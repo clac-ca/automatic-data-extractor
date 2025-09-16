@@ -1,1 +1,1 @@
-# automated-data-extractor
+# Automatic Data Extractor (ADE)
