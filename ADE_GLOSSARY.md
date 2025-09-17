@@ -1,69 +1,68 @@
 # ADE Glossary
 
-Plain language first. API field names or SQLite columns appear in backticks. Use this glossary when naming code, API
-contracts, or UI elements.
+Plain language first. API field names and SQLite columns appear in `code`. Use these names in code, API contracts, documentation, and the UI.
 
 ---
 
 ## Naming conventions
 
 * **UI labels** — Title Case (`Column Type`).
-* **API keys and SQLite columns** — `snake_case` (`column_type`).
-* **Enum values** — lowercase strings (`row_type: "header"`).
-* **Snapshots** — Immutable; "live" is just a pointer stored in SQLite.
+* **API keys & SQLite columns** — `snake_case` (`column_type`).
+* **Enum values** — lower-case strings (`row_type: "header"`).
+* **Snapshots** — Immutable bundles; `live` is only a pointer stored in SQLite.
 
 ---
 
-## Document lifecycle terms
+## Core building blocks
 
-| Term (UI) | Key / Identifier | Stored in | Summary |
+| Term | Identifier | Stored in | Description |
 | --- | --- | --- | --- |
-| Document | `document` (path or upload id) | `manifests.payload.document` | Input file (XLSX, CSV, PDF) processed for a document type. |
+| Document type | `document_type` | `snapshots`, `manifests` | Family of documents that share rules (e.g., payroll remittance). |
+| Snapshot | `snapshot_id` (ULID) | `snapshots` | Immutable configuration bundle for a document type. Drafts are editable; live and archived snapshots are read-only. |
+| Profile | `profile` | Snapshot payload | Optional overrides (synonyms, thresholds, context) scoped to a source, customer, or locale. |
+| Run | `run_id` (ULID) | `manifests` | Execution of the processing engine against a document + snapshot. |
+| Manifest | `manifest` | `manifests.payload` | Result of a run: detected tables, column mappings, audit data, stats, and the `snapshot_id` used. |
+| Live pointer | `live_snapshot_id` | `live_registry` | Maps a document type (and optional profile) to the snapshot used in production. |
+
+---
+
+## Document anatomy
+
+| Term (UI) | Identifier | Stored in | Description |
+| --- | --- | --- | --- |
+| Document | `document` (path or upload id) | `manifests.document` | File processed for a document type (XLSX, CSV, PDF, etc.). |
 | Page | `page.index` | Manifest payload | Worksheet or PDF page. |
-| Table | `table.index` per page | Manifest payload | Contiguous rows/columns with one header row plus data rows. |
+| Table | `table.index` per page | Manifest payload | Contiguous range of rows/columns with a single header row. |
 | Row type | `row_type` (`header`, `data`, `group_header`, `note`) | Manifest payload | Classification emitted by the header finder. |
 | Header row | `header_row` | Manifest payload | Winning row index used to name the columns. |
-| Column | `column.index` | Manifest payload | Observed column with header text and sampled values. |
+| Column | `column.index` | Manifest payload | Observed column with header text, samples, and metadata. |
 
 ---
 
 ## Column semantics
 
-| Term (UI) | Key / Identifier | Stored in | Summary |
+| Term (UI) | Identifier | Stored in | Description |
 | --- | --- | --- | --- |
-| Column catalog | `column_catalog` | Snapshot payload | Allowed column type keys for a document type. |
-| Column type | `column_type` | Snapshot payload | Canonical meaning for a column (`member_full_name`, `gross_amount`). |
-| Synonyms | `synonyms` | Snapshot payload | Header strings or regexes used during detection. |
-| Detection logic | `detection_logic` | Snapshot payload | Pure Python callable returning a match decision (bool/score). |
-| Transformation | `transformation_logic` | Snapshot payload | Optional callable to normalise values. |
+| Column catalogue | `column_catalog` | Snapshot payload | Allowed column type keys for a document type. |
+| Column type | `column_type` | Snapshot payload | Canonical meaning (`member_full_name`, `gross_amount`, etc.). |
+| Synonyms | `synonyms` | Snapshot payload | Header strings or regexes that hint the column type. |
+| Detection logic | `detection_logic` | Snapshot payload | Pure Python callable (code + digest) returning a match decision/score. |
+| Transformation | `transformation_logic` | Snapshot payload | Optional callable to normalise raw values. |
 | Validation | `validation_logic` | Snapshot payload | Optional callable to flag invalid or suspicious values. |
+| Schema rules | `schema` | Snapshot payload | Lists of required and optional column types. |
 
 ---
 
-## Configuration & release
+## Run output terms
 
-| Term (UI) | Key / Identifier | Stored in | Summary |
+| Term | Identifier | Stored in | Description |
 | --- | --- | --- | --- |
-| Snapshot | `snapshot_id` (ULID) | `snapshots` table | Immutable configuration bundle for a document type. |
-| Snapshot status | `status` (`draft`, `live`, `archived`) | `snapshots` table | Drafts are editable; live/archived are read-only. |
-| Live pointer | `live_snapshot_id` | `live_registry` table | Maps document type (+ optional profile) to the snapshot in production. |
-| Profile | `profile` | Snapshot payload | Optional overrides (extra synonyms, thresholds) scoped to a source or customer. |
-| Snapshot export | `.json` file | Filesystem | JSON dump of a snapshot payload used for review and backup. |
-
-Rule of thumb: create a new draft instead of mutating a live snapshot.
-
----
-
-## Run output
-
-| Term (UI) | Key / Identifier | Stored in | Summary |
-| --- | --- | --- | --- |
-| Manifest | `manifest` | `manifests` table | Result of a run: mappings, audit data, and the pinned snapshot ID. |
 | Column mapping | `column_mapping` | Manifest payload | Assignment of observed columns to column types with scores and audit notes. |
-| Confidence | `confidence` (0–1) | Manifest payload | Normalised certainty for a mapping. |
-| Needs review | `needs_review` (bool) | Manifest payload | Flag when validation fails or the decision margin is thin. |
-| Audit log | `audit_log` | Manifest payload | Ordered messages showing why a column matched (rules, transforms, validations). |
-| Digest | `digest` (`sha256:…`) | Snapshot & Manifest | Hash of logic source used for caching and auditing. |
+| Confidence | `confidence` (0–1) | Manifest payload | Normalised certainty for a mapping or decision. |
+| Needs review | `needs_review` (bool) | Manifest payload | Flag set when validation fails or the decision margin is thin. |
+| Audit log | `audit_log` | Manifest payload | Ordered messages explaining why a column matched, including rule hits and transforms. |
+| Digest | `digest` (`sha256:…`) | Snapshot & manifest payloads | Hash of logic source used for caching and audit trails. |
+| Stats | `stats` | Manifest payload | Summary counts (tables found, rows processed, warnings, etc.). |
 
 ---
 
@@ -71,18 +70,18 @@ Rule of thumb: create a new draft instead of mutating a live snapshot.
 
 | Term | Summary |
 | --- | --- |
-| **Frontend** | Vite-powered TypeScript UI that consumes the FastAPI routes for configuration, testing, publishing, and uploads. |
-| **FastAPI backend** | Stateless Python application exposing REST routes and OpenAPI docs. |
-| **Processing engine** | Pure Python module that runs table detection, header finding, column mapping, and value logic. |
-| **Document storage** | Folder mounted into the container (`./var/documents` by default) that holds uploaded files. |
-| **SQLite (`ade.sqlite`)** | Single-file database containing snapshots, live registry, manifests, and audit metadata. |
+| **Frontend** | Vite-powered TypeScript UI used to configure logic, compare snapshots, run tests, publish, and upload documents. |
+| **FastAPI backend** | Stateless Python app exposing REST routes and OpenAPI docs. Handles configuration CRUD, runs, manifests, and uploads. |
+| **Processing engine** | Pure Python module that loads a snapshot, detects tables, maps columns, and executes transforms/validations. |
+| **Document storage** | Folder mounted into the container (`var/documents/`) that holds uploaded and sample files. |
+| **SQLite (`var/ade.sqlite`)** | Single-file database containing snapshots, live registry, manifests, and audit metadata. |
 | **Docker image** | Deployable artefact bundling the frontend, backend, and processing engine. |
 
 ---
 
 ## SQLite storage model
 
-ADE persists everything in one SQLite database (`ade.sqlite`). Schema expressed in SQL for quick reference:
+Everything lives in one database file (`var/ade.sqlite`). Key tables:
 
 ```sql
 CREATE TABLE snapshots (
@@ -113,8 +112,7 @@ CREATE TABLE manifests (
 );
 ```
 
-Snapshots and manifests live as JSON blobs, so evolving the schema rarely needs migrations. Export those blobs for
-experimentation, review, or backup.
+Snapshots and manifests live as JSON blobs so evolving the schema rarely requires migrations. Backups are a file copy.
 
 ---
 
@@ -200,8 +198,8 @@ experimentation, review, or backup.
 
 ## Workflow reminders
 
-* Clone → edit → test → publish is the lifecycle for snapshots. Publishing only updates the live pointer.
-* Live pointer updates are transactional; failures leave the pointer untouched.
+* Draft → test → publish is the lifecycle for snapshots; publishing only updates the live pointer.
+* Run comparisons between snapshots before publishing to understand behaviour changes.
 * Manifests must always include the `snapshot_id` so reruns remain deterministic.
 * Profiles live inside the snapshot payload to avoid hidden configuration.
 
@@ -209,21 +207,12 @@ experimentation, review, or backup.
 
 ## Invariants & guardrails
 
-* Snapshots marked `live` or `archived` are read-only; create a new draft to change behaviour.
-* Every required column type in the schema must exist in the column catalog.
+* Snapshots marked `live` or `archived` are read-only; create a new draft for changes.
+* Every required column type in the schema must exist in the column catalogue.
 * Detection, transformation, validation, and header rules are pure functions (no I/O, deterministic results).
 * Digests are recalculated whenever code changes to support caching and audit checks.
 * Table boundaries on a page may not overlap.
-* Set `needs_review: true` when validation fails or the decision margin drops below the configured threshold.
-
----
-
-## Implementation notes
-
-* Cache compiled logic by `digest` so repeated runs avoid recompilation.
-* Allow detectors and transformers to receive a context dict (for locale, currency) derived from the snapshot profile.
-* Execute logic inside a sandbox with CPU and memory limits to keep runs predictable.
-* Maintain a small labelled corpus per document type to evaluate new snapshots before publishing.
+* Set `needs_review: true` when validation fails or confidence drops below the configured threshold.
 
 ---
 
