@@ -16,12 +16,15 @@ def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _generate_ulid() -> str:
+    return str(ulid.new())
+
 class Snapshot(Base):
     """Snapshot metadata and payloads."""
 
     __tablename__ = "snapshots"
 
-    snapshot_id: Mapped[str] = mapped_column(String(26), primary_key=True, default=lambda: str(ulid.new()))
+    snapshot_id: Mapped[str] = mapped_column(String(26), primary_key=True, default=_generate_ulid)
     document_type: Mapped[str] = mapped_column(String(100), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
