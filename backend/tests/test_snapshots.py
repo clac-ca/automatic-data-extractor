@@ -9,6 +9,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.app.db import get_sessionmaker
+
 
 def _create_sample_snapshot(
     client: TestClient,
@@ -178,10 +180,11 @@ def test_snapshot_payload_mutations_persist(app_client) -> None:
 
     created = _create_sample_snapshot(client)
 
-    from backend.app.db import SessionLocal
     from backend.app.models import Snapshot
 
-    with SessionLocal() as session:
+    session_factory = get_sessionmaker()
+
+    with session_factory() as session:
         snapshot = session.get(Snapshot, created["snapshot_id"])
         assert snapshot is not None
         snapshot.payload["metadata"] = {"version": "1.0", "tags": ["initial"]}
@@ -196,7 +199,7 @@ def test_snapshot_payload_mutations_persist(app_client) -> None:
         "tags": ["initial"],
     }
 
-    with SessionLocal() as session:
+    with session_factory() as session:
         snapshot = session.get(Snapshot, created["snapshot_id"])
         assert snapshot is not None
         snapshot.payload["metadata"]["version"] = "2.0"
@@ -212,7 +215,7 @@ def test_snapshot_payload_mutations_persist(app_client) -> None:
     assert data["payload"]["metadata"]["tags"] == ["initial", "updated"]
     assert data["payload"]["notes"] == [{"author": "qa"}]
 
-    with SessionLocal() as session:
+    with session_factory() as session:
         snapshot = session.get(Snapshot, created["snapshot_id"])
         assert snapshot is not None
         snapshot.payload["notes"][0]["status"] = "reviewed"
@@ -242,11 +245,12 @@ def test_in_memory_sqlite_is_shared_across_threads(tmp_path, app_client_factory)
 
         from sqlalchemy import select
 
-        from backend.app.db import SessionLocal
         from backend.app.models import Snapshot
 
+        session_factory = get_sessionmaker()
+
         def _fetch_titles() -> list[str]:
-            with SessionLocal() as session:
+            with session_factory() as session:
                 return session.scalars(select(Snapshot.title)).all()
 
         # Main thread should observe the inserted record.

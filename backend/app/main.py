@@ -8,8 +8,8 @@ from typing import AsyncIterator, Optional
 
 from fastapi import FastAPI
 
-from .config import get_settings
-from .db import Base, engine
+from . import config
+from .db import Base, get_engine
 from .routes.health import router as health_router
 from .routes.snapshots import router as snapshots_router
 
@@ -18,7 +18,7 @@ from .routes.snapshots import router as snapshots_router
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Prepare filesystem directories and database tables."""
 
-    settings = get_settings()
+    settings = config.get_settings()
     documents_dir = settings.documents_dir
     documents_dir.parent.mkdir(parents=True, exist_ok=True)
     documents_dir.mkdir(parents=True, exist_ok=True)
@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Import models so SQLAlchemy is aware of the tables before create_all
     from . import models  # noqa: F401
 
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=get_engine())
     yield
 
 
