@@ -1,59 +1,48 @@
 # AGENTS — Automatic Data Extractor
 
-This guide captures the conventions and working agreements for coding agents. Pair it with `README.md` for the human-focused overview.
+This file is the quick-start for coding agents. Pair it with `README.md` (human overview) and `ADE_GLOSSARY.md` (terminology).
 
 ---
 
-## Quick orientation
+## Quick facts
 
-- **Goal** – Turn semi-structured spreadsheets and PDFs into deterministic tables using snapshot-based logic.
-- **Packaging** – One Docker container bundles a FastAPI backend, Python extraction engine, and Vite + TypeScript frontend.
-- **Persistence** – SQLite at `var/ade.sqlite` plus documents under `var/documents/`.
-- **Priorities** – Determinism, easy debugging, and simple operations outrank raw throughput.
-
----
-
-## Repository layout (planned)
-
-```
-backend/   # FastAPI app + processing engine
-frontend/  # Vite + TypeScript UI
-infra/     # Dockerfile, docker-compose.yaml, deployment helpers
-examples/  # Sample documents used in tests and demos
-runs/      # Example manifest outputs
-var/       # Local persistence (gitignored)
-```
-
-Missing folders mean the implementation has not been scaffolded yet; follow this structure when adding code.
+- **Mission** – Turn semi-structured spreadsheets and PDFs into deterministic tables with snapshot-controlled logic.
+- **Packaging** – Ship everything as one Docker container with a FastAPI backend, Python processing engine, and Vite + TypeScript frontend.
+- **Persistence** – Use SQLite at `var/ade.sqlite` and store uploaded documents under `var/documents/`. Keep both out of version control.
+- **Priorities** – Determinism, debuggability, and simple operations beat raw throughput.
 
 ---
 
-## Environment setup
+## Repository status
 
-### Backend
-
-1. Use Python 3.11.
-2. Create a virtual environment.
-3. Install dependencies with `pip install -r requirements.txt` (add the file if missing).
-4. Run the API with `uvicorn backend.app.main:app --reload`.
-5. Defaults point to SQLite at `var/ade.sqlite` and documents in `var/documents/`.
-
-### Frontend
-
-1. Use Node.js 20 or newer.
-2. Inside `frontend/`, run `npm install`.
-3. Start the dev server with `npm run dev` (expects the backend at `http://localhost:8000`).
-
-### Docker workflow
-
-- `docker compose up` builds and runs the combined container from the repo root.
-- Mount `./var` to persist the database and uploaded documents.
+- The repo currently contains documentation only. Backend, frontend, and infra directories are not yet scaffolded.
+- Follow the planned layout in `README.md` when creating new code. Create directories as needed.
+- Update `AGENTS.md`, `README.md`, and the glossary whenever architecture or workflows change.
 
 ---
 
-## Tests and quality checks
+## Architecture guide
 
-Run the commands that apply to your changes:
+- **Backend** – Python 3.11 with FastAPI and Pydantic v2. Keep extraction logic in pure functions (no I/O, randomness, or external calls). Put orchestration and persistence under `backend/app/services/` and processing utilities under `backend/processor/`.
+- **Frontend** – Vite + React with TypeScript. Use functional components, strict TypeScript settings, and place API wrappers in `frontend/src/api/`.
+- **Snapshots & runs** – Treat published snapshots as immutable. Allow runs to execute multiple snapshots so the UI can compare manifests side-by-side. Persist manifests and snapshot payloads as JSON.
+- **Authentication** – Support username/password by default. Optional SSO (SAML or OIDC) can be added later. Admins issue API keys tied to user roles.
+- **Storage** – Default to SQLite unless volume demands a change. Mount `./var` when running in Docker to persist the database and documents.
+
+---
+
+## Local development checklist
+
+1. **Backend** – Create a Python 3.11 virtualenv and install dependencies via `pip install -r requirements.txt` (add the file when dependencies exist). Run `uvicorn backend.app.main:app --reload` for local API development.
+2. **Frontend** – Inside `frontend/`, run `npm install` then `npm run dev`. The UI expects the backend at `http://localhost:8000`.
+3. **Docker** – Provide a combined workflow via `docker compose up` that builds the app and mounts `./var` for persistence.
+4. **Environment variables** – Use `.env` files that are gitignored for secrets (DB paths, SSO settings, API key salts, etc.).
+
+---
+
+## Quality and testing
+
+Run the checks that match your changes:
 
 ```bash
 pytest -q          # Backend tests
@@ -64,59 +53,26 @@ npm run lint       # Frontend linting
 npm run typecheck  # Frontend type checks
 ```
 
-Documentation-only updates normally skip these checks; call that out in your report.
+- Documentation-only updates generally skip these commands; note the skip in your report.
+- Add new tests alongside new features. Prefer deterministic fixtures stored under `examples/`.
 
 ---
 
-## Coding guidelines
+## Data and security notes
 
-### Python
-
-- Target Python 3.11 and FastAPI with Pydantic v2.
-- Type-hint everything; enable `from __future__ import annotations` when helpful.
-- Keep processing logic pure—no network calls, randomness, or disk writes during a run.
-- Centralise orchestration and persistence in `backend/app/services/` or `backend/processor/` modules.
-- Format with Ruff (formatter + import sorting).
-
-### Frontend
-
-- Use functional React components with hooks.
-- Enable strict TypeScript options; avoid `any`.
-- Keep REST calls in `frontend/src/api/` as thin wrappers.
-- Co-locate component styles (CSS Modules or styled components).
-
-### Documentation
-
-- Optimise for clarity and step-by-step instructions.
-- Use sentence-case headings.
-- Align terminology with `ADE_GLOSSARY.md`.
-
----
-
-## Working with snapshots and runs
-
-- Published snapshots are immutable—clone to a new draft for changes.
-- Store detection, transformation, and validation logic as deterministic callables with digests for audit.
-- Allow runs to reference multiple snapshot IDs so the UI can compare manifests across versions.
-- Persist manifests and snapshots as JSON payloads; prefer additive schema changes.
-
----
-
-## Data and security practices
-
-- Treat the SQLite file and `var/documents/` as sensitive. Never commit their contents.
-- Keep secrets out of source control; rely on environment variables or ignored `.env` files.
+- Treat `var/ade.sqlite` and everything in `var/documents/` as sensitive. Never commit their contents.
 - Redact or hash personal data before logging.
-- Enforce role-based access control on every endpoint and ensure API keys inherit user scopes.
+- Enforce role-based access control on every endpoint. API keys inherit user scopes.
 
 ---
 
-## Git and PR workflow
+## Git workflow expectations
 
-- Use focused commits with descriptive messages (`<area>: <summary>` works well).
-- Confirm a clean working tree before finishing (`git status`).
-- Run applicable tests and note any that were skipped with a justification.
-- PR descriptions should summarise user-facing impact, technical highlights, and testing results.
-- After committing changes, call the `make_pr` tool to generate the PR message.
+- Keep commits focused with descriptive messages (e.g., `backend: add snapshot publish route`).
+- Ensure `git status` is clean before finishing.
+- After committing, always call the `make_pr` tool to record the PR summary.
+- Document architectural assumptions or open questions in the PR body so future contributors understand the decision.
 
-Document architectural assumptions or open questions in the PR body so future contributors understand the decision path.
+---
+
+When in doubt, favour simple, auditable solutions over premature abstractions, and record new findings here for the next agent.
