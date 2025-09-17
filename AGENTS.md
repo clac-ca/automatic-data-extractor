@@ -21,6 +21,15 @@ This file is the quick-start for coding agents. Pair it with `README.md` (human 
 
 ---
 
+## Collaboration workflow
+
+- We coordinate upcoming work through `CURRENT_TASK.md`. That file always contains the next build we plan to implement and the agreed definition of done.
+- When refining a plan, update `CURRENT_TASK.md` in place. Once a plan is executed, clear or replace its contents before queuing the next task.
+- Mention any new or revised task scope here in `AGENTS.md` so future agents know where to look.
+- The current focus is **“Bootstrap the backend foundation”** as described in `CURRENT_TASK.md`.
+
+---
+
 ## Architecture guide
 
 - **Backend** – Python 3.11 with FastAPI and Pydantic v2. Keep extraction logic in pure functions (no I/O, randomness, or external calls). Put orchestration and persistence under `backend/app/services/` and processing utilities under `backend/processor/`.

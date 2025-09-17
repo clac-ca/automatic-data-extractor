@@ -13,7 +13,7 @@ Use this glossary as the shared vocabulary for product, design, and engineering.
 
 ---
 
-## Snapshots, runs, and manifests
+## Domain model
 
 - **Document type** (`document_type`) – Family of documents that share extraction rules (for example, payroll remittances).
 - **Snapshot** (`snapshots.snapshot_id`, ULID) – Immutable configuration for a document type. Drafts are editable; published snapshots are read-only.
