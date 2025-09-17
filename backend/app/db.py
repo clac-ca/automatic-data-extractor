@@ -10,9 +10,12 @@ from sqlalchemy.engine import Engine, URL, make_url
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from .config import get_settings
+from . import config
 
 Base = declarative_base()
+
+_engine_cache: dict[str, Engine] = {}
+_sessionmaker_cache: dict[str, sessionmaker[Session]] = {}
 
 
 def _is_sqlite_memory_url(url: URL) -> bool:
@@ -50,19 +53,61 @@ def _create_engine(database_url: str) -> Engine:
     return create_engine(database_url, **engine_kwargs)
 
 
-settings = get_settings()
-engine = _create_engine(settings.database_url)
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, expire_on_commit=False)
+def get_engine() -> Engine:
+    """Return an engine configured from the active settings."""
+
+    database_url = config.get_settings().database_url
+    engine = _engine_cache.get(database_url)
+    if engine is None:
+        engine = _create_engine(database_url)
+        _engine_cache[database_url] = engine
+    return engine
+
+
+def get_sessionmaker() -> sessionmaker[Session]:
+    """Return a ``sessionmaker`` bound to the configured engine."""
+
+    database_url = config.get_settings().database_url
+    session_factory = _sessionmaker_cache.get(database_url)
+    if session_factory is None:
+        session_factory = sessionmaker(
+            bind=get_engine(),
+            autocommit=False,
+            autoflush=False,
+            expire_on_commit=False,
+        )
+        _sessionmaker_cache[database_url] = session_factory
+    return session_factory
+
+
+def reset_database_state() -> None:
+    """Dispose cached engines and session factories.
+
+    Tests override configuration between runs; clearing these caches avoids the
+    need for expensive module reloads.
+    """
+
+    for engine in _engine_cache.values():
+        engine.dispose()
+    _engine_cache.clear()
+    _sessionmaker_cache.clear()
 
 
 def get_db() -> Generator[Session, None, None]:
     """Yield a database session for the request lifecycle."""
 
-    db = SessionLocal()
+    session_factory = get_sessionmaker()
+    db = session_factory()
     try:
         yield db
     finally:
         db.close()
 
 
-__all__ = ["Base", "engine", "SessionLocal", "get_db"]
+__all__ = [
+    "Base",
+    "get_engine",
+    "get_sessionmaker",
+    "reset_database_state",
+    "get_db",
+]
