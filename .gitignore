@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+.env
+.venv/
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# pytest
+.pytest_cache/
+
+# SQLite and documents
+var/
+
+# IDE
+.vscode/
+.idea/
