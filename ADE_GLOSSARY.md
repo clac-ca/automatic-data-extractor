@@ -1,32 +1,32 @@
 # ADE glossary
 
-Terms shown in `code` match identifiers in the API, SQLite schema, or UI. Use this glossary as the shared language for product, design, and engineering.
+Use this glossary as the shared vocabulary for product, design, and engineering. Terms shown in `code` match identifiers in the API, SQLite schema, or UI.
 
 ---
 
 ## Accounts and access
 
-- **User** (`user_id`, table `users`) – Account that can sign in. Stores a hashed password or SSO subject.
-- **Role** (`role`) – Permission level: `viewer`, `editor`, or `admin`.
-- **Session** (`session_token`, table `sessions`) – Short-lived token created during UI sign-in.
-- **API key** (`api_key_id`, table `api_keys`) – Token issued by an admin. Keys inherit the linked user’s role.
+- **User** (`users.user_id`) – Account that can sign in. Stores a hashed password or an SSO subject.
+- **Role** (`users.role`) – Permission level: `viewer`, `editor`, or `admin`.
+- **Session** (`sessions.session_token`) – Short-lived token created during UI sign-in.
+- **API key** (`api_keys.api_key_id`) – Token issued by an admin. Keys inherit the linked user’s role.
 
 ---
 
-## Documents, logic, and runs
+## Snapshots, runs, and manifests
 
-- **Document type** (`document_type`) – Family of documents that share rules (for example, payroll remittances).
-- **Snapshot** (`snapshot_id`, ULID, table `snapshots`) – Immutable configuration for a document type. Drafts are editable; published snapshots are read-only.
+- **Document type** (`document_type`) – Family of documents that share extraction rules (for example, payroll remittances).
+- **Snapshot** (`snapshots.snapshot_id`, ULID) – Immutable configuration for a document type. Drafts are editable; published snapshots are read-only.
 - **Profile** (`profile`) – Optional overrides for a source, customer, or locale stored inside the snapshot payload.
-- **Live pointer** (`live_snapshot_id`, table `live_registry`) – Mapping from a document type (and optional profile) to the snapshot used in production.
-- **Run** (`run_id`, ULID, table `manifests`) – Execution of the processing engine against one or more documents.
-- **Manifest** (`payload`, column `manifests.payload`) – Result of a run: tables, column mappings, audit data, statistics, and the `snapshot_id` used.
+- **Live pointer** (`live_registry.live_snapshot_id`) – Mapping from a document type (and optional profile) to the snapshot currently used in production.
+- **Run** (`manifests.run_id`, ULID) – Execution of the processing engine against one or more documents.
+- **Manifest** (`manifests.payload`) – JSON result of a run: tables, column mappings, audit data, statistics, and the `snapshot_id` used.
 
 ---
 
 ## Document anatomy
 
-- **Document** (`document`) – Path or upload ID for the file being processed (XLSX, CSV, PDF, etc.). Stored in `manifests.document`.
+- **Document** (`manifests.document`) – Path or upload ID for the file being processed (XLSX, CSV, PDF, etc.). Files live in `var/documents/`.
 - **Page** (`pages[].index`) – Worksheet or PDF page captured in a manifest.
 - **Table** (`tables[].index`) – Contiguous rows and columns with a single header row.
 - **Row type** (`row_type`: `header`, `data`, `group_header`, `note`) – Classification emitted by the header finder.
@@ -47,7 +47,7 @@ Terms shown in `code` match identifiers in the API, SQLite schema, or UI. Use th
 
 ---
 
-## Run results
+## Run outputs
 
 - **Column mapping** (`column_mapping`) – Assignment of observed columns to column types with scores and audit notes.
 - **Confidence** (`confidence`, 0–1) – Normalised certainty for a mapping or decision.
@@ -107,11 +107,11 @@ CREATE TABLE api_keys (
 );
 ```
 
-Snapshots and manifests live as JSON blobs, so evolving the schema rarely needs migrations. Back up the SQLite file and the `var/documents/` directory together.
+Back up the SQLite file and the `var/documents/` directory together.
 
 ---
 
-## Snapshot payload cheat sheet
+## Snapshot payload quick view
 
 ```json
 {
@@ -150,7 +150,7 @@ Snapshots and manifests live as JSON blobs, so evolving the schema rarely needs 
 
 ---
 
-## Manifest payload cheat sheet
+## Manifest payload quick view
 
 ```json
 {
