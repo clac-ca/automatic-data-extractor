@@ -14,19 +14,11 @@ class HealthResponse(BaseModel):
     status: str
 
 
-TrimmedDocumentType = Annotated[
-    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
-]
-TrimmedTitle = Annotated[
-    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
-]
-
-
 class SnapshotBase(BaseModel):
     """Shared fields for snapshot payloads."""
 
-    document_type: TrimmedDocumentType
-    title: TrimmedTitle
+    document_type: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
     payload: dict[str, Any] = Field(default_factory=dict)
     is_published: bool = False
 
@@ -38,7 +30,7 @@ class SnapshotCreate(SnapshotBase):
 class SnapshotUpdate(BaseModel):
     """Payload for updating snapshots."""
 
-    title: TrimmedTitle | None = None
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)] | None = None
     payload: dict[str, Any] | None = None
     is_published: bool | None = None
 
