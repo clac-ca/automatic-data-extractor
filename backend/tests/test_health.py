@@ -17,22 +17,19 @@ def test_health_endpoint_reports_ok_and_creates_sqlite(tmp_path, monkeypatch) ->
     monkeypatch.setenv("ADE_DATABASE_URL", f"sqlite:///{db_path}")
     monkeypatch.setenv("ADE_DOCUMENTS_DIR", str(documents_dir))
 
-    config = importlib.import_module("backend.app.config")
-    config.get_settings.cache_clear()
+    # Patch get_settings to ensure fresh config per test
+    import backend.app.config
+    from backend.app.config import Settings
+    monkeypatch.setattr(
+        backend.app.config,
+        "get_settings",
+        lambda: Settings(
+            ADE_DATABASE_URL=f"sqlite:///{db_path}",
+            ADE_DOCUMENTS_DIR=str(documents_dir),
+        ),
+    )
 
-    for module_name in [
-        "backend.app.main",
-        "backend.app.routes.health",
-        "backend.app.models",
-        "backend.app.db",
-    ]:
-        sys.modules.pop(module_name, None)
-
-    importlib.import_module("backend.app.db")
-    importlib.import_module("backend.app.models")
-    importlib.import_module("backend.app.routes.health")
-    main_module = importlib.import_module("backend.app.main")
-
+    import backend.app.main as main_module
     with TestClient(main_module.app) as client:
         response = client.get("/health")
 
