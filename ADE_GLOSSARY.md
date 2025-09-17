@@ -1,24 +1,24 @@
 # ADE Glossary
 
-Plain language first. API and storage keys follow in backticks when needed. Use this glossary when naming code, API contracts, or
-UI elements.
+Plain language first. API field names or SQLite columns appear in backticks. Use this glossary when naming code, API
+contracts, or UI elements.
 
 ---
 
-## Conventions
+## Naming conventions
 
-* **UI labels** use Title Case (`Column Type`).
-* **API keys and SQLite columns** use `snake_case` (`column_type`).
-* **Enum values** are lowercase strings (`row_type: "header"`).
-* **Snapshots** are immutable; "live" is just a pointer stored in SQLite.
+* **UI labels** — Title Case (`Column Type`).
+* **API keys and SQLite columns** — `snake_case` (`column_type`).
+* **Enum values** — lowercase strings (`row_type: "header"`).
+* **Snapshots** — Immutable; "live" is just a pointer stored in SQLite.
 
 ---
 
-## Document flow
+## Document lifecycle terms
 
 | Term (UI) | Key / Identifier | Stored in | Summary |
 | --- | --- | --- | --- |
-| Document | `document` (path or upload id) | `manifests.payload.document` | File (XLSX, CSV, PDF) processed under one document type. |
+| Document | `document` (path or upload id) | `manifests.payload.document` | Input file (XLSX, CSV, PDF) processed for a document type. |
 | Page | `page.index` | Manifest payload | Worksheet or PDF page. |
 | Table | `table.index` per page | Manifest payload | Contiguous rows/columns with one header row plus data rows. |
 | Row type | `row_type` (`header`, `data`, `group_header`, `note`) | Manifest payload | Classification emitted by the header finder. |
@@ -33,9 +33,9 @@ UI elements.
 | --- | --- | --- | --- |
 | Column catalog | `column_catalog` | Snapshot payload | Allowed column type keys for a document type. |
 | Column type | `column_type` | Snapshot payload | Canonical meaning for a column (`member_full_name`, `gross_amount`). |
-| Synonyms | `synonyms` | Snapshot payload | Alternate header strings or regexes used during detection. |
+| Synonyms | `synonyms` | Snapshot payload | Header strings or regexes used during detection. |
 | Detection logic | `detection_logic` | Snapshot payload | Pure Python callable returning a match decision (bool/score). |
-| Transformation | `transformation_logic` | Snapshot payload | Optional callable to normalise values after mapping. |
+| Transformation | `transformation_logic` | Snapshot payload | Optional callable to normalise values. |
 | Validation | `validation_logic` | Snapshot payload | Optional callable to flag invalid or suspicious values. |
 
 ---
@@ -46,9 +46,11 @@ UI elements.
 | --- | --- | --- | --- |
 | Snapshot | `snapshot_id` (ULID) | `snapshots` table | Immutable configuration bundle for a document type. |
 | Snapshot status | `status` (`draft`, `live`, `archived`) | `snapshots` table | Drafts are editable; live/archived are read-only. |
-| Live pointer | `live_snapshot_id` | `live_registry` table | Mapping of document type (+ optional profile) to the snapshot currently in production. |
+| Live pointer | `live_snapshot_id` | `live_registry` table | Maps document type (+ optional profile) to the snapshot in production. |
 | Profile | `profile` | Snapshot payload | Optional overrides (extra synonyms, thresholds) scoped to a source or customer. |
 | Snapshot export | `.json` file | Filesystem | JSON dump of a snapshot payload used for review and backup. |
+
+Rule of thumb: create a new draft instead of mutating a live snapshot.
 
 ---
 
@@ -65,7 +67,7 @@ UI elements.
 
 ---
 
-## Platform terms
+## Platform components
 
 | Term | Summary |
 | --- | --- |
@@ -74,13 +76,13 @@ UI elements.
 | **Processing engine** | Pure Python module that runs table detection, header finding, column mapping, and value logic. |
 | **Document storage** | Folder mounted into the container (`./var/documents` by default) that holds uploaded files. |
 | **SQLite (`ade.sqlite`)** | Single-file database containing snapshots, live registry, manifests, and audit metadata. |
-| **Docker image** | Deployable artifact bundling the frontend, backend, and processing engine. |
+| **Docker image** | Deployable artefact bundling the frontend, backend, and processing engine. |
 
 ---
 
 ## SQLite storage model
 
-ADE keeps persistence minimal with one SQLite database (`ade.sqlite`). Schema expressed in plain SQL:
+ADE persists everything in one SQLite database (`ade.sqlite`). Schema expressed in SQL for quick reference:
 
 ```sql
 CREATE TABLE snapshots (
@@ -89,13 +91,13 @@ CREATE TABLE snapshots (
   status          TEXT NOT NULL CHECK(status IN ('draft','live','archived')),
   created_at      TEXT NOT NULL,
   created_by      TEXT NOT NULL,
-  payload         JSON NOT NULL              -- catalog, column types, header finder, schema, profiles
+  payload         JSON NOT NULL
 );
 
 CREATE TABLE live_registry (
   document_type      TEXT PRIMARY KEY,
   live_snapshot_id   TEXT NOT NULL,
-  profile_overrides  JSON DEFAULT NULL,      -- profile -> snapshot_id
+  profile_overrides  JSON DEFAULT NULL,
   updated_at         TEXT NOT NULL,
   updated_by         TEXT NOT NULL
 );
@@ -107,12 +109,12 @@ CREATE TABLE manifests (
   profile        TEXT,
   generated_at   TEXT NOT NULL,
   document       TEXT NOT NULL,
-  payload        JSON NOT NULL               -- pages, tables, column mappings, stats
+  payload        JSON NOT NULL
 );
 ```
 
-Snapshots and manifests are stored as JSON blobs, so evolving the schema rarely requires migrations. For experimentation or
-review, export those blobs to JSON files alongside the database.
+Snapshots and manifests live as JSON blobs, so evolving the schema rarely needs migrations. Export those blobs for
+experimentation, review, or backup.
 
 ---
 
@@ -212,7 +214,7 @@ review, export those blobs to JSON files alongside the database.
 * Detection, transformation, validation, and header rules are pure functions (no I/O, deterministic results).
 * Digests are recalculated whenever code changes to support caching and audit checks.
 * Table boundaries on a page may not overlap.
-* Set `needs_review: true` when validation fails or when the decision margin drops below the configured threshold.
+* Set `needs_review: true` when validation fails or the decision margin drops below the configured threshold.
 
 ---
 
@@ -225,4 +227,4 @@ review, export those blobs to JSON files alongside the database.
 
 ---
 
-Use this glossary as the single source of truth when naming things in code, APIs, or the user interface.
+This glossary is the single source of truth when naming things in code, APIs, or the UI.
