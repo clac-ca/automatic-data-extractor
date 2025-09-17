@@ -1,10 +1,10 @@
 # ADE glossary
 
-Use this glossary as the shared vocabulary for product, design, and engineering. Terms in `code` match identifiers in the API, SQLite schema, or UI.
+This glossary keeps product, design, and engineering aligned. Terms in `code` match identifiers in the API, SQLite schema, or UI.
 
 ---
 
-## Accounts and access
+## Accounts & access
 
 - **User** (`users.user_id`) – Account that can sign in. Stores a hashed password or an SSO subject.
 - **Role** (`users.role`) – Permission level: `viewer`, `editor`, or `admin`.
@@ -13,10 +13,10 @@ Use this glossary as the shared vocabulary for product, design, and engineering.
 
 ---
 
-## Domain model
+## Core domain
 
 - **Document type** (`document_type`) – Family of documents that share extraction rules (for example, payroll remittances).
-- **Snapshot** (`snapshots.snapshot_id`, ULID) – Immutable configuration for a document type. Drafts are editable; published snapshots are read-only.
+- **Snapshot** (`snapshots.snapshot_id`, ULID) – Immutable configuration for a document type. Drafts are editable; published snapshots are read only.
 - **Profile** (`profile`) – Optional overrides for a source, customer, or locale stored inside the snapshot payload.
 - **Live pointer** (`live_registry.live_snapshot_id`) – Mapping from a document type (and optional profile) to the snapshot currently used in production.
 - **Run** (`manifests.run_id`, ULID) – Execution of the processing engine against one or more documents.
@@ -60,13 +60,13 @@ Use this glossary as the shared vocabulary for product, design, and engineering.
 
 ## Storage quick reference
 
-Everything persists in SQLite (`var/ade.sqlite`). Key tables:
+ADE stores everything in SQLite (`var/ade.sqlite`). These tables form the foundation:
 
 ```sql
 CREATE TABLE snapshots (
   snapshot_id     TEXT PRIMARY KEY,
   document_type   TEXT NOT NULL,
-  status          TEXT NOT NULL CHECK(status IN ('draft','live','archived')),
+  status          TEXT NOT NULL CHECK (status IN ('draft','live','archived')),
   created_at      TEXT NOT NULL,
   created_by      TEXT NOT NULL,
   payload         JSON NOT NULL
@@ -93,7 +93,7 @@ CREATE TABLE manifests (
 CREATE TABLE users (
   user_id       TEXT PRIMARY KEY,
   email         TEXT UNIQUE NOT NULL,
-  role          TEXT NOT NULL CHECK(role IN ('viewer','editor','admin')),
+  role          TEXT NOT NULL CHECK (role IN ('viewer','editor','admin')),
   password_hash TEXT,
   sso_subject   TEXT
 );
@@ -111,7 +111,7 @@ Back up the SQLite file and the `var/documents/` directory together.
 
 ---
 
-## Snapshot payload quick view
+## Snapshot payload cheat sheet
 
 ```json
 {
@@ -150,7 +150,7 @@ Back up the SQLite file and the `var/documents/` directory together.
 
 ---
 
-## Manifest payload quick view
+## Manifest payload cheat sheet
 
 ```json
 {
@@ -186,24 +186,16 @@ Back up the SQLite file and the `var/documents/` directory together.
 
 ---
 
-## Workflow reminders
+## Working agreements
 
-- Draft → test → publish is the lifecycle for snapshots; publishing only updates the live pointer.
-- Run comparisons between snapshots before publishing to understand behaviour changes.
-- Manifests must include the `snapshot_id` so reruns stay deterministic.
-- Profiles live inside the snapshot payload to avoid hidden configuration.
-
----
-
-## Guardrails
-
-- Snapshots marked `live` or `archived` are read-only—create a new draft for changes.
-- Every required column type in the schema must exist in the column catalogue.
+- Snapshots move through draft → test → publish; publishing updates only the live pointer.
+- Compare snapshots before publishing to understand behavioural changes.
+- Manifests include the `snapshot_id` so reruns remain deterministic.
+- Profiles stay inside the snapshot payload to avoid hidden configuration.
 - Detection, transformation, validation, and header rules are pure functions (no I/O, deterministic results).
-- Digests are recalculated whenever code changes to support caching and audits.
-- Table boundaries on a page may not overlap.
 - Set `needs_review: true` when validation fails or confidence drops below the configured threshold.
+- Table boundaries on a page may not overlap.
 
 ---
 
-This glossary is the single source of truth when naming things in code, APIs, or the UI.
+This glossary is the naming authority for code, APIs, and UI copy.

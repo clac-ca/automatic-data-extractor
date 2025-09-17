@@ -23,10 +23,10 @@ This file is the quick-start for coding agents. Pair it with `README.md` (human 
 
 ## Collaboration workflow
 
-- **Current planning doc** – We capture the next build plan in `CURRENT_TASK.md`. Treat it as a living architecture note: refine it until we agree it is ready, then implement it in a later cycle.
-- **Iteration loop** – Update `CURRENT_TASK.md` in place while we design. After the work ships, clear or replace the file before sketching the next task.
-- **Cross-reference** – Note any new or revised task scope here so future agents immediately know which plan is active and where to find it.
-- The current focus remains **“Bootstrap the backend foundation”**; see `CURRENT_TASK.md` for the latest definition of done and sequence of steps.
+- **Current planning doc** – `CURRENT_TASK.md` holds the active build plan. Keep it updated until the plan is approved for implementation.
+- **Iteration loop** – Design together first, then build. Once a task is completed in code, rename `CURRENT_TASK.md` to `PREVIOUS_TASK.md` (or delete it) and create a fresh `CURRENT_TASK.md` for the next scope.
+- **Cross-reference** – Note any changes to scope or priorities here so the next agent immediately knows which plan is live.
+- The current focus is **“Backend foundation slice”**; see `CURRENT_TASK.md` for the definition of done and ordered steps.
 
 ---
 
