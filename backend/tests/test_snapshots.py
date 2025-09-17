@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Any
 
@@ -221,3 +222,37 @@ def test_snapshot_payload_mutations_persist(app_client) -> None:
 
     assert response.status_code == 200
     assert response.json()["payload"]["notes"][0] == {"author": "qa", "status": "reviewed"}
+
+
+def test_in_memory_sqlite_is_shared_across_threads(tmp_path, app_client_factory) -> None:
+    """Ensure in-memory SQLite connections share a single database across threads."""
+
+    documents_dir = tmp_path / "documents"
+
+    with app_client_factory("sqlite:///:memory:", documents_dir) as client:
+        payload = {
+            "document_type": "invoice",
+            "title": "Memory snapshot",
+            "payload": {"rows": [1, 2, 3]},
+        }
+
+        create_response = client.post("/snapshots", json=payload)
+
+        assert create_response.status_code == 201
+
+        from sqlalchemy import select
+
+        from backend.app.db import SessionLocal
+        from backend.app.models import Snapshot
+
+        def _fetch_titles() -> list[str]:
+            with SessionLocal() as session:
+                return session.scalars(select(Snapshot.title)).all()
+
+        # Main thread should observe the inserted record.
+        assert _fetch_titles() == ["Memory snapshot"]
+
+        # A background thread should hit the same in-memory database.
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_fetch_titles)
+            assert future.result() == ["Memory snapshot"]
