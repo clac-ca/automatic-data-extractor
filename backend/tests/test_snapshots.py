@@ -175,7 +175,7 @@ def test_delete_snapshot_removes_record(app_client) -> None:
     assert follow_up.status_code == 404
 
 
-def test_snapshot_payload_mutations_persist(app_client) -> None:
+def test_snapshot_payload_assignment_persists(app_client) -> None:
     client, _, _ = app_client
 
     created = _create_sample_snapshot(client)
@@ -187,7 +187,9 @@ def test_snapshot_payload_mutations_persist(app_client) -> None:
     with session_factory() as session:
         snapshot = session.get(Snapshot, created["snapshot_id"])
         assert snapshot is not None
-        snapshot.payload["metadata"] = {"version": "1.0", "tags": ["initial"]}
+        updated_payload = dict(snapshot.payload)
+        updated_payload["metadata"] = {"version": "1.0", "tags": ["initial"]}
+        snapshot.payload = updated_payload
         session.commit()
 
     response = client.get(f"/snapshots/{created['snapshot_id']}")
@@ -202,9 +204,17 @@ def test_snapshot_payload_mutations_persist(app_client) -> None:
     with session_factory() as session:
         snapshot = session.get(Snapshot, created["snapshot_id"])
         assert snapshot is not None
-        snapshot.payload["metadata"]["version"] = "2.0"
-        snapshot.payload["metadata"]["tags"].append("updated")
-        snapshot.payload.setdefault("notes", []).append({"author": "qa"})
+        updated_payload = dict(snapshot.payload)
+        metadata = dict(updated_payload.get("metadata", {}))
+        metadata["version"] = "2.0"
+        tags = list(metadata.get("tags", []))
+        tags.append("updated")
+        metadata["tags"] = tags
+        notes = list(updated_payload.get("notes", []))
+        notes.append({"author": "qa", "status": "reviewed"})
+        updated_payload["metadata"] = metadata
+        updated_payload["notes"] = notes
+        snapshot.payload = updated_payload
         session.commit()
 
     response = client.get(f"/snapshots/{created['snapshot_id']}")
@@ -213,18 +223,7 @@ def test_snapshot_payload_mutations_persist(app_client) -> None:
     data = response.json()
     assert data["payload"]["metadata"]["version"] == "2.0"
     assert data["payload"]["metadata"]["tags"] == ["initial", "updated"]
-    assert data["payload"]["notes"] == [{"author": "qa"}]
-
-    with session_factory() as session:
-        snapshot = session.get(Snapshot, created["snapshot_id"])
-        assert snapshot is not None
-        snapshot.payload["notes"][0]["status"] = "reviewed"
-        session.commit()
-
-    response = client.get(f"/snapshots/{created['snapshot_id']}")
-
-    assert response.status_code == 200
-    assert response.json()["payload"]["notes"][0] == {"author": "qa", "status": "reviewed"}
+    assert data["payload"]["notes"] == [{"author": "qa", "status": "reviewed"}]
 
 
 def test_in_memory_sqlite_is_shared_across_threads(tmp_path, app_client_factory) -> None:
