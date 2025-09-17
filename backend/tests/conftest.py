@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -10,17 +9,6 @@ from typing import ContextManager, Tuple
 
 import pytest
 from fastapi.testclient import TestClient
-
-
-_MODULES_TO_CLEAR = [
-    "backend.app.db",
-    "backend.app.models",
-    "backend.app.routes.health",
-    "backend.app.routes.snapshots",
-    "backend.app.services.snapshots",
-    "backend.app.main",
-]
-
 
 @contextmanager
 def _test_client(
@@ -42,8 +30,8 @@ def _test_client(
 
     monkeypatch.setattr(config_module, "get_settings", _get_settings_override)
 
-    for module_name in _MODULES_TO_CLEAR:
-        sys.modules.pop(module_name, None)
+    import backend.app.db as db_module
+    db_module.reset_database_state()
 
     import backend.app.main as main_module
 
