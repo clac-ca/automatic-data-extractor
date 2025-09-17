@@ -1,35 +1,40 @@
 # ADE glossary
 
-Use this glossary when naming database columns, API fields, and UI copy. Keep the wording consistent with the tables and payloads
-below.
+Use this glossary when naming database columns, API fields, and UI copy. Keep wording aligned with the tables and payloads
+listed beside each term.
 
 ---
 
 ## Access
-- **User** – Account that can sign in. Stores a hashed password or an SSO subject. (`users.user_id`, `users.email`, `users.role`)
-- **Role** – Permission tier: `viewer`, `editor`, or `admin`.
-- **Session** – Short-lived token created during UI sign-in. (`sessions.session_token`)
-- **API key** – Token issued by an admin; inherits the linked user’s role. (`api_keys.api_key_id`, `api_keys.user_id`)
+- **User** – Account that can sign in. Stores an email, role, and either a password hash or an SSO subject (`users.user_id`,
+  `users.email`, `users.role`).
+- **Role** – Permission tier. Default roles: `viewer`, `editor`, `admin`.
+- **Session** – Short-lived token created during UI sign-in (`sessions.session_token`).
+- **API key** – Token issued by an admin; inherits the linked user’s role (`api_keys.api_key_id`, `api_keys.user_id`).
 
 ---
 
 ## Core domain
-- **Document type** – Family of documents that share extraction rules (for example, payroll remittances). (`snapshots.document_type`)
-- **Snapshot** – Immutable bundle of logic for a document type. Drafts can change; published snapshots are read only. (`snapshots.snapshot_id` ULID)
-- **Profile** – Optional overrides for a source, customer, or locale stored in the snapshot payload. (`payload.profiles`)
-- **Live pointer** – Mapping from a document type (and optional profile) to the snapshot currently used in production. (`live_registry.live_snapshot_id`)
-- **Run** – Execution of the processing engine against one or more documents. (`manifests.run_id` ULID)
-- **Manifest** – JSON result of a run: tables, column mappings, audit data, statistics, and the `snapshot_id` used. (`manifests.payload`)
+- **Document type** – Family of documents that share extraction rules (`snapshots.document_type`).
+- **Snapshot** – Immutable bundle of logic for a document type. Drafts can change; published snapshots are read only
+  (`snapshots.snapshot_id` ULID).
+- **Profile** – Optional overrides for a source, customer, or locale stored in the snapshot payload (`payload.profiles`).
+- **Live pointer** – Mapping from a document type (and optional profile) to the snapshot currently used in production
+  (`live_registry.live_snapshot_id`).
+- **Run** – Execution of the processing engine against one or more documents (`manifests.run_id` ULID).
+- **Manifest** – JSON result of a run: tables, column mappings, audit data, statistics, and the `snapshot_id` used
+  (`manifests.payload`).
 
 ---
 
 ## Document anatomy
-- **Document** – Path or upload ID for the file being processed (XLSX, CSV, PDF, etc.). Files live in `var/documents/`. (`manifests.document`)
-- **Page** – Worksheet or PDF page captured in a manifest. (`pages[].index`)
-- **Table** – Contiguous rows and columns with a single header row. (`tables[].index`)
-- **Row type** – Classification emitted by the header finder (`header`, `data`, `group_header`, `note`). (`rows[].row_type`)
-- **Header row** – Row index that names the columns. (`tables[].header_row`)
-- **Column** – Observed column with header text, samples, and metadata. (`columns[].index`)
+- **Document** – Path or upload ID for the file being processed (XLSX, CSV, PDF, etc.). Files live in `var/documents/`
+  (`manifests.document`).
+- **Page** – Worksheet or PDF page captured in a manifest (`pages[].index`).
+- **Table** – Contiguous rows and columns with a single header row (`tables[].index`).
+- **Row type** – Classification emitted by the header finder (`header`, `data`, `group_header`, `note`) (`rows[].row_type`).
+- **Header row** – Row index that names the columns (`tables[].header_row`).
+- **Column** – Observed column with header text, samples, and metadata (`columns[].index`).
 
 ---
 
