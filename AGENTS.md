@@ -20,7 +20,8 @@ Approach this as an architect and engineer: your job is not just to code, but to
 ---
 
 ## Repository status
-- The repo currently contains documentation only. Backend, frontend, and infra directories are not yet scaffolded.
+- The FastAPI backend scaffold now lives under `backend/app/` with configuration, database utilities, health routing, and the
+  initial `Snapshot` model. Frontend and infra directories are still pending.
 - Follow the planned layout in `README.md` when creating new code. Create directories as needed.
 - Keep this file, the README, and the glossary aligned with the active architecture.
 
