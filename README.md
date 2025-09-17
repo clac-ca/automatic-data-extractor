@@ -1,47 +1,58 @@
 # ADE — Automatic Data Extractor
 
-ADE converts semi-structured spreadsheets and PDFs into deterministic tables. The product is an internal tool, so our design favours clarity, debuggability, and easy operations over large-scale throughput. SQLite and a simple file store give us everything we need.
+ADE turns semi-structured spreadsheets and PDFs into deterministic tables that teams can audit and trust. Because ADE is an internal tool, we optimise for clarity and repeatability instead of extreme scale. A single SQLite database and a folder of uploaded files are enough for everything we do.
+
+---
+
+## Product snapshot
+
+- **Purpose** – Author extraction rules once, rerun them deterministically, and keep a full audit trail of every change.
+- **Shape** – One Docker container with a FastAPI backend, Python processing engine, and Vite + TypeScript frontend.
+- **Data** – SQLite at `var/ade.sqlite` stores all state; uploaded files live under `var/documents/`.
+- **Audience** – Operations, compliance, and engineering teams who want transparent data ingestion.
 
 ---
 
 ## Guiding principles
 
-- **Deterministic by default.** All extraction rules are versioned snapshots so you always know which logic created a manifest.
-- **One predictable deployment.** Ship ADE as a single Docker image containing the FastAPI backend, Python processing engine, and Vite + TypeScript frontend.
-- **Operate with files.** SQLite at `var/ade.sqlite` and uploaded documents under `var/documents/` hold all state. Backups are file copies.
-- **APIs back every action.** Anything possible in the UI is available via REST, enabling scripting and automation without extra work.
+1. **Deterministic by default** – Every manifest ties back to an immutable snapshot of extraction logic.
+2. **Simple to operate** – If you can copy a SQLite file and a folder of documents, you can back up ADE.
+3. **APIs for everything** – The UI and automation hit the same FastAPI routes so scripts never need hidden workflows.
+4. **Pure processing logic** – Extraction code runs without side effects, randomness, or network calls to keep results reproducible.
 
 ---
 
-## System overview
+## Architecture at a glance
 
 ```
-+--------------------- Docker container ---------------------+
-| Frontend (Vite + TS) <-> FastAPI routes <-> Processing     |
-|                                   |                        |
-|                                   +--> SQLite (var/ade.sqlite)
-|                                   +--> Documents (var/documents/)
-+-------------------------------------------------------------+
++------------------- Docker container -------------------+
+| Vite + React UI  <->  FastAPI backend  <->  Processor  |
+|                         |                               |
+|                         +--> SQLite (var/ade.sqlite)    |
+|                         +--> Documents (var/documents/) |
++--------------------------------------------------------+
 ```
 
-- **Frontend** – Configure document types, edit logic, upload files, compare manifests, and review audit details.
-- **FastAPI backend** – Stateless routes for authentication, CRUD, job orchestration, and manifest retrieval.
-- **Processing engine** – Pure Python functions for header detection, column mapping, transformations, and validation.
-- **Storage** – SQLite plus the documents folder store users, snapshots, manifests, audit trails, and uploads. Switch databases only if a single SQLite file stops being practical.
+- **Frontend** – Configure document types, edit logic, upload files, compare manifests, and inspect audit notes.
+- **FastAPI backend** – Stateless routes for authentication, CRUD, run orchestration, and manifest retrieval.
+- **Processing engine** – Pure Python functions that detect headers, map columns, transform values, and validate results.
+- **Persistence** – SQLite tables plus the documents directory cover users, snapshots, manifests, audit trails, and uploads. Switch to another database only if the single-file model becomes a bottleneck.
 
-Snapshots drive every run. They package detection logic, schema expectations, and optional profile overrides. Runs can reference one or many snapshots so you can compare outputs inside the UI before promoting new logic.
+Snapshots drive every run. They bundle detection logic, schema expectations, and optional profile overrides. Runs can evaluate several snapshots side by side so reviewers can compare manifests before promoting new logic.
 
 ---
 
-## Core concepts
+## Domain quick reference
 
-- **Document type** – Family of documents that share extraction rules (for example, payroll remittances).
-- **Snapshot** – Immutable bundle of logic for a document type. Drafts are editable; published snapshots are read-only.
-- **Profile** – Optional overrides (customer, locale, etc.) stored inside a snapshot payload.
-- **Run** – Execution of one or more snapshots against uploaded documents.
-- **Manifest** – Structured result of a run: detected tables, column mappings, audit notes, and statistics.
+| Concept | Summary |
+| --- | --- |
+| **Document type** | Family of documents that share extraction rules (e.g., payroll remittances). |
+| **Snapshot** | Immutable bundle of logic for a document type. Drafts are editable; published snapshots are read-only. |
+| **Profile** | Optional overrides (customer, locale, etc.) that live inside the snapshot payload. |
+| **Run** | Execution of one or more snapshots against uploaded documents. |
+| **Manifest** | Structured result of a run: detected tables, column mappings, audit notes, and statistics. |
 
-Refer to `ADE_GLOSSARY.md` for precise field names used across the API and database.
+Refer to `ADE_GLOSSARY.md` for precise field names across the API and database.
 
 ---
 
@@ -49,29 +60,29 @@ Refer to `ADE_GLOSSARY.md` for precise field names used across the API and datab
 
 ### Upload and process documents
 
-1. Upload one or more files through the UI or `POST /api/v1/documents`. Files live in `var/documents/`.
-2. Select the snapshots to evaluate—use the live pointer or specific versions. Multiple snapshots allow side-by-side comparisons.
-3. Start a run from the UI or `POST /api/v1/runs`. The engine applies each snapshot and records manifests.
-4. Review manifests in the UI or via `GET /api/v1/manifests/{run_id}`. Compare results before promoting new logic.
+1. Upload files via the UI or `POST /api/v1/documents` (files persist in `var/documents/`).
+2. Pick the snapshots to evaluate—use the live pointer or choose specific versions for comparison.
+3. Start a run from the UI or `POST /api/v1/runs`. The processor applies each snapshot and stores manifests.
+4. Review manifests in the UI or `GET /api/v1/manifests/{run_id}` before promoting new logic.
 
 ### Improve extraction logic
 
 1. Create a draft snapshot for the relevant document type.
-2. Update column catalogues, detection logic, schema rules, and profile overrides in the UI.
-3. Test drafts against real uploads and review manifest diffs versus the live snapshot.
+2. Adjust column catalogues, detection logic, schema rules, and profile overrides.
+3. Test drafts against real uploads and inspect manifest diffs versus the live snapshot.
 4. Publish when satisfied. Publishing advances the live pointer; previous versions stay immutable for audit and rollback.
 
 ### Compare versions in the UI
 
-1. Select documents and the snapshots to evaluate (live or historical).
-2. Run the comparison. Each snapshot produces its own manifest.
+1. Select documents and the snapshots (live or historical) to evaluate.
+2. Run the comparison—each snapshot produces its own manifest.
 3. Inspect diffs to confirm behaviour changes before promoting logic.
 
 ---
 
 ## API quick reference
 
-OpenAPI documentation is served at `/docs`.
+OpenAPI documentation lives at `/docs`.
 
 | Endpoint | Description |
 | --- | --- |
@@ -89,9 +100,9 @@ Every UI action maps to an API route so automation can follow the same flows.
 ## Authentication and access
 
 - **Username/password** – Default sign-in method stored in SQLite and managed in the admin UI.
-- **SSO (optional)** – Support a single SAML or OIDC provider if required.
-- **Roles** – `viewer`, `editor`, and `admin` determine who can edit logic, publish snapshots, manage users, or issue keys.
-- **API keys** – Admins can create API keys tied to a user; keys inherit the user’s role permissions.
+- **SSO (optional)** – Add one SAML or OIDC provider if required.
+- **Roles** – `viewer`, `editor`, and `admin` control who can edit logic, publish snapshots, manage users, or issue keys.
+- **API keys** – Admins can create keys tied to users; keys inherit the user’s role permissions.
 
 Treat the Docker host, SQLite database, and documents directory as sensitive assets.
 
@@ -99,10 +110,10 @@ Treat the Docker host, SQLite database, and documents directory as sensitive ass
 
 ## Storage and backups
 
-- **SQLite (`var/ade.sqlite`)** stores snapshots, manifests, live pointers, users, sessions, and API keys. Snapshot and manifest payloads are JSON blobs to keep migrations simple.
-- **File storage (`var/documents/`)** holds uploaded documents, fixtures, and exported manifests. Mount it as a Docker volume in production.
+- **SQLite (`var/ade.sqlite`)** stores snapshots, manifests, live pointers, users, sessions, and API keys. Snapshot and manifest payloads remain JSON blobs to avoid premature schema work.
+- **File storage (`var/documents/`)** holds uploads, fixtures, and exported manifests. Mount it as a Docker volume in production.
 
-Backups require copying the SQLite file and the documents directory together.
+Backups require copying both the SQLite file and the documents directory.
 
 ---
 
@@ -110,7 +121,7 @@ Backups require copying the SQLite file and the documents directory together.
 
 - **Local development** – Run the backend with `uvicorn backend.app.main:app --reload` and the frontend with `npm run dev`. Both share the SQLite database and documents folder.
 - **Single-container deployment** – `docker compose up` builds the combined image and mounts `./var` for persistence.
-- **Configuration** – Environment variables cover database paths, document storage, and authentication providers. Defaults point to SQLite and local file storage.
+- **Configuration** – Environment variables cover database paths, document storage, and authentication providers. Defaults point to SQLite and the local file system.
 - **Monitoring** – Application logs stream to stdout. Watch `var/` disk usage and manifest volume.
 
 ---
