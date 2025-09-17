@@ -1,47 +1,54 @@
 # AGENTS — Automatic Data Extractor
 
-This file is the quick-start for coding agents. Pair it with `README.md` (human overview) and `ADE_GLOSSARY.md` (terminology).
+Pair this guide with `README.md` for the high-level architecture and `ADE_GLOSSARY.md` for terminology. Update all three when
+the architecture or workflows change.
 
 ---
 
 ## Quick facts
-
 - **Mission** – Turn semi-structured spreadsheets and PDFs into deterministic tables with snapshot-controlled logic.
-- **Packaging** – Ship everything as one Docker container with a FastAPI backend, Python processing engine, and Vite + TypeScript frontend.
-- **Persistence** – Use SQLite at `var/ade.sqlite` and store uploaded documents under `var/documents/`. Keep both out of version control.
+- **Packaging** – Ship everything as one Docker container running a FastAPI backend, deterministic Python processor, and Vite +
+  TypeScript frontend.
+- **Persistence** – Use SQLite at `var/ade.sqlite` and store uploaded documents under `var/documents/`. Keep both out of version
+  control.
 - **Priorities** – Determinism, debuggability, and simple operations beat raw throughput.
 
 ---
 
 ## Repository status
-
 - The repo currently contains documentation only. Backend, frontend, and infra directories are not yet scaffolded.
 - Follow the planned layout in `README.md` when creating new code. Create directories as needed.
-- Update `AGENTS.md`, `README.md`, and the glossary whenever architecture or workflows change.
+- Keep this file, the README, and the glossary aligned with the active architecture.
 
 ---
 
 ## Collaboration workflow
-
-- **Current planning doc** – `CURRENT_TASK.md` ("Backend foundation") holds the active build plan. Keep it updated until the plan is approved for implementation.
-- **Iteration loop** – Design together first, then build. Once a task is completed in code, force rename `CURRENT_TASK.md` to `PREVIOUS_TASK.md` (replacing the old `PREVIOUS_TASK.md` if one exists) and create a fresh `CURRENT_TASK.md` for the next active build plan.
-- **Cross-reference** – Note any changes to scope or priorities here so the next agent immediately knows which plan is live.
+- **Active planning doc** – `CURRENT_TASK.md` (“Backend foundation”) is the plan to execute right now. Keep it updated until the
+  work ships.
+- **Iteration loop** – Design together first, then build. Once a task is completed in code, rename `CURRENT_TASK.md` to
+  `PREVIOUS_TASK.md` (replacing the old one if present) and create a fresh `CURRENT_TASK.md` for the next plan.
+- **Cross-reference** – Note any shifts in scope or priorities here so the next agent immediately knows which plan is live.
 
 ---
 
 ## Architecture guide
-
-- **Backend** – Python 3.11 with FastAPI and Pydantic v2. Keep extraction logic in pure functions (no I/O, randomness, or external calls). Put orchestration and persistence under `backend/app/services/` and processing utilities under `backend/processor/`.
-- **Frontend** – Vite + React with TypeScript. Use functional components, strict TypeScript settings, and place API wrappers in `frontend/src/api/`.
-- **Snapshots & runs** – Treat published snapshots as immutable. Allow runs to execute multiple snapshots so the UI can compare manifests side-by-side. Persist manifests and snapshot payloads as JSON.
-- **Authentication** – Support username/password by default. Optional SSO (SAML or OIDC) can be added later. Admins issue API keys tied to user roles.
-- **Storage** – Default to SQLite unless volume demands a change. Mount `./var` when running in Docker to persist the database and documents.
+- **Backend** – Python 3.11 with FastAPI and Pydantic v2. Keep extraction logic in pure functions (no I/O, randomness, or
+  external calls). Put orchestration and persistence under `backend/app/services/` and processing utilities under
+  `backend/processor/`.
+- **Frontend** – Vite + React with TypeScript. Use functional components, strict typing, and place API wrappers in
+  `frontend/src/api/`.
+- **Snapshots & runs** – Treat published snapshots as immutable. Allow runs to execute multiple snapshots so the UI can compare
+  manifests side-by-side. Persist manifests and snapshot payloads as JSON.
+- **Authentication** – Support username/password by default. Optional SSO (SAML or OIDC) can arrive later. Admins issue API keys
+  tied to user roles.
+- **Storage** – Default to SQLite unless volume demands a change. Mount `./var` when running in Docker to persist the database
+  and documents.
 
 ---
 
 ## Local development checklist
-
-1. **Backend** – Create a Python 3.11 virtualenv and install dependencies via `pip install -r requirements.txt` (add the file when dependencies exist). Run `uvicorn backend.app.main:app --reload` for local API development.
+1. **Backend** – Create a Python 3.11 virtualenv and install dependencies via `pip install -r requirements.txt` (add the file
+   when dependencies exist). Run `uvicorn backend.app.main:app --reload` for local API development.
 2. **Frontend** – Inside `frontend/`, run `npm install` then `npm run dev`. The UI expects the backend at `http://localhost:8000`.
 3. **Docker** – Provide a combined workflow via `docker compose up` that builds the app and mounts `./var` for persistence.
 4. **Environment variables** – Use `.env` files that are gitignored for secrets (DB paths, SSO settings, API key salts, etc.).
@@ -49,7 +56,6 @@ This file is the quick-start for coding agents. Pair it with `README.md` (human 
 ---
 
 ## Quality and testing
-
 Run the checks that match your changes:
 
 ```bash
@@ -67,7 +73,6 @@ npm run typecheck  # Frontend type checks
 ---
 
 ## Data and security notes
-
 - Treat `var/ade.sqlite` and everything in `var/documents/` as sensitive. Never commit their contents.
 - Redact or hash personal data before logging.
 - Enforce role-based access control on every endpoint. API keys inherit user scopes.
@@ -75,7 +80,6 @@ npm run typecheck  # Frontend type checks
 ---
 
 ## Git workflow expectations
-
 - Keep commits focused with descriptive messages (e.g., `backend: add snapshot publish route`).
 - Ensure `git status` is clean before finishing.
 - After committing, always call the `make_pr` tool to record the PR summary.
@@ -83,4 +87,5 @@ npm run typecheck  # Frontend type checks
 
 ---
 
-When in doubt, favour simple, auditable solutions over premature abstractions, and record new findings here for the next agent.
+When in doubt, favour simple, auditable solutions over premature abstractions, and document new findings here for the next
+agent.

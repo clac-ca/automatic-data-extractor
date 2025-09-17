@@ -1,55 +1,39 @@
 # Current Task — Backend foundation
 
-## Objective
-Deliver the first runnable FastAPI service backed by SQLite. This slice sets the shared patterns for configuration, persistence,
-and routing so every later feature plugs into the same backbone.
+## Goal
+Stand up the first runnable FastAPI service backed by SQLite. This slice establishes the shared patterns for configuration,
+persistence, and routing so future features can plug into the same backbone.
 
-## Why this comes first
-- All UI, processor, and automation work will rely on the backend API; a working skeleton unblocks every team.
-- SQLite plus on-disk documents keeps deployment and backups trivial—copy `var/ade.sqlite` and `var/documents/` together.
-- Establishing the directory layout and settings early prevents churn when the codebase grows.
+## Architectural guardrails
+- Python 3.11 + FastAPI + Pydantic v2 for the HTTP layer.
+- SQLAlchemy ORM pointed at `var/ade.sqlite`; use SQLite defaults unless we hit scale limits.
+- Deterministic processing helpers under `backend/processor/` stay pure (no I/O or randomness).
+- On startup the app ensures `var/` and `var/documents/` exist.
+- Domain models start with `Snapshot` only. Additional tables come later.
 
-## Scope decisions for this slice
-- **Runtime** – Python 3.11 with FastAPI and Pydantic v2.
-- **Persistence** – SQLAlchemy ORM pointed at SQLite in `var/ade.sqlite`. Use `Base.metadata.create_all()` on startup; migrations
-  can wait until tables stabilise.
-- **Configuration** – Pydantic `BaseSettings` with defaults aimed at `var/ade.sqlite` and `var/documents/`, overridable via
-  environment variables.
-- **Dependency wiring** – Session-per-request dependency using the `yield` pattern to keep tests deterministic.
-- **Domain footprint** – Start with a single `Snapshot` table (ULID primary key, document type string, title, status flag,
-  payload JSON, and created/updated timestamps). Additional tables can follow future slices.
-- **Layout** – `backend/app/` for HTTP concerns, `backend/processor/` reserved for future pure logic helpers.
-
-## Ordered work plan
-1. **Repository scaffold**
-   - Add `pyproject.toml` with FastAPI, SQLAlchemy, Pydantic, and Uvicorn dependencies.
-   - Create `backend/app/`, `backend/processor/`, and `backend/tests/` packages (`__init__.py` as needed).
-   - Extend `.gitignore` to exclude `var/` and standard Python build artefacts.
-2. **Settings & filesystem prep**
-   - Implement `backend/app/config.py` with a `Settings` class and `get_settings()` helper.
-   - Ensure startup creates `var/` and `var/documents/` when missing.
-3. **Database plumbing**
-   - Add `backend/app/db.py` with an engine factory, `SessionLocal`, and a `get_db()` dependency.
-   - Call `Base.metadata.create_all()` during startup to guarantee tables exist.
-4. **Domain model**
-   - Define the SQLAlchemy `Snapshot` model with the fields noted above, using SQLite JSON storage for the payload.
-   - Keep timestamps as ISO strings for now to avoid premature utilities.
-5. **API skeleton**
-   - Add `backend/app/schemas.py` with a `HealthResponse` model (status string, optional database check details).
-   - Create `backend/app/routes/health.py` implementing `GET /health` that exercises the database connection (e.g., `SELECT 1`).
-   - Wire routers in `backend/app/main.py`, leaving TODO comments for future endpoints.
-   - Startup hooks should create directories and run `create_all()`.
-6. **Application entrypoint & tests**
-   - Implement `backend/app/main.py` to instantiate FastAPI and register dependencies and startup tasks.
-   - Add `backend/tests/test_health.py` covering the health endpoint and asserting the SQLite file exists after startup.
+## Deliverables
+1. **Repository scaffold** – Add `pyproject.toml`, create `backend/app/`, `backend/processor/`, and `backend/tests/` packages, and
+   extend `.gitignore` to exclude `var/` plus standard Python artefacts.
+2. **Configuration** – Implement `backend/app/config.py` with a `Settings` class (`BaseSettings`) and a `get_settings()` helper.
+   Defaults should point at `var/ade.sqlite` and `var/documents/`, with environment overrides.
+3. **Database plumbing** – Implement `backend/app/db.py` with an engine factory, `SessionLocal`, and a `get_db()` dependency that
+   yields a session per request. Call `Base.metadata.create_all()` on startup.
+4. **Domain model** – Define a SQLAlchemy `Snapshot` model with ULID primary key, document type, title, status flag, payload JSON,
+   and created/updated timestamps (store timestamps as ISO strings for now).
+5. **API skeleton** – Add `backend/app/routes/health.py` exposing `GET /health`. The handler should return `{ "status": "ok" }`
+   and exercise the database (e.g., `SELECT 1`). Create `backend/app/schemas.py` for the response model and wire routers in
+   `backend/app/main.py`.
+6. **Application entrypoint & tests** – Implement `backend/app/main.py` to instantiate FastAPI, register routes, and run startup
+   hooks (create directories + `create_all()`). Add `backend/tests/test_health.py` covering the health endpoint and asserting the
+   SQLite file exists after startup.
 
 ## Definition of done
-- `uvicorn backend.app.main:app --reload` starts without errors and creates `var/ade.sqlite` when missing.
-- `GET /health` returns a JSON payload such as `{ "status": "ok" }` and proves a real database connection.
+- `uvicorn backend.app.main:app --reload` starts without errors and creates `var/ade.sqlite` if it is missing.
+- `GET /health` returns `{ "status": "ok" }` and proves a real database connection.
 - Tests introduced in this slice pass locally.
 - Repository layout matches the scaffold above; no extra systems are introduced.
 
-## Deferred
+## Out of scope
 - Authentication, password hashing, or user management flows.
 - Document uploads, processor logic, or background job orchestration.
 - Frontend scaffolding, Docker packaging, and CI pipelines.
