@@ -1,6 +1,6 @@
 # ADE glossary
 
-Use this glossary as the shared vocabulary for product, design, and engineering. Terms shown in `code` match identifiers in the API, SQLite schema, or UI.
+Use this glossary as the shared vocabulary for product, design, and engineering. Terms in `code` match identifiers in the API, SQLite schema, or UI.
 
 ---
 
@@ -60,7 +60,7 @@ Use this glossary as the shared vocabulary for product, design, and engineering.
 
 ## Storage quick reference
 
-All persistent data lives in SQLite (`var/ade.sqlite`). Key tables:
+Everything persists in SQLite (`var/ade.sqlite`). Key tables:
 
 ```sql
 CREATE TABLE snapshots (
