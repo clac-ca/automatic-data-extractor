@@ -58,6 +58,7 @@ class SnapshotResponse(BaseModel):
     title: str
     payload: dict[str, Any]
     is_published: bool
+    published_at: str | None = None
     created_at: str
     updated_at: str
 

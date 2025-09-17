@@ -16,11 +16,11 @@ listed beside each term.
 
 ## Core domain
 - **Document type** – Family of documents that share extraction rules (`snapshots.document_type`).
-- **Snapshot** – Immutable bundle of logic for a document type. Drafts can change; published snapshots are read only
-  (`snapshots.snapshot_id` ULID).
+- **Snapshot** – Immutable bundle of logic for a document type. Drafts can change; the published snapshot is read only
+  (`snapshots.snapshot_id` ULID, `snapshots.is_published`, `snapshots.published_at`).
 - **Profile** – Optional overrides for a source, customer, or locale stored in the snapshot payload (`payload.profiles`).
-- **Live pointer** – Mapping from a document type (and optional profile) to the snapshot currently used in production
-  (`live_registry.live_snapshot_id`).
+- **Live snapshot** – The single published snapshot for a document type. API consumers use it by default when they do not
+  supply an explicit `snapshot_id` (`snapshots.is_published = 1`).
 - **Run** – Execution of the processing engine against one or more documents (`manifests.run_id` ULID).
 - **Manifest** – JSON result of a run: tables, column mappings, audit data, statistics, and the `snapshot_id` used
   (`manifests.payload`).
@@ -61,8 +61,7 @@ listed beside each term.
 
 ## Storage foundation
 ADE stores everything in SQLite (`var/ade.sqlite`). Tables expected on day one:
-- `snapshots` – Snapshot metadata and JSON payloads.
-- `live_registry` – Mapping from document type/profile to the live snapshot.
+- `snapshots` – Snapshot metadata, JSON payloads, and publication state.
 - `manifests` – Run outputs and manifest payloads.
 - `users` – Accounts with roles and optional SSO subjects.
 - `api_keys` – Issued API keys linked to users.
