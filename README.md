@@ -1,71 +1,72 @@
 # ADE — Automatic Data Extractor
 
-ADE is a single-container internal tool that turns repeating spreadsheets and PDFs into deterministic tables. Everything ships
-together: a FastAPI backend, a pure-Python processor, a React UI, and a SQLite database with documents on disk so teams can run
-it without extra services.
+ADE is an internal tool shipped as a single Docker container. The bundle includes a FastAPI backend, a pure-Python extraction
+engine, a React UI, and a SQLite database with documents on disk. Teams can run it on a laptop or a small server without any
+extra services.
 
 ---
 
-## Guiding principles
-- **Deterministic runs** – Every manifest ties back to an immutable snapshot with recorded logic digests.
-- **Boring technology** – FastAPI, SQLite, and TypeScript are enough. Reach for new tools only when a real limitation appears.
-- **One API surface** – The UI and automation scripts talk to the same HTTP endpoints.
-- **Pure extraction logic** – Processing code stays side-effect free so reruns always match.
-
----
-
-## Architecture overview
+## System snapshot
 ```
-+------------------------ Docker container -----------------------+
-|  React UI  ↔  FastAPI backend  ↔  Processor helpers             |
-|                              |                                   |
-|                              ├─ SQLite database  (var/ade.sqlite)|
-|                              └─ Document storage (var/documents/)|
-+-----------------------------------------------------------------+
++----------------------------- Docker container -----------------------------+
+|  React UI  ↔  FastAPI backend  ↔  Pure-Python processor helpers             |
+|                                     |                                       |
+|                                     ├─ SQLite database  (var/ade.sqlite)    |
+|                                     └─ Document storage (var/documents/)    |
++-----------------------------------------------------------------------------
 ```
-- **Frontend** – Configure document types, edit logic, upload files, review manifests, and compare versions.
+- **Frontend** – Configure document types, edit extraction logic, upload files, compare manifests, and publish new snapshots.
 - **Backend** – FastAPI routes for auth, CRUD, run orchestration, and manifest retrieval.
-- **Processor** – Pure Python helpers that detect tables, map columns, transform values, and collect audit notes.
-- **Storage** – SQLite and the documents directory handle all persistence. Move away only if volume demands it.
-
-Snapshots power every run: they bundle detection logic, schema expectations, and optional profile overrides. Runs can evaluate
-multiple snapshots side by side so reviewers can compare manifests before promoting new logic.
+- **Processor** – Pure functions that locate tables, map columns, transform values, and emit audit notes.
+- **Storage** – SQLite and the on-disk documents directory keep persistence simple. Switch only when scale truly demands it.
 
 ---
 
-## Core workflows
-### Process new documents
-1. Upload files via the UI or `POST /api/v1/documents`; uploads persist in `var/documents/`.
-2. Choose the snapshots to evaluate (live pointer or historical versions).
-3. Trigger a run from the UI or `POST /api/v1/runs`; the processor applies each snapshot and stores manifests in SQLite.
-4. Review manifests in the UI or `GET /api/v1/manifests/{run_id}` before promoting new logic.
-
-### Improve extraction logic
-1. Create or copy a draft snapshot for the relevant document type.
-2. Update column catalogues, detection rules, schema requirements, and profile overrides.
-3. Test drafts against real uploads and inspect manifest diffs versus the live snapshot.
-4. Publish when satisfied. Publishing advances the live pointer; old snapshots remain immutable.
-
-### Compare versions in the UI
-1. Select documents and the snapshots to evaluate.
-2. Trigger a comparison run—each snapshot produces its own manifest.
-3. Inspect diffs and audit notes to confirm behaviour before promoting logic.
+## Design tenets
+- **Deterministic by default** – Every manifest links back to an immutable snapshot with digests of the logic used.
+- **Choose boring tech** – FastAPI, SQLite, and TypeScript are enough. Reach for new dependencies only when the simple stack
+  blocks us.
+- **One API surface** – UI, automation scripts, and background jobs all call the same HTTP endpoints.
+- **Pure extraction logic** – Processing code is side-effect free so reruns always match prior outputs.
+- **Operational clarity** – Favour readable code, explicit logging, and shallow dependency trees over raw throughput.
 
 ---
 
-## Data & terminology
-The glossary in `ADE_GLOSSARY.md` defines the terms used across the API, database, and UI. Treat it as the naming authority for
-code, payloads, and documentation.
+## Building blocks
+### Frontend
+Lives under `frontend/` (Vite + React + TypeScript). It lets reviewers upload documents, inspect manifests, and manage
+snapshots. Strict typing and lightweight components keep the UI predictable.
+
+### Backend
+Resides in `backend/app/` (Python 3.11, FastAPI, SQLAlchemy, Pydantic v2). It owns routing, authentication, orchestration, and
+persistence helpers. Domain logic that manipulates data stays out of request handlers and in focused service modules.
+
+### Processor
+Pure Python helpers live in `backend/processor/`. They detect tables, decide column mappings, run validation rules, and produce
+audit notes. Because they are deterministic functions, reruns against the same snapshot + document yield identical manifests.
+
+### Storage
+All persistence uses SQLite (`var/ade.sqlite`) and an on-disk documents folder (`var/documents/`). These paths are gitignored
+and mounted as Docker volumes in deployment.
 
 ---
 
-## Tech stack & repository layout
-- **Backend** – Python 3.11, FastAPI, SQLAlchemy, and Pydantic v2 under `backend/app/`.
-- **Processor** – Pure Python helpers in `backend/processor/`.
-- **Frontend** – Vite + React + TypeScript under `frontend/` with strict typing enabled.
-- **Infra** – Docker assets under `infra/`.
+## How the system flows
+1. Upload documents through the UI or `POST /api/v1/documents`. Files land in `var/documents/`.
+2. Select one or more snapshots (live or historical) to evaluate.
+3. Trigger a run via the UI or `POST /api/v1/runs`. The processor executes each snapshot and writes manifests to SQLite.
+4. Review manifests in the UI or by calling `GET /api/v1/manifests/{run_id}`. Promote new snapshots when the results look right.
+5. Published snapshots advance the live pointer for that document type; older snapshots remain immutable.
 
-Planned layout:
+---
+
+## Data naming authority
+The glossary in `ADE_GLOSSARY.md` defines every API field, database column, and UI label. Treat it as the source of truth when
+naming payloads or schema elements.
+
+---
+
+## Repository layout (planned)
 ```
 .
 ├─ README.md
@@ -73,7 +74,7 @@ Planned layout:
 ├─ AGENTS.md
 ├─ backend/
 │  ├─ app/            # FastAPI entrypoint, routes, schemas, services
-│  ├─ processor/      # Header finder, column mapper, value logic
+│  ├─ processor/      # Table detection, column mapping, validation logic
 │  └─ tests/
 ├─ frontend/
 │  ├─ src/            # Pages, components, API client wrappers
@@ -90,28 +91,26 @@ Planned layout:
 
 ---
 
-## Operations & data handling
-- SQLite (`var/ade.sqlite`) stores snapshots, manifests, users, sessions, API keys, and audit metadata. Payloads stay JSON until
-  a strict schema is required.
-- `var/documents/` holds uploads, fixtures, and exported manifests. Mount it as a Docker volume when deploying.
+## Operations
+- SQLite stores snapshots, manifests, users, sessions, API keys, and audit metadata. Payloads stay JSON until a strict schema is
+  required.
+- Back up ADE by copying both the SQLite file and the documents directory.
 - Environment variables override defaults; `.env` files hold secrets and stay gitignored.
-- Logs stream to stdout. Keep an eye on `var/` size and run durations.
-
-Backing up ADE means copying both the SQLite file and the documents directory.
+- Logs stream to stdout. Keep an eye on `var/` size and long-running jobs.
 
 ---
 
-## Development
-- Run the backend with `uvicorn backend.app.main:app --reload`.
-- Run the frontend with `npm run dev`. Both reuse the same SQLite database and documents folder.
-- Provide a combined workflow with `docker compose up` that mounts `./var` for persistence.
-- Use pytest, ruff, mypy, and the frontend lint/typecheck commands when you change related areas.
+## Development routines
+- Backend: `uvicorn backend.app.main:app --reload`.
+- Frontend: `npm run dev`. Both reuse the same SQLite database and documents directory.
+- Docker: `docker compose up` builds the container and mounts `./var` for persistence.
+- Quality checks: pytest, ruff, mypy, plus `npm test`, `npm run lint`, and `npm run typecheck` for UI changes.
 
 ---
 
 ## Near-term roadmap
-- Guided rule authoring that surfaces example matches and misses.
-- Snapshot comparison reports summarising behaviour changes across batches.
+- Guided rule authoring with inline examples of matches and misses.
+- Snapshot comparison reports summarising behaviour changes across document batches.
 - Bulk uploads and optional background processing once single-run workflows become limiting.
 
 ---
