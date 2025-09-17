@@ -30,6 +30,7 @@ class Snapshot(Base):
     document_type: Mapped[str] = mapped_column(String(100), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    published_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # Persist arbitrary structured data. Callers should reassign ``payload``
     # instead of mutating nested keys so change tracking stays predictable.
     payload: Mapped[dict[str, Any]] = mapped_column(
@@ -40,6 +41,5 @@ class Snapshot(Base):
 
     def __repr__(self) -> str:
         return f"Snapshot(snapshot_id={self.snapshot_id!r}, document_type={self.document_type!r})"
-
 
 __all__ = ["Snapshot"]

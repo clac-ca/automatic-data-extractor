@@ -10,6 +10,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.db import get_sessionmaker
+from backend.app.services.snapshots import (
+    PublishedSnapshotNotFoundError,
+    SnapshotDocumentTypeMismatchError,
+    resolve_snapshot,
+)
 
 
 def _create_sample_snapshot(
@@ -17,6 +22,7 @@ def _create_sample_snapshot(
     *,
     document_type: str = "invoice",
     title: str = "Q1 snapshot",
+    is_published: bool = False,
 ) -> dict[str, Any]:
     """Create a snapshot via the API and return the response payload."""
 
@@ -24,6 +30,7 @@ def _create_sample_snapshot(
         "document_type": document_type,
         "title": title,
         "payload": {"rows": []},
+        "is_published": is_published,
     }
     response = client.post("/snapshots", json=payload)
     assert response.status_code == 201
@@ -48,6 +55,7 @@ def test_create_snapshot_returns_persisted_snapshot(app_client) -> None:
     assert data["title"] == payload["title"]
     assert data["payload"] == payload["payload"]
     assert data["is_published"] is True
+    datetime.fromisoformat(data["published_at"])
     assert len(data["snapshot_id"]) == 26
     # Ensure timestamps are ISO formatted strings
     datetime.fromisoformat(data["created_at"])
@@ -70,6 +78,7 @@ def test_create_snapshot_trims_strings(app_client) -> None:
     data = response.json()
     assert data["document_type"] == "invoice"
     assert data["title"] == "Needs trimming"
+    assert data["published_at"] is None
 
 
 def test_list_snapshots_orders_by_newest_first(app_client) -> None:
@@ -111,8 +120,50 @@ def test_update_snapshot_mutates_fields(app_client) -> None:
     data = response.json()
     assert data["title"] == "Updated title"
     assert data["is_published"] is True
+    datetime.fromisoformat(data["published_at"])
     assert data["payload"] == created["payload"]
     assert data["updated_at"] != created["updated_at"]
+
+
+def test_publishing_snapshot_demotes_previous_version(app_client) -> None:
+    client, _, _ = app_client
+
+    first = _create_sample_snapshot(client, title="Draft 1", is_published=True)
+    second = _create_sample_snapshot(client, title="Draft 2")
+
+    publish_response = client.patch(
+        f"/snapshots/{second['snapshot_id']}",
+        json={"is_published": True},
+    )
+
+    assert publish_response.status_code == 200
+    assert publish_response.json()["snapshot_id"] == second["snapshot_id"]
+    assert publish_response.json()["is_published"] is True
+
+    first_refresh = client.get(f"/snapshots/{first['snapshot_id']}")
+    assert first_refresh.status_code == 200
+    first_data = first_refresh.json()
+    assert first_data["is_published"] is False
+    assert first_data["published_at"] is None
+
+
+def test_unpublishing_snapshot_clears_published_state(app_client) -> None:
+    client, _, _ = app_client
+
+    published = _create_sample_snapshot(client, is_published=True)
+
+    response = client.patch(
+        f"/snapshots/{published['snapshot_id']}",
+        json={"is_published": False},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_published"] is False
+    assert data["published_at"] is None
+
+    lookup = client.get(f"/snapshots/published/{published['document_type']}")
+    assert lookup.status_code == 404
 
 
 def test_update_snapshot_trims_title(app_client) -> None:
@@ -175,6 +226,33 @@ def test_delete_snapshot_removes_record(app_client) -> None:
     assert follow_up.status_code == 404
 
 
+def test_get_published_snapshot_endpoint_returns_active_snapshot(app_client) -> None:
+    client, _, _ = app_client
+
+    _create_sample_snapshot(client, title="Draft copy")
+    published = _create_sample_snapshot(
+        client, title="Published copy", is_published=True
+    )
+
+    response = client.get(f"/snapshots/published/  {published['document_type']}  ")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["snapshot_id"] == published["snapshot_id"]
+    assert data["is_published"] is True
+
+
+def test_get_published_snapshot_endpoint_returns_404_when_missing(app_client) -> None:
+    client, _, _ = app_client
+
+    _create_sample_snapshot(client, title="Draft only")
+
+    response = client.get("/snapshots/published/invoice")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "No published snapshot found for document type 'invoice'"
+
+
 def test_snapshot_payload_assignment_persists(app_client) -> None:
     client, _, _ = app_client
 
@@ -224,6 +302,73 @@ def test_snapshot_payload_assignment_persists(app_client) -> None:
     assert data["payload"]["metadata"]["version"] == "2.0"
     assert data["payload"]["metadata"]["tags"] == ["initial", "updated"]
     assert data["payload"]["notes"] == [{"author": "qa", "status": "reviewed"}]
+
+
+def test_resolve_snapshot_defaults_to_published(app_client) -> None:
+    client, _, _ = app_client
+
+    published = _create_sample_snapshot(client, is_published=True)
+    _create_sample_snapshot(client, title="Archived copy")
+
+    session_factory = get_sessionmaker()
+    with session_factory() as session:
+        resolved = resolve_snapshot(
+            session,
+            document_type=published["document_type"],
+            snapshot_id=None,
+        )
+
+    assert resolved.snapshot_id == published["snapshot_id"]
+
+
+def test_resolve_snapshot_returns_requested_snapshot(app_client) -> None:
+    client, _, _ = app_client
+
+    published = _create_sample_snapshot(client, is_published=True)
+    draft = _create_sample_snapshot(client, title="Older version")
+
+    session_factory = get_sessionmaker()
+    with session_factory() as session:
+        resolved = resolve_snapshot(
+            session,
+            document_type=published["document_type"],
+            snapshot_id=draft["snapshot_id"],
+        )
+
+    assert resolved.snapshot_id == draft["snapshot_id"]
+
+
+def test_resolve_snapshot_raises_for_mismatched_document_type(app_client) -> None:
+    client, _, _ = app_client
+
+    snapshot = _create_sample_snapshot(client, document_type="invoice", is_published=True)
+
+    session_factory = get_sessionmaker()
+    with session_factory() as session:
+        with pytest.raises(SnapshotDocumentTypeMismatchError) as excinfo:
+            resolve_snapshot(
+                session,
+                document_type="remittance",
+                snapshot_id=snapshot["snapshot_id"],
+            )
+
+    assert (
+        str(excinfo.value)
+        == f"Snapshot '{snapshot['snapshot_id']}' belongs to document type 'invoice', not 'remittance'"
+    )
+
+
+def test_resolve_snapshot_requires_published_snapshot_when_missing_id(app_client) -> None:
+    client, _, _ = app_client
+
+    _create_sample_snapshot(client, is_published=False)
+
+    session_factory = get_sessionmaker()
+    with session_factory() as session:
+        with pytest.raises(PublishedSnapshotNotFoundError) as excinfo:
+            resolve_snapshot(session, document_type="invoice", snapshot_id=None)
+
+    assert str(excinfo.value) == "No published snapshot found for document type 'invoice'"
 
 
 def test_in_memory_sqlite_is_shared_across_threads(tmp_path, app_client_factory) -> None:
