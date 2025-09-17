@@ -27,7 +27,7 @@ class Settings(BaseSettings):
             return None
 
         database = (url.database or "").strip()
-        if not database or database == ":memory:" or database.startswith("file:"):
+        if not database or database == ":memory:":
             return None
 
         return Path(database)
