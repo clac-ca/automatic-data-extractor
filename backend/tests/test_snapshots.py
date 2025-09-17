@@ -52,6 +52,23 @@ def test_create_snapshot_returns_persisted_snapshot(app_client) -> None:
     assert db_path.exists()
 
 
+def test_create_snapshot_trims_strings(app_client) -> None:
+    client, _, _ = app_client
+
+    payload = {
+        "document_type": "  invoice  ",
+        "title": "  Needs trimming  ",
+        "payload": {},
+    }
+
+    response = client.post("/snapshots", json=payload)
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["document_type"] == "invoice"
+    assert data["title"] == "Needs trimming"
+
+
 def test_list_snapshots_orders_by_newest_first(app_client) -> None:
     client, _, _ = app_client
 
@@ -95,6 +112,20 @@ def test_update_snapshot_mutates_fields(app_client) -> None:
     assert data["updated_at"] != created["updated_at"]
 
 
+def test_update_snapshot_trims_title(app_client) -> None:
+    client, _, _ = app_client
+
+    created = _create_sample_snapshot(client)
+
+    response = client.patch(
+        f"/snapshots/{created['snapshot_id']}",
+        json={"title": "  Updated Title  "},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Updated Title"
+
+
 def test_update_snapshot_requires_payload_when_provided(app_client) -> None:
     client, _, _ = app_client
 
@@ -116,6 +147,19 @@ def test_update_snapshot_requires_non_empty_body(app_client, body) -> None:
     assert response.status_code == 422
 
 
+def test_update_snapshot_rejects_null_boolean(app_client) -> None:
+    client, _, _ = app_client
+
+    created = _create_sample_snapshot(client)
+
+    response = client.patch(
+        f"/snapshots/{created['snapshot_id']}",
+        json={"is_published": None},
+    )
+
+    assert response.status_code == 422
+
+
 def test_delete_snapshot_removes_record(app_client) -> None:
     client, _, _ = app_client
 
@@ -126,3 +170,23 @@ def test_delete_snapshot_removes_record(app_client) -> None:
 
     follow_up = client.get(f"/snapshots/{created['snapshot_id']}")
     assert follow_up.status_code == 404
+
+
+def test_snapshot_payload_mutations_persist(app_client) -> None:
+    client, _, _ = app_client
+
+    created = _create_sample_snapshot(client)
+
+    from backend.app.db import SessionLocal
+    from backend.app.models import Snapshot
+
+    with SessionLocal() as session:
+        snapshot = session.get(Snapshot, created["snapshot_id"])
+        assert snapshot is not None
+        snapshot.payload["metadata"] = {"version": "1.0"}
+        session.commit()
+
+    response = client.get(f"/snapshots/{created['snapshot_id']}")
+
+    assert response.status_code == 200
+    assert response.json()["payload"]["metadata"] == {"version": "1.0"}

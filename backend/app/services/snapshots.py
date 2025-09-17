@@ -24,7 +24,7 @@ def list_snapshots(db: Session) -> list[Snapshot]:
 
     statement = select(Snapshot).order_by(Snapshot.created_at.desc())
     result = db.scalars(statement)
-    return result.all()
+    return list(result)
 
 
 def get_snapshot(db: Session, snapshot_id: str) -> Snapshot:

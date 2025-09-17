@@ -26,8 +26,8 @@ def app_client(tmp_path, monkeypatch) -> Iterator[Tuple[TestClient, Path, Path]]
 
     def _get_settings_override() -> Settings:
         return Settings(
-            ADE_DATABASE_URL=f"sqlite:///{db_path}",
-            ADE_DOCUMENTS_DIR=str(documents_dir),
+            database_url=f"sqlite:///{db_path}",
+            documents_dir=documents_dir,
         )
 
     monkeypatch.setattr(config_module, "get_settings", _get_settings_override)
