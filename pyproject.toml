@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "automatic-data-extractor"
+version = "0.1.0"
+description = "Internal tooling for deterministic data extraction."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "ADE Team" }
+]
+dependencies = [
+    "fastapi>=0.110,<0.112",
+    "uvicorn[standard]>=0.23,<0.29",
+    "sqlalchemy>=2.0,<3.0",
+    "pydantic>=2.5,<3.0",
+    "pydantic-settings>=2.0,<3.0",
+    "ulid-py>=1.1,<2.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0,<8.0"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["backend/tests"]
