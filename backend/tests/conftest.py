@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import ContextManager, Tuple
+from typing import ContextManager
 
 import pytest
 from fastapi.testclient import TestClient
@@ -23,24 +23,23 @@ def _test_client(
     monkeypatch.setenv("ADE_DOCUMENTS_DIR", str(documents_dir))
 
     import backend.app.config as config_module
-    from backend.app.config import Settings
-
-    def _get_settings_override() -> Settings:
-        return Settings(database_url=database_url, documents_dir=documents_dir)
-
-    monkeypatch.setattr(config_module, "get_settings", _get_settings_override)
+    config_module.reset_settings_cache()
 
     import backend.app.db as db_module
     db_module.reset_database_state()
 
     import backend.app.main as main_module
 
-    with TestClient(main_module.app) as client:
-        yield client
+    try:
+        with TestClient(main_module.app) as client:
+            yield client
+    finally:
+        config_module.reset_settings_cache()
+        db_module.reset_database_state()
 
 
 @pytest.fixture
-def app_client(tmp_path, monkeypatch) -> Iterator[Tuple[TestClient, Path, Path]]:
+def app_client(tmp_path, monkeypatch) -> Iterator[tuple[TestClient, Path, Path]]:
     """Return a TestClient bound to an isolated SQLite database."""
 
     db_path = tmp_path / "ade.sqlite"
