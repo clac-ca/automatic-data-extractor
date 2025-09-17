@@ -1,53 +1,51 @@
-# Current Task — Backend foundation slice
+# Current Task — Backend bootstrap
 
-## Outcome
-Stand up a minimal FastAPI service backed by SQLite. The service should expose a health endpoint, prove that persistence works, and establish the directory layout other teams will build on.
+## Goal
+Stand up the first runnable FastAPI service with SQLite so every future team can plug into the same API surface and persistence layer.
 
-## Why this comes first
-- Every future component (UI, processor, automation) depends on a shared API surface and data model.
-- SQLite keeps operations simple: copy the database file and the documents folder to back up ADE.
-- A clean FastAPI project structure sets expectations for routes, services, and tests.
+## Why start here
+- All UI, processor, and automation work will call the backend; we need a working skeleton before building features.
+- SQLite keeps operations simple—copy the database file plus `var/documents/` and the deployment is backed up.
+- Establishing the directory layout and config patterns now prevents churn when the codebase grows.
 
-## Architectural choices locked in
+## Architectural decisions locked for this slice
 - **Runtime** – Python 3.11 with FastAPI and Pydantic v2.
-- **Persistence** – SQLAlchemy ORM pointed at SQLite. Use `metadata.create_all()` during startup; migrations can wait.
-- **Configuration** – Pydantic settings module with sensible defaults (`var/ade.sqlite`, `var/documents/`) and environment overrides.
-- **Dependency wiring** – Session-per-request dependency using the yield pattern to keep tests deterministic.
+- **Persistence** – SQLAlchemy ORM pointed at SQLite in `var/ade.sqlite`. Tables are created with `metadata.create_all()` on startup; migrations can wait.
+- **Configuration** – Pydantic `BaseSettings` with defaults pointing to `var/ade.sqlite` and `var/documents/`, overridable via environment variables.
+- **Dependency wiring** – Session-per-request dependency using the `yield` pattern to keep tests deterministic.
 - **Layout** – `backend/app/` for HTTP concerns, `backend/processor/` reserved for future pure logic helpers.
 
-## Work sequence
-1. **Project scaffold**
+## Ordered work plan
+1. **Repository scaffold**
    - Add `pyproject.toml` with FastAPI, SQLAlchemy, Pydantic, and Uvicorn.
-   - Create the `backend/app/` and `backend/processor/` packages (just `__init__.py` for the processor).
-   - Extend `.gitignore` to exclude `var/` and Python build artefacts.
-2. **Settings & paths**
+   - Create `backend/app/`, `backend/processor/`, and `backend/tests/` packages (`__init__.py` as needed).
+   - Extend `.gitignore` to exclude `var/` and standard Python build artefacts.
+2. **Settings & filesystem prep**
    - Implement `backend/app/config.py` with a `Settings` class and `get_settings()` helper.
-   - Ensure startup creates `var/` and `var/documents/` if they are missing.
+   - Ensure startup creates `var/` and `var/documents/` when missing.
 3. **Database plumbing**
-   - Build `backend/app/db.py` with an engine factory, `SessionLocal`, and a session dependency (`get_db`).
+   - Add `backend/app/db.py` with an engine factory, `SessionLocal`, and a `get_db()` dependency.
    - Call `Base.metadata.create_all()` during startup to guarantee tables exist.
-4. **Data models**
-   - Define SQLAlchemy models for: `User`, `ApiKey`, `DocumentType`, `Snapshot`, `LiveRegistry`, `Upload`, `Run`, and `Manifest`.
-   - Match field names to `ADE_GLOSSARY.md` and keep timestamps as ISO strings for now.
-5. **Schemas**
-   - Add `backend/app/schemas.py` containing `HealthResponse` plus minimal DTOs for document types and snapshots (id + name/title only).
+4. **Minimal models**
+   - Define SQLAlchemy models for `DocumentType` and `Snapshot` with the fields required by `ADE_GLOSSARY.md` (ids, names/titles, status, payload JSON placeholder).
+   - Keep timestamps as ISO strings for now to avoid premature utilities.
+5. **Schemas & routing**
+   - Add `backend/app/schemas.py` with a `HealthResponse` model and lightweight DTOs for document types or snapshots (id + label only).
+   - Create `backend/app/routes/health.py` implementing `GET /health` that checks the database connection (e.g., `SELECT 1`).
+   - Wire routers in `backend/app/main.py`, leaving TODO comments for future endpoints.
 6. **Application entrypoint**
-   - Implement `backend/app/main.py` to instantiate FastAPI, register dependencies, include routers, and run startup hooks.
-   - During startup: create directories, initialise settings, prime the database connection, and run `create_all()`.
-7. **Routes**
-   - Create `backend/app/routes/` with `__init__.py` and `health.py`.
-   - Implement `GET /health` returning status + database check (e.g., `SELECT 1`). Leave TODO stubs for future routers.
-8. **Tests**
-   - Add `backend/tests/test_health.py` covering the health endpoint and asserting the DB file is created.
+   - Implement `backend/app/main.py` to instantiate FastAPI, register dependencies, run startup hooks (directory creation, `create_all()`), and expose the app instance.
+7. **Tests**
+   - Add `backend/tests/test_health.py` covering the health endpoint and asserting the SQLite file is created after startup.
 
 ## Definition of done
-- `uvicorn backend.app.main:app --reload` starts without errors and creates `var/ade.sqlite` if it is missing.
-- `GET /health` returns `{ "status": "ok" }` (or similar) and verifies a real database connection.
-- Tests introduced in this task pass locally.
-- Repository structure matches the layout described above.
+- `uvicorn backend.app.main:app --reload` starts without errors and creates `var/ade.sqlite` when missing.
+- `GET /health` returns a JSON payload such as `{ "status": "ok" }` and confirms a real database connection.
+- Tests introduced in this slice pass locally.
+- Repository layout matches the scaffold above; no extra systems are introduced.
 
-## Deferred for later tasks
-- Authentication flows, password hashing, or user management screens.
+## Deferred
+- Authentication, password hashing, or user management flows.
 - Real extraction logic, file uploads, or background processing.
-- Frontend scaffolding, Docker packaging, and CI configuration.
-- Snapshot diffing or advanced querying optimisations.
+- Frontend scaffolding, Docker packaging, and CI pipelines.
+- Additional database models beyond the two defined here.
