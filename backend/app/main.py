@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator
 
 from fastapi import FastAPI
 
@@ -19,14 +19,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Prepare filesystem directories and database tables."""
 
     settings = config.get_settings()
-    documents_dir = settings.documents_dir
+    documents_dir: Path = settings.documents_dir
     documents_dir.mkdir(parents=True, exist_ok=True)
 
-    db_path: Optional[Path]
-    try:
-        db_path = settings.database_path
-    except ValueError:
-        db_path = None
+    db_path: Path | None = settings.database_path
     if db_path is not None:
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
