@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class HealthResponse(BaseModel):
@@ -21,17 +21,21 @@ class SnapshotBase(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
     is_published: bool = False
 
-    @model_validator(mode="after")
-    def _strip_title(cls, model: "SnapshotBase") -> "SnapshotBase":  # noqa: D401 - simple helper
-        """Ensure critical string fields retain non-whitespace characters."""
+    def model_post_init(self, __context: Any) -> None:  # noqa: D401 - simple post-init normalisation
+        """Trim string fields and ensure they remain non-empty."""
 
-        if not model.title.strip():
+        super().model_post_init(__context)
+        title = self.title.strip()
+        if not title:
             msg = "title must not be empty or whitespace"
             raise ValueError(msg)
-        if not model.document_type.strip():
+        document_type = self.document_type.strip()
+        if not document_type:
             msg = "document_type must not be empty or whitespace"
             raise ValueError(msg)
-        return model
+
+        self.title = title
+        self.document_type = document_type
 
 
 class SnapshotCreate(SnapshotBase):
@@ -45,26 +49,32 @@ class SnapshotUpdate(BaseModel):
     payload: dict[str, Any] | None = None
     is_published: bool | None = None
 
-    @model_validator(mode="after")
-    def _validate_update(cls, model: "SnapshotUpdate") -> "SnapshotUpdate":
-        """Ensure at least one field is supplied and enforce field-specific rules."""
+    def model_post_init(self, __context: Any) -> None:  # noqa: D401 - simple post-init normalisation
+        """Normalise and validate optional update fields."""
 
-        if all(
-            getattr(model, field) is None
-            for field in ("title", "payload", "is_published")
-        ):
+        super().model_post_init(__context)
+
+        if not self.model_fields_set:
             msg = "At least one field must be provided"
             raise ValueError(msg)
 
-        if "title" in model.model_fields_set and model.title is not None and not model.title.strip():
-            msg = "title must not be empty or whitespace"
-            raise ValueError(msg)
+        if "title" in self.model_fields_set:
+            if self.title is None:
+                msg = "title must not be empty or whitespace"
+                raise ValueError(msg)
+            title = self.title.strip()
+            if not title:
+                msg = "title must not be empty or whitespace"
+                raise ValueError(msg)
+            self.title = title
 
-        if "payload" in model.model_fields_set and model.payload is None:
+        if "payload" in self.model_fields_set and self.payload is None:
             msg = "payload cannot be null"
             raise ValueError(msg)
 
-        return model
+        if "is_published" in self.model_fields_set and self.is_published is None:
+            msg = "is_published cannot be null"
+            raise ValueError(msg)
 
 
 class SnapshotResponse(BaseModel):
