@@ -1,5 +1,7 @@
 """Application configuration settings."""
 
+from __future__ import annotations
+
 from functools import lru_cache
 from pathlib import Path
 
@@ -17,17 +19,18 @@ class Settings(BaseSettings):
     documents_dir: Path = Field(default=Path("var/documents"), description="Directory for uploaded documents")
 
     @property
-    def database_path(self) -> Path:
-        """Return the filesystem path of the SQLite database."""
+    def database_path(self) -> Path | None:
+        """Return the filesystem path of the SQLite database if available."""
 
         url = make_url(self.database_url)
         if url.get_backend_name() != "sqlite":
-            msg = "database_path is only defined for SQLite URLs"
-            raise ValueError(msg)
-        if not url.database:
-            msg = "SQLite URL must include a database path"
-            raise ValueError(msg)
-        return Path(url.database)
+            return None
+
+        database = (url.database or "").strip()
+        if not database or database == ":memory:":
+            return None
+
+        return Path(database)
 
 
 @lru_cache

@@ -25,17 +25,7 @@ def _is_sqlite_memory_url(url: URL) -> bool:
     database = (url.database or "").strip()
     if database in {"", ":memory:"}:
         return True
-    if database.startswith("file:"):
-        if database.endswith(":memory:"):
-            return True
-        mode = url.query.get("mode")
-        if isinstance(mode, list):
-            mode_value = mode[0] if mode else None
-        else:
-            mode_value = mode
-        if isinstance(mode_value, str) and mode_value.lower() == "memory":
-            return True
-    return False
+    return database.startswith("file::memory:")
 
 
 def _create_engine(database_url: str) -> Engine:
