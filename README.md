@@ -108,11 +108,88 @@ naming payloads or schema elements.
 
 ---
 
-## Development routines
-- Backend: `uvicorn backend.app.main:app --reload`.
-- Frontend: `npm run dev`. Both reuse the same SQLite database and documents directory.
-- Docker: `docker compose up` builds the container and mounts `./var` for persistence.
-- Quality checks: pytest, ruff, mypy, plus `npm test`, `npm run lint`, and `npm run typecheck` for UI changes.
+Here’s a polished section you can drop into your **README.md** under development routines. It’s focused on **Windows (PowerShell)** and written in the same professional style as the rest of your docs:
+
+---
+
+Looks solid. Here’s a tightened, dev-friendly version you can drop in. I kept the tone crisp, fixed small typos, and added tiny guardrails (prereqs + quick smoke test + common fixes).
+
+---
+
+## Local testing (no Docker, Windows PowerShell)
+
+Run ADE locally for fast backend/UI iteration. Commands assume **Windows 10/11** with **PowerShell**.
+
+### Prerequisites
+
+* **Python 3.11+**
+* **Node.js 20+** (for the frontend)
+* **Git**
+* (Optional) **Docker** for the containerized flow
+
+### 1) Backend (FastAPI + SQLite)
+
+```powershell
+# From the project root
+cd C:\Github\automatic-data-extractor
+
+# Create and activate a virtual environment
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# Install project deps (from pyproject.toml), incl. dev extras (pytest)
+pip install -e ".[dev]"
+
+# Start the API with auto-reload
+python -m uvicorn backend.app.main:app --reload
+# → http://127.0.0.1:8000
+```
+
+**Smoke check (new tab):**
+
+```powershell
+Invoke-WebRequest http://127.0.0.1:8000/health | Select-Object -ExpandProperty Content
+```
+
+### 2) Frontend (React + Vite)
+
+```powershell
+cd frontend
+npm install
+npm run dev
+# → http://127.0.0.1:5173 (expects backend at http://localhost:8000)
+```
+
+### 3) Tests & Quality
+
+```powershell
+# Backend tests
+pytest -q
+
+# Python quality
+ruff check
+mypy
+
+# Frontend quality
+npm test
+npm run lint
+npm run typecheck
+```
+
+### Notes & quick fixes
+
+* **Activate the venv** (`.\.venv\Scripts\Activate.ps1`) before running Python tools.
+* If `uvicorn` isn’t found, use `python -m uvicorn …`.
+* If PowerShell blocks activation, run:
+
+  ```powershell
+  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+  ```
+* If port **8000** is in use:
+
+  ```powershell
+  python -m uvicorn backend.app.main:app --reload --port 8001
+  ```
 
 ---
 
