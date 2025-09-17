@@ -20,7 +20,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     settings = config.get_settings()
     documents_dir = settings.documents_dir
-    documents_dir.parent.mkdir(parents=True, exist_ok=True)
     documents_dir.mkdir(parents=True, exist_ok=True)
 
     db_path: Optional[Path]
