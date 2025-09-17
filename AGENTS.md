@@ -1,15 +1,15 @@
-# Agent Guide — Automatic Data Extractor
+# AGENTS — Automatic Data Extractor
 
-This document gives coding agents the context needed to work effectively inside the ADE repository. Pair it with `README.md` for the human-friendly overview.
+This guide captures the conventions and working agreements for coding agents. Pair it with `README.md` for the human-focused overview.
 
 ---
 
-## Project snapshot
+## Quick orientation
 
-- **Purpose** – Turn semi-structured spreadsheets and PDFs into deterministic tabular data using snapshot-based logic.
-- **Packaging** – One Docker container that bundles a FastAPI backend, Python extraction engine, and Vite + TypeScript frontend.
-- **Storage** – SQLite database at `var/ade.sqlite` plus a `var/documents/` directory for uploaded files and exports.
-- **Design priorities** – Determinism, debuggability, and ease of operation outweigh raw throughput or multi-tenant scale.
+- **Goal** – Turn semi-structured spreadsheets and PDFs into deterministic tables using snapshot-based logic.
+- **Packaging** – One Docker container bundles a FastAPI backend, Python extraction engine, and Vite + TypeScript frontend.
+- **Persistence** – SQLite at `var/ade.sqlite` plus documents under `var/documents/`.
+- **Priorities** – Determinism, easy debugging, and simple operations outrank raw throughput.
 
 ---
 
@@ -18,41 +18,42 @@ This document gives coding agents the context needed to work effectively inside 
 ```
 backend/   # FastAPI app + processing engine
 frontend/  # Vite + TypeScript UI
-infra/     # Dockerfile, docker-compose.yaml, deployment scripts
+infra/     # Dockerfile, docker-compose.yaml, deployment helpers
 examples/  # Sample documents used in tests and demos
 runs/      # Example manifest outputs
 var/       # Local persistence (gitignored)
 ```
 
-Missing folders simply mean the implementation has not been scaffolded yet.
+Missing folders mean the implementation has not been scaffolded yet; follow this structure when adding code.
 
 ---
 
-## Local development
+## Environment setup
 
 ### Backend
 
-1. Create a virtual environment with Python 3.11.
-2. Install dependencies: `pip install -r requirements.txt` (file to be added when backend is scaffolded).
-3. Run the API: `uvicorn backend.app.main:app --reload`.
-4. Default settings assume SQLite at `var/ade.sqlite` and documents under `var/documents/`.
+1. Use Python 3.11.
+2. Create a virtual environment.
+3. Install dependencies with `pip install -r requirements.txt` (add the file if missing).
+4. Run the API with `uvicorn backend.app.main:app --reload`.
+5. Defaults point to SQLite at `var/ade.sqlite` and documents in `var/documents/`.
 
 ### Frontend
 
-1. Use Node.js 20+.
-2. Install dependencies: `npm install` inside `frontend/`.
-3. Start the dev server: `npm run dev` (expects the backend at `http://localhost:8000`).
+1. Use Node.js 20 or newer.
+2. Inside `frontend/`, run `npm install`.
+3. Start the dev server with `npm run dev` (expects the backend at `http://localhost:8000`).
 
 ### Docker workflow
 
-- Use `docker compose up` in the repo root to build and run the combined container.
-- Mount the `./var` directory for persistence across restarts.
+- `docker compose up` builds and runs the combined container from the repo root.
+- Mount `./var` to persist the database and uploaded documents.
 
 ---
 
 ## Tests and quality checks
 
-Run the relevant commands before sending work for review:
+Run the commands that apply to your changes:
 
 ```bash
 pytest -q          # Backend tests
@@ -63,60 +64,59 @@ npm run lint       # Frontend linting
 npm run typecheck  # Frontend type checks
 ```
 
-Documentation-only changes generally do not require running the test suite, but mention this explicitly in your final report.
+Documentation-only updates normally skip these checks; call that out in your report.
 
 ---
 
-## Style guidelines
+## Coding guidelines
 
 ### Python
 
 - Target Python 3.11 and FastAPI with Pydantic v2.
-- Prefer type hints everywhere; enable `from __future__ import annotations` where useful.
-- Keep processing logic pure: no network calls, random seeds, or disk writes during a run.
-- Use dependency injection for services and keep business logic inside `services/` or `processor/` modules.
-- Format with Ruff (uses the Ruff formatter) and keep imports sorted via Ruff.
+- Type-hint everything; enable `from __future__ import annotations` when helpful.
+- Keep processing logic pure—no network calls, randomness, or disk writes during a run.
+- Centralise orchestration and persistence in `backend/app/services/` or `backend/processor/` modules.
+- Format with Ruff (formatter + import sorting).
 
 ### Frontend
 
 - Use functional React components with hooks.
-- Enable strict TypeScript settings; define explicit types instead of relying on `any`.
-- Keep API calls in `frontend/src/api/` as thin wrappers around the REST endpoints.
-- Co-locate component-specific styles (CSS Modules or styled components) with the component.
+- Enable strict TypeScript options; avoid `any`.
+- Keep REST calls in `frontend/src/api/` as thin wrappers.
+- Co-locate component styles (CSS Modules or styled components).
 
 ### Documentation
 
-- Optimise for clarity and step-by-step guidance.
-- Use sentence-case headings and plain language.
-- Keep terminology aligned with `ADE_GLOSSARY.md`.
+- Optimise for clarity and step-by-step instructions.
+- Use sentence-case headings.
+- Align terminology with `ADE_GLOSSARY.md`.
 
 ---
 
-## Working with snapshots
+## Working with snapshots and runs
 
-- Snapshots are immutable once published. Create a new draft when adjusting logic.
-- Store detection, transformation, and validation code as deterministic callables that return predictable results.
-- Snapshot manifests and payloads are JSON; prefer additive schema changes and maintain backward compatibility where possible.
-- Comparison runs should accept multiple snapshot IDs and surface manifest diffs in both the UI and API responses.
-
----
-
-## Data & security practices
-
-- Treat the SQLite database and documents directory as sensitive; never commit their contents.
-- Avoid embedding secrets in the repo. Use environment variables or `.env` files ignored by Git.
-- When writing new processing logic, strip or hash personally identifiable information before logging.
-- Ensure API endpoints enforce role-based access control and respect API key scopes.
+- Published snapshots are immutable—clone to a new draft for changes.
+- Store detection, transformation, and validation logic as deterministic callables with digests for audit.
+- Allow runs to reference multiple snapshot IDs so the UI can compare manifests across versions.
+- Persist manifests and snapshots as JSON payloads; prefer additive schema changes.
 
 ---
 
-## Git & review expectations
+## Data and security practices
+
+- Treat the SQLite file and `var/documents/` as sensitive. Never commit their contents.
+- Keep secrets out of source control; rely on environment variables or ignored `.env` files.
+- Redact or hash personal data before logging.
+- Enforce role-based access control on every endpoint and ensure API keys inherit user scopes.
+
+---
+
+## Git and PR workflow
 
 - Use focused commits with descriptive messages (`<area>: <summary>` works well).
-- Keep the working tree clean before finishing a task; run `git status` to confirm.
-- Reference relevant docs or tests in PR descriptions. Summaries should mention user-facing changes and technical highlights.
-- Follow the testing matrix above and note any skipped checks along with the reason.
+- Confirm a clean working tree before finishing (`git status`).
+- Run applicable tests and note any that were skipped with a justification.
+- PR descriptions should summarise user-facing impact, technical highlights, and testing results.
+- After committing changes, call the `make_pr` tool to generate the PR message.
 
----
-
-Questions or assumptions that affect architecture should be recorded in the PR description so future contributors understand the decision trail.
+Document architectural assumptions or open questions in the PR body so future contributors understand the decision path.
