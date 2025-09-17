@@ -60,28 +60,35 @@ class SnapshotUpdate(BaseModel):
     payload: dict[str, Any] | None = None
     is_published: bool | None = None
 
-    @model_validator(mode="before")
+    @field_validator("title", mode="before")
     @classmethod
-    def _normalise_payload(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
+    def _trim_title(cls, value: Any) -> Any:
+        if value is None:
+            return value
+        return _normalise_non_empty_string(value, "title")
 
-        if not data:
-            msg = "At least one field must be provided"
-            raise ValueError(msg)
-
-        if "title" in data:
-            data["title"] = _normalise_non_empty_string(data["title"], "title")
-
-        if "payload" in data and data["payload"] is None:
+    @field_validator("payload", mode="before")
+    @classmethod
+    def _reject_null_payload(cls, value: Any) -> Any:
+        if value is None:
             msg = "payload cannot be null"
             raise ValueError(msg)
+        return value
 
-        if "is_published" in data and data["is_published"] is None:
+    @field_validator("is_published", mode="before")
+    @classmethod
+    def _reject_null_is_published(cls, value: Any) -> Any:
+        if value is None:
             msg = "is_published cannot be null"
             raise ValueError(msg)
+        return value
 
-        return data
+    @model_validator(mode="after")
+    def _ensure_updates(self) -> "SnapshotUpdate":
+        if not self.model_fields_set:
+            msg = "At least one field must be provided"
+            raise ValueError(msg)
+        return self
 
 
 class SnapshotResponse(BaseModel):
