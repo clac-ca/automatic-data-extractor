@@ -39,7 +39,15 @@ snapshots. Strict typing and lightweight components keep the UI predictable.
 
 ### Backend
 Resides in `backend/app/` (Python 3.11, FastAPI, SQLAlchemy, Pydantic v2). It owns routing, authentication, orchestration, and
-persistence helpers. Domain logic that manipulates data stays out of request handlers and in focused service modules.
+persistence helpers. Domain logic that manipulates data stays out of request handlers and in focused service modules. The
+initial foundation created here wires together:
+
+- `config.py` – centralised settings (`ADE_` environment variables, SQLite + documents defaults).
+- `db.py` – SQLAlchemy engine/session helpers shared across routes and services.
+- `models.py` – the first domain model (`Snapshot`) with ULID keys and JSON payload storage.
+- `routes/health.py` – health check hitting the database and returning `{ "status": "ok" }`.
+- `main.py` – FastAPI application setup, startup lifecycle, and router registration.
+- `tests/` – pytest-based checks that assert the service boots and SQLite file creation works.
 
 ### Processor
 Pure Python helpers live in `backend/processor/`. They detect tables, decide column mappings, run validation rules, and produce
