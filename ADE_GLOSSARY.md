@@ -1,6 +1,6 @@
 # ADE Glossary
 
-The glossary defines the vocabulary, identifiers, and lightweight data model that the Automatic Data Extractor (ADE) uses. It is tuned for day-to-day engineering and configuration work—plain words first, precise keys when needed.
+This glossary names the parts of ADE, the identifiers we store in SQLite, and the JSON payloads we exchange. Plain words come first; precise keys follow when necessary.
 
 ---
 
@@ -9,53 +9,58 @@ The glossary defines the vocabulary, identifiers, and lightweight data model tha
 * **UI labels** use Title Case (`Column Type`).
 * **API keys / storage keys** use `snake_case` (`column_type`).
 * **Enum values** are lowercase strings (`row_type: "header"`).
-* **Snapshots** are immutable. "Live" is a pointer to a snapshot ID stored in SQLite.
+* **Snapshots** are immutable. "Live" is just a pointer to a snapshot ID stored in SQLite.
 
 ---
 
-## Core terms
+## Domain model
 
 ### Document processing
 
-| Term (UI)     | Key / Identifier           | Stored in    | Summary |
-| ------------- | -------------------------- | ------------ | ------- |
-| Document      | `document` (path or ID)    | Manifest     | A single file (XLSX, CSV, PDF) processed under one document type. |
-| Page          | `page.index`               | Manifest     | Spreadsheet worksheet or PDF page. |
-| Table         | `table.index` per page     | Manifest     | Contiguous rows and columns with one header row plus data rows. |
-| Row type      | `row_type` (`header`, …)   | Manifest     | Classification produced by the header finder. |
-| Header row    | `header_row`               | Manifest     | Winning row index used to name the columns. |
-| Column        | `column.index`             | Manifest     | Observed column with header text and sampled values. |
+| Term (UI) | Key / Identifier | Stored in | Summary |
+| --- | --- | --- | --- |
+| Document | `document` (path or ID) | Manifest | File (XLSX, CSV, PDF) processed under one document type. |
+| Page | `page.index` | Manifest | Worksheet or PDF page. |
+| Table | `table.index` per page | Manifest | Contiguous rows and columns with one header row plus data rows. |
+| Row type | `row_type` (`header`, `data`, `group_header`, `note`) | Manifest | Classification emitted by the header finder. |
+| Header row | `header_row` | Manifest | Winning row index used to name the columns. |
+| Column | `column.index` | Manifest | Observed column with header text and sampled values. |
 
 ### Column semantics
 
-| Term (UI)       | Key / Identifier     | Stored in | Summary |
-| --------------- | ------------------- | --------- | ------- |
-| Column catalog  | `column_catalog`     | Snapshot  | List of allowed column type keys for a document type. |
-| Column type     | `column_type`        | Snapshot  | Canonical meaning for a column (`member_full_name`, `gross_amount`). |
-| Synonyms        | `synonyms`           | Snapshot  | Alternate header strings or regexes used during detection. |
-| Detection logic | `detection_logic`    | Snapshot  | Pure Python callable returning a match decision (bool/score). |
-| Transformation  | `transformation_logic` | Snapshot | Optional callable to normalize values after mapping. |
-| Validation      | `validation_logic`   | Snapshot  | Optional callable to flag invalid or suspicious values. |
+| Term (UI) | Key / Identifier | Stored in | Summary |
+| --- | --- | --- | --- |
+| Column catalog | `column_catalog` | Snapshot | Allowed column type keys for a document type. |
+| Column type | `column_type` | Snapshot | Canonical meaning for a column (`member_full_name`, `gross_amount`). |
+| Synonyms | `synonyms` | Snapshot | Alternate header strings or regexes used during detection. |
+| Detection logic | `detection_logic` | Snapshot | Pure Python callable returning a match decision (bool/score). |
+| Transformation | `transformation_logic` | Snapshot | Optional callable to normalise values after mapping. |
+| Validation | `validation_logic` | Snapshot | Optional callable to flag invalid or suspicious values. |
 
-### Configuration & outputs
+### Configuration & release
 
-| Term (UI)        | Key / Identifier        | Stored in           | Summary |
-| ---------------- | ----------------------- | ------------------- | ------- |
-| Snapshot         | `snapshot_id` (ULID)    | `snapshots` table   | Immutable configuration bundle for a document type. |
-| Live pointer     | `live_snapshot_id`      | `live_registry`     | Mapping of document type (+ optional profile) to the snapshot currently in production. |
-| Profile          | `profile`               | Snapshot            | Optional overrides (extra synonyms, thresholds) keyed by source. |
-| Manifest         | `manifest`              | `manifests` table   | Result of a run: mappings, audit data, and the pinned snapshot ID. |
-| Column mapping   | `column_mapping`        | Manifest            | Assignment of observed columns to column types with scores and audit notes. |
-| Confidence       | `confidence` (0–1)      | Manifest            | Normalized certainty for a mapping. |
-| Needs review     | `needs_review` (bool)   | Manifest            | Flag when validation fails or the decision margin is thin. |
-| Audit log        | `audit_log`             | Manifest            | Ordered messages showing why a column matched (rules, transforms, validations). |
-| Digest           | `digest` (sha256)       | Snapshot & Manifest | Hash of logic source used for caching and auditing. |
+| Term (UI) | Key / Identifier | Stored in | Summary |
+| --- | --- | --- | --- |
+| Snapshot | `snapshot_id` (ULID) | `snapshots` table | Immutable configuration bundle for a document type. |
+| Live pointer | `live_snapshot_id` | `live_registry` table | Mapping of document type (+ optional profile) to the snapshot currently in production. |
+| Profile | `profile` | Snapshot payload | Optional overrides (extra synonyms, thresholds) scoped to a source or customer. |
+
+### Run output
+
+| Term (UI) | Key / Identifier | Stored in | Summary |
+| --- | --- | --- | --- |
+| Manifest | `manifest` | `manifests` table | Result of a run: mappings, audit data, and the pinned snapshot ID. |
+| Column mapping | `column_mapping` | Manifest payload | Assignment of observed columns to column types with scores and audit notes. |
+| Confidence | `confidence` (0–1) | Manifest payload | Normalised certainty for a mapping. |
+| Needs review | `needs_review` (bool) | Manifest payload | Flag when validation fails or the decision margin is thin. |
+| Audit log | `audit_log` | Manifest payload | Ordered messages showing why a column matched (rules, transforms, validations). |
+| Digest | `digest` (`sha256:…`) | Snapshot & Manifest | Hash of logic source used for caching and auditing. |
 
 ---
 
-## Data model essentials
+## SQLite storage model
 
-ADE keeps persistence minimal with a single SQLite database (`ade.sqlite` by default). Tables can be created with `sqlite_utils` or standard migrations.
+ADE keeps persistence minimal with a single SQLite database (`ade.sqlite` by default). Tables can be created with `sqlite_utils`, Alembic, or raw SQL.
 
 ```sql
 CREATE TABLE snapshots (
@@ -86,7 +91,7 @@ CREATE TABLE manifests (
 );
 ```
 
-Snapshots and manifests are JSON blobs, so evolving the schema rarely requires migrations. For local experimentation, storing exported JSON files alongside the SQLite database is still encouraged.
+Snapshots and manifests are stored as JSON blobs, so evolving the schema rarely requires migrations. For experimentation or review, exporting those blobs to JSON files alongside the database is encouraged.
 
 ### Snapshot payload sketch
 
@@ -170,7 +175,7 @@ Snapshots and manifests are JSON blobs, so evolving the schema rarely requires m
 
 * **Clone → edit → test → publish** is the lifecycle for snapshots. Publishing updates only the Live pointer.
 * **Live pointer updates** are transactional; if anything fails the pointer remains unchanged.
-* **Manifests** must always include the `snapshot_id` so reruns are deterministic.
+* **Manifests** must always include the `snapshot_id` so reruns remain deterministic.
 * **Profiles** live inside the snapshot payload to avoid hidden configuration.
 
 ---
@@ -189,9 +194,9 @@ Snapshots and manifests are JSON blobs, so evolving the schema rarely requires m
 ## Implementation notes
 
 * Cache compiled logic by `digest` so repeated runs avoid recompilation.
-* Allow detectors/transformers to receive a context dict (e.g., `locale`, `currency`) derived from the snapshot profile.
+* Allow detectors and transformers to receive a context dict (e.g., `locale`, `currency`) derived from the snapshot profile.
 * Execute logic inside a sandbox with CPU and memory limits to keep runs predictable.
-* Keep a small labelled corpus per document type to evaluate new snapshots before publishing.
+* Maintain a small labelled corpus per document type to evaluate new snapshots before publishing.
 
 ---
 
