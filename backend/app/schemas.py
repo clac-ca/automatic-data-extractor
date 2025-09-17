@@ -49,7 +49,10 @@ class SnapshotUpdate(BaseModel):
     def _validate_update(cls, model: "SnapshotUpdate") -> "SnapshotUpdate":
         """Ensure at least one field is supplied and enforce field-specific rules."""
 
-        if not model.model_fields_set:
+        if all(
+            getattr(model, field) is None
+            for field in ("title", "payload", "is_published")
+        ):
             msg = "At least one field must be provided"
             raise ValueError(msg)
 
