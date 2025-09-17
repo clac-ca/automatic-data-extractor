@@ -4,7 +4,24 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+def _normalise_non_empty_string(value: Any, field_name: str) -> str:
+    """Return a trimmed string, raising if the result is empty."""
+
+    if value is None:
+        msg = f"{field_name} must not be empty or whitespace"
+        raise ValueError(msg)
+
+    if not isinstance(value, str):
+        value = str(value)
+
+    result = value.strip()
+    if not result:
+        msg = f"{field_name} must not be empty or whitespace"
+        raise ValueError(msg)
+    return result
 
 
 class HealthResponse(BaseModel):
@@ -21,21 +38,15 @@ class SnapshotBase(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
     is_published: bool = False
 
-    def model_post_init(self, __context: Any) -> None:  # noqa: D401 - simple post-init normalisation
-        """Trim string fields and ensure they remain non-empty."""
+    @field_validator("title", mode="before")
+    @classmethod
+    def _trim_title(cls, value: Any) -> str:
+        return _normalise_non_empty_string(value, "title")
 
-        super().model_post_init(__context)
-        title = self.title.strip()
-        if not title:
-            msg = "title must not be empty or whitespace"
-            raise ValueError(msg)
-        document_type = self.document_type.strip()
-        if not document_type:
-            msg = "document_type must not be empty or whitespace"
-            raise ValueError(msg)
-
-        self.title = title
-        self.document_type = document_type
+    @field_validator("document_type", mode="before")
+    @classmethod
+    def _trim_document_type(cls, value: Any) -> str:
+        return _normalise_non_empty_string(value, "document_type")
 
 
 class SnapshotCreate(SnapshotBase):
@@ -49,32 +60,28 @@ class SnapshotUpdate(BaseModel):
     payload: dict[str, Any] | None = None
     is_published: bool | None = None
 
-    def model_post_init(self, __context: Any) -> None:  # noqa: D401 - simple post-init normalisation
-        """Normalise and validate optional update fields."""
+    @model_validator(mode="before")
+    @classmethod
+    def _normalise_payload(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
 
-        super().model_post_init(__context)
-
-        if not self.model_fields_set:
+        if not data:
             msg = "At least one field must be provided"
             raise ValueError(msg)
 
-        if "title" in self.model_fields_set:
-            if self.title is None:
-                msg = "title must not be empty or whitespace"
-                raise ValueError(msg)
-            title = self.title.strip()
-            if not title:
-                msg = "title must not be empty or whitespace"
-                raise ValueError(msg)
-            self.title = title
+        if "title" in data:
+            data["title"] = _normalise_non_empty_string(data["title"], "title")
 
-        if "payload" in self.model_fields_set and self.payload is None:
+        if "payload" in data and data["payload"] is None:
             msg = "payload cannot be null"
             raise ValueError(msg)
 
-        if "is_published" in self.model_fields_set and self.is_published is None:
+        if "is_published" in data and data["is_published"] is None:
             msg = "is_published cannot be null"
             raise ValueError(msg)
+
+        return data
 
 
 class SnapshotResponse(BaseModel):
