@@ -37,4 +37,10 @@ def get_settings() -> Settings:
     return Settings()
 
 
-__all__ = ["Settings", "get_settings"]
+def reset_settings_cache() -> None:
+    """Clear cached settings so future calls re-read the environment."""
+
+    get_settings.cache_clear()
+
+
+__all__ = ["Settings", "get_settings", "reset_settings_cache"]
