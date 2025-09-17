@@ -50,11 +50,11 @@ class MutableJSONDict(MutableDict):
             parent.changed()
 
     def _sync_child_parent_links(self) -> None:
-        for child in list(dict.values(self)):
+        for child in dict.values(self):
             _assign_parent(child, self)
 
     def _clear_child_parent_links(self) -> None:
-        for child in list(dict.values(self)):
+        for child in dict.values(self):
             _clear_parent(child)
 
     def __setitem__(self, key: str, value: Any) -> None:
