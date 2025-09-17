@@ -14,8 +14,9 @@ from . import config
 
 Base = declarative_base()
 
-_engine_cache: dict[str, Engine] = {}
-_sessionmaker_cache: dict[str, sessionmaker[Session]] = {}
+_engine: Engine | None = None
+_session_factory: sessionmaker[Session] | None = None
+_engine_url: str | None = None
 
 
 def _is_sqlite_memory_url(url: URL) -> bool:
@@ -54,43 +55,55 @@ def _create_engine(database_url: str) -> Engine:
 
 
 def get_engine() -> Engine:
-    """Return an engine configured from the active settings."""
+    """Return the configured SQLAlchemy engine.
+
+    The application only works with a single database URL at a time, so
+    caching a lone engine is sufficient. When the URL changes (primarily in
+    tests that monkeypatch configuration) the previous engine is disposed and
+    replaced lazily the next time this function is called.
+    """
+
+    global _engine, _engine_url
 
     database_url = config.get_settings().database_url
-    engine = _engine_cache.get(database_url)
-    if engine is None:
-        engine = _create_engine(database_url)
-        _engine_cache[database_url] = engine
-    return engine
+    if _engine is None or _engine_url != database_url:
+        if _engine is not None:
+            _engine.dispose()
+        _engine = _create_engine(database_url)
+        _engine_url = database_url
+    return _engine
 
 
 def get_sessionmaker() -> sessionmaker[Session]:
-    """Return a ``sessionmaker`` bound to the configured engine."""
+    """Return a ``sessionmaker`` bound to the active engine."""
+
+    global _session_factory
 
     database_url = config.get_settings().database_url
-    session_factory = _sessionmaker_cache.get(database_url)
-    if session_factory is None:
-        session_factory = sessionmaker(
+    if _session_factory is None or _engine_url != database_url:
+        _session_factory = sessionmaker(
             bind=get_engine(),
             autocommit=False,
             autoflush=False,
             expire_on_commit=False,
         )
-        _sessionmaker_cache[database_url] = session_factory
-    return session_factory
+    return _session_factory
 
 
 def reset_database_state() -> None:
-    """Dispose cached engines and session factories.
+    """Dispose cached database resources.
 
-    Tests override configuration between runs; clearing these caches avoids the
-    need for expensive module reloads.
+    Test fixtures swap database URLs between runs. Clearing the cached engine
+    and session factory keeps imports stable without leaking connections.
     """
 
-    for engine in _engine_cache.values():
-        engine.dispose()
-    _engine_cache.clear()
-    _sessionmaker_cache.clear()
+    global _engine, _session_factory, _engine_url
+
+    if _engine is not None:
+        _engine.dispose()
+    _engine = None
+    _session_factory = None
+    _engine_url = None
 
 
 def get_db() -> Generator[Session, None, None]:
