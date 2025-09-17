@@ -1,51 +1,58 @@
 # ADE Glossary
 
-This glossary names the parts of ADE, the identifiers we store in SQLite, and the JSON payloads we exchange. Plain words come first; precise keys follow when necessary.
+Plain language first. API and storage keys follow in backticks when needed. Use this glossary when naming code, API contracts, or
+UI elements.
 
 ---
 
 ## Conventions
 
 * **UI labels** use Title Case (`Column Type`).
-* **API keys / storage keys** use `snake_case` (`column_type`).
+* **API keys and SQLite columns** use `snake_case` (`column_type`).
 * **Enum values** are lowercase strings (`row_type: "header"`).
-* **Snapshots** are immutable. "Live" is just a pointer to a snapshot ID stored in SQLite.
+* **Snapshots** are immutable; "live" is just a pointer stored in SQLite.
 
 ---
 
-## Domain model
-
-### Document processing
+## Document flow
 
 | Term (UI) | Key / Identifier | Stored in | Summary |
 | --- | --- | --- | --- |
-| Document | `document` (path or ID) | Manifest | File (XLSX, CSV, PDF) processed under one document type. |
-| Page | `page.index` | Manifest | Worksheet or PDF page. |
-| Table | `table.index` per page | Manifest | Contiguous rows and columns with one header row plus data rows. |
-| Row type | `row_type` (`header`, `data`, `group_header`, `note`) | Manifest | Classification emitted by the header finder. |
-| Header row | `header_row` | Manifest | Winning row index used to name the columns. |
-| Column | `column.index` | Manifest | Observed column with header text and sampled values. |
+| Document | `document` (path or upload id) | `manifests.payload.document` | File (XLSX, CSV, PDF) processed under one document type. |
+| Page | `page.index` | Manifest payload | Worksheet or PDF page. |
+| Table | `table.index` per page | Manifest payload | Contiguous rows/columns with one header row plus data rows. |
+| Row type | `row_type` (`header`, `data`, `group_header`, `note`) | Manifest payload | Classification emitted by the header finder. |
+| Header row | `header_row` | Manifest payload | Winning row index used to name the columns. |
+| Column | `column.index` | Manifest payload | Observed column with header text and sampled values. |
 
-### Column semantics
+---
+
+## Column semantics
 
 | Term (UI) | Key / Identifier | Stored in | Summary |
 | --- | --- | --- | --- |
-| Column catalog | `column_catalog` | Snapshot | Allowed column type keys for a document type. |
-| Column type | `column_type` | Snapshot | Canonical meaning for a column (`member_full_name`, `gross_amount`). |
-| Synonyms | `synonyms` | Snapshot | Alternate header strings or regexes used during detection. |
-| Detection logic | `detection_logic` | Snapshot | Pure Python callable returning a match decision (bool/score). |
-| Transformation | `transformation_logic` | Snapshot | Optional callable to normalise values after mapping. |
-| Validation | `validation_logic` | Snapshot | Optional callable to flag invalid or suspicious values. |
+| Column catalog | `column_catalog` | Snapshot payload | Allowed column type keys for a document type. |
+| Column type | `column_type` | Snapshot payload | Canonical meaning for a column (`member_full_name`, `gross_amount`). |
+| Synonyms | `synonyms` | Snapshot payload | Alternate header strings or regexes used during detection. |
+| Detection logic | `detection_logic` | Snapshot payload | Pure Python callable returning a match decision (bool/score). |
+| Transformation | `transformation_logic` | Snapshot payload | Optional callable to normalise values after mapping. |
+| Validation | `validation_logic` | Snapshot payload | Optional callable to flag invalid or suspicious values. |
 
-### Configuration & release
+---
+
+## Configuration & release
 
 | Term (UI) | Key / Identifier | Stored in | Summary |
 | --- | --- | --- | --- |
 | Snapshot | `snapshot_id` (ULID) | `snapshots` table | Immutable configuration bundle for a document type. |
+| Snapshot status | `status` (`draft`, `live`, `archived`) | `snapshots` table | Drafts are editable; live/archived are read-only. |
 | Live pointer | `live_snapshot_id` | `live_registry` table | Mapping of document type (+ optional profile) to the snapshot currently in production. |
 | Profile | `profile` | Snapshot payload | Optional overrides (extra synonyms, thresholds) scoped to a source or customer. |
+| Snapshot export | `.json` file | Filesystem | JSON dump of a snapshot payload used for review and backup. |
 
-### Run output
+---
+
+## Run output
 
 | Term (UI) | Key / Identifier | Stored in | Summary |
 | --- | --- | --- | --- |
@@ -58,9 +65,22 @@ This glossary names the parts of ADE, the identifiers we store in SQLite, and th
 
 ---
 
+## Platform terms
+
+| Term | Summary |
+| --- | --- |
+| **Frontend** | Vite-powered TypeScript UI that consumes the FastAPI routes for configuration, testing, publishing, and uploads. |
+| **FastAPI backend** | Stateless Python application exposing REST routes and OpenAPI docs. |
+| **Processing engine** | Pure Python module that runs table detection, header finding, column mapping, and value logic. |
+| **Document storage** | Folder mounted into the container (`./var/documents` by default) that holds uploaded files. |
+| **SQLite (`ade.sqlite`)** | Single-file database containing snapshots, live registry, manifests, and audit metadata. |
+| **Docker image** | Deployable artifact bundling the frontend, backend, and processing engine. |
+
+---
+
 ## SQLite storage model
 
-ADE keeps persistence minimal with a single SQLite database (`ade.sqlite` by default). Tables can be created with `sqlite_utils`, Alembic, or raw SQL.
+ADE keeps persistence minimal with one SQLite database (`ade.sqlite`). Schema expressed in plain SQL:
 
 ```sql
 CREATE TABLE snapshots (
@@ -91,9 +111,12 @@ CREATE TABLE manifests (
 );
 ```
 
-Snapshots and manifests are stored as JSON blobs, so evolving the schema rarely requires migrations. For experimentation or review, exporting those blobs to JSON files alongside the database is encouraged.
+Snapshots and manifests are stored as JSON blobs, so evolving the schema rarely requires migrations. For experimentation or
+review, export those blobs to JSON files alongside the database.
 
-### Snapshot payload sketch
+---
+
+## Snapshot payload sketch
 
 ```json
 {
@@ -135,7 +158,9 @@ Snapshots and manifests are stored as JSON blobs, so evolving the schema rarely 
 }
 ```
 
-### Manifest payload sketch
+---
+
+## Manifest payload sketch
 
 ```json
 {
@@ -173,16 +198,16 @@ Snapshots and manifests are stored as JSON blobs, so evolving the schema rarely 
 
 ## Workflow reminders
 
-* **Clone → edit → test → publish** is the lifecycle for snapshots. Publishing updates only the Live pointer.
-* **Live pointer updates** are transactional; if anything fails the pointer remains unchanged.
-* **Manifests** must always include the `snapshot_id` so reruns remain deterministic.
-* **Profiles** live inside the snapshot payload to avoid hidden configuration.
+* Clone → edit → test → publish is the lifecycle for snapshots. Publishing only updates the live pointer.
+* Live pointer updates are transactional; failures leave the pointer untouched.
+* Manifests must always include the `snapshot_id` so reruns remain deterministic.
+* Profiles live inside the snapshot payload to avoid hidden configuration.
 
 ---
 
 ## Invariants & guardrails
 
-* Snapshots marked `live` or `archived` are read-only. Create a new draft to make changes.
+* Snapshots marked `live` or `archived` are read-only; create a new draft to change behaviour.
 * Every required column type in the schema must exist in the column catalog.
 * Detection, transformation, validation, and header rules are pure functions (no I/O, deterministic results).
 * Digests are recalculated whenever code changes to support caching and audit checks.
@@ -194,7 +219,7 @@ Snapshots and manifests are stored as JSON blobs, so evolving the schema rarely 
 ## Implementation notes
 
 * Cache compiled logic by `digest` so repeated runs avoid recompilation.
-* Allow detectors and transformers to receive a context dict (e.g., `locale`, `currency`) derived from the snapshot profile.
+* Allow detectors and transformers to receive a context dict (for locale, currency) derived from the snapshot profile.
 * Execute logic inside a sandbox with CPU and memory limits to keep runs predictable.
 * Maintain a small labelled corpus per document type to evaluate new snapshots before publishing.
 
