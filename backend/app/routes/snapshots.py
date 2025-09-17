@@ -2,22 +2,35 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from pydantic import TypeAdapter
+from pydantic.types import StringConstraints
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Snapshot
 from ..schemas import SnapshotCreate, SnapshotResponse, SnapshotUpdate
 from ..services.snapshots import (
+    PublishedSnapshotNotFoundError,
     SnapshotNotFoundError,
     create_snapshot,
     delete_snapshot,
+    get_published_snapshot,
     get_snapshot,
     list_snapshots,
     update_snapshot,
 )
 
 router = APIRouter(prefix="/snapshots", tags=["snapshots"])
+
+_document_type_adapter = TypeAdapter(
+    Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=100),
+    ]
+)
 
 
 def _to_response(snapshot: Snapshot) -> SnapshotResponse:
@@ -59,6 +72,20 @@ def get_snapshot_endpoint(snapshot_id: str, db: Session = Depends(get_db)) -> Sn
         snapshot = get_snapshot(db, snapshot_id)
     except SnapshotNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _to_response(snapshot)
+
+
+@router.get("/published/{document_type}", response_model=SnapshotResponse)
+def get_published_snapshot_endpoint(
+    document_type: str, db: Session = Depends(get_db)
+) -> SnapshotResponse:
+    """Return the published snapshot for the given document type."""
+
+    normalized_document_type = _document_type_adapter.validate_python(document_type)
+    try:
+        snapshot = get_published_snapshot(db, normalized_document_type)
+    except PublishedSnapshotNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _to_response(snapshot)
 
 
