@@ -136,11 +136,11 @@ class MutableJSONList(MutableList):
             parent.changed()
 
     def _sync_child_parent_links(self) -> None:
-        for child in list(self):
+        for child in self:
             _assign_parent(child, self)
 
     def _clear_child_parent_links(self) -> None:
-        for child in list(self):
+        for child in self:
             _clear_parent(child)
 
     def append(self, value: Any) -> None:  # type: ignore[override]
