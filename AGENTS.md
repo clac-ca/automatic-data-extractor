@@ -1,7 +1,11 @@
 # AGENTS — Automatic Data Extractor
+Overview
+ADE (Automatic Data Extractor) is an internal tool that converts messy spreadsheets and PDFs into deterministic, structured tables. It uses snapshot-controlled logic to ensure results are consistent, auditable, and reproducible. ADE ships as a single Docker container with a FastAPI backend, pure-Python processing engine, React frontend, and SQLite persistence.
 
-Pair this guide with `README.md` for the high-level architecture and `ADE_GLOSSARY.md` for terminology. Update all three when
+Pair this AGENTS.md with `README.md` for the high-level architecture and `ADE_GLOSSARY.md` for terminology. Update all three when
 the architecture or workflows change.
+
+Approach this as an architect and engineer: your job is not just to code, but to implement the task comprehensively, thoughtfully, and to a high standard.
 
 ---
 
