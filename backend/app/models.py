@@ -8,6 +8,7 @@ from typing import Any
 import ulid
 from sqlalchemy import Boolean, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.ext.mutable import MutableDict
 
 from .db import Base
 
@@ -28,7 +29,9 @@ class Snapshot(Base):
     document_type: Mapped[str] = mapped_column(String(100), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        MutableDict.as_mutable(JSON), default=dict, nullable=False
+    )
     created_at: Mapped[str] = mapped_column(String(32), default=_timestamp, nullable=False)
     updated_at: Mapped[str] = mapped_column(String(32), default=_timestamp, onupdate=_timestamp, nullable=False)
 
