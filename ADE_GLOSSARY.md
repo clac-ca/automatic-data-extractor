@@ -1,70 +1,61 @@
 # ADE glossary
 
-Use this glossary when naming database columns, API fields, and UI copy. Terms are grouped by the workflows they support. Identifiers in `code` match what will appear in SQLite or our payloads.
+Use this glossary when naming database columns, API fields, and UI copy. Keep the wording consistent with the tables and payloads
+below.
 
 ---
 
 ## Access
-| Term | Plain meaning | Key columns |
-| --- | --- | --- |
-| **User** | Account that can sign in. Stores a hashed password or an SSO subject. | `users.user_id`, `users.email` |
-| **Role** | Permission tier: `viewer`, `editor`, or `admin`. | `users.role` |
-| **Session** | Short-lived token created during UI sign-in. | `sessions.session_token` |
-| **API key** | Token issued by an admin; inherits the linked user’s role. | `api_keys.api_key_id`, `api_keys.user_id` |
+- **User** – Account that can sign in. Stores a hashed password or an SSO subject. (`users.user_id`, `users.email`, `users.role`)
+- **Role** – Permission tier: `viewer`, `editor`, or `admin`.
+- **Session** – Short-lived token created during UI sign-in. (`sessions.session_token`)
+- **API key** – Token issued by an admin; inherits the linked user’s role. (`api_keys.api_key_id`, `api_keys.user_id`)
 
 ---
 
 ## Core domain
-| Term | Plain meaning | Key columns |
-| --- | --- | --- |
-| **Document type** | Family of documents that share extraction rules (for example, payroll remittances). | `snapshots.document_type` |
-| **Snapshot** | Immutable bundle of logic for a document type. Drafts can change; published snapshots are read only. | `snapshots.snapshot_id` (ULID) |
-| **Profile** | Optional overrides for a source, customer, or locale stored in the snapshot payload. | `payload->profiles` |
-| **Live pointer** | Mapping from a document type (and optional profile) to the snapshot currently used in production. | `live_registry.live_snapshot_id` |
-| **Run** | Execution of the processing engine against one or more documents. | `manifests.run_id` (ULID) |
-| **Manifest** | JSON result of a run: tables, column mappings, audit data, statistics, and the `snapshot_id` used. | `manifests.payload` |
+- **Document type** – Family of documents that share extraction rules (for example, payroll remittances). (`snapshots.document_type`)
+- **Snapshot** – Immutable bundle of logic for a document type. Drafts can change; published snapshots are read only. (`snapshots.snapshot_id` ULID)
+- **Profile** – Optional overrides for a source, customer, or locale stored in the snapshot payload. (`payload.profiles`)
+- **Live pointer** – Mapping from a document type (and optional profile) to the snapshot currently used in production. (`live_registry.live_snapshot_id`)
+- **Run** – Execution of the processing engine against one or more documents. (`manifests.run_id` ULID)
+- **Manifest** – JSON result of a run: tables, column mappings, audit data, statistics, and the `snapshot_id` used. (`manifests.payload`)
 
 ---
 
 ## Document anatomy
-| Term | Plain meaning | Key columns |
-| --- | --- | --- |
-| **Document** | Path or upload ID for the file being processed (XLSX, CSV, PDF, etc.). Files live in `var/documents/`. | `manifests.document` |
-| **Page** | Worksheet or PDF page captured in a manifest. | `pages[].index` |
-| **Table** | Contiguous rows and columns with a single header row. | `tables[].index` |
-| **Row type** | Classification emitted by the header finder (`header`, `data`, `group_header`, `note`). | `rows[].row_type` |
-| **Header row** | Row index that names the columns. | `tables[].header_row` |
-| **Column** | Observed column with header text, samples, and metadata. | `columns[].index` |
+- **Document** – Path or upload ID for the file being processed (XLSX, CSV, PDF, etc.). Files live in `var/documents/`. (`manifests.document`)
+- **Page** – Worksheet or PDF page captured in a manifest. (`pages[].index`)
+- **Table** – Contiguous rows and columns with a single header row. (`tables[].index`)
+- **Row type** – Classification emitted by the header finder (`header`, `data`, `group_header`, `note`). (`rows[].row_type`)
+- **Header row** – Row index that names the columns. (`tables[].header_row`)
+- **Column** – Observed column with header text, samples, and metadata. (`columns[].index`)
 
 ---
 
 ## Column logic
-| Term | Plain meaning |
-| --- | --- |
-| **Column catalogue** (`column_catalog`) | Allowed column type keys for a document type. Lives inside the snapshot payload.
-| **Column type** (`column_type`) | Canonical meaning such as `member_full_name` or `gross_amount`.
-| **Synonyms** (`synonyms`) | Header strings or regexes that hint at the column type.
-| **Detection logic** (`detection_logic`) | Pure Python callable (code + digest) returning a match decision or score.
-| **Transformation** (`transformation_logic`) | Optional callable that normalises raw values.
-| **Validation** (`validation_logic`) | Optional callable that flags invalid or suspicious values.
-| **Schema rules** (`schema`) | Required and optional column types.
+- **Column catalogue** (`column_catalog`) – Allowed column type keys for a document type. Lives inside the snapshot payload.
+- **Column type** (`column_type`) – Canonical meaning such as `member_full_name` or `gross_amount`.
+- **Synonyms** (`synonyms`) – Header strings or regexes that hint at the column type.
+- **Detection logic** (`detection_logic`) – Pure Python callable (code + digest) returning a match decision or score.
+- **Transformation** (`transformation_logic`) – Optional callable that normalises raw values.
+- **Validation** (`validation_logic`) – Optional callable that flags invalid or suspicious values.
+- **Schema rules** (`schema`) – Required and optional column types.
 
 ---
 
 ## Run outputs
-| Term | Plain meaning |
-| --- | --- |
-| **Column mapping** (`column_mapping`) | Assignment of observed columns to column types with scores and audit notes.
-| **Confidence** (`confidence`, 0–1) | Normalised certainty for a mapping or decision.
-| **Needs review** (`needs_review`) | Boolean flag when validation fails or the decision margin is thin.
-| **Audit log** (`audit_log`) | Ordered messages explaining why a column matched (rule hits, transforms, etc.).
-| **Digest** (`digest`, e.g., `sha256:…`) | Hash of logic source used for caching and audit trails.
-| **Stats** (`stats`) | Summary counts such as tables found, rows processed, and warnings.
+- **Column mapping** (`column_mapping`) – Assignment of observed columns to column types with scores and audit notes.
+- **Confidence** (`confidence`, 0–1) – Normalised certainty for a mapping or decision.
+- **Needs review** (`needs_review`) – Boolean flag when validation fails or the decision margin is thin.
+- **Audit log** (`audit_log`) – Ordered messages explaining why a column matched (rule hits, transforms, etc.).
+- **Digest** (`digest`, e.g., `sha256:…`) – Hash of logic source used for caching and audit trails.
+- **Stats** (`stats`) – Summary counts such as tables found, rows processed, and warnings.
 
 ---
 
 ## Storage foundation
-ADE stores everything in SQLite (`var/ade.sqlite`). Tables we expect on day one:
+ADE stores everything in SQLite (`var/ade.sqlite`). Tables expected on day one:
 - `snapshots` – Snapshot metadata and JSON payloads.
 - `live_registry` – Mapping from document type/profile to the live snapshot.
 - `manifests` – Run outputs and manifest payloads.
