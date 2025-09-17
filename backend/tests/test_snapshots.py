@@ -183,10 +183,41 @@ def test_snapshot_payload_mutations_persist(app_client) -> None:
     with SessionLocal() as session:
         snapshot = session.get(Snapshot, created["snapshot_id"])
         assert snapshot is not None
-        snapshot.payload["metadata"] = {"version": "1.0"}
+        snapshot.payload["metadata"] = {"version": "1.0", "tags": ["initial"]}
         session.commit()
 
     response = client.get(f"/snapshots/{created['snapshot_id']}")
 
     assert response.status_code == 200
-    assert response.json()["payload"]["metadata"] == {"version": "1.0"}
+    data = response.json()
+    assert data["payload"]["metadata"] == {
+        "version": "1.0",
+        "tags": ["initial"],
+    }
+
+    with SessionLocal() as session:
+        snapshot = session.get(Snapshot, created["snapshot_id"])
+        assert snapshot is not None
+        snapshot.payload["metadata"]["version"] = "2.0"
+        snapshot.payload["metadata"]["tags"].append("updated")
+        snapshot.payload.setdefault("notes", []).append({"author": "qa"})
+        session.commit()
+
+    response = client.get(f"/snapshots/{created['snapshot_id']}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["payload"]["metadata"]["version"] == "2.0"
+    assert data["payload"]["metadata"]["tags"] == ["initial", "updated"]
+    assert data["payload"]["notes"] == [{"author": "qa"}]
+
+    with SessionLocal() as session:
+        snapshot = session.get(Snapshot, created["snapshot_id"])
+        assert snapshot is not None
+        snapshot.payload["notes"][0]["status"] = "reviewed"
+        session.commit()
+
+    response = client.get(f"/snapshots/{created['snapshot_id']}")
+
+    assert response.status_code == 200
+    assert response.json()["payload"]["notes"][0] == {"author": "qa", "status": "reviewed"}
