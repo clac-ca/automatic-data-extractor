@@ -1,19 +1,19 @@
 # ADE Glossary
 
-Plain language first. API field names and SQLite columns appear in `code`. Use these names in code, API contracts, documentation, and the UI.
+Plain language first. Names in `code` are the identifiers you will see in the API, SQLite, and the UI.
 
 ---
 
-## Naming conventions
+## Naming basics
 
-* **UI labels** — Title Case (`Column Type`).
-* **API keys & SQLite columns** — `snake_case` (`column_type`).
-* **Enum values** — lower-case strings (`row_type: "header"`).
-* **Snapshots** — Immutable bundles; `live` is only a pointer stored in SQLite.
+* **UI labels** – Title Case (`Column Type`).
+* **API keys & SQLite columns** – `snake_case` (`column_type`).
+* **Enum values** – lower-case strings (`row_type: "header"`).
+* **Snapshots** – Immutable bundles; `live` is only a pointer stored in SQLite.
 
 ---
 
-## Core building blocks
+## Core concepts
 
 | Term | Identifier | Stored in | Description |
 | --- | --- | --- | --- |
@@ -21,14 +21,14 @@ Plain language first. API field names and SQLite columns appear in `code`. Use t
 | Snapshot | `snapshot_id` (ULID) | `snapshots` | Immutable configuration bundle for a document type. Drafts are editable; live and archived snapshots are read-only. |
 | Profile | `profile` | Snapshot payload | Optional overrides (synonyms, thresholds, context) scoped to a source, customer, or locale. |
 | Run | `run_id` (ULID) | `manifests` | Execution of the processing engine against a document + snapshot. |
-| Manifest | `manifest` | `manifests.payload` | Result of a run: detected tables, column mappings, audit data, stats, and the `snapshot_id` used. |
+| Manifest | `payload` | `manifests.payload` | Result of a run: detected tables, column mappings, audit data, stats, and the `snapshot_id` used. |
 | Live pointer | `live_snapshot_id` | `live_registry` | Maps a document type (and optional profile) to the snapshot used in production. |
 
 ---
 
 ## Document anatomy
 
-| Term (UI) | Identifier | Stored in | Description |
+| UI term | Identifier | Stored in | Description |
 | --- | --- | --- | --- |
 | Document | `document` (path or upload id) | `manifests.document` | File processed for a document type (XLSX, CSV, PDF, etc.). |
 | Page | `page.index` | Manifest payload | Worksheet or PDF page. |
@@ -39,9 +39,9 @@ Plain language first. API field names and SQLite columns appear in `code`. Use t
 
 ---
 
-## Column semantics
+## Column logic
 
-| Term (UI) | Identifier | Stored in | Description |
+| UI term | Identifier | Stored in | Description |
 | --- | --- | --- | --- |
 | Column catalogue | `column_catalog` | Snapshot payload | Allowed column type keys for a document type. |
 | Column type | `column_type` | Snapshot payload | Canonical meaning (`member_full_name`, `gross_amount`, etc.). |
@@ -53,7 +53,7 @@ Plain language first. API field names and SQLite columns appear in `code`. Use t
 
 ---
 
-## Run output terms
+## Run results
 
 | Term | Identifier | Stored in | Description |
 | --- | --- | --- | --- |
@@ -66,20 +66,18 @@ Plain language first. API field names and SQLite columns appear in `code`. Use t
 
 ---
 
-## Platform components
+## Platform & access
 
-| Term | Summary |
-| --- | --- |
-| **Frontend** | Vite-powered TypeScript UI used to configure logic, compare snapshots, run tests, publish, and upload documents. |
-| **FastAPI backend** | Stateless Python app exposing REST routes and OpenAPI docs. Handles configuration CRUD, runs, manifests, and uploads. |
-| **Processing engine** | Pure Python module that loads a snapshot, detects tables, maps columns, and executes transforms/validations. |
-| **Document storage** | Folder mounted into the container (`var/documents/`) that holds uploaded and sample files. |
-| **SQLite (`var/ade.sqlite`)** | Single-file database containing snapshots, live registry, manifests, and audit metadata. |
-| **Docker image** | Deployable artefact bundling the frontend, backend, and processing engine. |
+| Term | Identifier | Stored in | Description |
+| --- | --- | --- | --- |
+| User | `user_id` | `users` | Account that can sign in to the UI. Stores hashed passwords or SSO metadata. |
+| Role | `role` | `users.role` | Access level: `viewer`, `editor`, or `admin`. Governs editing and publishing rights. |
+| API key | `api_key_id` | `api_keys` | Token issued by an admin that maps to a user and inherits their role. |
+| Session | `session_token` | `sessions` | Short-lived token created during UI sign-in. |
 
 ---
 
-## SQLite storage model
+## SQLite quick reference
 
 Everything lives in one database file (`var/ade.sqlite`). Key tables:
 
@@ -110,13 +108,29 @@ CREATE TABLE manifests (
   document       TEXT NOT NULL,
   payload        JSON NOT NULL
 );
+
+CREATE TABLE users (
+  user_id      TEXT PRIMARY KEY,
+  email        TEXT UNIQUE NOT NULL,
+  role         TEXT NOT NULL CHECK(role IN ('viewer','editor','admin')),
+  password_hash TEXT,
+  sso_subject   TEXT
+);
+
+CREATE TABLE api_keys (
+  api_key_id   TEXT PRIMARY KEY,
+  user_id      TEXT NOT NULL,
+  hashed_key   TEXT NOT NULL,
+  created_at   TEXT NOT NULL,
+  revoked_at   TEXT
+);
 ```
 
 Snapshots and manifests live as JSON blobs so evolving the schema rarely requires migrations. Backups are a file copy.
 
 ---
 
-## Snapshot payload sketch
+## Snapshot payload cheat sheet
 
 ```json
 {
@@ -129,10 +143,7 @@ Snapshots and manifests live as JSON blobs so evolving the schema rarely require
       "rules": [
         {"name": "has_amount_headers", "code": "...", "digest": "sha256:…"}
       ],
-      "decision": {
-        "scoring": "boolean",
-        "tie_breaker": "prefer_first_header"
-      }
+      "decision": {"scoring": "boolean", "tie_breaker": "prefer_first_header"}
     },
     "column_catalog": ["member_full_name", "gross_amount"],
     "column_types": {
@@ -149,9 +160,7 @@ Snapshots and manifests live as JSON blobs so evolving the schema rarely require
     },
     "profiles": {
       "default": {
-        "synonyms_overrides": {
-          "member_full_name": ["member"]
-        }
+        "synonyms_overrides": {"member_full_name": ["member"]}
       }
     }
   }
@@ -160,7 +169,7 @@ Snapshots and manifests live as JSON blobs so evolving the schema rarely require
 
 ---
 
-## Manifest payload sketch
+## Manifest payload cheat sheet
 
 ```json
 {
@@ -205,7 +214,7 @@ Snapshots and manifests live as JSON blobs so evolving the schema rarely require
 
 ---
 
-## Invariants & guardrails
+## Guardrails
 
 * Snapshots marked `live` or `archived` are read-only; create a new draft for changes.
 * Every required column type in the schema must exist in the column catalogue.

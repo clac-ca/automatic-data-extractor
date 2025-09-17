@@ -1,121 +1,91 @@
 # ADE — Automatic Data Extractor
 
-> **ADE turns semi-structured spreadsheets and PDFs into trustworthy, typed data while keeping every decision auditable.**
+> **ADE turns semi-structured spreadsheets and PDFs into trustworthy, typed data with an audit trail you can replay at any time.**
 
-ADE is an internal product. We optimise for clarity, short feedback loops, and easy operations over internet-scale concerns. If a choice trades a little flexibility for simplicity, we take the simple option.
-
----
-
-## ADE in a minute
-
-* Convert XLSX, CSV, and PDF documents into structured tables.
-* Detect headers, map observed columns to a well-defined catalogue, and normalise values.
-* Keep every run reproducible through immutable configuration snapshots and stored manifests.
-* Provide both a web UI and FastAPI routes—anything you do in the UI can be scripted.
+ADE is an internal product and we optimise for quick feedback, predictable behaviour, and easy operations over internet-scale concerns. When a trade-off appears, we pick the option that keeps the system simple for the team that runs it.
 
 ---
 
-## Architecture at a glance
+## ADE at a glance
 
-ADE ships as a single Docker image bundling the FastAPI backend and the frontend. One container on a small VM, laptop, or CI worker is the default deployment target.
+* Converts XLSX, CSV, and PDF documents into structured tables.
+* Keeps business logic versioned as immutable snapshots so every run is reproducible.
+* Ships as a single Docker container that bundles the FastAPI backend, the processing engine, and the frontend UI.
+* Anything you can do through the UI can also be done through the public API (and therefore through scripts or CI jobs).
+* Stores state in SQLite and a documents folder—backups are a file copy.
 
-```mermaid
-flowchart LR
-  subgraph Docker container
-    FE[Frontend (Vite + TypeScript)] -->|REST/WebSocket| API[FastAPI application]
-    API --> DB[(SQLite: var/ade.sqlite)]
-    API --> Engine[Processing engine]
-    Engine --> Files[(Document storage: var/documents)]
-  end
-  User --> FE
-  Script[Automation / CI] -->|REST| API
+---
+
+## Product principles
+
+1. **Snapshots first** — Logic is never edited in place. Create a draft, try it against real files, and publish when satisfied.
+2. **UI + API parity** — If the UI does it, the API can do it. Automation uses the same primitives as humans.
+3. **Deterministic runs** — Rerunning the same snapshot on the same file produces identical manifests.
+4. **Simple deploys** — One Docker image, one SQLite database, one documents directory.
+
+---
+
+## System architecture
+
+ADE is delivered as a Docker image you can run on a laptop, a VM, or inside CI.
+
+```
++------------------ Docker container ------------------+
+|  Frontend (Vite + TS)  <-->  FastAPI app  <-->  Engine|
+|                         |                              |
+|                         +--> SQLite (var/ade.sqlite)   |
+|                         +--> Documents (var/documents/) |
++-------------------------------------------------------+
 ```
 
-### Component responsibilities
+* **Frontend** – Configure document types, edit logic, manage snapshots, upload documents, and compare manifests.
+* **FastAPI backend** – Stateless REST API that handles CRUD, run orchestration, manifest retrieval, and uploads.
+* **Processing engine** – Python module that loads a snapshot, finds tables, maps columns, and applies transforms and validations.
+* **SQLite (`var/ade.sqlite`)** – Single source of truth for snapshots, live pointers, manifests, and audit logs.
+* **Documents (`var/documents/`)** – Filesystem directory mounted into the container for uploads and fixtures.
 
-| Component | Summary |
-| --- | --- |
-| **Frontend** | Configure document types, edit logic, run tests, publish snapshots, upload documents, and compare results across snapshots. |
-| **FastAPI backend** | Stateless API surface that handles configuration CRUD, run orchestration, manifest retrieval, and file uploads. |
-| **Processing engine** | Pure-Python module that reads a snapshot, finds tables, maps columns, and executes transforms/validations. |
-| **SQLite (`var/ade.sqlite`)** | Single source of truth for snapshots, live pointers, manifests, and audit logs. |
-| **Document storage (`var/documents/`)** | Filesystem directory mounted into the container for uploaded and example files. |
-
-Horizontal scaling is not a design goal. When capacity becomes a concern we can move SQLite behind a lightweight service, but the baseline deployment stays intentionally simple.
+The default deployment runs one container. If capacity ever becomes a concern, SQLite can be replaced with a lightweight managed service, but that is intentionally out of scope for the base design.
 
 ---
 
-## Core concepts
+## Core workflows
 
-| Term | What it means |
-| --- | --- |
-| **Document type** | A family of inputs that share the same logic (e.g., payroll remittance). |
-| **Snapshot** | Immutable configuration bundle for a document type. Drafts can be edited; live/archived ones are read-only. |
-| **Profile** | Optional overrides inside a snapshot that tailor behaviour for a source, customer, or locale. |
-| **Manifest** | Stored result of processing a document: detected tables, mappings, audit notes, and the snapshot ID used. |
-| **Live pointer** | Record in SQLite that maps a document type (and optional profile) to the snapshot to run in production. |
+### Processing a document
 
----
+1. **Upload** documents through the UI or `POST /api/v1/documents`. Files land under `var/documents/`.
+2. **Select snapshots** to evaluate. Choose the live pointer or any historical version; compare multiple snapshots against the same uploads.
+3. **Process** via the UI or `POST /api/v1/runs`. The engine loads the snapshot, extracts tables, maps columns, runs transforms, and validates values.
+4. **Review manifests** in the UI or `GET /api/v1/manifests/{run_id}`. Compare manifests across snapshots to spot regressions before publishing.
 
-## Document processing flow
+### Managing snapshots
 
-1. **Upload** documents via the UI or `POST /api/v1/documents`. Files land under `var/documents/`.
-2. **Choose snapshots** to evaluate. The UI supports selecting the live pointer or any historical version. Multiple snapshots can be run against the same uploads to compare behaviour.
-3. **Process** by triggering the run in the UI or calling `POST /api/v1/runs`. The processing engine loads the snapshot, extracts tables, maps columns, applies transforms, and validates values.
-4. **Review** manifests. Results, warnings, and `needs_review` flags are stored in SQLite and displayed in the UI. JSON manifests are accessible via `GET /api/v1/manifests/{run_id}`.
+1. **Create a draft** for a document type. Drafts live entirely inside SQLite and remain editable.
+2. **Iterate and test** by uploading sample files and running them against the draft. The UI surfaces diffs against prior manifests.
+3. **Publish** when satisfied. Publishing flips the live pointer; existing snapshots stay archived for audit or rollback.
+4. **Bundle profiles** inside the snapshot so source- or customer-specific overrides stay versioned with the logic.
 
-Re-running the same snapshot on the same file produces identical output. Comparing manifests from different snapshots makes it easy to spot regressions before publishing.
+Always create a new draft instead of editing a live snapshot. Snapshots are immutable once published or archived.
 
----
+### Comparing versions
 
-## Snapshot workflow
-
-1. **Create a draft** snapshot for a document type. Drafts live entirely inside SQLite.
-2. **Iterate and test** by uploading example documents and running them against the draft. The UI highlights diffs against prior manifests so you can inspect behaviour changes.
-3. **Publish** once the draft behaves as expected. Publishing only flips the live pointer; older snapshots stay archived for audit or rollback.
-4. **Promote profiles** as part of the snapshot. Profile-specific overrides travel with the snapshot, avoiding hidden configuration.
-
-Always create a new draft instead of editing a live snapshot. Snapshots are write-once, guaranteeing reproducibility.
+The UI supports running the same uploads across multiple snapshots (live or historical) and highlighting differences in manifests. This "snapshot comparison" view is the primary way to validate changes before publication.
 
 ---
 
-## Storage model
+## Persistence model
 
 ADE keeps persistence intentionally straightforward:
 
-* **SQLite** — Everything lives in one file (`var/ade.sqlite`): snapshots, manifests, live pointers, and audit logs. JSON blobs store snapshot and manifest payloads so schema changes rarely require migrations.
+* **SQLite** — Everything lives in one file: snapshots, manifests, live pointers, audit logs, user accounts, and API keys. Snapshot and manifest payloads are stored as JSON so schema changes rarely require migrations.
 * **File storage** — Uploaded documents, example inputs, and exports are plain files under `var/documents/` (mounted volume in Docker).
-
-Example schema fragment for reference:
-
-```sql
-CREATE TABLE snapshots (
-  snapshot_id     TEXT PRIMARY KEY,
-  document_type   TEXT NOT NULL,
-  status          TEXT NOT NULL CHECK(status IN ('draft','live','archived')),
-  created_at      TEXT NOT NULL,
-  created_by      TEXT NOT NULL,
-  payload         JSON NOT NULL
-);
-
-CREATE TABLE manifests (
-  run_id         TEXT PRIMARY KEY,
-  snapshot_id    TEXT NOT NULL,
-  document_type  TEXT NOT NULL,
-  profile        TEXT,
-  generated_at   TEXT NOT NULL,
-  document       TEXT NOT NULL,
-  payload        JSON NOT NULL
-);
-```
 
 Backups are as simple as copying the SQLite file and the documents directory.
 
 ---
 
-## API & UI parity
+## API, UI, and automation
 
-The FastAPI application exposes every operation performed in the UI. Common routes:
+The FastAPI application exposes every operation performed in the UI. Common routes include:
 
 | Endpoint | Description |
 | --- | --- |
@@ -126,15 +96,26 @@ The FastAPI application exposes every operation performed in the UI. Common rout
 | `GET /api/v1/manifests/{run_id}` | Retrieve manifest payloads for auditing. |
 | `POST /api/v1/documents` | Upload a document for later runs. |
 
-OpenAPI docs live at `/docs`, making it easy to script or integrate with other systems.
+OpenAPI docs live at `/docs`, making it easy to script or integrate with other systems. API keys can be generated for automation (see “Authentication & access”).
 
 ---
 
-## Local development
+## Authentication & access
 
-* **Docker** — `docker compose up` builds the frontend, backend, and processing engine into one container and mounts `var/` for persistence.
-* **Backend** — FastAPI app with Pydantic models, organised into routers (`routes/`), services (`services/`), and the processing engine (`processor/`).
-* **Frontend** — Vite + TypeScript app for managing configuration, running comparisons, and inspecting manifests.
+* **User login** – Username/password authentication is the default. Credentials live in SQLite and can be managed through the admin UI.
+* **SSO (optional)** – Plug in an SSO provider if desired; the FastAPI app exposes a single integration point so you can add SAML/OIDC without touching the rest of the stack.
+* **Roles** – Users belong to roles (viewer, editor, admin). Roles govern who can edit logic, publish snapshots, or manage users.
+* **API keys** – Admins can mint and revoke API keys. Keys map back to a user and inherit that user’s role permissions.
+
+Keep it simple: no need for elaborate IAM. Restrict access to the Docker host and treat the SQLite database and documents directory as sensitive assets.
+
+---
+
+## Local development & deployment
+
+* **Docker** – `docker compose up` builds the frontend, backend, and engine into one container and mounts `var/` for persistence.
+* **Backend** – FastAPI app with Pydantic models, organised into routers (`routes/`), services (`services/`), and the processing engine (`processor/`).
+* **Frontend** – Vite + TypeScript app for managing configuration, running comparisons, and inspecting manifests.
 
 During development you can run the backend and frontend separately, but the supported deployment path is the combined container.
 
@@ -145,22 +126,25 @@ During development you can run the backend and frontend separately, but the supp
 ```bash
 pytest -q          # Backend tests
 npm test           # Frontend unit tests
+ruff check         # Python linting
+mypy               # Python type checks
+npm run lint       # Frontend linting
+npm run typecheck  # Frontend type checks
 ```
 
 Guidelines:
 
 * Maintain a labelled corpus per document type and run it against drafts before publishing.
-* Compare manifests between snapshots to surface regressions early.
-* Lint and type-check both codebases (`ruff`, `mypy`, `eslint`, `tsc`).
+* Compare manifests between snapshots to surface behavioural differences early.
+* Keep processing logic deterministic—no network calls, random seeds, or disk writes during a run.
 
 ---
 
-## Security & handling of sensitive data
+## Security considerations
 
 * Treat government IDs, payroll data, and personal information as sensitive; redact or hash before sharing manifests externally.
 * Restrict access to the Docker host, document storage directory, and the SQLite file.
 * Run custom logic inside a sandbox with CPU and memory limits to avoid runaway scripts.
-* Keep processing logic deterministic—no network calls, random seeds, or disk writes during a run.
 
 ---
 
@@ -173,7 +157,7 @@ Guidelines:
 ├─ backend/
 │  ├─ app/
 │  │  ├─ main.py                # FastAPI app entrypoint
-│  │  ├─ routes/                # API routers (runs, snapshots, documents)
+│  │  ├─ routes/                # API routers (runs, snapshots, documents, auth)
 │  │  ├─ services/              # Orchestration + SQLite access layer
 │  │  └─ schemas/               # Pydantic models
 │  ├─ processor/                # Header finder, column mapper, value logic
