@@ -16,7 +16,7 @@ listed beside each term.
 
 ## Core domain
 - **Document type** – Family of documents that share a configuration (`configuration_revisions.document_type`, `jobs.document_type`).
-- **Document record** – Canonical metadata for an uploaded file (`documents.document_id`, `documents.original_filename`, `documents.content_type`, `documents.byte_size`, `documents.sha256`, `documents.stored_uri`, `documents.metadata`).
+- **Document record** – Canonical metadata for an uploaded file (`documents.document_id`, `documents.original_filename`, `documents.content_type`, `documents.byte_size`, `documents.sha256`, `documents.stored_uri`, `documents.metadata`, `documents.expires_at`).
 - **Configuration** – Executable detection, transformation, and metadata logic that defines how ADE processes a document type. Stored as JSON on each configuration revision (`configuration_revisions.payload`).
 - **Configuration revision** – Immutable record of configuration logic for a document type. Draft revisions can change; activating one freezes the payload (`configuration_revisions.configuration_revision_id` ULID, `configuration_revisions.revision_number`, `configuration_revisions.is_active`, `configuration_revisions.activated_at`).
 - **Active configuration revision** – The single revision with `is_active = true` for a document type. API consumers use it by default when they do not supply an explicit `configuration_revision_id`.
@@ -27,17 +27,16 @@ listed beside each term.
 
 ## Document anatomy
 - **Document** – Canonical upload tracked by ADE. The API exposes its metadata via `/documents` (`documents.document_id`, `documents.stored_uri`). Files live in `var/documents/`.
-- **Stored URI** – Canonical path that jobs reference when describing inputs (`documents.stored_uri`). Uses a hashed directory structure such as `var/documents/ab/cd/<digest>`.
+- **Stored URI** – Canonical relative path that jobs reference when describing inputs (`documents.stored_uri`). Uses a hashed directory structure such as `ab/cd/<digest>` and is anchored under `var/documents/` on disk.
 - **Document hash** – SHA-256 digest used for deduplication (`documents.sha256`). Prefixed with `sha256:` in responses.
 - **Page** – Worksheet or PDF page captured in a manifest (`pages[].index`).
 - **Table** – Contiguous rows and columns with a single header row (`tables[].index`).
 - **Row type** – Classification emitted by the header finder (`header`, `data`, `group_header`, `note`) (`rows[].row_type`).
 - **Header row** – Row index that names the columns (`tables[].header_row`).
 - **Column** – Observed column with header text, samples, and metadata (`columns[].index`).
-- **Retention metadata** – Fields that describe when bytes can be purged and why (`documents.retention_expires_at`,
-  `documents.retention_source`, `documents.retention_override_days`, `documents.last_job_reference_at`).
+- **Document expiration** – Timestamp describing when operators may purge the stored bytes (`documents.expires_at`). Defaults to 30 days after ingest and may be overridden per upload. Future retention metadata (legal hold flags, override provenance) will extend this section.
 - **Legal hold** – Boolean flag that blocks deletion until cleared (`documents.legal_hold`).
-- **Deletion markers** – Lifecycle timestamps that capture manual deletions and purges (`documents.deleted_at`,
+- **Deletion markers** – Planned lifecycle timestamps that capture manual deletions and purges (`documents.deleted_at`,
   `documents.deleted_by`, `documents.delete_reason`, `documents.purge_requested_at`, `documents.purged_at`,
   `documents.purged_by`).
 
@@ -169,10 +168,11 @@ Back up the SQLite file alongside the `var/documents/` directory.
   "content_type": "application/pdf",
   "byte_size": 542118,
   "sha256": "sha256:bd5c3d9a6c5fe0d4f4a2c1b8e0f9db03a1376c64f071c7f1f0c7c6b8f019ab12",
-  "stored_uri": "var/documents/bd/5c/bd5c3d9a6c5fe0d4f4a2c1b8e0f9db03a1376c64f071c7f1f0c7c6b8f019ab12",
+  "stored_uri": "bd/5c/bd5c3d9a6c5fe0d4f4a2c1b8e0f9db03a1376c64f071c7f1f0c7c6b8f019ab12",
   "metadata": {},
-  "created_at": "2025-09-17T18:42:00Z",
-  "updated_at": "2025-09-17T18:42:00Z"
+  "expires_at": "2025-10-17T18:42:00+00:00",
+  "created_at": "2025-09-17T18:42:00+00:00",
+  "updated_at": "2025-09-17T18:42:00+00:00"
 }
 ```
 
