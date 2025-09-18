@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
 from pydantic.types import StringConstraints
 
 
@@ -24,7 +24,11 @@ class DocumentResponse(BaseModel):
     content_type: str | None = None
     byte_size: int
     sha256: str
-    stored_uri: str
+    stored_uri: str = Field(
+        description=(
+            "Relative storage path anchored under the configured documents directory"
+        )
+    )
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         validation_alias="metadata_",
@@ -32,6 +36,23 @@ class DocumentResponse(BaseModel):
     )
     created_at: str
     updated_at: str
+
+    @field_serializer("stored_uri")
+    def _serialise_stored_uri(self, stored_uri: str) -> str:
+        """Return a canonical relative URI for the stored document."""
+
+        _, _, digest = self.sha256.partition(":")
+        digest = digest or self.sha256
+        if not digest:
+            return stored_uri.replace("\\", "/")
+
+        first = digest[:2]
+        second = digest[2:4]
+        parts = [first]
+        if second:
+            parts.append(second)
+        parts.append(digest)
+        return "/".join(parts)
 
 
 class ConfigurationRevisionBase(BaseModel):
