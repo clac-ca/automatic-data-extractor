@@ -47,8 +47,8 @@ zones.
   calling `POST /documents`.
 - Accepted values must parse as ISO 8601. Naive timestamps are interpreted as
   UTC. Invalid or past values return HTTP 422 with `error=invalid_expiration`.
-- Overrides are stored verbatim; the service no longer recalculates the value
-  on duplicates so deduplicated uploads keep their original policy.
+- Overrides are stored verbatim; each upload keeps the provided timestamp even
+  when the bytes match a prior file.
 
 ---
 
