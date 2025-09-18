@@ -43,11 +43,11 @@ initial foundation created here wires together:
 
 - `config.py` – centralised settings (`ADE_` environment variables, SQLite + documents defaults, upload size cap).
 - `db.py` – SQLAlchemy engine/session helpers shared across routes and services.
-- `models.py` – the first domain models (`ConfigurationRevision`, `Job`, and `Document`) with ULID keys, JSON payload storage, and hashed document URIs.
+- `models.py` – the first domain models (`ConfigurationRevision`, `Job`, and `Document`) with ULID keys, JSON payload storage, and randomly assigned document URIs.
 - `routes/health.py` – health check hitting the database and returning `{ "status": "ok" }`.
 - `routes/documents.py` – multipart uploads, metadata listings, download streaming, and manual deletion for stored documents.
 - `main.py` – FastAPI application setup, startup lifecycle, and router registration.
-- `services/documents.py` – hashed-path storage, deduplication on SHA-256, filesystem lookups for uploads, size-limit enforcement, and soft-delete helpers.
+- `services/documents.py` – random-path storage for uploads, size-limit enforcement, filesystem lookups, and soft-delete helpers.
 - `tests/` – pytest-based checks that assert the service boots and SQLite file creation works.
 
 ### Processor
@@ -60,7 +60,7 @@ and mounted as Docker volumes in deployment.
 ---
 
 ## How the system flows
-1. Upload documents through the UI or `POST /documents`. The backend stores the file under a hashed path in `var/documents/` and returns canonical metadata (including the `stored_uri` jobs reference later).
+1. Upload documents through the UI or `POST /documents`. The backend writes the file to a randomly generated path in `var/documents/` and returns canonical metadata (including the `stored_uri` jobs reference later).
 2. Create or edit configuration revisions, then activate the revision that should run by default for the document type.
 3. Launch a job via the UI or `POST /jobs`. The processor applies the active configuration revision and records job inputs, outputs, metrics, and logs.
 4. Poll `GET /jobs/{job_id}` (or list with `GET /jobs`) to review progress, download output artefacts, and inspect metrics.
@@ -118,8 +118,8 @@ Jobs returned by the API and displayed in the UI always use the same JSON struct
 
 ## Document ingestion workflow
 
-1. `POST /documents` accepts a multipart upload (`file` field). The API streams the payload into `var/documents/<sha256-prefix>/...` and returns metadata including `document_id`, byte size, digest, and the canonical `stored_uri`.
-2. Uploading identical bytes returns the existing record and reuses the stored file. If the on-disk file has gone missing, the upload restores it before responding.
+1. `POST /documents` accepts a multipart upload (`file` field). The API streams the payload into a randomly generated directory under `var/documents/` and returns metadata including `document_id`, byte size, digest, and the canonical `stored_uri`.
+2. Every upload creates a fresh document record with its own storage path, even if the raw bytes match a prior submission.
 3. `GET /documents` lists records newest first, `GET /documents/{document_id}` returns metadata for a single file, `GET /documents/{document_id}/download` streams the stored bytes (with `Content-Disposition` set to the original filename), and `DELETE /documents/{document_id}` removes the bytes while recording who initiated the deletion.
 4. `POST /documents` enforces the configurable `max_upload_bytes` cap (defaults to 25 MiB). Payloads that exceed the limit return HTTP 413 with `{ "detail": {"error": "document_too_large", "max_upload_bytes": <bytes>, "received_bytes": <bytes>}}` so operators know the request failed before any data is persisted.
 5. Document retention and deletion workflows are defined in `docs/document_retention_and_deletion.md`. The API now records manual deletions; background purge automation remains on the roadmap.

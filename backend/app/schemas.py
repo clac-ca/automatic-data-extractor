@@ -45,18 +45,7 @@ class DocumentResponse(BaseModel):
     def _serialise_stored_uri(self, stored_uri: str) -> str:
         """Return a canonical relative URI for the stored document."""
 
-        _, _, digest = self.sha256.partition(":")
-        digest = digest or self.sha256
-        if not digest:
-            return stored_uri.replace("\\", "/")
-
-        first = digest[:2]
-        second = digest[2:4]
-        parts = [first]
-        if second:
-            parts.append(second)
-        parts.append(digest)
-        return "/".join(parts)
+        return stored_uri.replace("\\", "/")
 
 
 class DocumentDeleteRequest(BaseModel):

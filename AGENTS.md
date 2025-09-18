@@ -40,9 +40,9 @@ Approach this as an architect and engineer: your job is not just to code, but to
 - **Backend** – Python 3.11 with FastAPI and Pydantic v2. Keep extraction logic in pure functions (no I/O, randomness, or
   external calls). Put orchestration and persistence under `backend/app/services/` and processing utilities under
   `backend/processor/`.
-- **Document ingestion** – The `documents` table stores canonical uploads with hashed filesystem paths. `services/documents.py`
-  handles SHA-256 deduplication and rehydrating missing files; `routes/documents.py` exposes upload, list, and download routes
-  that return the `stored_uri` jobs should reference.
+- **Document ingestion** – The `documents` table stores canonical uploads with randomly assigned storage paths. `services/documents.py`
+  writes every upload to its own location, enforces size limits, and keeps metadata consistent; `routes/documents.py` exposes
+  upload, list, download, and deletion routes that return the `stored_uri` jobs should reference.
 - **Frontend** – Vite + React with TypeScript. Use functional components, strict typing, and place API wrappers in
   `frontend/src/api/`.
 - **Configurations, revisions, & jobs** – Treat active configuration revisions as immutable. Jobs apply the active revision, record inputs/outputs/metrics/logs as JSON, and provide the audit trail reviewers inspect in the UI. Persist configuration revision payloads and job records as JSON. Job IDs follow `job_YYYY_MM_DD_####`, remain mutable while `pending` or `running`, and lock once marked `completed` or `failed`.

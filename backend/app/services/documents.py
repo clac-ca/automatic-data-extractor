@@ -1,17 +1,20 @@
 """Document ingestion and storage helpers.
 
-This module owns the logic that writes uploaded files into the hashed
-directory structure under ``var/documents/`` and exposes metadata lookup
-utilities for API routes and background jobs. Centralising the behaviour
-keeps FastAPI routes small and ensures every entry point deduplicates on
-the SHA-256 digest before hitting the filesystem.
+This module owns the logic that writes uploaded files into the document
+storage directory under ``var/documents/`` and exposes metadata lookup
+utilities for API routes and background jobs. The implementation favours a
+straightforward "always store a new file" approach: every upload is written
+under a randomly generated path, and metadata is persisted alongside the
+stored bytes. This keeps the service easy to reason about without the
+complexity of deduplication or restoration logic.
 """
 
 from __future__ import annotations
 
 import io
-import tempfile
+import secrets
 from collections.abc import Iterator
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
@@ -25,6 +28,7 @@ from ..models import Document
 
 _HASH_PREFIX = "sha256:"
 _CHUNK_SIZE = 1024 * 1024
+_MAX_STORAGE_KEY_ATTEMPTS = 10
 
 
 class DocumentNotFoundError(Exception):
@@ -81,51 +85,85 @@ def _normalise_content_type(content_type: str | None) -> str | None:
     return stripped or None
 
 
-def _as_stream(data: bytes | BinaryIO) -> BinaryIO:
-    if isinstance(data, (bytes, bytearray)):
-        return io.BytesIO(data)
-    return data
+def _prepare_stream(data: bytes | BinaryIO) -> BinaryIO:
+    """Return a binary stream positioned at the start of the payload."""
 
-
-def _rewind(stream: BinaryIO) -> None:
+    stream = io.BytesIO(data) if isinstance(data, (bytes, bytearray)) else data
     try:
         if hasattr(stream, "seek") and stream.seekable():
             stream.seek(0)
     except Exception:  # pragma: no cover - defensive fallback
         pass
+    return stream
 
 
-def _hash_to_tempfile(
-    stream: BinaryIO, *, max_bytes: int | None = None
-) -> tuple[str, int, Path]:
-    hasher = sha256()
+def _generate_storage_token() -> str:
+    return secrets.token_hex(32)
+
+
+def _relative_storage_path(token: str) -> Path:
+    return Path(token[:2]) / token[2:4] / token
+
+
+@dataclass(frozen=True)
+class _StorageAllocation:
+    """Allocated location for a document on disk."""
+
+    relative_path: Path
+    disk_path: Path
+
+    @property
+    def uri(self) -> str:
+        return self.relative_path.as_posix()
+
+
+def _allocate_storage_path(documents_dir: Path) -> _StorageAllocation:
+    for _ in range(_MAX_STORAGE_KEY_ATTEMPTS):
+        token = _generate_storage_token()
+        relative = _relative_storage_path(token)
+        disk_path = documents_dir / relative
+        if not disk_path.exists():
+            return _StorageAllocation(relative, disk_path)
+    raise RuntimeError("Unable to allocate unique storage path")
+
+
+@dataclass(frozen=True)
+class _PersistedStream:
+    """Details about a stream that has been written to disk."""
+
+    digest: str
+    size: int
+
+
+def _persist_stream(
+    stream: BinaryIO,
+    destination: Path,
+    *,
+    max_bytes: int | None = None,
+) -> _PersistedStream:
     size = 0
-    tmp_path: Path | None = None
+    hasher = sha256()
+    destination.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
-            tmp_path = Path(tmp.name)
+        with destination.open("wb") as target:
             while True:
                 chunk = stream.read(_CHUNK_SIZE)
                 if not chunk:
                     break
+                prospective_size = size + len(chunk)
+                if max_bytes is not None and prospective_size > max_bytes:
+                    # Validate the limit before touching the filesystem so we
+                    # never leave a partially written payload behind.
+                    raise DocumentTooLargeError(
+                        limit=max_bytes, received=prospective_size
+                    )
+                target.write(chunk)
                 hasher.update(chunk)
-                tmp.write(chunk)
-                size += len(chunk)
-                if max_bytes is not None and size > max_bytes:
-                    raise DocumentTooLargeError(limit=max_bytes, received=size)
-        digest = hasher.hexdigest()
-        assert tmp_path is not None  # for type-checkers
-        return digest, size, tmp_path
+                size = prospective_size
     except Exception:
-        if tmp_path is not None:
-            tmp_path.unlink(missing_ok=True)
+        destination.unlink(missing_ok=True)
         raise
-
-
-def _strip_hash_prefix(value: str) -> str:
-    if value.startswith(_HASH_PREFIX):
-        return value[len(_HASH_PREFIX) :]
-    return value
+    return _PersistedStream(digest=hasher.hexdigest(), size=size)
 
 
 def _resolve_expiration(
@@ -154,27 +192,7 @@ def _resolve_expiration(
         raise InvalidDocumentExpirationError(message)
 
     return parsed
-
-
-def _storage_relative_path(digest: str) -> Path:
-    return Path(digest[:2]) / digest[2:4] / digest
-
-
-def _storage_uri(digest: str) -> str:
-    return _storage_relative_path(digest).as_posix()
-
-
-def _storage_path(documents_dir: Path, digest: str) -> Path:
-    return documents_dir / _storage_relative_path(digest)
-
-
-def _get_by_sha(db: Session, sha_value: str) -> Document | None:
-    statement = (
-        select(Document)
-        .where(Document.sha256 == sha_value, Document.deleted_at.is_(None))
-        .limit(1)
-    )
-    return db.scalars(statement).first()
+    
 
 
 def store_document(
@@ -187,24 +205,20 @@ def store_document(
 ) -> Document:
     """Persist a document to disk and return the metadata record.
 
-    Uploads deduplicate on the SHA-256 digest. When a file with the same
-    digest already exists, the existing record is returned and the incoming
-    payload is discarded (unless the original file is missing, in which case
-    it is restored).
+    Every upload is assigned a unique on-disk location under the configured
+    documents directory. The stored file path is randomised so callers do not
+    need to coordinate file names ahead of time.
     """
 
     settings = config.get_settings()
-    stream = _as_stream(data)
-    _rewind(stream)
+    stream = _prepare_stream(data)
 
-    digest, size, tmp_path = _hash_to_tempfile(
-        stream, max_bytes=settings.max_upload_bytes
+    allocation = _allocate_storage_path(settings.documents_dir)
+    persisted = _persist_stream(
+        stream, allocation.disk_path, max_bytes=settings.max_upload_bytes
     )
-    sha_value = f"{_HASH_PREFIX}{digest}"
-    relative_path = _storage_relative_path(digest)
-    stored_uri = _storage_uri(digest)
-    stored_path = _storage_path(settings.documents_dir, digest)
-    tmp_to_remove: Path | None = tmp_path
+    sha_value = f"{_HASH_PREFIX}{persisted.digest}"
+    stored_uri = allocation.uri
 
     now = datetime.now(timezone.utc)
     expiration = _resolve_expiration(
@@ -214,40 +228,21 @@ def store_document(
     ).isoformat()
     now_iso = now.isoformat()
 
-    try:
-        existing = _get_by_sha(db, sha_value)
-        if existing is not None:
-            if not stored_path.exists():
-                stored_path.parent.mkdir(parents=True, exist_ok=True)
-                tmp_path.replace(stored_path)
-                tmp_to_remove = None
-            if existing.stored_uri != stored_uri:
-                existing.stored_uri = stored_uri
-                db.add(existing)
-            return existing
-
-        stored_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path.replace(stored_path)
-        tmp_to_remove = None
-
-        document = Document(
-            original_filename=_normalise_filename(original_filename),
-            content_type=_normalise_content_type(content_type),
-            byte_size=size,
-            sha256=sha_value,
-            stored_uri=stored_uri,
-            metadata_={},
-            expires_at=expiration,
-            created_at=now_iso,
-            updated_at=now_iso,
-        )
-        db.add(document)
-        db.commit()
-        db.refresh(document)
-        return document
-    finally:
-        if tmp_to_remove is not None:
-            tmp_to_remove.unlink(missing_ok=True)
+    document = Document(
+        original_filename=_normalise_filename(original_filename),
+        content_type=_normalise_content_type(content_type),
+        byte_size=persisted.size,
+        sha256=sha_value,
+        stored_uri=stored_uri,
+        metadata_={},
+        expires_at=expiration,
+        created_at=now_iso,
+        updated_at=now_iso,
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+    return document
 
 
 def list_documents(db: Session, *, include_deleted: bool = False) -> list[Document]:
@@ -274,27 +269,10 @@ def resolve_document_path(
     """Return the on-disk path for the stored document."""
 
     settings = settings or config.get_settings()
-    digest = _strip_hash_prefix(document.sha256)
-    relative = _storage_relative_path(digest)
-    primary_path = settings.documents_dir / relative
-
-    if primary_path.exists():
-        return primary_path
-
     stored_path = Path(document.stored_uri)
     if stored_path.is_absolute():
-        candidate = stored_path
-    else:
-        candidate = settings.documents_dir / stored_path
-
-    try:
-        candidate.relative_to(settings.documents_dir)
-    except ValueError:
-        return primary_path
-
-    if candidate.exists():
-        return candidate
-    return primary_path
+        return stored_path
+    return settings.documents_dir / stored_path
 
 
 def delete_document(
