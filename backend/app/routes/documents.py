@@ -80,9 +80,7 @@ def _content_disposition(filename: str | None) -> str:
         .strip()
     )
 
-    try:
-        sanitised.encode("latin-1")
-    except UnicodeEncodeError:
+    if not all(ord(c) <= 255 for c in sanitised):
         ascii_filename = _ascii_filename_fallback(filename)
         encoded = quote(filename, safe="")
         header = f'attachment; filename="{ascii_filename}"'
