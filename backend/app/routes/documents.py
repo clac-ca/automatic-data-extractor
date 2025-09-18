@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 import os
 import unicodedata
 from urllib.parse import quote
@@ -12,6 +13,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from .. import config
 from ..db import get_db
 from ..models import AuditEvent, Document
 from ..schemas import (
@@ -23,6 +25,7 @@ from ..schemas import (
 from ..services.audit_log import list_entity_events
 from ..services.documents import (
     DocumentNotFoundError,
+    DocumentStoragePathError,
     DocumentTooLargeError,
     InvalidDocumentExpirationError,
     delete_document as delete_document_service,
@@ -37,6 +40,9 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 
 _DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 _DEFAULT_DOWNLOAD_FILENAME = "downloaded-document"
+
+
+logger = logging.getLogger(__name__)
 
 
 def _ascii_filename_fallback(filename: str) -> str:
@@ -171,8 +177,14 @@ def get_document(
     return _to_response(document)
 
 
-def _download_iterator(document: Document) -> Iterator[bytes]:
-    return iter_document_file(document, chunk_size=_DOWNLOAD_CHUNK_SIZE)
+def _download_iterator(
+    document: Document, *, settings: config.Settings | None = None
+) -> Iterator[bytes]:
+    return iter_document_file(
+        document,
+        settings=settings,
+        chunk_size=_DOWNLOAD_CHUNK_SIZE,
+    )
 
 
 @router.get("/{document_id}/download")
@@ -186,15 +198,30 @@ def download_document(
     except DocumentNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    path = resolve_document_path(document)
-    if not path.exists():
+    settings = config.get_settings()
+    try:
+        path = resolve_document_path(document, settings=settings)
+    except DocumentStoragePathError as exc:
+        logger.exception(
+            "Document stored URI resolves outside documents directory",
+            extra={
+                "document_id": document.document_id,
+                "stored_uri": document.stored_uri,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Stored document path is invalid",
+        ) from exc
+
+    if not path.exists() or not path.is_file():
         msg = f"Stored file for document '{document_id}' is missing"
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
 
     headers = {"Content-Disposition": _content_disposition(document.original_filename)}
     media_type = document.content_type or "application/octet-stream"
     return StreamingResponse(
-        _download_iterator(document),
+        _download_iterator(document, settings=settings),
         media_type=media_type,
         headers=headers,
     )
