@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import TypeAdapter, ValidationError
 from pydantic.types import StringConstraints
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from ..db import get_db
 from ..models import Configuration
@@ -53,13 +54,21 @@ def create_configuration_endpoint(
 ) -> ConfigurationResponse:
     """Create a new configuration version."""
 
-    configuration = create_configuration(
-        db,
-        document_type=payload.document_type,
-        title=payload.title,
-        payload=payload.payload,
-        is_active=payload.is_active,
-    )
+    try:
+        configuration = create_configuration(
+            db,
+            document_type=payload.document_type,
+            title=payload.title,
+            payload=payload.payload,
+            is_active=payload.is_active,
+        )
+    except IntegrityError as exc:
+        db.rollback()
+        detail = (
+            "An active configuration already exists for "
+            f"'{payload.document_type}'. Only one revision may be active at a time."
+        )
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=detail) from exc
     return _to_response(configuration)
 
 
@@ -126,6 +135,14 @@ def update_configuration_endpoint(
         configuration = update_configuration(db, configuration_id, **update_kwargs)
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        existing = get_configuration(db, configuration_id)
+        detail = (
+            "An active configuration already exists for "
+            f"'{existing.document_type}'. Only one revision may be active at a time."
+        )
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=detail) from exc
     return _to_response(configuration)
 
 
