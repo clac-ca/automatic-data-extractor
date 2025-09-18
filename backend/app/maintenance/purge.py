@@ -6,6 +6,7 @@ import argparse
 import logging
 import sys
 from dataclasses import asdict
+from datetime import datetime, timezone
 from typing import Sequence
 
 from ..db import Base, get_engine, get_sessionmaker
@@ -80,8 +81,15 @@ def _log_summary(summary: ExpiredDocumentPurgeSummary) -> None:
 
 def _run_purge(limit: int | None, dry_run: bool) -> ExpiredDocumentPurgeSummary:
     session_factory = get_sessionmaker()
+    started_at = datetime.now(timezone.utc).isoformat()
     with session_factory() as db:
-        return purge_expired_documents(db, limit=limit, dry_run=dry_run)
+        return purge_expired_documents(
+            db,
+            limit=limit,
+            dry_run=dry_run,
+            audit_source="cli",
+            audit_request_id=started_at,
+        )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
