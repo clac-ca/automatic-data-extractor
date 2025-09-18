@@ -9,8 +9,8 @@ import pytest
 import re
 
 
-def _activate_revision(
-    client, *, document_type: str = "remittance", title: str = "Active revision"
+def _activate_configuration(
+    client, *, document_type: str = "remittance", title: str = "Active configuration"
 ) -> dict[str, Any]:
     payload = {
         "document_type": document_type,
@@ -18,7 +18,7 @@ def _activate_revision(
         "payload": {"rules": []},
         "is_active": True,
     }
-    response = client.post("/configuration-revisions", json=payload)
+    response = client.post("/configurations", json=payload)
     assert response.status_code == 201
     return response.json()
 
@@ -58,18 +58,18 @@ def _job_sequence(job_id: str) -> int:
     return int(job_id.rsplit("_", 1)[-1])
 
 
-def test_create_job_uses_active_revision(app_client) -> None:
+def test_create_job_uses_active_configuration(app_client) -> None:
     client, _, _ = app_client
-    revision = _activate_revision(client)
+    configuration = _activate_configuration(client)
 
-    payload = _create_job_payload(revision["document_type"])
+    payload = _create_job_payload(configuration["document_type"])
     response = client.post("/jobs", json=payload)
 
     assert response.status_code == 201
     data = response.json()
     assert re.fullmatch(r"job_\d{4}_\d{2}_\d{2}_\d{4}", data["job_id"])
     assert data["document_type"] == payload["document_type"]
-    assert data["configuration_revision"] == revision["revision_number"]
+    assert data["configuration_version"] == configuration["version"]
     assert data["status"] == payload["status"]
     assert data["created_by"] == payload["created_by"]
     assert data["input"] == payload["input"]
@@ -80,66 +80,66 @@ def test_create_job_uses_active_revision(app_client) -> None:
     datetime.fromisoformat(data["updated_at"])
 
 
-def test_create_job_with_explicit_revision(app_client) -> None:
+def test_create_job_with_explicit_configuration(app_client) -> None:
     client, _, _ = app_client
-    active = _activate_revision(client, title="Draft to activate")
+    active = _activate_configuration(client, title="Draft to activate")
     draft_payload = {
         "document_type": active["document_type"],
-        "title": "Historical revision",
+        "title": "Historical version",
         "payload": {"rules": ["legacy"]},
     }
-    draft_response = client.post("/configuration-revisions", json=draft_payload)
+    draft_response = client.post("/configurations", json=draft_payload)
     assert draft_response.status_code == 201
-    draft_revision = draft_response.json()
+    draft_configuration = draft_response.json()
 
     payload = _create_job_payload(active["document_type"])
-    payload["configuration_revision_id"] = draft_revision["configuration_revision_id"]
+    payload["configuration_id"] = draft_configuration["configuration_id"]
     payload["status"] = "pending"
 
     response = client.post("/jobs", json=payload)
 
     assert response.status_code == 201
     data = response.json()
-    assert data["configuration_revision"] == draft_revision["revision_number"]
+    assert data["configuration_version"] == draft_configuration["version"]
     assert data["status"] == "pending"
 
 
-def test_create_job_rejects_revision_for_other_document_type(app_client) -> None:
+def test_create_job_rejects_configuration_for_other_document_type(app_client) -> None:
     client, _, _ = app_client
-    invoice_revision = _activate_revision(client, document_type="invoice")
-    remittance_revision = _activate_revision(client, document_type="remittance")
+    invoice_configuration = _activate_configuration(client, document_type="invoice")
+    remittance_configuration = _activate_configuration(client, document_type="remittance")
 
-    payload = _create_job_payload(remittance_revision["document_type"])
-    payload["configuration_revision_id"] = invoice_revision["configuration_revision_id"]
+    payload = _create_job_payload(remittance_configuration["document_type"])
+    payload["configuration_id"] = invoice_configuration["configuration_id"]
 
     response = client.post("/jobs", json=payload)
 
     assert response.status_code == 409
     assert (
         response.json()["detail"]
-        == "Configuration revision "
-        f"'{invoice_revision['configuration_revision_id']}' belongs to document type "
+        == "Configuration "
+        f"'{invoice_configuration['configuration_id']}' belongs to document type "
         "'invoice', not 'remittance'"
     )
 
 
-def test_create_job_requires_active_revision(app_client) -> None:
+def test_create_job_requires_active_configuration(app_client) -> None:
     client, _, _ = app_client
 
     payload = _create_job_payload()
     response = client.post("/jobs", json=payload)
 
     assert response.status_code == 409
-    assert response.json()["detail"] == "No active configuration revision found for 'remittance'"
+    assert response.json()["detail"] == "No active configuration found for 'remittance'"
 
 
 def test_list_jobs_returns_latest_first(app_client) -> None:
     client, _, _ = app_client
-    revision = _activate_revision(client)
+    configuration = _activate_configuration(client)
 
-    first_response = client.post("/jobs", json=_create_job_payload(revision["document_type"]))
+    first_response = client.post("/jobs", json=_create_job_payload(configuration["document_type"]))
     assert first_response.status_code == 201
-    second_payload = _create_job_payload(revision["document_type"])
+    second_payload = _create_job_payload(configuration["document_type"])
     second_payload["created_by"] = "ops"
     second_response = client.post("/jobs", json=second_payload)
     assert second_response.status_code == 201
@@ -155,11 +155,11 @@ def test_list_jobs_returns_latest_first(app_client) -> None:
 
 def test_job_ids_increment_within_same_day(app_client) -> None:
     client, _, _ = app_client
-    revision = _activate_revision(client)
+    configuration = _activate_configuration(client)
 
-    first = client.post("/jobs", json=_create_job_payload(revision["document_type"]))
+    first = client.post("/jobs", json=_create_job_payload(configuration["document_type"]))
     assert first.status_code == 201
-    second = client.post("/jobs", json=_create_job_payload(revision["document_type"]))
+    second = client.post("/jobs", json=_create_job_payload(configuration["document_type"]))
     assert second.status_code == 201
 
     first_id = first.json()["job_id"]
@@ -171,9 +171,9 @@ def test_job_ids_increment_within_same_day(app_client) -> None:
 
 def test_get_job_returns_single_job(app_client) -> None:
     client, _, _ = app_client
-    revision = _activate_revision(client)
+    configuration = _activate_configuration(client)
 
-    create_response = client.post("/jobs", json=_create_job_payload(revision["document_type"]))
+    create_response = client.post("/jobs", json=_create_job_payload(configuration["document_type"]))
     job = create_response.json()
 
     response = client.get(f"/jobs/{job['job_id']}")
@@ -193,9 +193,9 @@ def test_get_job_returns_404_for_missing_job(app_client) -> None:
 
 def test_update_job_tracks_progress_and_completion(app_client) -> None:
     client, _, _ = app_client
-    revision = _activate_revision(client)
+    configuration = _activate_configuration(client)
 
-    create_response = client.post("/jobs", json=_create_job_payload(revision["document_type"]))
+    create_response = client.post("/jobs", json=_create_job_payload(configuration["document_type"]))
     job = create_response.json()
 
     progress_payload = {
@@ -256,9 +256,9 @@ def test_update_job_tracks_progress_and_completion(app_client) -> None:
 
 def test_update_job_rejects_invalid_status(app_client) -> None:
     client, _, _ = app_client
-    revision = _activate_revision(client)
+    configuration = _activate_configuration(client)
 
-    create_response = client.post("/jobs", json=_create_job_payload(revision["document_type"]))
+    create_response = client.post("/jobs", json=_create_job_payload(configuration["document_type"]))
     job = create_response.json()
 
     response = client.patch(
@@ -277,7 +277,7 @@ def test_update_job_rejects_invalid_status(app_client) -> None:
 
 def test_create_job_rejects_invalid_status(app_client) -> None:
     client, _, _ = app_client
-    _activate_revision(client)
+    _activate_configuration(client)
 
     payload = _create_job_payload()
     payload["status"] = "invalid"
@@ -304,9 +304,9 @@ def test_create_job_rejects_invalid_status(app_client) -> None:
 )
 def test_update_job_rejects_null_fields(app_client, field: str, value: Any) -> None:
     client, _, _ = app_client
-    revision = _activate_revision(client)
+    configuration = _activate_configuration(client)
 
-    create_response = client.post("/jobs", json=_create_job_payload(revision["document_type"]))
+    create_response = client.post("/jobs", json=_create_job_payload(configuration["document_type"]))
     job = create_response.json()
 
     response = client.patch(f"/jobs/{job['job_id']}", json={field: value})

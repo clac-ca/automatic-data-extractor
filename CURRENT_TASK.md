@@ -1,7 +1,7 @@
 # Current Task — Expand audit logging beyond document deletions
 
 ## Goal
-Instrument additional ADE workflows (configuration revisions and jobs) to use the
+Instrument additional ADE workflows (configurations and jobs) to use the
 shared audit log while keeping the API surface predictable for future UI work.
 
 ## Why this matters
@@ -13,9 +13,9 @@ shared audit log while keeping the API surface predictable for future UI work.
   reduces duplicated SQL in route handlers.
 
 ## Proposed scope
-1. **Configuration revisions** – Record `configuration_revision.*` events when
-   revisions are created, updated, or activated. Payloads should capture title,
-   revision number, actor, and activation status.
+1. **Configurations** – Record `configuration.*` events when
+   configurations are created, updated, or activated. Payloads should capture
+   title, version, actor, and activation status.
 2. **Jobs** – Emit events for job creation, status transitions (`pending →
    running → completed/failed`), and result publication. Include actor (creator
    or system process), source (API vs. scheduler), and key metrics in payloads.

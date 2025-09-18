@@ -8,10 +8,10 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import Job
 from ..schemas import JobCreate, JobResponse, JobUpdate
-from ..services.configuration_revisions import (
-    ActiveConfigurationRevisionNotFoundError,
-    ConfigurationRevisionMismatchError,
-    ConfigurationRevisionNotFoundError,
+from ..services.configurations import (
+    ActiveConfigurationNotFoundError,
+    ConfigurationMismatchError,
+    ConfigurationNotFoundError,
 )
 from ..services.jobs import (
     InvalidJobStatusError,
@@ -44,13 +44,13 @@ def create_job_endpoint(payload: JobCreate, db: Session = Depends(get_db)) -> Jo
             outputs=payload.outputs,
             metrics=payload.metrics,
             logs=payload.logs,
-            configuration_revision_id=payload.configuration_revision_id,
+            configuration_id=payload.configuration_id,
         )
-    except ConfigurationRevisionNotFoundError as exc:
+    except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except ActiveConfigurationRevisionNotFoundError as exc:
+    except ActiveConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except ConfigurationRevisionMismatchError as exc:
+    except ConfigurationMismatchError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except InvalidJobStatusError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
