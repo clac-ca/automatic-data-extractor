@@ -101,10 +101,6 @@ class Document(Base):
     """Uploaded document metadata with deterministic storage paths."""
 
     __tablename__ = "documents"
-    __table_args__ = (
-        UniqueConstraint("sha256", name="uq_document_sha256"),
-        UniqueConstraint("stored_uri", name="uq_document_stored_uri"),
-    )
 
     document_id: Mapped[str] = mapped_column(
         String(26), primary_key=True, default=_generate_ulid
@@ -125,6 +121,9 @@ class Document(Base):
     updated_at: Mapped[str] = mapped_column(
         String(32), default=_timestamp, onupdate=_timestamp, nullable=False
     )
+    deleted_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    deleted_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    delete_reason: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
     def __repr__(self) -> str:
         return (

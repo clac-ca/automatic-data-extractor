@@ -45,9 +45,9 @@ initial foundation created here wires together:
 - `db.py` – SQLAlchemy engine/session helpers shared across routes and services.
 - `models.py` – the first domain models (`ConfigurationRevision`, `Job`, and `Document`) with ULID keys, JSON payload storage, and hashed document URIs.
 - `routes/health.py` – health check hitting the database and returning `{ "status": "ok" }`.
-- `routes/documents.py` – multipart uploads, metadata listings, and download streaming for stored documents.
+- `routes/documents.py` – multipart uploads, metadata listings, download streaming, and manual deletion for stored documents.
 - `main.py` – FastAPI application setup, startup lifecycle, and router registration.
-- `services/documents.py` – hashed-path storage, deduplication on SHA-256, filesystem lookups for uploads, and size-limit enforcement.
+- `services/documents.py` – hashed-path storage, deduplication on SHA-256, filesystem lookups for uploads, size-limit enforcement, and soft-delete helpers.
 - `tests/` – pytest-based checks that assert the service boots and SQLite file creation works.
 
 ### Processor
@@ -120,9 +120,9 @@ Jobs returned by the API and displayed in the UI always use the same JSON struct
 
 1. `POST /documents` accepts a multipart upload (`file` field). The API streams the payload into `var/documents/<sha256-prefix>/...` and returns metadata including `document_id`, byte size, digest, and the canonical `stored_uri`.
 2. Uploading identical bytes returns the existing record and reuses the stored file. If the on-disk file has gone missing, the upload restores it before responding.
-3. `GET /documents` lists records newest first, `GET /documents/{document_id}` returns metadata for a single file, and `GET /documents/{document_id}/download` streams the stored bytes (with `Content-Disposition` set to the original filename).
-4. `POST /documents` enforces the configurable `max_upload_bytes` cap (defaults to 25 MiB). Payloads that exceed the limit return HTTP 413 with `{"detail": {"error": "document_too_large", "max_upload_bytes": <bytes>, "received_bytes": <bytes>}}` so operators know the request failed before any data is persisted.
-5. Document retention and deletion workflows are defined in `docs/document_retention_and_deletion.md`. Upcoming engineering work will implement the API surface and background purge worker described there.
+3. `GET /documents` lists records newest first, `GET /documents/{document_id}` returns metadata for a single file, `GET /documents/{document_id}/download` streams the stored bytes (with `Content-Disposition` set to the original filename), and `DELETE /documents/{document_id}` removes the bytes while recording who initiated the deletion.
+4. `POST /documents` enforces the configurable `max_upload_bytes` cap (defaults to 25 MiB). Payloads that exceed the limit return HTTP 413 with `{ "detail": {"error": "document_too_large", "max_upload_bytes": <bytes>, "received_bytes": <bytes>}}` so operators know the request failed before any data is persisted.
+5. Document retention and deletion workflows are defined in `docs/document_retention_and_deletion.md`. The API now records manual deletions; background purge automation remains on the roadmap.
 
 ---
 

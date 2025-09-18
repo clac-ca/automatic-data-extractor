@@ -1,11 +1,13 @@
 # Document expiration and cleanup notes
 
 ## Summary
-ADE now applies a simple expiration policy to every uploaded document. New
-records carry an `expires_at` timestamp computed at ingest time so operators
-know when the file should disappear. The defaults aim to keep disk usage
-predictable while leaving space for future automation that actually purges
-expired bytes.
+ADE now applies a simple expiration policy to every uploaded document and
+records manual deletions. New records carry an `expires_at` timestamp computed
+at ingest time so operators know when the file should disappear. When an
+operator deletes a document through the API, the service removes the stored
+bytes and stamps audit metadata (`deleted_at`, `deleted_by`,
+`delete_reason`). The defaults aim to keep disk usage predictable while leaving
+space for future automation that actually purges expired bytes.
 
 Key points:
 
@@ -16,8 +18,12 @@ Key points:
   and stores it verbatim.
 - **Persistence** – The resolved `expires_at` value lives alongside existing
   document metadata and is returned by all document APIs.
-- **Cleanup** – Automatic deletion still needs to be built. Until then,
-  operators can use the stored timestamp to drive manual or scripted purges.
+- **Manual deletion** – Operators call `DELETE /documents/{document_id}` with
+  a `deleted_by` identifier (and optional `delete_reason`). The API removes the
+  file when present, stamps audit metadata, and returns the updated document.
+- **Cleanup automation** – A background purge worker is still forthcoming.
+  Until it exists, use the expiration timestamp plus the manual deletion API to
+  keep storage tidy.
 
 ---
 
@@ -46,6 +52,19 @@ zones.
 
 ---
 
+## Manual deletion API
+
+- Send `DELETE /documents/{document_id}` with a JSON body containing
+  `deleted_by` (required) and `delete_reason` (optional).
+- The service removes the file from disk when present and stamps
+  `deleted_at`, `deleted_by`, and `delete_reason` on the document record.
+- Repeated calls return the existing metadata so operators can retry cleanup
+  jobs without changing the audit trail.
+- Soft-deleted documents stay queryable by ID, but list endpoints exclude them
+  by default.
+
+---
+
 ## Configuration knobs
 
 | Environment variable | Default | Description |
@@ -69,8 +88,9 @@ worker can:
    confirm the system is healthy.
 
 In the meantime, operators can run ad-hoc scripts or cron jobs that read the
-stored timestamps and remove expired files. Keep audit requirements in mind:
-log who initiated the purge and when.
+stored timestamps and invoke the manual deletion API. Keep audit requirements
+in mind: log who initiated the purge and when so the `deleted_by` field stays
+trustworthy.
 
 ---
 

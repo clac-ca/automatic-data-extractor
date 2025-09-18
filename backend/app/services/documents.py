@@ -169,7 +169,11 @@ def _storage_path(documents_dir: Path, digest: str) -> Path:
 
 
 def _get_by_sha(db: Session, sha_value: str) -> Document | None:
-    statement = select(Document).where(Document.sha256 == sha_value).limit(1)
+    statement = (
+        select(Document)
+        .where(Document.sha256 == sha_value, Document.deleted_at.is_(None))
+        .limit(1)
+    )
     return db.scalars(statement).first()
 
 
@@ -246,10 +250,12 @@ def store_document(
             tmp_to_remove.unlink(missing_ok=True)
 
 
-def list_documents(db: Session) -> list[Document]:
+def list_documents(db: Session, *, include_deleted: bool = False) -> list[Document]:
     """Return documents ordered by creation time (newest first)."""
 
     statement = select(Document).order_by(Document.created_at.desc())
+    if not include_deleted:
+        statement = statement.where(Document.deleted_at.is_(None))
     return list(db.scalars(statement))
 
 
@@ -291,6 +297,36 @@ def resolve_document_path(
     return primary_path
 
 
+def delete_document(
+    db: Session,
+    document_id: str,
+    *,
+    deleted_by: str,
+    delete_reason: str | None = None,
+) -> Document:
+    """Soft delete a document and remove the stored file when present."""
+
+    document = get_document(db, document_id)
+    now = datetime.now(timezone.utc)
+    settings = config.get_settings()
+    path = resolve_document_path(document, settings=settings)
+    path.unlink(missing_ok=True)
+
+    if document.deleted_at is None:
+        now_iso = now.isoformat()
+        document.deleted_at = now_iso
+        document.deleted_by = deleted_by
+        document.delete_reason = delete_reason
+        document.updated_at = now_iso
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+    else:
+        db.commit()
+
+    return document
+
+
 def iter_document_file(
     document: Document,
     *,
@@ -316,5 +352,6 @@ __all__ = [
     "list_documents",
     "get_document",
     "resolve_document_path",
+    "delete_document",
     "iter_document_file",
 ]
