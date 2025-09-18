@@ -134,8 +134,12 @@ def _resolve_expiration(
     if override is None:
         return now + timedelta(days=retention_days)
 
+    candidate = override.strip()
+    if candidate.endswith(("Z", "z")):
+        candidate = f"{candidate[:-1]}+00:00"
+
     try:
-        parsed = datetime.fromisoformat(override)
+        parsed = datetime.fromisoformat(candidate)
     except ValueError as exc:
         message = "expires_at must be a valid ISO 8601 timestamp"
         raise InvalidDocumentExpirationError(message) from exc
