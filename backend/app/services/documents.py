@@ -13,22 +13,27 @@ from __future__ import annotations
 
 import io
 import secrets
+import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import config
 from ..models import Document
+from .audit_log import AuditEventRecord, record_event
 
 _HASH_PREFIX = "sha256:"
 _CHUNK_SIZE = 1024 * 1024
 _MAX_STORAGE_KEY_ATTEMPTS = 10
+
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentNotFoundError(Exception):
@@ -282,6 +287,12 @@ def delete_document(
     deleted_by: str,
     delete_reason: str | None = None,
     commit: bool = True,
+    audit_actor_type: str | None = None,
+    audit_actor_id: str | None = None,
+    audit_actor_label: str | None = None,
+    audit_source: str | None = None,
+    audit_request_id: str | None = None,
+    audit_payload: dict[str, Any] | None = None,
 ) -> Document:
     """Soft delete a document and remove the stored file when present."""
 
@@ -289,6 +300,7 @@ def delete_document(
     now = datetime.now(timezone.utc)
     settings = config.get_settings()
     path = resolve_document_path(document, settings=settings)
+    missing_before_delete = not path.exists()
     path.unlink(missing_ok=True)
 
     mutated = False
@@ -307,6 +319,48 @@ def delete_document(
             db.refresh(document)
     elif mutated:
         db.flush()
+
+    if mutated:
+        payload: dict[str, Any] = {
+            "deleted_by": document.deleted_by,
+            "delete_reason": document.delete_reason,
+            "byte_size": document.byte_size,
+            "stored_uri": document.stored_uri,
+            "sha256": document.sha256,
+            "expires_at": document.expires_at,
+            "missing_before_delete": missing_before_delete,
+        }
+        if audit_payload:
+            payload.update(audit_payload)
+
+        event = AuditEventRecord(
+            event_type="document.deleted",
+            entity_type="document",
+            entity_id=document.document_id,
+            actor_type=audit_actor_type,
+            actor_id=audit_actor_id,
+            actor_label=audit_actor_label or document.deleted_by,
+            source=audit_source,
+            request_id=audit_request_id,
+            occurred_at=document.deleted_at,
+            payload=payload,
+        )
+
+        try:
+            if commit:
+                record_event(db, event, commit=True)
+            else:
+                with db.begin_nested():
+                    record_event(db, event, commit=False)
+        except Exception:
+            logger.exception(
+                "Failed to record document deletion audit event",
+                extra={
+                    "document_id": document.document_id,
+                    "event_type": "document.deleted",
+                    "source": audit_source,
+                },
+            )
 
     return document
 
@@ -392,6 +446,8 @@ def purge_expired_documents(
     batch_size: int = 100,
     deleted_by: str = "maintenance:purge_expired_documents",
     delete_reason: str = "expired_document_purge",
+    audit_source: str = "scheduler",
+    audit_request_id: str | None = None,
 ) -> ExpiredDocumentPurgeSummary:
     """Remove expired documents and mark their metadata."""
 
@@ -426,6 +482,10 @@ def purge_expired_documents(
             deleted_by=deleted_by,
             delete_reason=delete_reason,
             commit=False,
+            audit_actor_type="system",
+            audit_actor_label=deleted_by,
+            audit_source=audit_source,
+            audit_request_id=audit_request_id,
         )
 
     iterator = iter_expired_documents(db, batch_size=batch_size, limit=limit)

@@ -307,6 +307,19 @@ def test_delete_document_removes_file_and_marks_metadata(app_client) -> None:
     assert deleted_at.tzinfo is not None
     assert not stored_path.exists()
 
+    audit_response = client.get(f"/documents/{payload['document_id']}/audit-events")
+    assert audit_response.status_code == 200
+    audit_payload = audit_response.json()
+    assert audit_payload["total"] == 1
+    assert audit_payload["limit"] == 50
+    event = audit_payload["items"][0]
+    assert event["event_type"] == "document.deleted"
+    assert event["entity_id"] == payload["document_id"]
+    assert event["actor_label"] == "ops@ade.local"
+    assert event["source"] == "api"
+    assert event["payload"]["delete_reason"] == "cleanup"
+    assert event["payload"]["missing_before_delete"] is False
+
     list_response = client.get("/documents")
     assert list_response.status_code == 200
     assert all(
@@ -346,6 +359,10 @@ def test_delete_document_is_idempotent(app_client) -> None:
     assert deleted_second["deleted_at"] == deleted_at
     assert deleted_second["deleted_by"] == "ops"
     assert deleted_second["delete_reason"] == "initial pass"
+
+    audit_response = client.get(f"/documents/{payload['document_id']}/audit-events")
+    assert audit_response.status_code == 200
+    assert audit_response.json()["total"] == 1
 
 
 def test_delete_missing_document_returns_404(app_client) -> None:

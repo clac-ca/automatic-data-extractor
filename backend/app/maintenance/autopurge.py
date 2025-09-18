@@ -94,7 +94,11 @@ class AutoPurgeScheduler:
         started_at = datetime.now(timezone.utc).isoformat()
         try:
             with self._session_factory() as db_session:
-                summary = purge_expired_documents(db_session)
+                summary = purge_expired_documents(
+                    db_session,
+                    audit_source="scheduler",
+                    audit_request_id=started_at,
+                )
                 completed_at = datetime.now(timezone.utc).isoformat()
                 record_auto_purge_success(
                     db_session,

@@ -1,5 +1,12 @@
 """Service layer for backend operations."""
 
+from .audit_log import (
+    AuditEventQueryResult,
+    AuditEventRecord,
+    list_entity_events,
+    list_events,
+    record_event,
+)
 from .configuration_revisions import (
     ActiveConfigurationRevisionNotFoundError,
     ConfigurationRevisionMismatchError,
@@ -38,6 +45,11 @@ from .maintenance_status import (
 )
 
 __all__ = [
+    "AuditEventQueryResult",
+    "AuditEventRecord",
+    "list_entity_events",
+    "list_events",
+    "record_event",
     "ActiveConfigurationRevisionNotFoundError",
     "ConfigurationRevisionMismatchError",
     "ConfigurationRevisionNotFoundError",

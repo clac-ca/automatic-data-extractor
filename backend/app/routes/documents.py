@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Iterator
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import Document
-from ..schemas import DocumentDeleteRequest, DocumentResponse
+from ..models import AuditEvent, Document
+from ..schemas import (
+    AuditEventListResponse,
+    AuditEventResponse,
+    DocumentDeleteRequest,
+    DocumentResponse,
+)
+from ..services.audit_log import list_entity_events
 from ..services.documents import (
     DocumentNotFoundError,
     DocumentTooLargeError,
@@ -30,6 +37,10 @@ _DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 
 def _to_response(document: Document) -> DocumentResponse:
     return DocumentResponse.model_validate(document)
+
+
+def _audit_to_response(event: AuditEvent) -> AuditEventResponse:
+    return AuditEventResponse.model_validate(event)
 
 
 @router.post(
@@ -144,10 +155,56 @@ def delete_document(
             document_id,
             deleted_by=payload.deleted_by,
             delete_reason=payload.delete_reason,
+            audit_actor_type="user",
+            audit_actor_label=payload.deleted_by,
+            audit_source="api",
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _to_response(document)
+
+
+@router.get("/{document_id}/audit-events", response_model=AuditEventListResponse)
+def list_document_audit_events(
+    document_id: str,
+    db: Session = Depends(get_db),
+    *,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    event_type: str | None = Query(None),
+    source: str | None = Query(None),
+    request_id: str | None = Query(None),
+    occurred_after: datetime | None = Query(None),
+    occurred_before: datetime | None = Query(None),
+) -> AuditEventListResponse:
+    try:
+        get_document_service(db, document_id)
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    try:
+        result = list_entity_events(
+            db,
+            entity_type="document",
+            entity_id=document_id,
+            limit=limit,
+            offset=offset,
+            event_type=event_type,
+            source=source,
+            request_id=request_id,
+            occurred_after=occurred_after,
+            occurred_before=occurred_before,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    items = [_audit_to_response(event) for event in result.events]
+    return AuditEventListResponse(
+        items=items,
+        total=result.total,
+        limit=result.limit,
+        offset=result.offset,
+    )
 
 
 __all__ = ["router"]
