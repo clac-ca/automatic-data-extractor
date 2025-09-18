@@ -83,8 +83,8 @@ npm run typecheck  # Frontend type checks
 - Treat `var/ade.sqlite` and everything in `var/documents/` as sensitive. Never commit their contents.
 - Hashed storage paths are derived from the SHA-256 digest; keep returned `stored_uri` values stable so audits can link jobs back
   to uploaded files.
-- Enforcing an explicit upload size limit on `/documents` is a follow-up item. FastAPI currently streams uploads without a cap;
-  see README for the documented TODO.
+- `/documents` enforces the `max_upload_bytes` cap (defaults to 25 MiB). Adjust it with `ADE_MAX_UPLOAD_BYTES`; the route
+  returns HTTP 413 with `error=document_too_large` when callers exceed the limit.
 - Redact or hash personal data before logging.
 - Enforce role-based access control on every endpoint. API keys inherit user scopes.
 
