@@ -92,6 +92,43 @@ def test_upload_document_accepts_manual_expiration(app_client) -> None:
     assert payload["expires_at"] == manual_expiration
 
 
+def test_upload_document_accepts_zulu_expiration(app_client) -> None:
+    client, _, _ = app_client
+    manual_expiration = (
+        datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=3)
+    )
+    zulu_expiration = manual_expiration.isoformat().replace("+00:00", "Z")
+
+    files = {"file": ("with-zulu.txt", io.BytesIO(b"data"), "text/plain")}
+    response = client.post(
+        "/documents",
+        files=files,
+        data={"expires_at": zulu_expiration},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["expires_at"] == manual_expiration.isoformat()
+
+
+def test_upload_document_normalises_expiration_timezone(app_client) -> None:
+    client, _, _ = app_client
+    target_expiration = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=2)
+    offset_zone = timezone(timedelta(hours=2))
+    override = target_expiration.astimezone(offset_zone).isoformat()
+
+    files = {"file": ("with-offset.txt", io.BytesIO(b"data"), "text/plain")}
+    response = client.post(
+        "/documents",
+        files=files,
+        data={"expires_at": override},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["expires_at"] == target_expiration.isoformat()
+
+
 def test_upload_document_rejects_past_expiration(app_client) -> None:
     client, _, _ = app_client
     past_expiration = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
