@@ -208,6 +208,25 @@ def test_download_document_streams_bytes(app_client) -> None:
     )
 
 
+def test_download_document_with_unicode_filename_sets_rfc5987_header(
+    app_client,
+) -> None:
+    client, _, _ = app_client
+    payload = _upload_document(
+        client,
+        filename="report 🎨.pdf",
+        data=b"paint-bytes",
+        content_type="application/pdf",
+    )
+
+    response = client.get(f"/documents/{payload['document_id']}/download")
+    assert response.status_code == 200
+    assert response.content == b"paint-bytes"
+    disposition = response.headers["content-disposition"]
+    assert disposition.startswith('attachment; filename="report.pdf"')
+    assert "filename*=utf-8''report%20%F0%9F%8E%A8.pdf" in disposition
+
+
 def test_download_missing_file_returns_404(app_client) -> None:
     client, _, documents_dir = app_client
     payload = _upload_document(client, filename="missing.pdf", data=b"payload")

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+import os
+import unicodedata
+from urllib.parse import quote
 from typing import Iterator
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -33,6 +36,64 @@ from ..services.documents import (
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 _DOWNLOAD_CHUNK_SIZE = 1024 * 1024
+_DEFAULT_DOWNLOAD_FILENAME = "downloaded-document"
+
+
+def _ascii_filename_fallback(filename: str) -> str:
+    """Return an ASCII-only filename suitable for HTTP headers."""
+
+    stem, ext = os.path.splitext(filename)
+
+    def _normalise(component: str) -> str:
+        normalised = unicodedata.normalize("NFKD", component)
+        ascii_component = normalised.encode("ascii", "ignore").decode("ascii")
+        ascii_component = ascii_component.replace("\r", " ").replace("\n", " ")
+        ascii_component = ascii_component.replace('"', "'")
+        ascii_component = " ".join(ascii_component.split())
+        return ascii_component.strip()
+
+    ascii_stem = _normalise(stem)
+    ascii_ext = _normalise(ext)
+
+    # Only keep the extension if it's not empty and not just a dot
+    if ascii_ext and ascii_ext != ".":
+        if not ascii_ext.startswith("."):
+            ascii_ext = f".{ascii_ext}"
+    else:
+        ascii_ext = ""
+
+    if not ascii_stem:
+        ascii_stem = _DEFAULT_DOWNLOAD_FILENAME
+
+    return f"{ascii_stem}{ascii_ext}"
+
+
+def _content_disposition(filename: str | None) -> str:
+    """Generate a Content-Disposition header that supports UTF-8 filenames."""
+
+    if not filename:
+        return "attachment"
+
+    sanitised = (
+        filename.replace("\r", " ")
+        .replace("\n", " ")
+        .replace('"', "'")
+        .strip()
+    )
+
+    if not all(ord(c) <= 255 for c in sanitised):
+        ascii_filename = _ascii_filename_fallback(filename)
+        encoded = quote(filename, safe="")
+        header = f'attachment; filename="{ascii_filename}"'
+        if encoded:
+            header += f"; filename*=utf-8''{encoded}"
+        return header
+
+    if not sanitised:
+        ascii_filename = _ascii_filename_fallback(filename)
+        return f'attachment; filename="{ascii_filename}"'
+
+    return f'attachment; filename="{sanitised}"'
 
 
 def _to_response(document: Document) -> DocumentResponse:
@@ -130,9 +191,7 @@ def download_document(
         msg = f"Stored file for document '{document_id}' is missing"
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
 
-    headers = {
-        "Content-Disposition": f"attachment; filename=\"{document.original_filename}\""
-    }
+    headers = {"Content-Disposition": _content_disposition(document.original_filename)}
     media_type = document.content_type or "application/octet-stream"
     return StreamingResponse(
         _download_iterator(document),
