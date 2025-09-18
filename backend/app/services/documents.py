@@ -137,8 +137,6 @@ def store_document(
             if existing.stored_uri != stored_uri:
                 existing.stored_uri = stored_uri
                 db.add(existing)
-                db.commit()
-                db.refresh(existing)
             return existing
 
         stored_path.parent.mkdir(parents=True, exist_ok=True)
