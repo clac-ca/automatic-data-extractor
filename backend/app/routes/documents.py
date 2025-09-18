@@ -55,11 +55,12 @@ def _ascii_filename_fallback(filename: str) -> str:
     ascii_stem = _normalise(stem)
     ascii_ext = _normalise(ext)
 
-    if ascii_ext:
+    # Only keep the extension if it's not empty and not just a dot
+    if ascii_ext and ascii_ext != ".":
         if not ascii_ext.startswith("."):
             ascii_ext = f".{ascii_ext}"
-        if len(ascii_ext) == 1:
-            ascii_ext = ""
+    else:
+        ascii_ext = ""
 
     if not ascii_stem:
         ascii_stem = _DEFAULT_DOWNLOAD_FILENAME
