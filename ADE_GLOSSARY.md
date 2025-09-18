@@ -72,6 +72,8 @@ ADE stores everything in SQLite (`var/ade.sqlite`). Tables expected on day one:
 - `api_keys` – Issued API keys linked to users.
 - `job_documents` – (Planned) join table linking jobs to the documents they consume or emit. Useful for future retention checks.
 - `document_deletion_events` – (Planned) audit trail for delete requests, purges, and legal hold transitions.
+- `maintenance_status` – Keyed JSON payloads for background maintenance loops (e.g. `automatic_document_purge` stores the last
+  automatic purge summary returned by `/health`).
 - **Max upload bytes** – Configurable request ceiling (default 25 MiB) enforced by `POST /documents`. Controlled via the
   `ADE_MAX_UPLOAD_BYTES` environment variable; exceeding the limit returns HTTP 413 with `error=document_too_large` plus the
   configured threshold in the response body.
@@ -83,6 +85,21 @@ Back up the SQLite file alongside the `var/documents/` directory.
 ---
 
 ## Payload cheat sheets
+```jsonc
+// Health response with automatic purge summary (abbreviated)
+{
+  "status": "ok",
+  "purge": {
+    "status": "succeeded",
+    "processed_count": 2,
+    "missing_files": 0,
+    "bytes_reclaimed": 4096,
+    "recorded_at": "2024-01-01T00:05:00+00:00",
+    "interval_seconds": 3600
+  }
+}
+```
+
 ```jsonc
 // Configuration revision payload (abbreviated)
 {

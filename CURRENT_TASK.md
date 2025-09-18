@@ -13,9 +13,9 @@ can confirm sweeps are running and reclaiming disk space without tailing logs.
   workflow should hinge on the automatic scheduler.
 
 ## Scope
-- Decide where to persist the "last purge" status (e.g. lightweight table or a
-  JSON blob under `var/`). Persistence should survive restarts so operators can
-  query the latest summary.
+- Persist the "last purge" status inside ADE itself (SQLite table preferred over
+  external services or ad-hoc files) so the data survives restarts and ships
+  inside the container.
 - Expose the stored status via a small read-only API endpoint and wire it into
   the health router, or extend `/health` with a purge section.
 - Consider emitting a Prometheus metric for processed count/bytes reclaimed
