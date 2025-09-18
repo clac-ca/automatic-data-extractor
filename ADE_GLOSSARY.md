@@ -15,15 +15,12 @@ listed beside each term.
 ---
 
 ## Core domain
-- **Document type** – Family of documents that share extraction rules (`snapshots.document_type`).
-- **Snapshot** – Immutable bundle of logic for a document type. Drafts can change; the published snapshot is read only
-  (`snapshots.snapshot_id` ULID, `snapshots.is_published`, `snapshots.published_at`).
-- **Profile** – Optional overrides for a source, customer, or locale stored in the snapshot payload (`payload.profiles`).
-- **Live snapshot** – The single published snapshot for a document type. API consumers use it by default when they do not
-  supply an explicit `snapshot_id` (`snapshots.is_published = 1`).
-- **Run** – Execution of the processing engine against one or more documents (`manifests.run_id` ULID).
-- **Manifest** – JSON result of a run: tables, column mappings, audit data, statistics, and the `snapshot_id` used
-  (`manifests.payload`).
+- **Document type** – Family of documents that share a configuration (`configuration_revisions.document_type`, `jobs.document_type`).
+- **Configuration** – Executable detection, transformation, and metadata logic that defines how ADE processes a document type. Stored as JSON on each configuration revision (`configuration_revisions.payload`).
+- **Configuration revision** – Immutable record of configuration logic for a document type. Draft revisions can change; activating one freezes the payload (`configuration_revisions.configuration_revision_id` ULID, `configuration_revisions.revision_number`, `configuration_revisions.is_active`, `configuration_revisions.activated_at`).
+- **Active configuration revision** – The single revision with `is_active = true` for a document type. API consumers use it by default when they do not supply an explicit `configuration_revision_id`.
+- **Profile** – Optional overrides for a source, customer, or locale stored in the configuration payload (`payload.profiles`).
+- **Job** – One execution of the processing engine against an input document using a specific configuration revision (`jobs.job_id`, `jobs.configuration_revision_number`, `jobs.status`, `jobs.created_by`, `jobs.metrics`, `jobs.logs`). Jobs stay mutable while `status` is `pending` or `running` and become immutable once marked `completed` or `failed`.
 
 ---
 
@@ -39,30 +36,29 @@ listed beside each term.
 ---
 
 ## Column logic
-- **Column catalogue** (`column_catalog`) – Allowed column type keys for a document type. Lives inside the snapshot payload.
+- **Column catalogue** (`column_catalog`) – Allowed column type keys for a document type. Lives inside the revision payload.
 - **Column type** (`column_type`) – Canonical meaning such as `member_full_name` or `gross_amount`.
 - **Synonyms** (`synonyms`) – Header strings or regexes that hint at the column type.
 - **Detection logic** (`detection_logic`) – Pure Python callable (code + digest) returning a match decision or score.
 - **Transformation** (`transformation_logic`) – Optional callable that normalises raw values.
 - **Validation** (`validation_logic`) – Optional callable that flags invalid or suspicious values.
-- **Schema rules** (`schema`) – Required and optional column types.
+- **Configuration requirements** (`configuration.required_column_types`, `configuration.optional_column_types`) – Required and optional column types.
 
 ---
 
-## Run outputs
-- **Column mapping** (`column_mapping`) – Assignment of observed columns to column types with scores and audit notes.
-- **Confidence** (`confidence`, 0–1) – Normalised certainty for a mapping or decision.
-- **Needs review** (`needs_review`) – Boolean flag when validation fails or the decision margin is thin.
-- **Audit log** (`audit_log`) – Ordered messages explaining why a column matched (rule hits, transforms, etc.).
-- **Digest** (`digest`, e.g., `sha256:…`) – Hash of logic source used for caching and audit trails.
-- **Stats** (`stats`) – Summary counts such as tables found, rows processed, and warnings.
+## Job payload
+- **Input** (`jobs.input`) – Source document metadata with `uri`, `hash`, and optional `expires_at`.
+- **Outputs** (`jobs.outputs`) – Mapping of output artefacts (e.g., JSON, Excel) to URIs and expiration timestamps.
+- **Status** (`jobs.status`) – Lifecycle state: `pending`, `running`, `completed`, or `failed`.
+- **Metrics** (`jobs.metrics`) – Summary statistics such as `rows_extracted`, `processing_time_ms`, and `errors`.
+- **Logs** (`jobs.logs`) – Ordered log entries with timestamp, level, and message for auditability.
 
 ---
 
 ## Storage foundation
 ADE stores everything in SQLite (`var/ade.sqlite`). Tables expected on day one:
-- `snapshots` – Snapshot metadata, JSON payloads, and publication state.
-- `manifests` – Run outputs and manifest payloads.
+- `configuration_revisions` – Configuration metadata, JSON payloads, immutable history, and lifecycle state.
+- `jobs` – Job inputs, outputs, metrics, logs, and status tied to configuration revisions.
 - `users` – Accounts with roles and optional SSO subjects.
 - `api_keys` – Issued API keys linked to users.
 
@@ -72,31 +68,33 @@ Back up the SQLite file alongside the `var/documents/` directory.
 
 ## Payload cheat sheets
 ```jsonc
-// Snapshot payload (abbreviated)
+// Configuration revision payload (abbreviated)
 {
-  "snapshot": {
-    "snapshot_id": "snap_01J8PQ3RDX8K6PX0ZA5G2T3N4V",
+    "configuration_revision": {
+    "configuration_revision_id": "rev_01J8PQ3RDX8K6PX0ZA5G2T3N4V",
     "document_type": "remittance",
-    "title": "Remittance default rules",
-    "header_finder": {
-      "rules": [
-        {"name": "has_amount_headers", "code": "...", "digest": "sha256:…"}
-      ]
-    },
-    "column_catalog": ["member_full_name", "gross_amount"],
-    "column_types": {
-      "gross_amount": {
-        "synonyms": ["gross remittance"],
-        "detection_logic": {"code": "...", "digest": "sha256:…"}
-      }
-    },
-    "schema": {
-      "required_column_types": ["member_full_name", "gross_amount"],
-      "optional_column_types": ["union_local"]
-    },
-    "profiles": {
-      "default": {
-        "synonyms_overrides": {"member_full_name": ["member"]}
+    "revision_number": 7,
+    "is_active": false,
+    "title": "Remittance default configuration",
+    "payload": {
+      "column_catalog": ["member_full_name", "gross_amount"],
+      "column_types": {
+        "gross_amount": {
+          "synonyms": ["gross remittance"],
+          "detection_logic": {"code": "...", "digest": "sha256:…"},
+          "transformation_logic": {"code": "...", "digest": "sha256:…"},
+          "validation_logic": {"code": "...", "digest": "sha256:…"},
+          "scoring_logic": {"code": "...", "digest": "sha256:…"}
+        }
+      },
+      "configuration": {
+        "required_column_types": ["member_full_name", "gross_amount"],
+        "optional_column_types": ["union_local"]
+      },
+      "profiles": {
+        "default": {
+          "synonyms_overrides": {"member_full_name": ["member"]}
+        }
       }
     }
   }
@@ -104,42 +102,56 @@ Back up the SQLite file alongside the `var/documents/` directory.
 ```
 
 ```jsonc
-// Manifest payload (abbreviated)
+// Job payload (abbreviated)
 {
-  "run_id": "run_01J8Q…",
-  "document_type": "remittance",
-  "snapshot_id": "snap_01J8PQ3RDX8K6PX0ZA5G2T3N4V",
-  "document": "examples/remittance.xlsx",
-  "pages": [
-    {
-      "index": 0,
-      "tables": [
-        {
-          "header_row": 2,
-          "column_mapping": [
-            {
-              "column_index": 0,
-              "column_type": "member_full_name",
-              "confidence": 0.92,
-              "needs_review": false,
-              "audit_log": ["synonym: member name"]
-            }
-          ]
-        }
-      ]
+  "job_id": "job_2025_09_17_0001",
+  "document_type": "Remittance PDF",
+  "configuration_revision": 3,
+
+  "status": "completed",
+  "created_at": "2025-09-17T18:42:00Z",
+  "updated_at": "2025-09-17T18:45:11Z",
+  "created_by": "jkropp",
+
+  "input": {
+    "uri": "var/documents/remit_2025-09.pdf",
+    "hash": "sha256:a93c...ff12",
+    "expires_at": "2025-10-01T00:00:00Z"
+  },
+
+  "outputs": {
+    "json": {
+      "uri": "var/outputs/remit_2025-09.json",
+      "expires_at": "2026-01-01T00:00:00Z"
+    },
+    "excel": {
+      "uri": "var/outputs/remit_2025-09.xlsx",
+      "expires_at": "2026-01-01T00:00:00Z"
     }
-  ],
-  "stats": {"tables_found": 1}
+  },
+
+  "metrics": {
+    "rows_extracted": 125,
+    "processing_time_ms": 4180,
+    "errors": 0
+  },
+
+  "logs": [
+    { "ts": "2025-09-17T18:42:00Z", "level": "info", "message": "Job started" },
+    { "ts": "2025-09-17T18:42:01Z", "level": "info", "message": "Detected table 'MemberContributions'" },
+    { "ts": "2025-09-17T18:44:59Z", "level": "info", "message": "125 rows processed" },
+    { "ts": "2025-09-17T18:45:11Z", "level": "info", "message": "Job completed successfully" }
+  ]
 }
 ```
 
 ---
 
 ## Working agreements
-- Snapshots flow draft → test → publish; publishing only updates the live pointer.
-- Always compare snapshots before publishing to understand behavioural changes.
-- Manifests include the `snapshot_id` so reruns remain deterministic.
-- Profiles stay inside the snapshot payload to avoid hidden configuration.
+- Configuration revisions flow draft → active → retired; activation only updates the live pointer.
+- Always compare configuration revisions before activating to understand behavioural changes.
+- Jobs include the `configuration_revision_id` so reruns remain deterministic.
+- Profiles stay inside the configuration payload to avoid hidden configuration drift.
 - Detection, transformation, validation, and header rules are pure functions (no I/O, deterministic results).
 - Flag `needs_review: true` when validation fails or confidence dips below the configured threshold.
 - Table boundaries on a page must not overlap.
