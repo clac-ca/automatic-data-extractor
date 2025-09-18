@@ -20,8 +20,8 @@ Approach this as an architect and engineer: your job is not just to code, but to
 ---
 
 ## Repository status
-- The FastAPI backend now lives under `backend/app/` with configuration, database utilities, health routing, configuration
-  revision + job services/routers, and the foundational SQLAlchemy models. Frontend and infra directories are still pending.
+- The FastAPI backend now lives under `backend/app/` with configuration, database utilities, health routing, document ingestion,
+  configuration revision + job services/routers, and the foundational SQLAlchemy models. Frontend and infra directories are still pending.
 - Follow the planned layout in `README.md` when creating new code. Create directories as needed.
 - Keep this file, the README, and the glossary aligned with the active architecture.
 
@@ -40,6 +40,9 @@ Approach this as an architect and engineer: your job is not just to code, but to
 - **Backend** – Python 3.11 with FastAPI and Pydantic v2. Keep extraction logic in pure functions (no I/O, randomness, or
   external calls). Put orchestration and persistence under `backend/app/services/` and processing utilities under
   `backend/processor/`.
+- **Document ingestion** – The `documents` table stores canonical uploads with hashed filesystem paths. `services/documents.py`
+  handles SHA-256 deduplication and rehydrating missing files; `routes/documents.py` exposes upload, list, and download routes
+  that return the `stored_uri` jobs should reference.
 - **Frontend** – Vite + React with TypeScript. Use functional components, strict typing, and place API wrappers in
   `frontend/src/api/`.
 - **Configurations, revisions, & jobs** – Treat active configuration revisions as immutable. Jobs apply the active revision, record inputs/outputs/metrics/logs as JSON, and provide the audit trail reviewers inspect in the UI. Persist configuration revision payloads and job records as JSON. Job IDs follow `job_YYYY_MM_DD_####`, remain mutable while `pending` or `running`, and lock once marked `completed` or `failed`.
@@ -78,6 +81,10 @@ npm run typecheck  # Frontend type checks
 
 ## Data and security notes
 - Treat `var/ade.sqlite` and everything in `var/documents/` as sensitive. Never commit their contents.
+- Hashed storage paths are derived from the SHA-256 digest; keep returned `stored_uri` values stable so audits can link jobs back
+  to uploaded files.
+- Enforcing an explicit upload size limit on `/documents` is a follow-up item. FastAPI currently streams uploads without a cap;
+  see README for the documented TODO.
 - Redact or hash personal data before logging.
 - Enforce role-based access control on every endpoint. API keys inherit user scopes.
 

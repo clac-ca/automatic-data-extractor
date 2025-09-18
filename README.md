@@ -16,7 +16,7 @@ extra services.
 +-----------------------------------------------------------------------------
 ```
 - **Frontend** – Manage document-type configurations, edit extraction logic, upload files, launch jobs, review job results, and activate new configuration revisions.
-- **Backend** – FastAPI routes for auth, CRUD, job orchestration, and job result retrieval.
+- **Backend** – FastAPI routes for auth, CRUD, document ingestion, job orchestration, and job result retrieval.
 - **Processor** – Pure functions that locate tables, map columns, transform values, and emit audit notes.
 - **Storage** – SQLite and the on-disk documents directory keep persistence simple. Switch only when scale truly demands it.
 
@@ -43,9 +43,11 @@ initial foundation created here wires together:
 
 - `config.py` – centralised settings (`ADE_` environment variables, SQLite + documents defaults).
 - `db.py` – SQLAlchemy engine/session helpers shared across routes and services.
-- `models.py` – the first domain models (`ConfigurationRevision` and `Job`) with ULID keys and JSON payload storage.
+- `models.py` – the first domain models (`ConfigurationRevision`, `Job`, and `Document`) with ULID keys, JSON payload storage, and hashed document URIs.
 - `routes/health.py` – health check hitting the database and returning `{ "status": "ok" }`.
+- `routes/documents.py` – multipart uploads, metadata listings, and download streaming for stored documents.
 - `main.py` – FastAPI application setup, startup lifecycle, and router registration.
+- `services/documents.py` – hashed-path storage, deduplication on SHA-256, and filesystem lookups for uploads.
 - `tests/` – pytest-based checks that assert the service boots and SQLite file creation works.
 
 ### Processor
@@ -58,7 +60,7 @@ and mounted as Docker volumes in deployment.
 ---
 
 ## How the system flows
-1. Upload documents through the UI or `POST /api/v1/documents`. Files land in `var/documents/`.
+1. Upload documents through the UI or `POST /documents`. The backend stores the file under a hashed path in `var/documents/` and returns canonical metadata (including the `stored_uri` jobs reference later).
 2. Create or edit configuration revisions, then activate the revision that should run by default for the document type.
 3. Launch a job via the UI or `POST /jobs`. The processor applies the active configuration revision and records job inputs, outputs, metrics, and logs.
 4. Poll `GET /jobs/{job_id}` (or list with `GET /jobs`) to review progress, download output artefacts, and inspect metrics.
@@ -111,6 +113,15 @@ Jobs returned by the API and displayed in the UI always use the same JSON struct
   ]
 }
 ```
+
+---
+
+## Document ingestion workflow
+
+1. `POST /documents` accepts a multipart upload (`file` field). The API streams the payload into `var/documents/<sha256-prefix>/...` and returns metadata including `document_id`, byte size, digest, and the canonical `stored_uri`.
+2. Uploading identical bytes returns the existing record and reuses the stored file. If the on-disk file has gone missing, the upload restores it before responding.
+3. `GET /documents` lists records newest first, `GET /documents/{document_id}` returns metadata for a single file, and `GET /documents/{document_id}/download` streams the stored bytes (with `Content-Disposition` set to the original filename).
+4. TODO: enforce an explicit request size limit so large uploads receive a clear 413 response. For now FastAPI's defaults stream uploads but do not cap request size.
 
 ---
 
