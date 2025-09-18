@@ -1,6 +1,6 @@
 # AGENTS — Automatic Data Extractor
 Overview
-ADE (Automatic Data Extractor) is an internal tool that converts messy spreadsheets and PDFs into deterministic, structured tables. It uses snapshot-controlled logic to ensure results are consistent, auditable, and reproducible. ADE ships as a single Docker container with a FastAPI backend, pure-Python processing engine, React frontend, and SQLite persistence.
+ADE (Automatic Data Extractor) is an internal tool that converts messy spreadsheets and PDFs into deterministic, structured tables. It uses revision-controlled logic to ensure results are consistent, auditable, and reproducible. ADE ships as a single Docker container with a FastAPI backend, pure-Python processing engine, React frontend, and SQLite persistence.
 
 Pair this AGENTS.md with `README.md` for the high-level architecture and `ADE_GLOSSARY.md` for terminology. Update all three when
 the architecture or workflows change.
@@ -10,7 +10,7 @@ Approach this as an architect and engineer: your job is not just to code, but to
 ---
 
 ## Quick facts
-- **Mission** – Turn semi-structured spreadsheets and PDFs into deterministic tables with snapshot-controlled logic.
+- **Mission** – Turn semi-structured spreadsheets and PDFs into deterministic tables with revision-controlled logic.
 - **Packaging** – Ship everything as one Docker container running a FastAPI backend, deterministic Python processor, and Vite +
   TypeScript frontend.
 - **Persistence** – Use SQLite at `var/ade.sqlite` and store uploaded documents under `var/documents/`. Keep both out of version
@@ -21,7 +21,7 @@ Approach this as an architect and engineer: your job is not just to code, but to
 
 ## Repository status
 - The FastAPI backend scaffold now lives under `backend/app/` with configuration, database utilities, health routing, and the
-  initial `Snapshot` model. Frontend and infra directories are still pending.
+  initial `ConfigurationRevision` and `Job` models. Frontend and infra directories are still pending.
 - Follow the planned layout in `README.md` when creating new code. Create directories as needed.
 - Keep this file, the README, and the glossary aligned with the active architecture.
 
@@ -42,8 +42,7 @@ Approach this as an architect and engineer: your job is not just to code, but to
   `backend/processor/`.
 - **Frontend** – Vite + React with TypeScript. Use functional components, strict typing, and place API wrappers in
   `frontend/src/api/`.
-- **Snapshots & runs** – Treat published snapshots as immutable. Allow runs to execute multiple snapshots so the UI can compare
-  manifests side-by-side. Persist manifests and snapshot payloads as JSON.
+- **Configurations, revisions, & jobs** – Treat active configuration revisions as immutable. Jobs apply the active revision, record inputs/outputs/metrics/logs as JSON, and provide the audit trail reviewers inspect in the UI. Persist configuration revision payloads and job records as JSON. Job IDs follow `job_YYYY_MM_DD_####`, remain mutable while `pending` or `running`, and lock once marked `completed` or `failed`.
 - **Authentication** – Support username/password by default. Optional SSO (SAML or OIDC) can arrive later. Admins issue API keys
   tied to user roles.
 - **Storage** – Default to SQLite unless volume demands a change. Mount `./var` when running in Docker to persist the database
@@ -85,7 +84,7 @@ npm run typecheck  # Frontend type checks
 ---
 
 ## Git workflow expectations
-- Keep commits focused with descriptive messages (e.g., `backend: add snapshot publish route`).
+- Keep commits focused with descriptive messages (e.g., `backend: add revision activate route`).
 - Ensure `git status` is clean before finishing.
 - After committing, always call the `make_pr` tool to record the PR summary.
 - Document architectural assumptions or open questions in the PR body so future contributors understand the decision.

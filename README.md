@@ -6,7 +6,7 @@ extra services.
 
 ---
 
-## System snapshot
+## System overview
 ```
 +----------------------------- Docker container -----------------------------+
 |  React UI  ↔  FastAPI backend  ↔  Pure-Python processor helpers             |
@@ -15,15 +15,15 @@ extra services.
 |                                     └─ Document storage (var/documents/)    |
 +-----------------------------------------------------------------------------
 ```
-- **Frontend** – Configure document types, edit extraction logic, upload files, compare manifests, and publish new snapshots.
-- **Backend** – FastAPI routes for auth, CRUD, run orchestration, and manifest retrieval.
+- **Frontend** – Manage document-type configurations, edit extraction logic, upload files, launch jobs, review job results, and activate new configuration revisions.
+- **Backend** – FastAPI routes for auth, CRUD, job orchestration, and job result retrieval.
 - **Processor** – Pure functions that locate tables, map columns, transform values, and emit audit notes.
 - **Storage** – SQLite and the on-disk documents directory keep persistence simple. Switch only when scale truly demands it.
 
 ---
 
 ## Design tenets
-- **Deterministic by default** – Every manifest links back to an immutable snapshot with digests of the logic used.
+- **Deterministic by default** – Every job links back to the configuration revision that produced it, complete with digests of the logic used.
 - **Choose boring tech** – FastAPI, SQLite, and TypeScript are enough. Reach for new dependencies only when the simple stack
   blocks us.
 - **One API surface** – UI, automation scripts, and background jobs all call the same HTTP endpoints.
@@ -34,8 +34,7 @@ extra services.
 
 ## Building blocks
 ### Frontend
-Lives under `frontend/` (Vite + React + TypeScript). It lets reviewers upload documents, inspect manifests, and manage
-snapshots. Strict typing and lightweight components keep the UI predictable.
+Lives under `frontend/` (Vite + React + TypeScript). It lets reviewers upload documents, monitor jobs, inspect job outputs, and manage configuration revisions. Strict typing and lightweight components keep the UI predictable.
 
 ### Backend
 Resides in `backend/app/` (Python 3.11, FastAPI, SQLAlchemy, Pydantic v2). It owns routing, authentication, orchestration, and
@@ -44,14 +43,13 @@ initial foundation created here wires together:
 
 - `config.py` – centralised settings (`ADE_` environment variables, SQLite + documents defaults).
 - `db.py` – SQLAlchemy engine/session helpers shared across routes and services.
-- `models.py` – the first domain model (`Snapshot`) with ULID keys and JSON payload storage.
+- `models.py` – the first domain models (`ConfigurationRevision` and `Job`) with ULID keys and JSON payload storage.
 - `routes/health.py` – health check hitting the database and returning `{ "status": "ok" }`.
 - `main.py` – FastAPI application setup, startup lifecycle, and router registration.
 - `tests/` – pytest-based checks that assert the service boots and SQLite file creation works.
 
 ### Processor
-Pure Python helpers live in `backend/processor/`. They detect tables, decide column mappings, run validation rules, and produce
-audit notes. Because they are deterministic functions, reruns against the same snapshot + document yield identical manifests.
+Pure Python helpers live in `backend/processor/`. They detect tables, decide column mappings, run validation rules, and produce audit notes. Because they are deterministic functions, reruns against the same configuration revision and document yield identical job results.
 
 ### Storage
 All persistence uses SQLite (`var/ade.sqlite`) and an on-disk documents folder (`var/documents/`). These paths are gitignored
@@ -61,16 +59,64 @@ and mounted as Docker volumes in deployment.
 
 ## How the system flows
 1. Upload documents through the UI or `POST /api/v1/documents`. Files land in `var/documents/`.
-2. Select one or more snapshots (live or historical) to evaluate.
-3. Trigger a run via the UI or `POST /api/v1/runs`. The processor executes each snapshot and writes manifests to SQLite.
-4. Review manifests in the UI or by calling `GET /api/v1/manifests/{run_id}`. Promote new snapshots when the results look right.
-5. Published snapshots advance the live pointer for that document type; older snapshots remain immutable.
+2. Create or edit configuration revisions, then activate the revision that should run by default for the document type.
+3. Launch a job via the UI or `POST /jobs`. The processor applies the active configuration revision and records job inputs, outputs, metrics, and logs.
+4. Poll `GET /jobs/{job_id}` (or list with `GET /jobs`) to review progress, download output artefacts, and inspect metrics.
+5. Promote new configuration revisions when results look right; only one active revision exists per document type at a time.
+
+---
+
+## Job record format
+Jobs returned by the API and displayed in the UI always use the same JSON structure:
+
+```jsonc
+{
+  "job_id": "job_2025_09_17_0001",
+  "document_type": "Remittance PDF",
+  "configuration_revision": 3,
+
+  "status": "completed",
+  "created_at": "2025-09-17T18:42:00Z",
+  "updated_at": "2025-09-17T18:45:11Z",
+  "created_by": "jkropp",
+
+  "input": {
+    "uri": "var/documents/remit_2025-09.pdf",
+    "hash": "sha256:a93c...ff12",
+    "expires_at": "2025-10-01T00:00:00Z"
+  },
+
+  "outputs": {
+    "json": {
+      "uri": "var/outputs/remit_2025-09.json",
+      "expires_at": "2026-01-01T00:00:00Z"
+    },
+    "excel": {
+      "uri": "var/outputs/remit_2025-09.xlsx",
+      "expires_at": "2026-01-01T00:00:00Z"
+    }
+  },
+
+  "metrics": {
+    "rows_extracted": 125,
+    "processing_time_ms": 4180,
+    "errors": 0
+  },
+
+  "logs": [
+    { "ts": "2025-09-17T18:42:00Z", "level": "info", "message": "Job started" },
+    { "ts": "2025-09-17T18:42:01Z", "level": "info", "message": "Detected table 'MemberContributions'" },
+    { "ts": "2025-09-17T18:44:59Z", "level": "info", "message": "125 rows processed" },
+    { "ts": "2025-09-17T18:45:11Z", "level": "info", "message": "Job completed successfully" }
+  ]
+}
+```
 
 ---
 
 ## Data naming authority
 The glossary in `ADE_GLOSSARY.md` defines every API field, database column, and UI label. Treat it as the source of truth when
-naming payloads or schema elements.
+naming payloads or configuration elements.
 
 ---
 
@@ -91,7 +137,7 @@ naming payloads or schema elements.
 │  ├─ Dockerfile
 │  └─ docker-compose.yaml
 ├─ examples/          # Sample documents used in testing
-├─ runs/              # Example manifest outputs
+├─ runs/              # Example job outputs
 └─ var/
    ├─ documents/      # Uploaded files (gitignored)
    └─ ade.sqlite      # Local development database (gitignored)
@@ -100,8 +146,7 @@ naming payloads or schema elements.
 ---
 
 ## Operations
-- SQLite stores snapshots, manifests, users, sessions, API keys, and audit metadata. Payloads stay JSON until a strict schema is
-  required.
+- SQLite stores configuration revisions, jobs, users, sessions, API keys, and audit metadata. Payloads stay JSON until a strict configuration is required.
 - Back up ADE by copying both the SQLite file and the documents directory.
 - Environment variables override defaults; `.env` files hold secrets and stay gitignored.
 - Logs stream to stdout. Keep an eye on `var/` size and long-running jobs.
@@ -195,7 +240,7 @@ npm run typecheck
 
 ## Near-term roadmap
 - Guided rule authoring with inline examples of matches and misses.
-- Snapshot comparison reports summarising behaviour changes across document batches.
+- Revision comparison reports summarising behaviour changes across document batches.
 - Bulk uploads and optional background processing once single-run workflows become limiting.
 
 ---
