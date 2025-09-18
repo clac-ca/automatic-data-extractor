@@ -1,75 +1,66 @@
-# Current Task — Unified audit log foundation
+# Current Task — Ship a simple, reusable audit log
 
 ## Goal
-Stand up a lightweight, extensible audit log that records key lifecycle events
-across ADE, starting with document deletions, so operators get a durable,
-actionable history without complicating the rest of the system.
+Create a single audit logging mechanism that ADE can reuse everywhere, starting
+with document deletions, so we capture who did what and when without layering in
+unnecessary infrastructure.
 
-## Background
-- Today we mutate `deleted_at`/`deleted_by` on the `documents` row itself. Once a
-  second purge or manual delete occurs, that context disappears.
-- Other actions (document uploads, configuration changes, job executions) will
-  also need immutable trails as ADE grows. Building a single audit substrate now
-  avoids bespoke tables for each workflow.
-- Operations values determinism and debuggability over throughput. A simple SQL
-  table that all services can write to keeps the design transparent and easy to
-  extend.
-- Legal/litigation hold remains out of scope; we just need consistent auditing of
-  the events ADE already performs.
+## Why this matters
+- Today deletions only toggle `deleted_at`/`deleted_by` on the `documents`
+  record. Once the row disappears, so does the trail.
+- Other workflows (uploads, config edits, job executions) will need immutable
+  history soon. Standing up one shared pipeline now keeps future work cheap.
+- Operations wants determinism and clarity over throughput. A single SQL table
+  with a thin helper service stays transparent and easy to reason about.
+- Litigation hold remains out of scope; we are just capturing the actions ADE
+  already performs.
 
-## Scope
-- Design an `audit_events` table + SQLAlchemy model keyed by ULID with:
-  - `event_type` (e.g., `document.deleted`, `document.uploaded` in future).
-  - `entity_type` + `entity_id` strings so the log can reference any model.
-  - `occurred_at` timestamp defaulting to `datetime.utcnow()`.
-  - `actor_type`/`actor_id` and optional display metadata (`actor_label`).
-  - `source` (API, scheduler, CLI) and optional `request_id` for tracing.
-  - `payload` JSON column for structured per-event details (e.g., bytes reclaimed,
-    delete reason, missing on disk flag).
-- Add a small `audit_log` service helper that exposes `record_event(...)` and
-  centralises validation (required fields, JSON serialisation, enum mapping).
-- Update document deletion flows to emit a `document.deleted` event when a row
-  transitions from active to deleted (manual API, CLI purge, background purge),
-  ensuring retries remain idempotent by checking the soft-delete state before
+## Guiding principles
+1. **Keep it boring** – SQLite table + SQLAlchemy ORM + service helper. No
+   queues or cross-service plumbing.
+2. **Model any entity** – Store generic `entity_type`/`entity_id` pairs so every
+   feature can log without schema changes.
+3. **Capture the actor + context** – Include optional actor metadata and a JSON
+   payload for structured details (e.g., deletion reason, bytes reclaimed).
+4. **Make reads easy** – Provide filtered list endpoints instead of bespoke
+   queries in every caller.
+5. **Document the pattern** – Show other teams how to emit their own events.
+
+## Proposed design
+- `audit_events` table keyed by ULID with:
+  - `event_type` (string: `document.deleted`, `document.uploaded`, etc.).
+  - `entity_type`, `entity_id` (strings) for cross-model coverage.
+  - `occurred_at` UTC timestamp defaulting to `datetime.utcnow()`.
+  - Optional actor columns: `actor_type`, `actor_id`, `actor_label`.
+  - Optional origin info: `source` (API, scheduler, CLI) + `request_id`.
+  - `payload` JSON column for event-specific context; ensure deterministic
+    serialisation.
+  - Indexes on `(entity_type, entity_id)` and `event_type` for filtered reads.
+- `services/audit_log.py` exposing `record_event(event_type, *, entity_type,
+  entity_id, actor=None, source=None, request_id=None, payload=None, session)`.
+  Handle validation, ULID generation, timestamp defaulting, and JSON
+  serialisation so callers remain simple.
+- Document deletion pathways call `record_event(...)` once they mark the row as
+  deleted. Guard against duplicates by checking the soft-delete state before
   logging.
-- Provide FastAPI read endpoints:
-  - `GET /audit-events` with filters for `entity_type`, `entity_id`, `event_type`,
-    time range, and source.
-  - `GET /documents/{document_id}/audit-events` as a convenience wrapper that
-    applies the above filters.
-- Expand Pydantic schemas/OpenAPI docs for the new endpoints, making the payload
-  field explicit so future events can document their structure.
-- Cover the happy paths with pytest: recording manual/automatic deletion events,
-  idempotency on repeated calls, payload serialisation, and list filtering.
-- Document the audit log in the README, glossary, and retention guide, clarifying
-  how to query it for deletions and how other teams should add new event types.
-
-## Out of scope
-- Building UI visualisations or dashboards for the log.
-- Streaming/queue-based audit delivery; all writes go straight to SQLite.
-- Emitting events for every possible action right now—focus on deletions, but
-  note how to extend to uploads/config changes later.
-- Litigation hold workflows or retention overrides.
-
-## Deliverables
-1. `audit_events` table + SQLAlchemy model/migration with indexes on
-   `(entity_type, entity_id)` and `event_type`.
-2. Shared audit log service helper with unit tests validating payload handling
-   and enums.
-3. Document deletion pathways updated to call the helper and emit consistent
-   events without duplicates.
-4. FastAPI endpoints + schemas that surface audit events with filtering support
-   and tests covering manual vs. automated deletions.
-5. Documentation updates describing the audit log design, usage, and extension
-   points for new event types.
+- FastAPI endpoints:
+  - `GET /audit-events` with filters for entity, event type, time range, and
+    source/request ID.
+  - `GET /documents/{document_id}/audit-events` convenience wrapper that locks
+    `entity_type="document"` and `entity_id=document_id`.
+- Pydantic response schema exposes the full event payload and clarifies that the
+  JSON structure varies by event type.
+- Tests cover manual + automatic deletion events, idempotent retries, payload
+  round-tripping, and endpoint filtering behaviour.
+- Update README, glossary, and retention guide with the new audit log concept
+  and instructions for adding future event types.
 
 ## Definition of done
-- Deleting a document through any existing pathway logs a `document.deleted`
-  audit event accessible through the new endpoints; repeated deletes do not
-  create duplicates.
-- Operators can query deletion history via API filters to see when, how, and by
-  whom a document was removed, including metadata like bytes reclaimed.
-- Other teams understand how to register new event types against the shared
-  audit log without schema changes beyond payload evolution.
-- Documentation reiterates that litigation hold is out of scope and points to the
-  audit endpoints for operational review.
+- Every deletion path emits a single `document.deleted` audit event accessible
+  via the new endpoints; retries do not double-log.
+- Operators can filter audit events to inspect document deletion history with
+  actor/context metadata.
+- Other teams know how to call `record_event(...)` for their own workflows
+  without schema edits beyond payload evolution.
+- Documentation reiterates that litigation hold is out of scope and highlights
+  the audit endpoints for operational review.
