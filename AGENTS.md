@@ -20,16 +20,16 @@ Approach this as an architect and engineer: your job is not just to code, but to
 ---
 
 ## Repository status
-- The FastAPI backend scaffold now lives under `backend/app/` with configuration, database utilities, health routing, and the
-  initial `ConfigurationRevision` and `Job` models. Frontend and infra directories are still pending.
+- The FastAPI backend now lives under `backend/app/` with configuration, database utilities, health routing, configuration
+  revision + job services/routers, and the foundational SQLAlchemy models. Frontend and infra directories are still pending.
 - Follow the planned layout in `README.md` when creating new code. Create directories as needed.
 - Keep this file, the README, and the glossary aligned with the active architecture.
 
 ---
 
 ## Collaboration workflow
-- **Active planning doc** – `CURRENT_TASK.md` (“Backend foundation”) is the plan to execute right now. Keep it updated until the
-  work ships.
+- **Active planning doc** – `CURRENT_TASK.md` tracks the live plan. Keep it updated until the work ships, then rename it to
+  `PREVIOUS_TASK.md` and draft the next plan.
 - **Iteration loop** – Design together first, then build. Once a task is completed in code, rename `CURRENT_TASK.md` to
   `PREVIOUS_TASK.md` (replacing the old one if present) and create a fresh `CURRENT_TASK.md` for the next plan.
 - **Cross-reference** – Note any shifts in scope or priorities here so the next agent immediately knows which plan is live.

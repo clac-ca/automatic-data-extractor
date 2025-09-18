@@ -1,4 +1,10 @@
-"""Service helpers for processing jobs."""
+"""Job orchestration helpers.
+
+Functions here coordinate job lifecycle invariants, generate sequential
+identifiers, and normalise JSON payloads before persistence. Keeping the
+logic in one place avoids divergent behaviour between API consumers and
+background processors.
+"""
 
 from __future__ import annotations
 
