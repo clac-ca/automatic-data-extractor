@@ -120,6 +120,7 @@ class Document(Base):
         default=dict,
         nullable=False,
     )
+    expires_at: Mapped[str] = mapped_column(String(32), nullable=False)
     created_at: Mapped[str] = mapped_column(String(32), default=_timestamp, nullable=False)
     updated_at: Mapped[str] = mapped_column(
         String(32), default=_timestamp, onupdate=_timestamp, nullable=False

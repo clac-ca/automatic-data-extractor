@@ -122,7 +122,7 @@ Jobs returned by the API and displayed in the UI always use the same JSON struct
 2. Uploading identical bytes returns the existing record and reuses the stored file. If the on-disk file has gone missing, the upload restores it before responding.
 3. `GET /documents` lists records newest first, `GET /documents/{document_id}` returns metadata for a single file, and `GET /documents/{document_id}/download` streams the stored bytes (with `Content-Disposition` set to the original filename).
 4. `POST /documents` enforces the configurable `max_upload_bytes` cap (defaults to 25 MiB). Payloads that exceed the limit return HTTP 413 with `{"detail": {"error": "document_too_large", "max_upload_bytes": <bytes>, "received_bytes": <bytes>}}` so operators know the request failed before any data is persisted.
-5. Follow-ups: document retention policies (how long to keep uploads) and deletion endpoints remain TODO so operations can manage storage proactively.
+5. Document retention and deletion workflows are defined in `docs/document_retention_and_deletion.md`. Upcoming engineering work will implement the API surface and background purge worker described there.
 
 ---
 
@@ -161,6 +161,7 @@ naming payloads or configuration elements.
 - SQLite stores configuration revisions, jobs, users, sessions, API keys, and audit metadata. Payloads stay JSON until a strict configuration is required.
 - Back up ADE by copying both the SQLite file and the documents directory.
 - Environment variables override defaults; `.env` files hold secrets and stay gitignored. Set `ADE_MAX_UPLOAD_BYTES` (bytes) to raise or lower the upload cap. Keep the value conservative so operators can predict disk usage.
+- Document retention defaults to 30 days (`ADE_DEFAULT_DOCUMENT_RETENTION_DAYS`). Callers can override the expiry per upload via the `expires_at` form field on `POST /documents`.
 - Logs stream to stdout. Keep an eye on `var/` size and long-running jobs.
 
 ---

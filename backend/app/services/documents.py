@@ -12,6 +12,7 @@ from __future__ import annotations
 import io
 import tempfile
 from collections.abc import Iterator
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import BinaryIO
@@ -45,6 +46,13 @@ class DocumentTooLargeError(Exception):
             f"Uploaded file is {_format_size(received)} ({received:,} bytes), "
             f"exceeding the configured limit of {_format_size(limit)} ({limit:,} bytes)."
         )
+        super().__init__(message)
+
+
+class InvalidDocumentExpirationError(Exception):
+    """Raised when an ``expires_at`` override cannot be processed."""
+
+    def __init__(self, message: str) -> None:
         super().__init__(message)
 
 
@@ -120,6 +128,30 @@ def _strip_hash_prefix(value: str) -> str:
     return value
 
 
+def _resolve_expiration(
+    *, override: str | None, now: datetime, retention_days: int
+) -> datetime:
+    if override is None:
+        return now + timedelta(days=retention_days)
+
+    try:
+        parsed = datetime.fromisoformat(override)
+    except ValueError as exc:
+        message = "expires_at must be a valid ISO 8601 timestamp"
+        raise InvalidDocumentExpirationError(message) from exc
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    else:
+        parsed = parsed.astimezone(timezone.utc)
+
+    if parsed <= now:
+        message = "expires_at must be in the future"
+        raise InvalidDocumentExpirationError(message)
+
+    return parsed
+
+
 def _storage_relative_path(digest: str) -> Path:
     return Path(digest[:2]) / digest[2:4] / digest
 
@@ -143,6 +175,7 @@ def store_document(
     original_filename: str | None,
     content_type: str | None,
     data: bytes | BinaryIO,
+    expires_at: str | None = None,
 ) -> Document:
     """Persist a document to disk and return the metadata record.
 
@@ -164,6 +197,14 @@ def store_document(
     stored_uri = _storage_uri(digest)
     stored_path = _storage_path(settings.documents_dir, digest)
     tmp_to_remove: Path | None = tmp_path
+
+    now = datetime.now(timezone.utc)
+    expiration = _resolve_expiration(
+        override=expires_at,
+        now=now,
+        retention_days=settings.default_document_retention_days,
+    ).isoformat()
+    now_iso = now.isoformat()
 
     try:
         existing = _get_by_sha(db, sha_value)
@@ -188,6 +229,9 @@ def store_document(
             sha256=sha_value,
             stored_uri=stored_uri,
             metadata_={},
+            expires_at=expiration,
+            created_at=now_iso,
+            updated_at=now_iso,
         )
         db.add(document)
         db.commit()
@@ -263,6 +307,7 @@ def iter_document_file(
 __all__ = [
     "DocumentNotFoundError",
     "DocumentTooLargeError",
+    "InvalidDocumentExpirationError",
     "store_document",
     "list_documents",
     "get_document",

@@ -34,6 +34,7 @@ class DocumentResponse(BaseModel):
         validation_alias="metadata_",
         serialization_alias="metadata",
     )
+    expires_at: str
     created_at: str
     updated_at: str
 

@@ -22,6 +22,11 @@ class Settings(BaseSettings):
         gt=0,
         description="Maximum accepted upload size for POST /documents",
     )
+    default_document_retention_days: int = Field(
+        default=30,
+        gt=0,
+        description="Default number of days to keep uploaded documents before they expire",
+    )
 
     @property
     def database_path(self) -> Path | None:
