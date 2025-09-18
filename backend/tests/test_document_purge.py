@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -12,7 +13,7 @@ from backend.app import config as config_module
 from backend.app import db as db_module
 from backend.app.db import Base, get_engine, get_sessionmaker
 from backend.app.models import AuditEvent, Document
-from sqlalchemy import select
+from sqlalchemy import event, select
 
 from backend.app.services.documents import (
     ExpiredDocumentPurgeSummary,
@@ -56,6 +57,47 @@ def _create_document(
     db_session.refresh(document)
     path = resolve_document_path(document)
     return _StoredDocument(document=document, path=path)
+
+
+def _bulk_create_expired_documents(
+    db_session,
+    *,
+    documents_dir: Path,
+    count: int,
+) -> None:
+    now = datetime.now(timezone.utc)
+    created_at = now.isoformat()
+    expires_at = (now - timedelta(days=1)).isoformat()
+
+    documents_dir.mkdir(parents=True, exist_ok=True)
+
+    chunk_size = 200
+    chunk: list[Document] = []
+    for index in range(count):
+        document_id = f"BULK{index:022d}"
+        stored_uri = f"bulk/{index:06d}.bin"
+        chunk.append(
+            Document(
+                document_id=document_id,
+                original_filename=f"bulk-{index}.bin",
+                content_type="application/octet-stream",
+                byte_size=1,
+                sha256=f"sha256:{index:064x}",
+                stored_uri=stored_uri,
+                metadata_={},
+                expires_at=expires_at,
+                created_at=created_at,
+                updated_at=created_at,
+            )
+        )
+        if len(chunk) == chunk_size:
+            db_session.bulk_save_objects(chunk)
+            chunk.clear()
+
+    if chunk:
+        db_session.bulk_save_objects(chunk)
+
+    db_session.commit()
 
 
 @contextmanager
@@ -184,6 +226,75 @@ def test_purge_expired_documents_deletes_files(app_client) -> None:
         ).all()
         assert all(row.document_id != expired_old.document.document_id for row in remaining)
         assert all(row.document_id != expired_recent.document.document_id for row in remaining)
+
+
+def test_purge_expired_documents_streams_large_batches(app_client) -> None:
+    client, _, documents_dir = app_client
+    del client
+    session_factory = get_sessionmaker()
+
+    total_documents = 2049
+    batch_size = 128
+
+    with session_factory() as seed_session:
+        _bulk_create_expired_documents(
+            seed_session,
+            documents_dir=documents_dir,
+            count=total_documents,
+        )
+
+    engine = get_engine()
+    captured: list[tuple[str, object]] = []
+
+    def _capture_statement(
+        conn, cursor, statement, parameters, context, executemany
+    ) -> None:
+        del conn, cursor, context, executemany
+        normalized = " ".join(statement.strip().lower().split())
+        if not normalized.startswith("select"):
+            return
+        if " from documents " not in normalized:
+            return
+        captured.append((normalized, parameters))
+
+    event.listen(engine, "before_cursor_execute", _capture_statement)
+    try:
+        with session_factory() as purge_session:
+            summary = purge_expired_documents(
+                purge_session,
+                batch_size=batch_size,
+                dry_run=True,
+            )
+    finally:
+        event.remove(engine, "before_cursor_execute", _capture_statement)
+
+    assert summary.dry_run is True
+    assert summary.processed_count == total_documents
+    assert summary.missing_files == total_documents
+    assert summary.bytes_reclaimed == 0
+    assert len(summary.documents) == total_documents
+    assert summary.documents[0].document_id == "BULK0000000000000000000000"
+    assert summary.documents[-1].document_id == f"BULK{total_documents - 1:022d}"
+
+    streaming_statements = [
+        (statement, params)
+        for statement, params in captured
+        if "deleted_at is null" in statement and "expires_at" in statement
+    ]
+    assert streaming_statements
+    expected_batches = math.ceil(total_documents / batch_size)
+    assert expected_batches <= len(streaming_statements) <= expected_batches + 1
+
+    def _extract_limit(params: object) -> int:
+        if isinstance(params, dict):
+            values = list(params.values())
+            return int(values[-1])
+        sequence = list(params) if isinstance(params, (list, tuple)) else [params]
+        return int(sequence[-1])
+
+    for statement, params in streaming_statements:
+        assert "limit" in statement
+        assert _extract_limit(params) <= batch_size
 
 
 def test_purge_expired_documents_respects_limit(app_client) -> None:
