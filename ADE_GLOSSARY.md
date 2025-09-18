@@ -27,8 +27,8 @@ listed beside each term.
 
 ## Document anatomy
 - **Document** – Canonical upload tracked by ADE. The API exposes its metadata via `/documents` (`documents.document_id`, `documents.stored_uri`). Files live in `var/documents/`.
-- **Stored URI** – Canonical relative path that jobs reference when describing inputs (`documents.stored_uri`). Uses a hashed directory structure such as `ab/cd/<digest>` and is anchored under `var/documents/` on disk.
-- **Document hash** – SHA-256 digest used for deduplication (`documents.sha256`). Prefixed with `sha256:` in responses.
+- **Stored URI** – Canonical relative path that jobs reference when describing inputs (`documents.stored_uri`). Uses a randomly generated two-level directory structure such as `ab/cd/<token>` anchored under `var/documents/` on disk.
+- **Document hash** – SHA-256 digest captured for auditing and integrity checks (`documents.sha256`). Prefixed with `sha256:` in responses.
 - **Page** – Worksheet or PDF page captured in a manifest (`pages[].index`).
 - **Table** – Contiguous rows and columns with a single header row (`tables[].index`).
 - **Row type** – Classification emitted by the header finder (`header`, `data`, `group_header`, `note`) (`rows[].row_type`).
