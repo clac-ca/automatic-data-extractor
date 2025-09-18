@@ -1,105 +1,67 @@
-# AGENTS — Automatic Data Extractor
-Overview
-ADE (Automatic Data Extractor) is an internal tool that converts messy spreadsheets and PDFs into deterministic, structured tables. It uses revision-controlled logic to ensure results are consistent, auditable, and reproducible. ADE ships as a single Docker container with a FastAPI backend, pure-Python processing engine, React frontend, and SQLite persistence.
+# AGENTS — Automatic Data Extractor (ADE)
 
-Pair this AGENTS.md with `README.md` for the high-level architecture and `ADE_GLOSSARY.md` for terminology. Update all three when
-the architecture or workflows change.
+**Mission**
+This project aims to transform semi-structured spreadsheets and PDFs into clean, structured tables using deterministic, revision-controlled logic.
 
-Approach this as an architect and engineer: your job is not just to code, but to implement the task comprehensively, thoughtfully, and to a high standard.
+**Priorities (in strict order)**
 
----
+1. **Clarity** – Favor solutions that are simple, readable, and easy to debug. Clear code prevents silent errors and makes future changes safe.
+2. **Pragmatic Optimization** – Improve performance where it delivers real value, but only if the solution remains maintainable. Skip complex edge-case handling that is unlikely to occur in practice.
+3. **Throughput** – Make the system fast and efficient once clarity and pragmatic optimization are satisfied. Speed is valuable, but never at the expense of reliability or simplicity.
 
-## Quick facts
-- **Mission** – Turn semi-structured spreadsheets and PDFs into deterministic tables with revision-controlled logic.
-- **Packaging** – Ship everything as one Docker container running a FastAPI backend, deterministic Python processor, and Vite +
-  TypeScript frontend.
-- **Persistence** – Use SQLite at `var/ade.sqlite` and store uploaded documents under `var/documents/`. Keep both out of version
-  control.
-- **Priorities** – Determinism, debuggability, and simple operations beat raw throughput.
+**Baseline Assumptions**
+
+* **Scale** – Built for modest, internal line-of-business usage (not internet-scale with millions of users).
+* **Style** – Use clear names, minimal abstractions, and deterministic functions. Code should be straightforward to read and audit.
+* **Trade-offs** – Prefer simple, reliable solutions over clever but fragile ones. Choose slower but clearer implementations if performance gains would add disproportionate complexity.
 
 ---
 
-## Repository status
-- The FastAPI backend now lives under `backend/app/` with configuration, database utilities, health routing, document ingestion,
-  configuration revision + job services/routers, and the foundational SQLAlchemy models. Frontend and infra directories are still pending.
-- Follow the planned layout in `README.md` when creating new code. Create directories as needed.
-- Keep this file, the README, and the glossary aligned with the active architecture.
+## Modes of Operation
+
+### 1. Task Implementation
+
+**When**: default mode.
+**Goal**: execute the active plan detailed in `CURRENT_TASK.md`, and update the `CURRENT_TASK.md` for the next run. No scope creep.
+**Steps**:
+
+1. Read `CURRENT_TASK.md` (source of truth).
+2. Implement only the defined scope with production-ready code.
+3. Add/update tests and deterministic fixtures in `examples/`.
+4. Run quality gates (pytest, ruff, mypy, npm test/lint/typecheck).
+5. Update docs if architecture or terminology changes.
+6. Open a focused PR with summary, assumptions, follow-ups.
+7. Rotate: `CURRENT_TASK.md → PREVIOUS_TASK.md` and draft next plan.
+
+**Acceptance criteria**:
+
+* CI checks pass.
+* Matches `CURRENT_TASK.md` scope exactly.
+* Deterministic behavior (no I/O or randomness in extraction).
 
 ---
 
-## Collaboration workflow
-- **Active planning doc** – `CURRENT_TASK.md` tracks the live plan. Keep it updated until the work ships, then rename it to
-  `PREVIOUS_TASK.md` and draft the next plan.
-- **Iteration loop** – Design together first, then build. Once a task is completed in code, rename `CURRENT_TASK.md` to
-  `PREVIOUS_TASK.md` (replacing the old one if present) and create a fresh `CURRENT_TASK.md` for the next plan.
-- **Cross-reference** – Note any shifts in scope or priorities here so the next agent immediately knows which plan is live.
+### 2. Code Review
+
+**When**: explicit request for “review” or code shown without a task.
+**Goal**: critique and propose minimal, ADE-aligned rewrites.
+
+**Checklist**:
+
+* **Correctness** – invariants, nulls, uniqueness, race conditions, timezones.
+* **Clarity** – remove dead code, avoid needless abstractions.
+* **Maintainability** – small functions, explicit invariants, clear names.
+* **Consistency** – FastAPI, Pydantic v2, SQLAlchemy patterns.
+* **Performance (contextual)** – avoid N+1 queries, repeated serialization.
+* **Security** – input validation, safe defaults, no sensitive leaks.
+* **Operational** – logging signal/noise, DB constraints, migrations.
+* **Testability** – seams for fixtures, return values > side effects.
+
+**Outputs**: issue list, targeted rewrites, test gaps, ops notes.
 
 ---
 
-## Architecture guide
-- **Backend** – Python 3.11 with FastAPI and Pydantic v2. Keep extraction logic in pure functions (no I/O, randomness, or
-  external calls). Put orchestration and persistence under `backend/app/services/` and processing utilities under
-  `backend/processor/`.
-- **Document ingestion** – The `documents` table stores canonical uploads with randomly assigned storage paths. `services/documents.py`
-  writes every upload to its own location, enforces size limits, and keeps metadata consistent; `routes/documents.py` exposes
-  upload, list, download, and deletion routes that return the `stored_uri` jobs should reference.
-- **Frontend** – Vite + React with TypeScript. Use functional components, strict typing, and place API wrappers in
-  `frontend/src/api/`.
-- **Configurations, revisions, & jobs** – Treat active configuration revisions as immutable. Jobs apply the active revision, record inputs/outputs/metrics/logs as JSON, and provide the audit trail reviewers inspect in the UI. Persist configuration revision payloads and job records as JSON. Job IDs follow `job_YYYY_MM_DD_####`, remain mutable while `pending` or `running`, and lock once marked `completed` or `failed`.
-- **Authentication** – Support username/password by default. Optional SSO (SAML or OIDC) can arrive later. Admins issue API keys
-  tied to user roles.
-- **Storage** – Default to SQLite unless volume demands a change. Mount `./var` when running in Docker to persist the database
-  and documents.
+## Guiding Principle
 
----
-
-## Local development checklist
-1. **Backend** – Create a Python 3.11 virtualenv and install dependencies via `pip install -r requirements.txt` (add the file
-   when dependencies exist). Run `uvicorn backend.app.main:app --reload` for local API development.
-2. **Frontend** – Inside `frontend/`, run `npm install` then `npm run dev`. The UI expects the backend at `http://localhost:8000`.
-3. **Docker** – Provide a combined workflow via `docker compose up` that builds the app and mounts `./var` for persistence.
-4. **Environment variables** – Use `.env` files that are gitignored for secrets (DB paths, SSO settings, API key salts, etc.).
-
----
-
-## Quality and testing
-Run the checks that match your changes:
-
-```bash
-pytest -q          # Backend tests
-ruff check         # Python linting
-mypy               # Python type checks
-npm test           # Frontend unit tests
-npm run lint       # Frontend linting
-npm run typecheck  # Frontend type checks
-```
-
-- Documentation-only updates generally skip these commands; note the skip in your report.
-- Add new tests alongside new features. Prefer deterministic fixtures stored under `examples/`.
-
----
-
-## Data and security notes
-- Treat `var/ade.sqlite` and everything in `var/documents/` as sensitive. Never commit their contents.
-- Hashed storage paths are derived from the SHA-256 digest; keep returned `stored_uri` values stable so audits can link jobs back
-  to uploaded files.
-- `/documents` enforces the `max_upload_bytes` cap (defaults to 25 MiB). Adjust it with `ADE_MAX_UPLOAD_BYTES`; the route
-  returns HTTP 413 with `error=document_too_large` when callers exceed the limit.
-- Document retention defaults to 30 days (configurable via `ADE_DEFAULT_DOCUMENT_RETENTION_DAYS`). Callers may override the
-  expiry when uploading by providing `expires_at` to `POST /documents`. Review `docs/document_retention_and_deletion.md`
-  before changing the retention behaviour or building deletion tooling.
-- Redact or hash personal data before logging.
-- Enforce role-based access control on every endpoint. API keys inherit user scopes.
-
----
-
-## Git workflow expectations
-- Keep commits focused with descriptive messages (e.g., `backend: add revision activate route`).
-- Ensure `git status` is clean before finishing.
-- After committing, always call the `make_pr` tool to record the PR summary.
-- Document architectural assumptions or open questions in the PR body so future contributors understand the decision.
-
----
-
-When in doubt, favour simple, auditable solutions over premature abstractions, and document new findings here for the next
-agent.
+**When in doubt → choose simple, auditable solutions.**
+Always leave clear notes for the next contributor or agent.
