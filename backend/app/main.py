@@ -12,8 +12,8 @@ from . import config
 from .db import Base, get_engine
 from .maintenance import AutoPurgeScheduler
 from .routes.health import router as health_router
-from .routes.configuration_revisions import (
-    router as configuration_revisions_router,
+from .routes.configurations import (
+    router as configurations_router,
 )
 from .routes.jobs import router as jobs_router
 from .routes.documents import router as documents_router
@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Automatic Data Extractor", lifespan=lifespan)
 app.include_router(health_router)
-app.include_router(configuration_revisions_router)
+app.include_router(configurations_router)
 app.include_router(jobs_router)
 app.include_router(documents_router)
 app.include_router(audit_events_router)

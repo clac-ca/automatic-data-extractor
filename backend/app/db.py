@@ -35,6 +35,7 @@ def _create_engine(database_url: str) -> Engine:
 
     if url.get_backend_name() == "sqlite":
         connect_args["check_same_thread"] = False
+        connect_args["timeout"] = 30
         if _is_sqlite_memory_url(url):
             engine_kwargs["poolclass"] = StaticPool
 
