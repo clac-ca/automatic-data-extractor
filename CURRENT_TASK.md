@@ -1,49 +1,49 @@
-# Current Task — Document expiration defaults
+# Current Task — Manual document deletion API
 
 ## Goal
-Attach an expiration timestamp to uploaded documents so operators have a
-simple policy to follow while we line up cleanup automation.
+Give operators a supported way to remove uploaded document bytes while keeping an
+audit trail in the metadata.
 
 ## Background
-- Uploads persist core metadata but have no notion of when the document
-  should age out.
-- Operators asked for a lightweight default: expire documents after 30 days
-  unless the caller specifies a custom date during upload.
-- Retention knobs should live in configuration so we can tweak them per
-environment.
+- Documents now carry an `expires_at` timestamp but bytes stick around until
+  someone deletes them manually.
+- Operators currently rely on ad-hoc scripts. We should expose a sanctioned
+  endpoint that enforces validation and records who performed the deletion.
+- The retention notes in `docs/document_retention_and_deletion.md` call out soft
+  deletion plus audit logging as the next milestone.
 
 ## Scope
-- Extend the document model with an `expires_at` column stored as an ISO 8601
-  UTC timestamp.
-- Add a configuration setting (env var `ADE_DEFAULT_DOCUMENT_RETENTION_DAYS`)
-  that controls the default expiration window. Default it to 30 days.
-- Update the document service to compute `expires_at` on ingest, honouring
-  an optional override passed to the upload route.
-- Surface the resolved `expires_at` value in the API response and ensure the
-  FastAPI route accepts an optional `expires_at` form field.
-- Cover the default window, the config override, and manual expiration in
-  tests.
+- Extend the `documents` table with soft-delete fields (`deleted_at`,
+  `deleted_by`, `delete_reason`) stored as ISO 8601 timestamps and free-form
+  text.
+- Implement a document service helper that marks the metadata, removes the file
+  from disk when it exists, and no-ops when the file has already vanished.
+- Add `DELETE /documents/{document_id}` to FastAPI. Require a `deleted_by`
+  string and optional `delete_reason` body payload. Return 200 with the updated
+  document record.
+- Ensure existing listings exclude deleted rows by default, with an option to
+  include them later when we expose admin views.
+- Tests should cover successful deletions, repeated calls, and attempts to
+  delete missing documents.
 
 ## Out of scope
-- Background jobs or cron hooks that delete expired files.
-- Legal hold / retention exceptions beyond a caller-provided date.
-- Bulk migrations for historical uploads (manual work can handle older rows
-  if needed).
+- Background purging of expired files (tracked separately).
+- Legal hold or retention exception handling beyond the soft delete fields.
+- Bulk deletion endpoints.
 
 ## Deliverables
-1. SQLAlchemy model update introducing the `expires_at` column.
-2. Configuration and service changes that calculate the default or custom
-   expiration timestamp when storing a document.
-3. API schema + route updates exposing the new field and accepting an
-   optional override during upload.
-4. Pytest coverage for the default window, env-var override, and manual
-   expiration path.
+1. SQLAlchemy model update introducing the deletion metadata columns.
+2. Service function that performs the soft delete and removes on-disk files.
+3. FastAPI route and schema updates accepting deletion payloads and omitting
+   deleted rows from document listings.
+4. Tests proving the happy path, double-deletes, and error conditions.
+5. Documentation updates (README, glossary, retention notes) describing the new
+   endpoint and metadata fields.
 
 ## Definition of done
-- `expires_at` is persisted for every new upload and returned in all document
-  responses.
-- Uploading without an override sets expiration to `now + configured_days` and
-  the default of 30 days is covered by a test.
-- Providing a valid future ISO 8601 `expires_at` value stores it verbatim and
-  a bad value returns a 422 explaining the issue.
-- Tests exercise the new configuration knob so we know overrides behave.
+- Deleted documents retain metadata with `deleted_at` and `deleted_by` set and
+  files removed when present.
+- Uploading a file after deletion creates a fresh record (dedupe should not
+  resurrect the deleted row).
+- Listing endpoints skip deleted documents by default.
+- Tests and docs describe the behaviour and edge cases clearly.
