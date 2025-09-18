@@ -109,6 +109,64 @@ def test_list_events_filters_and_paginates(db_session) -> None:
     assert all(event.event_type == "document.deleted" for event in filtered.events)
 
 
+def test_list_events_occurred_filters_include_same_day_boundaries(db_session) -> None:
+    event_day = datetime(2024, 3, 20, tzinfo=timezone.utc)
+    morning = event_day.replace(hour=9, minute=0)
+    evening = event_day.replace(hour=17, minute=30)
+    next_day = evening + timedelta(days=1)
+
+    record_event(
+        db_session,
+        AuditEventRecord(
+            event_type="document.accessed",
+            entity_type="document",
+            entity_id="doc-morning",
+            occurred_at=morning,
+        ),
+    )
+    record_event(
+        db_session,
+        AuditEventRecord(
+            event_type="document.accessed",
+            entity_type="document",
+            entity_id="doc-evening",
+            occurred_at=evening,
+        ),
+    )
+    record_event(
+        db_session,
+        AuditEventRecord(
+            event_type="document.accessed",
+            entity_type="document",
+            entity_id="doc-next-day",
+            occurred_at=next_day,
+        ),
+    )
+
+    before_results = list_events(db_session, occurred_before=evening)
+    assert {event.entity_id for event in before_results.events} == {
+        "doc-morning",
+        "doc-evening",
+    }
+
+    after_results = list_events(db_session, occurred_after=morning)
+    assert {event.entity_id for event in after_results.events} == {
+        "doc-morning",
+        "doc-evening",
+        "doc-next-day",
+    }
+
+    bounded_results = list_events(
+        db_session,
+        occurred_after=morning.isoformat(),
+        occurred_before=evening.isoformat(),
+    )
+    assert {event.entity_id for event in bounded_results.events} == {
+        "doc-morning",
+        "doc-evening",
+    }
+
+
 def test_list_entity_events_matches_generic(db_session) -> None:
     for suffix in range(2):
         record_event(

@@ -84,13 +84,13 @@ def _apply_filters(statement: Select[AuditEvent], filters: dict[str, Any]) -> Se
 
     occurred_after = filters.get("occurred_after")
     if occurred_after is not None:
-        occurred_after_dt = _normalise_datetime(occurred_after)
-        statement = statement.where(AuditEvent.occurred_at >= occurred_after_dt)
+        occurred_after_iso = _normalise_datetime(occurred_after).isoformat()
+        statement = statement.where(AuditEvent.occurred_at >= occurred_after_iso)
 
     occurred_before = filters.get("occurred_before")
     if occurred_before is not None:
-        occurred_before_dt = _normalise_datetime(occurred_before)
-        statement = statement.where(AuditEvent.occurred_at <= occurred_before_dt)
+        occurred_before_iso = _normalise_datetime(occurred_before).isoformat()
+        statement = statement.where(AuditEvent.occurred_at <= occurred_before_iso)
 
     return statement
 
