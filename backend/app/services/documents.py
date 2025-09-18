@@ -12,8 +12,8 @@ complexity of deduplication or restoration logic.
 from __future__ import annotations
 
 import io
-import secrets
 import logging
+import secrets
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -56,6 +56,18 @@ class DocumentTooLargeError(Exception):
             f"exceeding the configured limit of {_format_size(limit)} ({limit:,} bytes)."
         )
         super().__init__(message)
+
+
+class DocumentStoragePathError(RuntimeError):
+    """Raised when a stored document URI resolves outside the documents directory."""
+
+    def __init__(self, stored_uri: str) -> None:
+        message = (
+            "Document storage path is outside the configured documents directory "
+            "and cannot be accessed safely"
+        )
+        super().__init__(message)
+        self.stored_uri = stored_uri
 
 
 class InvalidDocumentExpirationError(Exception):
@@ -245,7 +257,29 @@ def store_document(
         updated_at=now_iso,
     )
     db.add(document)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Failed to persist document metadata; removing stored bytes",
+            extra={
+                "stored_uri": stored_uri,
+                "disk_path": str(allocation.disk_path),
+            },
+        )
+        try:
+            allocation.disk_path.unlink(missing_ok=True)
+        except Exception:
+            logger.exception(
+                "Failed to remove stored file after database error",
+                extra={
+                    "stored_uri": stored_uri,
+                    "disk_path": str(allocation.disk_path),
+                },
+            )
+        raise
+
     db.refresh(document)
     return document
 
@@ -274,10 +308,23 @@ def resolve_document_path(
     """Return the on-disk path for the stored document."""
 
     settings = settings or config.get_settings()
-    stored_path = Path(document.stored_uri)
-    if stored_path.is_absolute():
-        return stored_path
-    return settings.documents_dir / stored_path
+    stored_uri = (document.stored_uri or "").strip()
+    if not stored_uri:
+        raise DocumentStoragePathError(document.stored_uri or "")
+
+    base_dir = settings.documents_dir.resolve()
+    candidate = Path(stored_uri)
+    if not candidate.is_absolute():
+        candidate = (base_dir / candidate).resolve()
+    else:
+        candidate = candidate.resolve()
+
+    try:
+        candidate.relative_to(base_dir)
+    except ValueError as exc:
+        raise DocumentStoragePathError(document.stored_uri) from exc
+
+    return candidate
 
 
 def delete_document(
@@ -299,9 +346,38 @@ def delete_document(
     document = get_document(db, document_id)
     now = datetime.now(timezone.utc)
     settings = config.get_settings()
-    path = resolve_document_path(document, settings=settings)
-    missing_before_delete = not path.exists()
-    path.unlink(missing_ok=True)
+    path: Path | None = None
+    missing_before_delete = True
+
+    def _remove_stored_file() -> None:
+        if path is None:
+            return
+        try:
+            path.unlink(missing_ok=True)
+        except Exception:
+            logger.exception(
+                "Failed to remove stored bytes for document deletion",
+                extra={
+                    "document_id": document.document_id,
+                    "stored_uri": document.stored_uri,
+                },
+            )
+
+    try:
+        path = resolve_document_path(document, settings=settings)
+    except DocumentStoragePathError as exc:
+        logger.warning(
+            "Stored URI for document resolves outside documents directory",
+            extra={
+                "document_id": document.document_id,
+                "stored_uri": document.stored_uri,
+            },
+            exc_info=exc,
+        )
+    else:
+        missing_before_delete = not path.exists()
+        if not commit:
+            _remove_stored_file()
 
     mutated = False
     if document.deleted_at is None:
@@ -314,9 +390,14 @@ def delete_document(
         mutated = True
 
     if commit:
-        db.commit()
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
         if mutated:
             db.refresh(document)
+        _remove_stored_file()
     elif mutated:
         db.flush()
 
@@ -480,8 +561,21 @@ def purge_expired_documents(
     settings = config.get_settings()
 
     def _process(document: Document) -> None:
-        path = resolve_document_path(document, settings=settings)
-        missing_before_delete = not path.exists()
+        missing_before_delete = True
+        try:
+            path = resolve_document_path(document, settings=settings)
+        except DocumentStoragePathError as exc:
+            logger.warning(
+                "Stored URI for document resolves outside documents directory during purge",
+                extra={
+                    "document_id": document.document_id,
+                    "stored_uri": document.stored_uri,
+                },
+                exc_info=exc,
+            )
+        else:
+            missing_before_delete = not path.exists()
+
         summary.processed_count += 1
         if missing_before_delete:
             summary.missing_files += 1
@@ -531,6 +625,7 @@ def purge_expired_documents(
 __all__ = [
     "DocumentNotFoundError",
     "DocumentTooLargeError",
+    "DocumentStoragePathError",
     "InvalidDocumentExpirationError",
     "store_document",
     "list_documents",
