@@ -21,7 +21,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from .. import config
@@ -416,26 +416,51 @@ def iter_expired_documents(
         raise ValueError("batch_size must be positive")
 
     now_iso = datetime.now(timezone.utc).isoformat()
-    id_statement = (
-        select(Document.document_id)
-        .where(Document.deleted_at.is_(None), Document.expires_at <= now_iso)
-        .order_by(Document.expires_at.asc(), Document.document_id.asc())
-    )
-    if limit is not None:
-        if limit <= 0:
-            return
-        id_statement = id_statement.limit(limit)
+    if limit is not None and limit <= 0:
+        return
 
-    document_ids = list(db.scalars(id_statement))
-    for start in range(0, len(document_ids), batch_size):
-        chunk_ids = document_ids[start : start + batch_size]
-        documents = db.scalars(
-            select(Document).where(Document.document_id.in_(chunk_ids))
-        ).all()
-        document_map = {document.document_id: document for document in documents}
-        batch = [document_map[doc_id] for doc_id in chunk_ids if doc_id in document_map]
-        if batch:
-            yield batch
+    last_expires_at: str | None = None
+    last_document_id: str | None = None
+    yielded = 0
+
+    while True:
+        if limit is not None and yielded >= limit:
+            break
+
+        page_size = batch_size
+        if limit is not None:
+            remaining = limit - yielded
+            if remaining <= 0:
+                break
+            page_size = min(page_size, remaining)
+
+        statement = (
+            select(Document)
+            .where(Document.deleted_at.is_(None), Document.expires_at <= now_iso)
+        )
+        if last_expires_at is not None:
+            statement = statement.where(
+                or_(
+                    Document.expires_at > last_expires_at,
+                    and_(
+                        Document.expires_at == last_expires_at,
+                        Document.document_id > last_document_id,
+                    ),
+                )
+            )
+        statement = statement.order_by(
+            Document.expires_at.asc(), Document.document_id.asc()
+        ).limit(page_size)
+
+        batch = list(db.scalars(statement))
+        if not batch:
+            break
+
+        yield batch
+
+        yielded += len(batch)
+        last_expires_at = batch[-1].expires_at
+        last_document_id = batch[-1].document_id
 
 
 def purge_expired_documents(
