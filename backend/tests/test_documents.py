@@ -58,35 +58,28 @@ def test_upload_document_persists_file_and_metadata(app_client) -> None:
     assert not Path(payload["stored_uri"]).is_absolute()
     assert stored_path.exists()
     assert stored_path.read_bytes() == b"PDF-DATA-123"
+    assert stored_path.relative_to(documents_dir).as_posix() == payload["stored_uri"]
 
     created_at = datetime.fromisoformat(payload["created_at"])
     expires_at = datetime.fromisoformat(payload["expires_at"])
     assert expires_at - created_at == timedelta(days=30)
 
-    relative = stored_path.relative_to(documents_dir)
-    digest = payload["sha256"].split(":", 1)[1]
-    assert relative.parts[0] == digest[:2]
-    assert relative.parts[1] == digest[2:4]
-    assert relative.parts[2] == digest
 
-
-def test_duplicate_upload_reuses_existing_metadata(app_client) -> None:
+def test_duplicate_upload_creates_new_metadata(app_client) -> None:
     client, _, documents_dir = app_client
     original = _upload_document(client, filename="jan.xlsx", data=b"excel-bytes")
 
-    stored_path = _stored_path(documents_dir, original)
     duplicate = _upload_document(client, filename="feb.xlsx", data=b"excel-bytes")
 
-    assert duplicate["document_id"] == original["document_id"]
-    assert duplicate["stored_uri"] == original["stored_uri"]
-    assert stored_path.exists()
-    assert stored_path.read_bytes() == b"excel-bytes"
+    assert duplicate["document_id"] != original["document_id"]
+    assert duplicate["stored_uri"] != original["stored_uri"]
 
-    # Delete the stored file and upload again to ensure the record is rehydrated.
-    stored_path.unlink()
-    restored = _upload_document(client, filename="mar.xlsx", data=b"excel-bytes")
-    assert restored["document_id"] == original["document_id"]
-    assert _stored_path(documents_dir, restored).exists()
+    first_path = _stored_path(documents_dir, original)
+    second_path = _stored_path(documents_dir, duplicate)
+    assert first_path.exists()
+    assert second_path.exists()
+    assert first_path.read_bytes() == b"excel-bytes"
+    assert second_path.read_bytes() == b"excel-bytes"
 
 
 def test_upload_document_accepts_manual_expiration(app_client) -> None:

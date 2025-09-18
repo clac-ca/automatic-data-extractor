@@ -43,7 +43,7 @@ audit trail in the metadata.
 ## Definition of done
 - Deleted documents retain metadata with `deleted_at` and `deleted_by` set and
   files removed when present.
-- Uploading a file after deletion creates a fresh record (dedupe should not
-  resurrect the deleted row).
+- Uploading a file after deletion creates a fresh record (uploads always
+  allocate new storage).
 - Listing endpoints skip deleted documents by default.
 - Tests and docs describe the behaviour and edge cases clearly.
