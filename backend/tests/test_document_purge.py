@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import time
 
-import pytest
 from sqlalchemy import select
 
 from backend.app import config as config_module
@@ -15,10 +14,16 @@ from backend.app import db as db_module
 from backend.app.db import Base, get_engine, get_sessionmaker
 from backend.app.models import Document
 from backend.app.services.documents import (
+    ExpiredDocumentPurgeSummary,
     iter_expired_documents,
     purge_expired_documents,
     resolve_document_path,
     store_document,
+)
+from backend.app.services.maintenance_status import (
+    get_auto_purge_status,
+    record_auto_purge_failure,
+    record_auto_purge_success,
 )
 from backend.app.maintenance import purge as purge_cli
 
@@ -253,6 +258,77 @@ def test_purge_expired_documents_dry_run_leaves_state_untouched(app_client) -> N
         assert row.deleted_at is None
 
 
+def test_auto_purge_status_records_successful_run(app_client) -> None:
+    client, _, _ = app_client
+    del client
+    session_factory = get_sessionmaker()
+
+    summary = ExpiredDocumentPurgeSummary(
+        dry_run=False,
+        processed_count=5,
+        missing_files=1,
+        bytes_reclaimed=2048,
+    )
+    started_at = "2024-01-01T00:00:00+00:00"
+    completed_at = "2024-01-01T00:05:00+00:00"
+
+    with session_factory() as db_session:
+        record_auto_purge_success(
+            db_session,
+            summary=summary,
+            started_at=started_at,
+            completed_at=completed_at,
+            interval_seconds=900,
+        )
+        db_session.commit()
+
+    with session_factory() as verify_session:
+        status = get_auto_purge_status(verify_session)
+        assert status is not None
+        assert status["status"] == "succeeded"
+        assert status["dry_run"] is False
+        assert status["processed_count"] == 5
+        assert status["missing_files"] == 1
+        assert status["bytes_reclaimed"] == 2048
+        assert status["started_at"] == started_at
+        assert status["completed_at"] == completed_at
+        assert status["interval_seconds"] == 900
+        assert status["error"] is None
+        assert "recorded_at" in status
+
+
+def test_auto_purge_status_records_failure(app_client) -> None:
+    client, _, _ = app_client
+    del client
+    session_factory = get_sessionmaker()
+
+    started_at = "2024-02-01T00:00:00+00:00"
+
+    with session_factory() as db_session:
+        record_auto_purge_failure(
+            db_session,
+            started_at=started_at,
+            completed_at=None,
+            interval_seconds=1200,
+            error="boom",
+        )
+        db_session.commit()
+
+    with session_factory() as verify_session:
+        status = get_auto_purge_status(verify_session)
+        assert status is not None
+        assert status["status"] == "failed"
+        assert status["dry_run"] is None
+        assert status["processed_count"] is None
+        assert status["missing_files"] is None
+        assert status["bytes_reclaimed"] is None
+        assert status["started_at"] == started_at
+        assert status["completed_at"] is None
+        assert status["interval_seconds"] == 1200
+        assert status["error"] == "boom"
+        assert "recorded_at" in status
+
+
 def test_purge_cli_dry_run_reports_summary(tmp_path, monkeypatch, capsys) -> None:
     documents_dir = tmp_path / "documents"
     db_path = tmp_path / "ade.sqlite"
@@ -262,8 +338,6 @@ def test_purge_cli_dry_run_reports_summary(tmp_path, monkeypatch, capsys) -> Non
     monkeypatch.setenv("ADE_DOCUMENTS_DIR", str(documents_dir))
 
     with _configured_environment(database_url, documents_dir):
-        from sqlalchemy import select
-
         session_factory = get_sessionmaker()
         with session_factory() as db_session:
             expired_doc = _create_document(

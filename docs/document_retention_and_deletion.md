@@ -95,7 +95,16 @@ documents. The behaviour is intentionally simple:
    `purge_expired_documents` helper as the CLI.
 3. Results are logged at INFO level with a structured payload (`summary={...}`)
    so log forwarders and humans see the processed count, missing files, and
-   reclaimed bytes.
+   reclaimed bytes. The loop also writes the most recent summary to the
+   `maintenance_status` table and exposes it under the `purge` key on
+   `GET /health` (status, processed count, missing files, bytes reclaimed,
+   timestamps, configured interval, and any error message).
+
+To smoke test the scheduler locally, set `ADE_PURGE_SCHEDULE_INTERVAL_SECONDS`
+to a small value (e.g. `5`) before starting the API, upload a throwaway document
+that expires soon, and poll `/health`. The `purge` block will update each time a
+run completes, making it easy to confirm the loop still fires after restarts or
+configuration changes.
 
 Set `ADE_PURGE_SCHEDULE_ENABLED=false` to turn the loop off entirely (for
 example, in smoke tests or one-off maintenance).

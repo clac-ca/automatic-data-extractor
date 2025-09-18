@@ -31,6 +31,11 @@ from .documents import (
     resolve_document_path,
     iter_document_file,
 )
+from .maintenance_status import (
+    get_auto_purge_status,
+    record_auto_purge_failure,
+    record_auto_purge_success,
+)
 
 __all__ = [
     "ActiveConfigurationRevisionNotFoundError",
@@ -58,4 +63,7 @@ __all__ = [
     "get_document",
     "resolve_document_path",
     "iter_document_file",
+    "get_auto_purge_status",
+    "record_auto_purge_failure",
+    "record_auto_purge_success",
 ]

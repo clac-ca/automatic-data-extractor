@@ -8,10 +8,26 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_valid
 from pydantic.types import StringConstraints
 
 
+class AutoPurgeStatus(BaseModel):
+    """Summary of the most recent automatic purge run."""
+
+    status: Literal["succeeded", "failed"]
+    recorded_at: str
+    started_at: str | None = None
+    completed_at: str | None = None
+    processed_count: int | None = None
+    missing_files: int | None = None
+    bytes_reclaimed: int | None = None
+    dry_run: bool | None = None
+    interval_seconds: int | None = None
+    error: str | None = None
+
+
 class HealthResponse(BaseModel):
     """Response model for the health endpoint."""
 
     status: str
+    purge: AutoPurgeStatus | None = None
 
 
 class DocumentResponse(BaseModel):

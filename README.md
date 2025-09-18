@@ -167,8 +167,9 @@ naming payloads or configuration elements.
 
 ### Purging expired documents
 
-- The API checks for expired documents on startup and then every `ADE_PURGE_SCHEDULE_INTERVAL_SECONDS` seconds (default: 3600). Each run logs a structured summary with counts for processed files, missing paths, and reclaimed bytes.
+- The API checks for expired documents on startup and then every `ADE_PURGE_SCHEDULE_INTERVAL_SECONDS` seconds (default: 3600). Each run logs a structured summary with counts for processed files, missing paths, and reclaimed bytes. The scheduler also persists the latest results in SQLite (`maintenance_status` table) and surfaces them under the `purge` key on `GET /health` so operators can inspect the most recent sweep without scraping logs.
 - Keep the automatic scheduler enabled for day-to-day operations. When troubleshooting or before rolling configuration changes, run `python -m backend.app.maintenance.purge` manually to see the same summary interactively.
+- Shorten the cadence locally by exporting `ADE_PURGE_SCHEDULE_INTERVAL_SECONDS=5` before starting the API. Upload a throwaway document and call `/health` to watch the `purge` section update with `status`, counts, timestamps, and the configured interval.
 - `--dry-run` reports the documents that would be removed without touching the filesystem or database so you can alert on upcoming deletions before enabling destructive runs.
 - `--limit` caps how many documents are processed in a single invocation so operators can sweep large queues incrementally.
 - The command logs a structured summary (processed count, missing files, reclaimed bytes) and prints a human-readable report so cron jobs and humans see the same outcome.

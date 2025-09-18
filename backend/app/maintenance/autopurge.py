@@ -5,10 +5,15 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import asdict
+from datetime import datetime, timezone
 
 from .. import config
 from ..db import get_sessionmaker
 from ..services.documents import purge_expired_documents
+from ..services.maintenance_status import (
+    record_auto_purge_failure,
+    record_auto_purge_success,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,17 +91,42 @@ class AutoPurgeScheduler:
         await loop.run_in_executor(None, self._purge_once_sync)
 
     def _purge_once_sync(self) -> None:
+        started_at = datetime.now(timezone.utc).isoformat()
         try:
             with self._session_factory() as db_session:
                 summary = purge_expired_documents(db_session)
-        except Exception:  # pragma: no cover - defensive logging
+                completed_at = datetime.now(timezone.utc).isoformat()
+                record_auto_purge_success(
+                    db_session,
+                    summary=summary,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    interval_seconds=self._interval,
+                )
+                db_session.commit()
+        except Exception as exc:  # pragma: no cover - defensive logging
             logger.exception("Automatic purge run failed")
+            self._record_failure_status(started_at, exc)
             return
 
         logger.info(
             "Automatic purge run completed",
             extra={"summary": asdict(summary)},
         )
+
+    def _record_failure_status(self, started_at: str, error: Exception) -> None:
+        try:
+            with self._session_factory() as db_session:
+                record_auto_purge_failure(
+                    db_session,
+                    started_at=started_at,
+                    completed_at=datetime.now(timezone.utc).isoformat(),
+                    interval_seconds=self._interval,
+                    error=str(error),
+                )
+                db_session.commit()
+        except Exception:  # pragma: no cover - defensive logging
+            logger.exception("Unable to persist automatic purge failure status")
 
 
 __all__ = ["AutoPurgeScheduler"]
