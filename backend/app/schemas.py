@@ -75,6 +75,33 @@ class DocumentDeleteRequest(BaseModel):
     ] | None = None
 
 
+class AuditEventResponse(BaseModel):
+    """API representation of an audit event."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    audit_event_id: str
+    event_type: str
+    entity_type: str
+    entity_id: str
+    occurred_at: str
+    actor_type: str | None = None
+    actor_id: str | None = None
+    actor_label: str | None = None
+    source: str | None = None
+    request_id: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class AuditEventListResponse(BaseModel):
+    """Paginated container for audit events."""
+
+    items: list[AuditEventResponse]
+    total: int
+    limit: int
+    offset: int
+
+
 class ConfigurationRevisionBase(BaseModel):
     """Shared fields for configuration revision payloads."""
 

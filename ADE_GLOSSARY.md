@@ -22,6 +22,7 @@ listed beside each term.
 - **Active configuration revision** – The single revision with `is_active = true` for a document type. API consumers use it by default when they do not supply an explicit `configuration_revision_id`.
 - **Profile** – Optional overrides for a source, customer, or locale stored in the configuration payload (`payload.profiles`).
 - **Job** – One execution of the processing engine against an input document using a specific configuration revision (`jobs.job_id`, `jobs.configuration_revision_number`, `jobs.status`, `jobs.created_by`, `jobs.metrics`, `jobs.logs`). Jobs stay mutable while `status` is `pending` or `running` and become immutable once marked `completed` or `failed`.
+- **Audit event** – Immutable record that captures what happened to an entity, who triggered it, and any structured context (`audit_events.audit_event_id`, `audit_events.event_type`, `audit_events.entity_type`, `audit_events.entity_id`, `audit_events.occurred_at`, `audit_events.actor_type`, `audit_events.actor_id`, `audit_events.actor_label`, `audit_events.source`, `audit_events.request_id`, `audit_events.payload`).
 
 ---
 
@@ -36,8 +37,8 @@ listed beside each term.
 - **Column** – Observed column with header text, samples, and metadata (`columns[].index`).
 - **Document expiration** – Timestamp describing when operators may purge the stored bytes (`documents.expires_at`). Defaults to 30 days after ingest and may be overridden per upload. Future retention metadata (legal hold flags, override provenance) will extend this section.
 - **Legal hold** – Boolean flag that blocks deletion until cleared (`documents.legal_hold`).
-- **Manual deletion markers** – Audit trail capturing intentional removal of stored bytes (`documents.deleted_at`,
-  `documents.deleted_by`, `documents.delete_reason`).
+- **Manual deletion markers** – Soft-delete columns plus the audit feed capturing intentional removal of stored bytes (`documents.deleted_at`,
+  `documents.deleted_by`, `documents.delete_reason`, corresponding `audit_events` rows with `event_type="document.deleted"`).
 - **Purge markers** – (Planned) lifecycle timestamps for automated deletions (`documents.purge_requested_at`,
   `documents.purged_at`, `documents.purged_by`).
 
@@ -71,7 +72,7 @@ ADE stores everything in SQLite (`var/ade.sqlite`). Tables expected on day one:
 - `users` – Accounts with roles and optional SSO subjects.
 - `api_keys` – Issued API keys linked to users.
 - `job_documents` – (Planned) join table linking jobs to the documents they consume or emit. Useful for future retention checks.
-- `document_deletion_events` – (Planned) audit trail for delete requests, purges, and legal hold transitions.
+- `audit_events` – Immutable history of ADE actions keyed by ULID with optional actor/source metadata and structured payloads.
 - `maintenance_status` – Keyed JSON payloads for background maintenance loops (e.g. `automatic_document_purge` stores the last
   automatic purge summary returned by `/health`).
 - **Max upload bytes** – Configurable request ceiling (default 25 MiB) enforced by `POST /documents`. Controlled via the
@@ -191,6 +192,29 @@ Back up the SQLite file alongside the `var/documents/` directory.
   "expires_at": "2025-10-17T18:42:00+00:00",
   "created_at": "2025-09-17T18:42:00+00:00",
   "updated_at": "2025-09-17T18:42:00+00:00"
+}
+```
+
+```jsonc
+// Audit event (document deleted)
+{
+  "audit_event_id": "01JABCXY45MNE678PQRS012TU3",
+  "event_type": "document.deleted",
+  "entity_type": "document",
+  "entity_id": "01J9G9YK4A1T0Z8P6K4W5Q2JM3",
+  "occurred_at": "2024-08-02T17:25:14.123456+00:00",
+  "actor_type": "user",
+  "actor_label": "ops@ade.local",
+  "source": "api",
+  "payload": {
+    "deleted_by": "ops@ade.local",
+    "delete_reason": "cleanup",
+    "byte_size": 542118,
+    "stored_uri": "bd/5c/...",
+    "sha256": "sha256:bd5c3d9a...",
+    "expires_at": "2025-10-17T18:42:00+00:00",
+    "missing_before_delete": false
+  }
 }
 ```
 

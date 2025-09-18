@@ -17,6 +17,7 @@ from .routes.configuration_revisions import (
 )
 from .routes.jobs import router as jobs_router
 from .routes.documents import router as documents_router
+from .routes.audit_events import router as audit_events_router
 
 
 @asynccontextmanager
@@ -49,6 +50,7 @@ app.include_router(health_router)
 app.include_router(configuration_revisions_router)
 app.include_router(jobs_router)
 app.include_router(documents_router)
+app.include_router(audit_events_router)
 
 
 __all__ = ["app"]
