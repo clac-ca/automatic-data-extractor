@@ -134,4 +134,22 @@ class Document(Base):
         )
 
 
-__all__ = ["ConfigurationRevision", "Job", "Document"]
+class MaintenanceStatus(Base):
+    """Keyed storage for maintenance metadata payloads."""
+
+    __tablename__ = "maintenance_status"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        MutableDict.as_mutable(JSON), default=dict, nullable=False
+    )
+    created_at: Mapped[str] = mapped_column(String(32), default=_timestamp, nullable=False)
+    updated_at: Mapped[str] = mapped_column(
+        String(32), default=_timestamp, onupdate=_timestamp, nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return f"MaintenanceStatus(key={self.key!r})"
+
+
+__all__ = ["ConfigurationRevision", "Job", "Document", "MaintenanceStatus"]
