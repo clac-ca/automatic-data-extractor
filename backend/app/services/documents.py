@@ -14,7 +14,7 @@ from __future__ import annotations
 import io
 import secrets
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
@@ -281,6 +281,7 @@ def delete_document(
     *,
     deleted_by: str,
     delete_reason: str | None = None,
+    commit: bool = True,
 ) -> Document:
     """Soft delete a document and remove the stored file when present."""
 
@@ -290,6 +291,7 @@ def delete_document(
     path = resolve_document_path(document, settings=settings)
     path.unlink(missing_ok=True)
 
+    mutated = False
     if document.deleted_at is None:
         now_iso = now.isoformat()
         document.deleted_at = now_iso
@@ -297,10 +299,14 @@ def delete_document(
         document.delete_reason = delete_reason
         document.updated_at = now_iso
         db.add(document)
+        mutated = True
+
+    if commit:
         db.commit()
-        db.refresh(document)
-    else:
-        db.commit()
+        if mutated:
+            db.refresh(document)
+    elif mutated:
+        db.flush()
 
     return document
 
@@ -322,6 +328,121 @@ def iter_document_file(
             yield chunk
 
 
+@dataclass(slots=True)
+class PurgedDocument:
+    """Details about a document considered during a purge run."""
+
+    document_id: str
+    stored_uri: str
+    expires_at: str
+    byte_size: int
+    missing_before_delete: bool
+
+
+@dataclass(slots=True)
+class ExpiredDocumentPurgeSummary:
+    """Aggregated outcome of a purge run."""
+
+    dry_run: bool
+    processed_count: int = 0
+    missing_files: int = 0
+    bytes_reclaimed: int = 0
+    documents: list[PurgedDocument] = field(default_factory=list)
+
+
+def iter_expired_documents(
+    db: Session,
+    *,
+    batch_size: int = 100,
+    limit: int | None = None,
+) -> Iterator[list[Document]]:
+    """Yield batches of expired, undeleted documents ordered by expiration."""
+
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    id_statement = (
+        select(Document.document_id)
+        .where(Document.deleted_at.is_(None), Document.expires_at <= now_iso)
+        .order_by(Document.expires_at.asc(), Document.document_id.asc())
+    )
+    if limit is not None:
+        if limit <= 0:
+            return
+        id_statement = id_statement.limit(limit)
+
+    document_ids = list(db.scalars(id_statement))
+    for start in range(0, len(document_ids), batch_size):
+        chunk_ids = document_ids[start : start + batch_size]
+        documents = db.scalars(
+            select(Document).where(Document.document_id.in_(chunk_ids))
+        ).all()
+        document_map = {document.document_id: document for document in documents}
+        batch = [document_map[doc_id] for doc_id in chunk_ids if doc_id in document_map]
+        if batch:
+            yield batch
+
+
+def purge_expired_documents(
+    db: Session,
+    *,
+    limit: int | None = None,
+    dry_run: bool = False,
+    batch_size: int = 100,
+    deleted_by: str = "maintenance:purge_expired_documents",
+    delete_reason: str = "expired_document_purge",
+) -> ExpiredDocumentPurgeSummary:
+    """Remove expired documents and mark their metadata."""
+
+    summary = ExpiredDocumentPurgeSummary(dry_run=dry_run)
+    settings = config.get_settings()
+
+    def _process(document: Document) -> None:
+        path = resolve_document_path(document, settings=settings)
+        missing_before_delete = not path.exists()
+        summary.processed_count += 1
+        if missing_before_delete:
+            summary.missing_files += 1
+        else:
+            summary.bytes_reclaimed += document.byte_size
+
+        summary.documents.append(
+            PurgedDocument(
+                document_id=document.document_id,
+                stored_uri=document.stored_uri,
+                expires_at=document.expires_at,
+                byte_size=document.byte_size,
+                missing_before_delete=missing_before_delete,
+            )
+        )
+
+        if dry_run:
+            return
+
+        delete_document(
+            db,
+            document.document_id,
+            deleted_by=deleted_by,
+            delete_reason=delete_reason,
+            commit=False,
+        )
+
+    iterator = iter_expired_documents(db, batch_size=batch_size, limit=limit)
+    if dry_run:
+        for batch in iterator:
+            for document in batch:
+                _process(document)
+        return summary
+
+    with db.begin():
+        for batch in iterator:
+            for document in batch:
+                _process(document)
+
+    return summary
+
+
 __all__ = [
     "DocumentNotFoundError",
     "DocumentTooLargeError",
@@ -332,4 +453,8 @@ __all__ = [
     "resolve_document_path",
     "delete_document",
     "iter_document_file",
+    "iter_expired_documents",
+    "purge_expired_documents",
+    "PurgedDocument",
+    "ExpiredDocumentPurgeSummary",
 ]

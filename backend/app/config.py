@@ -27,6 +27,19 @@ class Settings(BaseSettings):
         gt=0,
         description="Default number of days to keep uploaded documents before they expire",
     )
+    purge_schedule_enabled: bool = Field(
+        default=True,
+        description="Run the automatic purge loop inside the API service",
+    )
+    purge_schedule_run_on_startup: bool = Field(
+        default=True,
+        description="Execute a purge sweep immediately when the API starts",
+    )
+    purge_schedule_interval_seconds: int = Field(
+        default=3600,
+        ge=1,
+        description="Number of seconds to wait between automatic purge sweeps",
+    )
 
     @property
     def database_path(self) -> Path | None:

@@ -122,7 +122,7 @@ Jobs returned by the API and displayed in the UI always use the same JSON struct
 2. Every upload creates a fresh document record with its own storage path, even if the raw bytes match a prior submission.
 3. `GET /documents` lists records newest first, `GET /documents/{document_id}` returns metadata for a single file, `GET /documents/{document_id}/download` streams the stored bytes (with `Content-Disposition` set to the original filename), and `DELETE /documents/{document_id}` removes the bytes while recording who initiated the deletion.
 4. `POST /documents` enforces the configurable `max_upload_bytes` cap (defaults to 25 MiB). Payloads that exceed the limit return HTTP 413 with `{ "detail": {"error": "document_too_large", "max_upload_bytes": <bytes>, "received_bytes": <bytes>}}` so operators know the request failed before any data is persisted.
-5. Document retention and deletion workflows are defined in `docs/document_retention_and_deletion.md`. The API now records manual deletions; background purge automation remains on the roadmap.
+5. Document retention and deletion workflows are defined in `docs/document_retention_and_deletion.md`. The API records manual deletions, runs an automatic purge sweep on startup (and hourly by default), and still exposes a maintenance CLI (`python -m backend.app.maintenance.purge`) for manual runs.
 
 ---
 
@@ -162,7 +162,16 @@ naming payloads or configuration elements.
 - Back up ADE by copying both the SQLite file and the documents directory.
 - Environment variables override defaults; `.env` files hold secrets and stay gitignored. Set `ADE_MAX_UPLOAD_BYTES` (bytes) to raise or lower the upload cap. Keep the value conservative so operators can predict disk usage.
 - Document retention defaults to 30 days (`ADE_DEFAULT_DOCUMENT_RETENTION_DAYS`). Callers can override the expiry per upload via the `expires_at` form field on `POST /documents`.
+- The backend purges expired documents automatically inside the API process. Set `ADE_PURGE_SCHEDULE_ENABLED=false` to disable it, `ADE_PURGE_SCHEDULE_INTERVAL_SECONDS` (default `3600`) to control the sweep cadence, and `ADE_PURGE_SCHEDULE_RUN_ON_STARTUP=false` to skip the initial run when the service boots.
 - Logs stream to stdout. Keep an eye on `var/` size and long-running jobs.
+
+### Purging expired documents
+
+- The API checks for expired documents on startup and then every `ADE_PURGE_SCHEDULE_INTERVAL_SECONDS` seconds (default: 3600). Each run logs a structured summary with counts for processed files, missing paths, and reclaimed bytes.
+- Keep the automatic scheduler enabled for day-to-day operations. When troubleshooting or before rolling configuration changes, run `python -m backend.app.maintenance.purge` manually to see the same summary interactively.
+- `--dry-run` reports the documents that would be removed without touching the filesystem or database so you can alert on upcoming deletions before enabling destructive runs.
+- `--limit` caps how many documents are processed in a single invocation so operators can sweep large queues incrementally.
+- The command logs a structured summary (processed count, missing files, reclaimed bytes) and prints a human-readable report so cron jobs and humans see the same outcome.
 
 ---
 

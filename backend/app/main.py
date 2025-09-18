@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from . import config
 from .db import Base, get_engine
+from .maintenance import AutoPurgeScheduler
 from .routes.health import router as health_router
 from .routes.configuration_revisions import (
     router as configuration_revisions_router,
@@ -34,7 +35,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from . import models  # noqa: F401
 
     Base.metadata.create_all(bind=get_engine())
-    yield
+
+    scheduler = AutoPurgeScheduler()
+    await scheduler.start()
+    try:
+        yield
+    finally:
+        await scheduler.stop()
 
 
 app = FastAPI(title="Automatic Data Extractor", lifespan=lifespan)
