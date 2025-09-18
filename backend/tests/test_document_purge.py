@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import time
 
-from sqlalchemy import select
 
 from backend.app import config as config_module
 from backend.app import db as db_module
