@@ -171,7 +171,7 @@ def resolve_document_path(
     try:
         relative = stored_path.relative_to(settings.documents_dir)
     except ValueError:
-        return Path.cwd() / stored_path
+        return settings.documents_dir / stored_path
     return settings.documents_dir / relative
 
 
