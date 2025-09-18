@@ -109,25 +109,24 @@ def create_configuration(
 ) -> Configuration:
     """Persist and return a new configuration version."""
 
-    version = _next_version(db, document_type=document_type)
-    configuration = Configuration(
-        document_type=document_type,
-        title=title,
-        payload={} if payload is None else payload,
-        is_active=is_active,
-        activated_at=_utcnow_iso() if is_active else None,
-        version=version,
-    )
-    db.add(configuration)
-    db.flush()
-    if configuration.is_active:
-        _demote_other_active_configurations(
-            db,
-            document_type=configuration.document_type,
-            configuration_id=configuration.configuration_id,
+    payload_data: dict[str, Any] = {} if payload is None else payload
+
+    with db.begin():
+        configuration = Configuration(
+            document_type=document_type,
+            title=title,
+            payload=payload_data,
+            is_active=is_active,
+            activated_at=_utcnow_iso() if is_active else None,
+            version=_next_version(db, document_type=document_type),
         )
-    db.commit()
-    db.refresh(configuration)
+        db.add(configuration)
+        if configuration.is_active:
+            _demote_other_active_configurations(
+                db,
+                document_type=configuration.document_type,
+                configuration_id=configuration.configuration_id,
+            )
     return configuration
 
 
@@ -141,27 +140,26 @@ def update_configuration(
 ) -> Configuration:
     """Update and return the configuration with the given ID."""
 
-    configuration = get_configuration(db, configuration_id)
-    if title is not None:
-        configuration.title = title
-    if payload is not None:
-        configuration.payload = payload
-    if is_active is not None:
-        if is_active and not configuration.is_active:
-            configuration.is_active = True
-            configuration.activated_at = _utcnow_iso()
-            _demote_other_active_configurations(
-                db,
-                document_type=configuration.document_type,
-                configuration_id=configuration.configuration_id,
-            )
-        elif not is_active and configuration.is_active:
-            configuration.is_active = False
-            configuration.activated_at = None
+    with db.begin():
+        configuration = get_configuration(db, configuration_id)
+        if title is not None:
+            configuration.title = title
+        if payload is not None:
+            configuration.payload = payload
+        if is_active is not None:
+            if is_active and not configuration.is_active:
+                configuration.is_active = True
+                configuration.activated_at = _utcnow_iso()
+                _demote_other_active_configurations(
+                    db,
+                    document_type=configuration.document_type,
+                    configuration_id=configuration.configuration_id,
+                )
+            elif not is_active and configuration.is_active:
+                configuration.is_active = False
+                configuration.activated_at = None
 
-    db.add(configuration)
-    db.commit()
-    db.refresh(configuration)
+        db.add(configuration)
     return configuration
 
 
