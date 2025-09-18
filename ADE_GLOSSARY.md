@@ -64,6 +64,9 @@ ADE stores everything in SQLite (`var/ade.sqlite`). Tables expected on day one:
 - `jobs` – Job inputs, outputs, metrics, logs, and status tied to configuration revisions.
 - `users` – Accounts with roles and optional SSO subjects.
 - `api_keys` – Issued API keys linked to users.
+- **Max upload bytes** – Configurable request ceiling (default 25 MiB) enforced by `POST /documents`. Controlled via the
+  `ADE_MAX_UPLOAD_BYTES` environment variable; exceeding the limit returns HTTP 413 with `error=document_too_large` plus the
+  configured threshold in the response body.
 
 Back up the SQLite file alongside the `var/documents/` directory.
 

@@ -124,3 +124,40 @@ def test_download_missing_file_returns_404(app_client) -> None:
         response.json()["detail"]
         == f"Stored file for document '{payload['document_id']}' is missing"
     )
+
+
+def test_upload_document_within_custom_limit_succeeds(
+    tmp_path, app_client_factory, monkeypatch
+) -> None:
+    documents_dir = tmp_path / "documents"
+    db_path = tmp_path / "ade.sqlite"
+    monkeypatch.setenv("ADE_MAX_UPLOAD_BYTES", str(10))
+
+    with app_client_factory(f"sqlite:///{db_path}", documents_dir) as client:
+        payload = _upload_document(
+            client,
+            filename="tiny.bin",
+            data=b"x" * 10,
+            content_type="application/octet-stream",
+        )
+
+    assert payload["byte_size"] == 10
+
+
+def test_upload_document_over_limit_returns_413(
+    tmp_path, app_client_factory, monkeypatch
+) -> None:
+    documents_dir = tmp_path / "documents"
+    db_path = tmp_path / "ade.sqlite"
+    monkeypatch.setenv("ADE_MAX_UPLOAD_BYTES", str(10))
+
+    with app_client_factory(f"sqlite:///{db_path}", documents_dir) as client:
+        files = {"file": ("too-big.bin", io.BytesIO(b"y" * 11), "application/octet-stream")}
+        response = client.post("/documents", files=files)
+
+    assert response.status_code == 413
+    detail = response.json()["detail"]
+    assert detail["error"] == "document_too_large"
+    assert detail["max_upload_bytes"] == 10
+    assert detail["received_bytes"] >= 11
+    assert "Uploaded file is" in detail["message"]

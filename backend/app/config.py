@@ -17,6 +17,11 @@ class Settings(BaseSettings):
 
     database_url: str = Field(default="sqlite:///var/ade.sqlite", description="SQLAlchemy database URL")
     documents_dir: Path = Field(default=Path("var/documents"), description="Directory for uploaded documents")
+    max_upload_bytes: int = Field(
+        default=25 * 1024 * 1024,
+        gt=0,
+        description="Maximum accepted upload size for POST /documents",
+    )
 
     @property
     def database_path(self) -> Path | None:

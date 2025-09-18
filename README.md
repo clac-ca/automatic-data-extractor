@@ -41,13 +41,13 @@ Resides in `backend/app/` (Python 3.11, FastAPI, SQLAlchemy, Pydantic v2). It ow
 persistence helpers. Domain logic that manipulates data stays out of request handlers and in focused service modules. The
 initial foundation created here wires together:
 
-- `config.py` – centralised settings (`ADE_` environment variables, SQLite + documents defaults).
+- `config.py` – centralised settings (`ADE_` environment variables, SQLite + documents defaults, upload size cap).
 - `db.py` – SQLAlchemy engine/session helpers shared across routes and services.
 - `models.py` – the first domain models (`ConfigurationRevision`, `Job`, and `Document`) with ULID keys, JSON payload storage, and hashed document URIs.
 - `routes/health.py` – health check hitting the database and returning `{ "status": "ok" }`.
 - `routes/documents.py` – multipart uploads, metadata listings, and download streaming for stored documents.
 - `main.py` – FastAPI application setup, startup lifecycle, and router registration.
-- `services/documents.py` – hashed-path storage, deduplication on SHA-256, and filesystem lookups for uploads.
+- `services/documents.py` – hashed-path storage, deduplication on SHA-256, filesystem lookups for uploads, and size-limit enforcement.
 - `tests/` – pytest-based checks that assert the service boots and SQLite file creation works.
 
 ### Processor
@@ -121,7 +121,8 @@ Jobs returned by the API and displayed in the UI always use the same JSON struct
 1. `POST /documents` accepts a multipart upload (`file` field). The API streams the payload into `var/documents/<sha256-prefix>/...` and returns metadata including `document_id`, byte size, digest, and the canonical `stored_uri`.
 2. Uploading identical bytes returns the existing record and reuses the stored file. If the on-disk file has gone missing, the upload restores it before responding.
 3. `GET /documents` lists records newest first, `GET /documents/{document_id}` returns metadata for a single file, and `GET /documents/{document_id}/download` streams the stored bytes (with `Content-Disposition` set to the original filename).
-4. TODO: enforce an explicit request size limit so large uploads receive a clear 413 response. For now FastAPI's defaults stream uploads but do not cap request size.
+4. `POST /documents` enforces the configurable `max_upload_bytes` cap (defaults to 25 MiB). Payloads that exceed the limit return HTTP 413 with `{"detail": {"error": "document_too_large", "max_upload_bytes": <bytes>, "received_bytes": <bytes>}}` so operators know the request failed before any data is persisted.
+5. Follow-ups: document retention policies (how long to keep uploads) and deletion endpoints remain TODO so operations can manage storage proactively.
 
 ---
 
@@ -159,7 +160,7 @@ naming payloads or configuration elements.
 ## Operations
 - SQLite stores configuration revisions, jobs, users, sessions, API keys, and audit metadata. Payloads stay JSON until a strict configuration is required.
 - Back up ADE by copying both the SQLite file and the documents directory.
-- Environment variables override defaults; `.env` files hold secrets and stay gitignored.
+- Environment variables override defaults; `.env` files hold secrets and stay gitignored. Set `ADE_MAX_UPLOAD_BYTES` (bytes) to raise or lower the upload cap. Keep the value conservative so operators can predict disk usage.
 - Logs stream to stdout. Keep an eye on `var/` size and long-running jobs.
 
 ---

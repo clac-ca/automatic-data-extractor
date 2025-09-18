@@ -35,6 +35,31 @@ class DocumentNotFoundError(Exception):
         self.document_id = document_id
 
 
+class DocumentTooLargeError(Exception):
+    """Raised when an uploaded payload exceeds the configured limit."""
+
+    def __init__(self, *, limit: int, received: int) -> None:
+        self.limit = limit
+        self.received = received
+        message = (
+            f"Uploaded file is {_format_size(received)} ({received:,} bytes), "
+            f"exceeding the configured limit of {_format_size(limit)} ({limit:,} bytes)."
+        )
+        super().__init__(message)
+
+
+def _format_size(value: int) -> str:
+    units = ("bytes", "KiB", "MiB", "GiB", "TiB")
+    size = float(value)
+    for unit in units:
+        if size < 1024 or unit == units[-1]:
+            if unit == "bytes":
+                return f"{int(size):,} {unit}"
+            return f"{size:.2f} {unit}"
+        size /= 1024
+    return f"{int(size):,} bytes"
+
+
 def _normalise_filename(name: str | None) -> str:
     if name is None:
         return "upload"
@@ -63,19 +88,31 @@ def _rewind(stream: BinaryIO) -> None:
         pass
 
 
-def _hash_to_tempfile(stream: BinaryIO) -> tuple[str, int, Path]:
+def _hash_to_tempfile(
+    stream: BinaryIO, *, max_bytes: int | None = None
+) -> tuple[str, int, Path]:
     hasher = sha256()
     size = 0
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        while True:
-            chunk = stream.read(_CHUNK_SIZE)
-            if not chunk:
-                break
-            hasher.update(chunk)
-            tmp.write(chunk)
-            size += len(chunk)
-    digest = hasher.hexdigest()
-    return digest, size, Path(tmp.name)
+    tmp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+            while True:
+                chunk = stream.read(_CHUNK_SIZE)
+                if not chunk:
+                    break
+                hasher.update(chunk)
+                tmp.write(chunk)
+                size += len(chunk)
+                if max_bytes is not None and size > max_bytes:
+                    raise DocumentTooLargeError(limit=max_bytes, received=size)
+        digest = hasher.hexdigest()
+        assert tmp_path is not None  # for type-checkers
+        return digest, size, tmp_path
+    except Exception:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def _strip_hash_prefix(value: str) -> str:
@@ -116,12 +153,14 @@ def store_document(
     it is restored).
     """
 
+    settings = config.get_settings()
     stream = _as_stream(data)
     _rewind(stream)
 
-    digest, size, tmp_path = _hash_to_tempfile(stream)
+    digest, size, tmp_path = _hash_to_tempfile(
+        stream, max_bytes=settings.max_upload_bytes
+    )
     sha_value = f"{_HASH_PREFIX}{digest}"
-    settings = config.get_settings()
     relative_path = _storage_relative_path(digest)
     stored_uri = _storage_uri(digest)
     stored_path = _storage_path(settings.documents_dir, digest)
@@ -224,6 +263,7 @@ def iter_document_file(
 
 __all__ = [
     "DocumentNotFoundError",
+    "DocumentTooLargeError",
     "store_document",
     "list_documents",
     "get_document",

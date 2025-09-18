@@ -13,6 +13,7 @@ from ..models import Document
 from ..schemas import DocumentResponse
 from ..services.documents import (
     DocumentNotFoundError,
+    DocumentTooLargeError,
     get_document as get_document_service,
     iter_document_file,
     list_documents as list_documents_service,
@@ -48,6 +49,17 @@ async def upload_document(
             content_type=file.content_type,
             data=file.file,
         )
+    except DocumentTooLargeError as exc:
+        detail = {
+            "error": "document_too_large",
+            "message": str(exc),
+            "max_upload_bytes": exc.limit,
+            "received_bytes": exc.received,
+        }
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=detail,
+        ) from exc
     finally:
         await file.close()
     return _to_response(document)
