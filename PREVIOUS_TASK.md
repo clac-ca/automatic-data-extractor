@@ -1,34 +1,33 @@
-# Current Task — Document ingestion safeguards
+# Previous Task — Document retention and deletion plan
 
 ## Goal
-Add guardrails around document uploads so ADE rejects oversized files with clear errors and operators understand the retention
-expectations for stored documents.
+Design the retention policy and deletion workflow for stored documents so operators can manage disk usage beyond the upload
+size cap.
 
 ## Background
-- The `/documents` API now persists uploads, deduplicates on SHA-256, and restores missing files, but it accepts arbitrarily large
-  payloads.
-- Operations teams need a configurable size ceiling to prevent runaway disk usage and to deliver predictable failure modes.
-- Documentation already calls out the pending size-limit TODO; this task implements the limit and ensures the behaviour is tested
-  and well communicated.
+- Upload size enforcement now protects the system from runaway single requests, but documents accumulate indefinitely.
+- Operations teams have asked for guidance on how long to retain uploaded files and how to purge them when storage becomes
+  constrained.
+- Deletion flows must preserve auditability for jobs that referenced a document while allowing compliant removal of the
+  underlying file when permitted.
 
 ## Scope
-- Introduce a configurable `max_upload_bytes` setting on the backend (default to a conservative value such as 25 MiB) and expose
-  it via environment variables.
-- Enforce the size limit in `POST /documents` while streaming uploads. Return HTTP 413 with a descriptive error body when the
-  payload exceeds the configured cap.
-- Cover the new behaviour with pytest cases (success within the limit, rejection when the limit is exceeded, and override via
-  configuration).
-- Update README, ADE_GLOSSARY.md, and AGENTS.md with the new setting, operational guidance, and the error semantics.
-- Note any open follow-ups (e.g., retention policies or delete endpoints) that should be planned next.
+- Document the desired retention period(s) for uploaded documents, including any grace windows tied to job lifecycles.
+- Propose API surface and permissions for deleting a document (e.g., `DELETE /documents/{document_id}`) while keeping metadata
+  for audit trails.
+- Identify background cleanup tasks or scheduled jobs needed to enforce retention automatically.
+- Call out schema or storage changes required to track deletion state (timestamps, soft-delete markers, audit logs).
+- Enumerate risks and mitigations (e.g., deleting a document that still feeds a pending job, regulatory requirements for
+  retention).
 
 ## Deliverables
-1. Backend configuration updates with a documented `max_upload_bytes` setting.
-2. Service and route changes that reject oversized uploads with HTTP 413 while still deduplicating valid files.
-3. Automated tests verifying the limit, configuration overrides, and error payloads.
-4. Documentation updates describing the default cap, how to tune it, and the resulting API errors.
+1. Retention policy draft covering default duration, overrides, and operator responsibilities.
+2. Deletion workflow design (API contract, auth model, storage interactions, audit logging expectations).
+3. Implementation outline split into incremental engineering tasks ready for execution.
+4. Updated docs/notes pointing to the retention strategy so future work can begin immediately.
 
 ## Definition of done
-- `/documents` rejects files larger than the configured limit with HTTP 413 and a helpful error message.
-- Successful uploads under the cap continue to return canonical metadata and reuse stored files based on digest.
-- The new configuration is covered in tests and documentation, and README/AGENTS no longer describe the size limit as TODO.
-- `pytest -q` passes with the expanded document ingestion test suite.
+- Stakeholders have an agreed-upon retention approach documented in the repo.
+- The proposed deletion API covers validation, authorisation, and audit logging considerations.
+- Follow-up engineering tasks are enumerated with clear acceptance criteria.
+- Open questions or dependencies (e.g., legal review, storage metrics) are listed for tracking.

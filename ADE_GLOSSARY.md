@@ -34,6 +34,12 @@ listed beside each term.
 - **Row type** – Classification emitted by the header finder (`header`, `data`, `group_header`, `note`) (`rows[].row_type`).
 - **Header row** – Row index that names the columns (`tables[].header_row`).
 - **Column** – Observed column with header text, samples, and metadata (`columns[].index`).
+- **Retention metadata** – Fields that describe when bytes can be purged and why (`documents.retention_expires_at`,
+  `documents.retention_source`, `documents.retention_override_days`, `documents.last_job_reference_at`).
+- **Legal hold** – Boolean flag that blocks deletion until cleared (`documents.legal_hold`).
+- **Deletion markers** – Lifecycle timestamps that capture manual deletions and purges (`documents.deleted_at`,
+  `documents.deleted_by`, `documents.delete_reason`, `documents.purge_requested_at`, `documents.purged_at`,
+  `documents.purged_by`).
 
 ---
 
@@ -64,9 +70,13 @@ ADE stores everything in SQLite (`var/ade.sqlite`). Tables expected on day one:
 - `jobs` – Job inputs, outputs, metrics, logs, and status tied to configuration revisions.
 - `users` – Accounts with roles and optional SSO subjects.
 - `api_keys` – Issued API keys linked to users.
+- `job_documents` – (Planned) join table linking jobs to the documents they consume or emit. Useful for future retention checks.
+- `document_deletion_events` – (Planned) audit trail for delete requests, purges, and legal hold transitions.
 - **Max upload bytes** – Configurable request ceiling (default 25 MiB) enforced by `POST /documents`. Controlled via the
   `ADE_MAX_UPLOAD_BYTES` environment variable; exceeding the limit returns HTTP 413 with `error=document_too_large` plus the
   configured threshold in the response body.
+- **Document retention defaults** – Uploads expire after the configured window (`ADE_DEFAULT_DOCUMENT_RETENTION_DAYS`,
+  30 days by default). Callers may override a document's expiry during upload by setting the `expires_at` form field.
 
 Back up the SQLite file alongside the `var/documents/` directory.
 

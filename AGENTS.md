@@ -85,6 +85,9 @@ npm run typecheck  # Frontend type checks
   to uploaded files.
 - `/documents` enforces the `max_upload_bytes` cap (defaults to 25 MiB). Adjust it with `ADE_MAX_UPLOAD_BYTES`; the route
   returns HTTP 413 with `error=document_too_large` when callers exceed the limit.
+- Document retention defaults to 30 days (configurable via `ADE_DEFAULT_DOCUMENT_RETENTION_DAYS`). Callers may override the
+  expiry when uploading by providing `expires_at` to `POST /documents`. Review `docs/document_retention_and_deletion.md`
+  before changing the retention behaviour or building deletion tooling.
 - Redact or hash personal data before logging.
 - Enforce role-based access control on every endpoint. API keys inherit user scopes.
 

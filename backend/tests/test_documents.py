@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +46,10 @@ def test_upload_document_persists_file_and_metadata(app_client) -> None:
     assert stored_path.exists()
     assert stored_path.read_bytes() == b"PDF-DATA-123"
 
+    created_at = datetime.fromisoformat(payload["created_at"])
+    expires_at = datetime.fromisoformat(payload["expires_at"])
+    assert expires_at - created_at == timedelta(days=30)
+
     relative = stored_path.relative_to(documents_dir)
     digest = payload["sha256"].split(":", 1)[1]
     assert relative.parts[0] == digest[:2]
@@ -69,6 +74,55 @@ def test_duplicate_upload_reuses_existing_metadata(app_client) -> None:
     restored = _upload_document(client, filename="mar.xlsx", data=b"excel-bytes")
     assert restored["document_id"] == original["document_id"]
     assert _stored_path(documents_dir, restored).exists()
+
+
+def test_upload_document_accepts_manual_expiration(app_client) -> None:
+    client, _, _ = app_client
+    manual_expiration = (datetime.now(timezone.utc) + timedelta(days=5)).isoformat()
+
+    files = {"file": ("with-expiry.txt", io.BytesIO(b"data"), "text/plain")}
+    response = client.post(
+        "/documents",
+        files=files,
+        data={"expires_at": manual_expiration},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["expires_at"] == manual_expiration
+
+
+def test_upload_document_rejects_past_expiration(app_client) -> None:
+    client, _, _ = app_client
+    past_expiration = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+
+    files = {"file": ("expired.txt", io.BytesIO(b"content"), "text/plain")}
+    response = client.post(
+        "/documents",
+        files=files,
+        data={"expires_at": past_expiration},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["error"] == "invalid_expiration"
+    assert "future" in detail["message"]
+
+
+def test_upload_document_rejects_invalid_expiration_format(app_client) -> None:
+    client, _, _ = app_client
+
+    files = {"file": ("invalid.txt", io.BytesIO(b"content"), "text/plain")}
+    response = client.post(
+        "/documents",
+        files=files,
+        data={"expires_at": "not-a-date"},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["error"] == "invalid_expiration"
+    assert "ISO 8601" in detail["message"]
 
 
 def test_list_documents_returns_newest_first(app_client) -> None:
@@ -142,6 +196,26 @@ def test_upload_document_within_custom_limit_succeeds(
         )
 
     assert payload["byte_size"] == 10
+
+
+def test_upload_document_honours_configured_retention_days(
+    tmp_path, app_client_factory, monkeypatch
+) -> None:
+    documents_dir = tmp_path / "documents"
+    db_path = tmp_path / "ade.sqlite"
+    monkeypatch.setenv("ADE_DEFAULT_DOCUMENT_RETENTION_DAYS", "45")
+
+    with app_client_factory(f"sqlite:///{db_path}", documents_dir) as client:
+        payload = _upload_document(
+            client,
+            filename="configured.bin",
+            data=b"c",
+            content_type="application/octet-stream",
+        )
+
+    created_at = datetime.fromisoformat(payload["created_at"])
+    expires_at = datetime.fromisoformat(payload["expires_at"])
+    assert expires_at - created_at == timedelta(days=45)
 
 
 def test_upload_document_over_limit_returns_413(

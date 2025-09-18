@@ -24,6 +24,7 @@ from .jobs import (
 )
 from .documents import (
     DocumentNotFoundError,
+    InvalidDocumentExpirationError,
     store_document,
     list_documents,
     get_document,
@@ -51,6 +52,7 @@ __all__ = [
     "list_jobs",
     "update_job",
     "DocumentNotFoundError",
+    "InvalidDocumentExpirationError",
     "store_document",
     "list_documents",
     "get_document",
