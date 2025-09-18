@@ -15,13 +15,12 @@ listed beside each term.
 ---
 
 ## Core domain
-- **Document type** – Family of documents that share a configuration (`configuration_revisions.document_type`, `jobs.document_type`).
+- **Document type** – Family of documents that share a configuration (`configurations.document_type`, `jobs.document_type`).
 - **Document record** – Canonical metadata for an uploaded file (`documents.document_id`, `documents.original_filename`, `documents.content_type`, `documents.byte_size`, `documents.sha256`, `documents.stored_uri`, `documents.metadata`, `documents.expires_at`, `documents.deleted_at`, `documents.deleted_by`, `documents.delete_reason`).
-- **Configuration** – Executable detection, transformation, and metadata logic that defines how ADE processes a document type. Stored as JSON on each configuration revision (`configuration_revisions.payload`).
-- **Configuration revision** – Immutable record of configuration logic for a document type. Draft revisions can change; activating one freezes the payload (`configuration_revisions.configuration_revision_id` ULID, `configuration_revisions.revision_number`, `configuration_revisions.is_active`, `configuration_revisions.activated_at`).
-- **Active configuration revision** – The single revision with `is_active = true` for a document type. API consumers use it by default when they do not supply an explicit `configuration_revision_id`.
+- **Configuration** – Executable detection, transformation, and metadata logic that defines how ADE processes a document type. Each configuration row is immutable and stored as JSON (`configurations.configuration_id`, `configurations.version`, `configurations.is_active`, `configurations.activated_at`, `configurations.payload`).
+- **Active configuration** – The single configuration with `is_active = true` for a document type. API consumers use it by default when they do not supply an explicit `configuration_id`.
 - **Profile** – Optional overrides for a source, customer, or locale stored in the configuration payload (`payload.profiles`).
-- **Job** – One execution of the processing engine against an input document using a specific configuration revision (`jobs.job_id`, `jobs.configuration_revision_number`, `jobs.status`, `jobs.created_by`, `jobs.metrics`, `jobs.logs`). Jobs stay mutable while `status` is `pending` or `running` and become immutable once marked `completed` or `failed`.
+- **Job** – One execution of the processing engine against an input document using a specific configuration version (`jobs.job_id`, `jobs.configuration_version`, `jobs.status`, `jobs.created_by`, `jobs.metrics`, `jobs.logs`). Jobs stay mutable while `status` is `pending` or `running` and become immutable once marked `completed` or `failed`.
 - **Audit event** – Immutable record that captures what happened to an entity, who triggered it, and any structured context (`audit_events.audit_event_id`, `audit_events.event_type`, `audit_events.entity_type`, `audit_events.entity_id`, `audit_events.occurred_at`, `audit_events.actor_type`, `audit_events.actor_id`, `audit_events.actor_label`, `audit_events.source`, `audit_events.request_id`, `audit_events.payload`).
 
 ---
@@ -45,7 +44,7 @@ listed beside each term.
 ---
 
 ## Column logic
-- **Column catalogue** (`column_catalog`) – Allowed column type keys for a document type. Lives inside the revision payload.
+- **Column catalogue** (`column_catalog`) – Allowed column type keys for a document type. Lives inside the configuration payload.
 - **Column type** (`column_type`) – Canonical meaning such as `member_full_name` or `gross_amount`.
 - **Synonyms** (`synonyms`) – Header strings or regexes that hint at the column type.
 - **Detection logic** (`detection_logic`) – Pure Python callable (code + digest) returning a match decision or score.
@@ -66,9 +65,9 @@ listed beside each term.
 
 ## Storage foundation
 ADE stores everything in SQLite (`var/ade.sqlite`). Tables expected on day one:
-- `configuration_revisions` – Configuration metadata, JSON payloads, immutable history, and lifecycle state.
+- `configurations` – Configuration metadata, JSON payloads, immutable history, and lifecycle state.
 - `documents` – Uploaded file metadata, SHA-256 digests, and canonical storage URIs.
-- `jobs` – Job inputs, outputs, metrics, logs, and status tied to configuration revisions.
+- `jobs` – Job inputs, outputs, metrics, logs, and status tied to configurations.
 - `users` – Accounts with roles and optional SSO subjects.
 - `api_keys` – Issued API keys linked to users.
 - `job_documents` – (Planned) join table linking jobs to the documents they consume or emit. Useful for future retention checks.
@@ -102,12 +101,12 @@ Back up the SQLite file alongside the `var/documents/` directory.
 ```
 
 ```jsonc
-// Configuration revision payload (abbreviated)
+// Configuration payload (abbreviated)
 {
-    "configuration_revision": {
-    "configuration_revision_id": "rev_01J8PQ3RDX8K6PX0ZA5G2T3N4V",
+  "configuration": {
+    "configuration_id": "cfg_01J8PQ3RDX8K6PX0ZA5G2T3N4V",
     "document_type": "remittance",
-    "revision_number": 7,
+    "version": 7,
     "is_active": false,
     "title": "Remittance default configuration",
     "payload": {
@@ -140,7 +139,7 @@ Back up the SQLite file alongside the `var/documents/` directory.
 {
   "job_id": "job_2025_09_17_0001",
   "document_type": "Remittance PDF",
-  "configuration_revision": 3,
+  "configuration": 3,
 
   "status": "completed",
   "created_at": "2025-09-17T18:42:00Z",
@@ -221,9 +220,9 @@ Back up the SQLite file alongside the `var/documents/` directory.
 ---
 
 ## Working agreements
-- Configuration revisions flow draft → active → retired; activation only updates the live pointer.
-- Always compare configuration revisions before activating to understand behavioural changes.
-- Jobs include the `configuration_revision_id` so reruns remain deterministic.
+- Configurations flow draft → active → retired; activation only updates the live pointer.
+- Always compare configurations before activating to understand behavioural changes.
+- Jobs include the `configuration_id` so reruns remain deterministic.
 - Profiles stay inside the configuration payload to avoid hidden configuration drift.
 - Detection, transformation, validation, and header rules are pure functions (no I/O, deterministic results).
 - Flag `needs_review: true` when validation fails or confidence dips below the configured threshold.

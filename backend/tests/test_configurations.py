@@ -1,4 +1,4 @@
-"""Tests for the configuration revision API."""
+"""Tests for the configuration API."""
 
 from __future__ import annotations
 
@@ -10,21 +10,21 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.db import get_sessionmaker
-from backend.app.services.configuration_revisions import (
-    ActiveConfigurationRevisionNotFoundError,
-    ConfigurationRevisionMismatchError,
-    resolve_configuration_revision,
+from backend.app.services.configurations import (
+    ActiveConfigurationNotFoundError,
+    ConfigurationMismatchError,
+    resolve_configuration,
 )
 
 
-def _create_sample_configuration_revision(
+def _create_sample_configuration(
     client: TestClient,
     *,
     document_type: str = "invoice",
     title: str = "Q1 configuration",
     is_active: bool = False,
 ) -> dict[str, Any]:
-    """Create a configuration revision via the API and return the payload."""
+    """Create a configuration via the API and return the payload."""
 
     payload = {
         "document_type": document_type,
@@ -32,12 +32,12 @@ def _create_sample_configuration_revision(
         "payload": {"rows": []},
         "is_active": is_active,
     }
-    response = client.post("/configuration-revisions", json=payload)
+    response = client.post("/configurations", json=payload)
     assert response.status_code == 201
     return response.json()
 
 
-def test_create_configuration_revision_returns_persisted_revision(app_client) -> None:
+def test_create_configuration_returns_persisted_configuration(app_client) -> None:
     client, db_path, _ = app_client
 
     payload = {
@@ -47,7 +47,7 @@ def test_create_configuration_revision_returns_persisted_revision(app_client) ->
         "is_active": True,
     }
 
-    response = client.post("/configuration-revisions", json=payload)
+    response = client.post("/configurations", json=payload)
 
     assert response.status_code == 201
     data = response.json()
@@ -56,14 +56,14 @@ def test_create_configuration_revision_returns_persisted_revision(app_client) ->
     assert data["payload"] == payload["payload"]
     assert data["is_active"] is True
     datetime.fromisoformat(data["activated_at"])
-    assert len(data["configuration_revision_id"]) == 26
-    assert data["revision_number"] == 1
+    assert len(data["configuration_id"]) == 26
+    assert data["version"] == 1
     datetime.fromisoformat(data["created_at"])
     datetime.fromisoformat(data["updated_at"])
     assert db_path.exists()
 
 
-def test_create_configuration_revision_trims_strings(app_client) -> None:
+def test_create_configuration_trims_strings(app_client) -> None:
     client, _, _ = app_client
 
     payload = {
@@ -72,7 +72,7 @@ def test_create_configuration_revision_trims_strings(app_client) -> None:
         "payload": {},
     }
 
-    response = client.post("/configuration-revisions", json=payload)
+    response = client.post("/configurations", json=payload)
 
     assert response.status_code == 201
     data = response.json()
@@ -81,41 +81,41 @@ def test_create_configuration_revision_trims_strings(app_client) -> None:
     assert data["activated_at"] is None
 
 
-def test_list_configuration_revisions_orders_by_newest_first(app_client) -> None:
+def test_list_configurations_orders_by_newest_first(app_client) -> None:
     client, _, _ = app_client
 
-    first = _create_sample_configuration_revision(client, title="First")
-    second = _create_sample_configuration_revision(client, title="Second")
+    first = _create_sample_configuration(client, title="First")
+    second = _create_sample_configuration(client, title="Second")
 
-    response = client.get("/configuration-revisions")
+    response = client.get("/configurations")
 
     assert response.status_code == 200
     data = response.json()
     assert [item["title"] for item in data] == ["Second", "First"]
-    assert data[0]["configuration_revision_id"] == second["configuration_revision_id"]
-    assert data[1]["configuration_revision_id"] == first["configuration_revision_id"]
+    assert data[0]["configuration_id"] == second["configuration_id"]
+    assert data[1]["configuration_id"] == first["configuration_id"]
 
 
-def test_get_configuration_revision_returns_404_for_missing_resource(app_client) -> None:
+def test_get_configuration_returns_404_for_missing_resource(app_client) -> None:
     client, _, _ = app_client
 
-    response = client.get("/configuration-revisions/does-not-exist")
+    response = client.get("/configurations/does-not-exist")
 
     assert response.status_code == 404
     assert (
         response.json()["detail"]
-        == "Configuration revision 'does-not-exist' was not found"
+        == "Configuration 'does-not-exist' was not found"
     )
 
 
-def test_update_configuration_revision_mutates_fields(app_client) -> None:
+def test_update_configuration_mutates_fields(app_client) -> None:
     client, _, _ = app_client
 
-    created = _create_sample_configuration_revision(client)
-    configuration_revision_id = created["configuration_revision_id"]
+    created = _create_sample_configuration(client)
+    configuration_id = created["configuration_id"]
 
     response = client.patch(
-        f"/configuration-revisions/{configuration_revision_id}",
+        f"/configurations/{configuration_id}",
         json={"title": "Updated title", "is_active": True},
     )
 
@@ -128,28 +128,28 @@ def test_update_configuration_revision_mutates_fields(app_client) -> None:
     assert data["updated_at"] != created["updated_at"]
 
 
-def test_activating_revision_demotes_previous_revision(app_client) -> None:
+def test_activating_configuration_demotes_previous_version(app_client) -> None:
     client, _, _ = app_client
 
-    first = _create_sample_configuration_revision(
+    first = _create_sample_configuration(
         client, title="Draft 1", is_active=True
     )
-    second = _create_sample_configuration_revision(client, title="Draft 2")
+    second = _create_sample_configuration(client, title="Draft 2")
 
     publish_response = client.patch(
-        f"/configuration-revisions/{second['configuration_revision_id']}",
+        f"/configurations/{second['configuration_id']}",
         json={"is_active": True},
     )
 
     assert publish_response.status_code == 200
     assert (
-        publish_response.json()["configuration_revision_id"]
-        == second["configuration_revision_id"]
+        publish_response.json()["configuration_id"]
+        == second["configuration_id"]
     )
     assert publish_response.json()["is_active"] is True
 
     first_refresh = client.get(
-        f"/configuration-revisions/{first['configuration_revision_id']}"
+        f"/configurations/{first['configuration_id']}"
     )
     assert first_refresh.status_code == 200
     first_data = first_refresh.json()
@@ -157,13 +157,13 @@ def test_activating_revision_demotes_previous_revision(app_client) -> None:
     assert first_data["activated_at"] is None
 
 
-def test_deactivating_revision_clears_active_state(app_client) -> None:
+def test_deactivating_configuration_clears_active_state(app_client) -> None:
     client, _, _ = app_client
 
-    active = _create_sample_configuration_revision(client, is_active=True)
+    active = _create_sample_configuration(client, is_active=True)
 
     response = client.patch(
-        f"/configuration-revisions/{active['configuration_revision_id']}",
+        f"/configurations/{active['configuration_id']}",
         json={"is_active": False},
     )
 
@@ -173,18 +173,18 @@ def test_deactivating_revision_clears_active_state(app_client) -> None:
     assert data["activated_at"] is None
 
     lookup = client.get(
-        f"/configuration-revisions/active/{active['document_type']}"
+        f"/configurations/active/{active['document_type']}"
     )
     assert lookup.status_code == 404
 
 
-def test_update_configuration_revision_trims_title(app_client) -> None:
+def test_update_configuration_trims_title(app_client) -> None:
     client, _, _ = app_client
 
-    created = _create_sample_configuration_revision(client)
+    created = _create_sample_configuration(client)
 
     response = client.patch(
-        f"/configuration-revisions/{created['configuration_revision_id']}",
+        f"/configurations/{created['configuration_id']}",
         json={"title": "  Updated Title  "},
     )
 
@@ -192,13 +192,13 @@ def test_update_configuration_revision_trims_title(app_client) -> None:
     assert response.json()["title"] == "Updated Title"
 
 
-def test_update_configuration_revision_requires_payload_when_provided(app_client) -> None:
+def test_update_configuration_requires_payload_when_provided(app_client) -> None:
     client, _, _ = app_client
 
-    created = _create_sample_configuration_revision(client)
+    created = _create_sample_configuration(client)
 
     response = client.patch(
-        f"/configuration-revisions/{created['configuration_revision_id']}",
+        f"/configurations/{created['configuration_id']}",
         json={"payload": None},
     )
 
@@ -206,90 +206,90 @@ def test_update_configuration_revision_requires_payload_when_provided(app_client
 
 
 @pytest.mark.parametrize("body", [{}, {"title": "   "}])
-def test_update_configuration_revision_requires_non_empty_body(app_client, body) -> None:
+def test_update_configuration_requires_non_empty_body(app_client, body) -> None:
     client, _, _ = app_client
 
-    created = _create_sample_configuration_revision(client)
+    created = _create_sample_configuration(client)
 
     response = client.patch(
-        f"/configuration-revisions/{created['configuration_revision_id']}",
+        f"/configurations/{created['configuration_id']}",
         json=body,
     )
 
     assert response.status_code == 422
 
 
-def test_update_configuration_revision_rejects_null_is_active(app_client) -> None:
+def test_update_configuration_rejects_null_is_active(app_client) -> None:
     client, _, _ = app_client
 
-    created = _create_sample_configuration_revision(client)
+    created = _create_sample_configuration(client)
 
     response = client.patch(
-        f"/configuration-revisions/{created['configuration_revision_id']}",
+        f"/configurations/{created['configuration_id']}",
         json={"is_active": None},
     )
 
     assert response.status_code == 422
 
 
-def test_delete_configuration_revision_removes_record(app_client) -> None:
+def test_delete_configuration_removes_record(app_client) -> None:
     client, _, _ = app_client
 
-    created = _create_sample_configuration_revision(client)
+    created = _create_sample_configuration(client)
 
     delete_response = client.delete(
-        f"/configuration-revisions/{created['configuration_revision_id']}"
+        f"/configurations/{created['configuration_id']}"
     )
     assert delete_response.status_code == 204
 
     follow_up = client.get(
-        f"/configuration-revisions/{created['configuration_revision_id']}"
+        f"/configurations/{created['configuration_id']}"
     )
     assert follow_up.status_code == 404
 
 
-def test_get_active_configuration_revision_endpoint_returns_active_revision(
+def test_get_active_configuration_endpoint_returns_active_configuration(
     app_client,
 ) -> None:
     client, _, _ = app_client
 
-    _create_sample_configuration_revision(client, title="Draft copy")
-    active = _create_sample_configuration_revision(
+    _create_sample_configuration(client, title="Draft copy")
+    active = _create_sample_configuration(
         client, title="Active copy", is_active=True
     )
 
     response = client.get(
-        f"/configuration-revisions/active/  {active['document_type']}  "
+        f"/configurations/active/  {active['document_type']}  "
     )
 
     assert response.status_code == 200
     data = response.json()
-    assert data["configuration_revision_id"] == active["configuration_revision_id"]
+    assert data["configuration_id"] == active["configuration_id"]
     assert data["is_active"] is True
 
 
-def test_get_active_configuration_revision_endpoint_returns_404_when_missing(
+def test_get_active_configuration_endpoint_returns_404_when_missing(
     app_client,
 ) -> None:
     client, _, _ = app_client
 
-    _create_sample_configuration_revision(client, title="Draft only")
+    _create_sample_configuration(client, title="Draft only")
 
-    response = client.get("/configuration-revisions/active/invoice")
+    response = client.get("/configurations/active/invoice")
 
     assert response.status_code == 404
     assert (
         response.json()["detail"]
-        == "No active configuration revision found for 'invoice'"
+        == "No active configuration found for 'invoice'"
     )
 
 
-def test_get_active_configuration_revision_endpoint_rejects_blank_document_type(
+def test_get_active_configuration_endpoint_rejects_blank_document_type(
     app_client,
 ) -> None:
     client, _, _ = app_client
 
-    response = client.get("/configuration-revisions/active/   ")
+    response = client.get("/configurations/active/   ")
 
     assert response.status_code == 422
     detail = response.json()["detail"]
@@ -297,44 +297,44 @@ def test_get_active_configuration_revision_endpoint_rejects_blank_document_type(
     assert any(error.get("type") == "string_too_short" for error in detail)
 
 
-def test_configuration_revision_payload_assignment_persists(app_client) -> None:
+def test_configuration_payload_assignment_persists(app_client) -> None:
     client, _, _ = app_client
 
-    created = _create_sample_configuration_revision(client)
+    created = _create_sample_configuration(client)
 
-    from backend.app.models import ConfigurationRevision
+    from backend.app.models import Configuration
 
     session_factory = get_sessionmaker()
 
     with session_factory() as session:
-        revision = session.get(
-            ConfigurationRevision, created["configuration_revision_id"]
+        configuration = session.get(
+            Configuration, created["configuration_id"]
         )
-        assert revision is not None
-        updated_payload = dict(revision.payload)
-        updated_payload["metadata"] = {"revision": "1.0", "tags": ["initial"]}
-        revision.payload = updated_payload
+        assert configuration is not None
+        updated_payload = dict(configuration.payload)
+        updated_payload["metadata"] = {"version": "1.0", "tags": ["initial"]}
+        configuration.payload = updated_payload
         session.commit()
 
     response = client.get(
-        f"/configuration-revisions/{created['configuration_revision_id']}"
+        f"/configurations/{created['configuration_id']}"
     )
 
     assert response.status_code == 200
     data = response.json()
     assert data["payload"]["metadata"] == {
-        "revision": "1.0",
+        "version": "1.0",
         "tags": ["initial"],
     }
 
     with session_factory() as session:
-        revision = session.get(
-            ConfigurationRevision, created["configuration_revision_id"]
+        configuration = session.get(
+            Configuration, created["configuration_id"]
         )
-        assert revision is not None
-        updated_payload = dict(revision.payload)
+        assert configuration is not None
+        updated_payload = dict(configuration.payload)
         metadata = dict(updated_payload.get("metadata", {}))
-        metadata["revision"] = "2.0"
+        metadata["version"] = "2.0"
         tags = list(metadata.get("tags", []))
         tags.append("updated")
         metadata["tags"] = tags
@@ -342,114 +342,114 @@ def test_configuration_revision_payload_assignment_persists(app_client) -> None:
         notes.append({"author": "qa", "status": "reviewed"})
         updated_payload["metadata"] = metadata
         updated_payload["notes"] = notes
-        revision.payload = updated_payload
+        configuration.payload = updated_payload
         session.commit()
 
     response = client.get(
-        f"/configuration-revisions/{created['configuration_revision_id']}"
+        f"/configurations/{created['configuration_id']}"
     )
 
     assert response.status_code == 200
     data = response.json()
-    assert data["payload"]["metadata"]["revision"] == "2.0"
+    assert data["payload"]["metadata"]["version"] == "2.0"
     assert data["payload"]["metadata"]["tags"] == ["initial", "updated"]
     assert data["payload"]["notes"] == [{"author": "qa", "status": "reviewed"}]
 
 
-def test_resolve_configuration_revision_defaults_to_active(app_client) -> None:
+def test_resolve_configuration_defaults_to_active(app_client) -> None:
     client, _, _ = app_client
 
-    active = _create_sample_configuration_revision(client, is_active=True)
-    _create_sample_configuration_revision(client, title="Archived copy")
+    active = _create_sample_configuration(client, is_active=True)
+    _create_sample_configuration(client, title="Archived copy")
 
     session_factory = get_sessionmaker()
     with session_factory() as session:
-        resolved = resolve_configuration_revision(
+        resolved = resolve_configuration(
             session,
             document_type=active["document_type"],
-            configuration_revision_id=None,
+            configuration_id=None,
         )
 
-    assert resolved.configuration_revision_id == active["configuration_revision_id"]
+    assert resolved.configuration_id == active["configuration_id"]
 
 
-def test_resolve_configuration_revision_returns_requested_revision(app_client) -> None:
+def test_resolve_configuration_returns_requested_configuration(app_client) -> None:
     client, _, _ = app_client
 
-    active = _create_sample_configuration_revision(client, is_active=True)
-    draft = _create_sample_configuration_revision(client, title="Older revision")
+    active = _create_sample_configuration(client, is_active=True)
+    draft = _create_sample_configuration(client, title="Older version")
 
     session_factory = get_sessionmaker()
     with session_factory() as session:
-        resolved = resolve_configuration_revision(
+        resolved = resolve_configuration(
             session,
             document_type=active["document_type"],
-            configuration_revision_id=draft["configuration_revision_id"],
+            configuration_id=draft["configuration_id"],
         )
 
-    assert resolved.configuration_revision_id == draft["configuration_revision_id"]
+    assert resolved.configuration_id == draft["configuration_id"]
 
 
-def test_resolve_configuration_revision_raises_for_mismatched_configuration(
+def test_resolve_configuration_raises_for_mismatched_configuration(
     app_client,
 ) -> None:
     client, _, _ = app_client
 
-    revision = _create_sample_configuration_revision(
+    configuration = _create_sample_configuration(
         client, document_type="invoice", is_active=True
     )
 
     session_factory = get_sessionmaker()
     with session_factory() as session:
-        with pytest.raises(ConfigurationRevisionMismatchError) as excinfo:
-            resolve_configuration_revision(
+        with pytest.raises(ConfigurationMismatchError) as excinfo:
+            resolve_configuration(
                 session,
                 document_type="remittance",
-                configuration_revision_id=revision["configuration_revision_id"],
+                configuration_id=configuration["configuration_id"],
             )
 
     assert (
         str(excinfo.value)
-        == "Configuration revision "
-        f"'{revision['configuration_revision_id']}' belongs to document type 'invoice', not 'remittance'"
+        == "Configuration "
+        f"'{configuration['configuration_id']}' belongs to document type 'invoice', not 'remittance'"
     )
 
 
-def test_resolve_configuration_revision_requires_active_revision_when_missing_id(
+def test_resolve_configuration_requires_active_configuration_when_missing_id(
     app_client,
 ) -> None:
     client, _, _ = app_client
 
-    _create_sample_configuration_revision(client, is_active=False)
+    _create_sample_configuration(client, is_active=False)
 
     session_factory = get_sessionmaker()
     with session_factory() as session:
-        with pytest.raises(ActiveConfigurationRevisionNotFoundError) as excinfo:
-            resolve_configuration_revision(
+        with pytest.raises(ActiveConfigurationNotFoundError) as excinfo:
+            resolve_configuration(
                 session,
                 document_type="invoice",
-                configuration_revision_id=None,
+                configuration_id=None,
             )
 
     assert (
         str(excinfo.value)
-        == "No active configuration revision found for 'invoice'"
+        == "No active configuration found for 'invoice'"
     )
 
 
-def test_revision_number_increments_per_configuration(app_client) -> None:
+def test_version_increments_per_configuration(app_client) -> None:
     client, _, _ = app_client
 
-    first = _create_sample_configuration_revision(client)
-    second = _create_sample_configuration_revision(client)
+    first = _create_sample_configuration(client)
+    second = _create_sample_configuration(client)
 
-    assert first["revision_number"] == 1
-    assert second["revision_number"] == 2
+    assert first["version"] == 1
+    assert second["version"] == 2
 
-    other_configuration = _create_sample_configuration_revision(
+    other_configuration = _create_sample_configuration(
         client, document_type="remittance"
     )
-    assert other_configuration["revision_number"] == 1
+    assert other_configuration["version"] == 1
 
 
 def test_in_memory_sqlite_is_shared_across_threads(tmp_path, app_client_factory) -> None:
@@ -464,19 +464,19 @@ def test_in_memory_sqlite_is_shared_across_threads(tmp_path, app_client_factory)
             "payload": {"rows": [1, 2, 3]},
         }
 
-        create_response = client.post("/configuration-revisions", json=payload)
+        create_response = client.post("/configurations", json=payload)
 
         assert create_response.status_code == 201
 
         from sqlalchemy import select
 
-        from backend.app.models import ConfigurationRevision
+        from backend.app.models import Configuration
 
         session_factory = get_sessionmaker()
 
         def _fetch_titles() -> list[str]:
             with session_factory() as session:
-                return session.scalars(select(ConfigurationRevision.title)).all()
+                return session.scalars(select(Configuration.title)).all()
 
         # Main thread should observe the inserted record.
         assert _fetch_titles() == ["Memory configuration"]

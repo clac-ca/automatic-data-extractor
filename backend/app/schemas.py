@@ -102,8 +102,8 @@ class AuditEventListResponse(BaseModel):
     offset: int
 
 
-class ConfigurationRevisionBase(BaseModel):
-    """Shared fields for configuration revision payloads."""
+class ConfigurationBase(BaseModel):
+    """Shared fields for configuration payloads."""
 
     document_type: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
@@ -115,12 +115,12 @@ class ConfigurationRevisionBase(BaseModel):
     is_active: bool = False
 
 
-class ConfigurationRevisionCreate(ConfigurationRevisionBase):
-    """Payload for creating configuration revisions."""
+class ConfigurationCreate(ConfigurationBase):
+    """Payload for creating configurations."""
 
 
-class ConfigurationRevisionUpdate(BaseModel):
-    """Payload for updating configuration revisions."""
+class ConfigurationUpdate(BaseModel):
+    """Payload for updating configurations."""
 
     title: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
@@ -129,7 +129,7 @@ class ConfigurationRevisionUpdate(BaseModel):
     is_active: bool | None = None
 
     @model_validator(mode="after")
-    def _ensure_updates(self) -> "ConfigurationRevisionUpdate":
+    def _ensure_updates(self) -> "ConfigurationUpdate":
         if "payload" in self.model_fields_set and self.payload is None:
             msg = "payload cannot be null"
             raise ValueError(msg)
@@ -142,16 +142,16 @@ class ConfigurationRevisionUpdate(BaseModel):
         return self
 
 
-class ConfigurationRevisionResponse(BaseModel):
-    """API response model for configuration revision resources."""
+class ConfigurationResponse(BaseModel):
+    """API response model for configuration resources."""
 
     model_config = ConfigDict(from_attributes=True)
 
-    configuration_revision_id: str
+    configuration_id: str
     document_type: str
     title: str
     payload: dict[str, Any]
-    revision_number: int
+    version: int
     is_active: bool
     activated_at: str | None = None
     created_at: str
@@ -215,7 +215,7 @@ class JobCreate(BaseModel):
     ]
     input: JobInput
     status: JobStatus = "pending"
-    configuration_revision_id: Annotated[
+    configuration_id: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=26, max_length=26)
     ] | None = None
     outputs: dict[str, JobOutputReference] = Field(default_factory=dict)
@@ -258,7 +258,7 @@ class JobResponse(BaseModel):
 
     job_id: str
     document_type: str
-    configuration_revision: int = Field(validation_alias="configuration_revision_number")
+    configuration_version: int
     status: JobStatus
     created_at: str
     updated_at: str
@@ -271,9 +271,9 @@ class JobResponse(BaseModel):
 __all__ = [
     "HealthResponse",
     "DocumentResponse",
-    "ConfigurationRevisionCreate",
-    "ConfigurationRevisionUpdate",
-    "ConfigurationRevisionResponse",
+    "ConfigurationCreate",
+    "ConfigurationUpdate",
+    "ConfigurationResponse",
     "JobStatus",
     "JobInput",
     "JobOutputReference",

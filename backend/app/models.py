@@ -21,22 +21,20 @@ def _generate_ulid() -> str:
     return str(ulid.new())
 
 
-class ConfigurationRevision(Base):
-    """Configuration revision metadata and payloads."""
+class Configuration(Base):
+    """Configuration metadata and versioned payloads."""
 
-    __tablename__ = "configuration_revisions"
+    __tablename__ = "configurations"
     __table_args__ = (
-        UniqueConstraint(
-            "document_type", "revision_number", name="uq_configuration_revision_number"
-        ),
+        UniqueConstraint("document_type", "version", name="uq_configuration_version"),
     )
 
-    configuration_revision_id: Mapped[str] = mapped_column(
+    configuration_id: Mapped[str] = mapped_column(
         String(26), primary_key=True, default=_generate_ulid
     )
     document_type: Mapped[str] = mapped_column(String(100), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
-    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     activated_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # Persist arbitrary structured data. Callers should reassign ``payload``
@@ -51,10 +49,10 @@ class ConfigurationRevision(Base):
 
     def __repr__(self) -> str:
         return (
-            "ConfigurationRevision("
-            f"configuration_revision_id={self.configuration_revision_id!r}, "
+            "Configuration("
+            f"configuration_id={self.configuration_id!r}, "
             f"document_type={self.document_type!r}, "
-            f"revision_number={self.revision_number!r}"
+            f"version={self.version!r}"
             ")"
         )
 
@@ -66,8 +64,8 @@ class Job(Base):
 
     job_id: Mapped[str] = mapped_column(String(40), primary_key=True)
     document_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    configuration_revision_id: Mapped[str] = mapped_column(String(26), nullable=False)
-    configuration_revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    configuration_id: Mapped[str] = mapped_column(String(26), nullable=False)
+    configuration_version: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
     created_at: Mapped[str] = mapped_column(String(32), default=_timestamp, nullable=False)
     updated_at: Mapped[str] = mapped_column(
@@ -92,7 +90,7 @@ class Job(Base):
             "Job("
             f"job_id={self.job_id!r}, "
             f"document_type={self.document_type!r}, "
-            f"configuration_revision_number={self.configuration_revision_number!r}"
+            f"configuration_version={self.configuration_version!r}"
             ")"
         )
 
@@ -190,7 +188,7 @@ class MaintenanceStatus(Base):
 
 
 __all__ = [
-    "ConfigurationRevision",
+    "Configuration",
     "Job",
     "Document",
     "AuditEvent",
