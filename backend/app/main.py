@@ -11,7 +11,10 @@ from fastapi import FastAPI
 from . import config
 from .db import Base, get_engine
 from .routes.health import router as health_router
-from .routes.snapshots import router as snapshots_router
+from .routes.configuration_revisions import (
+    router as configuration_revisions_router,
+)
+from .routes.jobs import router as jobs_router
 
 
 @asynccontextmanager
@@ -35,7 +38,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Automatic Data Extractor", lifespan=lifespan)
 app.include_router(health_router)
-app.include_router(snapshots_router)
+app.include_router(configuration_revisions_router)
+app.include_router(jobs_router)
 
 
 __all__ = ["app"]
