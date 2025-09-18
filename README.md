@@ -205,19 +205,9 @@ naming payloads or configuration elements.
 - `--limit` caps how many documents are processed in a single invocation so operators can sweep large queues incrementally.
 - The command logs a structured summary (processed count, missing files, reclaimed bytes) and prints a human-readable report so cron jobs and humans see the same outcome.
 
----
+## Local development (Windows PowerShell, no Docker)
 
-Here’s a polished section you can drop into your **README.md** under development routines. It’s focused on **Windows (PowerShell)** and written in the same professional style as the rest of your docs:
-
----
-
-Looks solid. Here’s a tightened, dev-friendly version you can drop in. I kept the tone crisp, fixed small typos, and added tiny guardrails (prereqs + quick smoke test + common fixes).
-
----
-
-## Local testing (no Docker, Windows PowerShell)
-
-Run ADE locally for fast backend/UI iteration. Commands assume **Windows 10/11** with **PowerShell**.
+Run ADE locally for fast backend/UI iteration without Docker. Commands assume **Windows 10/11** with **PowerShell**.
 
 ### Prerequisites
 
