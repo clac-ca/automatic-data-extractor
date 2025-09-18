@@ -284,6 +284,19 @@ def test_get_active_configuration_revision_endpoint_returns_404_when_missing(
     )
 
 
+def test_get_active_configuration_revision_endpoint_rejects_blank_document_type(
+    app_client,
+) -> None:
+    client, _, _ = app_client
+
+    response = client.get("/configuration-revisions/active/   ")
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert isinstance(detail, list)
+    assert any(error.get("type") == "string_too_short" for error in detail)
+
+
 def test_configuration_revision_payload_assignment_persists(app_client) -> None:
     client, _, _ = app_client
 

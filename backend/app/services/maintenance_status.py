@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import MaintenanceStatus
@@ -21,14 +22,23 @@ def _upsert_payload(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     record = dict(payload)
     record["recorded_at"] = _now_iso()
 
-    status = db.get(MaintenanceStatus, _AUTO_PURGE_KEY)
-    if status is None:
-        status = MaintenanceStatus(key=_AUTO_PURGE_KEY)
-        db.add(status)
-    status.payload = record
+    last_error: IntegrityError | None = None
+    for attempt in range(3):
+        try:
+            with db.begin_nested():
+                status = db.get(MaintenanceStatus, _AUTO_PURGE_KEY)
+                if status is None:
+                    status = MaintenanceStatus(key=_AUTO_PURGE_KEY)
+                    db.add(status)
+                status.payload = record
+            return dict(status.payload)
+        except IntegrityError as exc:
+            last_error = exc
+            continue
 
-    db.flush()
-    return dict(status.payload)
+    if last_error is not None:  # pragma: no cover - defensive fallback
+        raise last_error
+    raise RuntimeError("Unable to persist maintenance status")  # pragma: no cover
 
 
 def record_auto_purge_success(
