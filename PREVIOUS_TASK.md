@@ -1,31 +1,28 @@
-# Previous Task — Configuration revision CRUD API
+# Previous Task — Configuration revisions and jobs
 
 ## Goal
-Expose CRUD operations for the configuration revision model so the frontend and CLI tools can create, browse, inspect, update,
-and delete configuration metadata through the FastAPI backend.
+Finish unifying ADE around the Configuration → Configuration Revision → Job vocabulary. Every API, database table, service helper, UI surface, and document should describe runs as jobs that execute the active configuration revision for a document type.
+
+## Background
+- Configuration revisions already store immutable detection, transformation, and metadata payloads per document type with revision sequencing and activation flags.
+- Legacy wording referenced checkpoints and snapshots even though jobs now represent the auditable execution record that captures inputs, outputs, metrics, and logs.
+- Job payloads must present a consistent JSON shape so downstream tooling, UI pages, and auditors receive the same structure everywhere.
 
 ## Scope
-- Implement database-layer helpers that wrap the new SQLAlchemy model (`ConfigurationRevision`) with deterministic logic (no
-  randomness or side-effects besides persistence).
-- Build a dedicated router under `backend/app/routes/configuration_revisions.py` that provides:
-  - `POST /configuration-revisions` – create a configuration revision record.
-  - `GET /configuration-revisions` – list configuration revisions ordered by `created_at` descending.
-  - `GET /configuration-revisions/{configuration_revision_id}` – fetch a single configuration revision by ULID.
-  - `PATCH /configuration-revisions/{configuration_revision_id}` – update mutable fields (`title`, `payload`, lifecycle flags).
-  - `DELETE /configuration-revisions/{configuration_revision_id}` – remove a configuration revision.
-- Define request/response schemas for the endpoints in `backend/app/schemas.py` (or a dedicated module if needed) ensuring all
-  timestamps remain ISO 8601 strings.
-- Return 404 errors when a configuration revision is not found and validate payload shapes using Pydantic models.
+- Align service helpers, FastAPI routes, and schema models so job creation, updates, and retrieval follow the standard JSON contract (IDs, timestamps, status, input/output metadata, metrics, logs).
+- Ensure configuration revision helpers, routes, and documentation speak in terms of `document_type` and `configuration_revision` instead of `configuration_name` or generic “versions.”
+- Replace lingering “checkpoint” or “snapshot” terminology in documentation, planning files, and comments with the Job language.
+- Keep glossary, README, and AGENTS aligned with the new naming so the terminology is unambiguous for future contributors.
 
 ## Deliverables
-1. Service-layer utilities (e.g., `backend/app/services/configuration_revisions.py`) encapsulating CRUD operations for reuse.
-2. Pydantic schemas representing configuration revision creation, updates, and responses.
-3. FastAPI router mounted in `main.py` exposing the endpoints listed above.
-4. Unit tests under `backend/tests/` covering happy paths and 404 handling for the new API.
-5. README/AGENTS updates are not required unless the architecture meaningfully changes.
+1. Service-layer utilities that enforce the single active configuration revision per document type, resolve revisions correctly, and produce sequential job identifiers.
+2. FastAPI routers mounted at `/configuration-revisions` and `/jobs` exposing the normalized payloads described in the glossary.
+3. Pytest coverage that proves revision sequencing, activation behaviour, job lifecycle updates, and immutable completed jobs.
+4. Documentation updates (README, ADE_GLOSSARY.md, AGENTS.md, configuration revision lifecycle doc, planning files) that consistently use Configuration / Configuration Revision / Job terminology and include the canonical job JSON example.
 
 ## Definition of done
-- `uvicorn backend.app.main:app --reload` continues to boot successfully, creating the SQLite database when missing.
-- The configuration revision endpoints perform the expected CRUD operations against SQLite using deterministic logic.
-- Tests introduced for this slice pass locally (`pytest -q`).
-- Code and docs are committed with a clean working tree.
+- `uvicorn backend.app.main:app --reload` boots, creating `configuration_revisions` and `jobs` tables in SQLite with the expected columns.
+- Creating a job without specifying a revision binds to the active configuration revision for that document type, and job identifiers follow the `job_YYYY_MM_DD_####` format.
+- Updating a job after it finishes returns HTTP 409 and leaves persisted output/metric/log records intact.
+- `pytest -q` passes with the updated configuration revision and job tests.
+- Glossary, README, AGENTS, and other docs refer to configurations, configuration revisions, active revisions, and jobs instead of schemas, specs, rule sets, snapshots, or checkpoints.

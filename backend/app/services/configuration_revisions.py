@@ -1,4 +1,10 @@
-"""Configuration revision service helpers."""
+"""Configuration revision orchestration helpers.
+
+This module centralises the sequencing and activation semantics for
+configuration revisions. Service functions enforce the single-active
+revision rule per ``document_type`` and provide resolution utilities that
+other layers (such as job creation) rely on for deterministic behaviour.
+"""
 
 from __future__ import annotations
 
