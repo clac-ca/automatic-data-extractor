@@ -33,7 +33,7 @@ def list_audit_events(
     occurred_after: datetime | None = Query(None),
     occurred_before: datetime | None = Query(None),
 ) -> AuditEventListResponse:
-    if (entity_type is None) ^ (entity_id is None):
+    if (entity_type is None) != (entity_id is None):
         detail = "entity_type and entity_id must be provided together"
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
