@@ -37,6 +37,9 @@ class DocumentResponse(BaseModel):
     expires_at: str
     created_at: str
     updated_at: str
+    deleted_at: str | None = None
+    deleted_by: str | None = None
+    delete_reason: str | None = None
 
     @field_serializer("stored_uri")
     def _serialise_stored_uri(self, stored_uri: str) -> str:
@@ -54,6 +57,17 @@ class DocumentResponse(BaseModel):
             parts.append(second)
         parts.append(digest)
         return "/".join(parts)
+
+
+class DocumentDeleteRequest(BaseModel):
+    """Payload for manually deleting a stored document."""
+
+    deleted_by: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
+    ]
+    delete_reason: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1024)
+    ] | None = None
 
 
 class ConfigurationRevisionBase(BaseModel):

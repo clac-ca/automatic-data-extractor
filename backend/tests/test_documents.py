@@ -26,6 +26,19 @@ def _stored_path(documents_dir: Path, payload: dict[str, Any]) -> Path:
     return documents_dir / path
 
 
+def _delete_document(
+    client,
+    document_id: str,
+    *,
+    deleted_by: str,
+    delete_reason: str | None = None,
+):
+    payload = {"deleted_by": deleted_by}
+    if delete_reason is not None:
+        payload["delete_reason"] = delete_reason
+    return client.request("DELETE", f"/documents/{document_id}", json=payload)
+
+
 def test_upload_document_persists_file_and_metadata(app_client) -> None:
     client, _, documents_dir = app_client
     payload = _upload_document(
@@ -272,3 +285,113 @@ def test_upload_document_over_limit_returns_413(
     assert detail["max_upload_bytes"] == 10
     assert detail["received_bytes"] >= 11
     assert "Uploaded file is" in detail["message"]
+
+
+def test_delete_document_removes_file_and_marks_metadata(app_client) -> None:
+    client, _, documents_dir = app_client
+    payload = _upload_document(
+        client,
+        filename="to-delete.pdf",
+        data=b"binary-data",
+        content_type="application/pdf",
+    )
+
+    stored_path = _stored_path(documents_dir, payload)
+    assert stored_path.exists()
+
+    response = _delete_document(
+        client,
+        payload["document_id"],
+        deleted_by="ops@ade.local",
+        delete_reason="cleanup",
+    )
+
+    assert response.status_code == 200
+    deleted = response.json()
+    assert deleted["deleted_by"] == "ops@ade.local"
+    assert deleted["delete_reason"] == "cleanup"
+    deleted_at = datetime.fromisoformat(deleted["deleted_at"])
+    assert deleted_at.tzinfo is not None
+    assert not stored_path.exists()
+
+    list_response = client.get("/documents")
+    assert list_response.status_code == 200
+    assert all(
+        item["document_id"] != payload["document_id"]
+        for item in list_response.json()
+    )
+
+
+def test_delete_document_is_idempotent(app_client) -> None:
+    client, _, documents_dir = app_client
+    payload = _upload_document(
+        client,
+        filename="idempotent.pdf",
+        data=b"repeat",
+        content_type="application/pdf",
+    )
+
+    first_response = _delete_document(
+        client,
+        payload["document_id"],
+        deleted_by="ops",
+        delete_reason="initial pass",
+    )
+    assert first_response.status_code == 200
+    deleted_first = first_response.json()
+    deleted_at = deleted_first["deleted_at"]
+    assert not _stored_path(documents_dir, payload).exists()
+
+    second_response = _delete_document(
+        client,
+        payload["document_id"],
+        deleted_by="ops",
+        delete_reason="second pass",
+    )
+    assert second_response.status_code == 200
+    deleted_second = second_response.json()
+    assert deleted_second["deleted_at"] == deleted_at
+    assert deleted_second["deleted_by"] == "ops"
+    assert deleted_second["delete_reason"] == "initial pass"
+
+
+def test_delete_missing_document_returns_404(app_client) -> None:
+    client, _, _ = app_client
+
+    response = _delete_document(
+        client,
+        "doc_missing",
+        deleted_by="ops",
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Document 'doc_missing' was not found"
+
+
+def test_upload_after_delete_creates_new_record(app_client) -> None:
+    client, _, documents_dir = app_client
+    original = _upload_document(
+        client,
+        filename="cycle.pdf",
+        data=b"cycle-bytes",
+        content_type="application/pdf",
+    )
+
+    response = _delete_document(
+        client,
+        original["document_id"],
+        deleted_by="ops",
+        delete_reason="rotation",
+    )
+    assert response.status_code == 200
+
+    replacement = _upload_document(
+        client,
+        filename="cycle.pdf",
+        data=b"cycle-bytes",
+        content_type="application/pdf",
+    )
+
+    assert replacement["document_id"] != original["document_id"]
+    new_path = _stored_path(documents_dir, replacement)
+    assert new_path.exists()
