@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import ulid
-from sqlalchemy import Boolean, Integer, JSON, String, UniqueConstraint
+from sqlalchemy import Boolean, Integer, JSON, String, UniqueConstraint, Index
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -134,6 +134,43 @@ class Document(Base):
         )
 
 
+class AuditEvent(Base):
+    """Immutable record of actions performed against ADE entities."""
+
+    __tablename__ = "audit_events"
+
+    audit_event_id: Mapped[str] = mapped_column(
+        String(26), primary_key=True, default=_generate_ulid
+    )
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    occurred_at: Mapped[str] = mapped_column(String(32), default=_timestamp, nullable=False)
+    actor_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    actor_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    actor_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        MutableDict.as_mutable(JSON), default=dict, nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_audit_events_entity", "entity_type", "entity_id"),
+        Index("ix_audit_events_event_type", "event_type"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            "AuditEvent("
+            f"audit_event_id={self.audit_event_id!r}, "
+            f"event_type={self.event_type!r}, "
+            f"entity_type={self.entity_type!r}, "
+            f"entity_id={self.entity_id!r}"
+            ")"
+        )
+
+
 class MaintenanceStatus(Base):
     """Keyed storage for maintenance metadata payloads."""
 
@@ -152,4 +189,10 @@ class MaintenanceStatus(Base):
         return f"MaintenanceStatus(key={self.key!r})"
 
 
-__all__ = ["ConfigurationRevision", "Job", "Document", "MaintenanceStatus"]
+__all__ = [
+    "ConfigurationRevision",
+    "Job",
+    "Document",
+    "AuditEvent",
+    "MaintenanceStatus",
+]

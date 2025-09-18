@@ -11,7 +11,9 @@ import time
 from backend.app import config as config_module
 from backend.app import db as db_module
 from backend.app.db import Base, get_engine, get_sessionmaker
-from backend.app.models import Document
+from backend.app.models import AuditEvent, Document
+from sqlalchemy import select
+
 from backend.app.services.documents import (
     ExpiredDocumentPurgeSummary,
     iter_expired_documents,
@@ -158,6 +160,24 @@ def test_purge_expired_documents_deletes_files(app_client) -> None:
         recent_row = verify_session.get(Document, expired_recent.document.document_id)
         assert recent_row is not None
         assert recent_row.deleted_at is not None
+
+        events = verify_session.scalars(
+            select(AuditEvent).where(
+                AuditEvent.event_type == "document.deleted",
+                AuditEvent.entity_id.in_(
+                    [
+                        expired_old.document.document_id,
+                        expired_recent.document.document_id,
+                    ]
+                ),
+            )
+        ).all()
+        assert len(events) == 2
+        assert all(event.source == "scheduler" for event in events)
+        assert all(
+            event.actor_label == "maintenance:purge_expired_documents" for event in events
+        )
+        assert all(event.payload["delete_reason"] == "expired_document_purge" for event in events)
 
         remaining = verify_session.scalars(
             select(Document).where(Document.deleted_at.is_(None))
