@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 from pydantic.types import StringConstraints
 from sqlalchemy.orm import Session
 
@@ -101,7 +101,20 @@ def get_active_configuration_revision_endpoint(
 ) -> ConfigurationRevisionResponse:
     """Return the active revision for the given configuration."""
 
-    normalized_name = _document_type_adapter.validate_python(document_type)
+    try:
+        normalized_name = _document_type_adapter.validate_python(document_type)
+    except ValidationError as exc:
+        detail = [
+            {
+                **error,
+                "loc": ["path", "document_type", *error.get("loc", ())],
+            }
+            for error in exc.errors()
+        ]
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=detail,
+        ) from exc
     try:
         revision = get_active_configuration_revision(db, normalized_name)
     except ActiveConfigurationRevisionNotFoundError as exc:
