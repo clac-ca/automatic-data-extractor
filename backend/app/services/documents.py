@@ -14,6 +14,7 @@ from __future__ import annotations
 import io
 import secrets
 from collections.abc import Iterator
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
@@ -84,18 +85,16 @@ def _normalise_content_type(content_type: str | None) -> str | None:
     return stripped or None
 
 
-def _as_stream(data: bytes | BinaryIO) -> BinaryIO:
-    if isinstance(data, (bytes, bytearray)):
-        return io.BytesIO(data)
-    return data
+def _prepare_stream(data: bytes | BinaryIO) -> BinaryIO:
+    """Return a binary stream positioned at the start of the payload."""
 
-
-def _rewind(stream: BinaryIO) -> None:
+    stream = io.BytesIO(data) if isinstance(data, (bytes, bytearray)) else data
     try:
         if hasattr(stream, "seek") and stream.seekable():
             stream.seek(0)
     except Exception:  # pragma: no cover - defensive fallback
         pass
+    return stream
 
 
 def _generate_storage_token() -> str:
@@ -106,22 +105,42 @@ def _relative_storage_path(token: str) -> Path:
     return Path(token[:2]) / token[2:4] / token
 
 
-def _reserve_storage_path(documents_dir: Path) -> tuple[Path, Path]:
+@dataclass(frozen=True)
+class _StorageAllocation:
+    """Allocated location for a document on disk."""
+
+    relative_path: Path
+    disk_path: Path
+
+    @property
+    def uri(self) -> str:
+        return self.relative_path.as_posix()
+
+
+def _allocate_storage_path(documents_dir: Path) -> _StorageAllocation:
     for _ in range(_MAX_STORAGE_KEY_ATTEMPTS):
         token = _generate_storage_token()
         relative = _relative_storage_path(token)
-        candidate = documents_dir / relative
-        if not candidate.exists():
-            return relative, candidate
+        disk_path = documents_dir / relative
+        if not disk_path.exists():
+            return _StorageAllocation(relative, disk_path)
     raise RuntimeError("Unable to allocate unique storage path")
 
 
-def _write_stream_to_path(
+@dataclass(frozen=True)
+class _PersistedStream:
+    """Details about a stream that has been written to disk."""
+
+    digest: str
+    size: int
+
+
+def _persist_stream(
     stream: BinaryIO,
     destination: Path,
     *,
     max_bytes: int | None = None,
-) -> tuple[str, int]:
+) -> _PersistedStream:
     size = 0
     hasher = sha256()
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -133,6 +152,8 @@ def _write_stream_to_path(
                     break
                 prospective_size = size + len(chunk)
                 if max_bytes is not None and prospective_size > max_bytes:
+                    # Validate the limit before touching the filesystem so we
+                    # never leave a partially written payload behind.
                     raise DocumentTooLargeError(
                         limit=max_bytes, received=prospective_size
                     )
@@ -142,8 +163,7 @@ def _write_stream_to_path(
     except Exception:
         destination.unlink(missing_ok=True)
         raise
-    digest = hasher.hexdigest()
-    return digest, size
+    return _PersistedStream(digest=hasher.hexdigest(), size=size)
 
 
 def _resolve_expiration(
@@ -191,15 +211,14 @@ def store_document(
     """
 
     settings = config.get_settings()
-    stream = _as_stream(data)
-    _rewind(stream)
+    stream = _prepare_stream(data)
 
-    relative_path, stored_path = _reserve_storage_path(settings.documents_dir)
-    digest, size = _write_stream_to_path(
-        stream, stored_path, max_bytes=settings.max_upload_bytes
+    allocation = _allocate_storage_path(settings.documents_dir)
+    persisted = _persist_stream(
+        stream, allocation.disk_path, max_bytes=settings.max_upload_bytes
     )
-    sha_value = f"{_HASH_PREFIX}{digest}"
-    stored_uri = relative_path.as_posix()
+    sha_value = f"{_HASH_PREFIX}{persisted.digest}"
+    stored_uri = allocation.uri
 
     now = datetime.now(timezone.utc)
     expiration = _resolve_expiration(
@@ -212,7 +231,7 @@ def store_document(
     document = Document(
         original_filename=_normalise_filename(original_filename),
         content_type=_normalise_content_type(content_type),
-        byte_size=size,
+        byte_size=persisted.size,
         sha256=sha_value,
         stored_uri=stored_uri,
         metadata_={},
