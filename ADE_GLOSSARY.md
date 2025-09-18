@@ -16,6 +16,7 @@ listed beside each term.
 
 ## Core domain
 - **Document type** – Family of documents that share a configuration (`configuration_revisions.document_type`, `jobs.document_type`).
+- **Document record** – Canonical metadata for an uploaded file (`documents.document_id`, `documents.original_filename`, `documents.content_type`, `documents.byte_size`, `documents.sha256`, `documents.stored_uri`, `documents.metadata`).
 - **Configuration** – Executable detection, transformation, and metadata logic that defines how ADE processes a document type. Stored as JSON on each configuration revision (`configuration_revisions.payload`).
 - **Configuration revision** – Immutable record of configuration logic for a document type. Draft revisions can change; activating one freezes the payload (`configuration_revisions.configuration_revision_id` ULID, `configuration_revisions.revision_number`, `configuration_revisions.is_active`, `configuration_revisions.activated_at`).
 - **Active configuration revision** – The single revision with `is_active = true` for a document type. API consumers use it by default when they do not supply an explicit `configuration_revision_id`.
@@ -25,8 +26,9 @@ listed beside each term.
 ---
 
 ## Document anatomy
-- **Document** – Path or upload ID for the file being processed (XLSX, CSV, PDF, etc.). Files live in `var/documents/`
-  (`manifests.document`).
+- **Document** – Canonical upload tracked by ADE. The API exposes its metadata via `/documents` (`documents.document_id`, `documents.stored_uri`). Files live in `var/documents/`.
+- **Stored URI** – Canonical path that jobs reference when describing inputs (`documents.stored_uri`). Uses a hashed directory structure such as `var/documents/ab/cd/<digest>`.
+- **Document hash** – SHA-256 digest used for deduplication (`documents.sha256`). Prefixed with `sha256:` in responses.
 - **Page** – Worksheet or PDF page captured in a manifest (`pages[].index`).
 - **Table** – Contiguous rows and columns with a single header row (`tables[].index`).
 - **Row type** – Classification emitted by the header finder (`header`, `data`, `group_header`, `note`) (`rows[].row_type`).
@@ -58,6 +60,7 @@ listed beside each term.
 ## Storage foundation
 ADE stores everything in SQLite (`var/ade.sqlite`). Tables expected on day one:
 - `configuration_revisions` – Configuration metadata, JSON payloads, immutable history, and lifecycle state.
+- `documents` – Uploaded file metadata, SHA-256 digests, and canonical storage URIs.
 - `jobs` – Job inputs, outputs, metrics, logs, and status tied to configuration revisions.
 - `users` – Accounts with roles and optional SSO subjects.
 - `api_keys` – Issued API keys linked to users.
@@ -142,6 +145,21 @@ Back up the SQLite file alongside the `var/documents/` directory.
     { "ts": "2025-09-17T18:44:59Z", "level": "info", "message": "125 rows processed" },
     { "ts": "2025-09-17T18:45:11Z", "level": "info", "message": "Job completed successfully" }
   ]
+}
+```
+
+```jsonc
+// Document response (abbreviated)
+{
+  "document_id": "01J9G9YK4A1T0Z8P6K4W5Q2JM3",
+  "original_filename": "remittance.pdf",
+  "content_type": "application/pdf",
+  "byte_size": 542118,
+  "sha256": "sha256:bd5c3d9a6c5fe0d4f4a2c1b8e0f9db03a1376c64f071c7f1f0c7c6b8f019ab12",
+  "stored_uri": "var/documents/bd/5c/bd5c3d9a6c5fe0d4f4a2c1b8e0f9db03a1376c64f071c7f1f0c7c6b8f019ab12",
+  "metadata": {},
+  "created_at": "2025-09-17T18:42:00Z",
+  "updated_at": "2025-09-17T18:42:00Z"
 }
 ```
 

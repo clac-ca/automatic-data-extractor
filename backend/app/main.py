@@ -15,6 +15,7 @@ from .routes.configuration_revisions import (
     router as configuration_revisions_router,
 )
 from .routes.jobs import router as jobs_router
+from .routes.documents import router as documents_router
 
 
 @asynccontextmanager
@@ -40,6 +41,7 @@ app = FastAPI(title="Automatic Data Extractor", lifespan=lifespan)
 app.include_router(health_router)
 app.include_router(configuration_revisions_router)
 app.include_router(jobs_router)
+app.include_router(documents_router)
 
 
 __all__ = ["app"]

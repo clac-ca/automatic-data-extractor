@@ -22,6 +22,14 @@ from .jobs import (
     list_jobs,
     update_job,
 )
+from .documents import (
+    DocumentNotFoundError,
+    store_document,
+    list_documents,
+    get_document,
+    resolve_document_path,
+    iter_document_file,
+)
 
 __all__ = [
     "ActiveConfigurationRevisionNotFoundError",
@@ -42,4 +50,10 @@ __all__ = [
     "get_job",
     "list_jobs",
     "update_job",
+    "DocumentNotFoundError",
+    "store_document",
+    "list_documents",
+    "get_document",
+    "resolve_document_path",
+    "iter_document_file",
 ]

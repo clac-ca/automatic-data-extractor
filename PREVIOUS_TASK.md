@@ -1,28 +1,37 @@
-# Previous Task — Configuration revisions and jobs
+# Previous Task — Document ingestion API
 
 ## Goal
-Finish unifying ADE around the Configuration → Configuration Revision → Job vocabulary. Every API, database table, service helper, UI surface, and document should describe runs as jobs that execute the active configuration revision for a document type.
+Stand up the first-party document ingestion workflow so every job input is backed by deterministic metadata and an on-disk file managed by the backend.
 
 ## Background
-- Configuration revisions already store immutable detection, transformation, and metadata payloads per document type with revision sequencing and activation flags.
-- Legacy wording referenced checkpoints and snapshots even though jobs now represent the auditable execution record that captures inputs, outputs, metrics, and logs.
-- Job payloads must present a consistent JSON shape so downstream tooling, UI pages, and auditors receive the same structure everywhere.
+- Jobs now require callers to provide a `uri` + `hash`, but there is no canonical service to accept uploads or generate those identifiers.
+- Settings already reserve `var/documents/` for persistence. We need helpers that write into this directory, guard against collisions, and expose metadata via the API.
+- Downstream orchestration (manual uploads, CLI automation, future background processors) should all rely on the same API surface.
 
 ## Scope
-- Align service helpers, FastAPI routes, and schema models so job creation, updates, and retrieval follow the standard JSON contract (IDs, timestamps, status, input/output metadata, metrics, logs).
-- Ensure configuration revision helpers, routes, and documentation speak in terms of `document_type` and `configuration_revision` instead of `configuration_name` or generic “versions.”
-- Replace lingering “checkpoint” or “snapshot” terminology in documentation, planning files, and comments with the Job language.
-- Keep glossary, README, and AGENTS aligned with the new naming so the terminology is unambiguous for future contributors.
+- Introduce a `Document` SQLAlchemy model that stores `document_id` (ULID), `original_filename`, `content_type`, `byte_size`, `sha256`, `stored_uri`, and timestamps. Use JSON for any optional metadata required later.
+- Add storage helpers under `backend/app/services/documents.py` that:
+  - Accept bytes/streams and persist them inside `var/documents/` using a deterministic hashed path.
+  - De-duplicate uploads by returning the existing record when the SHA-256 digest matches an existing file.
+  - Expose listing + lookup utilities ordered by recency so routes/tests stay thin.
+- Build a FastAPI router mounted at `/documents` supporting:
+  - `POST /documents` (multipart upload) → creates or reuses a document record and returns metadata including the canonical `stored_uri` consumers pass into job inputs.
+  - `GET /documents` → list documents ordered by `created_at` desc.
+  - `GET /documents/{document_id}` → fetch metadata for a specific document.
+  - Optional `GET /documents/{document_id}/download` can stream files if it stays simple.
+- Ensure upload size limits and error handling are documented even if enforcement stays TODO.
+- Update README, ADE_GLOSSARY.md, and AGENTS.md to reference the document ingestion workflow and the new API surface.
 
 ## Deliverables
-1. Service-layer utilities that enforce the single active configuration revision per document type, resolve revisions correctly, and produce sequential job identifiers.
-2. FastAPI routers mounted at `/configuration-revisions` and `/jobs` exposing the normalized payloads described in the glossary.
-3. Pytest coverage that proves revision sequencing, activation behaviour, job lifecycle updates, and immutable completed jobs.
-4. Documentation updates (README, ADE_GLOSSARY.md, AGENTS.md, configuration revision lifecycle doc, planning files) that consistently use Configuration / Configuration Revision / Job terminology and include the canonical job JSON example.
+1. SQLAlchemy model + Alembic-not-required migration (via `Base.metadata.create_all`) that introduces the `documents` table.
+2. Service helpers covering hashed file storage, deduplication, and metadata retrieval with deterministic URIs.
+3. FastAPI routes + Pydantic schemas for create/list/get (and optional download) operations.
+4. Pytest coverage exercising upload workflows (fresh upload, duplicate hash, list ordering, metadata retrieval) using temporary directories.
+5. Documentation updates that describe how callers upload documents before launching jobs.
 
 ## Definition of done
-- `uvicorn backend.app.main:app --reload` boots, creating `configuration_revisions` and `jobs` tables in SQLite with the expected columns.
-- Creating a job without specifying a revision binds to the active configuration revision for that document type, and job identifiers follow the `job_YYYY_MM_DD_####` format.
-- Updating a job after it finishes returns HTTP 409 and leaves persisted output/metric/log records intact.
-- `pytest -q` passes with the updated configuration revision and job tests.
-- Glossary, README, AGENTS, and other docs refer to configurations, configuration revisions, active revisions, and jobs instead of schemas, specs, rule sets, snapshots, or checkpoints.
+- `uvicorn backend.app.main:app --reload` boots, creating the `documents` table and the hashed storage directory structure when missing.
+- Uploading the same file twice reuses the prior metadata, does not duplicate the file on disk, and the API returns consistent URIs.
+- Jobs can rely on the returned `stored_uri` without manual filesystem knowledge.
+- `pytest -q` passes with the new document ingestion tests.
+- Docs, glossary, and agent notes explain the upload → job flow with the updated vocabulary.

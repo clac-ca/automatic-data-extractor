@@ -14,6 +14,26 @@ class HealthResponse(BaseModel):
     status: str
 
 
+class DocumentResponse(BaseModel):
+    """API representation of stored document metadata."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    document_id: str
+    original_filename: str
+    content_type: str | None = None
+    byte_size: int
+    sha256: str
+    stored_uri: str
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        validation_alias="metadata_",
+        serialization_alias="metadata",
+    )
+    created_at: str
+    updated_at: str
+
+
 class ConfigurationRevisionBase(BaseModel):
     """Shared fields for configuration revision payloads."""
 
@@ -182,6 +202,7 @@ class JobResponse(BaseModel):
 
 __all__ = [
     "HealthResponse",
+    "DocumentResponse",
     "ConfigurationRevisionCreate",
     "ConfigurationRevisionUpdate",
     "ConfigurationRevisionResponse",
