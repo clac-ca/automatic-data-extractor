@@ -13,7 +13,7 @@ class AutoPurgeStatus(BaseModel):
 
     status: Literal["succeeded", "failed"]
     recorded_at: str
-    started_at: str | None = None
+    started_at: str
     completed_at: str | None = None
     processed_count: int | None = None
     missing_files: int | None = None
