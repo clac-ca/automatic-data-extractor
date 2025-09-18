@@ -1,7 +1,29 @@
-# AGENTS — Automatic Data Extractor (ADE)
+The automatic-data-extractor (ADE) aims to transform semi-structured spreadsheets and PDFs into clean, structured tables using deterministic, revision-controlled logic.
 
-**Mission**
-This project aims to transform semi-structured spreadsheets and PDFs into clean, structured tables using deterministic, revision-controlled logic.
+## Repository layout (planned)
+```
+.
+├─ README.md
+├─ ADE_GLOSSARY.md
+├─ AGENTS.md
+├─ backend/
+│  ├─ app/            # FastAPI entrypoint, routes, schemas, services
+│  ├─ processor/      # Table detection, column mapping, validation logic
+│  └─ tests/
+├─ frontend/
+│  ├─ src/            # Pages, components, API client wrappers
+│  └─ tests/
+├─ infra/
+│  ├─ Dockerfile
+│  └─ docker-compose.yaml
+├─ examples/          # Sample documents used in testing
+├─ runs/              # Example job outputs
+└─ var/
+   ├─ documents/      # Uploaded files (gitignored)
+   └─ ade.sqlite      # Local development database (gitignored)
+```
+
+---
 
 **Priorities (in strict order)**
 
