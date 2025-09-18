@@ -18,11 +18,11 @@ def _upload_document(
     return response.json()
 
 
-def _stored_path(payload: dict[str, Any]) -> Path:
+def _stored_path(documents_dir: Path, payload: dict[str, Any]) -> Path:
     path = Path(payload["stored_uri"])
-    if not path.is_absolute():
-        return Path.cwd() / path
-    return path
+    if path.is_absolute():
+        return path
+    return documents_dir / path
 
 
 def test_upload_document_persists_file_and_metadata(app_client) -> None:
@@ -40,7 +40,8 @@ def test_upload_document_persists_file_and_metadata(app_client) -> None:
     assert payload["sha256"].startswith("sha256:")
     assert payload["metadata"] == {}
 
-    stored_path = _stored_path(payload)
+    stored_path = _stored_path(documents_dir, payload)
+    assert not Path(payload["stored_uri"]).is_absolute()
     assert stored_path.exists()
     assert stored_path.read_bytes() == b"PDF-DATA-123"
 
@@ -52,10 +53,10 @@ def test_upload_document_persists_file_and_metadata(app_client) -> None:
 
 
 def test_duplicate_upload_reuses_existing_metadata(app_client) -> None:
-    client, _, _ = app_client
+    client, _, documents_dir = app_client
     original = _upload_document(client, filename="jan.xlsx", data=b"excel-bytes")
 
-    stored_path = _stored_path(original)
+    stored_path = _stored_path(documents_dir, original)
     duplicate = _upload_document(client, filename="feb.xlsx", data=b"excel-bytes")
 
     assert duplicate["document_id"] == original["document_id"]
@@ -67,7 +68,7 @@ def test_duplicate_upload_reuses_existing_metadata(app_client) -> None:
     stored_path.unlink()
     restored = _upload_document(client, filename="mar.xlsx", data=b"excel-bytes")
     assert restored["document_id"] == original["document_id"]
-    assert _stored_path(restored).exists()
+    assert _stored_path(documents_dir, restored).exists()
 
 
 def test_list_documents_returns_newest_first(app_client) -> None:
@@ -111,10 +112,10 @@ def test_download_document_streams_bytes(app_client) -> None:
 
 
 def test_download_missing_file_returns_404(app_client) -> None:
-    client, _, _ = app_client
+    client, _, documents_dir = app_client
     payload = _upload_document(client, filename="missing.pdf", data=b"payload")
 
-    stored_path = _stored_path(payload)
+    stored_path = _stored_path(documents_dir, payload)
     stored_path.unlink()
 
     response = client.get(f"/documents/{payload['document_id']}/download")

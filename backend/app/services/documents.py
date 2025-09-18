@@ -78,9 +78,22 @@ def _hash_to_tempfile(stream: BinaryIO) -> tuple[str, int, Path]:
     return digest, size, Path(tmp.name)
 
 
+def _strip_hash_prefix(value: str) -> str:
+    if value.startswith(_HASH_PREFIX):
+        return value[len(_HASH_PREFIX) :]
+    return value
+
+
+def _storage_relative_path(digest: str) -> Path:
+    return Path(digest[:2]) / digest[2:4] / digest
+
+
+def _storage_uri(digest: str) -> str:
+    return _storage_relative_path(digest).as_posix()
+
+
 def _storage_path(documents_dir: Path, digest: str) -> Path:
-    subdir = Path(digest[:2]) / digest[2:4]
-    return documents_dir / subdir / digest
+    return documents_dir / _storage_relative_path(digest)
 
 
 def _get_by_sha(db: Session, sha_value: str) -> Document | None:
@@ -108,20 +121,26 @@ def store_document(
 
     digest, size, tmp_path = _hash_to_tempfile(stream)
     sha_value = f"{_HASH_PREFIX}{digest}"
-    tmp_to_remove: Path | None = tmp_path
     settings = config.get_settings()
+    relative_path = _storage_relative_path(digest)
+    stored_uri = _storage_uri(digest)
+    stored_path = _storage_path(settings.documents_dir, digest)
+    tmp_to_remove: Path | None = tmp_path
 
     try:
         existing = _get_by_sha(db, sha_value)
         if existing is not None:
-            stored_path = resolve_document_path(existing, settings=settings)
             if not stored_path.exists():
                 stored_path.parent.mkdir(parents=True, exist_ok=True)
                 tmp_path.replace(stored_path)
                 tmp_to_remove = None
+            if existing.stored_uri != stored_uri:
+                existing.stored_uri = stored_uri
+                db.add(existing)
+                db.commit()
+                db.refresh(existing)
             return existing
 
-        stored_path = _storage_path(settings.documents_dir, digest)
         stored_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path.replace(stored_path)
         tmp_to_remove = None
@@ -131,7 +150,7 @@ def store_document(
             content_type=_normalise_content_type(content_type),
             byte_size=size,
             sha256=sha_value,
-            stored_uri=str(stored_path),
+            stored_uri=stored_uri,
             metadata_={},
         )
         db.add(document)
@@ -165,14 +184,27 @@ def resolve_document_path(
     """Return the on-disk path for the stored document."""
 
     settings = settings or config.get_settings()
+    digest = _strip_hash_prefix(document.sha256)
+    relative = _storage_relative_path(digest)
+    primary_path = settings.documents_dir / relative
+
+    if primary_path.exists():
+        return primary_path
+
     stored_path = Path(document.stored_uri)
     if stored_path.is_absolute():
-        return stored_path
+        candidate = stored_path
+    else:
+        candidate = settings.documents_dir / stored_path
+
     try:
-        relative = stored_path.relative_to(settings.documents_dir)
+        candidate.relative_to(settings.documents_dir)
     except ValueError:
-        return settings.documents_dir / stored_path
-    return settings.documents_dir / relative
+        return primary_path
+
+    if candidate.exists():
+        return candidate
+    return primary_path
 
 
 def iter_document_file(
