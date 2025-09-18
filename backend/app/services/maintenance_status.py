@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from time import sleep
 from typing import Any
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from ..models import MaintenanceStatus
@@ -22,8 +23,8 @@ def _upsert_payload(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     record = dict(payload)
     record["recorded_at"] = _now_iso()
 
-    last_error: IntegrityError | None = None
-    for attempt in range(3):
+    last_error: Exception | None = None
+    for attempt in range(10):
         try:
             with db.begin_nested():
                 status = db.get(MaintenanceStatus, _AUTO_PURGE_KEY)
@@ -34,7 +35,15 @@ def _upsert_payload(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
             return dict(status.payload)
         except IntegrityError as exc:
             last_error = exc
+            db.rollback()
             continue
+        except OperationalError as exc:
+            last_error = exc
+            if "database is locked" in str(exc).lower():
+                db.rollback()
+                sleep(0.2)
+                continue
+            raise
 
     if last_error is not None:  # pragma: no cover - defensive fallback
         raise last_error

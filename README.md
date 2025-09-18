@@ -92,10 +92,10 @@ Logging is additive—failures to append an audit event are logged but do not ro
 
 ## How the system flows
 1. Upload documents through the UI or `POST /documents`. The backend writes the file to a randomly generated path in `var/documents/` and returns canonical metadata (including the `stored_uri` jobs reference later).
-2. Create or edit configuration revisions, then activate the revision that should run by default for the document type.
-3. Launch a job via the UI or `POST /jobs`. The processor applies the active configuration revision and records job inputs, outputs, metrics, and logs.
+2. Create or edit configurations, then activate the configuration that should run by default for the document type.
+3. Launch a job via the UI or `POST /jobs`. The processor applies the active configuration and records job inputs, outputs, metrics, and logs.
 4. Poll `GET /jobs/{job_id}` (or list with `GET /jobs`) to review progress, download output artefacts, and inspect metrics.
-5. Promote new configuration revisions when results look right; only one active revision exists per document type at a time.
+5. Promote new configurations when results look right; only one active configuration exists per document type at a time.
 
 ---
 
@@ -106,7 +106,7 @@ Jobs returned by the API and displayed in the UI always use the same JSON struct
 {
   "job_id": "job_2025_09_17_0001",
   "document_type": "Remittance PDF",
-  "configuration_revision": 3,
+  "configuration_version": 3,
 
   "status": "completed",
   "created_at": "2025-09-17T18:42:00Z",

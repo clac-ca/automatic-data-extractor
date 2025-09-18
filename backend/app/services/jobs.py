@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import Job
-from .configuration_revisions import resolve_configuration_revision
+from .configurations import resolve_configuration
 
 VALID_STATUSES = {"pending", "running", "completed", "failed"}
 FINISHED_STATUSES = {"completed", "failed"}
@@ -137,23 +137,23 @@ def create_job(
     outputs: dict[str, Any] | None = None,
     metrics: dict[str, Any] | None = None,
     logs: list[dict[str, Any]] | None = None,
-    configuration_revision_id: str | None = None,
+    configuration_id: str | None = None,
 ) -> Job:
-    """Persist and return a new job tied to a configuration revision."""
+    """Persist and return a new job tied to a configuration version."""
 
     _ensure_valid_status(status)
-    revision = resolve_configuration_revision(
+    configuration = resolve_configuration(
         db,
         document_type=document_type,
-        configuration_revision_id=configuration_revision_id,
+        configuration_id=configuration_id,
     )
 
     job_id = generate_job_id(db)
     job = Job(
         job_id=job_id,
         document_type=document_type,
-        configuration_revision_id=revision.configuration_revision_id,
-        configuration_revision_number=revision.revision_number,
+        configuration_id=configuration.configuration_id,
+        configuration_version=configuration.version,
         status=status,
         created_by=created_by,
         input=_coerce_dict(input_payload),
