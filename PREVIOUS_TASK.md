@@ -1,37 +1,34 @@
-# Previous Task — Document ingestion API
+# Current Task — Document ingestion safeguards
 
 ## Goal
-Stand up the first-party document ingestion workflow so every job input is backed by deterministic metadata and an on-disk file managed by the backend.
+Add guardrails around document uploads so ADE rejects oversized files with clear errors and operators understand the retention
+expectations for stored documents.
 
 ## Background
-- Jobs now require callers to provide a `uri` + `hash`, but there is no canonical service to accept uploads or generate those identifiers.
-- Settings already reserve `var/documents/` for persistence. We need helpers that write into this directory, guard against collisions, and expose metadata via the API.
-- Downstream orchestration (manual uploads, CLI automation, future background processors) should all rely on the same API surface.
+- The `/documents` API now persists uploads, deduplicates on SHA-256, and restores missing files, but it accepts arbitrarily large
+  payloads.
+- Operations teams need a configurable size ceiling to prevent runaway disk usage and to deliver predictable failure modes.
+- Documentation already calls out the pending size-limit TODO; this task implements the limit and ensures the behaviour is tested
+  and well communicated.
 
 ## Scope
-- Introduce a `Document` SQLAlchemy model that stores `document_id` (ULID), `original_filename`, `content_type`, `byte_size`, `sha256`, `stored_uri`, and timestamps. Use JSON for any optional metadata required later.
-- Add storage helpers under `backend/app/services/documents.py` that:
-  - Accept bytes/streams and persist them inside `var/documents/` using a deterministic hashed path.
-  - De-duplicate uploads by returning the existing record when the SHA-256 digest matches an existing file.
-  - Expose listing + lookup utilities ordered by recency so routes/tests stay thin.
-- Build a FastAPI router mounted at `/documents` supporting:
-  - `POST /documents` (multipart upload) → creates or reuses a document record and returns metadata including the canonical `stored_uri` consumers pass into job inputs.
-  - `GET /documents` → list documents ordered by `created_at` desc.
-  - `GET /documents/{document_id}` → fetch metadata for a specific document.
-  - Optional `GET /documents/{document_id}/download` can stream files if it stays simple.
-- Ensure upload size limits and error handling are documented even if enforcement stays TODO.
-- Update README, ADE_GLOSSARY.md, and AGENTS.md to reference the document ingestion workflow and the new API surface.
+- Introduce a configurable `max_upload_bytes` setting on the backend (default to a conservative value such as 25 MiB) and expose
+  it via environment variables.
+- Enforce the size limit in `POST /documents` while streaming uploads. Return HTTP 413 with a descriptive error body when the
+  payload exceeds the configured cap.
+- Cover the new behaviour with pytest cases (success within the limit, rejection when the limit is exceeded, and override via
+  configuration).
+- Update README, ADE_GLOSSARY.md, and AGENTS.md with the new setting, operational guidance, and the error semantics.
+- Note any open follow-ups (e.g., retention policies or delete endpoints) that should be planned next.
 
 ## Deliverables
-1. SQLAlchemy model + Alembic-not-required migration (via `Base.metadata.create_all`) that introduces the `documents` table.
-2. Service helpers covering hashed file storage, deduplication, and metadata retrieval with deterministic URIs.
-3. FastAPI routes + Pydantic schemas for create/list/get (and optional download) operations.
-4. Pytest coverage exercising upload workflows (fresh upload, duplicate hash, list ordering, metadata retrieval) using temporary directories.
-5. Documentation updates that describe how callers upload documents before launching jobs.
+1. Backend configuration updates with a documented `max_upload_bytes` setting.
+2. Service and route changes that reject oversized uploads with HTTP 413 while still deduplicating valid files.
+3. Automated tests verifying the limit, configuration overrides, and error payloads.
+4. Documentation updates describing the default cap, how to tune it, and the resulting API errors.
 
 ## Definition of done
-- `uvicorn backend.app.main:app --reload` boots, creating the `documents` table and the hashed storage directory structure when missing.
-- Uploading the same file twice reuses the prior metadata, does not duplicate the file on disk, and the API returns consistent URIs.
-- Jobs can rely on the returned `stored_uri` without manual filesystem knowledge.
-- `pytest -q` passes with the new document ingestion tests.
-- Docs, glossary, and agent notes explain the upload → job flow with the updated vocabulary.
+- `/documents` rejects files larger than the configured limit with HTTP 413 and a helpful error message.
+- Successful uploads under the cap continue to return canonical metadata and reuse stored files based on digest.
+- The new configuration is covered in tests and documentation, and README/AGENTS no longer describe the size limit as TODO.
+- `pytest -q` passes with the expanded document ingestion test suite.
