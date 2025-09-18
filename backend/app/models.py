@@ -97,4 +97,41 @@ class Job(Base):
         )
 
 
-__all__ = ["ConfigurationRevision", "Job"]
+class Document(Base):
+    """Uploaded document metadata with deterministic storage paths."""
+
+    __tablename__ = "documents"
+    __table_args__ = (
+        UniqueConstraint("sha256", name="uq_document_sha256"),
+        UniqueConstraint("stored_uri", name="uq_document_stored_uri"),
+    )
+
+    document_id: Mapped[str] = mapped_column(
+        String(26), primary_key=True, default=_generate_ulid
+    )
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    stored_uri: Mapped[str] = mapped_column(String(512), nullable=False)
+    metadata_: Mapped[dict[str, Any]] = mapped_column(
+        "metadata",
+        MutableDict.as_mutable(JSON),
+        default=dict,
+        nullable=False,
+    )
+    created_at: Mapped[str] = mapped_column(String(32), default=_timestamp, nullable=False)
+    updated_at: Mapped[str] = mapped_column(
+        String(32), default=_timestamp, onupdate=_timestamp, nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return (
+            "Document("
+            f"document_id={self.document_id!r}, "
+            f"original_filename={self.original_filename!r}"
+            ")"
+        )
+
+
+__all__ = ["ConfigurationRevision", "Job", "Document"]
