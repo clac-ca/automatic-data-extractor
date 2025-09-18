@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Iterator
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from ..schemas import DocumentResponse
 from ..services.documents import (
     DocumentNotFoundError,
     DocumentTooLargeError,
+    InvalidDocumentExpirationError,
     get_document as get_document_service,
     iter_document_file,
     list_documents as list_documents_service,
@@ -37,6 +38,7 @@ def _to_response(document: Document) -> DocumentResponse:
 )
 async def upload_document(
     file: UploadFile = File(...),
+    expires_at: str | None = Form(None),
     db: Session = Depends(get_db),
 ) -> DocumentResponse:
     """Ingest an uploaded document and return canonical metadata."""
@@ -48,6 +50,7 @@ async def upload_document(
             original_filename=file.filename,
             content_type=file.content_type,
             data=file.file,
+            expires_at=expires_at,
         )
     except DocumentTooLargeError as exc:
         detail = {
@@ -58,6 +61,15 @@ async def upload_document(
         }
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=detail,
+        ) from exc
+    except InvalidDocumentExpirationError as exc:
+        detail = {
+            "error": "invalid_expiration",
+            "message": str(exc),
+        }
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=detail,
         ) from exc
     finally:
