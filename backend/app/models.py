@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import ulid
-from sqlalchemy import Boolean, Integer, JSON, String, UniqueConstraint, Index
+from sqlalchemy import Boolean, Integer, JSON, String, UniqueConstraint, Index, text
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -25,9 +25,6 @@ class Configuration(Base):
     """Configuration metadata and versioned payloads."""
 
     __tablename__ = "configurations"
-    __table_args__ = (
-        UniqueConstraint("document_type", "version", name="uq_configuration_version"),
-    )
 
     configuration_id: Mapped[str] = mapped_column(
         String(26), primary_key=True, default=_generate_ulid
@@ -45,6 +42,16 @@ class Configuration(Base):
     created_at: Mapped[str] = mapped_column(String(32), default=_timestamp, nullable=False)
     updated_at: Mapped[str] = mapped_column(
         String(32), default=_timestamp, onupdate=_timestamp, nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("document_type", "version", name="uq_configuration_version"),
+        Index(
+            "uq_configuration_active_per_document_type",
+            "document_type",
+            unique=True,
+            sqlite_where=text("is_active = 1"),
+        ),
     )
 
     def __repr__(self) -> str:
