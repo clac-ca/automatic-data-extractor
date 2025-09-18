@@ -10,11 +10,12 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Document
-from ..schemas import DocumentResponse
+from ..schemas import DocumentDeleteRequest, DocumentResponse
 from ..services.documents import (
     DocumentNotFoundError,
     DocumentTooLargeError,
     InvalidDocumentExpirationError,
+    delete_document as delete_document_service,
     get_document as get_document_service,
     iter_document_file,
     list_documents as list_documents_service,
@@ -127,6 +128,26 @@ def download_document(
         media_type=media_type,
         headers=headers,
     )
+
+
+@router.delete("/{document_id}", response_model=DocumentResponse)
+def delete_document(
+    document_id: str,
+    payload: DocumentDeleteRequest,
+    db: Session = Depends(get_db),
+) -> DocumentResponse:
+    """Soft delete a stored document and remove its bytes from disk."""
+
+    try:
+        document = delete_document_service(
+            db,
+            document_id,
+            deleted_by=payload.deleted_by,
+            delete_reason=payload.delete_reason,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _to_response(document)
 
 
 __all__ = ["router"]

@@ -16,7 +16,7 @@ listed beside each term.
 
 ## Core domain
 - **Document type** – Family of documents that share a configuration (`configuration_revisions.document_type`, `jobs.document_type`).
-- **Document record** – Canonical metadata for an uploaded file (`documents.document_id`, `documents.original_filename`, `documents.content_type`, `documents.byte_size`, `documents.sha256`, `documents.stored_uri`, `documents.metadata`, `documents.expires_at`).
+- **Document record** – Canonical metadata for an uploaded file (`documents.document_id`, `documents.original_filename`, `documents.content_type`, `documents.byte_size`, `documents.sha256`, `documents.stored_uri`, `documents.metadata`, `documents.expires_at`, `documents.deleted_at`, `documents.deleted_by`, `documents.delete_reason`).
 - **Configuration** – Executable detection, transformation, and metadata logic that defines how ADE processes a document type. Stored as JSON on each configuration revision (`configuration_revisions.payload`).
 - **Configuration revision** – Immutable record of configuration logic for a document type. Draft revisions can change; activating one freezes the payload (`configuration_revisions.configuration_revision_id` ULID, `configuration_revisions.revision_number`, `configuration_revisions.is_active`, `configuration_revisions.activated_at`).
 - **Active configuration revision** – The single revision with `is_active = true` for a document type. API consumers use it by default when they do not supply an explicit `configuration_revision_id`.
@@ -36,9 +36,10 @@ listed beside each term.
 - **Column** – Observed column with header text, samples, and metadata (`columns[].index`).
 - **Document expiration** – Timestamp describing when operators may purge the stored bytes (`documents.expires_at`). Defaults to 30 days after ingest and may be overridden per upload. Future retention metadata (legal hold flags, override provenance) will extend this section.
 - **Legal hold** – Boolean flag that blocks deletion until cleared (`documents.legal_hold`).
-- **Deletion markers** – Planned lifecycle timestamps that capture manual deletions and purges (`documents.deleted_at`,
-  `documents.deleted_by`, `documents.delete_reason`, `documents.purge_requested_at`, `documents.purged_at`,
-  `documents.purged_by`).
+- **Manual deletion markers** – Audit trail capturing intentional removal of stored bytes (`documents.deleted_at`,
+  `documents.deleted_by`, `documents.delete_reason`).
+- **Purge markers** – (Planned) lifecycle timestamps for automated deletions (`documents.purge_requested_at`,
+  `documents.purged_at`, `documents.purged_by`).
 
 ---
 
