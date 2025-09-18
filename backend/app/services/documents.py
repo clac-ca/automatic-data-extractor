@@ -57,7 +57,6 @@ def _format_size(value: int) -> str:
                 return f"{int(size):,} {unit}"
             return f"{size:.2f} {unit}"
         size /= 1024
-    return f"{int(size):,} bytes"
 
 
 def _normalise_filename(name: str | None) -> str:
