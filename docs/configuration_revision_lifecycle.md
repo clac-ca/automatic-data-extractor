@@ -74,17 +74,22 @@ Resolver logic mirrors other configuration stores:
 - `invoice@7` fetches the invoice configuration revision with `revision_number = 7`.
 - Supplying a ULID fetches the exact row.
 
-Minimal API surface:
+Current FastAPI routers expose:
 
-1. `POST /configuration-revisions` – create a draft (optionally cloning from another configuration revision).
-2. `PATCH /configuration-revisions/{id}` – edit a draft.
-3. `POST /configuration-revisions/{id}/activate` – promote a draft to active. Automatically demotes the previous active configuration revision.
-4. `POST /configuration-revisions/{id}/retire` – move an active configuration revision to retired without activating a replacement (emergency stop).
-5. `GET /configuration-revisions` – list configuration revisions filtered by document type and state.
-6. `GET /configuration-revisions/{id}` – fetch a single configuration revision.
-7. `GET /configuration-revisions/{document_type}/active` – convenience endpoint for the active configuration revision.
+1. `POST /configuration-revisions` – create a configuration revision (draft or immediately active).
+2. `GET /configuration-revisions` – list revisions ordered by `created_at` descending.
+3. `GET /configuration-revisions/{configuration_revision_id}` – fetch a single revision by ULID.
+4. `GET /configuration-revisions/active/{document_type}` – resolve the active revision for a document type.
+5. `PATCH /configuration-revisions/{configuration_revision_id}` – update metadata, payloads, and activation state while enforcing the single-active rule.
+6. `DELETE /configuration-revisions/{configuration_revision_id}` – remove unused revisions (draft clean-up).
+7. `POST /jobs` – create a job bound to the active or explicitly requested configuration revision.
+8. `GET /jobs` – list jobs ordered by creation time.
+9. `GET /jobs/{job_id}` – retrieve a single job record.
+10. `PATCH /jobs/{job_id}` – update running jobs (`status`, `outputs`, `metrics`, `logs`). Completed or failed jobs return HTTP 409 on further updates.
 
-Lifecycle events (`revision_events`) remain optional but recommended for detailed auditing (state, actor, timestamp, optional notes). They mirror LaunchDarkly's event log or AWS AppConfig's deployment history.
+These endpoints all emit the canonical job JSON documented in the glossary and README so downstream systems receive a uniform contract.
+
+Future extensions may introduce dedicated activation or retirement endpoints instead of the current `PATCH` workflow, plus lifecycle event logs (`revision_events`) for audit trails similar to LaunchDarkly or AWS AppConfig.
 
 ### Data integrity and automation
 
