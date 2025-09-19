@@ -7,11 +7,11 @@ import logging
 import os
 import unicodedata
 from urllib.parse import quote
-from typing import Iterator
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 
 from .. import config
 from ..db import get_db
@@ -30,7 +30,6 @@ from ..services.documents import (
     InvalidDocumentExpirationError,
     delete_document as delete_document_service,
     get_document as get_document_service,
-    iter_document_file,
     list_documents as list_documents_service,
     resolve_document_path,
     store_document,
@@ -177,16 +176,6 @@ def get_document(
     return _to_response(document)
 
 
-def _download_iterator(
-    document: Document, *, settings: config.Settings | None = None
-) -> Iterator[bytes]:
-    return iter_document_file(
-        document,
-        settings=settings,
-        chunk_size=_DOWNLOAD_CHUNK_SIZE,
-    )
-
-
 @router.get("/{document_id}/download")
 def download_document(
     document_id: str, db: Session = Depends(get_db)
@@ -218,12 +207,34 @@ def download_document(
         msg = f"Stored file for document '{document_id}' is missing"
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
 
+    try:
+        stream = path.open("rb")
+    except FileNotFoundError as exc:
+        msg = f"Stored file for document '{document_id}' is missing"
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg) from exc
+    except OSError as exc:  # pragma: no cover - unexpected I/O failure
+        logger.exception(
+            "Failed to open stored file for download",
+            extra={
+                "document_id": document.document_id,
+                "stored_uri": document.stored_uri,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to read stored document bytes",
+        ) from exc
+
     headers = {"Content-Disposition": _content_disposition(document.original_filename)}
     media_type = document.content_type or "application/octet-stream"
+    headers["Content-Length"] = str(document.byte_size)
+    iterator = iter(lambda: stream.read(_DOWNLOAD_CHUNK_SIZE), b"")
+    background = BackgroundTask(stream.close)
     return StreamingResponse(
-        _download_iterator(document, settings=settings),
+        iterator,
         media_type=media_type,
         headers=headers,
+        background=background,
     )
 
 
