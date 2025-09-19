@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import Job
-from ..schemas import JobCreate, JobResponse, JobUpdate
+from ..models import AuditEvent, Job
+from ..schemas import (
+    AuditEventListResponse,
+    AuditEventResponse,
+    JobCreate,
+    JobResponse,
+    JobUpdate,
+)
+from ..services.audit_log import list_entity_events
 from ..services.configurations import (
     ActiveConfigurationNotFoundError,
     ConfigurationMismatchError,
@@ -28,6 +37,10 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 def _to_response(job: Job) -> JobResponse:
     return JobResponse.model_validate(job)
+
+
+def _audit_to_response(event: AuditEvent) -> AuditEventResponse:
+    return AuditEventResponse.model_validate(event)
 
 
 @router.post("", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
@@ -78,6 +91,49 @@ def get_job_endpoint(job_id: str, db: Session = Depends(get_db)) -> JobResponse:
     except JobNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _to_response(job)
+
+
+@router.get("/{job_id}/audit-events", response_model=AuditEventListResponse)
+def list_job_audit_events(
+    job_id: str,
+    db: Session = Depends(get_db),
+    *,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    event_type: str | None = Query(None),
+    source: str | None = Query(None),
+    request_id: str | None = Query(None),
+    occurred_after: datetime | None = Query(None),
+    occurred_before: datetime | None = Query(None),
+) -> AuditEventListResponse:
+    try:
+        get_job(db, job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    try:
+        result = list_entity_events(
+            db,
+            entity_type="job",
+            entity_id=job_id,
+            limit=limit,
+            offset=offset,
+            event_type=event_type,
+            source=source,
+            request_id=request_id,
+            occurred_after=occurred_after,
+            occurred_before=occurred_before,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    items = [_audit_to_response(event) for event in result.events]
+    return AuditEventListResponse(
+        items=items,
+        total=result.total,
+        limit=result.limit,
+        offset=result.offset,
+    )
 
 
 @router.patch("/{job_id}", response_model=JobResponse)

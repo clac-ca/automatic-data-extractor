@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
 import re
+
+from backend.app.db import get_sessionmaker
+from backend.app.services.audit_log import AuditEventRecord, record_event
 
 
 def _activate_configuration(
@@ -414,4 +417,76 @@ def test_job_updates_emit_status_and_result_events(app_client) -> None:
     )
     assert results_event["payload"]["outputs"] == completion_payload["outputs"]
     assert results_event["payload"]["metrics"] == completion_payload["metrics"]
+
+
+def test_job_audit_timeline_paginates_and_filters(app_client) -> None:
+    client, _, _ = app_client
+    configuration = _activate_configuration(client)
+
+    payload = _create_job_payload(configuration["document_type"])
+    payload["status"] = "pending"
+
+    response = client.post("/jobs", json=payload)
+    assert response.status_code == 201
+    job = response.json()
+
+    session_factory = get_sessionmaker()
+    base_time = datetime(2024, 1, 1, 9, 0, tzinfo=timezone.utc)
+    with session_factory() as session:
+        for index in range(3):
+            record_event(
+                session,
+                AuditEventRecord(
+                    event_type=f"job.test.{index}",
+                    entity_type="job",
+                    entity_id=job["job_id"],
+                    source="timeline-test",
+                    occurred_at=base_time + timedelta(minutes=index),
+                    payload={"index": index},
+                ),
+            )
+
+    response = client.get(
+        f"/jobs/{job['job_id']}/audit-events",
+        params={"limit": 2, "source": "timeline-test"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 3
+    assert [item["event_type"] for item in payload["items"]] == [
+        "job.test.2",
+        "job.test.1",
+    ]
+
+    second_page = client.get(
+        f"/jobs/{job['job_id']}/audit-events",
+        params={"limit": 2, "offset": 2, "source": "timeline-test"},
+    )
+    assert second_page.status_code == 200
+    second_payload = second_page.json()
+    assert second_payload["total"] == 3
+    assert [item["event_type"] for item in second_payload["items"]] == [
+        "job.test.0",
+    ]
+
+    filtered = client.get(
+        f"/jobs/{job['job_id']}/audit-events",
+        params={
+            "event_type": "job.test.1",
+            "source": "timeline-test",
+        },
+    )
+    assert filtered.status_code == 200
+    filtered_payload = filtered.json()
+    assert filtered_payload["total"] == 1
+    assert filtered_payload["items"][0]["event_type"] == "job.test.1"
+
+
+def test_job_audit_timeline_returns_404_for_missing_job(app_client) -> None:
+    client, _, _ = app_client
+
+    response = client.get("/jobs/missing/audit-events")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Job 'missing' was not found"
 
