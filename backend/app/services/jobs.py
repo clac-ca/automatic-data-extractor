@@ -8,6 +8,7 @@ background processors.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -15,7 +16,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import Job
+from .audit_log import AuditEventRecord, record_event
 from .configurations import resolve_configuration
+
+
+logger = logging.getLogger(__name__)
 
 VALID_STATUSES = {"pending", "running", "completed", "failed"}
 FINISHED_STATUSES = {"completed", "failed"}
@@ -85,6 +90,57 @@ def _coerce_logs(entries: list[Any] | None) -> list[dict[str, Any]]:
     return [dict(_to_plain(entry)) for entry in entries]
 
 
+def _job_event_payload(job: Job, *, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "document_type": job.document_type,
+        "configuration_id": job.configuration_id,
+        "configuration_version": job.configuration_version,
+        "status": job.status,
+    }
+    if extra:
+        payload.update(extra)
+    return payload
+
+
+def _record_job_event(
+    db: Session,
+    *,
+    job: Job,
+    event_type: str,
+    actor_type: str | None,
+    actor_id: str | None,
+    actor_label: str | None,
+    source: str | None,
+    request_id: str | None,
+    occurred_at: str | None,
+    payload: dict[str, Any],
+) -> None:
+    record = AuditEventRecord(
+        event_type=event_type,
+        entity_type="job",
+        entity_id=job.job_id,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        actor_label=actor_label,
+        source=source,
+        request_id=request_id,
+        occurred_at=occurred_at,
+        payload=payload,
+    )
+
+    try:
+        record_event(db, record)
+    except Exception:
+        logger.exception(
+            "Failed to record job audit event",
+            extra={
+                "job_id": job.job_id,
+                "event_type": event_type,
+                "source": source,
+            },
+        )
+
+
 class JobNotFoundError(Exception):
     """Raised when a job identifier cannot be located."""
 
@@ -138,6 +194,11 @@ def create_job(
     metrics: dict[str, Any] | None = None,
     logs: list[dict[str, Any]] | None = None,
     configuration_id: str | None = None,
+    audit_actor_type: str | None = None,
+    audit_actor_id: str | None = None,
+    audit_actor_label: str | None = None,
+    audit_source: str | None = None,
+    audit_request_id: str | None = None,
 ) -> Job:
     """Persist and return a new job tied to a configuration version."""
 
@@ -165,6 +226,29 @@ def create_job(
     db.add(job)
     db.commit()
     db.refresh(job)
+
+    actor_label = audit_actor_label or job.created_by
+    payload = _job_event_payload(
+        job,
+        extra={
+            "created_by": job.created_by,
+            "input": _coerce_dict(job.input),
+            "outputs": _coerce_outputs(job.outputs),
+            "metrics": _coerce_dict(job.metrics),
+        },
+    )
+    _record_job_event(
+        db,
+        job=job,
+        event_type="job.created",
+        actor_type=audit_actor_type,
+        actor_id=audit_actor_id,
+        actor_label=actor_label,
+        source=audit_source,
+        request_id=audit_request_id,
+        occurred_at=job.created_at,
+        payload=payload,
+    )
     return job
 
 
@@ -176,6 +260,11 @@ def update_job(
     outputs: dict[str, Any] | None = None,
     metrics: dict[str, Any] | None = None,
     logs: list[dict[str, Any]] | None = None,
+    audit_actor_type: str | None = None,
+    audit_actor_id: str | None = None,
+    audit_actor_label: str | None = None,
+    audit_source: str | None = None,
+    audit_request_id: str | None = None,
 ) -> Job:
     """Apply updates to a job that is still running."""
 
@@ -183,13 +272,29 @@ def update_job(
     if job.status in FINISHED_STATUSES:
         raise JobImmutableError(job_id)
 
+    original_status = job.status
+    status_changed = False
+    outputs_changed = False
+    metrics_changed = False
+
     if status is not None:
         _ensure_valid_status(status)
-        job.status = status
+        if status != job.status:
+            job.status = status
+            status_changed = True
+
     if outputs is not None:
-        job.outputs = _coerce_outputs(outputs)
+        new_outputs = _coerce_outputs(outputs)
+        if new_outputs != job.outputs:
+            job.outputs = new_outputs
+            outputs_changed = True
+
     if metrics is not None:
-        job.metrics = _coerce_dict(metrics)
+        new_metrics = _coerce_dict(metrics)
+        if new_metrics != job.metrics:
+            job.metrics = new_metrics
+            metrics_changed = True
+
     if logs is not None:
         job.logs = _coerce_logs(logs)
 
@@ -197,6 +302,50 @@ def update_job(
     db.add(job)
     db.commit()
     db.refresh(job)
+
+    actor_label = audit_actor_label or job.created_by
+
+    if status_changed:
+        status_payload = _job_event_payload(
+            job,
+            extra={
+                "from_status": original_status,
+                "to_status": job.status,
+            },
+        )
+        _record_job_event(
+            db,
+            job=job,
+            event_type=f"job.status.{job.status}",
+            actor_type=audit_actor_type,
+            actor_id=audit_actor_id,
+            actor_label=actor_label,
+            source=audit_source,
+            request_id=audit_request_id,
+            occurred_at=job.updated_at,
+            payload=status_payload,
+        )
+
+    if outputs_changed or metrics_changed:
+        result_details: dict[str, Any] = {
+            "outputs": _coerce_outputs(job.outputs),
+            "metrics": _coerce_dict(job.metrics),
+        }
+
+        results_payload = _job_event_payload(job, extra=result_details)
+        _record_job_event(
+            db,
+            job=job,
+            event_type="job.results.published",
+            actor_type=audit_actor_type,
+            actor_id=audit_actor_id,
+            actor_label=actor_label,
+            source=audit_source,
+            request_id=audit_request_id,
+            occurred_at=job.updated_at,
+            payload=results_payload,
+        )
+
     return job
 
 

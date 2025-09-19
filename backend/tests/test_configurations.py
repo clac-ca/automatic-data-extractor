@@ -248,6 +248,129 @@ def test_delete_configuration_removes_record(app_client) -> None:
     assert follow_up.status_code == 404
 
 
+def test_create_configuration_records_audit_events(app_client) -> None:
+    client, _, _ = app_client
+
+    payload = {
+        "document_type": "invoice",
+        "title": "Initial config",
+        "payload": {"rules": ["basic"]},
+        "is_active": True,
+    }
+
+    response = client.post("/configurations", json=payload)
+    assert response.status_code == 201
+    configuration = response.json()
+
+    events = client.get(
+        "/audit-events",
+        params={
+            "entity_type": "configuration",
+            "entity_id": configuration["configuration_id"],
+        },
+    )
+    assert events.status_code == 200
+    payload_events = events.json()
+
+    assert payload_events["total"] == 2
+    event_types = {item["event_type"] for item in payload_events["items"]}
+    assert event_types == {"configuration.created", "configuration.activated"}
+
+    created_event = next(
+        item
+        for item in payload_events["items"]
+        if item["event_type"] == "configuration.created"
+    )
+    assert created_event["actor_label"] == "api"
+    assert created_event["source"] == "api"
+    assert created_event["payload"]["title"] == payload["title"]
+    assert created_event["payload"]["version"] == configuration["version"]
+    assert created_event["payload"]["is_active"] is True
+
+    activated_event = next(
+        item
+        for item in payload_events["items"]
+        if item["event_type"] == "configuration.activated"
+    )
+    assert activated_event["payload"]["is_active"] is True
+    assert activated_event["actor_label"] == "api"
+
+
+def test_update_configuration_appends_audit_events(app_client) -> None:
+    client, _, _ = app_client
+
+    created = _create_sample_configuration(client, is_active=False)
+
+    events = client.get(
+        "/audit-events",
+        params={
+            "entity_type": "configuration",
+            "entity_id": created["configuration_id"],
+        },
+    )
+    assert events.status_code == 200
+    assert events.json()["total"] == 1
+
+    update_response = client.patch(
+        f"/configurations/{created['configuration_id']}",
+        json={"title": "Updated"},
+    )
+    assert update_response.status_code == 200
+
+    after_update = client.get(
+        "/audit-events",
+        params={
+            "entity_type": "configuration",
+            "entity_id": created["configuration_id"],
+        },
+    )
+    assert after_update.status_code == 200
+    update_payload = after_update.json()
+    assert update_payload["total"] == 2
+    updated_event = next(
+        item
+        for item in update_payload["items"]
+        if item["event_type"] == "configuration.updated"
+    )
+    assert updated_event["payload"]["changed_fields"] == ["title"]
+    assert updated_event["actor_label"] == "api"
+
+    activate_response = client.patch(
+        f"/configurations/{created['configuration_id']}",
+        json={"is_active": True},
+    )
+    assert activate_response.status_code == 200
+
+    after_activation = client.get(
+        "/audit-events",
+        params={
+            "entity_type": "configuration",
+            "entity_id": created["configuration_id"],
+        },
+    )
+    assert after_activation.status_code == 200
+    activation_payload = after_activation.json()
+    assert activation_payload["total"] == 4
+    activation_events = {
+        item["event_type"]: item
+        for item in activation_payload["items"]
+        if item["event_type"] in {"configuration.updated", "configuration.activated"}
+    }
+    assert "configuration.activated" in activation_events
+
+    activated = activation_events["configuration.activated"]
+    assert activated["payload"]["is_active"] is True
+    assert activated["actor_label"] == "api"
+
+    updated_activation = next(
+        item
+        for item in activation_payload["items"]
+        if item["event_type"] == "configuration.updated"
+        and "is_active" in item["payload"].get("changed_fields", [])
+    )
+    assert "is_active" in updated_activation["payload"]["changed_fields"]
+
+
 def test_get_active_configuration_endpoint_returns_active_configuration(
     app_client,
 ) -> None:
