@@ -4,14 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime
 import logging
-import os
-import unicodedata
-from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from starlette.background import BackgroundTask
 
 from .. import config
 from ..db import get_db
@@ -37,62 +33,8 @@ from ..services.documents import (
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-_DOWNLOAD_CHUNK_SIZE = 1024 * 1024
-_DEFAULT_DOWNLOAD_FILENAME = "downloaded-document"
-
 
 logger = logging.getLogger(__name__)
-
-
-def _sanitize_header_value(value: str) -> str:
-    cleaned = value.replace("\r", " ").replace("\n", " ")
-    cleaned = cleaned.replace('"', "'")
-    return " ".join(cleaned.split()).strip()
-
-
-def _ascii_filename(value: str) -> str:
-    stem, ext = os.path.splitext(value)
-
-    def _to_ascii(component: str) -> str:
-        ascii_component = (
-            unicodedata.normalize("NFKD", component)
-            .encode("ascii", "ignore")
-            .decode("ascii")
-        )
-        return " ".join(ascii_component.split()).strip()
-
-    safe_stem = _to_ascii(stem) or _DEFAULT_DOWNLOAD_FILENAME
-    safe_ext = _to_ascii(ext)
-    if safe_ext and not safe_ext.startswith("."):
-        safe_ext = f".{safe_ext}"
-    elif safe_ext == ".":
-        safe_ext = ""
-
-    combined = f"{safe_stem}{safe_ext}" or _DEFAULT_DOWNLOAD_FILENAME
-    return combined.replace(" .", ".")
-
-
-def _content_disposition(filename: str | None) -> str:
-    """Generate a Content-Disposition header that supports UTF-8 filenames."""
-
-    if not filename:
-        return "attachment"
-
-    cleaned = _sanitize_header_value(filename)
-    if not cleaned:
-        cleaned = _DEFAULT_DOWNLOAD_FILENAME
-
-    ascii_name = _ascii_filename(cleaned)
-    if cleaned == ascii_name and all(ord(char) < 128 for char in cleaned):
-        return f'attachment; filename="{cleaned}"'
-
-    encoded = quote(cleaned, safe="")
-    header = f'attachment; filename="{ascii_name}"'
-    if encoded:
-        header += f"; filename*=utf-8''{encoded}"
-    return header
-
-
 def _to_response(document: Document) -> DocumentResponse:
     return DocumentResponse.model_validate(document)
 
@@ -171,8 +113,8 @@ def get_document(
 @router.get("/{document_id}/download")
 def download_document(
     document_id: str, db: Session = Depends(get_db)
-) -> StreamingResponse:
-    """Stream the stored file for download."""
+) -> FileResponse:
+    """Return the stored file for download."""
 
     try:
         document = get_document_service(db, document_id)
@@ -200,7 +142,8 @@ def download_document(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
 
     try:
-        stream = path.open("rb")
+        with path.open("rb"):
+            pass
     except FileNotFoundError as exc:
         msg = f"Stored file for document '{document_id}' is missing"
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg) from exc
@@ -217,17 +160,13 @@ def download_document(
             detail="Unable to read stored document bytes",
         ) from exc
 
-    headers = {"Content-Disposition": _content_disposition(document.original_filename)}
     media_type = document.content_type or "application/octet-stream"
-    headers["Content-Length"] = str(document.byte_size)
-    iterator = iter(lambda: stream.read(_DOWNLOAD_CHUNK_SIZE), b"")
-    background = BackgroundTask(stream.close)
-    return StreamingResponse(
-        iterator,
+    response = FileResponse(
+        path,
         media_type=media_type,
-        headers=headers,
-        background=background,
+        filename=document.original_filename,
     )
+    return response
 
 
 @router.delete("/{document_id}", response_model=DocumentResponse)
