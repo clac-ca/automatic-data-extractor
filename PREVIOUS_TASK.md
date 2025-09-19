@@ -1,19 +1,19 @@
-# Previous Task — Include entity summaries in timeline responses
+# Previous Task — Mirror entity summaries for document timelines
 
 ## Goal
-Attach lightweight entity metadata to the configuration and job audit timeline responses so UI callers can render headers without making extra round trips.
+Extend the document audit timeline endpoint so `/documents/{document_id}/audit-events` returns the same embedded `entity` summary pattern as configurations and jobs.
 
 ## Why this matters
-- The new per-entity audit endpoints return only events; the UI must currently request the configuration or job separately to display names and status.
-- Including a minimal summary keeps the timeline API ergonomic for low-latency views while still reusing existing audit filters.
-- Surfacing the summary in one response also makes it easier to log or debug requests without correlating multiple payloads.
+- Timeline consumers currently get document metadata only by calling `/documents/{document_id}` separately; embedding the summary keeps the API ergonomic for quick views.
+- Aligning all timeline responses unlocks shared UI components that expect an `entity` block without branching on entity type.
+- The document summary gives operators enough context (filename, size, expiry) to investigate events straight from logs or CLI tools.
 
 ## Proposed scope
-1. **Schema updates** – Extend `AuditEventListResponse` or introduce a wrapper so `/configurations/{configuration_id}/audit-events` and `/jobs/{job_id}/audit-events` can include an `entity` block. For configurations capture `configuration_id`, `document_type`, `title`, `version`, and `is_active`; for jobs include `job_id`, `document_type`, `status`, and `created_by`.
-2. **Endpoint wiring** – Load the entity once per request, reuse the existing event pagination logic, and populate the summary fields without disturbing other response attributes.
-3. **Tests and docs** – Add API tests that assert the summary is present, stays in sync with the entity, and still returns 404 for missing resources. Update the README/glossary to mention the embedded metadata and how clients can rely on it.
+1. **Schema support** – Extend the `AuditEventListResponse.entity` union to include a document summary with `document_id`, `original_filename`, `content_type`, `byte_size`, `sha256`, and `expires_at`.
+2. **Endpoint wiring** – Load the document once in `GET /documents/{document_id}/audit-events`, return 404 if missing, and attach the summary while preserving the existing pagination behaviour.
+3. **Validation** – Add API tests that cover happy path, missing document, and ensure updates to document metadata (e.g., delete markers) are reflected in the embedded summary. Update the README/glossary to document the shared `entity` shape across timelines.
 
 ## Open questions / follow-ups
-- Should the document timeline mirror the same summary shape for consistency?
-- Do we need to expose additional job details (e.g., configuration version, latest run status) to help timeline consumers?
-- Would it be useful to embed a count of event types or timestamps for quick navigation tabs in the UI?
+- Should the summary also surface deletion metadata (`deleted_at`, `deleted_by`) when present?
+- Do we need a guard to prevent leaking metadata for documents marked as purged or expired?
+- Once all timelines share an `entity` block, should we document a reusable client type for SDKs?
