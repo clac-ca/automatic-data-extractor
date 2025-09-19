@@ -313,3 +313,105 @@ def test_update_job_rejects_null_fields(app_client, field: str, value: Any) -> N
 
     assert response.status_code == 422
 
+
+def test_create_job_records_audit_event(app_client) -> None:
+    client, _, _ = app_client
+    configuration = _activate_configuration(client)
+
+    payload = _create_job_payload(configuration["document_type"])
+    payload["status"] = "pending"
+
+    response = client.post("/jobs", json=payload)
+    assert response.status_code == 201
+    job = response.json()
+
+    events = client.get(
+        "/audit-events",
+        params={"entity_type": "job", "entity_id": job["job_id"]},
+    )
+    assert events.status_code == 200
+    payload_events = events.json()
+    assert payload_events["total"] == 1
+    event = payload_events["items"][0]
+    assert event["event_type"] == "job.created"
+    assert event["actor_label"] == payload["created_by"]
+    assert event["actor_type"] == "user"
+    assert event["source"] == "api"
+    assert event["payload"]["document_type"] == payload["document_type"]
+    assert event["payload"]["created_by"] == payload["created_by"]
+    assert event["payload"]["status"] == "pending"
+
+
+def test_job_updates_emit_status_and_result_events(app_client) -> None:
+    client, _, _ = app_client
+    configuration = _activate_configuration(client)
+
+    payload = _create_job_payload(configuration["document_type"])
+    payload["status"] = "pending"
+
+    response = client.post("/jobs", json=payload)
+    job = response.json()
+
+    progress_response = client.patch(
+        f"/jobs/{job['job_id']}",
+        json={"status": "running"},
+    )
+    assert progress_response.status_code == 200
+
+    completion_payload = {
+        "status": "completed",
+        "outputs": {
+            "json": {
+                "uri": "var/outputs/remit_final.json",
+                "expires_at": "2026-01-01T00:00:00Z",
+            }
+        },
+        "metrics": {
+            "rows_extracted": 125,
+            "processing_time_ms": 4180,
+            "errors": 0,
+        },
+    }
+    completion_response = client.patch(
+        f"/jobs/{job['job_id']}",
+        json=completion_payload,
+    )
+    assert completion_response.status_code == 200
+
+    events = client.get(
+        "/audit-events",
+        params={"entity_type": "job", "entity_id": job["job_id"]},
+    )
+    assert events.status_code == 200
+    payload_events = events.json()
+    assert payload_events["total"] == 4
+
+    event_types = {item["event_type"] for item in payload_events["items"]}
+    assert {"job.created", "job.status.running", "job.status.completed", "job.results.published"} <= event_types
+
+    running_event = next(
+        item
+        for item in payload_events["items"]
+        if item["event_type"] == "job.status.running"
+    )
+    assert running_event["payload"]["from_status"] == "pending"
+    assert running_event["payload"]["to_status"] == "running"
+    assert running_event["actor_label"] == "api"
+
+    completed_event = next(
+        item
+        for item in payload_events["items"]
+        if item["event_type"] == "job.status.completed"
+    )
+    assert completed_event["payload"]["from_status"] == "running"
+    assert completed_event["payload"]["to_status"] == "completed"
+    assert completed_event["actor_label"] == "api"
+
+    results_event = next(
+        item
+        for item in payload_events["items"]
+        if item["event_type"] == "job.results.published"
+    )
+    assert results_event["payload"]["outputs"] == completion_payload["outputs"]
+    assert results_event["payload"]["metrics"] == completion_payload["metrics"]
+

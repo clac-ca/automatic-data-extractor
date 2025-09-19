@@ -77,6 +77,12 @@ def _apply_filters(statement: Select[AuditEvent], filters: dict[str, Any]) -> Se
         statement = statement.where(AuditEvent.entity_id == entity_id)
     if event_type := filters.get("event_type"):
         statement = statement.where(AuditEvent.event_type == event_type)
+    if actor_type := filters.get("actor_type"):
+        statement = statement.where(AuditEvent.actor_type == actor_type)
+    if actor_id := filters.get("actor_id"):
+        statement = statement.where(AuditEvent.actor_id == actor_id)
+    if actor_label := filters.get("actor_label"):
+        statement = statement.where(AuditEvent.actor_label == actor_label)
     if source := filters.get("source"):
         statement = statement.where(AuditEvent.source == source)
     if request_id := filters.get("request_id"):
@@ -150,6 +156,9 @@ def list_events(
     event_type: str | None = None,
     entity_type: str | None = None,
     entity_id: str | None = None,
+    actor_type: str | None = None,
+    actor_id: str | None = None,
+    actor_label: str | None = None,
     source: str | None = None,
     request_id: str | None = None,
     occurred_after: datetime | str | None = None,
@@ -166,6 +175,9 @@ def list_events(
         "event_type": event_type,
         "entity_type": entity_type,
         "entity_id": entity_id,
+        "actor_type": actor_type,
+        "actor_id": actor_id,
+        "actor_label": actor_label,
         "source": source,
         "request_id": request_id,
         "occurred_after": occurred_after,

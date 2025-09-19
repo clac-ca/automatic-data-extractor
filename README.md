@@ -60,9 +60,15 @@ All persistence uses SQLite (`var/ade.sqlite`) and an on-disk documents folder (
 and mounted as Docker volumes in deployment.
 
 ### Audit log
-ADE keeps an immutable audit log in the `audit_events` table. The helper at `services/audit_log.record_event(...)` accepts a typed payload, canonicalises any JSON context for deterministic storage, and persists a ULID-keyed row. Clients query events through the same service or via `/audit-events`, which supports pagination plus filters for entity, event type, source, request ID, and time bounds. Document tools also rely on `GET /documents/{document_id}/audit-events` for convenience.
+ADE keeps an immutable audit log in the `audit_events` table. The helper at `services/audit_log.record_event(...)` accepts a typed payload, canonicalises any JSON context for deterministic storage, and persists a ULID-keyed row. Clients query events through the same service or via `/audit-events`, which supports pagination plus filters for entity, event type, actor metadata, source, request ID, and time bounds. Document tools also rely on `GET /documents/{document_id}/audit-events` for convenience.
 
-Document deletions emit a shared `document.deleted` event that captures actor metadata, the origin (`api`, `scheduler`, or `cli`), and soft-delete context (delete reason, byte size, storage URI, hash, and expiration). The API surfaces these records directly:
+Core event families include:
+
+- `document.deleted` – records soft deletions with byte-size, checksum, delete reason, and the actor/source that initiated the removal.
+- `configuration.created`, `configuration.updated`, `configuration.activated` – capture configuration titles, versions, activation state, and which actor changed them.
+- `job.created`, `job.status.*`, `job.results.published` – log job creation, state transitions, and when outputs/metrics are published.
+
+The API surfaces these records directly. A `document.deleted` entry looks like:
 
 ```jsonc
 {
@@ -81,6 +87,41 @@ Document deletions emit a shared `document.deleted` event that captures actor me
     "stored_uri": "bd/5c/...",
     "sha256": "sha256:bd5c3d9a...",
     "expires_at": "2025-10-17T18:42:00+00:00"
+  }
+}
+```
+
+Configuration lifecycle events carry similar structure:
+
+```jsonc
+{
+  "event_type": "configuration.updated",
+  "entity_type": "configuration",
+  "actor_label": "api",
+  "payload": {
+    "document_type": "invoice",
+    "title": "Invoice v2",
+    "version": 3,
+    "is_active": true,
+    "changed_fields": ["is_active"]
+  }
+}
+```
+
+Job execution emits status transitions and result publications:
+
+```jsonc
+{
+  "event_type": "job.status.completed",
+  "entity_type": "job",
+  "actor_label": "api",
+  "payload": {
+    "document_type": "remittance",
+    "configuration_id": "01JABCXY45MNE678PQRS012TU3",
+    "configuration_version": 7,
+    "status": "completed",
+    "from_status": "running",
+    "to_status": "completed"
   }
 }
 ```

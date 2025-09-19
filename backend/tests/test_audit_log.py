@@ -72,6 +72,8 @@ def test_list_events_filters_and_paginates(db_session) -> None:
             entity_type="document",
             entity_id="doc-1",
             source="api",
+            actor_type="user",
+            actor_label="ops",
             occurred_at=base_time + timedelta(minutes=index),
             payload={"index": index},
         )
@@ -107,6 +109,10 @@ def test_list_events_filters_and_paginates(db_session) -> None:
     )
     assert filtered.total == 3
     assert all(event.event_type == "document.deleted" for event in filtered.events)
+
+    actor_filtered = list_events(db_session, actor_label="ops")
+    assert actor_filtered.total == 3
+    assert all(event.actor_label == "ops" for event in actor_filtered.events)
 
 
 def test_list_events_occurred_filters_include_same_day_boundaries(db_session) -> None:
@@ -200,6 +206,8 @@ def test_audit_events_endpoint_supports_filters(app_client) -> None:
                 entity_type="document",
                 entity_id="doc-api-1",
                 source="api",
+                actor_type="user",
+                actor_label="ops",
             ),
         )
         record_event(
@@ -226,6 +234,15 @@ def test_audit_events_endpoint_supports_filters(app_client) -> None:
     filtered_payload = filtered.json()
     assert filtered_payload["total"] == 1
     assert filtered_payload["items"][0]["entity_id"] == "doc-api-1"
+
+    actor_filtered = client.get(
+        "/audit-events",
+        params={"actor_label": "ops"},
+    )
+    assert actor_filtered.status_code == 200
+    actor_payload = actor_filtered.json()
+    assert actor_payload["total"] == 1
+    assert actor_payload["items"][0]["actor_label"] == "ops"
 
     invalid = client.get("/audit-events", params={"entity_type": "document"})
     assert invalid.status_code == 400

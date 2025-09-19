@@ -61,6 +61,9 @@ def create_configuration_endpoint(
             title=payload.title,
             payload=payload.payload,
             is_active=payload.is_active,
+            audit_actor_type="system",
+            audit_actor_label="api",
+            audit_source="api",
         )
     except IntegrityError as exc:
         db.rollback()
@@ -132,7 +135,14 @@ def update_configuration_endpoint(
 
     update_kwargs = payload.model_dump(exclude_unset=True)
     try:
-        configuration = update_configuration(db, configuration_id, **update_kwargs)
+        configuration = update_configuration(
+            db,
+            configuration_id,
+            **update_kwargs,
+            audit_actor_type="system",
+            audit_actor_label="api",
+            audit_source="api",
+        )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except IntegrityError as exc:
