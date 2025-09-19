@@ -206,6 +206,7 @@ def test_download_document_streams_bytes(app_client) -> None:
         response.headers["content-disposition"]
         == f"attachment; filename=\"{payload['original_filename']}\""
     )
+    assert response.headers["content-length"] == str(payload["byte_size"])
 
 
 def test_download_document_with_unicode_filename_sets_rfc5987_header(
@@ -233,6 +234,30 @@ def test_download_missing_file_returns_404(app_client) -> None:
 
     stored_path = _stored_path(documents_dir, payload)
     stored_path.unlink()
+
+    response = client.get(f"/documents/{payload['document_id']}/download")
+    assert response.status_code == 404
+    assert (
+        response.json()["detail"]
+        == f"Stored file for document '{payload['document_id']}' is missing"
+    )
+
+
+def test_download_document_removed_during_open_returns_404(app_client, monkeypatch) -> None:
+    client, _, documents_dir = app_client
+    payload = _upload_document(client, filename="race.pdf", data=b"bytes")
+
+    target_path = _stored_path(documents_dir, payload)
+    assert target_path.exists()
+
+    original_open = Path.open
+
+    def _failing_open(self, mode="r", *args, **kwargs):
+        if self == target_path and "b" in mode:
+            raise FileNotFoundError("disappeared")
+        return original_open(self, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", _failing_open)
 
     response = client.get(f"/documents/{payload['document_id']}/download")
     assert response.status_code == 404
