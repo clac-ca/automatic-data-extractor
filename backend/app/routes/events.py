@@ -1,4 +1,4 @@
-"""Audit event API endpoints."""
+"""Event API endpoints."""
 
 from __future__ import annotations
 
@@ -8,16 +8,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import AuditEvent
+from ..models import Event
 from ..schemas import (
-    AuditEventEntitySummary,
-    AuditEventListResponse,
-    AuditEventResponse,
+    EventEntitySummary,
+    EventListResponse,
+    EventResponse,
     ConfigurationTimelineSummary,
     DocumentTimelineSummary,
     JobTimelineSummary,
 )
-from ..services.audit_log import list_events as list_events_service
+from ..services.events import list_events as list_events_service
 from ..services.configurations import (
     ConfigurationNotFoundError,
     get_configuration as get_configuration_service,
@@ -28,16 +28,16 @@ from ..services.documents import (
 )
 from ..services.jobs import JobNotFoundError, get_job as get_job_service
 
-router = APIRouter(prefix="/audit-events", tags=["audit"])
+router = APIRouter(prefix="/events", tags=["events"])
 
 
-def _to_response(event: AuditEvent) -> AuditEventResponse:
-    return AuditEventResponse.model_validate(event)
+def _to_response(event: Event) -> EventResponse:
+    return EventResponse.model_validate(event)
 
 
 def _load_entity_summary(
     db: Session, entity_type: str, entity_id: str
-) -> AuditEventEntitySummary | None:
+) -> EventEntitySummary | None:
     if entity_type == "document":
         document = get_document_service(db, entity_id)
         return DocumentTimelineSummary.model_validate(document)
@@ -50,8 +50,8 @@ def _load_entity_summary(
     return None
 
 
-@router.get("", response_model=AuditEventListResponse)
-def list_audit_events(
+@router.get("", response_model=EventListResponse)
+def list_events(
     db: Session = Depends(get_db),
     *,
     limit: int = Query(50, ge=1, le=200),
@@ -66,12 +66,12 @@ def list_audit_events(
     request_id: str | None = Query(None),
     occurred_after: datetime | None = Query(None),
     occurred_before: datetime | None = Query(None),
-) -> AuditEventListResponse:
+) -> EventListResponse:
     if (entity_type is None) != (entity_id is None):
         detail = "entity_type and entity_id must be provided together"
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
-    entity_summary: AuditEventEntitySummary | None = None
+    entity_summary: EventEntitySummary | None = None
     if entity_type and entity_id:
         try:
             entity_summary = _load_entity_summary(db, entity_type, entity_id)
@@ -98,7 +98,7 @@ def list_audit_events(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     items = [_to_response(event) for event in result.events]
-    return AuditEventListResponse(
+    return EventListResponse(
         items=items,
         total=result.total,
         limit=result.limit,

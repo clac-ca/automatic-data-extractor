@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import Job
-from .audit_log import AuditEventRecord, record_event
+from .events import EventRecord, record_event
 from .configurations import resolve_configuration
 
 
@@ -115,7 +115,7 @@ def _record_job_event(
     occurred_at: str | None,
     payload: dict[str, Any],
 ) -> None:
-    record = AuditEventRecord(
+    record = EventRecord(
         event_type=event_type,
         entity_type="job",
         entity_id=job.job_id,
@@ -132,7 +132,7 @@ def _record_job_event(
         record_event(db, record)
     except Exception:
         logger.exception(
-            "Failed to record job audit event",
+            "Failed to record job event",
             extra={
                 "job_id": job.job_id,
                 "event_type": event_type,
@@ -194,11 +194,11 @@ def create_job(
     metrics: dict[str, Any] | None = None,
     logs: list[dict[str, Any]] | None = None,
     configuration_id: str | None = None,
-    audit_actor_type: str | None = None,
-    audit_actor_id: str | None = None,
-    audit_actor_label: str | None = None,
-    audit_source: str | None = None,
-    audit_request_id: str | None = None,
+    event_actor_type: str | None = None,
+    event_actor_id: str | None = None,
+    event_actor_label: str | None = None,
+    event_source: str | None = None,
+    event_request_id: str | None = None,
 ) -> Job:
     """Persist and return a new job tied to a configuration version."""
 
@@ -227,7 +227,7 @@ def create_job(
     db.commit()
     db.refresh(job)
 
-    actor_label = audit_actor_label or job.created_by
+    actor_label = event_actor_label or job.created_by
     payload = _job_event_payload(
         job,
         extra={
@@ -241,11 +241,11 @@ def create_job(
         db,
         job=job,
         event_type="job.created",
-        actor_type=audit_actor_type,
-        actor_id=audit_actor_id,
+        actor_type=event_actor_type,
+        actor_id=event_actor_id,
         actor_label=actor_label,
-        source=audit_source,
-        request_id=audit_request_id,
+        source=event_source,
+        request_id=event_request_id,
         occurred_at=job.created_at,
         payload=payload,
     )
@@ -260,11 +260,11 @@ def update_job(
     outputs: dict[str, Any] | None = None,
     metrics: dict[str, Any] | None = None,
     logs: list[dict[str, Any]] | None = None,
-    audit_actor_type: str | None = None,
-    audit_actor_id: str | None = None,
-    audit_actor_label: str | None = None,
-    audit_source: str | None = None,
-    audit_request_id: str | None = None,
+    event_actor_type: str | None = None,
+    event_actor_id: str | None = None,
+    event_actor_label: str | None = None,
+    event_source: str | None = None,
+    event_request_id: str | None = None,
 ) -> Job:
     """Apply updates to a job that is still running."""
 
@@ -303,7 +303,7 @@ def update_job(
     db.commit()
     db.refresh(job)
 
-    actor_label = audit_actor_label or job.created_by
+    actor_label = event_actor_label or job.created_by
 
     if status_changed:
         status_payload = _job_event_payload(
@@ -317,11 +317,11 @@ def update_job(
             db,
             job=job,
             event_type=f"job.status.{job.status}",
-            actor_type=audit_actor_type,
-            actor_id=audit_actor_id,
+            actor_type=event_actor_type,
+            actor_id=event_actor_id,
             actor_label=actor_label,
-            source=audit_source,
-            request_id=audit_request_id,
+            source=event_source,
+            request_id=event_request_id,
             occurred_at=job.updated_at,
             payload=status_payload,
         )
@@ -337,11 +337,11 @@ def update_job(
             db,
             job=job,
             event_type="job.results.published",
-            actor_type=audit_actor_type,
-            actor_id=audit_actor_id,
+            actor_type=event_actor_type,
+            actor_id=event_actor_id,
             actor_label=actor_label,
-            source=audit_source,
-            request_id=audit_request_id,
+            source=event_source,
+            request_id=event_request_id,
             occurred_at=job.updated_at,
             payload=results_payload,
         )

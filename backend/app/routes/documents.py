@@ -5,21 +5,22 @@ from __future__ import annotations
 from datetime import datetime
 import logging
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .. import config
 from ..db import get_db
-from ..models import AuditEvent, Document
+from ..models import Event, Document
 from ..schemas import (
-    AuditEventListResponse,
-    AuditEventResponse,
+    EventListResponse,
+    EventResponse,
     DocumentDeleteRequest,
+    DocumentUpdate,
     DocumentResponse,
     DocumentTimelineSummary,
 )
-from ..services.audit_log import list_entity_events
+from ..services.events import list_entity_events
 from ..services.documents import (
     DocumentNotFoundError,
     DocumentFileMissingError,
@@ -29,6 +30,7 @@ from ..services.documents import (
     delete_document as delete_document_service,
     get_document as get_document_service,
     list_documents as list_documents_service,
+    update_document as update_document_service,
     resolve_document_path,
     store_document,
 )
@@ -41,8 +43,8 @@ def _to_response(document: Document) -> DocumentResponse:
     return DocumentResponse.model_validate(document)
 
 
-def _audit_to_response(event: AuditEvent) -> AuditEventResponse:
-    return AuditEventResponse.model_validate(event)
+def _event_to_response(event: Event) -> EventResponse:
+    return EventResponse.model_validate(event)
 
 
 @router.post(
@@ -109,6 +111,36 @@ def get_document(
         document = get_document_service(db, document_id)
     except DocumentNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _to_response(document)
+
+
+@router.patch("/{document_id}", response_model=DocumentResponse)
+def update_document(
+    document_id: str,
+    payload: DocumentUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> DocumentResponse:
+    """Update document metadata and record an event."""
+
+    override_occurred_at = request.headers.get("X-Test-Occurred-At")
+    update_kwargs = payload.model_dump(exclude_unset=True)
+
+    if not update_kwargs.get("source"):
+        update_kwargs.setdefault("source", "api")
+
+    if ("occurred_at" not in update_kwargs or update_kwargs["occurred_at"] is None) and override_occurred_at:
+        update_kwargs["occurred_at"] = override_occurred_at
+
+    try:
+        document = update_document_service(
+            db,
+            document_id,
+            **update_kwargs,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
     return _to_response(document)
 
 
@@ -185,9 +217,9 @@ def delete_document(
             document_id,
             deleted_by=payload.deleted_by,
             delete_reason=payload.delete_reason,
-            audit_actor_type="user",
-            audit_actor_label=payload.deleted_by,
-            audit_source="api",
+            event_actor_type="user",
+            event_actor_label=payload.deleted_by,
+            event_source="api",
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -207,8 +239,8 @@ def delete_document(
     return _to_response(document)
 
 
-@router.get("/{document_id}/audit-events", response_model=AuditEventListResponse)
-def list_document_audit_events(
+@router.get("/{document_id}/events", response_model=EventListResponse)
+def list_document_events(
     document_id: str,
     db: Session = Depends(get_db),
     *,
@@ -219,7 +251,7 @@ def list_document_audit_events(
     request_id: str | None = Query(None),
     occurred_after: datetime | None = Query(None),
     occurred_before: datetime | None = Query(None),
-) -> AuditEventListResponse:
+    ) -> EventListResponse:
     try:
         document = get_document_service(db, document_id)
     except DocumentNotFoundError as exc:
@@ -241,8 +273,8 @@ def list_document_audit_events(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    items = [_audit_to_response(event) for event in result.events]
-    return AuditEventListResponse(
+    items = [_event_to_response(event) for event in result.events]
+    return EventListResponse(
         items=items,
         total=result.total,
         limit=result.limit,

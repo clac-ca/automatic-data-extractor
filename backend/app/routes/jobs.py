@@ -8,16 +8,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import AuditEvent, Job
+from ..models import Event, Job
 from ..schemas import (
-    AuditEventListResponse,
-    AuditEventResponse,
+    EventListResponse,
+    EventResponse,
     JobCreate,
     JobResponse,
     JobTimelineSummary,
     JobUpdate,
 )
-from ..services.audit_log import list_entity_events
+from ..services.events import list_entity_events
 from ..services.configurations import (
     ActiveConfigurationNotFoundError,
     ConfigurationMismatchError,
@@ -40,8 +40,8 @@ def _to_response(job: Job) -> JobResponse:
     return JobResponse.model_validate(job)
 
 
-def _audit_to_response(event: AuditEvent) -> AuditEventResponse:
-    return AuditEventResponse.model_validate(event)
+def _event_to_response(event: Event) -> EventResponse:
+    return EventResponse.model_validate(event)
 
 
 @router.post("", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
@@ -59,9 +59,9 @@ def create_job_endpoint(payload: JobCreate, db: Session = Depends(get_db)) -> Jo
             metrics=payload.metrics,
             logs=payload.logs,
             configuration_id=payload.configuration_id,
-            audit_actor_type="user",
-            audit_actor_label=payload.created_by,
-            audit_source="api",
+            event_actor_type="user",
+            event_actor_label=payload.created_by,
+            event_source="api",
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -94,8 +94,8 @@ def get_job_endpoint(job_id: str, db: Session = Depends(get_db)) -> JobResponse:
     return _to_response(job)
 
 
-@router.get("/{job_id}/audit-events", response_model=AuditEventListResponse)
-def list_job_audit_events(
+@router.get("/{job_id}/events", response_model=EventListResponse)
+def list_job_events(
     job_id: str,
     db: Session = Depends(get_db),
     *,
@@ -106,7 +106,7 @@ def list_job_audit_events(
     request_id: str | None = Query(None),
     occurred_after: datetime | None = Query(None),
     occurred_before: datetime | None = Query(None),
-) -> AuditEventListResponse:
+    ) -> EventListResponse:
     try:
         job = get_job(db, job_id)
     except JobNotFoundError as exc:
@@ -128,8 +128,8 @@ def list_job_audit_events(
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    items = [_audit_to_response(event) for event in result.events]
-    return AuditEventListResponse(
+    items = [_event_to_response(event) for event in result.events]
+    return EventListResponse(
         items=items,
         total=result.total,
         limit=result.limit,
@@ -151,9 +151,9 @@ def update_job_endpoint(
             db,
             job_id,
             **update_kwargs,
-            audit_actor_type="system",
-            audit_actor_label="api",
-            audit_source="api",
+            event_actor_type="system",
+            event_actor_label="api",
+            event_source="api",
         )
     except JobNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -167,7 +167,7 @@ def update_job_endpoint(
 
 @router.delete("/{job_id}", status_code=status.HTTP_405_METHOD_NOT_ALLOWED)
 def delete_job_endpoint(job_id: str) -> None:
-    """Jobs are immutable audit records and cannot be deleted."""
+    """Jobs are immutable records and cannot be deleted."""
 
     raise HTTPException(
         status.HTTP_405_METHOD_NOT_ALLOWED,
