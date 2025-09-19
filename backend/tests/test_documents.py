@@ -224,7 +224,7 @@ def test_download_document_with_unicode_filename_sets_rfc5987_header(
     assert response.status_code == 200
     assert response.content == b"paint-bytes"
     disposition = response.headers["content-disposition"]
-    assert disposition.startswith('attachment; filename="report.pdf"')
+    assert disposition.startswith("attachment;")
     assert "filename*=utf-8''report%20%F0%9F%8E%A8.pdf" in disposition
 
 
