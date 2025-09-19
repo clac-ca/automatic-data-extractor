@@ -68,7 +68,11 @@ Core event families include:
 - `configuration.created`, `configuration.updated`, `configuration.activated` – capture configuration titles, versions, activation state, and which actor changed them.
 - `job.created`, `job.status.*`, `job.results.published` – log job creation, state transitions, and when outputs/metrics are published.
 
-The API surfaces these records directly. A `document.deleted` entry looks like:
+The API surfaces these records directly.
+
+#### Document events
+
+A `document.deleted` entry looks like:
 
 ```jsonc
 {
@@ -91,7 +95,23 @@ The API surfaces these records directly. A `document.deleted` entry looks like:
 }
 ```
 
-Configuration lifecycle events carry similar structure:
+#### Configuration events
+
+Configuration rows emit immutable entries as drafts are created, metadata changes, and activations occur.
+
+```jsonc
+{
+  "event_type": "configuration.created",
+  "entity_type": "configuration",
+  "actor_label": "api",
+  "payload": {
+    "document_type": "invoice",
+    "title": "Invoice v1",
+    "version": 3,
+    "is_active": false
+  }
+}
+```
 
 ```jsonc
 {
@@ -108,7 +128,44 @@ Configuration lifecycle events carry similar structure:
 }
 ```
 
-Job execution emits status transitions and result publications:
+```jsonc
+{
+  "event_type": "configuration.activated",
+  "entity_type": "configuration",
+  "actor_label": "api",
+  "source": "api",
+  "payload": {
+    "document_type": "invoice",
+    "title": "Invoice v3",
+    "version": 4,
+    "is_active": true,
+    "activated_at": "2025-01-10T08:01:12+00:00"
+  }
+}
+```
+
+#### Job events
+
+Jobs append events as they are created, progress through statuses, and publish outputs or metrics.
+
+```jsonc
+{
+  "event_type": "job.created",
+  "entity_type": "job",
+  "actor_label": "ops@ade.local",
+  "payload": {
+    "document_type": "remittance",
+    "configuration_id": "01JCFG7890ABCDEFFEDCBA3210",
+    "configuration_version": 7,
+    "status": "pending",
+    "created_by": "ops@ade.local",
+    "input": {
+      "uri": "var/documents/remit_final.pdf",
+      "sha256": "sha256:bd5c3d9a..."
+    }
+  }
+}
+```
 
 ```jsonc
 {
@@ -122,6 +179,31 @@ Job execution emits status transitions and result publications:
     "status": "completed",
     "from_status": "running",
     "to_status": "completed"
+  }
+}
+```
+
+```jsonc
+{
+  "event_type": "job.results.published",
+  "entity_type": "job",
+  "actor_label": "api",
+  "payload": {
+    "document_type": "remittance",
+    "configuration_id": "01JCFG7890ABCDEFFEDCBA3210",
+    "configuration_version": 7,
+    "status": "completed",
+    "outputs": {
+      "json": {
+        "uri": "var/outputs/remit_final.json",
+        "expires_at": "2026-01-01T00:00:00Z"
+      }
+    },
+    "metrics": {
+      "rows_extracted": 125,
+      "processing_time_ms": 4180,
+      "errors": 0
+    }
   }
 }
 ```
