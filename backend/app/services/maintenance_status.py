@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from time import sleep
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from ..models import MaintenanceStatus
+from ..schemas import AutoPurgeStatus
 from .documents import ExpiredDocumentPurgeSummary
 
 _AUTO_PURGE_KEY = "automatic_document_purge"
+
+logger = logging.getLogger(__name__)
 
 
 def _now_iso() -> str:
@@ -102,7 +107,15 @@ def get_auto_purge_status(db: Session) -> dict[str, Any] | None:
     status = db.get(MaintenanceStatus, _AUTO_PURGE_KEY)
     if status is None:
         return None
-    return dict(status.payload)
+
+    payload = dict(status.payload)
+    try:
+        validated = AutoPurgeStatus.model_validate(payload)
+    except ValidationError as exc:
+        logger.warning("Ignoring invalid automatic purge status payload: %s", exc)
+        return None
+
+    return validated.model_dump()
 
 
 __all__ = [
@@ -110,4 +123,3 @@ __all__ = [
     "record_auto_purge_failure",
     "record_auto_purge_success",
 ]
-

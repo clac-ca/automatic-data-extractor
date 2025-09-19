@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from backend.app.db import get_sessionmaker
+from backend.app.models import MaintenanceStatus
 from backend.app.services.documents import ExpiredDocumentPurgeSummary
 from backend.app.services.maintenance_status import record_auto_purge_success
 
@@ -63,3 +64,26 @@ def test_health_endpoint_includes_purge_summary_when_present(app_client) -> None
     assert purge["error"] is None
     assert "missing_files" not in purge
     assert "recorded_at" in purge
+
+
+def test_health_endpoint_ignores_invalid_purge_payload(app_client) -> None:
+    """`GET /health` should ignore malformed purge payloads in storage."""
+
+    client, _, _ = app_client
+    session_factory = get_sessionmaker()
+
+    with session_factory() as db_session:
+        db_session.add(
+            MaintenanceStatus(
+                key="automatic_document_purge",
+                payload={"status": "broken"},
+            )
+        )
+        db_session.commit()
+
+    response = client.get("/health")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["status"] == "ok"
+    assert payload["purge"] is None
