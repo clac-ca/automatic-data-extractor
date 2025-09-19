@@ -1,4 +1,4 @@
-"""Helpers for recording and querying audit events."""
+"""Helpers for recording and querying events."""
 
 from __future__ import annotations
 
@@ -12,13 +12,13 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from ..models import AuditEvent
+from ..models import Event
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
-class AuditEventRecord:
+class EventRecord:
     """Input payload accepted by :func:`record_event`."""
 
     event_type: str
@@ -34,10 +34,10 @@ class AuditEventRecord:
 
 
 @dataclass(slots=True)
-class AuditEventQueryResult:
-    """Container for a page of audit events."""
+class EventQueryResult:
+    """Container for a page of stored events."""
 
-    events: list[AuditEvent]
+    events: list[Event]
     total: int
     limit: int
     offset: int
@@ -70,49 +70,49 @@ def _normalise_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     return json.loads(serialised)
 
 
-def _apply_filters(statement: Select[AuditEvent], filters: dict[str, Any]) -> Select[AuditEvent]:
+def _apply_filters(statement: Select[Event], filters: dict[str, Any]) -> Select[Event]:
     if entity_type := filters.get("entity_type"):
-        statement = statement.where(AuditEvent.entity_type == entity_type)
+        statement = statement.where(Event.entity_type == entity_type)
     if entity_id := filters.get("entity_id"):
-        statement = statement.where(AuditEvent.entity_id == entity_id)
+        statement = statement.where(Event.entity_id == entity_id)
     if event_type := filters.get("event_type"):
-        statement = statement.where(AuditEvent.event_type == event_type)
+        statement = statement.where(Event.event_type == event_type)
     if actor_type := filters.get("actor_type"):
-        statement = statement.where(AuditEvent.actor_type == actor_type)
+        statement = statement.where(Event.actor_type == actor_type)
     if actor_id := filters.get("actor_id"):
-        statement = statement.where(AuditEvent.actor_id == actor_id)
+        statement = statement.where(Event.actor_id == actor_id)
     if actor_label := filters.get("actor_label"):
-        statement = statement.where(AuditEvent.actor_label == actor_label)
+        statement = statement.where(Event.actor_label == actor_label)
     if source := filters.get("source"):
-        statement = statement.where(AuditEvent.source == source)
+        statement = statement.where(Event.source == source)
     if request_id := filters.get("request_id"):
-        statement = statement.where(AuditEvent.request_id == request_id)
+        statement = statement.where(Event.request_id == request_id)
 
     occurred_after = filters.get("occurred_after")
     if occurred_after is not None:
         occurred_after_iso = _normalise_datetime(occurred_after).isoformat()
-        statement = statement.where(AuditEvent.occurred_at >= occurred_after_iso)
+        statement = statement.where(Event.occurred_at >= occurred_after_iso)
 
     occurred_before = filters.get("occurred_before")
     if occurred_before is not None:
         occurred_before_iso = _normalise_datetime(occurred_before).isoformat()
-        statement = statement.where(AuditEvent.occurred_at <= occurred_before_iso)
+        statement = statement.where(Event.occurred_at <= occurred_before_iso)
 
     return statement
 
 
 def record_event(
     db: Session,
-    event: AuditEventRecord,
+    event: EventRecord,
     *,
     commit: bool = True,
-) -> AuditEvent:
-    """Persist an audit event and return the stored row."""
+) -> Event:
+    """Persist an event and return the stored row."""
 
     occurred_at = _normalise_datetime(event.occurred_at).isoformat()
     payload = _normalise_payload(event.payload)
 
-    model = AuditEvent(
+    model = Event(
         event_type=event.event_type,
         entity_type=event.entity_type,
         entity_id=event.entity_id,
@@ -134,7 +134,7 @@ def record_event(
             db.flush()
     except SQLAlchemyError:
         logger.exception(
-            "Failed to record audit event",
+            "Failed to record event",
             extra={
                 "event_type": event.event_type,
                 "entity_type": event.entity_type,
@@ -163,8 +163,8 @@ def list_events(
     request_id: str | None = None,
     occurred_after: datetime | str | None = None,
     occurred_before: datetime | str | None = None,
-) -> AuditEventQueryResult:
-    """Return audit events ordered by recency with optional filters."""
+) -> EventQueryResult:
+    """Return events ordered by recency with optional filters."""
 
     if limit <= 0:
         raise ValueError("limit must be positive")
@@ -184,16 +184,16 @@ def list_events(
         "occurred_before": occurred_before,
     }
 
-    filtered_statement = _apply_filters(select(AuditEvent), filters)
+    filtered_statement = _apply_filters(select(Event), filters)
     ordered_statement = filtered_statement.order_by(
-        AuditEvent.occurred_at.desc(), AuditEvent.audit_event_id.desc()
+        Event.occurred_at.desc(), Event.event_id.desc()
     )
 
     total_statement = select(func.count()).select_from(filtered_statement.subquery())
     total = db.scalar(total_statement) or 0
 
     events = list(db.scalars(ordered_statement.offset(offset).limit(limit)))
-    return AuditEventQueryResult(events=events, total=total, limit=limit, offset=offset)
+    return EventQueryResult(events=events, total=total, limit=limit, offset=offset)
 
 
 def list_entity_events(
@@ -208,7 +208,7 @@ def list_entity_events(
     request_id: str | None = None,
     occurred_after: datetime | str | None = None,
     occurred_before: datetime | str | None = None,
-) -> AuditEventQueryResult:
+) -> EventQueryResult:
     """Return events for a specific entity."""
 
     return list_events(
@@ -226,8 +226,8 @@ def list_entity_events(
 
 
 __all__ = [
-    "AuditEventRecord",
-    "AuditEventQueryResult",
+    "EventRecord",
+    "EventQueryResult",
     "record_event",
     "list_events",
     "list_entity_events",

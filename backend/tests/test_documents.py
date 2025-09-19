@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.app.db import get_sessionmaker
-from backend.app.services.audit_log import AuditEventRecord, record_event
+from backend.app.services.events import EventRecord, record_event
 
 
 def _upload_document(
@@ -51,6 +51,7 @@ def test_upload_document_persists_file_and_metadata(app_client) -> None:
         content_type="application/pdf",
     )
 
+    assert len(payload["document_id"]) == 26
     assert payload["original_filename"] == "remittance.pdf"
     assert payload["content_type"] == "application/pdf"
     assert payload["byte_size"] == 12
@@ -58,6 +59,8 @@ def test_upload_document_persists_file_and_metadata(app_client) -> None:
     assert payload["metadata"] == {}
 
     stored_path = _stored_path(documents_dir, payload)
+    assert Path(payload["stored_uri"]).parts[0] == "uploads"
+    assert payload["stored_uri"] == f"uploads/{payload['document_id']}"
     assert not Path(payload["stored_uri"]).is_absolute()
     assert stored_path.exists()
     assert stored_path.read_bytes() == b"PDF-DATA-123"
@@ -354,12 +357,12 @@ def test_delete_document_removes_file_and_marks_metadata(app_client) -> None:
     assert deleted_at.tzinfo is not None
     assert not stored_path.exists()
 
-    audit_response = client.get(f"/documents/{payload['document_id']}/audit-events")
-    assert audit_response.status_code == 200
-    audit_payload = audit_response.json()
-    assert audit_payload["total"] == 1
-    assert audit_payload["limit"] == 50
-    event = audit_payload["items"][0]
+    events_response = client.get(f"/documents/{payload['document_id']}/events")
+    assert events_response.status_code == 200
+    events_payload = events_response.json()
+    assert events_payload["total"] == 1
+    assert events_payload["limit"] == 50
+    event = events_payload["items"][0]
     assert event["event_type"] == "document.deleted"
     assert event["entity_id"] == payload["document_id"]
     assert event["actor_label"] == "ops@ade.local"
@@ -407,12 +410,120 @@ def test_delete_document_is_idempotent(app_client) -> None:
     assert deleted_second["deleted_by"] == "ops"
     assert deleted_second["delete_reason"] == "initial pass"
 
-    audit_response = client.get(f"/documents/{payload['document_id']}/audit-events")
-    assert audit_response.status_code == 200
-    assert audit_response.json()["total"] == 1
+    events_response = client.get(f"/documents/{payload['document_id']}/events")
+    assert events_response.status_code == 200
+    assert events_response.json()["total"] == 1
 
 
-def test_document_audit_timeline_paginates_and_filters(app_client) -> None:
+def test_update_document_merges_metadata_and_emits_event(app_client) -> None:
+    client, _, _ = app_client
+    payload = _upload_document(
+        client,
+        filename="to-update.pdf",
+        data=b"payload",
+        content_type="application/pdf",
+    )
+
+    patch_response = client.patch(
+        f"/documents/{payload['document_id']}",
+        json={
+            "metadata": {"status": "processed", "tags": ["initial"]},
+            "event_type": "document.status.updated",
+            "actor_label": "processor",
+            "source": "api",
+        },
+    )
+
+    assert patch_response.status_code == 200
+    updated = patch_response.json()
+    assert updated["metadata"] == {"status": "processed", "tags": ["initial"]}
+
+    events_response = client.get(f"/documents/{payload['document_id']}/events")
+    assert events_response.status_code == 200
+    events_payload = events_response.json()
+    assert events_payload["total"] == 1
+    event = events_payload["items"][0]
+    assert event["event_type"] == "document.status.updated"
+    assert event["actor_label"] == "processor"
+    assert event["source"] == "api"
+    assert event["payload"]["metadata"] == {"status": "processed", "tags": ["initial"]}
+    assert event["payload"]["changed_keys"] == ["status", "tags"]
+
+
+def test_update_document_supports_metadata_removal(app_client) -> None:
+    client, _, _ = app_client
+    payload = _upload_document(
+        client,
+        filename="to-remove.pdf",
+        data=b"payload",
+        content_type="application/pdf",
+    )
+
+    first_response = client.patch(
+        f"/documents/{payload['document_id']}",
+        json={
+            "metadata": {"status": "queued"},
+            "event_type": "document.status.updated",
+            "source": "api",
+        },
+    )
+
+    assert first_response.status_code == 200
+
+    second_response = client.patch(
+        f"/documents/{payload['document_id']}",
+        json={
+            "metadata": {"status": None},
+            "event_type": "document.status.cleared",
+            "source": "api",
+        },
+    )
+
+    assert second_response.status_code == 200
+    updated = second_response.json()
+    assert "status" not in updated["metadata"]
+
+    filtered = client.get(
+        f"/documents/{payload['document_id']}/events",
+        params={"event_type": "document.status.cleared"},
+    )
+    assert filtered.status_code == 200
+    payload_events = filtered.json()
+    assert payload_events["total"] == 1
+    event = payload_events["items"][0]
+    assert event["payload"]["removed_keys"] == ["status"]
+    assert event["payload"]["changed_keys"] == ["status"]
+
+
+def test_update_document_defaults_event_type_and_source(app_client) -> None:
+    client, _, _ = app_client
+    payload = _upload_document(
+        client,
+        filename="defaults.pdf",
+        data=b"payload",
+        content_type="application/pdf",
+    )
+
+    response = client.patch(
+        f"/documents/{payload['document_id']}",
+        json={"metadata": {"label": "scanned"}},
+    )
+
+    assert response.status_code == 200
+    updated = response.json()
+    assert updated["metadata"] == {"label": "scanned"}
+
+    events_response = client.get(f"/documents/{payload['document_id']}/events")
+    assert events_response.status_code == 200
+    events_payload = events_response.json()
+    assert events_payload["total"] == 1
+    event = events_payload["items"][0]
+    assert event["event_type"] == "document.metadata.updated"
+    assert event["source"] == "api"
+    assert event["payload"]["metadata"] == {"label": "scanned"}
+
+
+def test_document_event_timeline_paginates_and_filters(app_client) -> None:
     client, _, _ = app_client
     payload = _upload_document(
         client,
@@ -421,21 +532,22 @@ def test_document_audit_timeline_paginates_and_filters(app_client) -> None:
         content_type="application/pdf",
     )
 
-    # Instead of manually creating audit events, perform document updates that generate audit events
+    # Instead of manually creating events, perform document updates that generate events
     base_time = datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc)
     for index in range(3):
         response = client.patch(
             f"/documents/{payload['document_id']}",
             json={
                 "metadata": {"index": index},
-                "source": "timeline-test"
+                "source": "timeline-test",
+                "event_type": f"document.test.{index}",
             },
             headers={"X-Test-Occurred-At": (base_time + timedelta(minutes=index)).isoformat()},
         )
         assert response.status_code == 200
 
     response = client.get(
-        f"/documents/{payload['document_id']}/audit-events",
+        f"/documents/{payload['document_id']}/events",
         params={"limit": 2, "source": "timeline-test"},
     )
     assert response.status_code == 200
@@ -459,7 +571,7 @@ def test_document_audit_timeline_paginates_and_filters(app_client) -> None:
     ]
 
     second_page = client.get(
-        f"/documents/{payload['document_id']}/audit-events",
+        f"/documents/{payload['document_id']}/events",
         params={"limit": 2, "offset": 2, "source": "timeline-test"},
     )
     assert second_page.status_code == 200
@@ -470,7 +582,7 @@ def test_document_audit_timeline_paginates_and_filters(app_client) -> None:
     ]
 
     filtered = client.get(
-        f"/documents/{payload['document_id']}/audit-events",
+        f"/documents/{payload['document_id']}/events",
         params={
             "event_type": "document.test.1",
             "source": "timeline-test",
@@ -482,7 +594,7 @@ def test_document_audit_timeline_paginates_and_filters(app_client) -> None:
     assert filtered_payload["items"][0]["event_type"] == "document.test.1"
 
 
-def test_document_audit_timeline_summary_tracks_updates(app_client) -> None:
+def test_document_event_timeline_summary_tracks_updates(app_client) -> None:
     client, _, _ = app_client
     payload = _upload_document(
         client,
@@ -500,7 +612,7 @@ def test_document_audit_timeline_summary_tracks_updates(app_client) -> None:
     assert delete_response.status_code == 200
     deleted_document = delete_response.json()
 
-    timeline = client.get(f"/documents/{payload['document_id']}/audit-events")
+    timeline = client.get(f"/documents/{payload['document_id']}/events")
     assert timeline.status_code == 200
     timeline_payload = timeline.json()
     assert timeline_payload["total"] == 1
@@ -517,10 +629,10 @@ def test_document_audit_timeline_summary_tracks_updates(app_client) -> None:
     }
 
 
-def test_document_audit_timeline_returns_404_for_missing_document(app_client) -> None:
+def test_document_event_timeline_returns_404_for_missing_document(app_client) -> None:
     client, _, _ = app_client
 
-    response = client.get("/documents/does-not-exist/audit-events")
+    response = client.get("/documents/does-not-exist/events")
 
     assert response.status_code == 404
     assert (

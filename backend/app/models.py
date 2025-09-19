@@ -139,12 +139,12 @@ class Document(Base):
         )
 
 
-class AuditEvent(Base):
+class Event(Base):
     """Immutable record of actions performed against ADE entities."""
 
-    __tablename__ = "audit_events"
+    __tablename__ = "events"
 
-    audit_event_id: Mapped[str] = mapped_column(
+    event_id: Mapped[str] = mapped_column(
         String(26), primary_key=True, default=_generate_ulid
     )
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -161,14 +161,14 @@ class AuditEvent(Base):
     )
 
     __table_args__ = (
-        Index("ix_audit_events_entity", "entity_type", "entity_id"),
-        Index("ix_audit_events_event_type", "event_type"),
+        Index("ix_events_entity", "entity_type", "entity_id"),
+        Index("ix_events_event_type", "event_type"),
     )
 
     def __repr__(self) -> str:
         return (
-            "AuditEvent("
-            f"audit_event_id={self.audit_event_id!r}, "
+            "Event("
+            f"event_id={self.event_id!r}, "
             f"event_type={self.event_type!r}, "
             f"entity_type={self.entity_type!r}, "
             f"entity_id={self.entity_id!r}"
@@ -198,6 +198,6 @@ __all__ = [
     "Configuration",
     "Job",
     "Document",
-    "AuditEvent",
+    "Event",
     "MaintenanceStatus",
 ]

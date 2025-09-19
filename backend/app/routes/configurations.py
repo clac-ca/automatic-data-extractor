@@ -12,16 +12,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import AuditEvent, Configuration
+from ..models import Event, Configuration
 from ..schemas import (
-    AuditEventListResponse,
-    AuditEventResponse,
+    EventListResponse,
+    EventResponse,
     ConfigurationCreate,
     ConfigurationResponse,
     ConfigurationTimelineSummary,
     ConfigurationUpdate,
 )
-from ..services.audit_log import list_entity_events
+from ..services.events import list_entity_events
 from ..services.configurations import (
     ActiveConfigurationNotFoundError,
     ConfigurationNotFoundError,
@@ -49,8 +49,8 @@ def _to_response(configuration: Configuration) -> ConfigurationResponse:
     return ConfigurationResponse.model_validate(configuration)
 
 
-def _audit_to_response(event: AuditEvent) -> AuditEventResponse:
-    return AuditEventResponse.model_validate(event)
+def _event_to_response(event: Event) -> EventResponse:
+    return EventResponse.model_validate(event)
 
 
 @router.post(
@@ -70,9 +70,9 @@ def create_configuration_endpoint(
             title=payload.title,
             payload=payload.payload,
             is_active=payload.is_active,
-            audit_actor_type="system",
-            audit_actor_label="api",
-            audit_source="api",
+            event_actor_type="system",
+            event_actor_label="api",
+            event_source="api",
         )
     except IntegrityError as exc:
         db.rollback()
@@ -134,8 +134,8 @@ def get_active_configuration_endpoint(
     return _to_response(configuration)
 
 
-@router.get("/{configuration_id}/audit-events", response_model=AuditEventListResponse)
-def list_configuration_audit_events(
+@router.get("/{configuration_id}/events", response_model=EventListResponse)
+def list_configuration_events(
     configuration_id: str,
     db: Session = Depends(get_db),
     *,
@@ -146,7 +146,7 @@ def list_configuration_audit_events(
     request_id: str | None = Query(None),
     occurred_after: datetime | None = Query(None),
     occurred_before: datetime | None = Query(None),
-) -> AuditEventListResponse:
+    ) -> EventListResponse:
     try:
         configuration = get_configuration(db, configuration_id)
     except ConfigurationNotFoundError as exc:
@@ -168,8 +168,8 @@ def list_configuration_audit_events(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    items = [_audit_to_response(event) for event in result.events]
-    return AuditEventListResponse(
+    items = [_event_to_response(event) for event in result.events]
+    return EventListResponse(
         items=items,
         total=result.total,
         limit=result.limit,
@@ -192,9 +192,9 @@ def update_configuration_endpoint(
             db,
             configuration_id,
             **update_kwargs,
-            audit_actor_type="system",
-            audit_actor_label="api",
-            audit_source="api",
+            event_actor_type="system",
+            event_actor_label="api",
+            event_source="api",
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

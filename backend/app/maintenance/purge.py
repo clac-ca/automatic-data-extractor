@@ -85,8 +85,8 @@ def _run_purge(limit: int | None, dry_run: bool) -> ExpiredDocumentPurgeSummary:
             db,
             limit=limit,
             dry_run=dry_run,
-            audit_source="cli",
-            audit_request_id=started_at,
+            event_source="cli",
+            event_request_id=started_at,
         )
 
 

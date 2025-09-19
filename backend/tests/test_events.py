@@ -10,8 +10,8 @@ from backend.app.schemas import (
     DocumentTimelineSummary,
     JobTimelineSummary,
 )
-from backend.app.services.audit_log import (
-    AuditEventRecord,
+from backend.app.services.events import (
+    EventRecord,
     list_entity_events,
     list_events,
     record_event,
@@ -31,7 +31,7 @@ def db_session(app_client):
 
 
 def test_record_event_generates_ulids_and_canonical_payload(db_session) -> None:
-    record = AuditEventRecord(
+    record = EventRecord(
         event_type="document.deleted",
         entity_type="document",
         entity_id="doc-1",
@@ -39,17 +39,17 @@ def test_record_event_generates_ulids_and_canonical_payload(db_session) -> None:
     )
 
     first = record_event(db_session, record)
-    assert len(first.audit_event_id) == 26
+    assert len(first.event_id) == 26
     assert list(first.payload.keys()) == ["a", "b"]
 
     second = record_event(db_session, record)
-    assert second.audit_event_id != first.audit_event_id
+    assert second.event_id != first.event_id
     assert list(second.payload.keys()) == ["a", "b"]
 
 
 def test_record_event_accepts_optional_metadata(db_session) -> None:
     occurred_at = datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc)
-    record = AuditEventRecord(
+    record = EventRecord(
         event_type="configuration.updated",
         entity_type="configuration",
         entity_id="config-1",
@@ -75,7 +75,7 @@ def test_record_event_accepts_optional_metadata(db_session) -> None:
 def test_list_events_filters_and_paginates(db_session) -> None:
     base_time = datetime.now(timezone.utc) - timedelta(minutes=5)
     records = [
-        AuditEventRecord(
+        EventRecord(
             event_type="document.deleted",
             entity_type="document",
             entity_id="doc-1",
@@ -88,7 +88,7 @@ def test_list_events_filters_and_paginates(db_session) -> None:
         for index in range(3)
     ]
     records.append(
-        AuditEventRecord(
+        EventRecord(
             event_type="document.uploaded",
             entity_type="document",
             entity_id="doc-2",
@@ -131,7 +131,7 @@ def test_list_events_occurred_filters_include_same_day_boundaries(db_session) ->
 
     record_event(
         db_session,
-        AuditEventRecord(
+        EventRecord(
             event_type="document.accessed",
             entity_type="document",
             entity_id="doc-morning",
@@ -140,7 +140,7 @@ def test_list_events_occurred_filters_include_same_day_boundaries(db_session) ->
     )
     record_event(
         db_session,
-        AuditEventRecord(
+        EventRecord(
             event_type="document.accessed",
             entity_type="document",
             entity_id="doc-evening",
@@ -149,7 +149,7 @@ def test_list_events_occurred_filters_include_same_day_boundaries(db_session) ->
     )
     record_event(
         db_session,
-        AuditEventRecord(
+        EventRecord(
             event_type="document.accessed",
             entity_type="document",
             entity_id="doc-next-day",
@@ -185,7 +185,7 @@ def test_list_entity_events_matches_generic(db_session) -> None:
     for suffix in range(2):
         record_event(
             db_session,
-            AuditEventRecord(
+            EventRecord(
                 event_type="document.deleted",
                 entity_type="document",
                 entity_id="doc-entity",
@@ -197,12 +197,12 @@ def test_list_entity_events_matches_generic(db_session) -> None:
     scoped = list_entity_events(db_session, entity_type="document", entity_id="doc-entity")
 
     assert scoped.total == generic.total
-    assert [event.audit_event_id for event in scoped.events] == [
-        event.audit_event_id for event in generic.events
+    assert [event.event_id for event in scoped.events] == [
+        event.event_id for event in generic.events
     ]
 
 
-def test_audit_events_endpoint_supports_filters(app_client) -> None:
+def test_events_endpoint_supports_filters(app_client) -> None:
     client, _, _ = app_client
     session_factory = get_sessionmaker()
 
@@ -225,7 +225,7 @@ def test_audit_events_endpoint_supports_filters(app_client) -> None:
 
         record_event(
             session,
-            AuditEventRecord(
+            EventRecord(
                 event_type="document.deleted",
                 entity_type="document",
                 entity_id=first_document_id,
@@ -236,7 +236,7 @@ def test_audit_events_endpoint_supports_filters(app_client) -> None:
         )
         record_event(
             session,
-            AuditEventRecord(
+            EventRecord(
                 event_type="document.uploaded",
                 entity_type="document",
                 entity_id=second_document_id,
@@ -244,7 +244,7 @@ def test_audit_events_endpoint_supports_filters(app_client) -> None:
             ),
         )
 
-    response = client.get("/audit-events", params={"limit": 1})
+    response = client.get("/events", params={"limit": 1})
     assert response.status_code == 200
     payload = response.json()
     assert payload["total"] == 2
@@ -252,7 +252,7 @@ def test_audit_events_endpoint_supports_filters(app_client) -> None:
     assert payload["entity"] is None
 
     filtered = client.get(
-        "/audit-events",
+        "/events",
         params={"entity_type": "document", "entity_id": first_document_id},
     )
     assert filtered.status_code == 200
@@ -262,7 +262,7 @@ def test_audit_events_endpoint_supports_filters(app_client) -> None:
     assert filtered_payload["entity"] == first_summary
 
     actor_filtered = client.get(
-        "/audit-events",
+        "/events",
         params={"actor_label": "ops"},
     )
     assert actor_filtered.status_code == 200
@@ -271,11 +271,11 @@ def test_audit_events_endpoint_supports_filters(app_client) -> None:
     assert actor_payload["items"][0]["actor_label"] == "ops"
     assert actor_payload["entity"] is None
 
-    invalid = client.get("/audit-events", params={"entity_type": "document"})
+    invalid = client.get("/events", params={"entity_type": "document"})
     assert invalid.status_code == 400
 
 
-def test_audit_events_endpoint_embeds_entity_summary_when_filtered(app_client) -> None:
+def test_events_endpoint_embeds_entity_summary_when_filtered(app_client) -> None:
     client, _, _ = app_client
     session_factory = get_sessionmaker()
 
@@ -291,7 +291,7 @@ def test_audit_events_endpoint_embeds_entity_summary_when_filtered(app_client) -
 
         record_event(
             session,
-            AuditEventRecord(
+            EventRecord(
                 event_type="document.note",
                 entity_type="document",
                 entity_id=document_id,
@@ -306,7 +306,7 @@ def test_audit_events_endpoint_embeds_entity_summary_when_filtered(app_client) -
             title="Invoice parser",
             payload={"fields": []},
             is_active=True,
-            audit_source="api",
+            event_source="api",
         )
         configuration_summary = (
             ConfigurationTimelineSummary.model_validate(configuration).model_dump()
@@ -320,13 +320,13 @@ def test_audit_events_endpoint_embeds_entity_summary_when_filtered(app_client) -
             created_by="ops@ade.local",
             input_payload={"uri": "s3://bucket/invoice.pdf"},
             configuration_id=configuration_id,
-            audit_source="api",
+            event_source="api",
         )
         job_summary = JobTimelineSummary.model_validate(job).model_dump()
         job_id = job.job_id
 
     document_response = client.get(
-        "/audit-events",
+        "/events",
         params={"entity_type": "document", "entity_id": document_id},
     )
     assert document_response.status_code == 200
@@ -339,7 +339,7 @@ def test_audit_events_endpoint_embeds_entity_summary_when_filtered(app_client) -
     )
 
     configuration_response = client.get(
-        "/audit-events",
+        "/events",
         params={
             "entity_type": "configuration",
             "entity_id": configuration_id,
@@ -355,7 +355,7 @@ def test_audit_events_endpoint_embeds_entity_summary_when_filtered(app_client) -
     )
 
     job_response = client.get(
-        "/audit-events",
+        "/events",
         params={"entity_type": "job", "entity_id": job_id},
     )
     assert job_response.status_code == 200
@@ -365,11 +365,11 @@ def test_audit_events_endpoint_embeds_entity_summary_when_filtered(app_client) -
     assert all(item["entity_id"] == job_id for item in job_payload["items"])
 
 
-def test_audit_events_endpoint_returns_404_for_missing_entity(app_client) -> None:
+def test_events_endpoint_returns_404_for_missing_entity(app_client) -> None:
     client, _, _ = app_client
 
     response = client.get(
-        "/audit-events",
+        "/events",
         params={"entity_type": "document", "entity_id": "missing"},
     )
     assert response.status_code == 404
