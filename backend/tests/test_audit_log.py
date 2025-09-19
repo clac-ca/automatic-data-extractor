@@ -5,12 +5,20 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from backend.app.db import get_sessionmaker
+from backend.app.schemas import (
+    ConfigurationTimelineSummary,
+    DocumentTimelineSummary,
+    JobTimelineSummary,
+)
 from backend.app.services.audit_log import (
     AuditEventRecord,
     list_entity_events,
     list_events,
     record_event,
 )
+from backend.app.services.configurations import create_configuration
+from backend.app.services.documents import store_document
+from backend.app.services.jobs import create_job
 
 
 @pytest.fixture
@@ -199,12 +207,28 @@ def test_audit_events_endpoint_supports_filters(app_client) -> None:
     session_factory = get_sessionmaker()
 
     with session_factory() as session:
+        first_document = store_document(
+            session,
+            original_filename="ops.txt",
+            content_type="text/plain",
+            data=b"ops",
+        )
+        second_document = store_document(
+            session,
+            original_filename="other.txt",
+            content_type="text/plain",
+            data=b"other",
+        )
+        first_summary = DocumentTimelineSummary.model_validate(first_document).model_dump()
+        first_document_id = first_document.document_id
+        second_document_id = second_document.document_id
+
         record_event(
             session,
             AuditEventRecord(
                 event_type="document.deleted",
                 entity_type="document",
-                entity_id="doc-api-1",
+                entity_id=first_document_id,
                 source="api",
                 actor_type="user",
                 actor_label="ops",
@@ -215,7 +239,7 @@ def test_audit_events_endpoint_supports_filters(app_client) -> None:
             AuditEventRecord(
                 event_type="document.uploaded",
                 entity_type="document",
-                entity_id="doc-api-2",
+                entity_id=second_document_id,
                 source="api",
             ),
         )
@@ -225,15 +249,17 @@ def test_audit_events_endpoint_supports_filters(app_client) -> None:
     payload = response.json()
     assert payload["total"] == 2
     assert len(payload["items"]) == 1
+    assert payload["entity"] is None
 
     filtered = client.get(
         "/audit-events",
-        params={"entity_type": "document", "entity_id": "doc-api-1"},
+        params={"entity_type": "document", "entity_id": first_document_id},
     )
     assert filtered.status_code == 200
     filtered_payload = filtered.json()
     assert filtered_payload["total"] == 1
-    assert filtered_payload["items"][0]["entity_id"] == "doc-api-1"
+    assert filtered_payload["items"][0]["entity_id"] == first_document_id
+    assert filtered_payload["entity"] == first_summary
 
     actor_filtered = client.get(
         "/audit-events",
@@ -243,6 +269,108 @@ def test_audit_events_endpoint_supports_filters(app_client) -> None:
     actor_payload = actor_filtered.json()
     assert actor_payload["total"] == 1
     assert actor_payload["items"][0]["actor_label"] == "ops"
+    assert actor_payload["entity"] is None
 
     invalid = client.get("/audit-events", params={"entity_type": "document"})
     assert invalid.status_code == 400
+
+
+def test_audit_events_endpoint_embeds_entity_summary_when_filtered(app_client) -> None:
+    client, _, _ = app_client
+    session_factory = get_sessionmaker()
+
+    with session_factory() as session:
+        document = store_document(
+            session,
+            original_filename="summary.txt",
+            content_type="text/plain",
+            data=b"summary",
+        )
+        document_summary = DocumentTimelineSummary.model_validate(document).model_dump()
+        document_id = document.document_id
+
+        record_event(
+            session,
+            AuditEventRecord(
+                event_type="document.note",
+                entity_type="document",
+                entity_id=document_id,
+                source="api",
+            ),
+        )
+
+    with session_factory() as session:
+        configuration = create_configuration(
+            session,
+            document_type="invoice",
+            title="Invoice parser",
+            payload={"fields": []},
+            is_active=True,
+            audit_source="api",
+        )
+        configuration_summary = (
+            ConfigurationTimelineSummary.model_validate(configuration).model_dump()
+        )
+        configuration_id = configuration.configuration_id
+
+    with session_factory() as session:
+        job = create_job(
+            session,
+            document_type="invoice",
+            created_by="ops@ade.local",
+            input_payload={"uri": "s3://bucket/invoice.pdf"},
+            configuration_id=configuration_id,
+            audit_source="api",
+        )
+        job_summary = JobTimelineSummary.model_validate(job).model_dump()
+        job_id = job.job_id
+
+    document_response = client.get(
+        "/audit-events",
+        params={"entity_type": "document", "entity_id": document_id},
+    )
+    assert document_response.status_code == 200
+    document_payload = document_response.json()
+    assert document_payload["entity"] == document_summary
+    assert document_payload["total"] == 1
+    assert all(
+        item["entity_id"] == document_id
+        for item in document_payload["items"]
+    )
+
+    configuration_response = client.get(
+        "/audit-events",
+        params={
+            "entity_type": "configuration",
+            "entity_id": configuration_id,
+        },
+    )
+    assert configuration_response.status_code == 200
+    configuration_payload = configuration_response.json()
+    assert configuration_payload["entity"] == configuration_summary
+    assert configuration_payload["total"] >= 1
+    assert all(
+        item["entity_id"] == configuration_id
+        for item in configuration_payload["items"]
+    )
+
+    job_response = client.get(
+        "/audit-events",
+        params={"entity_type": "job", "entity_id": job_id},
+    )
+    assert job_response.status_code == 200
+    job_payload = job_response.json()
+    assert job_payload["entity"] == job_summary
+    assert job_payload["total"] >= 1
+    assert all(item["entity_id"] == job_id for item in job_payload["items"])
+
+
+def test_audit_events_endpoint_returns_404_for_missing_entity(app_client) -> None:
+    client, _, _ = app_client
+
+    response = client.get(
+        "/audit-events",
+        params={"entity_type": "document", "entity_id": "missing"},
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Document 'missing' was not found"

@@ -9,14 +9,45 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import AuditEvent
-from ..schemas import AuditEventListResponse, AuditEventResponse
+from ..schemas import (
+    AuditEventEntitySummary,
+    AuditEventListResponse,
+    AuditEventResponse,
+    ConfigurationTimelineSummary,
+    DocumentTimelineSummary,
+    JobTimelineSummary,
+)
 from ..services.audit_log import list_events as list_events_service
+from ..services.configurations import (
+    ConfigurationNotFoundError,
+    get_configuration as get_configuration_service,
+)
+from ..services.documents import (
+    DocumentNotFoundError,
+    get_document as get_document_service,
+)
+from ..services.jobs import JobNotFoundError, get_job as get_job_service
 
 router = APIRouter(prefix="/audit-events", tags=["audit"])
 
 
 def _to_response(event: AuditEvent) -> AuditEventResponse:
     return AuditEventResponse.model_validate(event)
+
+
+def _load_entity_summary(
+    db: Session, entity_type: str, entity_id: str
+) -> AuditEventEntitySummary | None:
+    if entity_type == "document":
+        document = get_document_service(db, entity_id)
+        return DocumentTimelineSummary.model_validate(document)
+    if entity_type == "configuration":
+        configuration = get_configuration_service(db, entity_id)
+        return ConfigurationTimelineSummary.model_validate(configuration)
+    if entity_type == "job":
+        job = get_job_service(db, entity_id)
+        return JobTimelineSummary.model_validate(job)
+    return None
 
 
 @router.get("", response_model=AuditEventListResponse)
@@ -40,6 +71,13 @@ def list_audit_events(
         detail = "entity_type and entity_id must be provided together"
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
+    entity_summary: AuditEventEntitySummary | None = None
+    if entity_type and entity_id:
+        try:
+            entity_summary = _load_entity_summary(db, entity_type, entity_id)
+        except (DocumentNotFoundError, ConfigurationNotFoundError, JobNotFoundError) as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
     try:
         result = list_events_service(
             db,
@@ -60,7 +98,13 @@ def list_audit_events(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     items = [_to_response(event) for event in result.events]
-    return AuditEventListResponse(items=items, total=result.total, limit=result.limit, offset=result.offset)
+    return AuditEventListResponse(
+        items=items,
+        total=result.total,
+        limit=result.limit,
+        offset=result.offset,
+        entity=entity_summary,
+    )
 
 
 __all__ = ["router"]
