@@ -362,7 +362,7 @@ def test_delete_document_removes_file_and_marks_metadata(app_client) -> None:
     assert event["actor_label"] == "ops@ade.local"
     assert event["source"] == "api"
     assert event["payload"]["delete_reason"] == "cleanup"
-    assert event["payload"]["missing_before_delete"] is False
+    assert "missing_before_delete" not in event["payload"]
 
     list_response = client.get("/documents")
     assert list_response.status_code == 200
@@ -407,6 +407,31 @@ def test_delete_document_is_idempotent(app_client) -> None:
     audit_response = client.get(f"/documents/{payload['document_id']}/audit-events")
     assert audit_response.status_code == 200
     assert audit_response.json()["total"] == 1
+
+
+def test_delete_document_missing_file_returns_404(app_client) -> None:
+    client, _, documents_dir = app_client
+    payload = _upload_document(
+        client,
+        filename="missing-delete.pdf",
+        data=b"payload",
+        content_type="application/pdf",
+    )
+
+    stored_path = _stored_path(documents_dir, payload)
+    stored_path.unlink()
+
+    response = _delete_document(
+        client,
+        payload["document_id"],
+        deleted_by="ops",
+    )
+
+    assert response.status_code == 404
+    assert (
+        response.json()["detail"]
+        == f"Stored file for document '{payload['document_id']}' is missing"
+    )
 
 
 def test_delete_missing_document_returns_404(app_client) -> None:
