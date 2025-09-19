@@ -133,33 +133,20 @@ def _allocate_storage_path(documents_dir: Path) -> _StorageAllocation:
     raise RuntimeError("Unable to allocate unique storage path")
 
 
-@dataclass(frozen=True)
-class _PersistedStream:
-    """Details about a stream that has been written to disk."""
-
-    digest: str
-    size: int
-
-
 def _persist_stream(
     stream: BinaryIO,
     destination: Path,
     *,
     max_bytes: int | None = None,
-) -> _PersistedStream:
+) -> tuple[str, int]:
     size = 0
     hasher = sha256()
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         with destination.open("wb") as target:
-            while True:
-                chunk = stream.read(_CHUNK_SIZE)
-                if not chunk:
-                    break
+            for chunk in iter(lambda: stream.read(_CHUNK_SIZE), b""):
                 prospective_size = size + len(chunk)
                 if max_bytes is not None and prospective_size > max_bytes:
-                    # Validate the limit before touching the filesystem so we
-                    # never leave a partially written payload behind.
                     raise DocumentTooLargeError(
                         limit=max_bytes, received=prospective_size
                     )
@@ -169,7 +156,7 @@ def _persist_stream(
     except Exception:
         destination.unlink(missing_ok=True)
         raise
-    return _PersistedStream(digest=hasher.hexdigest(), size=size)
+    return hasher.hexdigest(), size
 
 
 def _resolve_expiration(
@@ -220,10 +207,10 @@ def store_document(
     stream = _prepare_stream(data)
 
     allocation = _allocate_storage_path(settings.documents_dir)
-    persisted = _persist_stream(
+    digest, size = _persist_stream(
         stream, allocation.disk_path, max_bytes=settings.max_upload_bytes
     )
-    sha_value = f"{_HASH_PREFIX}{persisted.digest}"
+    sha_value = f"{_HASH_PREFIX}{digest}"
     stored_uri = allocation.uri
 
     now = datetime.now(timezone.utc)
@@ -237,7 +224,7 @@ def store_document(
     document = Document(
         original_filename=_normalise_filename(original_filename),
         content_type=_normalise_content_type(content_type),
-        byte_size=persisted.size,
+        byte_size=size,
         sha256=sha_value,
         stored_uri=stored_uri,
         metadata_={},
@@ -316,6 +303,31 @@ def resolve_document_path(
     return candidate
 
 
+def _safe_document_path(
+    document: Document,
+    *,
+    settings: config.Settings,
+    context: str | None = None,
+) -> Path | None:
+    """Resolve a document path, logging and returning ``None`` on failure."""
+
+    try:
+        return resolve_document_path(document, settings=settings)
+    except DocumentStoragePathError as exc:
+        message = "Stored URI for document resolves outside documents directory"
+        if context:
+            message = f"{message} {context}"
+        logger.warning(
+            message,
+            extra={
+                "document_id": document.document_id,
+                "stored_uri": document.stored_uri,
+            },
+            exc_info=exc,
+        )
+        return None
+
+
 @dataclass(slots=True)
 class DocumentDeletionResult:
     """Outcome of a document deletion attempt."""
@@ -343,21 +355,10 @@ def delete_document(
     document = get_document(db, document_id)
     now = datetime.now(timezone.utc)
     settings = config.get_settings()
-    path: Path | None = None
+    path = _safe_document_path(document, settings=settings)
     missing_before_delete = True
-
-    try:
-        path = resolve_document_path(document, settings=settings)
+    if path is not None:
         missing_before_delete = not path.exists()
-    except DocumentStoragePathError as exc:
-        logger.warning(
-            "Stored URI for document resolves outside documents directory",
-            extra={
-                "document_id": document.document_id,
-                "stored_uri": document.stored_uri,
-            },
-            exc_info=exc,
-        )
 
     mutated = document.deleted_at is None
     if mutated:
@@ -471,6 +472,23 @@ class ExpiredDocumentPurgeSummary:
     bytes_reclaimed: int = 0
     documents: list[PurgedDocument] = field(default_factory=list)
 
+    def record(self, document: Document, *, missing_before_delete: bool) -> None:
+        self.processed_count += 1
+        if missing_before_delete:
+            self.missing_files += 1
+        else:
+            self.bytes_reclaimed += document.byte_size
+
+        self.documents.append(
+            PurgedDocument(
+                document_id=document.document_id,
+                stored_uri=document.stored_uri,
+                expires_at=document.expires_at,
+                byte_size=document.byte_size,
+                missing_before_delete=missing_before_delete,
+            )
+        )
+
 
 def iter_expired_documents(
     db: Session,
@@ -535,35 +553,13 @@ def purge_expired_documents(
     summary = ExpiredDocumentPurgeSummary(dry_run=dry_run)
     settings = config.get_settings()
 
-    def _record(document: Document, missing_before_delete: bool) -> None:
-        summary.processed_count += 1
-        if missing_before_delete:
-            summary.missing_files += 1
-        else:
-            summary.bytes_reclaimed += document.byte_size
-
-        summary.documents.append(
-            PurgedDocument(
-                document_id=document.document_id,
-                stored_uri=document.stored_uri,
-                expires_at=document.expires_at,
-                byte_size=document.byte_size,
-                missing_before_delete=missing_before_delete,
-            )
-        )
-
     def _missing_before_delete(document: Document) -> bool:
-        try:
-            path = resolve_document_path(document, settings=settings)
-        except DocumentStoragePathError as exc:
-            logger.warning(
-                "Stored URI for document resolves outside documents directory during purge",
-                extra={
-                    "document_id": document.document_id,
-                    "stored_uri": document.stored_uri,
-                },
-                exc_info=exc,
-            )
+        path = _safe_document_path(
+            document,
+            settings=settings,
+            context="during purge",
+        )
+        if path is None:
             return True
         return not path.exists()
 
@@ -571,8 +567,10 @@ def purge_expired_documents(
     if dry_run:
         for batch in iterator:
             for document in batch:
-                missing_before_delete = _missing_before_delete(document)
-                _record(document, missing_before_delete)
+                summary.record(
+                    document,
+                    missing_before_delete=_missing_before_delete(document),
+                )
         return summary
 
     with db.begin():
@@ -589,7 +587,10 @@ def purge_expired_documents(
                     audit_source=audit_source,
                     audit_request_id=audit_request_id,
                 )
-                _record(result.document, result.missing_before_delete)
+                summary.record(
+                    result.document,
+                    missing_before_delete=result.missing_before_delete,
+                )
 
     return summary
 
