@@ -74,12 +74,48 @@ class DocumentDeleteRequest(BaseModel):
     ] | None = None
 
 
-class AuditEventResponse(BaseModel):
-    """API representation of an audit event."""
+class DocumentUpdate(BaseModel):
+    """Payload for updating document metadata and recording events."""
+
+    metadata: dict[str, Any] | None = None
+    event_type: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
+    ] | None = None
+    actor_type: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)
+    ] | None = None
+    actor_id: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
+    ] | None = None
+    actor_label: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
+    ] | None = None
+    source: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)
+    ] | None = None
+    request_id: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
+    ] | None = None
+    occurred_at: str | None = None
+    event_payload: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def _ensure_updates(self) -> "DocumentUpdate":
+        if self.metadata is None and self.event_type is None and self.event_payload is None:
+            msg = "At least one of metadata, event_type, or event_payload must be provided"
+            raise ValueError(msg)
+        if self.event_payload is not None and self.event_type is None:
+            msg = "event_type is required when supplying event_payload"
+            raise ValueError(msg)
+        return self
+
+
+class EventResponse(BaseModel):
+    """API representation of an event."""
 
     model_config = ConfigDict(from_attributes=True)
 
-    audit_event_id: str
+    event_id: str
     event_type: str
     entity_type: str
     entity_id: str
@@ -93,7 +129,7 @@ class AuditEventResponse(BaseModel):
 
 
 class DocumentTimelineSummary(BaseModel):
-    """Lightweight document metadata embedded in audit timelines."""
+    """Lightweight document metadata embedded in event timelines."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -109,7 +145,7 @@ class DocumentTimelineSummary(BaseModel):
 
 
 class ConfigurationTimelineSummary(BaseModel):
-    """Lightweight configuration metadata embedded in audit timelines."""
+    """Lightweight configuration metadata embedded in event timelines."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -121,7 +157,7 @@ class ConfigurationTimelineSummary(BaseModel):
 
 
 class JobTimelineSummary(BaseModel):
-    """Lightweight job metadata embedded in audit timelines."""
+    """Lightweight job metadata embedded in event timelines."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -131,19 +167,19 @@ class JobTimelineSummary(BaseModel):
     created_by: str
 
 
-AuditEventEntitySummary = (
+EventEntitySummary = (
     DocumentTimelineSummary | ConfigurationTimelineSummary | JobTimelineSummary
 )
 
 
-class AuditEventListResponse(BaseModel):
-    """Paginated container for audit events."""
+class EventListResponse(BaseModel):
+    """Paginated container for events."""
 
-    items: list[AuditEventResponse]
+    items: list[EventResponse]
     total: int
     limit: int
     offset: int
-    entity: AuditEventEntitySummary | None = None
+    entity: EventEntitySummary | None = None
 
 
 class ConfigurationBase(BaseModel):
@@ -315,6 +351,11 @@ class JobResponse(BaseModel):
 __all__ = [
     "HealthResponse",
     "DocumentResponse",
+    "DocumentDeleteRequest",
+    "DocumentUpdate",
+    "EventResponse",
+    "EventListResponse",
+    "EventEntitySummary",
     "ConfigurationCreate",
     "ConfigurationUpdate",
     "ConfigurationResponse",

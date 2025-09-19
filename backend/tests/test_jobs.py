@@ -9,7 +9,7 @@ import pytest
 import re
 
 from backend.app.db import get_sessionmaker
-from backend.app.services.audit_log import AuditEventRecord, record_event
+from backend.app.services.events import EventRecord, record_event
 
 
 def _activate_configuration(
@@ -317,7 +317,7 @@ def test_update_job_rejects_null_fields(app_client, field: str, value: Any) -> N
     assert response.status_code == 422
 
 
-def test_create_job_records_audit_event(app_client) -> None:
+def test_create_job_records_event_event(app_client) -> None:
     client, _, _ = app_client
     configuration = _activate_configuration(client)
 
@@ -329,7 +329,7 @@ def test_create_job_records_audit_event(app_client) -> None:
     job = response.json()
 
     events = client.get(
-        "/audit-events",
+        "/events",
         params={"entity_type": "job", "entity_id": job["job_id"]},
     )
     assert events.status_code == 200
@@ -382,7 +382,7 @@ def test_job_updates_emit_status_and_result_events(app_client) -> None:
     assert completion_response.status_code == 200
 
     events = client.get(
-        "/audit-events",
+        "/events",
         params={"entity_type": "job", "entity_id": job["job_id"]},
     )
     assert events.status_code == 200
@@ -419,7 +419,7 @@ def test_job_updates_emit_status_and_result_events(app_client) -> None:
     assert results_event["payload"]["metrics"] == completion_payload["metrics"]
 
 
-def test_job_audit_timeline_paginates_and_filters(app_client) -> None:
+def test_job_event_timeline_paginates_and_filters(app_client) -> None:
     client, _, _ = app_client
     configuration = _activate_configuration(client)
 
@@ -436,7 +436,7 @@ def test_job_audit_timeline_paginates_and_filters(app_client) -> None:
         for index in range(3):
             record_event(
                 session,
-                AuditEventRecord(
+                EventRecord(
                     event_type=f"job.test.{index}",
                     entity_type="job",
                     entity_id=job["job_id"],
@@ -447,7 +447,7 @@ def test_job_audit_timeline_paginates_and_filters(app_client) -> None:
             )
 
     response = client.get(
-        f"/jobs/{job['job_id']}/audit-events",
+        f"/jobs/{job['job_id']}/events",
         params={"limit": 2, "source": "timeline-test"},
     )
     assert response.status_code == 200
@@ -465,7 +465,7 @@ def test_job_audit_timeline_paginates_and_filters(app_client) -> None:
     ]
 
     second_page = client.get(
-        f"/jobs/{job['job_id']}/audit-events",
+        f"/jobs/{job['job_id']}/events",
         params={"limit": 2, "offset": 2, "source": "timeline-test"},
     )
     assert second_page.status_code == 200
@@ -476,7 +476,7 @@ def test_job_audit_timeline_paginates_and_filters(app_client) -> None:
     ]
 
     filtered = client.get(
-        f"/jobs/{job['job_id']}/audit-events",
+        f"/jobs/{job['job_id']}/events",
         params={
             "event_type": "job.test.1",
             "source": "timeline-test",
@@ -488,7 +488,7 @@ def test_job_audit_timeline_paginates_and_filters(app_client) -> None:
     assert filtered_payload["items"][0]["event_type"] == "job.test.1"
 
 
-def test_job_audit_timeline_summary_tracks_updates(app_client) -> None:
+def test_job_event_timeline_summary_tracks_updates(app_client) -> None:
     client, _, _ = app_client
     configuration = _activate_configuration(client)
 
@@ -506,7 +506,7 @@ def test_job_audit_timeline_summary_tracks_updates(app_client) -> None:
     assert patch_response.status_code == 200
     updated = patch_response.json()
 
-    timeline = client.get(f"/jobs/{job['job_id']}/audit-events")
+    timeline = client.get(f"/jobs/{job['job_id']}/events")
     assert timeline.status_code == 200
     payload = timeline.json()
     assert payload["entity"] == {
@@ -517,10 +517,10 @@ def test_job_audit_timeline_summary_tracks_updates(app_client) -> None:
     }
 
 
-def test_job_audit_timeline_returns_404_for_missing_job(app_client) -> None:
+def test_job_event_timeline_returns_404_for_missing_job(app_client) -> None:
     client, _, _ = app_client
 
-    response = client.get("/jobs/missing/audit-events")
+    response = client.get("/jobs/missing/events")
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Job 'missing' was not found"

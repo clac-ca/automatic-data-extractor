@@ -16,7 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..models import Configuration
-from .audit_log import AuditEventRecord, record_event
+from .events import EventRecord, record_event
 
 
 logger = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ def _record_configuration_event(
     if payload:
         combined_payload.update(payload)
 
-    record = AuditEventRecord(
+    record = EventRecord(
         event_type=event_type,
         entity_type="configuration",
         entity_id=configuration.configuration_id,
@@ -111,7 +111,7 @@ def _record_configuration_event(
         record_event(db, record, commit=commit)
     except Exception:
         logger.exception(
-            "Failed to record configuration audit event",
+            "Failed to record configuration event",
             extra={
                 "configuration_id": configuration.configuration_id,
                 "event_type": event_type,
@@ -179,11 +179,11 @@ def create_configuration(
     title: str,
     payload: dict[str, Any] | None = None,
     is_active: bool = False,
-    audit_actor_type: str | None = None,
-    audit_actor_id: str | None = None,
-    audit_actor_label: str | None = None,
-    audit_source: str | None = None,
-    audit_request_id: str | None = None,
+    event_actor_type: str | None = None,
+    event_actor_id: str | None = None,
+    event_actor_label: str | None = None,
+    event_source: str | None = None,
+    event_request_id: str | None = None,
 ) -> Configuration:
     """Persist and return a new configuration version."""
 
@@ -211,11 +211,11 @@ def create_configuration(
             db,
             configuration=configuration,
             event_type="configuration.created",
-            actor_type=audit_actor_type,
-            actor_id=audit_actor_id,
-            actor_label=audit_actor_label,
-            source=audit_source,
-            request_id=audit_request_id,
+            actor_type=event_actor_type,
+            actor_id=event_actor_id,
+            actor_label=event_actor_label,
+            source=event_source,
+            request_id=event_request_id,
             occurred_at=configuration.created_at,
             payload=None,
             commit=False,
@@ -226,11 +226,11 @@ def create_configuration(
                 db,
                 configuration=configuration,
                 event_type="configuration.activated",
-                actor_type=audit_actor_type,
-                actor_id=audit_actor_id,
-                actor_label=audit_actor_label,
-                source=audit_source,
-                request_id=audit_request_id,
+                actor_type=event_actor_type,
+                actor_id=event_actor_id,
+                actor_label=event_actor_label,
+                source=event_source,
+                request_id=event_request_id,
                 occurred_at=configuration.activated_at,
                 payload=None,
                 commit=False,
@@ -245,11 +245,11 @@ def update_configuration(
     title: str | None = None,
     payload: dict[str, Any] | None = None,
     is_active: bool | None = None,
-    audit_actor_type: str | None = None,
-    audit_actor_id: str | None = None,
-    audit_actor_label: str | None = None,
-    audit_source: str | None = None,
-    audit_request_id: str | None = None,
+    event_actor_type: str | None = None,
+    event_actor_id: str | None = None,
+    event_actor_label: str | None = None,
+    event_source: str | None = None,
+    event_request_id: str | None = None,
 ) -> Configuration:
     """Update and return the configuration with the given ID."""
 
@@ -290,11 +290,11 @@ def update_configuration(
                 db,
                 configuration=configuration,
                 event_type="configuration.updated",
-                actor_type=audit_actor_type,
-                actor_id=audit_actor_id,
-                actor_label=audit_actor_label,
-                source=audit_source,
-                request_id=audit_request_id,
+                actor_type=event_actor_type,
+                actor_id=event_actor_id,
+                actor_label=event_actor_label,
+                source=event_source,
+                request_id=event_request_id,
                 occurred_at=configuration.updated_at,
                 payload={"changed_fields": changed_fields},
                 commit=False,
@@ -305,11 +305,11 @@ def update_configuration(
                 db,
                 configuration=configuration,
                 event_type="configuration.activated",
-                actor_type=audit_actor_type,
-                actor_id=audit_actor_id,
-                actor_label=audit_actor_label,
-                source=audit_source,
-                request_id=audit_request_id,
+                actor_type=event_actor_type,
+                actor_id=event_actor_id,
+                actor_label=event_actor_label,
+                source=event_source,
+                request_id=event_request_id,
                 occurred_at=configuration.activated_at,
                 payload=None,
                 commit=False,

@@ -64,9 +64,9 @@ draft -> active -> retired
 - **Active configuration version** – the lone version used for default jobs. Payload is immutable; metadata edits are limited to annotations (description, rollout notes).
 - **Retired configuration version** – frozen history for auditing and deterministic replays. Retiring the active version occurs automatically when another version is activated.
 
-Publishing is a single operation: mark one draft as active, automatically demote the previous active configuration version, and stamp the audit fields. Rolling back simply activates an older version (which clones into a new draft first so the version numbers keep increasing).
+Publishing is a single operation: mark one draft as active, automatically demote the previous active configuration version, and stamp the lifecycle fields. Rolling back simply activates an older version (which clones into a new draft first so the version numbers keep increasing).
 
-Every mutation records an immutable audit event:
+Every mutation records an immutable event:
 
 - `configuration.created` captures the initial title, document type, and version.
 - `configuration.updated` lists changed fields (title, payload, activation flag) whenever metadata shifts.
@@ -97,7 +97,7 @@ Current FastAPI routers expose:
 
 These endpoints all emit the canonical job JSON documented in the glossary and README so downstream systems receive a uniform contract.
 
-Future extensions may introduce dedicated activation or retirement endpoints instead of the current `PATCH` workflow, plus lifecycle event logs (`version_events`) for audit trails similar to LaunchDarkly or AWS AppConfig.
+Future extensions may introduce dedicated activation or retirement endpoints instead of the current `PATCH` workflow, plus lifecycle event logs (`version_events`) for event trails similar to LaunchDarkly or AWS AppConfig.
 
 ### Data integrity and automation
 
