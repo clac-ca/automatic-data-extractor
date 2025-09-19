@@ -639,6 +639,13 @@ def test_configuration_audit_timeline_paginates_and_filters(app_client) -> None:
     )
     assert response.status_code == 200
     payload = response.json()
+    assert payload["entity"] == {
+        "configuration_id": configuration_id,
+        "document_type": created["document_type"],
+        "title": created["title"],
+        "version": created["version"],
+        "is_active": created["is_active"],
+    }
     assert payload["total"] == 3
     assert [item["event_type"] for item in payload["items"]] == [
         "configuration.test.2",
@@ -667,6 +674,31 @@ def test_configuration_audit_timeline_paginates_and_filters(app_client) -> None:
     filtered_payload = filtered.json()
     assert filtered_payload["total"] == 1
     assert filtered_payload["items"][0]["event_type"] == "configuration.test.1"
+
+
+def test_configuration_audit_timeline_summary_tracks_updates(app_client) -> None:
+    client, _, _ = app_client
+
+    created = _create_sample_configuration(client)
+    configuration_id = created["configuration_id"]
+
+    update_response = client.patch(
+        f"/configurations/{configuration_id}",
+        json={"title": "Updated", "is_active": True},
+    )
+    assert update_response.status_code == 200
+    updated = update_response.json()
+
+    response = client.get(f"/configurations/{configuration_id}/audit-events")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["entity"] == {
+        "configuration_id": configuration_id,
+        "document_type": updated["document_type"],
+        "title": updated["title"],
+        "version": updated["version"],
+        "is_active": updated["is_active"],
+    }
 
 
 def test_configuration_audit_timeline_returns_404_for_missing_configuration(app_client) -> None:
