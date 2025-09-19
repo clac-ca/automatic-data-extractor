@@ -16,18 +16,18 @@ listed beside each term.
 
 ## Core domain
 - **Document type** – Family of documents that share a configuration (`configurations.document_type`, `jobs.document_type`).
-- **Document record** – Canonical metadata for an uploaded file (`documents.document_id`, `documents.original_filename`, `documents.content_type`, `documents.byte_size`, `documents.sha256`, `documents.stored_uri`, `documents.metadata`, `documents.expires_at`, `documents.deleted_at`, `documents.deleted_by`, `documents.delete_reason`).
+- **Document record** – Canonical metadata for an uploaded file (`documents.document_id`, `documents.original_filename`, `documents.content_type`, `documents.byte_size`, `documents.sha256`, `documents.stored_uri`, `documents.metadata`, `documents.expires_at`, `documents.deleted_at`, `documents.deleted_by`, `documents.delete_reason`). Document identifiers are ULIDs reused as filenames under `var/documents/uploads/`.
 - **Configuration** – Executable detection, transformation, and metadata logic that defines how ADE processes a document type. Each configuration row is immutable and stored as JSON (`configurations.configuration_id`, `configurations.version`, `configurations.is_active`, `configurations.activated_at`, `configurations.payload`).
 - **Active configuration** – The single configuration with `is_active = true` for a document type. API consumers use it by default when they do not supply an explicit `configuration_id`.
 - **Profile** – Optional overrides for a source, customer, or locale stored in the configuration payload (`payload.profiles`).
 - **Job** – One execution of the processing engine against an input document using a specific configuration version (`jobs.job_id`, `jobs.configuration_version`, `jobs.status`, `jobs.created_by`, `jobs.metrics`, `jobs.logs`). Jobs stay mutable while `status` is `pending` or `running` and become immutable once marked `completed` or `failed`.
-- **Audit event** – Immutable record that captures what happened to an entity, who triggered it, and any structured context (`audit_events.audit_event_id`, `audit_events.event_type`, `audit_events.entity_type`, `audit_events.entity_id`, `audit_events.occurred_at`, `audit_events.actor_type`, `audit_events.actor_id`, `audit_events.actor_label`, `audit_events.source`, `audit_events.request_id`, `audit_events.payload`). Document deletions emit `document.deleted`, configuration lifecycle changes emit `configuration.created` / `configuration.updated` / `configuration.activated`, and jobs report `job.created`, `job.status.*`, and `job.results.published` entries. Timelines are available at `GET /documents/{document_id}/audit-events`, `GET /configurations/{configuration_id}/audit-events`, and `GET /jobs/{job_id}/audit-events`; document, configuration, and job responses embed an `entity` summary with the identifiers, filenames, and statuses needed for UI headers, and the shared `/audit-events` feed now reuses the same summary when filters scope to a single entity.
+- **Event** – Immutable record that captures what happened to an entity, who triggered it, and any structured context (`events.event_id`, `events.event_type`, `events.entity_type`, `events.entity_id`, `events.occurred_at`, `events.actor_type`, `events.actor_id`, `events.actor_label`, `events.source`, `events.request_id`, `events.payload`). Document deletions emit `document.deleted`, metadata edits emit `document.metadata.updated` by default (callers may supply a more specific type), configuration lifecycle changes emit `configuration.created` / `configuration.updated` / `configuration.activated`, and jobs report `job.created`, `job.status.*`, and `job.results.published` entries. Timelines are available at `GET /documents/{document_id}/events`, `GET /configurations/{configuration_id}/events`, and `GET /jobs/{job_id}/events`; document, configuration, and job responses embed an `entity` summary with the identifiers, filenames, and statuses needed for UI headers, and the shared `/events` feed reuses the same summary when filters scope to a single entity.
 
 ---
 
 ## Document anatomy
-- **Document** – Canonical upload tracked by ADE. The API exposes its metadata via `/documents` (`documents.document_id`, `documents.stored_uri`). Files live in `var/documents/`.
-- **Stored URI** – Canonical relative path that jobs reference when describing inputs (`documents.stored_uri`). Uses a randomly generated two-level directory structure such as `ab/cd/<token>` anchored under `var/documents/` on disk.
+- **Document** – Canonical upload tracked by ADE. The API exposes its metadata via `/documents` (`documents.document_id`, `documents.stored_uri`). Document IDs are ULIDs reused as filenames, so files live at `var/documents/uploads/{document_id}` for uploads and `var/documents/output/` for derived artefacts.
+- **Stored URI** – Canonical relative path that jobs reference when describing inputs (`documents.stored_uri`). Uses deterministic segments such as `uploads/{document_id}` for source files and `output/<name>` for generated artefacts anchored under `var/documents/` on disk.
 - **Document hash** – SHA-256 digest captured for auditing and integrity checks (`documents.sha256`). Prefixed with `sha256:` in responses.
 - **Page** – Worksheet or PDF page captured in a manifest (`pages[].index`).
 - **Table** – Contiguous rows and columns with a single header row (`tables[].index`).
@@ -36,8 +36,8 @@ listed beside each term.
 - **Column** – Observed column with header text, samples, and metadata (`columns[].index`).
 - **Document expiration** – Timestamp describing when operators may purge the stored bytes (`documents.expires_at`). Defaults to 30 days after ingest and may be overridden per upload. Future retention metadata (legal hold flags, override provenance) will extend this section.
 - **Legal hold** – Boolean flag that blocks deletion until cleared (`documents.legal_hold`).
-- **Manual deletion markers** – Soft-delete columns plus the audit feed capturing intentional removal of stored bytes (`documents.deleted_at`,
-  `documents.deleted_by`, `documents.delete_reason`, corresponding `audit_events` rows with `event_type="document.deleted"`).
+- **Manual deletion markers** – Soft-delete columns plus the events feed capturing intentional removal of stored bytes (`documents.deleted_at`,
+  `documents.deleted_by`, `documents.delete_reason`, corresponding `events` rows with `event_type="document.deleted"`).
 - **Purge markers** – (Planned) lifecycle timestamps for automated deletions (`documents.purge_requested_at`,
   `documents.purged_at`, `documents.purged_by`).
 
@@ -71,7 +71,7 @@ ADE stores everything in SQLite (`var/ade.sqlite`). Tables expected on day one:
 - `users` – Accounts with roles and optional SSO subjects.
 - `api_keys` – Issued API keys linked to users.
 - `job_documents` – (Planned) join table linking jobs to the documents they consume or emit. Useful for future retention checks.
-- `audit_events` – Immutable history of ADE actions keyed by ULID with optional actor/source metadata and structured payloads.
+- `events` – Immutable history of ADE actions keyed by ULID with optional actor/source metadata and structured payloads.
 - `maintenance_status` – Keyed JSON payloads for background maintenance loops (e.g. `automatic_document_purge` stores the last
   automatic purge summary returned by `/health`).
 - **Max upload bytes** – Configurable request ceiling (default 25 MiB) enforced by `POST /documents`. Controlled via the
@@ -180,12 +180,12 @@ Back up the SQLite file alongside the `var/documents/` directory.
 ```jsonc
 // Document response (abbreviated)
 {
-  "document_id": "01J9G9YK4A1T0Z8P6K4W5Q2JM3",
+  "document_id": "01J8Z0Z4YV6N9Q8XCN5P7Q2RSD",
   "original_filename": "remittance.pdf",
   "content_type": "application/pdf",
   "byte_size": 542118,
   "sha256": "sha256:bd5c3d9a6c5fe0d4f4a2c1b8e0f9db03a1376c64f071c7f1f0c7c6b8f019ab12",
-  "stored_uri": "bd/5c/bd5c3d9a6c5fe0d4f4a2c1b8e0f9db03a1376c64f071c7f1f0c7c6b8f019ab12",
+  "stored_uri": "uploads/01J8Z0Z4YV6N9Q8XCN5P7Q2RSD",
   "metadata": {},
   "expires_at": "2025-10-17T18:42:00+00:00",
   "created_at": "2025-09-17T18:42:00+00:00",
@@ -194,12 +194,12 @@ Back up the SQLite file alongside the `var/documents/` directory.
 ```
 
 ```jsonc
-// Audit event (document deleted)
+// Event (document deleted)
 {
-  "audit_event_id": "01JABCXY45MNE678PQRS012TU3",
+  "event_id": "01JABCXY45MNE678PQRS012TU3",
   "event_type": "document.deleted",
   "entity_type": "document",
-  "entity_id": "01J9G9YK4A1T0Z8P6K4W5Q2JM3",
+  "entity_id": "01J8Z0Z4YV6N9Q8XCN5P7Q2RSD",
   "occurred_at": "2024-08-02T17:25:14.123456+00:00",
   "actor_type": "user",
   "actor_label": "ops@ade.local",
@@ -208,7 +208,7 @@ Back up the SQLite file alongside the `var/documents/` directory.
     "deleted_by": "ops@ade.local",
     "delete_reason": "cleanup",
     "byte_size": 542118,
-    "stored_uri": "bd/5c/...",
+    "stored_uri": "uploads/01J8Z0Z4YV6N9Q8XCN5P7Q2RSD",
     "sha256": "sha256:bd5c3d9a...",
     "expires_at": "2025-10-17T18:42:00+00:00"
   }

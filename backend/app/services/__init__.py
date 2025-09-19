@@ -1,8 +1,8 @@
 """Service layer for backend operations."""
 
-from .audit_log import (
-    AuditEventQueryResult,
-    AuditEventRecord,
+from .events import (
+    EventQueryResult,
+    EventRecord,
     list_entity_events,
     list_events,
     record_event,
@@ -45,8 +45,8 @@ from .maintenance_status import (
 )
 
 __all__ = [
-    "AuditEventQueryResult",
-    "AuditEventRecord",
+    "EventQueryResult",
+    "EventRecord",
     "list_entity_events",
     "list_events",
     "record_event",

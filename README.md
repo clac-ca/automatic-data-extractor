@@ -43,13 +43,13 @@ initial foundation created here wires together:
 
 - `config.py` – centralised settings (`ADE_` environment variables, SQLite + documents defaults, upload size cap).
 - `db.py` – SQLAlchemy engine/session helpers shared across routes and services.
-- `models.py` – the first domain models (`ConfigurationRevision`, `Job`, and `Document`) with ULID keys, JSON payload storage, and randomly assigned document URIs.
+- `models.py` – the first domain models (`ConfigurationRevision`, `Job`, and `Document`) with ULID identifiers, JSON payload storage, and predictable document URIs.
 - `routes/health.py` – health check hitting the database and returning `{ "status": "ok" }`.
 - `routes/documents.py` – multipart uploads, metadata listings, download streaming, and manual deletion for stored documents.
-- `routes/audit_events.py` – paginated audit log listings plus document, configuration, and job timeline endpoints.
+- `routes/events.py` – paginated event listings plus document, configuration, and job timeline endpoints.
 - `main.py` – FastAPI application setup, startup lifecycle, and router registration.
-- `services/documents.py` – random-path storage for uploads, size-limit enforcement, filesystem lookups, and soft-delete helpers.
-- `services/audit_log.py` – shared helper for recording immutable audit events and querying them with consistent filters.
+- `services/documents.py` – ULID-based storage for uploads, size-limit enforcement, filesystem lookups, and soft-delete helpers.
+- `services/events.py` – shared helper for recording immutable events and querying them with consistent filters.
 - `tests/` – pytest-based checks that assert the service boots and SQLite file creation works.
 
 ### Processor
@@ -59,8 +59,11 @@ Pure Python helpers live in `backend/processor/`. They detect tables, decide col
 All persistence uses SQLite (`var/ade.sqlite`) and an on-disk documents folder (`var/documents/`). These paths are gitignored
 and mounted as Docker volumes in deployment.
 
-### Audit log
-ADE keeps an immutable audit log in the `audit_events` table. The helper at `services/audit_log.record_event(...)` accepts a typed payload, canonicalises any JSON context for deterministic storage, and persists a ULID-keyed row. Clients query events through the same service or via `/audit-events`, which supports pagination plus filters for entity, event type, actor metadata, source, request ID, and time bounds. When callers provide both `entity_type` and `entity_id` the global feed resolves that entity once and reuses the same summary block emitted by the timeline endpoints, so document tools can render context (filename, title, status, etc.) without issuing another lookup.
+### Identifier strategy
+Documents, configurations, and events share the same ULID format for their primary keys and, in the case of documents, their stored filenames. UUIDv4 identifiers are widely standardised and perfectly random, which makes them a safe universal default, but that randomness also scatters writes across a database index and increases fragmentation. ULIDs remain 128-bit identifiers while adding a 48-bit timestamp prefix, so new values stay lexicographically sorted, keep SQLite indexes append-friendly, and preserve chronological ordering even if multiple workers generate IDs. We will stick with ULIDs for ADE’s ingestion-heavy workflows, while reserving UUIDv4s for situations where external interoperability or strict standards compliance outweigh those locality benefits.
+
+### Events
+ADE keeps an immutable event log in the `events` table. The helper at `services/events.record_event(...)` accepts a typed payload, canonicalises any JSON context for deterministic storage, and persists a ULID-keyed row. Clients query events through the same service or via `/events`, which supports pagination plus filters for entity, event type, actor metadata, source, request ID, and time bounds. When callers provide both `entity_type` and `entity_id` the global feed resolves that entity once and reuses the same summary block emitted by the timeline endpoints, so document tools can render context (filename, title, status, etc.) without issuing another lookup.
 
 Core event families include:
 
@@ -76,10 +79,10 @@ A `document.deleted` entry looks like:
 
 ```jsonc
 {
-  "audit_event_id": "01JABCXY45MNE678PQRS012TU3",
+  "event_id": "01JABCXY45MNE678PQRS012TU3",
   "event_type": "document.deleted",
   "entity_type": "document",
-  "entity_id": "01J9G9YK4A1T0Z8P6K4W5Q2JM3",
+  "entity_id": "01J8Z0Z4YV6N9Q8XCN5P7Q2RSD",
   "occurred_at": "2024-08-02T17:25:14.123456+00:00",
   "actor_type": "user",
   "actor_label": "ops@ade.local",
@@ -88,12 +91,18 @@ A `document.deleted` entry looks like:
     "deleted_by": "ops@ade.local",
     "delete_reason": "cleanup",
     "byte_size": 542118,
-    "stored_uri": "bd/5c/...",
+    "stored_uri": "uploads/01J8Z0Z4YV6N9Q8XCN5P7Q2RSD",
     "sha256": "sha256:bd5c3d9a...",
     "expires_at": "2025-10-17T18:42:00+00:00"
   }
 }
 ```
+
+`PATCH /documents/{document_id}` merges metadata updates into the stored
+record and appends a `document.metadata.updated` event (or a caller supplied
+`event_type`). Event payloads capture the changed values, list which metadata
+keys were modified, and note any keys that were removed so downstream tools can
+reconstruct context without refetching the document.
 
 #### Configuration events
 
@@ -208,12 +217,12 @@ Jobs append events as they are created, progress through statuses, and publish o
 }
 ```
 
-Logging is additive—failures to append an audit event are logged but do not roll back the underlying workflow. Litigation hold remains out of scope; extend payloads if special handling is required.
+Logging is additive—failures to append an event are logged but do not roll back the underlying workflow. Litigation hold remains out of scope; extend payloads if special handling is required.
 
 ---
 
 ## How the system flows
-1. Upload documents through the UI or `POST /documents`. The backend writes the file to a randomly generated path in `var/documents/` and returns canonical metadata (including the `stored_uri` jobs reference later).
+1. Upload documents through the UI or `POST /documents`. The backend writes the file to `var/documents/uploads/{document_id}` using the document ULID and returns canonical metadata (including the `stored_uri` jobs reference later).
 2. Create or edit configurations, then activate the configuration that should run by default for the document type.
 3. Launch a job via the UI or `POST /jobs`. The processor applies the active configuration and records job inputs, outputs, metrics, and logs.
 4. Poll `GET /jobs/{job_id}` (or list with `GET /jobs`) to review progress, download output artefacts, and inspect metrics.
@@ -271,11 +280,11 @@ Jobs returned by the API and displayed in the UI always use the same JSON struct
 
 ## Document ingestion workflow
 
-1. `POST /documents` accepts a multipart upload (`file` field). The API streams the payload into a randomly generated directory under `var/documents/` and returns metadata including `document_id`, byte size, digest, and the canonical `stored_uri`.
+1. `POST /documents` accepts a multipart upload (`file` field). The API streams the payload into `var/documents/uploads/{document_id}` and returns metadata including `document_id`, byte size, digest, and the canonical `stored_uri`.
 2. Every upload creates a fresh document record with its own storage path, even if the raw bytes match a prior submission.
-3. `GET /documents` lists records newest first, `GET /documents/{document_id}` returns metadata for a single file, `GET /documents/{document_id}/download` streams the stored bytes (with `Content-Disposition` set to the original filename), and `DELETE /documents/{document_id}` removes the bytes while recording who initiated the deletion. `GET /documents/{document_id}/audit-events` exposes the immutable history of deletion events for that record and includes an `entity` summary with the filename, type, byte size, checksum, expiration, and deletion markers. Configuration revisions use `GET /configurations/{configuration_id}/audit-events` and jobs use `GET /jobs/{job_id}/audit-events`; all timeline endpoints share pagination and filtering behaviour with the global audit feed and embed the headline fields the UI needs. When `/audit-events` is filtered to a specific entity, it now inlines the same summary block so consumers see consistent context across feeds.
+3. `GET /documents` lists records newest first, `GET /documents/{document_id}` returns metadata for a single file, `GET /documents/{document_id}/download` streams the stored bytes (with `Content-Disposition` set to the original filename), and `DELETE /documents/{document_id}` removes the bytes while recording who initiated the deletion. `GET /documents/{document_id}/events` exposes the immutable history of deletion events for that record and includes an `entity` summary with the filename, type, byte size, checksum, expiration, and deletion markers. Configuration revisions use `GET /configurations/{configuration_id}/events` and jobs use `GET /jobs/{job_id}/events`; all timeline endpoints share pagination and filtering behaviour with the global events feed and embed the headline fields the UI needs. When `/events` is filtered to a specific entity, it inlines the same summary block so consumers see consistent context across feeds.
 4. `POST /documents` enforces the configurable `max_upload_bytes` cap (defaults to 25 MiB). Payloads that exceed the limit return HTTP 413 with `{ "detail": {"error": "document_too_large", "max_upload_bytes": <bytes>, "received_bytes": <bytes>}}` so operators know the request failed before any data is persisted.
-5. Document retention and deletion workflows are defined in `docs/document_retention_and_deletion.md`. The API records manual deletions, logs them to the shared audit feed, runs an automatic purge sweep on startup (and hourly by default), and still exposes a maintenance CLI (`python -m backend.app.maintenance.purge`) for manual runs.
+5. Document retention and deletion workflows are defined in `docs/document_retention_and_deletion.md`. The API records manual deletions, logs them to the shared events feed, runs an automatic purge sweep on startup (and hourly by default), and still exposes a maintenance CLI (`python -m backend.app.maintenance.purge`) for manual runs.
 
 ---
 
@@ -311,7 +320,7 @@ naming payloads or configuration elements.
 ---
 
 ## Operations
-- SQLite stores configuration revisions, jobs, users, sessions, API keys, and audit metadata. Payloads stay JSON until a strict configuration is required.
+- SQLite stores configuration revisions, jobs, users, sessions, API keys, and event metadata. Payloads stay JSON until a strict configuration is required.
 - Back up ADE by copying both the SQLite file and the documents directory.
 - Environment variables override defaults; `.env` files hold secrets and stay gitignored. Set `ADE_MAX_UPLOAD_BYTES` (bytes) to raise or lower the upload cap. Keep the value conservative so operators can predict disk usage.
 - Document retention defaults to 30 days (`ADE_DEFAULT_DOCUMENT_RETENTION_DAYS`). Callers can override the expiry per upload via the `expires_at` form field on `POST /documents`.

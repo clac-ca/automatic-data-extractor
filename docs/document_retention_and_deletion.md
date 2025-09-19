@@ -3,12 +3,12 @@
 ## Summary
 ADE now applies a simple expiration policy to every uploaded document, records
 manual deletions, automatically purges expired bytes from within the API
-process, and appends each deletion to the shared audit log. New records carry an
+process, and appends each deletion to the shared events feed. New records carry an
 `expires_at` timestamp computed at ingest time so operators know when the file
 should disappear. When an operator deletes a document through the API, the
 automatic scheduler, or the purge CLI, the service removes the stored bytes,
-stamps audit metadata (`deleted_at`, `deleted_by`, `delete_reason`), and emits a
-`document.deleted` audit event with actor/source context and structured
+stamps deletion metadata (`deleted_at`, `deleted_by`, `delete_reason`), and emits a
+`document.deleted` event with actor/source context and structured
 payloads. The defaults aim to keep disk usage predictable while leaving room for
 operators to adjust cadence or trigger manual sweeps when needed.
 
@@ -23,15 +23,15 @@ Key points:
   document metadata and is returned by all document APIs.
 - **Manual deletion** – Operators call `DELETE /documents/{document_id}` with
   a `deleted_by` identifier (and optional `delete_reason`). The API removes the
-  file when present, stamps audit metadata, and returns the updated document.
+  file when present, stamps deletion metadata, and returns the updated document.
 - **Audit log** – Every deletion path writes a `document.deleted` event that is
-  accessible via `/audit-events` or the convenience
-  `/documents/{document_id}/audit-events` endpoint. Events capture actor
+  accessible via `/events` or the convenience
+  `/documents/{document_id}/events` endpoint. Events capture actor
   metadata, origin (`api`, `scheduler`, or `cli`), byte size, delete reason, and
   whether the file had already gone missing.
 - **Cleanup automation** – The API checks for expired documents on startup and
   then on a configurable cadence. It reuses the soft-delete fields, reports
-  missing files, and keeps the audit trail consistent. Operators can still run
+  missing files, and keeps the event trail consistent. Operators can still run
   `python -m backend.app.maintenance.purge` manually for dry-runs or ad-hoc
   sweeps.
 
@@ -69,10 +69,10 @@ zones.
 - The service removes the file from disk when present and stamps
   `deleted_at`, `deleted_by`, and `delete_reason` on the document record.
 - Repeated calls return the existing metadata so operators can retry cleanup
-  jobs without changing the audit trail.
+  jobs without changing the event trail.
 - Soft-deleted documents stay queryable by ID, but list endpoints exclude them
   by default.
-- Successful deletions append a `document.deleted` entry to the audit log with
+- Successful deletions append a `document.deleted` entry to the events feed with
   the supplied actor identifier, optional reason, byte size, hash, storage URI,
   and a flag showing whether the file was already missing.
 
@@ -109,7 +109,7 @@ documents. The behaviour is intentionally simple:
    `maintenance_status` table and exposes it under the `purge` key on
    `GET /health` (status, processed count, missing files, bytes reclaimed,
    timestamps, configured interval, and any error message). Every removal also
-   records a `document.deleted` audit event with `source="scheduler"` and the
+   records a `document.deleted` event with `source="scheduler"` and the
    canonical purge metadata.
 
 To smoke test the scheduler locally, set `ADE_PURGE_SCHEDULE_INTERVAL_SECONDS`
@@ -127,7 +127,7 @@ example, in smoke tests or one-off maintenance).
 
 `python -m backend.app.maintenance.purge` remains available for on-demand
 sweeps. The helper runs entirely within the FastAPI codebase so it inherits the
-same validation and audit metadata as the manual deletion API. Use it to perform
+same validation and deletion metadata as the manual deletion API. Use it to perform
 dry-runs, trigger an immediate cleanup before deploying, or double-check the
 automatic scheduler when diagnosing retention issues.
 
@@ -138,7 +138,7 @@ The command:
 2. Removes the stored file when it exists and stamps `deleted_at`,
    `deleted_by = "maintenance:purge_expired_documents"`, and
    `delete_reason = "expired_document_purge"` inside a single transaction per
-   run. Each deletion also emits a `document.deleted` audit event tagged with
+   run. Each deletion also emits a `document.deleted` event tagged with
    `source="cli"`.
 3. Tallies processed documents, missing files, and reclaimed bytes. Missing
    files are still soft-deleted so metadata stays consistent.

@@ -17,7 +17,7 @@ from .routes.configurations import (
 )
 from .routes.jobs import router as jobs_router
 from .routes.documents import router as documents_router
-from .routes.audit_events import router as audit_events_router
+from .routes.events import router as events_router
 
 
 @asynccontextmanager
@@ -27,6 +27,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = config.get_settings()
     documents_dir: Path = settings.documents_dir
     documents_dir.mkdir(parents=True, exist_ok=True)
+    (documents_dir / "uploads").mkdir(parents=True, exist_ok=True)
+    (documents_dir / "output").mkdir(parents=True, exist_ok=True)
 
     db_path: Path | None = settings.database_path
     if db_path is not None:
@@ -50,7 +52,7 @@ app.include_router(health_router)
 app.include_router(configurations_router)
 app.include_router(jobs_router)
 app.include_router(documents_router)
-app.include_router(audit_events_router)
+app.include_router(events_router)
 
 
 __all__ = ["app"]

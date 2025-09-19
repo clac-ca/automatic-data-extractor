@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.db import get_sessionmaker
-from backend.app.services.audit_log import AuditEventRecord, record_event
+from backend.app.services.events import EventRecord, record_event
 from backend.app.services.configurations import (
     ActiveConfigurationNotFoundError,
     ConfigurationMismatchError,
@@ -249,7 +249,7 @@ def test_delete_configuration_removes_record(app_client) -> None:
     assert follow_up.status_code == 404
 
 
-def test_create_configuration_records_audit_events(app_client) -> None:
+def test_create_configuration_records_events(app_client) -> None:
     client, _, _ = app_client
 
     payload = {
@@ -264,7 +264,7 @@ def test_create_configuration_records_audit_events(app_client) -> None:
     configuration = response.json()
 
     events = client.get(
-        "/audit-events",
+        "/events",
         params={
             "entity_type": "configuration",
             "entity_id": configuration["configuration_id"],
@@ -297,13 +297,13 @@ def test_create_configuration_records_audit_events(app_client) -> None:
     assert activated_event["actor_label"] == "api"
 
 
-def test_update_configuration_appends_audit_events(app_client) -> None:
+def test_update_configuration_appends_events(app_client) -> None:
     client, _, _ = app_client
 
     created = _create_sample_configuration(client, is_active=False)
 
     events = client.get(
-        "/audit-events",
+        "/events",
         params={
             "entity_type": "configuration",
             "entity_id": created["configuration_id"],
@@ -319,7 +319,7 @@ def test_update_configuration_appends_audit_events(app_client) -> None:
     assert update_response.status_code == 200
 
     after_update = client.get(
-        "/audit-events",
+        "/events",
         params={
             "entity_type": "configuration",
             "entity_id": created["configuration_id"],
@@ -343,7 +343,7 @@ def test_update_configuration_appends_audit_events(app_client) -> None:
     assert activate_response.status_code == 200
 
     after_activation = client.get(
-        "/audit-events",
+        "/events",
         params={
             "entity_type": "configuration",
             "entity_id": created["configuration_id"],
@@ -611,7 +611,7 @@ def test_in_memory_sqlite_is_shared_across_threads(tmp_path, app_client_factory)
             assert future.result() == ["Memory configuration"]
 
 
-def test_configuration_audit_timeline_paginates_and_filters(app_client) -> None:
+def test_configuration_event_timeline_paginates_and_filters(app_client) -> None:
     client, _, _ = app_client
 
     created = _create_sample_configuration(client)
@@ -623,7 +623,7 @@ def test_configuration_audit_timeline_paginates_and_filters(app_client) -> None:
         for index in range(3):
             record_event(
                 session,
-                AuditEventRecord(
+                EventRecord(
                     event_type=f"configuration.test.{index}",
                     entity_type="configuration",
                     entity_id=configuration_id,
@@ -634,7 +634,7 @@ def test_configuration_audit_timeline_paginates_and_filters(app_client) -> None:
             )
 
     response = client.get(
-        f"/configurations/{configuration_id}/audit-events",
+        f"/configurations/{configuration_id}/events",
         params={"limit": 2, "source": "timeline-test"},
     )
     assert response.status_code == 200
@@ -653,7 +653,7 @@ def test_configuration_audit_timeline_paginates_and_filters(app_client) -> None:
     ]
 
     second_page = client.get(
-        f"/configurations/{configuration_id}/audit-events",
+        f"/configurations/{configuration_id}/events",
         params={"limit": 2, "offset": 2, "source": "timeline-test"},
     )
     assert second_page.status_code == 200
@@ -664,7 +664,7 @@ def test_configuration_audit_timeline_paginates_and_filters(app_client) -> None:
     ]
 
     filtered = client.get(
-        f"/configurations/{configuration_id}/audit-events",
+        f"/configurations/{configuration_id}/events",
         params={
             "event_type": "configuration.test.1",
             "source": "timeline-test",
@@ -676,7 +676,7 @@ def test_configuration_audit_timeline_paginates_and_filters(app_client) -> None:
     assert filtered_payload["items"][0]["event_type"] == "configuration.test.1"
 
 
-def test_configuration_audit_timeline_summary_tracks_updates(app_client) -> None:
+def test_configuration_event_timeline_summary_tracks_updates(app_client) -> None:
     client, _, _ = app_client
 
     created = _create_sample_configuration(client)
@@ -689,7 +689,7 @@ def test_configuration_audit_timeline_summary_tracks_updates(app_client) -> None
     assert update_response.status_code == 200
     updated = update_response.json()
 
-    response = client.get(f"/configurations/{configuration_id}/audit-events")
+    response = client.get(f"/configurations/{configuration_id}/events")
     assert response.status_code == 200
     payload = response.json()
     assert payload["entity"] == {
@@ -701,10 +701,10 @@ def test_configuration_audit_timeline_summary_tracks_updates(app_client) -> None
     }
 
 
-def test_configuration_audit_timeline_returns_404_for_missing_configuration(app_client) -> None:
+def test_configuration_event_timeline_returns_404_for_missing_configuration(app_client) -> None:
     client, _, _ = app_client
 
-    response = client.get("/configurations/does-not-exist/audit-events")
+    response = client.get("/configurations/does-not-exist/events")
 
     assert response.status_code == 404
     assert (

@@ -13,7 +13,7 @@ import pytest
 from backend.app import config as config_module
 from backend.app import db as db_module
 from backend.app.db import Base, get_engine, get_sessionmaker
-from backend.app.models import AuditEvent, Document
+from backend.app.models import Event, Document
 from sqlalchemy import select
 
 from backend.app.services.documents import (
@@ -77,7 +77,7 @@ def _bulk_create_expired_documents(
     chunk: list[Document] = []
     for index in range(count):
         document_id = f"BULK{index:022d}"
-        stored_uri = f"bulk/{index:06d}.bin"
+        stored_uri = f"uploads/bulk/{index:06d}.bin"
         target_path = documents_dir / stored_uri
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_bytes(b"x")
@@ -208,9 +208,9 @@ def test_purge_expired_documents_deletes_files(app_client) -> None:
         assert recent_row.deleted_at is not None
 
         events = verify_session.scalars(
-            select(AuditEvent).where(
-                AuditEvent.event_type == "document.deleted",
-                AuditEvent.entity_id.in_(
+            select(Event).where(
+                Event.event_type == "document.deleted",
+                Event.entity_id.in_(
                     [
                         expired_old.document.document_id,
                         expired_recent.document.document_id,
