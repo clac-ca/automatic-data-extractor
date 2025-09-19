@@ -1,4 +1,4 @@
-The automatic-data-extractor (ADE) aims to transform semi-structured spreadsheets and PDFs into clean, structured tables using deterministic, revision-controlled logic.
+The automatic-data-extractor (ADE) aims to transform semi-structured spreadsheets and PDFs into clean, structured tables using deterministic, revision-controlled logic.  This is the only AGENTS.md file in this repo.  Pay close attention to it.
 
 ## Repository layout (planned)
 ```
