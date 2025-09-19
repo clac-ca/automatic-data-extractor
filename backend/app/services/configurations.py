@@ -8,6 +8,7 @@ deterministic behaviour.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -15,6 +16,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..models import Configuration
+from .audit_log import AuditEventRecord, record_event
+
+
+logger = logging.getLogger(__name__)
 
 
 def _utcnow_iso() -> str:
@@ -45,6 +50,74 @@ def _demote_other_active_configurations(
         competing.is_active = False
         competing.activated_at = None
         db.add(competing)
+
+
+def _configuration_event_payload(
+    configuration: Configuration,
+    *,
+    actor_label: str | None = None,
+    changed_fields: list[str] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "document_type": configuration.document_type,
+        "title": configuration.title,
+        "version": configuration.version,
+        "is_active": configuration.is_active,
+    }
+    if configuration.activated_at is not None:
+        payload["activated_at"] = configuration.activated_at
+    if actor_label:
+        payload["actor_label"] = actor_label
+    if changed_fields:
+        payload["changed_fields"] = changed_fields
+    return payload
+
+
+def _record_configuration_event(
+    db: Session,
+    *,
+    configuration: Configuration,
+    event_type: str,
+    actor_type: str | None,
+    actor_id: str | None,
+    actor_label: str | None,
+    source: str | None,
+    request_id: str | None,
+    occurred_at: str | None,
+    payload: dict[str, Any] | None,
+    commit: bool,
+) -> None:
+    combined_payload = _configuration_event_payload(
+        configuration,
+        actor_label=actor_label,
+    )
+    if payload:
+        combined_payload.update(payload)
+
+    record = AuditEventRecord(
+        event_type=event_type,
+        entity_type="configuration",
+        entity_id=configuration.configuration_id,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        actor_label=actor_label,
+        source=source,
+        request_id=request_id,
+        occurred_at=occurred_at,
+        payload=combined_payload,
+    )
+
+    try:
+        record_event(db, record, commit=commit)
+    except Exception:
+        logger.exception(
+            "Failed to record configuration audit event",
+            extra={
+                "configuration_id": configuration.configuration_id,
+                "event_type": event_type,
+                "source": source,
+            },
+        )
 
 
 class ConfigurationNotFoundError(Exception):
@@ -106,6 +179,11 @@ def create_configuration(
     title: str,
     payload: dict[str, Any] | None = None,
     is_active: bool = False,
+    audit_actor_type: str | None = None,
+    audit_actor_id: str | None = None,
+    audit_actor_label: str | None = None,
+    audit_source: str | None = None,
+    audit_request_id: str | None = None,
 ) -> Configuration:
     """Persist and return a new configuration version."""
 
@@ -121,11 +199,41 @@ def create_configuration(
             version=_next_version(db, document_type=document_type),
         )
         db.add(configuration)
+        db.flush()
         if configuration.is_active:
             _demote_other_active_configurations(
                 db,
                 document_type=configuration.document_type,
                 configuration_id=configuration.configuration_id,
+            )
+
+        _record_configuration_event(
+            db,
+            configuration=configuration,
+            event_type="configuration.created",
+            actor_type=audit_actor_type,
+            actor_id=audit_actor_id,
+            actor_label=audit_actor_label,
+            source=audit_source,
+            request_id=audit_request_id,
+            occurred_at=configuration.created_at,
+            payload=None,
+            commit=False,
+        )
+
+        if configuration.is_active:
+            _record_configuration_event(
+                db,
+                configuration=configuration,
+                event_type="configuration.activated",
+                actor_type=audit_actor_type,
+                actor_id=audit_actor_id,
+                actor_label=audit_actor_label,
+                source=audit_source,
+                request_id=audit_request_id,
+                occurred_at=configuration.activated_at,
+                payload=None,
+                commit=False,
             )
     return configuration
 
@@ -137,15 +245,27 @@ def update_configuration(
     title: str | None = None,
     payload: dict[str, Any] | None = None,
     is_active: bool | None = None,
+    audit_actor_type: str | None = None,
+    audit_actor_id: str | None = None,
+    audit_actor_label: str | None = None,
+    audit_source: str | None = None,
+    audit_request_id: str | None = None,
 ) -> Configuration:
     """Update and return the configuration with the given ID."""
 
     with db.begin():
         configuration = get_configuration(db, configuration_id)
-        if title is not None:
+        changed_fields: list[str] = []
+        became_active = False
+
+        if title is not None and title != configuration.title:
             configuration.title = title
-        if payload is not None:
+            changed_fields.append("title")
+
+        if payload is not None and payload != configuration.payload:
             configuration.payload = payload
+            changed_fields.append("payload")
+
         if is_active is not None:
             if is_active and not configuration.is_active:
                 configuration.is_active = True
@@ -155,11 +275,46 @@ def update_configuration(
                     document_type=configuration.document_type,
                     configuration_id=configuration.configuration_id,
                 )
+                changed_fields.append("is_active")
+                became_active = True
             elif not is_active and configuration.is_active:
                 configuration.is_active = False
                 configuration.activated_at = None
+                changed_fields.append("is_active")
 
         db.add(configuration)
+        db.flush()
+
+        if changed_fields:
+            _record_configuration_event(
+                db,
+                configuration=configuration,
+                event_type="configuration.updated",
+                actor_type=audit_actor_type,
+                actor_id=audit_actor_id,
+                actor_label=audit_actor_label,
+                source=audit_source,
+                request_id=audit_request_id,
+                occurred_at=configuration.updated_at,
+                payload={"changed_fields": changed_fields},
+                commit=False,
+            )
+
+        if became_active:
+            _record_configuration_event(
+                db,
+                configuration=configuration,
+                event_type="configuration.activated",
+                actor_type=audit_actor_type,
+                actor_id=audit_actor_id,
+                actor_label=audit_actor_label,
+                source=audit_source,
+                request_id=audit_request_id,
+                occurred_at=configuration.activated_at,
+                payload=None,
+                commit=False,
+            )
+
     return configuration
 
 

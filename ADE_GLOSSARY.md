@@ -21,7 +21,7 @@ listed beside each term.
 - **Active configuration** – The single configuration with `is_active = true` for a document type. API consumers use it by default when they do not supply an explicit `configuration_id`.
 - **Profile** – Optional overrides for a source, customer, or locale stored in the configuration payload (`payload.profiles`).
 - **Job** – One execution of the processing engine against an input document using a specific configuration version (`jobs.job_id`, `jobs.configuration_version`, `jobs.status`, `jobs.created_by`, `jobs.metrics`, `jobs.logs`). Jobs stay mutable while `status` is `pending` or `running` and become immutable once marked `completed` or `failed`.
-- **Audit event** – Immutable record that captures what happened to an entity, who triggered it, and any structured context (`audit_events.audit_event_id`, `audit_events.event_type`, `audit_events.entity_type`, `audit_events.entity_id`, `audit_events.occurred_at`, `audit_events.actor_type`, `audit_events.actor_id`, `audit_events.actor_label`, `audit_events.source`, `audit_events.request_id`, `audit_events.payload`).
+- **Audit event** – Immutable record that captures what happened to an entity, who triggered it, and any structured context (`audit_events.audit_event_id`, `audit_events.event_type`, `audit_events.entity_type`, `audit_events.entity_id`, `audit_events.occurred_at`, `audit_events.actor_type`, `audit_events.actor_id`, `audit_events.actor_label`, `audit_events.source`, `audit_events.request_id`, `audit_events.payload`). Document deletions emit `document.deleted`, configuration lifecycle changes emit `configuration.created` / `configuration.updated` / `configuration.activated`, and jobs report `job.created`, `job.status.*`, and `job.results.published` entries.
 
 ---
 
@@ -211,6 +211,51 @@ Back up the SQLite file alongside the `var/documents/` directory.
     "stored_uri": "bd/5c/...",
     "sha256": "sha256:bd5c3d9a...",
     "expires_at": "2025-10-17T18:42:00+00:00"
+  }
+}
+```
+
+```jsonc
+// Audit event (configuration activated)
+{
+  "event_type": "configuration.activated",
+  "entity_type": "configuration",
+  "entity_id": "01JCFG7890ABCDEFFEDCBA3210",
+  "actor_label": "api",
+  "source": "api",
+  "payload": {
+    "document_type": "invoice",
+    "title": "Invoice v3",
+    "version": 4,
+    "is_active": true,
+    "activated_at": "2025-01-10T08:01:12+00:00"
+  }
+}
+```
+
+```jsonc
+// Audit event (job results published)
+{
+  "event_type": "job.results.published",
+  "entity_type": "job",
+  "entity_id": "job_2025_09_17_0001",
+  "actor_label": "api",
+  "payload": {
+    "document_type": "remittance",
+    "configuration_id": "01JCFG7890ABCDEFFEDCBA3210",
+    "configuration_version": 4,
+    "status": "completed",
+    "outputs": {
+      "json": {
+        "uri": "var/outputs/remit_final.json",
+        "expires_at": "2026-01-01T00:00:00Z"
+      }
+    },
+    "metrics": {
+      "rows_extracted": 125,
+      "processing_time_ms": 4180,
+      "errors": 0
+    }
   }
 }
 ```
