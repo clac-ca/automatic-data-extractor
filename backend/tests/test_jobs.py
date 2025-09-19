@@ -452,6 +452,12 @@ def test_job_audit_timeline_paginates_and_filters(app_client) -> None:
     )
     assert response.status_code == 200
     payload = response.json()
+    assert payload["entity"] == {
+        "job_id": job["job_id"],
+        "document_type": job["document_type"],
+        "status": job["status"],
+        "created_by": job["created_by"],
+    }
     assert payload["total"] == 3
     assert [item["event_type"] for item in payload["items"]] == [
         "job.test.2",
@@ -480,6 +486,35 @@ def test_job_audit_timeline_paginates_and_filters(app_client) -> None:
     filtered_payload = filtered.json()
     assert filtered_payload["total"] == 1
     assert filtered_payload["items"][0]["event_type"] == "job.test.1"
+
+
+def test_job_audit_timeline_summary_tracks_updates(app_client) -> None:
+    client, _, _ = app_client
+    configuration = _activate_configuration(client)
+
+    payload = _create_job_payload(configuration["document_type"])
+    payload["status"] = "pending"
+
+    response = client.post("/jobs", json=payload)
+    assert response.status_code == 201
+    job = response.json()
+
+    patch_response = client.patch(
+        f"/jobs/{job['job_id']}",
+        json={"status": "completed"},
+    )
+    assert patch_response.status_code == 200
+    updated = patch_response.json()
+
+    timeline = client.get(f"/jobs/{job['job_id']}/audit-events")
+    assert timeline.status_code == 200
+    payload = timeline.json()
+    assert payload["entity"] == {
+        "job_id": updated["job_id"],
+        "document_type": updated["document_type"],
+        "status": updated["status"],
+        "created_by": updated["created_by"],
+    }
 
 
 def test_job_audit_timeline_returns_404_for_missing_job(app_client) -> None:
