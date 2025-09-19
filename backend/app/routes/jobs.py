@@ -14,6 +14,7 @@ from ..schemas import (
     AuditEventResponse,
     JobCreate,
     JobResponse,
+    JobTimelineSummary,
     JobUpdate,
 )
 from ..services.audit_log import list_entity_events
@@ -107,7 +108,7 @@ def list_job_audit_events(
     occurred_before: datetime | None = Query(None),
 ) -> AuditEventListResponse:
     try:
-        get_job(db, job_id)
+        job = get_job(db, job_id)
     except JobNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -133,6 +134,7 @@ def list_job_audit_events(
         total=result.total,
         limit=result.limit,
         offset=result.offset,
+        entity=JobTimelineSummary.model_validate(job),
     )
 
 

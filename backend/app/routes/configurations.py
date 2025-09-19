@@ -18,6 +18,7 @@ from ..schemas import (
     AuditEventResponse,
     ConfigurationCreate,
     ConfigurationResponse,
+    ConfigurationTimelineSummary,
     ConfigurationUpdate,
 )
 from ..services.audit_log import list_entity_events
@@ -147,7 +148,7 @@ def list_configuration_audit_events(
     occurred_before: datetime | None = Query(None),
 ) -> AuditEventListResponse:
     try:
-        get_configuration(db, configuration_id)
+        configuration = get_configuration(db, configuration_id)
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -173,6 +174,7 @@ def list_configuration_audit_events(
         total=result.total,
         limit=result.limit,
         offset=result.offset,
+        entity=ConfigurationTimelineSummary.model_validate(configuration),
     )
 
 

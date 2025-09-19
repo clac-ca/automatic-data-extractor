@@ -92,6 +92,32 @@ class AuditEventResponse(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class ConfigurationTimelineSummary(BaseModel):
+    """Lightweight configuration metadata embedded in audit timelines."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    configuration_id: str
+    document_type: str
+    title: str
+    version: int
+    is_active: bool
+
+
+class JobTimelineSummary(BaseModel):
+    """Lightweight job metadata embedded in audit timelines."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    job_id: str
+    document_type: str
+    status: str
+    created_by: str
+
+
+AuditEventEntitySummary = ConfigurationTimelineSummary | JobTimelineSummary
+
+
 class AuditEventListResponse(BaseModel):
     """Paginated container for audit events."""
 
@@ -99,6 +125,7 @@ class AuditEventListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+    entity: AuditEventEntitySummary | None = None
 
 
 class ConfigurationBase(BaseModel):
