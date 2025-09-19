@@ -45,6 +45,9 @@ def create_job_endpoint(payload: JobCreate, db: Session = Depends(get_db)) -> Jo
             metrics=payload.metrics,
             logs=payload.logs,
             configuration_id=payload.configuration_id,
+            audit_actor_type="user",
+            audit_actor_label=payload.created_by,
+            audit_source="api",
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -86,7 +89,14 @@ def update_job_endpoint(
     update_kwargs = payload.model_dump(exclude_unset=True)
 
     try:
-        job = update_job(db, job_id, **update_kwargs)
+        job = update_job(
+            db,
+            job_id,
+            **update_kwargs,
+            audit_actor_type="system",
+            audit_actor_label="api",
+            audit_source="api",
+        )
     except JobNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except JobImmutableError as exc:

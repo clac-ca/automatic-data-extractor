@@ -66,6 +66,14 @@ draft -> active -> retired
 
 Publishing is a single operation: mark one draft as active, automatically demote the previous active configuration version, and stamp the audit fields. Rolling back simply activates an older version (which clones into a new draft first so the version numbers keep increasing).
 
+Every mutation records an immutable audit event:
+
+- `configuration.created` captures the initial title, document type, and version.
+- `configuration.updated` lists changed fields (title, payload, activation flag) whenever metadata shifts.
+- `configuration.activated` fires when a revision becomes the active configuration for its document type.
+
+Events include the actor label (`api`, `scheduler`, etc.) so operators can trace who promoted each revision.
+
 ### Configuration resolution and APIs
 
 Resolver logic mirrors other configuration stores:
