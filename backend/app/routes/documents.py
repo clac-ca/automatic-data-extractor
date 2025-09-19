@@ -21,6 +21,7 @@ from ..schemas import (
 from ..services.audit_log import list_entity_events
 from ..services.documents import (
     DocumentNotFoundError,
+    DocumentFileMissingError,
     DocumentStoragePathError,
     DocumentTooLargeError,
     InvalidDocumentExpirationError,
@@ -178,7 +179,7 @@ def delete_document(
     """Soft delete a stored document and remove its bytes from disk."""
 
     try:
-        result = delete_document_service(
+        document = delete_document_service(
             db,
             document_id,
             deleted_by=payload.deleted_by,
@@ -189,7 +190,20 @@ def delete_document(
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _to_response(result.document)
+    except DocumentFileMissingError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentStoragePathError as exc:
+        logger.exception(
+            "Document stored URI resolves outside documents directory during delete",
+            extra={
+                "document_id": document_id,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Stored document path is invalid",
+        ) from exc
+    return _to_response(document)
 
 
 @router.get("/{document_id}/audit-events", response_model=AuditEventListResponse)

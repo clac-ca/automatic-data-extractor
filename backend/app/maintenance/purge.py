@@ -51,10 +51,9 @@ def _ensure_schema() -> None:
 
 
 def _format_document(detail: PurgedDocument) -> str:
-    status = "missing" if detail.missing_before_delete else "purged"
     return (
         f"{detail.document_id} | expires {detail.expires_at} | "
-        f"{detail.byte_size:,} bytes | {status}"
+        f"{detail.byte_size:,} bytes"
     )
 
 
@@ -62,7 +61,6 @@ def _print_summary(summary: ExpiredDocumentPurgeSummary) -> None:
     header = "Dry run" if summary.dry_run else "Purge"
     print(f"{header} complete.")
     print(f"Processed: {summary.processed_count}")
-    print(f"Missing files: {summary.missing_files}")
     print(f"Bytes reclaimed: {summary.bytes_reclaimed:,}")
 
     if not summary.documents:
