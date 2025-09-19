@@ -5,6 +5,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from backend.app.db import get_sessionmaker
+from backend.app.services.audit_log import AuditEventRecord, record_event
+
 
 def _upload_document(
     client,
@@ -407,6 +410,126 @@ def test_delete_document_is_idempotent(app_client) -> None:
     audit_response = client.get(f"/documents/{payload['document_id']}/audit-events")
     assert audit_response.status_code == 200
     assert audit_response.json()["total"] == 1
+
+
+def test_document_audit_timeline_paginates_and_filters(app_client) -> None:
+    client, _, _ = app_client
+    payload = _upload_document(
+        client,
+        filename="timeline.pdf",
+        data=b"timeline",
+        content_type="application/pdf",
+    )
+
+    session_factory = get_sessionmaker()
+    base_time = datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc)
+    with session_factory() as session:
+        for index in range(3):
+            record_event(
+                session,
+                AuditEventRecord(
+                    event_type=f"document.test.{index}",
+                    entity_type="document",
+                    entity_id=payload["document_id"],
+                    source="timeline-test",
+                    occurred_at=base_time + timedelta(minutes=index),
+                    payload={"index": index},
+                ),
+            )
+
+    response = client.get(
+        f"/documents/{payload['document_id']}/audit-events",
+        params={"limit": 2, "source": "timeline-test"},
+    )
+    assert response.status_code == 200
+    timeline = response.json()
+    expected_summary = {
+        "document_id": payload["document_id"],
+        "original_filename": payload["original_filename"],
+        "content_type": payload["content_type"],
+        "byte_size": payload["byte_size"],
+        "sha256": payload["sha256"],
+        "expires_at": payload["expires_at"],
+        "deleted_at": payload.get("deleted_at"),
+        "deleted_by": payload.get("deleted_by"),
+        "delete_reason": payload.get("delete_reason"),
+    }
+    assert timeline["entity"] == expected_summary
+    assert timeline["total"] == 3
+    assert [item["event_type"] for item in timeline["items"]] == [
+        "document.test.2",
+        "document.test.1",
+    ]
+
+    second_page = client.get(
+        f"/documents/{payload['document_id']}/audit-events",
+        params={"limit": 2, "offset": 2, "source": "timeline-test"},
+    )
+    assert second_page.status_code == 200
+    second_payload = second_page.json()
+    assert second_payload["total"] == 3
+    assert [item["event_type"] for item in second_payload["items"]] == [
+        "document.test.0",
+    ]
+
+    filtered = client.get(
+        f"/documents/{payload['document_id']}/audit-events",
+        params={
+            "event_type": "document.test.1",
+            "source": "timeline-test",
+        },
+    )
+    assert filtered.status_code == 200
+    filtered_payload = filtered.json()
+    assert filtered_payload["total"] == 1
+    assert filtered_payload["items"][0]["event_type"] == "document.test.1"
+
+
+def test_document_audit_timeline_summary_tracks_updates(app_client) -> None:
+    client, _, _ = app_client
+    payload = _upload_document(
+        client,
+        filename="summary-updates.pdf",
+        data=b"summary",
+        content_type="application/pdf",
+    )
+
+    delete_response = _delete_document(
+        client,
+        payload["document_id"],
+        deleted_by="ops@ade.local",
+        delete_reason="cleanup",
+    )
+    assert delete_response.status_code == 200
+    deleted_document = delete_response.json()
+
+    timeline = client.get(f"/documents/{payload['document_id']}/audit-events")
+    assert timeline.status_code == 200
+    timeline_payload = timeline.json()
+    assert timeline_payload["total"] == 1
+    assert timeline_payload["entity"] == {
+        "document_id": deleted_document["document_id"],
+        "original_filename": deleted_document["original_filename"],
+        "content_type": deleted_document["content_type"],
+        "byte_size": deleted_document["byte_size"],
+        "sha256": deleted_document["sha256"],
+        "expires_at": deleted_document["expires_at"],
+        "deleted_at": deleted_document["deleted_at"],
+        "deleted_by": deleted_document["deleted_by"],
+        "delete_reason": deleted_document["delete_reason"],
+    }
+
+
+def test_document_audit_timeline_returns_404_for_missing_document(app_client) -> None:
+    client, _, _ = app_client
+
+    response = client.get("/documents/does-not-exist/audit-events")
+
+    assert response.status_code == 404
+    assert (
+        response.json()["detail"]
+        == "Document 'does-not-exist' was not found"
+    )
 
 
 def test_delete_document_missing_file_returns_404(app_client) -> None:
