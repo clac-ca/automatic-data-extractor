@@ -92,6 +92,22 @@ class AuditEventResponse(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class DocumentTimelineSummary(BaseModel):
+    """Lightweight document metadata embedded in audit timelines."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    document_id: str
+    original_filename: str
+    content_type: str | None = None
+    byte_size: int
+    sha256: str
+    expires_at: str
+    deleted_at: str | None = None
+    deleted_by: str | None = None
+    delete_reason: str | None = None
+
+
 class ConfigurationTimelineSummary(BaseModel):
     """Lightweight configuration metadata embedded in audit timelines."""
 
@@ -115,7 +131,9 @@ class JobTimelineSummary(BaseModel):
     created_by: str
 
 
-AuditEventEntitySummary = ConfigurationTimelineSummary | JobTimelineSummary
+AuditEventEntitySummary = (
+    DocumentTimelineSummary | ConfigurationTimelineSummary | JobTimelineSummary
+)
 
 
 class AuditEventListResponse(BaseModel):
