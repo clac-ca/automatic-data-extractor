@@ -44,33 +44,32 @@ _DEFAULT_DOWNLOAD_FILENAME = "downloaded-document"
 logger = logging.getLogger(__name__)
 
 
-def _ascii_filename_fallback(filename: str) -> str:
-    """Return an ASCII-only filename suitable for HTTP headers."""
+def _sanitize_header_value(value: str) -> str:
+    cleaned = value.replace("\r", " ").replace("\n", " ")
+    cleaned = cleaned.replace('"', "'")
+    return " ".join(cleaned.split()).strip()
 
-    stem, ext = os.path.splitext(filename)
 
-    def _normalise(component: str) -> str:
-        normalised = unicodedata.normalize("NFKD", component)
-        ascii_component = normalised.encode("ascii", "ignore").decode("ascii")
-        ascii_component = ascii_component.replace("\r", " ").replace("\n", " ")
-        ascii_component = ascii_component.replace('"', "'")
-        ascii_component = " ".join(ascii_component.split())
-        return ascii_component.strip()
+def _ascii_filename(value: str) -> str:
+    stem, ext = os.path.splitext(value)
 
-    ascii_stem = _normalise(stem)
-    ascii_ext = _normalise(ext)
+    def _to_ascii(component: str) -> str:
+        ascii_component = (
+            unicodedata.normalize("NFKD", component)
+            .encode("ascii", "ignore")
+            .decode("ascii")
+        )
+        return " ".join(ascii_component.split()).strip()
 
-    # Only keep the extension if it's not empty and not just a dot
-    if ascii_ext and ascii_ext != ".":
-        if not ascii_ext.startswith("."):
-            ascii_ext = f".{ascii_ext}"
-    else:
-        ascii_ext = ""
+    safe_stem = _to_ascii(stem) or _DEFAULT_DOWNLOAD_FILENAME
+    safe_ext = _to_ascii(ext)
+    if safe_ext and not safe_ext.startswith("."):
+        safe_ext = f".{safe_ext}"
+    elif safe_ext == ".":
+        safe_ext = ""
 
-    if not ascii_stem:
-        ascii_stem = _DEFAULT_DOWNLOAD_FILENAME
-
-    return f"{ascii_stem}{ascii_ext}"
+    combined = f"{safe_stem}{safe_ext}" or _DEFAULT_DOWNLOAD_FILENAME
+    return combined.replace(" .", ".")
 
 
 def _content_disposition(filename: str | None) -> str:
@@ -79,26 +78,19 @@ def _content_disposition(filename: str | None) -> str:
     if not filename:
         return "attachment"
 
-    sanitised = (
-        filename.replace("\r", " ")
-        .replace("\n", " ")
-        .replace('"', "'")
-        .strip()
-    )
+    cleaned = _sanitize_header_value(filename)
+    if not cleaned:
+        cleaned = _DEFAULT_DOWNLOAD_FILENAME
 
-    if not all(ord(c) <= 255 for c in sanitised):
-        ascii_filename = _ascii_filename_fallback(filename)
-        encoded = quote(filename, safe="")
-        header = f'attachment; filename="{ascii_filename}"'
-        if encoded:
-            header += f"; filename*=utf-8''{encoded}"
-        return header
+    ascii_name = _ascii_filename(cleaned)
+    if cleaned == ascii_name and all(ord(char) < 128 for char in cleaned):
+        return f'attachment; filename="{cleaned}"'
 
-    if not sanitised:
-        ascii_filename = _ascii_filename_fallback(filename)
-        return f'attachment; filename="{ascii_filename}"'
-
-    return f'attachment; filename="{sanitised}"'
+    encoded = quote(cleaned, safe="")
+    header = f'attachment; filename="{ascii_name}"'
+    if encoded:
+        header += f"; filename*=utf-8''{encoded}"
+    return header
 
 
 def _to_response(document: Document) -> DocumentResponse:
@@ -247,7 +239,7 @@ def delete_document(
     """Soft delete a stored document and remove its bytes from disk."""
 
     try:
-        document = delete_document_service(
+        result = delete_document_service(
             db,
             document_id,
             deleted_by=payload.deleted_by,
@@ -258,7 +250,7 @@ def delete_document(
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _to_response(document)
+    return _to_response(result.document)
 
 
 @router.get("/{document_id}/audit-events", response_model=AuditEventListResponse)

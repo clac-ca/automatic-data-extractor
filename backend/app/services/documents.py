@@ -21,7 +21,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import select, tuple_
 from sqlalchemy.orm import Session
 
 from .. import config
@@ -52,8 +52,8 @@ class DocumentTooLargeError(Exception):
         self.limit = limit
         self.received = received
         message = (
-            f"Uploaded file is {_format_size(received)} ({received:,} bytes), "
-            f"exceeding the configured limit of {_format_size(limit)} ({limit:,} bytes)."
+            f"Uploaded file is {received:,} bytes, exceeding the configured "
+            f"limit of {limit:,} bytes."
         )
         super().__init__(message)
 
@@ -75,19 +75,6 @@ class InvalidDocumentExpirationError(Exception):
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
-
-
-def _format_size(value: int) -> str:
-    units = ("bytes", "KiB", "MiB", "GiB", "TiB")
-    size = float(value)
-    for unit in units:
-        if size < 1024 or unit == units[-1]:
-            if unit == "bytes":
-                return f"{int(size):,} {unit}"
-            return f"{size:.2f} {unit}"
-        size /= 1024
-
-
 def _normalise_filename(name: str | None) -> str:
     if name is None:
         return "upload"
@@ -105,11 +92,13 @@ def _normalise_content_type(content_type: str | None) -> str | None:
 def _prepare_stream(data: bytes | BinaryIO) -> BinaryIO:
     """Return a binary stream positioned at the start of the payload."""
 
-    stream = io.BytesIO(data) if isinstance(data, (bytes, bytearray)) else data
+    if isinstance(data, (bytes, bytearray)):
+        return io.BytesIO(data)
+
+    stream = data
     try:
-        if hasattr(stream, "seek") and stream.seekable():
-            stream.seek(0)
-    except Exception:  # pragma: no cover - defensive fallback
+        stream.seek(0)
+    except (AttributeError, OSError):  # pragma: no cover - optional reset best effort
         pass
     return stream
 
@@ -327,6 +316,14 @@ def resolve_document_path(
     return candidate
 
 
+@dataclass(slots=True)
+class DocumentDeletionResult:
+    """Outcome of a document deletion attempt."""
+
+    document: Document
+    missing_before_delete: bool
+
+
 def delete_document(
     db: Session,
     document_id: str,
@@ -340,7 +337,7 @@ def delete_document(
     audit_source: str | None = None,
     audit_request_id: str | None = None,
     audit_payload: dict[str, Any] | None = None,
-) -> Document:
+) -> DocumentDeletionResult:
     """Soft delete a document and remove the stored file when present."""
 
     document = get_document(db, document_id)
@@ -349,9 +346,39 @@ def delete_document(
     path: Path | None = None
     missing_before_delete = True
 
-    def _remove_stored_file() -> None:
-        if path is None:
-            return
+    try:
+        path = resolve_document_path(document, settings=settings)
+        missing_before_delete = not path.exists()
+    except DocumentStoragePathError as exc:
+        logger.warning(
+            "Stored URI for document resolves outside documents directory",
+            extra={
+                "document_id": document.document_id,
+                "stored_uri": document.stored_uri,
+            },
+            exc_info=exc,
+        )
+
+    mutated = document.deleted_at is None
+    if mutated:
+        now_iso = now.isoformat()
+        document.deleted_at = now_iso
+        document.deleted_by = deleted_by
+        document.delete_reason = delete_reason
+        document.updated_at = now_iso
+
+    if commit:
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        if mutated:
+            db.refresh(document)
+    elif mutated:
+        db.flush()
+
+    if path is not None:
         try:
             path.unlink(missing_ok=True)
         except Exception:
@@ -362,44 +389,6 @@ def delete_document(
                     "stored_uri": document.stored_uri,
                 },
             )
-
-    try:
-        path = resolve_document_path(document, settings=settings)
-    except DocumentStoragePathError as exc:
-        logger.warning(
-            "Stored URI for document resolves outside documents directory",
-            extra={
-                "document_id": document.document_id,
-                "stored_uri": document.stored_uri,
-            },
-            exc_info=exc,
-        )
-    else:
-        missing_before_delete = not path.exists()
-        if not commit:
-            _remove_stored_file()
-
-    mutated = False
-    if document.deleted_at is None:
-        now_iso = now.isoformat()
-        document.deleted_at = now_iso
-        document.deleted_by = deleted_by
-        document.delete_reason = delete_reason
-        document.updated_at = now_iso
-        db.add(document)
-        mutated = True
-
-    if commit:
-        try:
-            db.commit()
-        except Exception:
-            db.rollback()
-            raise
-        if mutated:
-            db.refresh(document)
-        _remove_stored_file()
-    elif mutated:
-        db.flush()
 
     if mutated:
         payload: dict[str, Any] = {
@@ -428,11 +417,7 @@ def delete_document(
         )
 
         try:
-            if commit:
-                record_event(db, event, commit=True)
-            else:
-                with db.begin_nested():
-                    record_event(db, event, commit=False)
+            record_event(db, event, commit=commit)
         except Exception:
             logger.exception(
                 "Failed to record document deletion audit event",
@@ -443,7 +428,9 @@ def delete_document(
                 },
             )
 
-    return document
+    return DocumentDeletionResult(
+        document=document, missing_before_delete=missing_before_delete
+    )
 
 
 def iter_document_file(
@@ -500,38 +487,26 @@ def iter_expired_documents(
     if limit is not None and limit <= 0:
         return
 
-    last_expires_at: str | None = None
-    last_document_id: str | None = None
+    base_query = (
+        select(Document)
+        .where(Document.deleted_at.is_(None), Document.expires_at <= now_iso)
+        .order_by(Document.expires_at.asc(), Document.document_id.asc())
+    )
+
     yielded = 0
+    cursor: tuple[str, str] | None = None
 
     while True:
-        if limit is not None and yielded >= limit:
+        remaining = None if limit is None else limit - yielded
+        if remaining is not None and remaining <= 0:
             break
 
-        page_size = batch_size
-        if limit is not None:
-            remaining = limit - yielded
-            if remaining <= 0:
-                break
-            page_size = min(page_size, remaining)
-
-        statement = (
-            select(Document)
-            .where(Document.deleted_at.is_(None), Document.expires_at <= now_iso)
-        )
-        if last_expires_at is not None:
+        page_size = batch_size if remaining is None else min(batch_size, remaining)
+        statement = base_query.limit(page_size)
+        if cursor is not None:
             statement = statement.where(
-                or_(
-                    Document.expires_at > last_expires_at,
-                    and_(
-                        Document.expires_at == last_expires_at,
-                        Document.document_id > last_document_id,
-                    ),
-                )
+                tuple_(Document.expires_at, Document.document_id) > cursor
             )
-        statement = statement.order_by(
-            Document.expires_at.asc(), Document.document_id.asc()
-        ).limit(page_size)
 
         batch = list(db.scalars(statement))
         if not batch:
@@ -540,8 +515,8 @@ def iter_expired_documents(
         yield batch
 
         yielded += len(batch)
-        last_expires_at = batch[-1].expires_at
-        last_document_id = batch[-1].document_id
+        last = batch[-1]
+        cursor = (last.expires_at, last.document_id)
 
 
 def purge_expired_documents(
@@ -560,22 +535,7 @@ def purge_expired_documents(
     summary = ExpiredDocumentPurgeSummary(dry_run=dry_run)
     settings = config.get_settings()
 
-    def _process(document: Document) -> None:
-        missing_before_delete = True
-        try:
-            path = resolve_document_path(document, settings=settings)
-        except DocumentStoragePathError as exc:
-            logger.warning(
-                "Stored URI for document resolves outside documents directory during purge",
-                extra={
-                    "document_id": document.document_id,
-                    "stored_uri": document.stored_uri,
-                },
-                exc_info=exc,
-            )
-        else:
-            missing_before_delete = not path.exists()
-
+    def _record(document: Document, missing_before_delete: bool) -> None:
         summary.processed_count += 1
         if missing_before_delete:
             summary.missing_files += 1
@@ -592,32 +552,44 @@ def purge_expired_documents(
             )
         )
 
-        if dry_run:
-            return
-
-        delete_document(
-            db,
-            document.document_id,
-            deleted_by=deleted_by,
-            delete_reason=delete_reason,
-            commit=False,
-            audit_actor_type="system",
-            audit_actor_label=deleted_by,
-            audit_source=audit_source,
-            audit_request_id=audit_request_id,
-        )
+    def _missing_before_delete(document: Document) -> bool:
+        try:
+            path = resolve_document_path(document, settings=settings)
+        except DocumentStoragePathError as exc:
+            logger.warning(
+                "Stored URI for document resolves outside documents directory during purge",
+                extra={
+                    "document_id": document.document_id,
+                    "stored_uri": document.stored_uri,
+                },
+                exc_info=exc,
+            )
+            return True
+        return not path.exists()
 
     iterator = iter_expired_documents(db, batch_size=batch_size, limit=limit)
     if dry_run:
         for batch in iterator:
             for document in batch:
-                _process(document)
+                missing_before_delete = _missing_before_delete(document)
+                _record(document, missing_before_delete)
         return summary
 
     with db.begin():
         for batch in iterator:
             for document in batch:
-                _process(document)
+                result = delete_document(
+                    db,
+                    document.document_id,
+                    deleted_by=deleted_by,
+                    delete_reason=delete_reason,
+                    commit=False,
+                    audit_actor_type="system",
+                    audit_actor_label=deleted_by,
+                    audit_source=audit_source,
+                    audit_request_id=audit_request_id,
+                )
+                _record(result.document, result.missing_before_delete)
 
     return summary
 
@@ -632,6 +604,7 @@ __all__ = [
     "get_document",
     "resolve_document_path",
     "delete_document",
+    "DocumentDeletionResult",
     "iter_document_file",
     "iter_expired_documents",
     "purge_expired_documents",
