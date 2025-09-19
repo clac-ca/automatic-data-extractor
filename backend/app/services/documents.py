@@ -144,7 +144,10 @@ def _persist_stream(
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         with destination.open("wb") as target:
-            for chunk in iter(lambda: stream.read(_CHUNK_SIZE), b""):
+            while True:
+                chunk = stream.read(_CHUNK_SIZE)
+                if not chunk:
+                    break
                 prospective_size = size + len(chunk)
                 if max_bytes is not None and prospective_size > max_bytes:
                     raise DocumentTooLargeError(
