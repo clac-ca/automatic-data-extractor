@@ -62,7 +62,7 @@ and mounted as Docker volumes in deployment.
 ### Audit log
 ADE keeps an immutable audit log in the `audit_events` table. The helper at `services/audit_log.record_event(...)` accepts a typed payload, canonicalises any JSON context for deterministic storage, and persists a ULID-keyed row. Clients query events through the same service or via `/audit-events`, which supports pagination plus filters for entity, event type, source, request ID, and time bounds. Document tools also rely on `GET /documents/{document_id}/audit-events` for convenience.
 
-Document deletions emit a shared `document.deleted` event that captures actor metadata, the origin (`api`, `scheduler`, or `cli`), and soft-delete context (delete reason, byte size, storage URI, hash, expiration, and whether the file was already missing). The API surfaces these records directly:
+Document deletions emit a shared `document.deleted` event that captures actor metadata, the origin (`api`, `scheduler`, or `cli`), and soft-delete context (delete reason, byte size, storage URI, hash, and expiration). The API surfaces these records directly:
 
 ```jsonc
 {
@@ -80,8 +80,7 @@ Document deletions emit a shared `document.deleted` event that captures actor me
     "byte_size": 542118,
     "stored_uri": "bd/5c/...",
     "sha256": "sha256:bd5c3d9a...",
-    "expires_at": "2025-10-17T18:42:00+00:00",
-    "missing_before_delete": false
+    "expires_at": "2025-10-17T18:42:00+00:00"
   }
 }
 ```

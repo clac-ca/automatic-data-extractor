@@ -7,6 +7,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import time
 
+import pytest
+
 
 from backend.app import config as config_module
 from backend.app import db as db_module
@@ -15,6 +17,7 @@ from backend.app.models import AuditEvent, Document
 from sqlalchemy import select
 
 from backend.app.services.documents import (
+    DocumentFileMissingError,
     ExpiredDocumentPurgeSummary,
     iter_expired_documents,
     purge_expired_documents,
@@ -75,6 +78,9 @@ def _bulk_create_expired_documents(
     for index in range(count):
         document_id = f"BULK{index:022d}"
         stored_uri = f"bulk/{index:06d}.bin"
+        target_path = documents_dir / stored_uri
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_bytes(b"x")
         chunk.append(
             Document(
                 document_id=document_id,
@@ -181,7 +187,6 @@ def test_purge_expired_documents_deletes_files(app_client) -> None:
 
     assert summary.dry_run is False
     assert summary.processed_count == 2
-    assert summary.missing_files == 0
     assert summary.bytes_reclaimed == expired_old.document.byte_size + expired_recent.document.byte_size
     assert [detail.document_id for detail in summary.documents] == [
         expired_old.document.document_id,
@@ -251,8 +256,7 @@ def test_purge_expired_documents_streams_large_batches(app_client) -> None:
 
     assert summary.dry_run is True
     assert summary.processed_count == total_documents
-    assert summary.missing_files == total_documents
-    assert summary.bytes_reclaimed == 0
+    assert summary.bytes_reclaimed == total_documents
     assert len(summary.documents) == total_documents
     assert summary.documents[0].document_id == "BULK0000000000000000000000"
     assert summary.documents[-1].document_id == f"BULK{total_documents - 1:022d}"
@@ -290,7 +294,7 @@ def test_purge_expired_documents_respects_limit(app_client) -> None:
         assert recent_row is not None and recent_row.deleted_at is None
 
 
-def test_purge_expired_documents_handles_missing_files(app_client) -> None:
+def test_purge_expired_documents_raises_when_file_missing(app_client) -> None:
     client, _, _ = app_client
     del client
     session_factory = get_sessionmaker()
@@ -306,17 +310,13 @@ def test_purge_expired_documents_handles_missing_files(app_client) -> None:
     expired_doc.path.unlink()
 
     with session_factory() as purge_session:
-        summary = purge_expired_documents(purge_session)
-
-    assert summary.processed_count == 1
-    assert summary.missing_files == 1
-    assert summary.bytes_reclaimed == 0
-    assert summary.documents[0].missing_before_delete is True
+        with pytest.raises(DocumentFileMissingError):
+            purge_expired_documents(purge_session)
 
     with session_factory() as verify_session:
         row = verify_session.get(Document, expired_doc.document.document_id)
         assert row is not None
-        assert row.deleted_at is not None
+        assert row.deleted_at is None
 
 
 def test_purge_expired_documents_dry_run_leaves_state_untouched(app_client) -> None:
@@ -338,7 +338,6 @@ def test_purge_expired_documents_dry_run_leaves_state_untouched(app_client) -> N
     assert summary.dry_run is True
     assert summary.processed_count == 1
     assert summary.bytes_reclaimed == expired_doc.document.byte_size
-    assert summary.missing_files == 0
     assert summary.documents[0].document_id == expired_doc.document.document_id
 
     assert expired_doc.path.exists()
@@ -357,7 +356,6 @@ def test_auto_purge_status_records_successful_run(app_client) -> None:
     summary = ExpiredDocumentPurgeSummary(
         dry_run=False,
         processed_count=5,
-        missing_files=1,
         bytes_reclaimed=2048,
     )
     started_at = "2024-01-01T00:00:00+00:00"
@@ -379,12 +377,12 @@ def test_auto_purge_status_records_successful_run(app_client) -> None:
         assert status["status"] == "succeeded"
         assert status["dry_run"] is False
         assert status["processed_count"] == 5
-        assert status["missing_files"] == 1
         assert status["bytes_reclaimed"] == 2048
         assert status["started_at"] == started_at
         assert status["completed_at"] == completed_at
         assert status["interval_seconds"] == 900
         assert status["error"] is None
+        assert "missing_files" not in status
         assert "recorded_at" in status
 
 
@@ -411,12 +409,12 @@ def test_auto_purge_status_records_failure(app_client) -> None:
         assert status["status"] == "failed"
         assert status["dry_run"] is None
         assert status["processed_count"] is None
-        assert status["missing_files"] is None
         assert status["bytes_reclaimed"] is None
         assert status["started_at"] == started_at
         assert status["completed_at"] is None
         assert status["interval_seconds"] == 1200
         assert status["error"] == "boom"
+        assert "missing_files" not in status
         assert "recorded_at" in status
 
 

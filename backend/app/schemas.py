@@ -16,7 +16,6 @@ class AutoPurgeStatus(BaseModel):
     started_at: str
     completed_at: str | None = None
     processed_count: int | None = None
-    missing_files: int | None = None
     bytes_reclaimed: int | None = None
     dry_run: bool | None = None
     interval_seconds: int | None = None

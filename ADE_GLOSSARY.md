@@ -92,7 +92,6 @@ Back up the SQLite file alongside the `var/documents/` directory.
   "purge": {
     "status": "succeeded",
     "processed_count": 2,
-    "missing_files": 0,
     "bytes_reclaimed": 4096,
     "recorded_at": "2024-01-01T00:05:00+00:00",
     "interval_seconds": 3600
@@ -211,8 +210,7 @@ Back up the SQLite file alongside the `var/documents/` directory.
     "byte_size": 542118,
     "stored_uri": "bd/5c/...",
     "sha256": "sha256:bd5c3d9a...",
-    "expires_at": "2025-10-17T18:42:00+00:00",
-    "missing_before_delete": false
+    "expires_at": "2025-10-17T18:42:00+00:00"
   }
 }
 ```

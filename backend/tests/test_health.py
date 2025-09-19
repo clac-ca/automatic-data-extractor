@@ -34,7 +34,6 @@ def test_health_endpoint_includes_purge_summary_when_present(app_client) -> None
     summary = ExpiredDocumentPurgeSummary(
         dry_run=False,
         processed_count=2,
-        missing_files=1,
         bytes_reclaimed=4096,
     )
     started_at = datetime.now(timezone.utc).isoformat()
@@ -57,10 +56,10 @@ def test_health_endpoint_includes_purge_summary_when_present(app_client) -> None
     assert purge is not None
     assert purge["status"] == "succeeded"
     assert purge["processed_count"] == 2
-    assert purge["missing_files"] == 1
     assert purge["bytes_reclaimed"] == 4096
     assert purge["interval_seconds"] == 600
     assert purge["started_at"] == started_at
     assert purge["completed_at"] == completed_at
     assert purge["error"] is None
+    assert "missing_files" not in purge
     assert "recorded_at" in purge
