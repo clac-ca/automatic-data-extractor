@@ -46,7 +46,7 @@ initial foundation created here wires together:
 - `models.py` – the first domain models (`ConfigurationRevision`, `Job`, and `Document`) with ULID keys, JSON payload storage, and randomly assigned document URIs.
 - `routes/health.py` – health check hitting the database and returning `{ "status": "ok" }`.
 - `routes/documents.py` – multipart uploads, metadata listings, download streaming, and manual deletion for stored documents.
-- `routes/audit_events.py` – paginated audit log listings and document-scoped history endpoints.
+- `routes/audit_events.py` – paginated audit log listings plus document, configuration, and job timeline endpoints.
 - `main.py` – FastAPI application setup, startup lifecycle, and router registration.
 - `services/documents.py` – random-path storage for uploads, size-limit enforcement, filesystem lookups, and soft-delete helpers.
 - `services/audit_log.py` – shared helper for recording immutable audit events and querying them with consistent filters.
@@ -273,7 +273,7 @@ Jobs returned by the API and displayed in the UI always use the same JSON struct
 
 1. `POST /documents` accepts a multipart upload (`file` field). The API streams the payload into a randomly generated directory under `var/documents/` and returns metadata including `document_id`, byte size, digest, and the canonical `stored_uri`.
 2. Every upload creates a fresh document record with its own storage path, even if the raw bytes match a prior submission.
-3. `GET /documents` lists records newest first, `GET /documents/{document_id}` returns metadata for a single file, `GET /documents/{document_id}/download` streams the stored bytes (with `Content-Disposition` set to the original filename), and `DELETE /documents/{document_id}` removes the bytes while recording who initiated the deletion. `GET /documents/{document_id}/audit-events` exposes the immutable history of deletion events for that record.
+3. `GET /documents` lists records newest first, `GET /documents/{document_id}` returns metadata for a single file, `GET /documents/{document_id}/download` streams the stored bytes (with `Content-Disposition` set to the original filename), and `DELETE /documents/{document_id}` removes the bytes while recording who initiated the deletion. `GET /documents/{document_id}/audit-events` exposes the immutable history of deletion events for that record. Configuration revisions use `GET /configurations/{configuration_id}/audit-events` and jobs use `GET /jobs/{job_id}/audit-events`; both endpoints share pagination and filtering behaviour with the global audit feed.
 4. `POST /documents` enforces the configurable `max_upload_bytes` cap (defaults to 25 MiB). Payloads that exceed the limit return HTTP 413 with `{ "detail": {"error": "document_too_large", "max_upload_bytes": <bytes>, "received_bytes": <bytes>}}` so operators know the request failed before any data is persisted.
 5. Document retention and deletion workflows are defined in `docs/document_retention_and_deletion.md`. The API records manual deletions, logs them to the shared audit feed, runs an automatic purge sweep on startup (and hourly by default), and still exposes a maintenance CLI (`python -m backend.app.maintenance.purge`) for manual runs.
 
