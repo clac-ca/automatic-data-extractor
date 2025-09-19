@@ -421,21 +421,18 @@ def test_document_audit_timeline_paginates_and_filters(app_client) -> None:
         content_type="application/pdf",
     )
 
-    session_factory = get_sessionmaker()
+    # Instead of manually creating audit events, perform document updates that generate audit events
     base_time = datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc)
-    with session_factory() as session:
-        for index in range(3):
-            record_event(
-                session,
-                AuditEventRecord(
-                    event_type=f"document.test.{index}",
-                    entity_type="document",
-                    entity_id=payload["document_id"],
-                    source="timeline-test",
-                    occurred_at=base_time + timedelta(minutes=index),
-                    payload={"index": index},
-                ),
-            )
+    for index in range(3):
+        response = client.patch(
+            f"/documents/{payload['document_id']}",
+            json={
+                "metadata": {"index": index},
+                "source": "timeline-test"
+            },
+            headers={"X-Test-Occurred-At": (base_time + timedelta(minutes=index)).isoformat()},
+        )
+        assert response.status_code == 200
 
     response = client.get(
         f"/documents/{payload['document_id']}/audit-events",
