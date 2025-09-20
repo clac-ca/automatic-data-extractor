@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=67", "wheel"]
+requires = ["setuptools>=80"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,24 +8,28 @@ version = "0.1.0"
 description = "Internal tooling for deterministic data extraction."
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [
-    { name = "ADE Team" }
-]
+authors = [{ name = "ADE Team" }]
+
+# Runtime deps — pinned for reproducible builds
 dependencies = [
-    "fastapi>=0.110,<0.112",
-    "python-multipart>=0.0.7,<0.0.10",
-    "uvicorn[standard]>=0.23,<0.29",
-    "sqlalchemy>=2.0,<3.0",
-    "alembic>=1.13,<2.0",
-    "pydantic>=2.5,<3.0",
-    "pydantic-settings>=2.0,<3.0",
-    "ulid-py>=1.1,<2.0",
-    "httpx>=0.25,<0.28"
+  "fastapi==0.117.0",
+  "uvicorn[standard]==0.36.0",
+  "sqlalchemy==2.0.43",
+  "alembic==1.16.5",
+  "pydantic==2.11.9",
+  "pydantic-settings==2.10.1",
+  "python-multipart==0.0.20",
+  "httpx==0.28.1",
+  # 2025-09-20 (JK): Replace ulid-py with the actively maintained python-ulid:
+  "python-ulid[pydantic]==3.1.0"
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0,<8.0"
+  "pytest==8.4.2",
+  "pytest-asyncio==1.2.0",
+  "mypy==1.18.2",
+  "ruff==0.13.1"
 ]
 
 [tool.pytest.ini_options]
