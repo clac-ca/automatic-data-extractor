@@ -1,7 +1,7 @@
 """Document ingestion and storage helpers.
 
 This module owns the logic that writes uploaded files into the document
-storage directory under ``var/documents/`` and exposes metadata lookup
+storage directory under ``data/documents/`` and exposes metadata lookup
 utilities for API routes and background jobs. The implementation favours a
 straightforward "always store a new file" approach: every upload is written
 under a ULID-named path, and metadata is persisted alongside the stored

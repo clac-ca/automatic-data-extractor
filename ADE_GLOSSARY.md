@@ -16,7 +16,7 @@ listed beside each term.
 
 ## Core domain
 - **Document type** – Family of documents that share a configuration (`configurations.document_type`, `jobs.document_type`).
-- **Document record** – Canonical metadata for an uploaded file (`documents.document_id`, `documents.original_filename`, `documents.content_type`, `documents.byte_size`, `documents.sha256`, `documents.stored_uri`, `documents.metadata`, `documents.expires_at`, `documents.deleted_at`, `documents.deleted_by`, `documents.delete_reason`). Document identifiers are ULIDs reused as filenames under `var/documents/uploads/`.
+- **Document record** – Canonical metadata for an uploaded file (`documents.document_id`, `documents.original_filename`, `documents.content_type`, `documents.byte_size`, `documents.sha256`, `documents.stored_uri`, `documents.metadata`, `documents.expires_at`, `documents.deleted_at`, `documents.deleted_by`, `documents.delete_reason`). Document identifiers are ULIDs reused as filenames under `data/documents/uploads/`.
 - **Configuration** – Executable detection, transformation, and metadata logic that defines how ADE processes a document type. Each configuration row is immutable and stored as JSON (`configurations.configuration_id`, `configurations.version`, `configurations.is_active`, `configurations.activated_at`, `configurations.payload`).
 - **Active configuration** – The single configuration with `is_active = true` for a document type. API consumers use it by default when they do not supply an explicit `configuration_id`.
 - **Profile** – Optional overrides for a source, customer, or locale stored in the configuration payload (`payload.profiles`).
@@ -26,8 +26,8 @@ listed beside each term.
 ---
 
 ## Document anatomy
-- **Document** – Canonical upload tracked by ADE. The API exposes its metadata via `/documents` (`documents.document_id`, `documents.stored_uri`). Document IDs are ULIDs reused as filenames, so files live at `var/documents/uploads/{document_id}` for uploads and `var/documents/output/` for derived artefacts.
-- **Stored URI** – Canonical relative path that jobs reference when describing inputs (`documents.stored_uri`). Uses deterministic segments such as `uploads/{document_id}` for source files and `output/<name>` for generated artefacts anchored under `var/documents/` on disk.
+- **Document** – Canonical upload tracked by ADE. The API exposes its metadata via `/documents` (`documents.document_id`, `documents.stored_uri`). Document IDs are ULIDs reused as filenames, so files live at `data/documents/uploads/{document_id}` for uploads and `data/documents/output/` for derived artefacts.
+- **Stored URI** – Canonical relative path that jobs reference when describing inputs (`documents.stored_uri`). Uses deterministic segments such as `uploads/{document_id}` for source files and `output/<name>` for generated artefacts anchored under `data/documents/` on disk.
 - **Document hash** – SHA-256 digest captured for auditing and integrity checks (`documents.sha256`). Prefixed with `sha256:` in responses.
 - **Page** – Worksheet or PDF page captured in a manifest (`pages[].index`).
 - **Table** – Contiguous rows and columns with a single header row (`tables[].index`).
@@ -64,7 +64,7 @@ listed beside each term.
 ---
 
 ## Storage foundation
-ADE stores everything in SQLite (`var/ade.sqlite`). Tables expected on day one:
+ADE stores everything in SQLite (`data/db/ade.sqlite`). Tables expected on day one:
 - `configurations` – Configuration metadata, JSON payloads, immutable history, and lifecycle state.
 - `documents` – Uploaded file metadata, SHA-256 digests, canonical storage URIs, and optional `produced_by_job_id` pointers linking derived outputs back to the job that emitted them.
 - `jobs` – Configuration linkage, `input_document_id`, metrics, logs, and status for each processing run.
@@ -79,7 +79,7 @@ ADE stores everything in SQLite (`var/ade.sqlite`). Tables expected on day one:
 - **Document retention defaults** – Uploads expire after the configured window (`ADE_DEFAULT_DOCUMENT_RETENTION_DAYS`,
   30 days by default). Callers may override a document's expiry during upload by setting the `expires_at` form field.
 
-Back up the SQLite file alongside the `var/documents/` directory.
+Back up the entire `data/` directory (database plus documents).
 
 ---
 

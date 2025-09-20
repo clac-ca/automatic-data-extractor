@@ -52,8 +52,9 @@ initial foundation created here wires together:
 Pure Python helpers live in `backend/processor/`. They detect tables, decide column mappings, run validation rules, and produce audit notes. Because they are deterministic functions, reruns against the same configuration revision and document yield identical job results.
 
 ### Storage
-All persistence uses SQLite (`var/ade.sqlite`) and an on-disk documents folder (`var/documents/`). These paths are gitignored
-and mounted as Docker volumes in deployment.
+All persistence lives under a gitignored `data/` root. By default ADE stores the SQLite database at `data/db/ade.sqlite` and
+documents under `data/documents/` (with dedicated `uploads/` and `output/` children). Set `ADE_DATA_DIR` to move the entire
+tree, or override `ADE_DATABASE_URL` / `ADE_DOCUMENTS_DIR` for bespoke paths.
 
 ### Authentication
 ADE exposes a small set of authentication modes controlled by the `ADE_AUTH_MODES` environment variable:
@@ -192,7 +193,7 @@ Jobs append events as they are created, progress through statuses, and publish o
     "status": "pending",
     "created_by": "ops@ade.local",
     "input": {
-      "uri": "var/documents/remit_final.pdf",
+      "uri": "data/documents/remit_final.pdf",
       "sha256": "sha256:bd5c3d9a..."
     }
   }
@@ -239,7 +240,7 @@ Logging is additive—failures to append an event are logged but do not roll bac
 ---
 
 ## How the system flows
-1. Upload documents through the UI or `POST /documents`. The backend writes the file to `var/documents/uploads/{document_id}` using the document ULID and returns canonical metadata (including the `stored_uri` jobs reference later).
+1. Upload documents through the UI or `POST /documents`. The backend writes the file to `data/documents/uploads/{document_id}` using the document ULID and returns canonical metadata (including the `stored_uri` jobs reference later).
 2. Create or edit configurations, then activate the configuration that should run by default for the document type.
 3. Launch a job via the UI or `POST /jobs`, supplying the `input_document_id` for the source file. The processor applies the active configuration and records metrics and logs alongside the job. Derived outputs are uploaded later by calling `POST /documents` with `produced_by_job_id` set to the job identifier.
 4. Poll `GET /jobs/{job_id}` (or list with `GET /jobs`, optionally filtering by `input_document_id`) to review progress, download output artefacts, and inspect metrics. Use `GET /documents/{document_id}/jobs` to show the processing history for a specific file without scanning the full job list.
@@ -314,7 +315,7 @@ Jobs returned by the API and displayed in the UI always use the same JSON struct
 
 ## Document ingestion workflow
 
-1. `POST /documents` accepts a multipart upload (`file` field). The API streams the payload into `var/documents/uploads/{document_id}` and returns metadata including `document_id`, byte size, digest, and the canonical `stored_uri`.
+1. `POST /documents` accepts a multipart upload (`file` field). The API streams the payload into `data/documents/uploads/{document_id}` and returns metadata including `document_id`, byte size, digest, and the canonical `stored_uri`.
 2. Every upload creates a fresh document record with its own storage path, even if the raw bytes match a prior submission.
 3. `GET /documents` lists records newest first, `GET /documents/{document_id}` returns metadata for a single file, `GET /documents/{document_id}/download` streams the stored bytes (with `Content-Disposition` set to the original filename), and `DELETE /documents/{document_id}` removes the bytes while recording who initiated the deletion. `GET /documents/{document_id}/events` exposes the immutable history of deletion events for that record and includes an `entity` summary with the filename, type, byte size, checksum, expiration, and deletion markers. `GET /documents/{document_id}/jobs` lists the jobs linked to that document (respecting the same `limit`/`offset` bounds as the other timelines), and `/jobs` accepts an `input_document_id` query parameter when the global list needs to be filtered. Configuration revisions use `GET /configurations/{configuration_id}/events` and jobs use `GET /jobs/{job_id}/events`; all timeline endpoints share pagination and filtering behaviour with the global events feed and embed the headline fields the UI needs. When `/events` is filtered to a specific entity, it inlines the same summary block so consumers see consistent context across feeds.
 4. `POST /documents` enforces the configurable `max_upload_bytes` cap (defaults to 25 MiB). Payloads that exceed the limit return HTTP 413 with `{ "detail": {"error": "document_too_large", "max_upload_bytes": <bytes>, "received_bytes": <bytes>}}` so operators know the request failed before any data is persisted.
@@ -346,20 +347,34 @@ naming payloads or configuration elements.
 │  └─ docker-compose.yaml
 ├─ examples/          # Sample documents used in testing
 ├─ runs/              # Example job outputs
-└─ var/
-   ├─ documents/      # Uploaded files (gitignored)
-   └─ ade.sqlite      # Local development database (gitignored)
+└─ data/
+   ├─ db/ade.sqlite   # SQLite database (gitignored)
+   └─ documents/      # Uploaded and derived files (gitignored)
 ```
 
 ---
 
 ## Operations
 - SQLite stores configuration revisions, jobs, users, sessions, API keys, and event metadata. Payloads stay JSON until a strict configuration is required.
-- Back up ADE by copying both the SQLite file and the documents directory.
+- Back up ADE by copying the entire `data/` directory (database plus documents).
 - Environment variables override defaults; `.env` files hold secrets and stay gitignored. Set `ADE_MAX_UPLOAD_BYTES` (bytes) to raise or lower the upload cap. Keep the value conservative so operators can predict disk usage.
 - Document retention defaults to 30 days (`ADE_DEFAULT_DOCUMENT_RETENTION_DAYS`). Callers can override the expiry per upload via the `expires_at` form field on `POST /documents`.
 - The backend purges expired documents automatically inside the API process. Set `ADE_PURGE_SCHEDULE_ENABLED=false` to disable it, `ADE_PURGE_SCHEDULE_INTERVAL_SECONDS` (default `3600`) to control the sweep cadence, and `ADE_PURGE_SCHEDULE_RUN_ON_STARTUP=false` to skip the initial run when the service boots.
-- Logs stream to stdout. Keep an eye on `var/` size and long-running jobs.
+- Logs stream to stdout. Keep an eye on `data/` size and long-running jobs.
+
+### Database migrations
+
+- Apply schema changes with `python -m backend.app.db_migrations upgrade` (or `alembic upgrade head`).
+- File-based SQLite URLs auto-run Alembic migrations on startup. Set `ADE_AUTO_MIGRATE=false` to opt out and manage upgrades manually.
+- The FastAPI lifespan and CLI entry points call `ensure_schema()` at startup so fresh environments create tables automatically.
+- In-memory SQLite URLs (`sqlite:///:memory:`) bypass Alembic and fall back to `Base.metadata.create_all(...)` for lightweight tests.
+
+### Upgrading from the legacy `var/` layout
+
+1. Stop the ADE service.
+2. Create a `data/` directory at the repository root (or set `ADE_DATA_DIR` to an absolute path).
+3. Move `var/ade.sqlite` to `data/db/ade.sqlite` and copy the contents of `var/documents/` into `data/documents/`.
+4. Start ADE; the server will create any missing subdirectories on boot before running migrations.
 
 ### Purging expired documents
 

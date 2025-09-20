@@ -64,7 +64,7 @@ class Configuration(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("document_type", "version", name="uq_configuration_version"),
+        UniqueConstraint("document_type", "version"),
         Index(
             "uq_configuration_active_per_document_type",
             "document_type",
@@ -131,7 +131,7 @@ class Document(Base):
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
-    sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     stored_uri: Mapped[str] = mapped_column(String(512), nullable=False)
     metadata_: Mapped[dict[str, Any]] = mapped_column(
         "metadata",
@@ -243,9 +243,7 @@ class User(Base):
     )
     last_login_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
-    __table_args__ = (
-        UniqueConstraint("sso_provider", "sso_subject", name="uq_user_sso_identity"),
-    )
+    __table_args__ = (UniqueConstraint("sso_provider", "sso_subject"),)
 
     def __repr__(self) -> str:
         return f"User(user_id={self.user_id!r}, email={self.email!r})"
@@ -296,8 +294,8 @@ class ApiKey(Base):
     revoked_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     __table_args__ = (
-        UniqueConstraint("user_id", "name", name="uq_api_key_user_name"),
-        UniqueConstraint("token_prefix", name="uq_api_key_token_prefix"),
+        UniqueConstraint("user_id", "name"),
+        UniqueConstraint("token_prefix"),
     )
 
     def __repr__(self) -> str:

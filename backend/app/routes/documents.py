@@ -79,7 +79,7 @@ async def upload_document(
                     "message": str(exc),
                 }
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=detail,
                 ) from exc
 
@@ -99,7 +99,7 @@ async def upload_document(
             "received_bytes": exc.received,
         }
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=detail,
         ) from exc
     except InvalidDocumentExpirationError as exc:
@@ -108,7 +108,7 @@ async def upload_document(
             "message": str(exc),
         }
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=detail,
         ) from exc
     finally:

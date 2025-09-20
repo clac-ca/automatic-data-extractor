@@ -9,7 +9,8 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Sequence
 
-from ..db import Base, get_engine, get_sessionmaker
+from ..db import get_sessionmaker
+from ..db_migrations import ensure_schema
 from ..services.documents import (
     ExpiredDocumentPurgeSummary,
     PurgedDocument,
@@ -44,10 +45,7 @@ def _validate_arguments(parser: argparse.ArgumentParser, args: argparse.Namespac
 
 
 def _ensure_schema() -> None:
-    # Import models so SQLAlchemy knows about the tables before create_all.
-    from .. import models  # noqa: F401
-
-    Base.metadata.create_all(bind=get_engine())
+    ensure_schema()
 
 
 def _format_document(detail: PurgedDocument) -> str:

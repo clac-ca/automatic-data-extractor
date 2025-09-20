@@ -12,7 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import config
-from ..db import Base, get_engine, get_sessionmaker
+from ..db import get_sessionmaker
+from ..db_migrations import ensure_schema
 from ..models import User, UserRole
 from . import passwords
 from .events import cli_action
@@ -68,9 +69,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _ensure_schema() -> None:
-    from .. import models  # noqa: F401
-
-    Base.metadata.create_all(bind=get_engine())
+    ensure_schema()
 
 
 def _normalise_email(email: str) -> str:

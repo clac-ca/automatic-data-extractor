@@ -19,7 +19,8 @@ from backend.app.auth import sessions as session_service, sso
 from backend.app.auth.passwords import hash_password, verify_password
 from backend.app.auth.sessions import hash_session_token
 from backend.app.auth.sso import SSOExchangeError
-from backend.app.db import Base, get_engine, get_sessionmaker
+from backend.app.db import get_sessionmaker
+from backend.app.db_migrations import ensure_schema
 from backend.app.models import Event, User, UserRole, UserSession
 
 
@@ -37,11 +38,11 @@ def _b64url(data: bytes) -> str:
 def _configured_settings(monkeypatch, tmp_path, **overrides):
     from backend.app import db as db_module
 
-    documents_dir = tmp_path / "documents"
+    data_dir = tmp_path / "data"
+    documents_dir = data_dir / "documents"
     documents_dir.mkdir(parents=True, exist_ok=True)
     defaults = {
-        "ADE_DATABASE_URL": f"sqlite:///{tmp_path / 'ade.sqlite'}",
-        "ADE_DOCUMENTS_DIR": str(documents_dir),
+        "ADE_DATA_DIR": str(data_dir),
         "ADE_AUTH_MODES": "basic",
         "ADE_SESSION_COOKIE_SECURE": "0",
     }
@@ -53,7 +54,7 @@ def _configured_settings(monkeypatch, tmp_path, **overrides):
     db_module.reset_database_state()
     import backend.app.models  # noqa: F401
 
-    Base.metadata.create_all(bind=get_engine())
+    ensure_schema()
     try:
         yield config.get_settings(), get_sessionmaker()
     finally:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
@@ -10,7 +11,7 @@ from fastapi import FastAPI
 
 from . import config
 from .auth.validation import validate_settings
-from .db import Base, get_engine
+from .db_migrations import SchemaState, ensure_schema
 from .maintenance import AutoPurgeScheduler
 from .routes.auth import router as auth_router
 from .routes.health import router as health_router
@@ -22,25 +23,38 @@ from .routes.documents import router as documents_router
 from .routes.events import router as events_router
 
 
+logger = logging.getLogger(__name__)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Prepare filesystem directories and database tables."""
 
     settings = config.get_settings()
     validate_settings(settings)
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+
     documents_dir: Path = settings.documents_dir
     documents_dir.mkdir(parents=True, exist_ok=True)
     (documents_dir / "uploads").mkdir(parents=True, exist_ok=True)
     (documents_dir / "output").mkdir(parents=True, exist_ok=True)
 
-    db_path: Path | None = settings.database_path
-    if db_path is not None:
-        db_path.parent.mkdir(parents=True, exist_ok=True)
+    logger.info(
+        "Resolved storage paths",
+        extra={
+            "data_dir": str(settings.data_dir),
+            "documents_dir": str(documents_dir),
+            "database_url": settings.database_url,
+        },
+    )
 
-    # Import models so SQLAlchemy is aware of the tables before create_all
-    from . import models  # noqa: F401
-
-    Base.metadata.create_all(bind=get_engine())
+    schema_state: SchemaState = ensure_schema()
+    if schema_state == "migrated":
+        logger.info("Database migrations applied automatically")
+    elif schema_state == "metadata_created":
+        logger.info("Initialised in-memory database for this session")
+    else:
+        logger.info("Database schema already current; migrations skipped")
 
     scheduler = AutoPurgeScheduler()
     await scheduler.start()
