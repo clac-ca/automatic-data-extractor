@@ -13,13 +13,14 @@ from __future__ import annotations
 
 import io
 import logging
-import ulid
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, BinaryIO
+
+from ulid import ULID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -190,7 +191,7 @@ def store_document(
     settings = config.get_settings()
     stream = _prepare_stream(data)
 
-    document_id = str(ulid.new())
+    document_id = str(ULID())
     stored_uri = f"{_UPLOAD_SUBDIR}/{document_id}"
     disk_path = settings.documents_dir / stored_uri
 
