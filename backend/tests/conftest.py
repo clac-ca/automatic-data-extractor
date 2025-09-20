@@ -52,7 +52,7 @@ def _test_client(
     if "ADE_PURGE_SCHEDULE_RUN_ON_STARTUP" not in os.environ:
         monkeypatch.setenv("ADE_PURGE_SCHEDULE_RUN_ON_STARTUP", "0")
     if "ADE_AUTH_MODES" not in os.environ:
-        monkeypatch.setenv("ADE_AUTH_MODES", "basic,session")
+        monkeypatch.setenv("ADE_AUTH_MODES", "basic")
     if "ADE_SESSION_COOKIE_SECURE" not in os.environ:
         monkeypatch.setenv("ADE_SESSION_COOKIE_SECURE", "0")
 

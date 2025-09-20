@@ -64,9 +64,16 @@ All persistence uses SQLite (`var/ade.sqlite`) and an on-disk documents folder (
 and mounted as Docker volumes in deployment.
 
 ### Authentication
-ADE ships with three authentication mechanisms that can be enabled via `ADE_AUTH_MODES` (comma separated: `basic`, `session`,
-`sso`). HTTP Basic credentials work for scripts and the CLI, cookie-backed sessions power the React UI, and optional OIDC
-callbacks allow SSO providers to mint the same session cookies. Key environment variables include:
+ADE exposes a small set of authentication modes controlled by the `ADE_AUTH_MODES` environment variable:
+
+- `basic` (default) – enable HTTP Basic credentials plus the cookie-backed sessions the UI expects.
+- `sso` – layer OIDC sign-in alongside the default sessions.
+- `none` – disable authentication entirely so every request runs with administrator privileges (handy for demos).
+
+Session cookies are always issued when authentication is active, so there is no separate `session` toggle. Key environment
+variables include:
+
+- `ADE_AUTH_MODES` – comma separated list drawn from `none`, `basic`, and `sso` (default: `basic`).
 
 - `ADE_SESSION_COOKIE_NAME`, `ADE_SESSION_TTL_MINUTES`, `ADE_SESSION_COOKIE_SECURE`, `ADE_SESSION_COOKIE_DOMAIN`,
   `ADE_SESSION_COOKIE_SAME_SITE` – control browser session behaviour.

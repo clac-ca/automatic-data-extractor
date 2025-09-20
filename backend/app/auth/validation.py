@@ -13,10 +13,8 @@ def validate_settings(settings: config.Settings) -> None:
     except ValueError as exc:  # pragma: no cover - defensive
         raise RuntimeError(str(exc)) from exc
 
-    if not modes:
-        raise RuntimeError("ADE_AUTH_MODES must enable at least one authentication mode")
-
-    if "session" in modes:
+    sessions_active = modes != ("none",)
+    if sessions_active:
         if settings.session_cookie_same_site == "none" and not settings.session_cookie_secure:
             raise RuntimeError(
                 "ADE_SESSION_COOKIE_SECURE must be enabled when SameSite is set to 'none'"
