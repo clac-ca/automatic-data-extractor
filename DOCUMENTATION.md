@@ -1,197 +1,96 @@
-# Documentation strategy draft
+# Documentation strategy
 
-## Goals and audiences
-- **Primary readers**
-  - *Platform administrators* – deploy ADE in controlled environments (Azure Container Apps, Docker/Kubernetes), manage upgrades, and own configuration secrets.
-  - *Support engineers / on-call responders* – triage incidents, understand the pipeline, run maintenance commands, and explain behaviour to internal stakeholders.
-  - *Configuration authors / power users* – maintain document-type logic, inspect jobs and events, and validate extraction output.
-- **Secondary readers**
-  - *Contributors inside the repo* – need pointers from the README into the operator-focused docs without duplicating guidance.
-- **Objectives**
-  - Provide persona-based navigation that separates foundational concepts, setup tasks, day-to-day operations, and deep reference material.
-  - Keep the README as a concise overview that links to the documentation set; avoid duplicating long-form procedures in both places.
-  - Optimise for actionability: every task page should surface prerequisites, commands, validation steps, and rollback guidance where applicable.
+## Purpose
+ADE runs on configurations, not constant code releases. Our documentation must show every reader how to change, review, and operate those configurations safely while keeping deployment and security stories discoverable. All content should render cleanly in GitHub and inside the in-app documentation viewer.
 
-## Documentation principles
-- **Persona-first navigation** – every top-level section should map to a reader goal (understand, set up, operate, secure, integrate).
-- **Task-oriented content** – lead with checklists and copy-pasteable commands; follow with background context for curious readers.
-- **Single source of truth** – reuse canonical assets (e.g. `ADE_GLOSSARY.md`, OpenAPI schema) instead of restating definitions.
-- **Progressive disclosure** – intro pages summarise concepts and link to detailed guides so readers can stop when they have enough information.
-- **Change awareness** – highlight configuration flags, defaults, and the impact of changing them; flag risky operations.
+## Personas and promises
+| Persona | Arrive asking | Leave knowing | Entry points |
+| --- | --- | --- | --- |
+| **Platform administrators** | “How do I stand ADE up, secure it, and keep it running?” | Provision paths (local, Docker, Azure Container Apps), secret rotation, backup routines, and recovery runbooks. | `README.md`, `docs/platform/`, `docs/operations/`
+| **IT architects** | “What is the system I am approving and how do configs move through it?” | Architecture boundaries, configuration model, audit expectations, and shared vocabulary. | `docs/foundation/`, `docs/security/`
+| **Support teams / configuration managers** | “How do I author, validate, publish, and roll back configurations without breaking jobs?” | Configuration lifecycle, testing tools, comparison workflows, and export/import safety nets. | `docs/configuration/`, `docs/operations/runbooks/`
+| **Data teams** | “How do I integrate programmatically and consume normalised data?” | Auth patterns, API/SQL usage, payload schemas, and retention rules. | `docs/data-integration/`, `docs/reference/`
+| **End users** | “How do I process my documents in the UI?” | Task-focused walkthroughs for uploading, monitoring, reviewing, and downloading results. | `docs/user-guide/`
 
-## Information architecture
-```
-docs/
-├─ README.md                      # Landing page + persona jump links
-├─ understand/
-│  ├─ README.md                   # Section overview + when to read which page
-│  ├─ architecture.md             # System diagram, component responsibilities
-│  ├─ data-flow.md                # End-to-end job lifecycle, storage layout
-│  └─ glossary.md                 # Include or link to ADE_GLOSSARY.md
-├─ setup/
-│  ├─ README.md                   # Setup roadmap + platform comparison
-│  ├─ quickstart-docker.md        # Run the published container locally
-│  ├─ local-development.md        # Backend-only and full-stack dev without Docker
-│  ├─ azure-container-apps.md     # ACA deployment guide (prereqs + IaC pointers)
-│  ├─ other-platforms.md          # Generic Docker/Kubernetes/Compose guidance
-│  └─ sample-data.md              # Using examples/ to exercise the pipeline
-├─ operate/
-│  ├─ README.md                   # Day-to-day operations index
-│  ├─ configuration-lifecycle.md  # Versioning workflow and audit trails
-│  ├─ document-retention.md       # Expiration defaults, purge scheduler, CLI
-│  ├─ jobs-and-processing.md      # Job states, metrics, replay guidance
-│  ├─ monitoring-and-alerting.md  # Health endpoint, logs, capacity checks
-│  └─ upgrade-and-backup.md       # Rolling upgrades, backup/restore procedures
-├─ security/
-│  ├─ README.md                   # Security posture + quick links
-│  ├─ authentication.md           # Modes, session cookies, CLI usage
-│  ├─ sso-setup.md                # OIDC configuration + troubleshooting
-│  └─ access-management.md        # Roles, API keys, audit expectations
-├─ integrate/
-│  ├─ README.md                   # Integration personas and prerequisites
-│  ├─ api-overview.md             # REST surface, auth, pagination
-│  ├─ job-payloads.md             # Canonical JSON contracts with examples
-│  ├─ automation-recipes.md       # Upload, launch job, poll, download scripts
-│  └─ data-export.md              # Consuming outputs and stored URIs
-├─ reference/
-│  ├─ README.md                   # How to use the reference set
-│  ├─ environment-variables.md    # ADE_* catalogue with defaults and notes
-│  ├─ cli-tools.md                # Auth + maintenance CLIs, exit codes
-│  ├─ database-schema.md          # Table descriptions and relationships
-│  └─ release-notes.md            # Version history and upgrade callouts
-└─ runbooks/
-   ├─ README.md                   # When to reach for each runbook
-   ├─ purge-runbook.md            # Troubleshooting expired documents
-   ├─ storage-capacity.md         # Responding to low disk scenarios
-   ├─ sso-troubleshooting.md      # Debugging authentication failures
-   └─ upgrade-verification.md     # Pre/post deployment checklist
-```
+Each landing page must restate prerequisites, access needed, and who to contact when tasks fail.
 
-### Navigation experience
-- `docs/README.md` acts as the hub: short description, persona cards (“Deploy ADE”, “Operate ADE”, “Integrate with ADE”), quick links to critical pages (Quickstart, Azure deployment, SSO setup, purge runbook).
-- Each folder includes its own `README.md` so GitHub renders a section overview when browsing; those landing pages should summarise contained pages and when to read them.
-- Runbooks live separately from conceptual operations docs so on-call engineers can jump straight into actionable checklists.
+## Guiding principles
+1. **Configuration-first story** – Explain lifecycle states, auditability, and rollbacks before code internals.
+2. **Persona-first navigation** – Keep every reader within two clicks of their tasks by using clear section overviews and cross-links.
+3. **Task over theory** – Procedures start with context, then numbered steps, validation checks, and rollback notes.
+4. **Single source of truth** – Reuse `ADE_GLOSSARY.md`, OpenAPI exports, and schema diagrams rather than duplicating definitions.
+5. **Operational boundary** – Troubleshooting covers supported incidents only (storage limits, Azure Container Apps, SSO, admin access recovery, backups, configuration export/import).
 
-## Page outlines
+## Navigation blueprint
+- **Root `README.md`** – Orientation for new admins: short product synopsis, local quickstart link, documentation hub link, and glossary pointer.
+- **`docs/README.md`** – Acts as the documentation home. Present persona cards (Deploy, Understand, Configure, Support Users, Integrate) with direct links to the highest-priority guides and runbooks.
+- **Metadata block** – Begin every guide with audience, goal, prerequisites, estimated time, related docs, and last validation date. Keep it Markdown-only for in-app rendering.
+- **README per folder** – Offer the section overview, intended personas, and reading order. This supports both GitHub browsing and the in-app menu.
 
-### Landing page (`docs/README.md`)
-- Purpose of ADE, supported scenarios, and call-outs for who should read what.
-- Persona-based entry points and highlights for the most common tasks.
-- Link back to README for contributors plus instructions on where to report issues.
+### Section directory
+| Section | Primary persona(s) | Stories covered | Notes |
+| --- | --- | --- | --- |
+| `docs/foundation/` | IT architects, platform admins | System overview, architecture diagrams, configuration model, glossary surface | Keep diagrams in `docs/assets/` (Mermaid + PNG)
+| `docs/platform/` | Platform admins | Local/Docker/ACA setup, environment management, upgrades | Includes backup guidance for `var/` volumes and secret rotation
+| `docs/security/` | Platform admins, architects | Auth modes, SSO setup + recovery, access management | Highlight compliance expectations and escalation paths
+| `docs/configuration/` | Support teams | Concepts, authoring, validation, publishing, rollback, diff/history, automation hooks | Anchor all configuration tooling here; reuse glossary terms
+| `docs/user-guide/` | End users, support teams | Upload, monitor, review, download, lightweight UI troubleshooting | Add screenshots when frontend ships
+| `docs/data-integration/` | Data teams | API usage, automation recipes, payload schemas, SQL access, export patterns | Reference API schema and checksum practices
+| `docs/operations/` | Platform admins, support teams | Monitoring, job operations, document retention, account/session admin | Houses runbooks for supported incidents
+| `docs/operations/runbooks/` | Platform admins, support teams | Storage capacity, Azure Container Apps, SSO recovery, admin access recovery, backup/restore, configuration export/import | Each runbook includes triggers, diagnostics, resolution, and escalation
+| `docs/reference/` | All personas | Environment variables, CLI tools, database schema, release notes, change-control checklist | Source-of-truth tables and templates
+| `docs/assets/` | Authors | Architecture and workflow diagrams | Track which guides embed each asset
 
-### Understand
-- **understand/README.md**
-  - Orient readers who want conceptual knowledge: outline available pages, expected reading order, and links back to glossary items.
-- **architecture.md**
-  - Diagram (Mermaid/PNG) showing UI ↔ FastAPI ↔ processor ↔ SQLite/document storage.
-  - Bullet summary of each component and the directories to inspect in the repo.
-  - Deterministic design principles (immutable configurations, ULIDs, event log).
-- **data-flow.md**
-  - Step-by-step walkthrough: upload → configuration resolution → job execution → outputs → events.
-  - Storage paths (`var/documents/uploads`, derived outputs) and purge lifecycle.
-  - How event timelines relate to job/doc responses.
-- **glossary.md**
-  - Surface ADE_GLOSSARY verbatim or via include; add navigation tips from glossary terms to relevant guides.
+## Persona walkthroughs
+### Platform administrators
+- **Start here**: Root `README.md` → `docs/README.md` → `docs/platform/README.md`.
+- **Key guides**: `quickstart-local.md`, `local-development.md`, `azure-container-apps.md`, `environment-management.md`, `upgrade-paths.md`.
+- **Runbooks**: Storage capacity, Azure Container Apps health, backup-and-restore, admin access recovery.
+- **What success looks like**: They can deploy ADE, rotate secrets, back up `var/`, and recover from supported outages without touching backend code.
 
-### Setup
-- **setup/README.md**
-  - Compare setup options (Docker quickstart, Azure Container Apps, dev workstation) and route readers to the appropriate guide based on their goal.
-- **quickstart-docker.md**
-  - Pull published image, run via `docker run` or `docker compose` with mounted volumes for `var/`.
-  - Default credentials, minimal configuration (only `ADE_AUTH_MODES=basic`).
-  - Sanity checks: hit `/health`, upload sample doc, run a demo job via API.
-- **local-development.md**
-  - Cross-platform setup (Windows/macOS/Linux) for backend (venv, uvicorn) and optional frontend.
-  - Quality gates (pytest, ruff, mypy, npm scripts when frontend lands), resetting SQLite/doc storage.
-  - Tips for `.env` usage and cleaning stale sessions.
-- **azure-container-apps.md**
-  - Prerequisites (resource group, ACR, identity, storage).
-  - Deployment flow: build/push image, create secrets, configure ACA revision, mount Azure Files for `var/`.
-  - Bicep/ARM/Terraform snippets, scaling notes, Log Analytics pointers, post-deploy validation.
-- **other-platforms.md**
-  - Docker Compose and generic Kubernetes notes: readiness/liveness, volumes, secrets, load balancers.
-  - Guidance for air-gapped environments or on-prem Docker hosts.
-- **sample-data.md**
-  - Overview of files in `examples/`, how to run them through the pipeline, and expected results for smoke tests.
+### IT architects
+- **Start here**: `docs/foundation/system-overview.md` paired with `docs/foundation/architecture.md` and `docs/security/README.md`.
+- **Key guides**: `configuration-model.md` for lifecycle insight, `access-management.md` for governance, `glossary.md` for shared language.
+- **What success looks like**: They understand trust boundaries, audit trails, and how configuration state flows through the platform.
 
-### Operate
-- **operate/README.md**
-  - Summarise operational responsibilities (reviewing jobs, managing configurations, monitoring health) and provide quick links to runbooks.
-- **configuration-lifecycle.md**
-  - Adapt existing doc: lifecycle stages (draft → active → retired), activation workflow, rollback patterns, related events.
-  - Quick reference table for statuses and key API endpoints/CLI commands.
-- **document-retention.md**
-  - Adapt existing doc: default expiration, manual overrides, purge scheduler, CLI usage, environment knobs.
-- **jobs-and-processing.md**
-  - Job status transitions, metrics/log schema, reprocessing guidance, links to automation recipes.
-- **monitoring-and-alerting.md**
-  - `/health` response fields, purge summary, log patterns to watch, suggested alert thresholds.
-- **upgrade-and-backup.md**
-  - Rolling upgrade checklist (backup, deploy, verify, rollback), copying SQLite + documents, restoration testing.
+### Support teams / configuration managers
+- **Start here**: `docs/configuration/README.md`.
+- **Key guides**: `concepts.md`, `authoring-guide.md`, `validation-and-testing.md`, `publishing-and-rollback.md`, `diff-and-history.md`, `import-export.md`.
+- **Runbooks**: Configuration export/import, rollback checklist (in publishing guide), escalation to platform team when tests fail.
+- **What success looks like**: They can create, compare, publish, and roll back configurations with documented validations and audit notes.
 
-### Security
-- **security/README.md**
-  - Highlight supported auth modes, identity sources, and where to find hardening guidance.
-- **authentication.md**
-  - Combine existing authentication overview with session handling, CLI usage, failure responses.
-- **sso-setup.md**
-  - Deep dive into OIDC configuration (issuer discovery, redirect URLs, claims mapping), provider-specific notes (Azure AD, Okta, Auth0), validation/testing steps, troubleshooting links.
-- **access-management.md**
-  - Roles, API keys, session TTLs, auditing expectations, how to rotate secrets and deactivate accounts.
+### Data teams
+- **Start here**: `docs/data-integration/README.md`.
+- **Key guides**: `api-overview.md`, `automation-recipes.md`, `job-payloads.md`, `sql-access.md`, `data-export.md`.
+- **Reference hooks**: Environment variables affecting outputs, CLI tools, release notes.
+- **What success looks like**: They automate ingestion, consume outputs deterministically, and respect retention/verification policies.
 
-### Integrate
-- **integrate/README.md**
-  - Frame integration personas (automation scripts, data consumers) and list prerequisites before diving into API docs.
-- **api-overview.md**
-  - Base URL conventions, auth requirements, pagination patterns, link to OpenAPI schema.
-- **job-payloads.md**
-  - Annotated request/response examples (upload, job creation, events) referencing glossary terms.
-- **automation-recipes.md**
-  - `curl`/Python snippets for upload → job → poll → download, idempotency advice, error handling.
-- **data-export.md**
-  - How to consume outputs (`stored_uri`, directories), verifying checksums, clean-up considerations.
+### End users
+- **Start here**: `docs/user-guide/README.md`.
+- **Key guides**: `upload-and-queue.md`, `monitor-and-review.md`, `download-and-share.md`, `troubleshooting.md`.
+- **What success looks like**: They complete the upload → review → download workflow independently and know when to contact support.
 
-### Reference
-- **reference/README.md**
-  - Explain how reference pages are organised and when to consult each table or schema overview.
-- **environment-variables.md**
-  - Table of all `ADE_*` settings from `config.Settings`, defaults, when required, security notes, interactions.
-- **cli-tools.md**
-  - Auth management CLI and purge CLI commands, arguments, sample output, exit codes, error handling.
-- **database-schema.md**
-  - Table-by-table descriptions (primary keys, important columns, relationships) referencing `models.py`, future ERD placeholder.
-- **release-notes.md**
-  - Template for version/date, highlights, upgrade steps, incompatible changes.
+## Immediate build queue
+1. **Orientation** – Refresh root `README.md`, write `docs/README.md`, and seed `docs/foundation/README.md` with a concise system overview.
+2. **Deployment & security** – Deliver `docs/platform/quickstart-local.md`, `docs/platform/local-development.md`, `docs/platform/azure-container-apps.md`, and split `docs/security/authentication-modes.md` + `docs/security/sso-setup.md` with recovery instructions.
+3. **Configuration lifecycle** – Author `docs/configuration/README.md`, `concepts.md`, `authoring-guide.md`, `validation-and-testing.md`, and `publishing-and-rollback.md` so support teams can manage change safely.
+4. **End-user workflows** – Draft `docs/user-guide/upload-and-queue.md` and `monitor-and-review.md`; add placeholders for screenshots.
+5. **Runbooks** – Create `runbooks/storage-capacity.md`, `runbooks/azure-container-apps.md`, and `runbooks/sso-recovery.md`, each with triggers, diagnostics, resolution, validation, and escalation sections.
 
-### Runbooks
-- **runbooks/README.md**
-  - Teach responders how to use the runbooks, emphasise prerequisite observability tooling, and link back to foundational concepts when deeper context is required.
-- Opinionated checklists with clear prerequisites, diagnostics, remediation steps, and escalation guidance.
-- Planned pages: purge issues, low disk/storage, SSO failures, upgrade verification. Add more as incidents surface.
+Subsequent passes can extend automation recipes, SQL guidance, admin access recovery, backup/restore, and configuration export/import runbooks.
 
-## Prioritised rollout
-1. **Foundation (phase 1)** – docs/README, section README stubs, architecture, quickstart, local development, Azure deployment, authentication, SSO setup, configuration lifecycle, document retention, environment variables, purge runbook.
-2. **Operations deep dive (phase 2)** – jobs-and-processing, monitoring, upgrade/backup, automation recipes, cli tools, storage capacity runbook.
-3. **Richer references (phase 3)** – database schema, data export, release notes template, additional runbooks (SSO troubleshooting, upgrade verification), other-platforms guide.
+## Existing content migration
+- `docs/authentication.md` → `docs/security/README.md` (overview) + `authentication-modes.md` (basic/session/API/CLI) + `sso-setup.md` (OIDC setup, testing, recovery).
+- `docs/configuration_lifecycle.md` → `docs/configuration/concepts.md` and `publishing-and-rollback.md`, summarised in `docs/configuration/README.md`.
+- `docs/document_retention_and_deletion.md` → `docs/operations/document-retention.md`, linked from `docs/operations/README.md` and the storage runbook.
+- `ADE_GLOSSARY.md` → surfaced via `docs/foundation/glossary.md` (import or include) with cross-links.
+- Existing diagrams → relocate under `docs/assets/` with references inside relevant guides.
 
-## Existing content migration plan
-- `docs/authentication.md` → split into `security/README.md` (overview), `security/authentication.md`, and `security/sso-setup.md` (keep CLI snippets, expand SSO steps).
-- `docs/configuration_lifecycle.md` → becomes `operate/README.md` (overview) plus `operate/configuration-lifecycle.md` with lifecycle tables and workflow diagrams.
-- `docs/document_retention_and_deletion.md` → becomes `operate/document-retention.md` and is linked prominently from `operate/README.md`; reuse scheduler/CLI sections and link to purge runbook.
-- `README.md` retains the high-level overview and local-dev primer but delegates detailed procedures to the docs; update cross-links once new pages exist.
-- `ADE_GLOSSARY.md` remains canonical; expose it via `understand/glossary.md` (include or symlink) and link glossary terms to relevant guides.
+## Maintenance guardrails
+- **Front-matter discipline** – Update the metadata block whenever procedures change; include a “Last validated” date.
+- **Validation steps** – Close every procedure with checks (health endpoint, sample job, audit log review) so readers know the task finished successfully.
+- **Change tracking** – Update affected guides and append entries to `docs/reference/release-notes.md` when configurations, defaults, or operational behaviour shift.
+- **Cross-linking** – Prefer relative links to runbooks, glossary terms, and configuration guides instead of duplicating content.
+- **Review cadence** – Assign section owners and review quarterly or after major releases; log the review in the metadata block.
 
-## Assets and tooling
-- Generate a simple architecture diagram and job lifecycle diagram (Mermaid or PNG checked into `docs/assets/`).
-- Capture OpenAPI schema automatically for `integrate/api-overview.md` (e.g. export during build).
-- Standardise admonitions (“Note”, “Warning”, “Tip”) for operational caveats and troubleshooting callouts.
-- Consider adopting MkDocs (Material theme) or similar static site tooling later; initial draft can live as Markdown in repo.
-
-## Style and maintenance guidelines
-- Lead with a summary and task checklist before diving into details; keep steps numbered for easy tracking during incidents.
-- Surface environment variable names, defaults, and impact in tables; call out when changes require a restart.
-- Use consistent terminology from the glossary; link to reference pages instead of re-describing concepts.
-- Embed validation/verification steps for every procedure (e.g. check `/health`, inspect events, confirm job status).
-- Cross-link related guides and runbooks to minimise duplication (e.g. document retention page links to purge runbook).
-- During development changes, update affected docs within the same PR; treat `release-notes.md` as part of the release checklist.
-- Ensure every folder has a `README.md` landing page so GitHub renders helpful context when navigating the repo hierarchy.
+This lean structure keeps every persona focused on configuration-driven operations, avoids code-level debugging, and ensures the documentation stays approachable in both GitHub and the in-app viewer.
