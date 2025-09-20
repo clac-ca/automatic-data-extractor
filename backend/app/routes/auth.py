@@ -215,7 +215,7 @@ def session_status(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session invalid")
 
     ip_address, user_agent = _request_metadata(request)
-    sessions.touch_session(
+    refreshed = sessions.touch_session(
         db,
         session_model,
         settings=settings,
@@ -223,11 +223,16 @@ def session_status(
         user_agent=user_agent,
         commit=True,
     )
+    if refreshed is None:
+        sessions.revoke_session(db, session_model, commit=True)
+        _clear_session_cookie(response, settings)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session expired")
+
     session_refreshed(
         db,
         user,
         source="api",
-        payload={"session_id": session_model.session_id},
+        payload={"session_id": refreshed.session_id},
         commit=True,
     )
     _set_session_cookie(response, settings, cookie_value)
@@ -235,9 +240,9 @@ def session_status(
         request,
         user,
         mode="session",
-        session_id=session_model.session_id,
+        session_id=refreshed.session_id,
     )
-    return _auth_response(user, settings, session_model=session_model)
+    return _auth_response(user, settings, session_model=refreshed)
 
 
 @router.get("/me", response_model=AuthSessionResponse)
