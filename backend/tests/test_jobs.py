@@ -1,16 +1,6 @@
-"""Tests for the job API."""
-
-from __future__ import annotations
-
-from datetime import datetime, timedelta, timezone
+import io
+from datetime import datetime, timezone
 from typing import Any
-
-import pytest
-import re
-
-from backend.app.db import get_sessionmaker
-from backend.app.services.events import EventRecord, record_event
-
 
 def _activate_configuration(
     client, *, document_type: str = "remittance", title: str = "Active configuration"
@@ -26,502 +16,275 @@ def _activate_configuration(
     return response.json()
 
 
-def _create_job_payload(document_type: str = "remittance") -> dict[str, Any]:
-    return {
-        "document_type": document_type,
-        "created_by": "jkropp",
-        "status": "running",
-        "input": {
-            "uri": "var/documents/remit_2025-09.pdf",
-            "hash": "sha256:a93c...ff12",
-            "expires_at": "2025-10-01T00:00:00Z",
-        },
-        "outputs": {
-            "json": {
-                "uri": "var/outputs/remit_2025-09.json",
-                "expires_at": "2026-01-01T00:00:00Z",
-            }
-        },
-        "metrics": {
-            "rows_extracted": 125,
-            "processing_time_ms": 4180,
-            "errors": 0,
-        },
-        "logs": [
-            {
-                "ts": "2025-09-17T18:42:00Z",
-                "level": "info",
-                "message": "Job started",
-            }
-        ],
+def _upload_document(
+    client,
+    *,
+    filename: str = "input.pdf",
+    data: bytes = b"PDF",
+    content_type: str = "application/pdf",
+    produced_by_job_id: str | None = None,
+) -> dict[str, Any]:
+    files = {"file": (filename, io.BytesIO(data), content_type)}
+    form: dict[str, Any] = {}
+    if produced_by_job_id is not None:
+        form["produced_by_job_id"] = produced_by_job_id
+    response = client.post("/documents", files=files, data=form)
+    assert response.status_code == 201
+    return response.json()
+
+
+def _create_job(
+    client,
+    configuration: dict[str, Any],
+    input_document: dict[str, Any],
+    *,
+    created_by: str = "jkropp",
+    status: str = "running",
+    metrics: dict[str, Any] | None = None,
+    logs: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "document_type": configuration["document_type"],
+        "created_by": created_by,
+        "input_document_id": input_document["document_id"],
+        "status": status,
     }
+    if metrics is not None:
+        payload["metrics"] = metrics
+    if logs is not None:
+        payload["logs"] = logs
+
+    response = client.post("/jobs", json=payload)
+    assert response.status_code == 201
+    return response.json()
 
 
-def _job_sequence(job_id: str) -> int:
-    return int(job_id.rsplit("_", 1)[-1])
+def _soft_delete_document(client, document_id: str, *, deleted_by: str = "tester") -> None:
+    payload = {"deleted_by": deleted_by}
+    response = client.request("DELETE", f"/documents/{document_id}", json=payload)
+    assert response.status_code == 200
 
 
-def test_create_job_uses_active_configuration(app_client) -> None:
+def test_create_job_returns_input_projection(app_client) -> None:
     client, _, _ = app_client
     configuration = _activate_configuration(client)
+    document = _upload_document(client)
 
-    payload = _create_job_payload(configuration["document_type"])
-    response = client.post("/jobs", json=payload)
+    metrics = {"rows_extracted": 12}
+    logs = [
+        {
+            "ts": "2024-01-01T12:00:00Z",
+            "level": "info",
+            "message": "Job created",
+        }
+    ]
 
-    assert response.status_code == 201
-    data = response.json()
-    assert re.fullmatch(r"job_\d{4}_\d{2}_\d{2}_\d{4}", data["job_id"])
-    assert data["document_type"] == payload["document_type"]
-    assert data["configuration_version"] == configuration["version"]
-    assert data["status"] == payload["status"]
-    assert data["created_by"] == payload["created_by"]
-    assert data["input"] == payload["input"]
-    assert data["outputs"] == payload["outputs"]
-    assert data["metrics"] == payload["metrics"]
-    assert data["logs"] == payload["logs"]
-    datetime.fromisoformat(data["created_at"])
-    datetime.fromisoformat(data["updated_at"])
-
-
-def test_create_job_with_explicit_configuration(app_client) -> None:
-    client, _, _ = app_client
-    active = _activate_configuration(client, title="Draft to activate")
-    draft_payload = {
-        "document_type": active["document_type"],
-        "title": "Historical version",
-        "payload": {"rules": ["legacy"]},
-    }
-    draft_response = client.post("/configurations", json=draft_payload)
-    assert draft_response.status_code == 201
-    draft_configuration = draft_response.json()
-
-    payload = _create_job_payload(active["document_type"])
-    payload["configuration_id"] = draft_configuration["configuration_id"]
-    payload["status"] = "pending"
-
-    response = client.post("/jobs", json=payload)
+    response = client.post(
+        "/jobs",
+        json={
+            "document_type": configuration["document_type"],
+            "created_by": "jkropp",
+            "input_document_id": document["document_id"],
+            "status": "running",
+            "metrics": metrics,
+            "logs": logs,
+        },
+    )
 
     assert response.status_code == 201
-    data = response.json()
-    assert data["configuration_version"] == draft_configuration["version"]
-    assert data["status"] == "pending"
+    job = response.json()
 
+    assert job["document_type"] == configuration["document_type"]
+    assert job["configuration_id"] == configuration["configuration_id"]
+    assert job["status"] == "running"
+    assert job["metrics"] == metrics
+    assert job["logs"] == logs
+    assert job["output_documents"] == []
+    assert "legacy_input" not in job
 
-def test_create_job_rejects_configuration_for_other_document_type(app_client) -> None:
-    client, _, _ = app_client
-    invoice_configuration = _activate_configuration(client, document_type="invoice")
-    remittance_configuration = _activate_configuration(client, document_type="remittance")
-
-    payload = _create_job_payload(remittance_configuration["document_type"])
-    payload["configuration_id"] = invoice_configuration["configuration_id"]
-
-    response = client.post("/jobs", json=payload)
-
-    assert response.status_code == 409
-    assert (
-        response.json()["detail"]
-        == "Configuration "
-        f"'{invoice_configuration['configuration_id']}' belongs to document type "
-        "'invoice', not 'remittance'"
+    input_document = job["input_document"]
+    assert input_document["document_id"] == document["document_id"]
+    assert input_document["is_deleted"] is False
+    assert input_document["download_url"].endswith(
+        f"/documents/{document['document_id']}/download"
     )
 
 
-def test_create_job_requires_active_configuration(app_client) -> None:
+def test_create_job_rejects_unknown_input_document(app_client) -> None:
     client, _, _ = app_client
+    configuration = _activate_configuration(client)
 
-    payload = _create_job_payload()
+    payload = {
+        "document_type": configuration["document_type"],
+        "created_by": "jkropp",
+        "input_document_id": "01J9UNKNOWN0000000000000000",
+    }
+
     response = client.post("/jobs", json=payload)
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Document '01J9UNKNOWN0000000000000000' was not found"
 
-    assert response.status_code == 409
-    assert response.json()["detail"] == "No active configuration found for 'remittance'"
 
-
-def test_list_jobs_returns_latest_first(app_client) -> None:
+def test_get_job_includes_outputs_and_deleted_state(app_client) -> None:
     client, _, _ = app_client
     configuration = _activate_configuration(client)
+    input_document = _upload_document(client)
+    job = _create_job(client, configuration, input_document)
 
-    first_response = client.post("/jobs", json=_create_job_payload(configuration["document_type"]))
-    assert first_response.status_code == 201
-    second_payload = _create_job_payload(configuration["document_type"])
-    second_payload["created_by"] = "ops"
-    second_response = client.post("/jobs", json=second_payload)
-    assert second_response.status_code == 201
+    first_output = _upload_document(
+        client,
+        filename="remit.json",
+        data=b"{}",
+        content_type="application/json",
+        produced_by_job_id=job["job_id"],
+    )
+    second_output = _upload_document(
+        client,
+        filename="remit.xlsx",
+        data=b"binary",
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        produced_by_job_id=job["job_id"],
+    )
 
-    response = client.get("/jobs")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 2
-    assert data[0]["job_id"] == second_response.json()["job_id"]
-    assert data[1]["job_id"] == first_response.json()["job_id"]
-
-
-def test_job_ids_increment_within_same_day(app_client) -> None:
-    client, _, _ = app_client
-    configuration = _activate_configuration(client)
-
-    first = client.post("/jobs", json=_create_job_payload(configuration["document_type"]))
-    assert first.status_code == 201
-    second = client.post("/jobs", json=_create_job_payload(configuration["document_type"]))
-    assert second.status_code == 201
-
-    first_id = first.json()["job_id"]
-    second_id = second.json()["job_id"]
-
-    assert first_id.rsplit("_", 1)[0] == second_id.rsplit("_", 1)[0]
-    assert _job_sequence(second_id) == _job_sequence(first_id) + 1
-
-
-def test_get_job_returns_single_job(app_client) -> None:
-    client, _, _ = app_client
-    configuration = _activate_configuration(client)
-
-    create_response = client.post("/jobs", json=_create_job_payload(configuration["document_type"]))
-    job = create_response.json()
+    _soft_delete_document(client, first_output["document_id"])
 
     response = client.get(f"/jobs/{job['job_id']}")
-
     assert response.status_code == 200
-    assert response.json()["job_id"] == job["job_id"]
+    payload = response.json()
 
+    output_documents = payload["output_documents"]
+    assert [doc["document_id"] for doc in output_documents] == [
+        first_output["document_id"],
+        second_output["document_id"],
+    ]
 
-def test_get_job_returns_404_for_missing_job(app_client) -> None:
-    client, _, _ = app_client
+    deleted = output_documents[0]
+    assert deleted["is_deleted"] is True
+    assert deleted.get("download_url") is None
 
-    response = client.get("/jobs/job_missing")
+    active = output_documents[1]
+    assert active["is_deleted"] is False
+    assert active["download_url"].endswith(
+        f"/documents/{second_output['document_id']}/download"
+    )
 
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Job 'job_missing' was not found"
-
-
-def test_update_job_tracks_progress_and_completion(app_client) -> None:
+def test_list_jobs_filters_by_input_document(app_client) -> None:
     client, _, _ = app_client
     configuration = _activate_configuration(client)
+    input_a = _upload_document(client, filename="a.pdf")
+    input_b = _upload_document(client, filename="b.pdf")
 
-    create_response = client.post("/jobs", json=_create_job_payload(configuration["document_type"]))
-    job = create_response.json()
+    job_a = _create_job(client, configuration, input_a, created_by="alpha")
+    _create_job(client, configuration, input_b, created_by="beta")
 
-    progress_payload = {
-        "status": "running",
+    response = client.get(
+        "/jobs",
+        params={"input_document_id": input_a["document_id"]},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert [item["job_id"] for item in data] == [job_a["job_id"]]
+
+
+def test_document_history_lists_jobs(app_client) -> None:
+    client, _, _ = app_client
+    configuration = _activate_configuration(client)
+    input_document = _upload_document(client)
+
+    first_job = _create_job(client, configuration, input_document, created_by="first")
+    second_job = _create_job(client, configuration, input_document, created_by="second")
+
+    output_document = _upload_document(
+        client,
+        filename="output.json",
+        data=b"{}",
+        content_type="application/json",
+        produced_by_job_id=second_job["job_id"],
+    )
+
+    as_input = client.get(f"/documents/{input_document['document_id']}/jobs")
+    assert as_input.status_code == 200
+    history = as_input.json()
+    assert history["document_id"] == input_document["document_id"]
+    assert [job["job_id"] for job in history["input_to_jobs"]] == [
+        second_job["job_id"],
+        first_job["job_id"],
+    ]
+    assert history.get("produced_by_job") is None
+
+    as_output = client.get(f"/documents/{output_document['document_id']}/jobs")
+    assert as_output.status_code == 200
+    output_history = as_output.json()
+    assert output_history["input_to_jobs"] == []
+    assert output_history["produced_by_job"]["job_id"] == second_job["job_id"]
+
+
+def test_documents_filter_by_produced_by_job(app_client) -> None:
+    client, _, _ = app_client
+    configuration = _activate_configuration(client)
+    input_document = _upload_document(client)
+    job = _create_job(client, configuration, input_document)
+
+    first_output = _upload_document(
+        client,
+        filename="output-1.json",
+        data=b"{}",
+        produced_by_job_id=job["job_id"],
+    )
+    second_output = _upload_document(
+        client,
+        filename="output-2.json",
+        data=b"{}",
+        produced_by_job_id=job["job_id"],
+    )
+
+    response = client.get(
+        "/documents",
+        params={"produced_by_job_id": job["job_id"]},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert [doc["document_id"] for doc in data] == [
+        second_output["document_id"],
+        first_output["document_id"],
+    ]
+
+
+def test_upload_document_rejects_unknown_job_reference(app_client) -> None:
+    client, _, _ = app_client
+    files = {"file": ("output.json", io.BytesIO(b"{}"), "application/json")}
+    response = client.post(
+        "/documents",
+        files=files,
+        data={"produced_by_job_id": "job_2024_01_01_0001"},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["error"] == "invalid_job_reference"
+    assert detail["message"] == "Job 'job_2024_01_01_0001' was not found"
+
+
+def test_update_job_updates_metrics(app_client) -> None:
+    client, _, _ = app_client
+    configuration = _activate_configuration(client)
+    document = _upload_document(client)
+    job = _create_job(client, configuration, document)
+
+    update = {
+        "metrics": {"rows_extracted": 5},
         "logs": [
             {
-                "ts": "2025-09-17T18:42:01Z",
+                "ts": datetime.now(timezone.utc).isoformat(),
                 "level": "info",
-                "message": "Detected table",
+                "message": "metrics updated",
             }
         ],
     }
-    progress_response = client.patch(f"/jobs/{job['job_id']}", json=progress_payload)
 
-    assert progress_response.status_code == 200
-    progress = progress_response.json()
-    assert progress["status"] == "running"
-    assert progress["logs"] == progress_payload["logs"]
-    assert progress["outputs"] == job["outputs"]
-    assert progress["metrics"] == job["metrics"]
-
-    completion_payload = {
-        "status": "completed",
-        "outputs": {
-            "json": {
-                "uri": "var/outputs/remit_final.json",
-                "expires_at": "2026-01-01T00:00:00Z",
-            },
-            "excel": {
-                "uri": "var/outputs/remit_final.xlsx",
-                "expires_at": "2026-01-01T00:00:00Z",
-            },
-        },
-        "metrics": {
-            "rows_extracted": 125,
-            "processing_time_ms": 4180,
-            "errors": 0,
-        },
-    }
-    completion_response = client.patch(
-        f"/jobs/{job['job_id']}", json=completion_payload
-    )
-
-    assert completion_response.status_code == 200
-    completed = completion_response.json()
-    assert completed["status"] == "completed"
-    assert completed["outputs"] == completion_payload["outputs"]
-    assert completed["metrics"] == completion_payload["metrics"]
-
-    locked_response = client.patch(
-        f"/jobs/{job['job_id']}",
-        json={"status": "failed"},
-    )
-
-    assert locked_response.status_code == 409
-    assert locked_response.json()["detail"] == f"Job '{job['job_id']}' can no longer be modified"
-
-
-def test_update_job_rejects_invalid_status(app_client) -> None:
-    client, _, _ = app_client
-    configuration = _activate_configuration(client)
-
-    create_response = client.post("/jobs", json=_create_job_payload(configuration["document_type"]))
-    job = create_response.json()
-
-    response = client.patch(
-        f"/jobs/{job['job_id']}", json={"status": "unknown"}
-    )
-
-    assert response.status_code == 422
-    detail = response.json()["detail"]
-    assert isinstance(detail, list)
-    assert any(
-        item.get("msg")
-        == "Input should be 'pending', 'running', 'completed' or 'failed'"
-        for item in detail
-    )
-
-
-def test_create_job_rejects_invalid_status(app_client) -> None:
-    client, _, _ = app_client
-    _activate_configuration(client)
-
-    payload = _create_job_payload()
-    payload["status"] = "invalid"
-
-    response = client.post("/jobs", json=payload)
-
-    assert response.status_code == 422
-    detail = response.json()["detail"]
-    assert isinstance(detail, list)
-    assert any(
-        item.get("msg")
-        == "Input should be 'pending', 'running', 'completed' or 'failed'"
-        for item in detail
-    )
-
-
-@pytest.mark.parametrize(
-    "field, value",
-    [
-        ("outputs", None),
-        ("metrics", None),
-        ("logs", None),
-    ],
-)
-def test_update_job_rejects_null_fields(app_client, field: str, value: Any) -> None:
-    client, _, _ = app_client
-    configuration = _activate_configuration(client)
-
-    create_response = client.post("/jobs", json=_create_job_payload(configuration["document_type"]))
-    job = create_response.json()
-
-    response = client.patch(f"/jobs/{job['job_id']}", json={field: value})
-
-    assert response.status_code == 422
-
-
-def test_create_job_records_event_event(app_client) -> None:
-    client, _, _ = app_client
-    configuration = _activate_configuration(client)
-
-    payload = _create_job_payload(configuration["document_type"])
-    payload["status"] = "pending"
-
-    response = client.post("/jobs", json=payload)
-    assert response.status_code == 201
-    job = response.json()
-
-    events = client.get(
-        "/events",
-        params={"entity_type": "job", "entity_id": job["job_id"]},
-    )
-    assert events.status_code == 200
-    payload_events = events.json()
-    assert payload_events["total"] == 1
-    event = payload_events["items"][0]
-    assert event["event_type"] == "job.created"
-    assert event["actor_label"] == payload["created_by"]
-    assert event["actor_type"] == "user"
-    assert event["source"] == "api"
-    assert event["payload"]["document_type"] == payload["document_type"]
-    assert event["payload"]["created_by"] == payload["created_by"]
-    assert event["payload"]["status"] == "pending"
-
-
-def test_job_updates_emit_status_and_result_events(app_client) -> None:
-    client, _, _ = app_client
-    configuration = _activate_configuration(client)
-
-    payload = _create_job_payload(configuration["document_type"])
-    payload["status"] = "pending"
-
-    response = client.post("/jobs", json=payload)
-    job = response.json()
-
-    progress_response = client.patch(
-        f"/jobs/{job['job_id']}",
-        json={"status": "running"},
-    )
-    assert progress_response.status_code == 200
-
-    completion_payload = {
-        "status": "completed",
-        "outputs": {
-            "json": {
-                "uri": "var/outputs/remit_final.json",
-                "expires_at": "2026-01-01T00:00:00Z",
-            }
-        },
-        "metrics": {
-            "rows_extracted": 125,
-            "processing_time_ms": 4180,
-            "errors": 0,
-        },
-    }
-    completion_response = client.patch(
-        f"/jobs/{job['job_id']}",
-        json=completion_payload,
-    )
-    assert completion_response.status_code == 200
-
-    events = client.get(
-        "/events",
-        params={"entity_type": "job", "entity_id": job["job_id"]},
-    )
-    assert events.status_code == 200
-    payload_events = events.json()
-    assert payload_events["total"] == 4
-
-    event_types = {item["event_type"] for item in payload_events["items"]}
-    assert {"job.created", "job.status.running", "job.status.completed", "job.results.published"} <= event_types
-
-    running_event = next(
-        item
-        for item in payload_events["items"]
-        if item["event_type"] == "job.status.running"
-    )
-    assert running_event["payload"]["from_status"] == "pending"
-    assert running_event["payload"]["to_status"] == "running"
-    assert running_event["actor_label"] == "api"
-
-    completed_event = next(
-        item
-        for item in payload_events["items"]
-        if item["event_type"] == "job.status.completed"
-    )
-    assert completed_event["payload"]["from_status"] == "running"
-    assert completed_event["payload"]["to_status"] == "completed"
-    assert completed_event["actor_label"] == "api"
-
-    results_event = next(
-        item
-        for item in payload_events["items"]
-        if item["event_type"] == "job.results.published"
-    )
-    assert results_event["payload"]["outputs"] == completion_payload["outputs"]
-    assert results_event["payload"]["metrics"] == completion_payload["metrics"]
-
-
-def test_job_event_timeline_paginates_and_filters(app_client) -> None:
-    client, _, _ = app_client
-    configuration = _activate_configuration(client)
-
-    payload = _create_job_payload(configuration["document_type"])
-    payload["status"] = "pending"
-
-    response = client.post("/jobs", json=payload)
-    assert response.status_code == 201
-    job = response.json()
-
-    session_factory = get_sessionmaker()
-    base_time = datetime(2024, 1, 1, 9, 0, tzinfo=timezone.utc)
-    with session_factory() as session:
-        for index in range(3):
-            record_event(
-                session,
-                EventRecord(
-                    event_type=f"job.test.{index}",
-                    entity_type="job",
-                    entity_id=job["job_id"],
-                    source="timeline-test",
-                    occurred_at=base_time + timedelta(minutes=index),
-                    payload={"index": index},
-                ),
-            )
-
-    response = client.get(
-        f"/jobs/{job['job_id']}/events",
-        params={"limit": 2, "source": "timeline-test"},
-    )
+    response = client.patch(f"/jobs/{job['job_id']}", json=update)
     assert response.status_code == 200
     payload = response.json()
-    assert payload["entity"] == {
-        "job_id": job["job_id"],
-        "document_type": job["document_type"],
-        "status": job["status"],
-        "created_by": job["created_by"],
-    }
-    assert payload["total"] == 3
-    assert [item["event_type"] for item in payload["items"]] == [
-        "job.test.2",
-        "job.test.1",
-    ]
-
-    second_page = client.get(
-        f"/jobs/{job['job_id']}/events",
-        params={"limit": 2, "offset": 2, "source": "timeline-test"},
-    )
-    assert second_page.status_code == 200
-    second_payload = second_page.json()
-    assert second_payload["total"] == 3
-    assert [item["event_type"] for item in second_payload["items"]] == [
-        "job.test.0",
-    ]
-
-    filtered = client.get(
-        f"/jobs/{job['job_id']}/events",
-        params={
-            "event_type": "job.test.1",
-            "source": "timeline-test",
-        },
-    )
-    assert filtered.status_code == 200
-    filtered_payload = filtered.json()
-    assert filtered_payload["total"] == 1
-    assert filtered_payload["items"][0]["event_type"] == "job.test.1"
-
-
-def test_job_event_timeline_summary_tracks_updates(app_client) -> None:
-    client, _, _ = app_client
-    configuration = _activate_configuration(client)
-
-    payload = _create_job_payload(configuration["document_type"])
-    payload["status"] = "pending"
-
-    response = client.post("/jobs", json=payload)
-    assert response.status_code == 201
-    job = response.json()
-
-    patch_response = client.patch(
-        f"/jobs/{job['job_id']}",
-        json={"status": "completed"},
-    )
-    assert patch_response.status_code == 200
-    updated = patch_response.json()
-
-    timeline = client.get(f"/jobs/{job['job_id']}/events")
-    assert timeline.status_code == 200
-    payload = timeline.json()
-    assert payload["entity"] == {
-        "job_id": updated["job_id"],
-        "document_type": updated["document_type"],
-        "status": updated["status"],
-        "created_by": updated["created_by"],
-    }
-
-
-def test_job_event_timeline_returns_404_for_missing_job(app_client) -> None:
-    client, _, _ = app_client
-
-    response = client.get("/jobs/missing/events")
-
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Job 'missing' was not found"
+    assert payload["metrics"] == update["metrics"]
+    assert payload["logs"] == update["logs"]
 

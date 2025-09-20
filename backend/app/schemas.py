@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Any, Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    model_validator,
+)
 from pydantic.types import StringConstraints
 
 
@@ -55,6 +61,7 @@ class DocumentResponse(BaseModel):
     deleted_at: str | None = None
     deleted_by: str | None = None
     delete_reason: str | None = None
+    produced_by_job_id: str | None = None
 
     @field_serializer("stored_uri")
     def _serialise_stored_uri(self, stored_uri: str) -> str:
@@ -241,27 +248,6 @@ class ConfigurationResponse(BaseModel):
 JobStatus = Literal["pending", "running", "completed", "failed"]
 
 
-class JobInput(BaseModel):
-    """Input document metadata captured on each job."""
-
-    uri: Annotated[
-        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=512)
-    ]
-    hash: Annotated[
-        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)
-    ]
-    expires_at: str
-
-
-class JobOutputReference(BaseModel):
-    """Reference to a generated output artifact."""
-
-    uri: Annotated[
-        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=512)
-    ]
-    expires_at: str
-
-
 class JobMetrics(BaseModel):
     """Summary statistics emitted by a job."""
 
@@ -284,6 +270,37 @@ class JobLogEntry(BaseModel):
     ]
 
 
+class JobDocumentSummary(BaseModel):
+    """Summary of a document linked to a job."""
+
+    document_id: str
+    original_filename: str
+    content_type: str | None = None
+    byte_size: int
+    created_at: str
+    is_deleted: bool
+    download_url: str | None = None
+
+
+class JobHistoryEntry(BaseModel):
+    """Minimal job metadata for document-centric history views."""
+
+    job_id: str
+    status: JobStatus
+    configuration_id: str
+    configuration_version: int
+    created_at: str
+    updated_at: str
+
+
+class DocumentJobsResponse(BaseModel):
+    """Jobs linked to a document either as input or output."""
+
+    document_id: str
+    input_to_jobs: list[JobHistoryEntry]
+    produced_by_job: JobHistoryEntry | None = None
+
+
 class JobCreate(BaseModel):
     """Payload for creating a processing job."""
 
@@ -293,12 +310,13 @@ class JobCreate(BaseModel):
     created_by: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
     ]
-    input: JobInput
+    input_document_id: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)
+    ]
     status: JobStatus = "pending"
     configuration_id: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=26, max_length=26)
     ] | None = None
-    outputs: dict[str, JobOutputReference] = Field(default_factory=dict)
     metrics: JobMetrics = Field(default_factory=JobMetrics)
     logs: list[JobLogEntry] = Field(default_factory=list)
 
@@ -307,7 +325,6 @@ class JobUpdate(BaseModel):
     """Payload for mutating a job while it is running."""
 
     status: JobStatus | None = None
-    outputs: dict[str, JobOutputReference] | None = None
     metrics: JobMetrics | None = None
     logs: list[JobLogEntry] | None = None
 
@@ -318,9 +335,6 @@ class JobUpdate(BaseModel):
             raise ValueError(msg)
         if "status" in self.model_fields_set and self.status is None:
             msg = "status cannot be null"
-            raise ValueError(msg)
-        if "outputs" in self.model_fields_set and self.outputs is None:
-            msg = "outputs cannot be null"
             raise ValueError(msg)
         if "metrics" in self.model_fields_set and self.metrics is None:
             msg = "metrics cannot be null"
@@ -334,19 +348,20 @@ class JobUpdate(BaseModel):
 class JobResponse(BaseModel):
     """API representation of a job record."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     job_id: str
     document_type: str
+    configuration_id: str
     configuration_version: int
     status: JobStatus
     created_at: str
     updated_at: str
     created_by: str
-    input: JobInput
-    outputs: dict[str, JobOutputReference] = Field(default_factory=dict)
     metrics: JobMetrics = Field(default_factory=JobMetrics)
     logs: list[JobLogEntry] = Field(default_factory=list)
+    input_document: JobDocumentSummary
+    output_documents: list[JobDocumentSummary] = Field(default_factory=list)
 
 __all__ = [
     "HealthResponse",
@@ -360,10 +375,11 @@ __all__ = [
     "ConfigurationUpdate",
     "ConfigurationResponse",
     "JobStatus",
-    "JobInput",
-    "JobOutputReference",
     "JobMetrics",
     "JobLogEntry",
+    "JobDocumentSummary",
+    "JobHistoryEntry",
+    "DocumentJobsResponse",
     "JobCreate",
     "JobUpdate",
     "JobResponse",

@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import ContextManager
+import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -21,6 +22,10 @@ def _test_client(
 
     monkeypatch.setenv("ADE_DATABASE_URL", database_url)
     monkeypatch.setenv("ADE_DOCUMENTS_DIR", str(documents_dir))
+    if "ADE_PURGE_SCHEDULE_ENABLED" not in os.environ:
+        monkeypatch.setenv("ADE_PURGE_SCHEDULE_ENABLED", "0")
+    if "ADE_PURGE_SCHEDULE_RUN_ON_STARTUP" not in os.environ:
+        monkeypatch.setenv("ADE_PURGE_SCHEDULE_RUN_ON_STARTUP", "0")
 
     import backend.app.config as config_module
     config_module.reset_settings_cache()

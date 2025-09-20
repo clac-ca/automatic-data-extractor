@@ -179,6 +179,7 @@ def store_document(
     content_type: str | None,
     data: bytes | BinaryIO,
     expires_at: str | None = None,
+    produced_by_job_id: str | None = None,
 ) -> Document:
     """Persist a document to disk and return the metadata record.
 
@@ -217,6 +218,7 @@ def store_document(
         expires_at=expiration,
         created_at=now_iso,
         updated_at=now_iso,
+        produced_by_job_id=produced_by_job_id,
     )
     db.add(document)
     try:
@@ -246,12 +248,28 @@ def store_document(
     return document
 
 
-def list_documents(db: Session, *, include_deleted: bool = False) -> list[Document]:
+def list_documents(
+    db: Session,
+    *,
+    include_deleted: bool = False,
+    produced_by_job_id: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[Document]:
     """Return documents ordered by creation time (newest first)."""
 
-    statement = select(Document).order_by(Document.created_at.desc())
+    statement = select(Document).order_by(
+        Document.created_at.desc(),
+        Document.document_id.desc(),
+    )
     if not include_deleted:
         statement = statement.where(Document.deleted_at.is_(None))
+    if produced_by_job_id is not None:
+        statement = statement.where(Document.produced_by_job_id == produced_by_job_id)
+    if offset:
+        statement = statement.offset(offset)
+    if limit is not None:
+        statement = statement.limit(limit)
     return list(db.scalars(statement))
 
 
