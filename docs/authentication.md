@@ -1,10 +1,8 @@
 # Authentication overview
 
-ADE supports three authentication mechanisms that can be enabled in combination:
-
-- **HTTP Basic** – deterministic credentials ideal for service accounts and automation.
-- **Cookie sessions** – short-lived tokens issued after a successful login that power the React UI.
-- **SSO (OIDC)** – standards-compliant code exchanges that reuse the same session cookie contract.
+ADE supports HTTP Basic credentials, cookie-backed browser sessions, and optional OIDC single sign-on. Session cookies are
+issued automatically whenever authentication is active, so deployments only toggle the primary mechanisms and whether auth is
+disabled entirely.
 
 ## Environment variables
 
@@ -12,7 +10,7 @@ All configuration flows through `ADE_` environment variables. Common settings in
 
 | Variable | Description |
 | --- | --- |
-| `ADE_AUTH_MODES` | Comma separated list of enabled mechanisms (`basic`, `session`, `sso`). |
+| `ADE_AUTH_MODES` | Comma separated list drawn from `none`, `basic`, `sso` (default: `basic`). `none` cannot be combined with other values. |
 | `ADE_SESSION_COOKIE_NAME` | Session cookie name (default: `ade_session`). |
 | `ADE_SESSION_TTL_MINUTES` | Expiry window for issued sessions. |
 | `ADE_SESSION_COOKIE_SECURE` | Set to `1` to mark cookies as Secure; required when SameSite is `none`. |
@@ -23,8 +21,8 @@ All configuration flows through `ADE_` environment variables. Common settings in
 | `ADE_SSO_AUDIENCE` | Expected ID token audience (defaults to the client ID). |
 | `ADE_SSO_CACHE_TTL_SECONDS` | Seconds to cache discovery metadata and JWKS responses. |
 
-The service refuses to start if `ADE_AUTH_MODES` resolves to an empty set or if `sso` is requested without the required issuer,
-client, secret, and redirect values.
+The service refuses to start if `ADE_AUTH_MODES` resolves to an empty set, combines `none` with another value, or if `sso` is
+requested without the required issuer, client, secret, and redirect values.
 
 ## SSO validation
 
@@ -48,8 +46,8 @@ CLI actions emit `user.*` events with `actor_type="system"` and `source="cli"`, 
 
 ## Login flow summary
 
-1. Clients authenticate with HTTP Basic. When sessions are enabled the login endpoint issues an opaque token, hashes it using
-   SHA-256, stores the hash in `user_sessions.token_hash`, and returns the raw token as an HttpOnly cookie.
+1. Clients authenticate with HTTP Basic. The login endpoint always issues an opaque session token, hashes it using SHA-256,
+   stores the hash in `user_sessions.token_hash`, and returns the raw token as an HttpOnly cookie.
 2. Subsequent requests prefer the session cookie. The `CurrentUser` dependency falls back to HTTP Basic and then `Authorization:
    Bearer` when SSO is configured.
 3. SSO-enabled deployments expose `/auth/sso/login` and `/auth/sso/callback`. ADE validates the provider's discovery document,
