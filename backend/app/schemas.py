@@ -35,6 +35,32 @@ class HealthResponse(BaseModel):
     purge: AutoPurgeStatus | None = None
 
 
+class UserProfile(BaseModel):
+    """Public representation of an ADE user."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: str
+    email: str
+    role: str
+    is_active: bool
+
+
+class SessionSummary(BaseModel):
+    """Metadata about an active browser session."""
+
+    session_id: str
+    expires_at: str
+
+
+class AuthSessionResponse(BaseModel):
+    """Response envelope for authentication endpoints."""
+
+    user: UserProfile
+    modes: list[str]
+    session: SessionSummary | None = None
+
+
 class DocumentResponse(BaseModel):
     """API representation of stored document metadata."""
 

@@ -7,6 +7,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from ..auth.dependencies import get_current_user
 from ..db import get_db
 from ..models import Event, Job
 from ..schemas import (
@@ -35,7 +36,11 @@ from ..services.jobs import (
     update_job,
 )
 
-router = APIRouter(prefix="/jobs", tags=["jobs"])
+router = APIRouter(
+    prefix="/jobs",
+    tags=["jobs"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 def _to_response(db: Session, job: Job) -> JobResponse:

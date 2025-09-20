@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
@@ -40,6 +40,84 @@ class Settings(BaseSettings):
         ge=1,
         description="Number of seconds to wait between automatic purge sweeps",
     )
+    auth_modes: str = Field(
+        default="basic,session",
+        description=(
+            "Comma separated list of enabled authentication mechanisms (basic, session, sso)"
+        ),
+    )
+    session_cookie_name: str = Field(
+        default="ade_session",
+        min_length=1,
+        description="Name of the browser cookie carrying session tokens",
+    )
+    session_ttl_minutes: int = Field(
+        default=720,
+        gt=0,
+        description="Validity window for issued browser sessions",
+    )
+    session_cookie_secure: bool = Field(
+        default=False,
+        description="Mark session cookies as Secure (HTTPS-only)",
+    )
+    session_cookie_domain: str | None = Field(
+        default=None,
+        description="Optional domain attribute to include on session cookies",
+    )
+    session_cookie_path: str = Field(
+        default="/",
+        description="Path attribute applied to session cookies",
+    )
+    session_cookie_same_site: str = Field(
+        default="lax",
+        description="SameSite attribute for session cookies (lax, strict, none)",
+    )
+    sso_client_id: str | None = Field(default=None, description="OIDC client identifier")
+    sso_client_secret: str | None = Field(
+        default=None, description="OIDC client secret for code exchange"
+    )
+    sso_issuer: str | None = Field(
+        default=None,
+        description="OIDC issuer base URL used for discovery",
+    )
+    sso_redirect_url: str | None = Field(
+        default=None,
+        description="Callback URL registered with the OIDC provider",
+    )
+    sso_audience: str | None = Field(
+        default=None,
+        description="Expected ID token audience (defaults to client id when unset)",
+    )
+    sso_scopes: str = Field(
+        default="openid email profile",
+        description="Scopes requested during the OIDC authorisation redirect",
+    )
+    sso_cache_ttl_seconds: int = Field(
+        default=300,
+        gt=0,
+        description="Seconds to cache discovery documents and JWKS responses",
+    )
+    sso_auto_provision: bool = Field(
+        default=False,
+        description="Automatically create users for valid SSO identities",
+    )
+    admin_email_allowlist_enabled: bool = Field(
+        default=False,
+        description="Require administrator accounts to match the configured allowlist",
+    )
+    admin_email_allowlist: str | None = Field(
+        default=None,
+        description="Comma separated list of administrator email addresses",
+    )
+
+    @field_validator("session_cookie_same_site")
+    @classmethod
+    def _validate_same_site(cls, value: str) -> str:
+        candidate = value.lower().strip()
+        if candidate not in {"lax", "strict", "none"}:
+            msg = "session_cookie_same_site must be lax, strict, or none"
+            raise ValueError(msg)
+        return candidate
 
     @property
     def database_path(self) -> Path | None:
@@ -54,6 +132,37 @@ class Settings(BaseSettings):
             return None
 
         return Path(database)
+
+    @property
+    def auth_mode_sequence(self) -> tuple[str, ...]:
+        """Return configured authentication modes in declaration order."""
+
+        modes: list[str] = []
+        for raw in self.auth_modes.split(","):
+            candidate = raw.strip().lower()
+            if not candidate:
+                continue
+            if candidate not in {"basic", "session", "sso"}:
+                msg = f"Unsupported auth mode: {candidate}"
+                raise ValueError(msg)
+            if candidate not in modes:
+                modes.append(candidate)
+        return tuple(modes)
+
+    @property
+    def admin_allowlist(self) -> tuple[str, ...]:
+        """Return normalised administrator email addresses."""
+
+        source = (self.admin_email_allowlist or "").strip()
+        if not source:
+            return ()
+
+        values: list[str] = []
+        for item in source.split(","):
+            candidate = item.strip().lower()
+            if candidate and candidate not in values:
+                values.append(candidate)
+        return tuple(values)
 
 
 @lru_cache
