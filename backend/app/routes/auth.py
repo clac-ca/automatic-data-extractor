@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBasicCredentials
@@ -17,6 +18,8 @@ from ..auth.sso import SSOExchangeError
 from ..db import get_db
 from ..models import User, UserSession
 from ..schemas import AuthSessionResponse, SessionSummary, UserProfile
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -301,6 +304,7 @@ def sso_callback(
     try:
         user, claims = sso.exchange_code(settings, code=code, state=state, db=db)
     except SSOExchangeError as exc:
+        logger.warning("SSO code exchange failed", extra={"reason": str(exc)})
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     ip_address, user_agent = _request_metadata(request)

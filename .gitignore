@@ -14,7 +14,7 @@ build/
 .pytest_cache/
 
 # SQLite and documents
-var/
+data/
 
 # IDE
 .vscode/

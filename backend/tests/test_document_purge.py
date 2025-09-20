@@ -13,7 +13,8 @@ import pytest
 
 from backend.app import config as config_module
 from backend.app import db as db_module
-from backend.app.db import Base, get_engine, get_sessionmaker
+from backend.app.db import get_sessionmaker
+from backend.app.db_migrations import ensure_schema
 from backend.app.models import Event, Document
 from sqlalchemy import select
 
@@ -111,7 +112,7 @@ def _configured_environment(database_url: str, documents_dir: Path) -> Iterator[
     config_module.reset_settings_cache()
     db_module.reset_database_state()
     documents_dir.mkdir(parents=True, exist_ok=True)
-    Base.metadata.create_all(bind=get_engine())
+    ensure_schema()
     try:
         yield
     finally:
@@ -461,12 +462,14 @@ def test_auto_purge_status_records_failure(app_client) -> None:
 
 
 def test_purge_cli_dry_run_reports_summary(tmp_path, monkeypatch, capsys) -> None:
-    documents_dir = tmp_path / "documents"
-    db_path = tmp_path / "ade.sqlite"
+    data_dir = tmp_path / "data"
+    documents_dir = data_dir / "documents"
+    db_path = data_dir / "db" / "ade.sqlite"
     database_url = f"sqlite:///{db_path}"
 
+    monkeypatch.setenv("ADE_DATA_DIR", str(data_dir))
     monkeypatch.setenv("ADE_DATABASE_URL", database_url)
-    monkeypatch.setenv("ADE_DOCUMENTS_DIR", str(documents_dir))
+    monkeypatch.delenv("ADE_DOCUMENTS_DIR", raising=False)
 
     with _configured_environment(database_url, documents_dir):
         session_factory = get_sessionmaker()
@@ -490,17 +493,19 @@ def test_purge_cli_dry_run_reports_summary(tmp_path, monkeypatch, capsys) -> Non
             assert row is not None
             assert row.deleted_at is None
 
+    monkeypatch.delenv("ADE_DATA_DIR", raising=False)
     monkeypatch.delenv("ADE_DATABASE_URL", raising=False)
-    monkeypatch.delenv("ADE_DOCUMENTS_DIR", raising=False)
 
 
 def test_purge_cli_executes_purge(tmp_path, monkeypatch) -> None:
-    documents_dir = tmp_path / "documents"
-    db_path = tmp_path / "ade.sqlite"
+    data_dir = tmp_path / "data"
+    documents_dir = data_dir / "documents"
+    db_path = data_dir / "db" / "ade.sqlite"
     database_url = f"sqlite:///{db_path}"
 
+    monkeypatch.setenv("ADE_DATA_DIR", str(data_dir))
     monkeypatch.setenv("ADE_DATABASE_URL", database_url)
-    monkeypatch.setenv("ADE_DOCUMENTS_DIR", str(documents_dir))
+    monkeypatch.delenv("ADE_DOCUMENTS_DIR", raising=False)
 
     with _configured_environment(database_url, documents_dir):
         session_factory = get_sessionmaker()
@@ -521,8 +526,8 @@ def test_purge_cli_executes_purge(tmp_path, monkeypatch) -> None:
             assert row is not None
             assert row.deleted_at is not None
 
+    monkeypatch.delenv("ADE_DATA_DIR", raising=False)
     monkeypatch.delenv("ADE_DATABASE_URL", raising=False)
-    monkeypatch.delenv("ADE_DOCUMENTS_DIR", raising=False)
 
 
 def test_automatic_purge_scheduler_removes_expired_documents(
