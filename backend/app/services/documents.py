@@ -580,9 +580,15 @@ def iter_expired_documents(
     if limit is not None:
         statement = statement.limit(limit)
 
-    documents = list(db.scalars(statement))
-    for start in range(0, len(documents), batch_size):
-        yield documents[start : start + batch_size]
+    result = db.scalars(statement)
+    try:
+        while True:
+            batch = result.fetchmany(batch_size)
+            if not batch:
+                break
+            yield list(batch)
+    finally:
+        result.close()
 
 
 def purge_expired_documents(
