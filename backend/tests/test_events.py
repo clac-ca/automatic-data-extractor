@@ -318,7 +318,7 @@ def test_events_endpoint_embeds_entity_summary_when_filtered(app_client) -> None
             session,
             document_type="invoice",
             created_by="ops@ade.local",
-            input_payload={"uri": "s3://bucket/invoice.pdf"},
+            input_document_id=document_id,
             configuration_id=configuration_id,
             event_source="api",
         )

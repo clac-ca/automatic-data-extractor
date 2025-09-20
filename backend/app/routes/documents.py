@@ -16,9 +16,11 @@ from ..schemas import (
     EventListResponse,
     EventResponse,
     DocumentDeleteRequest,
-    DocumentUpdate,
+    DocumentJobsResponse,
     DocumentResponse,
     DocumentTimelineSummary,
+    DocumentUpdate,
+    JobHistoryEntry,
 )
 from ..services.events import list_entity_events
 from ..services.documents import (
@@ -34,6 +36,7 @@ from ..services.documents import (
     resolve_document_path,
     store_document,
 )
+from ..services.jobs import JobNotFoundError, get_job, list_jobs, summarise_job
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -55,18 +58,33 @@ def _event_to_response(event: Event) -> EventResponse:
 async def upload_document(
     file: UploadFile = File(...),
     expires_at: str | None = Form(None),
+    produced_by_job_id: str | None = Form(None),
     db: Session = Depends(get_db),
 ) -> DocumentResponse:
     """Ingest an uploaded document and return canonical metadata."""
 
     try:
         await file.seek(0)
+        if produced_by_job_id is not None:
+            try:
+                get_job(db, produced_by_job_id)
+            except JobNotFoundError as exc:
+                detail = {
+                    "error": "invalid_job_reference",
+                    "message": str(exc),
+                }
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=detail,
+                ) from exc
+
         document = store_document(
             db,
             original_filename=file.filename,
             content_type=file.content_type,
             data=file.file,
             expires_at=expires_at,
+            produced_by_job_id=produced_by_job_id,
         )
     except DocumentTooLargeError as exc:
         detail = {
@@ -94,10 +112,21 @@ async def upload_document(
 
 
 @router.get("", response_model=list[DocumentResponse])
-def list_documents(db: Session = Depends(get_db)) -> list[DocumentResponse]:
+def list_documents(
+    db: Session = Depends(get_db),
+    *,
+    produced_by_job_id: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> list[DocumentResponse]:
     """Return stored documents ordered by recency."""
 
-    documents = list_documents_service(db)
+    documents = list_documents_service(
+        db,
+        produced_by_job_id=produced_by_job_id,
+        limit=limit,
+        offset=offset,
+    )
     return [_to_response(document) for document in documents]
 
 
@@ -112,6 +141,51 @@ def get_document(
     except DocumentNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _to_response(document)
+
+
+@router.get(
+    "/{document_id}/jobs",
+    response_model=DocumentJobsResponse,
+    response_model_exclude_none=True,
+)
+def list_document_jobs(
+    document_id: str,
+    db: Session = Depends(get_db),
+    *,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> DocumentJobsResponse:
+    """Return jobs associated with a document ordered by recency."""
+
+    try:
+        document = get_document_service(db, document_id)
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    jobs = list_jobs(
+        db,
+        input_document_id=document_id,
+        limit=limit,
+        offset=offset,
+    )
+    input_history = [JobHistoryEntry.model_validate(summarise_job(job)) for job in jobs]
+
+    produced_job_summary: JobHistoryEntry | None = None
+    if document.produced_by_job_id:
+        try:
+            produced_job = get_job(db, document.produced_by_job_id)
+        except JobNotFoundError:
+            produced_job_summary = None
+        else:
+            produced_job_summary = JobHistoryEntry.model_validate(
+                summarise_job(produced_job)
+            )
+
+    return DocumentJobsResponse(
+        document_id=document.document_id,
+        input_to_jobs=input_history,
+        produced_by_job=produced_job_summary,
+    )
 
 
 @router.patch("/{document_id}", response_model=DocumentResponse)

@@ -6,7 +6,16 @@ from datetime import datetime, timezone
 from typing import Any
 
 import ulid
-from sqlalchemy import Boolean, Integer, JSON, String, UniqueConstraint, Index, text
+from sqlalchemy import (
+    Boolean,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    UniqueConstraint,
+    Index,
+    text,
+)
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -65,7 +74,7 @@ class Configuration(Base):
 
 
 class Job(Base):
-    """Processing job metadata and outputs."""
+    """Processing job metadata and configuration details."""
 
     __tablename__ = "jobs"
 
@@ -79,11 +88,8 @@ class Job(Base):
         String(32), default=_timestamp, onupdate=_timestamp, nullable=False
     )
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
-    input: Mapped[dict[str, Any]] = mapped_column(
-        MutableDict.as_mutable(JSON), default=dict, nullable=False
-    )
-    outputs: Mapped[dict[str, Any]] = mapped_column(
-        MutableDict.as_mutable(JSON), default=dict, nullable=False
+    input_document_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("documents.document_id"), nullable=False
     )
     metrics: Mapped[dict[str, Any]] = mapped_column(
         MutableDict.as_mutable(JSON), default=dict, nullable=False
@@ -91,6 +97,8 @@ class Job(Base):
     logs: Mapped[list[dict[str, Any]]] = mapped_column(
         MutableList.as_mutable(JSON), default=list, nullable=False
     )
+
+    __table_args__ = (Index("ix_jobs_input_document_id", "input_document_id"),)
 
     def __repr__(self) -> str:
         return (
@@ -129,6 +137,13 @@ class Document(Base):
     deleted_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
     deleted_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     delete_reason: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    produced_by_job_id: Mapped[str | None] = mapped_column(
+        String(40), ForeignKey("jobs.job_id"), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_documents_produced_by_job_id", "produced_by_job_id"),
+    )
 
     def __repr__(self) -> str:
         return (

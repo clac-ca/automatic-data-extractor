@@ -1,19 +1,31 @@
-# Current Task — Surface entity summaries in the global events feed
+# Previous Task — Finalize document–job linking without legacy payloads
 
 ## Goal
-Teach `GET /events` to embed the same `entity` summary block when callers filter to a single entity (`entity_type` + `entity_id`).
+Finish the schema and API work so jobs reference a single input document via `jobs.input_document_id`, documents optionally link back to the producing job with `documents.produced_by_job_id`, and job projections surface linked documents without carrying historical JSON blobs.
 
-## Why this matters
-- Operators using the global feed today must hit both `/events` and the resource-specific endpoint to see context; inlining the summary avoids redundant round-trips.
-- CLI tooling that tails the shared feed can render document filenames or configuration titles without bespoke lookups per entity type.
-- Reusing the summary union keeps downstream consumers aligned across entity-specific and global timelines.
+## Why this mattered
+- The prior join/role abstractions were unnecessary and complicated pagination.
+- Keeping relationships in first-class columns allows `/jobs`, `/documents`, and `/documents/{document_id}/jobs` to answer history questions directly.
+- Dropping unused `legacy_input` plumbing keeps the codebase simpler before any production consumers rely on it.
 
-## Proposed scope
-1. **Schema + plumbing** – Allow `EventListResponse` emitted by `/events` to populate `entity` when both `entity_type` and `entity_id` filters are supplied.
-2. **Data loading** – Resolve the matching entity (document/configuration/job) once per request, reuse existing timeline summaries, and continue returning 404 when the entity does not exist.
-3. **Validation** – Add API tests that cover each entity type, ensure pagination still works, and assert the endpoint stays summary-free when filters are absent or incomplete. Update the README/glossary to mention the behaviour.
+## Scope
+1. **Schema + models**
+   - Ensure jobs store `input_document_id` and documents store `produced_by_job_id`, with supporting indexes.
+   - Remove the unused `jobs.input` JSON column and any association tables.
+2. **Services + routes**
+   - Require a valid `input_document_id` when creating jobs and compute `input_document`/`output_documents` on read.
+   - Let document uploads optionally set `produced_by_job_id`, expose the history view at `/documents/{document_id}/jobs`, and support filtering via `input_document_id`/`produced_by_job_id` query parameters.
+   - Keep document downloads disabled for soft-deleted rows and surface deletion state in projections.
+3. **Docs + tests**
+   - Update README + glossary examples to describe the computed projection model.
+   - Add pytest coverage for multiple outputs, deletion markers, history queries, list filters, and validation errors.
 
-## Open questions / follow-ups
-- Should the endpoint reject requests that pass only one of `entity_type` or `entity_id` now that a summary is expected?
-- Do we need to cap which entity types support summaries to prevent future breakage when new types are added to the events feed?
-- Would a query flag (`include_entity=false`) be useful for clients that prefer the lean payload?
+## Out of scope
+- Frontend changes to consume the new response shapes.
+- Processor/runtime changes beyond API surface area.
+- Historical data migrations beyond the new columns.
+
+## Acceptance criteria
+- Job responses return `input_document` and `output_documents` summaries derived from the database pointers.
+- Document uploads accept optional `produced_by_job_id` and reject unknown jobs.
+- History endpoints and list filters operate on the new columns without exposing any legacy `input` payloads.
