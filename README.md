@@ -70,12 +70,16 @@ callbacks allow SSO providers to mint the same session cookies. Key environment 
 
 - `ADE_SESSION_COOKIE_NAME`, `ADE_SESSION_TTL_MINUTES`, `ADE_SESSION_COOKIE_SECURE`, `ADE_SESSION_COOKIE_DOMAIN`,
   `ADE_SESSION_COOKIE_SAME_SITE` – control browser session behaviour.
-- `ADE_SSO_CLIENT_ID`, `ADE_SSO_CLIENT_SECRET`, `ADE_SSO_ISSUER`, `ADE_SSO_REDIRECT_URL`, `ADE_SSO_AUDIENCE` – configure
+- `ADE_SSO_CLIENT_ID`, `ADE_SSO_CLIENT_SECRET`, `ADE_SSO_ISSUER`, `ADE_SSO_REDIRECT_URL`, `ADE_SSO_AUDIENCE`,
+  `ADE_SSO_CACHE_TTL_SECONDS` – configure
   standards-compliant code exchanges when `sso` mode is active.
 
 User accounts live in the `users` table. A lightweight CLI (`python -m backend.app.auth.manage`) manages accounts with
 `create-user`, `reset-password`, `deactivate`, `promote`, and `list-users` commands. CLI operations emit events so audit logs
 capture administrative changes even when the API is offline.
+
+SSO environments expect RS256-signed ID tokens. ADE caches the provider discovery document and JWKS payloads for the configured
+TTL (`ADE_SSO_CACHE_TTL_SECONDS`) while still rejecting expired tokens or IDs signed by unknown keys.
 
 ### Identifier strategy
 Documents, configurations, and events share the same ULID format for their primary keys and, in the case of documents, their stored filenames. UUIDv4 identifiers are widely standardised and perfectly random, which makes them a safe universal default, but that randomness also scatters writes across a database index and increases fragmentation. ULIDs remain 128-bit identifiers while adding a 48-bit timestamp prefix, so new values stay lexicographically sorted, keep SQLite indexes append-friendly, and preserve chronological ordering even if multiple workers generate IDs. We will stick with ULIDs for ADE’s ingestion-heavy workflows, while reserving UUIDv4s for situations where external interoperability or strict standards compliance outweigh those locality benefits.

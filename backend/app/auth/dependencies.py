@@ -87,7 +87,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
             if session_model:
                 user = db.get(User, session_model.user_id)
                 if user and user.is_active:
-                    sessions.touch_session(
+                    refreshed = sessions.touch_session(
                         db,
                         session_model,
                         settings=settings,
@@ -95,16 +95,16 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
                         user_agent=user_agent,
                         commit=True,
                     )
-                    request.state.auth_session = session_model
-                    _set_request_context(
-                        request,
-                        user,
-                        "session",
-                        session_id=session_model.session_id,
-                    )
-                    return user
-                if session_model:
-                    sessions.revoke_session(db, session_model, commit=True)
+                    if refreshed is not None:
+                        request.state.auth_session = refreshed
+                        _set_request_context(
+                            request,
+                            user,
+                            "session",
+                            session_id=refreshed.session_id,
+                        )
+                        return user
+                sessions.revoke_session(db, session_model, commit=True)
 
     if "basic" in modes:
         credentials = extract_basic_credentials(request)
