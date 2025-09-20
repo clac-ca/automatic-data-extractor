@@ -405,6 +405,24 @@ def _ensure_document_file(
     return path
 
 
+def _remove_document_file(document: Document, path: Path) -> None:
+    """Remove the stored bytes for ``document`` from disk."""
+
+    try:
+        path.unlink()
+    except FileNotFoundError as exc:
+        raise DocumentFileMissingError(document.document_id) from exc
+    except Exception:
+        logger.exception(
+            "Failed to remove stored bytes for document deletion",
+            extra={
+                "document_id": document.document_id,
+                "stored_uri": document.stored_uri,
+            },
+        )
+        raise
+
+
 def delete_document(
     db: Session,
     document_id: str,
@@ -420,6 +438,9 @@ def delete_document(
     event_payload: dict[str, Any] | None = None,
 ) -> Document:
     """Soft delete a document and remove the stored file.
+
+    When ``commit`` is ``False`` the caller is responsible for removing the stored
+    bytes after the surrounding transaction succeeds.
 
     Raises:
         DocumentNotFoundError: If the document metadata cannot be located.
@@ -451,20 +472,8 @@ def delete_document(
     elif mutated:
         db.flush()
 
-    if path is not None:
-        try:
-            path.unlink()
-        except FileNotFoundError as exc:
-            raise DocumentFileMissingError(document.document_id) from exc
-        except Exception:
-            logger.exception(
-                "Failed to remove stored bytes for document deletion",
-                extra={
-                    "document_id": document.document_id,
-                    "stored_uri": document.stored_uri,
-                },
-            )
-            raise
+    if path is not None and commit:
+        _remove_document_file(document, path)
 
     if mutated:
         payload: dict[str, Any] = {
@@ -619,6 +628,7 @@ def purge_expired_documents(
                 summary.record(document)
         return summary
 
+    deleted_documents: list[Document] = []
     with db.begin():
         for batch in iterator:
             for document in batch:
@@ -634,6 +644,11 @@ def purge_expired_documents(
                     event_request_id=event_request_id,
                 )
                 summary.record(deleted_document)
+                deleted_documents.append(deleted_document)
+
+    for document in deleted_documents:
+        path = resolve_document_path(document, settings=settings)
+        _remove_document_file(document, path)
 
     return summary
 
