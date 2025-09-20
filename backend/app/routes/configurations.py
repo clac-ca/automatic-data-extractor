@@ -11,6 +11,7 @@ from pydantic.types import StringConstraints
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ..auth.dependencies import get_current_user
 from ..db import get_db
 from ..models import Event, Configuration
 from ..schemas import (
@@ -33,7 +34,11 @@ from ..services.configurations import (
     update_configuration,
 )
 
-router = APIRouter(prefix="/configurations", tags=["configurations"])
+router = APIRouter(
+    prefix="/configurations",
+    tags=["configurations"],
+    dependencies=[Depends(get_current_user)],
+)
 
 _document_type_adapter = TypeAdapter(
     Annotated[
