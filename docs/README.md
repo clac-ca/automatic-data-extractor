@@ -1,12 +1,3 @@
----
-Audience: All personas
-Goal: Provide a persona-oriented hub that routes every reader to the correct ADE documentation slice.
-Prerequisites: Access to this repository or the in-app documentation viewer.
-When to use: Start here whenever you need to find setup, operations, or workflow guidance for ADE.
-Validation: Visit each persona card below and confirm the linked README plus at least one guide renders without 404s.
-Escalate to: Documentation maintainers (platform administrators) when navigation is broken or personas lack coverage.
----
-
 # ADE documentation hub
 
 ADE’s documentation is organised around the core personas described in [DOCUMENTATION.md](../DOCUMENTATION.md). Each section keeps the same metadata block so you always see audience, prerequisites, and escalation paths before diving in. Start with the stable foundation references below to anchor yourself on architecture choices that rarely change, then jump to the persona workflow that matches the job at hand.
