@@ -78,7 +78,7 @@ docs/
 ### Getting started
 - **quickstart-docker.md**
   - Pull published image, run via `docker run` or `docker compose` with mounted volumes for `var/`.
-  - Default credentials, minimal configuration (only `ADE_AUTH_MODES=basic,session`).
+  - Default credentials, minimal configuration (only `ADE_AUTH_MODES=basic`).
   - Sanity checks: hit `/health`, upload sample doc, run a demo job via API.
 - **local-development.md**
   - Expand README Windows instructions into cross-platform guidance (macOS/Linux + Windows).
