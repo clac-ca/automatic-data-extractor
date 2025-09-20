@@ -42,7 +42,7 @@ def _configured_settings(monkeypatch, tmp_path, **overrides):
     defaults = {
         "ADE_DATABASE_URL": f"sqlite:///{tmp_path / 'ade.sqlite'}",
         "ADE_DOCUMENTS_DIR": str(documents_dir),
-        "ADE_AUTH_MODES": "basic,session",
+        "ADE_AUTH_MODES": "basic",
         "ADE_SESSION_COOKIE_SECURE": "0",
     }
     defaults.update(overrides)
@@ -336,7 +336,7 @@ def test_protected_routes_require_authentication(app_client_factory, tmp_path, m
     db_path = tmp_path / "auth.sqlite"
     documents_dir = tmp_path / "docs"
     database_url = f"sqlite:///{db_path}"
-    monkeypatch.setenv("ADE_AUTH_MODES", "basic,session")
+    monkeypatch.setenv("ADE_AUTH_MODES", "basic")
     monkeypatch.setenv("ADE_SESSION_COOKIE_SECURE", "0")
     with app_client_factory(database_url, documents_dir) as client:
         client.auth = None
@@ -345,6 +345,38 @@ def test_protected_routes_require_authentication(app_client_factory, tmp_path, m
         assert "WWW-Authenticate" in response.headers
         health = client.get("/health")
         assert health.status_code == 200
+
+
+def test_open_access_mode_disables_auth(app_client_factory, tmp_path, monkeypatch) -> None:
+    db_path = tmp_path / "open.sqlite"
+    documents_dir = tmp_path / "docs"
+    database_url = f"sqlite:///{db_path}"
+    monkeypatch.setenv("ADE_AUTH_MODES", "none")
+    monkeypatch.setenv("ADE_SESSION_COOKIE_SECURE", "0")
+    with app_client_factory(database_url, documents_dir) as client:
+        client.auth = None
+        documents = client.get("/documents")
+        assert documents.status_code == 200
+        profile = client.get("/auth/me")
+        assert profile.status_code == 200
+        body = profile.json()
+        assert body["modes"] == ["none"]
+        assert body["user"]["role"] == "admin"
+
+
+def test_basic_login_disabled_when_mode_missing(app_client_factory, tmp_path, monkeypatch) -> None:
+    db_path = tmp_path / "sso-only.sqlite"
+    documents_dir = tmp_path / "docs"
+    database_url = f"sqlite:///{db_path}"
+    monkeypatch.setenv("ADE_AUTH_MODES", "sso")
+    monkeypatch.setenv("ADE_SESSION_COOKIE_SECURE", "0")
+    monkeypatch.setenv("ADE_SSO_CLIENT_ID", "client-123")
+    monkeypatch.setenv("ADE_SSO_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("ADE_SSO_ISSUER", "https://sso.example.com")
+    monkeypatch.setenv("ADE_SSO_REDIRECT_URL", "https://ade.example.com/auth/callback")
+    with app_client_factory(database_url, documents_dir) as client:
+        response = client.post("/auth/login", auth=("admin@example.com", "password123"))
+        assert response.status_code == 404
 
 
 def _encode_hs256_token(secret: bytes, issuer: str, audience: str, nonce: str) -> str:
@@ -375,7 +407,7 @@ def test_sso_callback_issues_session(app_client_factory, tmp_path, monkeypatch) 
     db_path = tmp_path / "sso.sqlite"
     documents_dir = tmp_path / "docs"
     database_url = f"sqlite:///{db_path}"
-    monkeypatch.setenv("ADE_AUTH_MODES", "basic,session,sso")
+    monkeypatch.setenv("ADE_AUTH_MODES", "basic,sso")
     monkeypatch.setenv("ADE_SESSION_COOKIE_SECURE", "0")
     monkeypatch.setenv("ADE_SSO_CLIENT_ID", "client-123")
     monkeypatch.setenv("ADE_SSO_CLIENT_SECRET", "client-secret")
@@ -484,13 +516,13 @@ def test_verify_bearer_token_rs256(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("ADE_SSO_ISSUER", issuer)
     monkeypatch.setenv("ADE_SSO_REDIRECT_URL", "https://ade.internal/auth/callback")
     monkeypatch.setenv("ADE_SSO_CACHE_TTL_SECONDS", "60")
-    monkeypatch.setenv("ADE_AUTH_MODES", "basic,session,sso")
+    monkeypatch.setenv("ADE_AUTH_MODES", "basic,sso")
     monkeypatch.setenv("ADE_SESSION_COOKIE_SECURE", "0")
     monkeypatch.setattr(httpx, "get", fake_get)
 
     overrides = {
         "ADE_DATABASE_URL": f"sqlite:///{tmp_path / 'rs256.sqlite'}",
-        "ADE_AUTH_MODES": "basic,session,sso",
+        "ADE_AUTH_MODES": "basic,sso",
     }
 
     with _configured_settings(monkeypatch, tmp_path, **overrides) as (settings, session_factory):
@@ -551,7 +583,7 @@ def test_verify_bearer_token_rejects_unknown_kid(monkeypatch, tmp_path) -> None:
 
     overrides = {
         "ADE_DATABASE_URL": f"sqlite:///{tmp_path / 'rs256-kid.sqlite'}",
-        "ADE_AUTH_MODES": "basic,session,sso",
+        "ADE_AUTH_MODES": "basic,sso",
         "ADE_SSO_CLIENT_SECRET": "client-secret",
         "ADE_SSO_CLIENT_ID": "client-123",
         "ADE_SSO_ISSUER": issuer,
@@ -613,7 +645,7 @@ def test_verify_bearer_token_rejects_expired_token(monkeypatch, tmp_path) -> Non
 
     overrides = {
         "ADE_DATABASE_URL": f"sqlite:///{tmp_path / 'rs256-expired.sqlite'}",
-        "ADE_AUTH_MODES": "basic,session,sso",
+        "ADE_AUTH_MODES": "basic,sso",
         "ADE_SSO_CLIENT_SECRET": "client-secret",
         "ADE_SSO_CLIENT_ID": "client-123",
         "ADE_SSO_ISSUER": issuer,
@@ -659,7 +691,7 @@ def test_verify_bearer_token_rejects_audience_mismatch(monkeypatch, tmp_path) ->
 
     overrides = {
         "ADE_DATABASE_URL": f"sqlite:///{tmp_path / 'rs256-aud.sqlite'}",
-        "ADE_AUTH_MODES": "basic,session,sso",
+        "ADE_AUTH_MODES": "basic,sso",
         "ADE_SSO_CLIENT_SECRET": "client-secret",
         "ADE_SSO_CLIENT_ID": "client-123",
         "ADE_SSO_ISSUER": issuer,

@@ -41,9 +41,9 @@ class Settings(BaseSettings):
         description="Number of seconds to wait between automatic purge sweeps",
     )
     auth_modes: str = Field(
-        default="basic,session",
+        default="basic",
         description=(
-            "Comma separated list of enabled authentication mechanisms (basic, session, sso)"
+            "Comma separated list of enabled authentication mechanisms (none, basic, sso)"
         ),
     )
     session_cookie_name: str = Field(
@@ -138,15 +138,25 @@ class Settings(BaseSettings):
         """Return configured authentication modes in declaration order."""
 
         modes: list[str] = []
+        allowed = {"none", "basic", "sso"}
         for raw in self.auth_modes.split(","):
             candidate = raw.strip().lower()
             if not candidate:
                 continue
-            if candidate not in {"basic", "session", "sso"}:
+            if candidate not in allowed:
                 msg = f"Unsupported auth mode: {candidate}"
                 raise ValueError(msg)
             if candidate not in modes:
                 modes.append(candidate)
+
+        if not modes:
+            raise ValueError("At least one authentication mode must be specified")
+
+        if "none" in modes:
+            if len(modes) > 1:
+                raise ValueError("Auth mode 'none' cannot be combined with other modes")
+            return ("none",)
+
         return tuple(modes)
 
     @property

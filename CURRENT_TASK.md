@@ -1,28 +1,33 @@
-# Current Task — Harden authentication flows and edge cases
+# Current Task — Guardrails for updated authentication modes
 
 ## Objective
-Round out the new authentication stack so it behaves predictably under the real-world scenarios operations will care about: RSA-signed SSO tokens, concurrent session usage, and CLI-driven account management.
+Add safety nets and observability around the new `ADE_AUTH_MODES` semantics so operators clearly understand when ADE is running in
+open-access mode versus enforcing HTTP Basic or SSO.
 
 ## Context carried forward
-- Passwords now rely on `hashlib.scrypt` so we can ship without extra wheels. Settings, docs, and tests all assume the tighter dependency footprint.
-- `backend/app/auth/sso.py` verifies HS256 tokens in tests, but the production path will see RS256/ES256 ID tokens with kid rotation and discovery caching.
-- `backend/app/auth/sessions.py` handles issue/touch/revoke logic, yet pytest only covers the happy path. Revocation + expiry races should stay deterministic so background jobs can lean on the same helpers.
-- The CLI emits `user.*` events, but we do not assert their shape and we do not exercise deactivated user authentication failures.
+- Sessions are now issued automatically; `auth_mode_sequence` only reports `none`, `basic`, and `sso` in declaration order.
+- `ADE_AUTH_MODES=none` returns a synthetic administrator in `get_current_user` and unlocks every route without credentials.
+- Docs and high-level tests cover the new mode list, but we lack regression tests for the parser/validator and we do not surface
+  runtime warnings when deployments forget to secure ADE.
+- CLI flows still allow user provisioning even when auth is disabled, making it easy to miss that open access is active.
 
 ## Deliverables
-1. **SSO hardening**
-   - Add pytest coverage for RS256 tokens using a generated keypair. Confirm JWKS caching honours `kid`, rejects unknown keys, and surfaces clear errors for expired or audience-mismatched tokens.
-   - Ensure discovery caching respects the configured TTL (e.g. simulated second request reuses cached metadata instead of hitting `httpx.get`).
-2. **Session service edge cases**
-   - Add focused unit tests for `revoke_session` and `touch_session`, covering already-revoked tokens, expired sessions, and commit=False flows.
-   - Fix any bugs uncovered by the new tests (e.g. ensure revoked sessions stay revoked when touched, touching expired sessions should return `None` upstream, etc.).
-3. **CLI and dependency behaviour**
-   - Extend CLI tests to assert the emitted events include `actor_type="system"`, the operator email, and the expected payload fields.
-   - Add a regression test confirming deactivated users cannot authenticate via HTTP Basic or sessions.
-4. **Docs & operational notes**
-   - Update `docs/authentication.md` (and README if useful) with explicit notes on scrypt parameters, RS256 expectations, and how caching behaves.
+1. **Settings validation coverage**
+   - Add focused unit tests for `Settings.auth_mode_sequence` and `auth.validation.validate_settings` covering duplicate entries,
+     invalid values, and the guarantee that `none` cannot be combined with other modes.
+   - Ensure the tests exercise error messages so operators see actionable failures during startup.
+2. **Operational guardrails**
+   - Emit a clear startup warning (e.g. via `logging.warning`) when ADE boots with `ADE_AUTH_MODES=none` so container logs highlight
+     the risk. Confirm the warning fires once during application startup.
+   - Update the CLI (`backend/app/auth/manage.py`) to print a similar warning before executing commands whenever it resolves
+     `ADE_AUTH_MODES=none`.
+3. **Docs & examples**
+   - Extend the authentication documentation (and Quickstart if helpful) with an explicit "development only" callout for open
+     access, including guidance on switching back to `basic` or `basic,sso`.
+   - Provide a short `.env` example or note that highlights the default (`basic`) and how to opt into SSO alongside it.
 
 ## Acceptance criteria
-- Pytest includes RS256 and caching checks for the SSO flow, plus deterministic unit tests for session helpers and CLI events.
-- Revoked or expired sessions no longer show up as valid through the dependencies.
-- Auth documentation reflects the new hashing approach and SSO nuances without referencing Argon2/passlib.
+- Pytest includes regression coverage for the new configuration parser/validator behaviour.
+- Both the API service and CLI emit a warning when operating without authentication.
+- Documentation clearly signals that `ADE_AUTH_MODES=none` is for isolated demos/tests and shows the supported secure
+  configurations.

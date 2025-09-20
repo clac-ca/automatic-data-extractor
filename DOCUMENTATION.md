@@ -97,8 +97,9 @@ docs/
 - **setup/README.md**
   - Compare setup options (Docker quickstart, Azure Container Apps, dev workstation) and route readers to the appropriate guide based on their goal.
 - **quickstart-docker.md**
-  - Pull/run commands, required environment variables, mounted volumes, default credentials.
-  - Sanity checks: `/health`, upload sample, create job via API.
+  - Pull published image, run via `docker run` or `docker compose` with mounted volumes for `var/`.
+  - Default credentials, minimal configuration (only `ADE_AUTH_MODES=basic`).
+  - Sanity checks: hit `/health`, upload sample doc, run a demo job via API.
 - **local-development.md**
   - Cross-platform setup (Windows/macOS/Linux) for backend (venv, uvicorn) and optional frontend.
   - Quality gates (pytest, ruff, mypy, npm scripts when frontend lands), resetting SQLite/doc storage.

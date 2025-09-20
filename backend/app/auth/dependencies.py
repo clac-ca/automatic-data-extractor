@@ -25,6 +25,17 @@ from .sso import SSOExchangeError
 
 _http_bearer = HTTPBearer(auto_error=False)
 
+# Synthetic admin identity returned when ADE_AUTH_MODES=none.
+_OPEN_ACCESS_USER = User(
+    user_id="00000000000000000000000000",
+    email="open-access@ade.local",
+    password_hash=None,
+    role=UserRole.ADMIN,
+    is_active=True,
+)
+_OPEN_ACCESS_USER.created_at = "1970-01-01T00:00:00+00:00"
+_OPEN_ACCESS_USER.updated_at = "1970-01-01T00:00:00+00:00"
+
 
 def _client_context(request: Request) -> tuple[str | None, str | None]:
     ip_address = request.client.host if request.client else None
@@ -78,33 +89,36 @@ def _load_user_by_email(db: Session, email: str) -> User | None:
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     settings = config.get_settings()
     modes = settings.auth_mode_sequence
+    if modes == ("none",):
+        _set_request_context(request, _OPEN_ACCESS_USER, "none")
+        return _OPEN_ACCESS_USER
+
     ip_address, user_agent = _client_context(request)
 
-    if "session" in modes:
-        cookie_value = request.cookies.get(settings.session_cookie_name)
-        if cookie_value:
-            session_model = sessions.get_session(db, cookie_value)
-            if session_model:
-                user = db.get(User, session_model.user_id)
-                if user and user.is_active:
-                    refreshed = sessions.touch_session(
-                        db,
-                        session_model,
-                        settings=settings,
-                        ip_address=ip_address,
-                        user_agent=user_agent,
-                        commit=True,
+    cookie_value = request.cookies.get(settings.session_cookie_name)
+    if cookie_value:
+        session_model = sessions.get_session(db, cookie_value)
+        if session_model:
+            user = db.get(User, session_model.user_id)
+            if user and user.is_active:
+                refreshed = sessions.touch_session(
+                    db,
+                    session_model,
+                    settings=settings,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    commit=True,
+                )
+                if refreshed is not None:
+                    request.state.auth_session = refreshed
+                    _set_request_context(
+                        request,
+                        user,
+                        "session",
+                        session_id=refreshed.session_id,
                     )
-                    if refreshed is not None:
-                        request.state.auth_session = refreshed
-                        _set_request_context(
-                            request,
-                            user,
-                            "session",
-                            session_id=refreshed.session_id,
-                        )
-                        return user
-                sessions.revoke_session(db, session_model, commit=True)
+                    return user
+            sessions.revoke_session(db, session_model, commit=True)
 
     if "basic" in modes:
         credentials = extract_basic_credentials(request)
@@ -123,7 +137,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         if bearer is not None:
             try:
                 user, claims = sso.verify_bearer_token(
-                    config.get_settings(), token=bearer.credentials, db=db
+                    settings, token=bearer.credentials, db=db
                 )
             except SSOExchangeError as exc:
                 raise HTTPException(

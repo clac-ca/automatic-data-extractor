@@ -104,6 +104,12 @@ def login(  # noqa: PLR0915 - clarity over cleverness
     settings = config.get_settings()
     modes = settings.auth_mode_sequence
 
+    if "basic" not in modes:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail="HTTP Basic authentication is not enabled",
+        )
+
     credentials: HTTPBasicCredentials | None = dependencies.extract_basic_credentials(request)
     if credentials is None:
         raise HTTPException(
@@ -130,17 +136,14 @@ def login(  # noqa: PLR0915 - clarity over cleverness
     now_iso = datetime.now(timezone.utc).isoformat()
     user.last_login_at = now_iso
 
-    session_model: UserSession | None = None
-    raw_token: str | None = None
-    if "session" in modes:
-        session_model, raw_token = sessions.issue_session(
-            db,
-            user,
-            settings=settings,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            commit=False,
-        )
+    session_model, raw_token = sessions.issue_session(
+        db,
+        user,
+        settings=settings,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        commit=False,
+    )
 
     login_success(
         db,
@@ -153,15 +156,14 @@ def login(  # noqa: PLR0915 - clarity over cleverness
 
     db.commit()
     db.refresh(user)
-    if session_model is not None:
-        db.refresh(session_model)
-        assert raw_token is not None  # for type checkers
-        _set_session_cookie(response, settings, raw_token)
+    db.refresh(session_model)
+    assert raw_token is not None  # for type checkers
+    _set_session_cookie(response, settings, raw_token)
     _set_request_context(
         request,
         user,
-        mode="session" if session_model else "basic",
-        session_id=session_model.session_id if session_model else None,
+        mode="session",
+        session_id=session_model.session_id,
     )
     return _auth_response(user, settings, session_model=session_model)
 
@@ -305,17 +307,14 @@ def sso_callback(
     now_iso = datetime.now(timezone.utc).isoformat()
     user.last_login_at = now_iso
 
-    session_model: UserSession | None = None
-    raw_token: str | None = None
-    if "session" in settings.auth_mode_sequence:
-        session_model, raw_token = sessions.issue_session(
-            db,
-            user,
-            settings=settings,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            commit=False,
-        )
+    session_model, raw_token = sessions.issue_session(
+        db,
+        user,
+        settings=settings,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        commit=False,
+    )
 
     login_success(
         db,
@@ -327,15 +326,14 @@ def sso_callback(
     )
     db.commit()
     db.refresh(user)
-    if session_model is not None:
-        db.refresh(session_model)
-        assert raw_token is not None
-        _set_session_cookie(response, settings, raw_token)
+    db.refresh(session_model)
+    assert raw_token is not None
+    _set_session_cookie(response, settings, raw_token)
     _set_request_context(
         request,
         user,
-        mode="session" if session_model else "sso",
-        session_id=session_model.session_id if session_model else None,
+        mode="session",
+        session_id=session_model.session_id,
         subject=claims.get("sub"),
     )
     return _auth_response(user, settings, session_model=session_model)
