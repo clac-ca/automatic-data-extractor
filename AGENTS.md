@@ -83,6 +83,25 @@ The automatic-data-extractor (ADE) aims to transform semi-structured spreadsheet
 
 ---
 
+## Dependencies
+
+Keep the dependency footprint small. ADE should only add a library when it is a **well-maintained, widely used dependency** that makes the code significantly clearer, safer, or simpler. If the same result can be achieved with a few lines of straightforward native code (`pathlib`, `uuid`, `json`, etc.), prefer the standard library.
+
+**Rule of thumb**  
+- *Native if simple* → a few clear lines.  
+- *Library if complex* → edge-case heavy tasks (e.g., date parsing, schema validation, async HTTP).  
+
+**Process**  
+If the current task can only be completed after a new dependency is added:  
+1. Add it to `pyproject.toml` with pinned version(s).  
+2. End the current task with a PR updating only that file.  
+3. Note in the PR that the dependency was required for the task.  
+4. Resume development in the next PR once merged.
+
+This ensures dependency decisions are explicit, auditable, and reversible.
+
+---
+
 ## Guiding Principle
 
 **When in doubt → choose simple, auditable solutions.**
