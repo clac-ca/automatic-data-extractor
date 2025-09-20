@@ -117,10 +117,14 @@ def cli_action(
     *,
     user: User,
     event_type: str,
-    operator: str,
+    operator_email: str | None,
     payload: dict[str, Any] | None = None,
     commit: bool = False,
 ) -> None:
+    event_payload = {"email": user.email}
+    if payload:
+        event_payload.update(payload)
+    actor_label = operator_email or "cli"
     record_event(
         db,
         EventRecord(
@@ -128,9 +132,10 @@ def cli_action(
             entity_type="user",
             entity_id=user.user_id,
             actor_type="system",
-            actor_label=operator,
+            actor_id=operator_email,
+            actor_label=actor_label,
             source="cli",
-            payload=payload or {},
+            payload=event_payload,
         ),
         commit=commit,
     )

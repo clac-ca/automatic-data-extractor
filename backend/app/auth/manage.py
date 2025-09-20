@@ -24,6 +24,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Manage ADE user accounts.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    def _add_operator_argument(command: argparse.ArgumentParser) -> None:
+        command.add_argument(
+            "--operator-email",
+            help="Email address recorded as the actor for emitted events",
+        )
+
     create = subparsers.add_parser("create-user", help="Create a new ADE user")
     create.add_argument("email", help="Email address of the user")
     create.add_argument("--password", help="Password for HTTP Basic authentication")
@@ -37,15 +43,23 @@ def _build_parser() -> argparse.ArgumentParser:
     create.add_argument("--sso-subject", help="OIDC subject identifier")
     create.add_argument("--inactive", action="store_true", help="Create the account in a disabled state")
 
+    _add_operator_argument(create)
+
     reset = subparsers.add_parser("reset-password", help="Set a new password for an existing user")
     reset.add_argument("email", help="Email address of the user")
     reset.add_argument("--password", required=True, help="New password value")
 
+    _add_operator_argument(reset)
+
     deactivate = subparsers.add_parser("deactivate", help="Deactivate a user account")
     deactivate.add_argument("email", help="Email address of the user")
 
+    _add_operator_argument(deactivate)
+
     promote = subparsers.add_parser("promote", help="Grant administrator privileges to a user")
     promote.add_argument("email", help="Email address of the user")
+
+    _add_operator_argument(promote)
 
     list_users = subparsers.add_parser("list-users", help="Display all user accounts")
     list_users.add_argument("--show-inactive", action="store_true", help="Include deactivated accounts")
@@ -110,7 +124,7 @@ def _create_user(db: Session, settings: config.Settings, args: argparse.Namespac
         db,
         user=user,
         event_type="user.created",
-        operator="auth.manage",
+        operator_email=args.operator_email,
         payload={"role": role.value},
         commit=False,
     )
@@ -130,7 +144,7 @@ def _reset_password(db: Session, settings: config.Settings, args: argparse.Names
         db,
         user=user,
         event_type="user.password.reset",
-        operator="auth.manage",
+        operator_email=args.operator_email,
         commit=False,
     )
     db.commit()
@@ -149,7 +163,7 @@ def _deactivate_user(db: Session, settings: config.Settings, args: argparse.Name
         db,
         user=user,
         event_type="user.deactivated",
-        operator="auth.manage",
+        operator_email=args.operator_email,
         commit=False,
     )
     db.commit()
@@ -169,7 +183,7 @@ def _promote_user(db: Session, settings: config.Settings, args: argparse.Namespa
         db,
         user=user,
         event_type="user.promoted",
-        operator="auth.manage",
+        operator_email=args.operator_email,
         payload={"role": UserRole.ADMIN.value},
         commit=False,
     )

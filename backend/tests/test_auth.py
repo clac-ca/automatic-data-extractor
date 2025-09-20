@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+from contextlib import contextmanager
 import hashlib
 import hmac
 import json
@@ -11,18 +12,127 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 
 import httpx
+import pytest
 
 from backend.app import config
+from backend.app.auth import sessions as session_service, sso
 from backend.app.auth.passwords import hash_password, verify_password
 from backend.app.auth.sessions import hash_session_token
-from backend.app.db import get_sessionmaker
-from backend.app.models import User, UserRole, UserSession
+from backend.app.auth.sso import SSOExchangeError
+from backend.app.db import Base, get_engine, get_sessionmaker
+from backend.app.models import Event, User, UserRole, UserSession
 
 
 def _all_sessions() -> list[UserSession]:
     session_factory = get_sessionmaker()
     with session_factory() as db:
         return list(db.query(UserSession).order_by(UserSession.issued_at).all())
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
+
+
+@contextmanager
+def _configured_settings(monkeypatch, tmp_path, **overrides):
+    from backend.app import db as db_module
+
+    documents_dir = tmp_path / "documents"
+    documents_dir.mkdir(parents=True, exist_ok=True)
+    defaults = {
+        "ADE_DATABASE_URL": f"sqlite:///{tmp_path / 'ade.sqlite'}",
+        "ADE_DOCUMENTS_DIR": str(documents_dir),
+        "ADE_AUTH_MODES": "basic,session",
+        "ADE_SESSION_COOKIE_SECURE": "0",
+    }
+    defaults.update(overrides)
+    for key, value in defaults.items():
+        monkeypatch.setenv(key, str(value))
+
+    config.reset_settings_cache()
+    db_module.reset_database_state()
+    import backend.app.models  # noqa: F401
+
+    Base.metadata.create_all(bind=get_engine())
+    try:
+        yield config.get_settings(), get_sessionmaker()
+    finally:
+        config.reset_settings_cache()
+        db_module.reset_database_state()
+
+
+_RSA_MODULUS_HEX = (
+    "00c00df431856af1f7427bcd0ff35abb718d818e1318109a3a6905bab953a7cf7d840192596eb0e1b7437f6bc3c5e2870db70899efcd26008a38704bff0446bd"
+    "71d72474e21a399695888e992b91dd54411dea36d57820edfda8fb0720dab985407afa6763cb6da623a33f40fdc0c788103db695649b8e89e23a448febdb4997"
+    "3272267b8613c383c2e4701e5b2bdfc0d99782b959fa081bccd0d20b56887995aa906e56b066318cad62e0d4ebff956d2e977144c3034cf34791fcdc0250c228"
+    "51862ce026871f35e4e48fecda37f4d36e76594d841b1f6dd9d5258c68faa65feb301448c789969d02a33012fc9e76fadafdcbbb6d4b686484b46895c0aeabee"
+    "9f"
+)
+_RSA_PRIVATE_EXPONENT_HEX = (
+    "56344d36072d443398776a496d117e4e4f566617a2f71ccaf805f6d4a5bc8e9147b5cee36ea05d883d774dbf3facd8b2eac3a518f28bcab53ff503df91235178"
+    "6e39b26f249751c487d97dde052883df8096770b6552de903b8f859915242db00e2324523266e2aa5f658e7df7d077fdd63d849bf688c9d22e1645457815f593"
+    "8b37a71a36b3010720cec089d0e28d6ed3d4cf11ed29c196196be0f5ff046233792aba23ac0493f63fcb079ba9c1420d0e6740c877b96dfa9ccebaafeb58d6fd"
+    "87459f5472391ac5369ee173de6218fcc51f7b82cad41ea05d9f5350d1de9b26e05b02f8f0482eef1bd41933439b5ba23834237661dc7dcda47ebdeb48c39b99"
+)
+
+
+def _rsa_components() -> tuple[int, int, int, int]:
+    modulus = int(_RSA_MODULUS_HEX, 16)
+    private_exponent = int(_RSA_PRIVATE_EXPONENT_HEX, 16)
+    public_exponent = 65537
+    key_size = (modulus.bit_length() + 7) // 8
+    return modulus, public_exponent, private_exponent, key_size
+
+
+def _encode_rs256_token(
+    issuer: str,
+    audience: str,
+    *,
+    kid: str = "rs256-key",
+    overrides: dict[str, object] | None = None,
+) -> str:
+    header = {"alg": "RS256", "typ": "JWT", "kid": kid}
+    now = int(time.time())
+    payload: dict[str, object] = {
+        "iss": issuer,
+        "sub": "sso-user-1",
+        "aud": audience,
+        "email": "sso@example.com",
+        "iat": now,
+        "exp": now + 3600,
+    }
+    if overrides:
+        payload.update(overrides)
+
+    signing_input = ".".join(
+        [
+            _b64url(json.dumps(header, separators=(",", ":"), sort_keys=True).encode()),
+            _b64url(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()),
+        ]
+    )
+    modulus, public_exponent, private_exponent, key_size = _rsa_components()
+    digest = hashlib.sha256(signing_input.encode("ascii")).digest()
+    digest_info = bytes.fromhex("3031300d060960864801650304020105000420") + digest
+    padding_length = key_size - len(digest_info) - 3
+    assert padding_length >= 8
+    encoded_message = b"\x00\x01" + (b"\xff" * padding_length) + b"\x00" + digest_info
+    signature_int = pow(int.from_bytes(encoded_message, "big"), private_exponent, modulus)
+    signature = signature_int.to_bytes(key_size, "big")
+    return f"{signing_input}.{_b64url(signature)}"
+
+
+def _rs256_jwk(kid: str) -> dict[str, str]:
+    modulus, public_exponent, _, key_size = _rsa_components()
+    modulus_bytes = modulus.to_bytes(key_size, "big")
+    exponent_bytes = public_exponent.to_bytes((public_exponent.bit_length() + 7) // 8, "big")
+    return {
+        "kty": "RSA",
+        "use": "sig",
+        "alg": "RS256",
+        "kid": kid,
+        "n": _b64url(modulus_bytes),
+        "e": _b64url(exponent_bytes),
+    }
 
 
 def test_password_hashing_roundtrip() -> None:
@@ -80,6 +190,148 @@ def test_session_endpoint_rejects_expired_cookie(app_client) -> None:
     assert response.status_code == 401
 
 
+def test_revoke_session_is_idempotent(app_client) -> None:
+    client, _, _ = app_client
+    del client
+    settings = config.get_settings()
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        user = db.query(User).filter(User.email == "admin@example.com").one()
+        session_model, _ = session_service.issue_session(
+            db,
+            user,
+            settings=settings,
+            commit=False,
+        )
+        session_id = session_model.session_id
+        session_service.revoke_session(db, session_model, commit=False)
+        first_revoked = session_model.revoked_at
+        assert first_revoked is not None
+        session_service.revoke_session(db, session_model, commit=False)
+        assert session_model.revoked_at == first_revoked
+        db.commit()
+
+    with session_factory() as db:
+        persisted = db.get(UserSession, session_id)
+        assert persisted.revoked_at == first_revoked
+
+
+def test_touch_session_updates_metadata_commit_false(app_client) -> None:
+    client, _, _ = app_client
+    del client
+    settings = config.get_settings()
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        user = db.query(User).filter(User.email == "admin@example.com").one()
+        session_model, _ = session_service.issue_session(
+            db,
+            user,
+            settings=settings,
+            commit=False,
+        )
+        original_expiry = datetime.fromisoformat(session_model.expires_at)
+        agent = "Mozilla/5.0" * 40
+        refreshed = session_service.touch_session(
+            db,
+            session_model,
+            settings=settings,
+            ip_address="10.0.0.1",
+            user_agent=agent,
+            commit=False,
+        )
+        assert refreshed is session_model
+        assert refreshed.last_seen_ip == "10.0.0.1"
+        assert refreshed.last_seen_user_agent == agent[:255]
+        assert datetime.fromisoformat(refreshed.expires_at) > original_expiry
+        db.commit()
+
+    with session_factory() as db:
+        reloaded = db.get(UserSession, session_model.session_id)
+        assert reloaded.last_seen_ip == "10.0.0.1"
+        assert reloaded.last_seen_user_agent == agent[:255]
+
+
+def test_touch_session_rejects_revoked_and_expired(app_client) -> None:
+    client, _, _ = app_client
+    del client
+    settings = config.get_settings()
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        user = db.query(User).filter(User.email == "admin@example.com").one()
+        revoked_session, _ = session_service.issue_session(
+            db,
+            user,
+            settings=settings,
+            commit=True,
+        )
+        expired_session, _ = session_service.issue_session(
+            db,
+            user,
+            settings=settings,
+            commit=True,
+        )
+
+    now = datetime.now(timezone.utc)
+    with session_factory() as db:
+        record = db.get(UserSession, revoked_session.session_id)
+        record.revoked_at = now.isoformat()
+        db.commit()
+
+    with session_factory() as db:
+        record = db.get(UserSession, revoked_session.session_id)
+        result = session_service.touch_session(
+            db,
+            record,
+            settings=settings,
+            ip_address="10.0.0.2",
+            user_agent="Revoked",
+            commit=False,
+        )
+        assert result is None
+        assert record.last_seen_ip is None
+
+    expired_at = now - timedelta(minutes=5)
+    with session_factory() as db:
+        record = db.get(UserSession, expired_session.session_id)
+        record.expires_at = expired_at.isoformat()
+        db.commit()
+
+    with session_factory() as db:
+        record = db.get(UserSession, expired_session.session_id)
+        result = session_service.touch_session(
+            db,
+            record,
+            settings=settings,
+            ip_address="10.0.0.3",
+            user_agent="Expired",
+            commit=False,
+        )
+        assert result is None
+        assert record.last_seen_ip is None
+        assert record.expires_at == expired_at.isoformat()
+
+
+def test_deactivated_user_cannot_use_basic_or_session(app_client) -> None:
+    client, _, _ = app_client
+    settings = config.get_settings()
+    login = client.post("/auth/login")
+    assert login.status_code == 200
+    cookie = client.cookies.get(settings.session_cookie_name)
+    assert cookie is not None
+
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        user = db.query(User).filter(User.email == "admin@example.com").one()
+        user.is_active = False
+        db.commit()
+
+    session_response = client.get("/auth/session")
+    assert session_response.status_code == 401
+
+    retry_login = client.post("/auth/login")
+    assert retry_login.status_code in {401, 403}
+
+
 def test_protected_routes_require_authentication(app_client_factory, tmp_path, monkeypatch) -> None:
     db_path = tmp_path / "auth.sqlite"
     documents_dir = tmp_path / "docs"
@@ -108,17 +360,14 @@ def _encode_hs256_token(secret: bytes, issuer: str, audience: str, nonce: str) -
         "exp": now + 3600,
     }
 
-    def _b64(data: bytes) -> str:
-        return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
-
     signing_input = ".".join(
         [
-            _b64(json.dumps(header, separators=(",", ":"), sort_keys=True).encode()),
-            _b64(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()),
+            _b64url(json.dumps(header, separators=(",", ":"), sort_keys=True).encode()),
+            _b64url(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()),
         ]
     )
     signature = hmac.new(secret, signing_input.encode("ascii"), hashlib.sha256).digest()
-    return f"{signing_input}.{_b64(signature)}"
+    return f"{signing_input}.{_b64url(signature)}"
 
 
 def test_sso_callback_issues_session(app_client_factory, tmp_path, monkeypatch) -> None:
@@ -206,6 +455,226 @@ def test_sso_callback_issues_session(app_client_factory, tmp_path, monkeypatch) 
         assert cookie is not None
 
 
+def test_verify_bearer_token_rs256(monkeypatch, tmp_path) -> None:
+    issuer = "https://sso.example.com"
+    discovery_url = f"{issuer}/.well-known/openid-configuration"
+    jwks_url = f"{issuer}/jwks"
+    sso.clear_caches()
+    jwks_payload = {"keys": [_rs256_jwk("rs256-key")]} 
+    get_calls: list[str] = []
+
+    def fake_get(url: str, *args, **kwargs) -> httpx.Response:
+        get_calls.append(url)
+        if url == discovery_url:
+            return httpx.Response(
+                200,
+                json={
+                    "issuer": issuer,
+                    "authorization_endpoint": f"{issuer}/authorize",
+                    "token_endpoint": f"{issuer}/token",
+                    "jwks_uri": jwks_url,
+                },
+            )
+        if url == jwks_url:
+            return httpx.Response(200, json=jwks_payload)
+        raise AssertionError(f"Unexpected GET {url}")
+
+    monkeypatch.setenv("ADE_SSO_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("ADE_SSO_CLIENT_ID", "client-123")
+    monkeypatch.setenv("ADE_SSO_ISSUER", issuer)
+    monkeypatch.setenv("ADE_SSO_REDIRECT_URL", "https://ade.internal/auth/callback")
+    monkeypatch.setenv("ADE_SSO_CACHE_TTL_SECONDS", "60")
+    monkeypatch.setenv("ADE_AUTH_MODES", "basic,session,sso")
+    monkeypatch.setenv("ADE_SESSION_COOKIE_SECURE", "0")
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    overrides = {
+        "ADE_DATABASE_URL": f"sqlite:///{tmp_path / 'rs256.sqlite'}",
+        "ADE_AUTH_MODES": "basic,session,sso",
+    }
+
+    with _configured_settings(monkeypatch, tmp_path, **overrides) as (settings, session_factory):
+        with session_factory() as db:
+            user = User(
+                email="sso@example.com",
+                password_hash=None,
+                role=UserRole.VIEWER,
+                is_active=True,
+                sso_provider=issuer,
+                sso_subject="sso-user-1",
+            )
+            db.add(user)
+            db.commit()
+
+        token = _encode_rs256_token(issuer, "client-123")
+
+        with session_factory() as db:
+            resolved, claims = sso.verify_bearer_token(settings, token=token, db=db)
+            first_user_id = resolved.user_id
+            assert claims["sub"] == "sso-user-1"
+
+        assert get_calls == [discovery_url, jwks_url]
+
+        with session_factory() as db:
+            second, _ = sso.verify_bearer_token(settings, token=token, db=db)
+            assert second.user_id == first_user_id
+
+        assert get_calls == [discovery_url, jwks_url]
+    sso.clear_caches()
+
+
+def test_verify_bearer_token_rejects_unknown_kid(monkeypatch, tmp_path) -> None:
+    issuer = "https://sso.example.com"
+    discovery_url = f"{issuer}/.well-known/openid-configuration"
+    jwks_url = f"{issuer}/jwks"
+    sso.clear_caches()
+    jwks_payload = {"keys": [_rs256_jwk("rs256-key")]}
+    get_calls: list[str] = []
+
+    def fake_get(url: str, *args, **kwargs) -> httpx.Response:
+        get_calls.append(url)
+        if url == discovery_url:
+            return httpx.Response(
+                200,
+                json={
+                    "issuer": issuer,
+                    "authorization_endpoint": f"{issuer}/authorize",
+                    "token_endpoint": f"{issuer}/token",
+                    "jwks_uri": jwks_url,
+                },
+            )
+        if url == jwks_url:
+            return httpx.Response(200, json=jwks_payload)
+        raise AssertionError(f"Unexpected GET {url}")
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    overrides = {
+        "ADE_DATABASE_URL": f"sqlite:///{tmp_path / 'rs256-kid.sqlite'}",
+        "ADE_AUTH_MODES": "basic,session,sso",
+        "ADE_SSO_CLIENT_SECRET": "client-secret",
+        "ADE_SSO_CLIENT_ID": "client-123",
+        "ADE_SSO_ISSUER": issuer,
+        "ADE_SSO_REDIRECT_URL": "https://ade.internal/auth/callback",
+        "ADE_SSO_CACHE_TTL_SECONDS": "60",
+    }
+
+    with _configured_settings(monkeypatch, tmp_path, **overrides) as (settings, session_factory):
+        with session_factory() as db:
+            user = User(
+                email="sso@example.com",
+                password_hash=None,
+                role=UserRole.VIEWER,
+                is_active=True,
+                sso_provider=issuer,
+                sso_subject="sso-user-1",
+            )
+            db.add(user)
+            db.commit()
+
+        valid = _encode_rs256_token(issuer, "client-123", kid="rs256-key")
+        with session_factory() as db:
+            sso.verify_bearer_token(settings, token=valid, db=db)
+
+        assert get_calls == [discovery_url, jwks_url]
+
+        unknown = _encode_rs256_token(issuer, "client-123", kid="other-key")
+        with session_factory() as db:
+            with pytest.raises(SSOExchangeError, match="Signing key not found"):
+                sso.verify_bearer_token(settings, token=unknown, db=db)
+
+        assert get_calls == [discovery_url, jwks_url]
+    sso.clear_caches()
+
+
+def test_verify_bearer_token_rejects_expired_token(monkeypatch, tmp_path) -> None:
+    issuer = "https://sso.example.com"
+    discovery_url = f"{issuer}/.well-known/openid-configuration"
+    jwks_url = f"{issuer}/jwks"
+    sso.clear_caches()
+    jwks_payload = {"keys": [_rs256_jwk("rs256-key")]} 
+
+    def fake_get(url: str, *args, **kwargs) -> httpx.Response:
+        if url == discovery_url:
+            return httpx.Response(
+                200,
+                json={
+                    "issuer": issuer,
+                    "authorization_endpoint": f"{issuer}/authorize",
+                    "token_endpoint": f"{issuer}/token",
+                    "jwks_uri": jwks_url,
+                },
+            )
+        if url == jwks_url:
+            return httpx.Response(200, json=jwks_payload)
+        raise AssertionError(f"Unexpected GET {url}")
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    overrides = {
+        "ADE_DATABASE_URL": f"sqlite:///{tmp_path / 'rs256-expired.sqlite'}",
+        "ADE_AUTH_MODES": "basic,session,sso",
+        "ADE_SSO_CLIENT_SECRET": "client-secret",
+        "ADE_SSO_CLIENT_ID": "client-123",
+        "ADE_SSO_ISSUER": issuer,
+        "ADE_SSO_REDIRECT_URL": "https://ade.internal/auth/callback",
+        "ADE_SSO_CACHE_TTL_SECONDS": "60",
+    }
+
+    with _configured_settings(monkeypatch, tmp_path, **overrides) as (settings, session_factory):
+        token = _encode_rs256_token(
+            issuer,
+            "client-123",
+            overrides={"exp": int(time.time()) - 10},
+        )
+        with session_factory() as db:
+            with pytest.raises(SSOExchangeError, match="ID token expired"):
+                sso.verify_bearer_token(settings, token=token, db=db)
+    sso.clear_caches()
+
+
+def test_verify_bearer_token_rejects_audience_mismatch(monkeypatch, tmp_path) -> None:
+    issuer = "https://sso.example.com"
+    discovery_url = f"{issuer}/.well-known/openid-configuration"
+    jwks_url = f"{issuer}/jwks"
+    sso.clear_caches()
+    jwks_payload = {"keys": [_rs256_jwk("rs256-key")]} 
+
+    def fake_get(url: str, *args, **kwargs) -> httpx.Response:
+        if url == discovery_url:
+            return httpx.Response(
+                200,
+                json={
+                    "issuer": issuer,
+                    "authorization_endpoint": f"{issuer}/authorize",
+                    "token_endpoint": f"{issuer}/token",
+                    "jwks_uri": jwks_url,
+                },
+            )
+        if url == jwks_url:
+            return httpx.Response(200, json=jwks_payload)
+        raise AssertionError(f"Unexpected GET {url}")
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    overrides = {
+        "ADE_DATABASE_URL": f"sqlite:///{tmp_path / 'rs256-aud.sqlite'}",
+        "ADE_AUTH_MODES": "basic,session,sso",
+        "ADE_SSO_CLIENT_SECRET": "client-secret",
+        "ADE_SSO_CLIENT_ID": "client-123",
+        "ADE_SSO_ISSUER": issuer,
+        "ADE_SSO_REDIRECT_URL": "https://ade.internal/auth/callback",
+        "ADE_SSO_CACHE_TTL_SECONDS": "60",
+    }
+
+    with _configured_settings(monkeypatch, tmp_path, **overrides) as (settings, session_factory):
+        token = _encode_rs256_token(issuer, "client-123", overrides={"aud": "other-audience"})
+        with session_factory() as db:
+            with pytest.raises(SSOExchangeError, match="audience mismatch"):
+                sso.verify_bearer_token(settings, token=token, db=db)
+    sso.clear_caches()
+
+
 def test_manage_cli_flows(tmp_path, monkeypatch) -> None:
     from backend.app.auth import manage
 
@@ -215,6 +684,7 @@ def test_manage_cli_flows(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("ADE_DOCUMENTS_DIR", str(documents_dir))
     monkeypatch.setenv("ADE_AUTH_MODES", "basic")
     monkeypatch.setenv("ADE_SESSION_COOKIE_SECURE", "0")
+    operator = "ops@example.com"
     try:
         assert (
             manage.main([
@@ -224,12 +694,42 @@ def test_manage_cli_flows(tmp_path, monkeypatch) -> None:
                 "cli-pass",
                 "--role",
                 "viewer",
+                "--operator-email",
+                operator,
             ])
             == 0
         )
-        assert manage.main(["promote", "cli@example.com"]) == 0
-        assert manage.main(["reset-password", "cli@example.com", "--password", "new-pass"]) == 0
-        assert manage.main(["deactivate", "cli@example.com"]) == 0
+        assert (
+            manage.main([
+                "promote",
+                "cli@example.com",
+                "--operator-email",
+                operator,
+            ])
+            == 0
+        )
+        assert (
+            manage.main(
+                [
+                    "reset-password",
+                    "cli@example.com",
+                    "--password",
+                    "new-pass",
+                    "--operator-email",
+                    operator,
+                ]
+            )
+            == 0
+        )
+        assert (
+            manage.main([
+                "deactivate",
+                "cli@example.com",
+                "--operator-email",
+                operator,
+            ])
+            == 0
+        )
 
         session_factory = get_sessionmaker()
         with session_factory() as db:
@@ -237,6 +737,33 @@ def test_manage_cli_flows(tmp_path, monkeypatch) -> None:
             assert user.role == UserRole.ADMIN
             assert not user.is_active
             assert verify_password("new-pass", user.password_hash)
+            user_id = user.user_id
+
+        with session_factory() as db:
+            events = (
+                db.query(Event)
+                .filter(Event.entity_type == "user", Event.entity_id == user_id)
+                .order_by(Event.occurred_at)
+                .all()
+            )
+
+        assert [event.event_type for event in events] == [
+            "user.created",
+            "user.promoted",
+            "user.password.reset",
+            "user.deactivated",
+        ]
+        for event in events:
+            assert event.actor_type == "system"
+            assert event.actor_label == operator
+            assert event.actor_id == operator
+            assert event.source == "cli"
+            assert event.payload["email"] == "cli@example.com"
+
+        assert events[0].payload == {"email": "cli@example.com", "role": UserRole.VIEWER.value}
+        assert events[1].payload == {"email": "cli@example.com", "role": UserRole.ADMIN.value}
+        assert events[2].payload == {"email": "cli@example.com"}
+        assert events[3].payload == {"email": "cli@example.com"}
 
         assert manage.main(["list-users"]) == 0
     finally:
