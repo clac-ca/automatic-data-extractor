@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
-import ulid
+from ulid import ULID
 from sqlalchemy import (
     Boolean,
     Enum,
@@ -29,7 +29,7 @@ def _timestamp() -> str:
 
 
 def _generate_ulid() -> str:
-    return str(ulid.new())
+    return str(ULID())
 
 
 class UserRole(StrEnum):
