@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import MethodType
 import time
 
 import pytest
@@ -152,6 +153,47 @@ def test_iter_expired_documents_batches_and_limit(app_client) -> None:
         limited_batches = list(iter_expired_documents(db_session, batch_size=5, limit=1))
         assert sum(len(batch) for batch in limited_batches) == 1
         assert limited_batches[0][0].document_id == expired_old.document.document_id
+
+
+def test_iter_expired_documents_streams_without_materialising(app_client) -> None:
+    client, _, _ = app_client
+    del client
+    session_factory = get_sessionmaker()
+
+    class FakeScalarResult:
+        def __init__(self, batches):
+            self._batches = [list(batch) for batch in batches]
+            self.fetch_sizes: list[int] = []
+            self.closed = False
+
+        def fetchmany(self, size):
+            self.fetch_sizes.append(size)
+            if not self._batches:
+                return []
+            return self._batches.pop(0)
+
+        def close(self):
+            self.closed = True
+
+    with session_factory() as db_session:
+        fake_result = FakeScalarResult([["expired-1", "expired-2"], ["expired-3"]])
+
+        def fake_scalars(self, statement):
+            fake_scalars.calls += 1
+            return fake_result
+
+        fake_scalars.calls = 0
+        original_scalars = db_session.scalars
+        db_session.scalars = MethodType(fake_scalars, db_session)
+        try:
+            batches = list(iter_expired_documents(db_session, batch_size=2))
+        finally:
+            db_session.scalars = original_scalars
+
+    assert batches == [["expired-1", "expired-2"], ["expired-3"]]
+    assert fake_scalars.calls == 1
+    assert fake_result.fetch_sizes == [2, 2, 2]
+    assert fake_result.closed is True
 
 
 def test_purge_expired_documents_deletes_files(app_client) -> None:
