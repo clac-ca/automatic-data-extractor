@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
@@ -15,8 +15,25 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="ADE_", extra="ignore")
 
-    database_url: str = Field(default="sqlite:///var/ade.sqlite", description="SQLAlchemy database URL")
-    documents_dir: Path = Field(default=Path("var/documents"), description="Directory for uploaded documents")
+    data_dir: Path = Field(
+        default=Path("data"),
+        description="Root directory for persisted ADE state",
+    )
+    database_url: str = Field(
+        default="sqlite:///data/db/ade.sqlite",
+        description="SQLAlchemy database URL",
+    )
+    documents_dir: Path = Field(
+        default=Path("data/documents"),
+        description="Directory for uploaded documents",
+    )
+    auto_migrate: bool | None = Field(
+        default=None,
+        description=(
+            "If None, auto-apply Alembic migrations when using a file-based "
+            "SQLite database. Set False to require manual upgrades."
+        ),
+    )
     max_upload_bytes: int = Field(
         default=25 * 1024 * 1024,
         gt=0,
@@ -173,6 +190,19 @@ class Settings(BaseSettings):
             if candidate and candidate not in values:
                 values.append(candidate)
         return tuple(values)
+
+    @model_validator(mode="after")
+    def _apply_derived_paths(self) -> "Settings":
+        """Derive dependent filesystem locations when unset."""
+
+        if "documents_dir" not in self.model_fields_set:
+            self.documents_dir = self.data_dir / "documents"
+
+        if "database_url" not in self.model_fields_set:
+            default_sqlite = self.data_dir / "db" / "ade.sqlite"
+            self.database_url = f"sqlite:///{default_sqlite}"
+
+        return self
 
 
 @lru_cache

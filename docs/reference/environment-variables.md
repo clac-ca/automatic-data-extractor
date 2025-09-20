@@ -15,8 +15,10 @@ ADE reads all runtime configuration through `backend/app/config.py`. The table b
 
 | Variable | Default | Allowed values / notes | Restart required |
 | --- | --- | --- | --- |
-| `ADE_DATABASE_URL` | `sqlite:///var/ade.sqlite` | Any SQLAlchemy-compatible database URL. | Yes |
-| `ADE_DOCUMENTS_DIR` | `var/documents` | Absolute or relative path to the document storage directory. | Yes |
+| `ADE_DATA_DIR` | `data` | Root directory for runtime artefacts (database, documents, caches). | Yes |
+| `ADE_DATABASE_URL` | `sqlite:///data/db/ade.sqlite` | Any SQLAlchemy-compatible database URL. Derived from `ADE_DATA_DIR` when unset. | Yes |
+| `ADE_DOCUMENTS_DIR` | `data/documents` | Absolute or relative path to the document storage directory. Defaults to `ADE_DATA_DIR/documents`. | Yes |
+| `ADE_AUTO_MIGRATE` | _(auto)_ | When unset, ADE auto-applies Alembic migrations for file-based SQLite URLs. Set `false` to require manual upgrades or `true` to force auto-run for other backends. | Yes |
 | `ADE_MAX_UPLOAD_BYTES` | `26214400` (25 MiB) | Positive integer representing upload size cap in bytes. | No (takes effect on next request) |
 
 ## Document retention and purge scheduler

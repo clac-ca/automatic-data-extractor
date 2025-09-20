@@ -17,7 +17,7 @@ Start with the simple priority order below. Each layer overrides the one beneath
 
 | Layer | Example | Purpose | Override behaviour |
 | --- | --- | --- | --- |
-| Code defaults | `Settings.database_url = "sqlite:///var/ade.sqlite"` | Reasonable local defaults tracked in Git | Lowest priority |
+| Code defaults | `Settings.data_dir = Path("data")` | Reasonable local defaults tracked in Git | Lowest priority |
 | `.env` file | `.env`, `.env.local`, `.env.staging` | Store secrets for a specific environment | Overrides defaults |
 | Process environment | `ADE_DATABASE_URL`, `ADE_SSO_CLIENT_SECRET` | Temporary overrides from shells, CI, or hosts | Highest priority |
 
@@ -42,12 +42,17 @@ Populate each file with the secrets relevant to that environment. Use comments t
 
 ```dotenv
 # .env.local
-ADE_DATABASE_URL=sqlite:///var/ade.sqlite
+ADE_DATA_DIR=data
+# ADE_DATABASE_URL=sqlite:///data/db/ade.sqlite
+# Uncomment to require manual schema upgrades instead of auto-migrating
+# ADE_AUTO_MIGRATE=false
 ADE_AUTH_MODES=basic
 ADE_SESSION_TTL_MINUTES=720
 # Rotate when you refresh sample SSO metadata
 ADE_SSO_CLIENT_SECRET=local-dev-client-secret
 ```
+
+By default ADE detects file-based SQLite URLs and applies Alembic migrations on startup. Leave `ADE_AUTO_MIGRATE` unset to rely on the automatic behaviour, or export `ADE_AUTO_MIGRATE=false` before booting if you need to run `python -m backend.app.db_migrations upgrade` (or `alembic upgrade head`) manually.
 
 When you switch environments (for example, from staging to production), overwrite `.env` with the appropriate template and delete any leftover files from your working directory.
 
@@ -73,18 +78,18 @@ python -m uvicorn backend.app.main:app --reload
 
 # Validate the service came back and is using the desired database
 Invoke-WebRequest http://127.0.0.1:8000/health | Select-Object -ExpandProperty Content
-Get-Item var\ade.sqlite
+Get-Item data\db\ade.sqlite
 ```
 
 For hosted environments, redeploy the service or trigger the process supervisor (systemd, Azure Container Apps, etc.) to restart the container so fresh settings load.
 
-## Protect the `var/` directory
+## Protect the `data/` directory
 
-The `var/` directory holds uploaded documents and the SQLite database. Treat it as sensitive data:
+The `data/` directory holds uploaded documents and the SQLite database. Treat it as sensitive data:
 
-- Keep it out of version control (`var/` already appears in `.gitignore`).
+- Keep it out of version control (`data/` already appears in `.gitignore`).
 - Restrict permissions so only the ADE service account can read the contents.
-- Back up both `var/ade.sqlite` and `var/documents/` together when you snapshot the environment.
+- Back up the entire directory when you snapshot the environment (database and documents should move together).
 
 When the directory moves to shared storage or cloud buckets, ensure the same protections apply.
 

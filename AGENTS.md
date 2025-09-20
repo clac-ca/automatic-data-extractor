@@ -18,9 +18,7 @@ The automatic-data-extractor (ADE) aims to transform semi-structured spreadsheet
 │  └─ docker-compose.yaml
 ├─ examples/          # Sample documents used in testing
 ├─ runs/              # Example job outputs
-└─ var/
-   ├─ documents/      # Uploaded files (gitignored)
-   └─ ade.sqlite      # Local development database (gitignored)
+└─ data/              # Gitignored runtime artefacts (database, documents, caches)
 ```
 
 ---
