@@ -9,8 +9,8 @@ listed beside each term.
 - **User** – Account that can sign in. Stores an email, role, and either a password hash or an SSO subject (`users.user_id`,
   `users.email`, `users.role`).
 - **Role** – Permission tier. Default roles: `viewer`, `editor`, `admin`.
-- **Session** – Short-lived token created during UI sign-in (`sessions.session_token`).
-- **API key** – Token issued by an admin; inherits the linked user’s role (`api_keys.api_key_id`, `api_keys.user_id`).
+- **Session** – Short-lived token created during UI sign-in (`user_sessions.token_hash`, `user_sessions.expires_at`).
+- **API key** – Token issued by an admin; inherits the linked user’s role (`api_keys.api_key_id`, `api_keys.user_id`, `api_keys.token_hash`).
 
 ---
 

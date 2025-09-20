@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from enum import StrEnum
 from typing import Any
 
 import ulid
 from sqlalchemy import (
     Boolean,
+    Enum,
     ForeignKey,
     Integer,
     JSON,
@@ -28,6 +30,14 @@ def _timestamp() -> str:
 
 def _generate_ulid() -> str:
     return str(ulid.new())
+
+
+class UserRole(StrEnum):
+    """Role assigned to ADE users."""
+
+    VIEWER = "viewer"
+    EDITOR = "editor"
+    ADMIN = "admin"
 
 
 class Configuration(Base):
@@ -209,10 +219,99 @@ class MaintenanceStatus(Base):
         return f"MaintenanceStatus(key={self.key!r})"
 
 
+class User(Base):
+    """Registered ADE operator."""
+
+    __tablename__ = "users"
+
+    user_id: Mapped[str] = mapped_column(
+        String(26), primary_key=True, default=_generate_ulid
+    )
+    email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, native_enum=False, length=20),
+        default=UserRole.VIEWER,
+        nullable=False,
+    )
+    sso_provider: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sso_subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[str] = mapped_column(String(32), default=_timestamp, nullable=False)
+    updated_at: Mapped[str] = mapped_column(
+        String(32), default=_timestamp, onupdate=_timestamp, nullable=False
+    )
+    last_login_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("sso_provider", "sso_subject", name="uq_user_sso_identity"),
+    )
+
+    def __repr__(self) -> str:
+        return f"User(user_id={self.user_id!r}, email={self.email!r})"
+
+
+class UserSession(Base):
+    """Persistent browser session backed by a hashed token."""
+
+    __tablename__ = "user_sessions"
+
+    session_id: Mapped[str] = mapped_column(
+        String(26), primary_key=True, default=_generate_ulid
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("users.user_id"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    issued_at: Mapped[str] = mapped_column(String(32), default=_timestamp, nullable=False)
+    expires_at: Mapped[str] = mapped_column(String(32), nullable=False)
+    last_seen_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    last_seen_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    last_seen_user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    revoked_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    __table_args__ = (Index("ix_user_sessions_user_id", "user_id"),)
+
+    def __repr__(self) -> str:
+        return f"UserSession(session_id={self.session_id!r}, user_id={self.user_id!r})"
+
+
+class ApiKey(Base):
+    """Long-lived token for automated clients."""
+
+    __tablename__ = "api_keys"
+
+    api_key_id: Mapped[str] = mapped_column(
+        String(26), primary_key=True, default=_generate_ulid
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("users.user_id"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    token_prefix: Mapped[str] = mapped_column(String(12), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_at: Mapped[str] = mapped_column(String(32), default=_timestamp, nullable=False)
+    last_used_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    revoked_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    revoked_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_api_key_user_name"),
+        UniqueConstraint("token_prefix", name="uq_api_key_token_prefix"),
+    )
+
+    def __repr__(self) -> str:
+        return f"ApiKey(api_key_id={self.api_key_id!r}, user_id={self.user_id!r})"
+
+
 __all__ = [
     "Configuration",
     "Job",
     "Document",
     "Event",
     "MaintenanceStatus",
+    "User",
+    "UserSession",
+    "ApiKey",
+    "UserRole",
 ]

@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .. import config
+from ..auth.dependencies import get_current_user
 from ..db import get_db
 from ..models import Event, Document
 from ..schemas import (
@@ -38,7 +39,11 @@ from ..services.documents import (
 )
 from ..services.jobs import JobNotFoundError, get_job, list_jobs, summarise_job
 
-router = APIRouter(prefix="/documents", tags=["documents"])
+router = APIRouter(
+    prefix="/documents",
+    tags=["documents"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 logger = logging.getLogger(__name__)

@@ -2,14 +2,39 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import ContextManager
-import os
 
 import pytest
 from fastapi.testclient import TestClient
+
+from backend.app.auth.passwords import hash_password
+from backend.app.db import get_sessionmaker
+from backend.app.models import User, UserRole
+
+DEFAULT_USER_EMAIL = "admin@example.com"
+DEFAULT_USER_PASSWORD = "password123"
+
+
+def _seed_default_user() -> None:
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        existing = (
+            db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one_or_none()
+        )
+        if existing is not None:
+            return
+        user = User(
+            email=DEFAULT_USER_EMAIL,
+            password_hash=hash_password(DEFAULT_USER_PASSWORD),
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
 
 @contextmanager
 def _test_client(
@@ -26,6 +51,10 @@ def _test_client(
         monkeypatch.setenv("ADE_PURGE_SCHEDULE_ENABLED", "0")
     if "ADE_PURGE_SCHEDULE_RUN_ON_STARTUP" not in os.environ:
         monkeypatch.setenv("ADE_PURGE_SCHEDULE_RUN_ON_STARTUP", "0")
+    if "ADE_AUTH_MODES" not in os.environ:
+        monkeypatch.setenv("ADE_AUTH_MODES", "basic,session")
+    if "ADE_SESSION_COOKIE_SECURE" not in os.environ:
+        monkeypatch.setenv("ADE_SESSION_COOKIE_SECURE", "0")
 
     import backend.app.config as config_module
     config_module.reset_settings_cache()
@@ -36,7 +65,9 @@ def _test_client(
     import backend.app.main as main_module
 
     try:
-        with TestClient(main_module.app) as client:
+        with TestClient(main_module.app, follow_redirects=False) as client:
+            _seed_default_user()
+            client.auth = (DEFAULT_USER_EMAIL, DEFAULT_USER_PASSWORD)
             yield client
     finally:
         config_module.reset_settings_cache()
