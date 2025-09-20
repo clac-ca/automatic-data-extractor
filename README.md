@@ -6,21 +6,13 @@ extra services.
 
 ---
 
-## System overview
-```
+## Documentation
 
-Job responses surface an `input_document` object and an `output_documents` array derived from stored relationships, so history screens render links without guessing from storage URIs.
-+----------------------------- Docker container -----------------------------+
-|  React UI  ↔  FastAPI backend  ↔  Pure-Python processor helpers             |
-|                                     |                                       |
-|                                     ├─ SQLite database  (var/ade.sqlite)    |
-|                                     └─ Document storage (var/documents/)    |
-+-----------------------------------------------------------------------------
-```
-- **Frontend** – Manage document-type configurations, edit extraction logic, upload files, launch jobs, review job results, and activate new configuration revisions.
-- **Backend** – FastAPI routes for auth, CRUD, document ingestion, job orchestration, and job result retrieval.
-- **Processor** – Pure functions that locate tables, map columns, transform values, and emit audit notes.
-- **Storage** – SQLite and the on-disk documents directory keep persistence simple. Switch only when scale truly demands it.
+Start with the [documentation hub](docs/README.md) for persona-specific guides, runbooks, and references.
+
+## System overview
+
+The architecture diagram, component responsibilities, and job lifecycle are documented in [docs/foundation/system-overview.md](docs/foundation/system-overview.md).
 
 ---
 
@@ -80,6 +72,8 @@ variables include:
 - `ADE_SSO_CLIENT_ID`, `ADE_SSO_CLIENT_SECRET`, `ADE_SSO_ISSUER`, `ADE_SSO_REDIRECT_URL`, `ADE_SSO_AUDIENCE`,
   `ADE_SSO_CACHE_TTL_SECONDS` – configure
   standards-compliant code exchanges when `sso` mode is active.
+
+API key authentication is under development and will sit alongside these modes. Integrations should prepare to send an `ADE-API-Key` header sourced from a per-service secret (for example, `ADE_API_KEY`) while still honouring the session cookie the UI relies on.
 
 User accounts live in the `users` table. A lightweight CLI (`python -m backend.app.auth.manage`) manages accounts with
 `create-user`, `reset-password`, `deactivate`, `promote`, and `list-users` commands. CLI operations emit events so audit logs
@@ -376,80 +370,12 @@ naming payloads or configuration elements.
 - `--limit` caps how many documents are processed in a single invocation so operators can sweep large queues incrementally.
 - The command logs a structured summary (processed count, missing files, reclaimed bytes) and prints a human-readable report so cron jobs and humans see the same outcome.
 
-## Local development (Windows PowerShell, no Docker)
+## Local development
 
-Run ADE locally for fast backend/UI iteration without Docker. Commands assume **Windows 10/11** with **PowerShell**.
+Use the platform guides for step-by-step setup and configuration management.
 
-### Prerequisites
-
-* **Python 3.11+**
-* **Node.js 20+** (for the frontend)
-* **Git**
-* (Optional) **Docker** for the containerized flow
-
-### 1) Backend (FastAPI + SQLite)
-
-```powershell
-# From the project root
-cd C:\Github\automatic-data-extractor
-
-# Create and activate a virtual environment
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-# Install project deps (from pyproject.toml), incl. dev extras (pytest)
-pip install -e ".[dev]"
-
-# Start the API with auto-reload
-python -m uvicorn backend.app.main:app --reload
-# → http://127.0.0.1:8000
-```
-
-**Smoke check (new tab):**
-
-```powershell
-Invoke-WebRequest http://127.0.0.1:8000/health | Select-Object -ExpandProperty Content
-```
-
-### 2) Frontend (React + Vite)
-
-```powershell
-cd frontend
-npm install
-npm run dev
-# → http://127.0.0.1:5173 (expects backend at http://localhost:8000)
-```
-
-### 3) Tests & Quality
-
-```powershell
-# Backend tests
-pytest -q
-
-# Python quality
-ruff check
-mypy
-
-# Frontend quality
-npm test
-npm run lint
-npm run typecheck
-```
-
-### Notes & quick fixes
-
-* **Activate the venv** (`.\.venv\Scripts\Activate.ps1`) before running Python tools.
-* If `uvicorn` isn’t found, use `python -m uvicorn …`.
-* If PowerShell blocks activation, run:
-
-  ```powershell
-  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-  ```
-* If port **8000** is in use:
-
-  ```powershell
-  python -m uvicorn backend.app.main:app --reload --port 8001
-  ```
+- [Local quickstart (Windows PowerShell)](docs/platform/quickstart-local.md) walks through creating a virtual environment, running the backend, and starting the Vite dev server.
+- [Environment and secret management](docs/platform/environment-management.md) explains how `.env` files, overrides, and restarts work together.
 
 ---
 
