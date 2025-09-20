@@ -14,15 +14,6 @@ Ship a **clean, correct OpenAPI 3.1** for the ADE backend that:
 > We will not change core runtime logic beyond envelope/metadata alignment; the focus is on contract, documentation, and thin glue code.
 
 ---
-
-## Do this first (one‑time setup)
-
-* Create a working branch: `docs/openapi-3-1`.
-* Add **docs & tooling** deps (dev only): `spectral`, `openapi-spec-validator`, and `oasdiff`. ([Stoplight][3])
-* Create `build/openapi/` to store the generated `openapi.json`.
-
----
-
 ## Work Items (in the order to implement)
 
 ### 1) Centralized OpenAPI builder (FastAPI)
