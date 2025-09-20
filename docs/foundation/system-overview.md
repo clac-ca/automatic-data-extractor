@@ -15,8 +15,8 @@ ADE ships as a single Docker container bundling the frontend, FastAPI backend, d
 +----------------------------- Docker container -----------------------------+
 |  React UI  ↔  FastAPI backend  ↔  Pure-Python processor helpers             |
 |                                     |                                       |
-|                                     ├─ SQLite database  (var/ade.sqlite)    |
-|                                     └─ Document storage (var/documents/)    |
+|                                     ├─ SQLite database  (data/db/ade.sqlite) |
+|                                     └─ Document storage (data/documents/)    |
 +-----------------------------------------------------------------------------+
 ```
 
@@ -32,7 +32,7 @@ _A future diagram asset will live at `docs/assets/system-overview.png` once rend
   - `auth/` — Password hashing, session management, and optional SSO utilities.
   - `maintenance/` — Scheduler and CLI tooling for document purge operations.
 - **Processor (`backend/processor/`)** — Pure functions that detect tables, map columns, and emit audit notes without side effects.
-- **Storage** — SQLite database (`var/ade.sqlite`) and filesystem-backed document store (`var/documents/`). Both paths mount as volumes in production to simplify backup.
+- **Storage** — SQLite database (`data/db/ade.sqlite`) and filesystem-backed document store (`data/documents/`). Both paths mount as volumes in production to simplify backup.
 
 ## Integration surfaces
 

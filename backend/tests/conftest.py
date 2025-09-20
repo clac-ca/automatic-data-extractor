@@ -40,13 +40,26 @@ def _seed_default_user() -> None:
 def _test_client(
     monkeypatch: pytest.MonkeyPatch,
     *,
-    database_url: str,
-    documents_dir: Path,
+    database_url: str | None = None,
+    documents_dir: Path | None = None,
+    data_dir: Path | None = None,
 ) -> Iterator[TestClient]:
     """Instantiate a TestClient using the provided database configuration."""
 
-    monkeypatch.setenv("ADE_DATABASE_URL", database_url)
-    monkeypatch.setenv("ADE_DOCUMENTS_DIR", str(documents_dir))
+    if data_dir is not None:
+        monkeypatch.setenv("ADE_DATA_DIR", str(data_dir))
+    else:
+        monkeypatch.delenv("ADE_DATA_DIR", raising=False)
+
+    if database_url is not None:
+        monkeypatch.setenv("ADE_DATABASE_URL", database_url)
+    else:
+        monkeypatch.delenv("ADE_DATABASE_URL", raising=False)
+
+    if documents_dir is not None:
+        monkeypatch.setenv("ADE_DOCUMENTS_DIR", str(documents_dir))
+    else:
+        monkeypatch.delenv("ADE_DOCUMENTS_DIR", raising=False)
     if "ADE_PURGE_SCHEDULE_ENABLED" not in os.environ:
         monkeypatch.setenv("ADE_PURGE_SCHEDULE_ENABLED", "0")
     if "ADE_PURGE_SCHEDULE_RUN_ON_STARTUP" not in os.environ:
@@ -78,21 +91,31 @@ def _test_client(
 def app_client(tmp_path, monkeypatch) -> Iterator[tuple[TestClient, Path, Path]]:
     """Return a TestClient bound to an isolated SQLite database."""
 
-    db_path = tmp_path / "ade.sqlite"
-    documents_dir = tmp_path / "documents"
-    database_url = f"sqlite:///{db_path}"
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "db" / "ade.sqlite"
+    documents_dir = data_dir / "documents"
 
-    with _test_client(monkeypatch, database_url=database_url, documents_dir=documents_dir) as client:
+    with _test_client(monkeypatch, data_dir=data_dir) as client:
         yield client, db_path, documents_dir
 
 
 @pytest.fixture
 def app_client_factory(
     monkeypatch,
-) -> Callable[[str, Path], ContextManager[TestClient]]:
+) -> Callable[[str | None, Path | None], ContextManager[TestClient]]:
     """Provide a factory that yields TestClients with custom database URLs."""
 
-    def _factory(database_url: str, documents_dir: Path) -> ContextManager[TestClient]:
-        return _test_client(monkeypatch, database_url=database_url, documents_dir=documents_dir)
+    def _factory(
+        database_url: str | None,
+        documents_dir: Path | None,
+        *,
+        data_dir: Path | None = None,
+    ) -> ContextManager[TestClient]:
+        return _test_client(
+            monkeypatch,
+            database_url=database_url,
+            documents_dir=documents_dir,
+            data_dir=data_dir,
+        )
 
     return _factory

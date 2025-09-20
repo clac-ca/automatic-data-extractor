@@ -6,7 +6,7 @@ ADE is configuration-driven. Deployments remain stable while configurations evol
 ## Audiences and promises
 | Persona | They arrive asking | They leave knowing | Primary entry points |
 | --- | --- | --- | --- |
-| **Platform administrators** | “How do I install, secure, and keep ADE healthy?” | Local/Docker/Azure Container Apps setup, environment management, backup/restore of `var/`, secret rotation, and supported runbooks. | Root `README.md`, `docs/platform/`, `docs/operations/` |
+| **Platform administrators** | “How do I install, secure, and keep ADE healthy?” | Local/Docker/Azure Container Apps setup, environment management, backup/restore of `data/`, secret rotation, and supported runbooks. | Root `README.md`, `docs/platform/`, `docs/operations/` |
 | **IT architects** | “What system am I approving and how are configurations governed?” | Trust boundaries, auth and SSO model, configuration lifecycle, audit trail expectations, and shared terminology. | `docs/foundation/`, `docs/security/` |
 | **Support / configuration managers** | “How do I author, validate, publish, and roll back configurations?” | Configuration concepts, drafting tools, comparison/diff views, validation workflows, promotion/rollback steps, and export/import safety nets. | `docs/configuration/`, `docs/operations/runbooks/` |
 | **Data teams** | “How do I integrate with the outputs?” | Auth patterns, APIs, SQL access, file export formats, checksum expectations, and retention rules. | `docs/data-integration/`, `docs/reference/` |
@@ -52,7 +52,7 @@ Every landing page restates prerequisites, required roles/access, and escalation
 - **Start**: Root `README.md` → `docs/README.md` → `docs/platform/README.md`.
 - **Essential guides**: `quickstart-local.md`, `local-development.md`, `docker-compose.md`, `azure-container-apps.md`, `environment-management.md`, `upgrade-paths.md`.
 - **Runbooks**: Storage capacity, Azure Container Apps stability, SSO recovery, admin access recovery, database backup/restore, configuration export/import.
-- **Success state**: They can deploy ADE in their environment, manage secrets, back up `var/`, restore service after supported incidents, and know when to escalate.
+- **Success state**: They can deploy ADE in their environment, manage secrets, back up `data/`, restore service after supported incidents, and know when to escalate.
 
 ### IT architects
 - **Start**: `docs/foundation/README.md` and `docs/security/README.md`.
