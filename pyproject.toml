@@ -29,7 +29,8 @@ dev = [
   "pytest==8.4.2",
   "pytest-asyncio==1.2.0",
   "mypy==1.18.2",
-  "ruff==0.13.1"
+  "ruff==0.13.1",
+  "openapi-spec-validator==0.7.2"
 ]
 
 [tool.pytest.ini_options]
