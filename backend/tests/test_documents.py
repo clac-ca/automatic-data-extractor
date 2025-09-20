@@ -5,7 +5,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from backend.app.db import get_sessionmaker
+from backend.app.models import Document
+from backend.app.services.documents import delete_document as delete_document_service
 from backend.app.services.events import EventRecord, record_event
 
 
@@ -413,6 +417,38 @@ def test_delete_document_is_idempotent(app_client) -> None:
     events_response = client.get(f"/documents/{payload['document_id']}/events")
     assert events_response.status_code == 200
     assert events_response.json()["total"] == 1
+
+
+def test_delete_document_rollback_preserves_file(app_client) -> None:
+    client, _, documents_dir = app_client
+    payload = _upload_document(
+        client,
+        filename="rollback.pdf",
+        data=b"rollback-bytes",
+        content_type="application/pdf",
+    )
+
+    stored_path = _stored_path(documents_dir, payload)
+    assert stored_path.exists()
+
+    session_factory = get_sessionmaker()
+    with session_factory() as db_session:
+        with pytest.raises(RuntimeError):
+            with db_session.begin():
+                delete_document_service(
+                    db_session,
+                    payload["document_id"],
+                    deleted_by="rollback@test",
+                    commit=False,
+                )
+                raise RuntimeError("abort transaction")
+
+    assert stored_path.exists()
+
+    with session_factory() as verify_session:
+        refreshed = verify_session.get(Document, payload["document_id"])
+        assert refreshed is not None
+        assert refreshed.deleted_at is None
 
 
 def test_update_document_merges_metadata_and_emits_event(app_client) -> None:
