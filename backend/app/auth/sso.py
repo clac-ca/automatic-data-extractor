@@ -77,6 +77,14 @@ def _set_cached(cache: dict[str, _CacheEntry], key: str, value: Any, ttl_seconds
     cache[key] = _CacheEntry(value=value, expires_at=_now() + timedelta(seconds=ttl_seconds))
 
 
+def clear_caches() -> None:
+    """Clear cached discovery documents and JWKS payloads."""
+
+    with _CACHE_LOCK:
+        _DISCOVERY_CACHE.clear()
+        _JWKS_CACHE.clear()
+
+
 def _assert_sso_enabled(settings: config.Settings) -> None:
     if "sso" not in settings.auth_mode_sequence:
         raise SSOConfigurationError("SSO mode is not enabled")
@@ -477,6 +485,7 @@ __all__ = [
     "SSOConfigurationError",
     "SSOExchangeError",
     "OIDCMetadata",
+    "clear_caches",
     "build_authorization_url",
     "exchange_code",
     "verify_bearer_token",

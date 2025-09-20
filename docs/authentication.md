@@ -21,9 +21,16 @@ All configuration flows through `ADE_` environment variables. Common settings in
 | `ADE_SSO_ISSUER` | Base URL for the OIDC provider. |
 | `ADE_SSO_REDIRECT_URL` | Callback URL registered with the provider. |
 | `ADE_SSO_AUDIENCE` | Expected ID token audience (defaults to the client ID). |
+| `ADE_SSO_CACHE_TTL_SECONDS` | Seconds to cache discovery metadata and JWKS responses. |
 
 The service refuses to start if `ADE_AUTH_MODES` resolves to an empty set or if `sso` is requested without the required issuer,
 client, secret, and redirect values.
+
+## SSO validation
+
+ADE verifies ID tokens signed with RS256. JWKS responses are keyed by `kid`, and an unknown key immediately raises a validation
+error even when discovery metadata is cached. Both the discovery document and JWKS payloads reuse responses for `ADE_SSO_CACHE_TTL_SECONDS`
+so subsequent exchanges avoid redundant network calls without tolerating expired or audience-mismatched tokens.
 
 ## User management CLI
 
@@ -53,6 +60,6 @@ CLI actions emit `user.*` events with `actor_type="system"` and `source="cli"`, 
 ## Password hashing
 
 ADE hashes passwords with the Python standard library's `hashlib.scrypt` implementation. Each hash records the scrypt work
-factors alongside a random 16-byte salt so verification always uses the original parameters. We avoid optional third-party
-dependencies to keep deployments predictable in restricted environments while still relying on a modern, memory-hard key
-derivation function.
+factors alongside a random 16-byte salt so verification always uses the original parameters. ADE derives a 32-byte key using
+`N=16384`, `r=8`, and `p=1`, values that balance verification cost and operational headroom while keeping deployments predictable
+without optional third-party dependencies.

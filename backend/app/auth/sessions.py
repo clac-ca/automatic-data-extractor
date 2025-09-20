@@ -100,11 +100,14 @@ def get_session(db: Session, token: str) -> UserSession | None:
 def revoke_session(db: Session, session: UserSession, *, commit: bool = True) -> None:
     """Mark the supplied session as revoked."""
 
-    session.revoked_at = _format_timestamp(_now())
-    if commit:
+    if session.revoked_at is None:
+        session.revoked_at = _format_timestamp(_now())
+        if commit:
+            db.commit()
+        else:
+            db.flush()
+    elif commit:
         db.commit()
-    else:
-        db.flush()
 
 
 def touch_session(
@@ -115,10 +118,17 @@ def touch_session(
     ip_address: str | None = None,
     user_agent: str | None = None,
     commit: bool = True,
-) -> UserSession:
+) -> UserSession | None:
     """Extend the session expiry and update last seen metadata."""
 
+    if session.revoked_at is not None:
+        return None
+
+    current_expiry = _parse_timestamp(session.expires_at)
     now = _now()
+    if current_expiry <= now:
+        return None
+
     expires_at = now + timedelta(minutes=settings.session_ttl_minutes)
     session.last_seen_at = _format_timestamp(now)
     session.last_seen_ip = ip_address
