@@ -21,7 +21,7 @@ listed beside each term.
 - **Active configuration** – The single configuration with `is_active = true` for a document type. API consumers use it by default when they do not supply an explicit `configuration_id`.
 - **Profile** – Optional overrides for a source, customer, or locale stored in the configuration payload (`payload.profiles`).
 - **Job** – One execution of the processing engine against an input document using a specific configuration version (`jobs.job_id`, `jobs.configuration_version`, `jobs.status`, `jobs.created_by`, `jobs.metrics`, `jobs.logs`). Jobs stay mutable while `status` is `pending` or `running` and become immutable once marked `completed` or `failed`.
-- **Event** – Immutable record that captures what happened to an entity, who triggered it, and any structured context (`events.event_id`, `events.event_type`, `events.entity_type`, `events.entity_id`, `events.occurred_at`, `events.actor_type`, `events.actor_id`, `events.actor_label`, `events.source`, `events.request_id`, `events.payload`). Document deletions emit `document.deleted`, metadata edits emit `document.metadata.updated` by default (callers may supply a more specific type), configuration lifecycle changes emit `configuration.created` / `configuration.updated` / `configuration.activated`, and jobs report `job.created`, `job.status.*`, and `job.results.published` entries. Timelines are available at `GET /documents/{document_id}/events`, `GET /configurations/{configuration_id}/events`, and `GET /jobs/{job_id}/events`; document, configuration, and job responses embed an `entity` summary with the identifiers, filenames, and statuses needed for UI headers, and the shared `/events` feed reuses the same summary when filters scope to a single entity.
+- **Event** – Immutable record that captures what happened to an entity, who triggered it, and any structured context (`events.event_id`, `events.event_type`, `events.entity_type`, `events.entity_id`, `events.occurred_at`, `events.actor_type`, `events.actor_id`, `events.actor_label`, `events.source`, `events.request_id`, `events.payload`). Document deletions emit `document.deleted`, metadata edits emit `document.metadata.updated` by default (callers may supply a more specific type), configuration lifecycle changes emit `configuration.created` / `configuration.updated` / `configuration.activated`, and jobs report `job.created`, `job.status.*`, and `job.metrics.updated` entries. Timelines are available at `GET /documents/{document_id}/events`, `GET /configurations/{configuration_id}/events`, and `GET /jobs/{job_id}/events`; document, configuration, and job responses embed an `entity` summary with the identifiers, filenames, and statuses needed for UI headers, and the shared `/events` feed reuses the same summary when filters scope to a single entity.
 
 ---
 
@@ -55,8 +55,8 @@ listed beside each term.
 ---
 
 ## Job payload
-- **Input** (`jobs.input`) – Source document metadata with `uri`, `hash`, and optional `expires_at`.
-- **Outputs** (`jobs.outputs`) – Mapping of output artefacts (e.g., JSON, Excel) to URIs and expiration timestamps.
+- **Input document** (`jobs.input_document_id`) – ULID of the document that triggered the job.
+- **Output documents** (`documents.produced_by_job_id`) – Each derived document stores the producing job ID; job responses compute `output_documents` summaries on read.
 - **Status** (`jobs.status`) – Lifecycle state: `pending`, `running`, `completed`, or `failed`.
 - **Metrics** (`jobs.metrics`) – Summary statistics such as `rows_extracted`, `processing_time_ms`, and `errors`.
 - **Logs** (`jobs.logs`) – Ordered log entries with timestamp, level, and message for auditability.
@@ -66,11 +66,10 @@ listed beside each term.
 ## Storage foundation
 ADE stores everything in SQLite (`var/ade.sqlite`). Tables expected on day one:
 - `configurations` – Configuration metadata, JSON payloads, immutable history, and lifecycle state.
-- `documents` – Uploaded file metadata, SHA-256 digests, and canonical storage URIs.
-- `jobs` – Job inputs, outputs, metrics, logs, and status tied to configurations.
+- `documents` – Uploaded file metadata, SHA-256 digests, canonical storage URIs, and optional `produced_by_job_id` pointers linking derived outputs back to the job that emitted them.
+- `jobs` – Configuration linkage, `input_document_id`, metrics, logs, and status for each processing run.
 - `users` – Accounts with roles and optional SSO subjects.
 - `api_keys` – Issued API keys linked to users.
-- `job_documents` – (Planned) join table linking jobs to the documents they consume or emit. Useful for future retention checks.
 - `events` – Immutable history of ADE actions keyed by ULID with optional actor/source metadata and structured payloads.
 - `maintenance_status` – Keyed JSON payloads for background maintenance loops (e.g. `automatic_document_purge` stores the last
   automatic purge summary returned by `/health`).
@@ -138,29 +137,43 @@ Back up the SQLite file alongside the `var/documents/` directory.
 {
   "job_id": "job_2025_09_17_0001",
   "document_type": "Remittance PDF",
-  "configuration": 3,
-
+  "configuration_id": "cfg_01J8PQ3RDX8K6PX0ZA5G2T3N4V",
+  "configuration_version": 3,
   "status": "completed",
   "created_at": "2025-09-17T18:42:00Z",
   "updated_at": "2025-09-17T18:45:11Z",
   "created_by": "jkropp",
 
-  "input": {
-    "uri": "var/documents/remit_2025-09.pdf",
-    "hash": "sha256:a93c...ff12",
-    "expires_at": "2025-10-01T00:00:00Z"
+  "input_document": {
+    "document_id": "01J8Z0Z4YV6N9Q8XCN5P7Q2RSD",
+    "original_filename": "remittance.pdf",
+    "content_type": "application/pdf",
+    "byte_size": 542118,
+    "created_at": "2025-09-17T18:42:00Z",
+    "is_deleted": false,
+    "download_url": "/documents/01J8Z0Z4YV6N9Q8XCN5P7Q2RSD/download"
   },
 
-  "outputs": {
-    "json": {
-      "uri": "var/outputs/remit_2025-09.json",
-      "expires_at": "2026-01-01T00:00:00Z"
+  "output_documents": [
+    {
+      "document_id": "01J8Z0Z4YV6N9Q8XCN5P7Q2RSE",
+      "original_filename": "remit.json",
+      "content_type": "application/json",
+      "byte_size": 12345,
+      "created_at": "2025-09-17T18:45:10Z",
+      "is_deleted": false,
+      "download_url": "/documents/01J8Z0Z4YV6N9Q8XCN5P7Q2RSE/download"
     },
-    "excel": {
-      "uri": "var/outputs/remit_2025-09.xlsx",
-      "expires_at": "2026-01-01T00:00:00Z"
+    {
+      "document_id": "01J8Z0Z4YV6N9Q8XCN5P7Q2RSF",
+      "original_filename": "remit.xlsx",
+      "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "byte_size": 98765,
+      "created_at": "2025-09-17T18:45:11Z",
+      "is_deleted": false,
+      "download_url": "/documents/01J8Z0Z4YV6N9Q8XCN5P7Q2RSF/download"
     }
-  },
+  ],
 
   "metrics": {
     "rows_extracted": 125,
@@ -177,6 +190,8 @@ Back up the SQLite file alongside the `var/documents/` directory.
 }
 ```
 
+`input_document` and `output_documents` are computed from the job's `input_document_id` and each document's `produced_by_job_id`, so history views never guess at relationships from storage URIs.
+
 ```jsonc
 // Document response (abbreviated)
 {
@@ -189,7 +204,8 @@ Back up the SQLite file alongside the `var/documents/` directory.
   "metadata": {},
   "expires_at": "2025-10-17T18:42:00+00:00",
   "created_at": "2025-09-17T18:42:00+00:00",
-  "updated_at": "2025-09-17T18:42:00+00:00"
+  "updated_at": "2025-09-17T18:42:00+00:00",
+  "produced_by_job_id": null
 }
 ```
 
@@ -234,9 +250,9 @@ Back up the SQLite file alongside the `var/documents/` directory.
 ```
 
 ```jsonc
-// Audit event (job results published)
+// Audit event (job metrics updated)
 {
-  "event_type": "job.results.published",
+  "event_type": "job.metrics.updated",
   "entity_type": "job",
   "entity_id": "job_2025_09_17_0001",
   "actor_label": "api",
@@ -245,12 +261,6 @@ Back up the SQLite file alongside the `var/documents/` directory.
     "configuration_id": "01JCFG7890ABCDEFFEDCBA3210",
     "configuration_version": 4,
     "status": "completed",
-    "outputs": {
-      "json": {
-        "uri": "var/outputs/remit_final.json",
-        "expires_at": "2026-01-01T00:00:00Z"
-      }
-    },
     "metrics": {
       "rows_extracted": 125,
       "processing_time_ms": 4180,

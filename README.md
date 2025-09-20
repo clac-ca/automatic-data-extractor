@@ -8,6 +8,8 @@ extra services.
 
 ## System overview
 ```
+
+Job responses surface an `input_document` object and an `output_documents` array derived from stored relationships, so history screens render links without guessing from storage URIs.
 +----------------------------- Docker container -----------------------------+
 |  React UI  ↔  FastAPI backend  ↔  Pure-Python processor helpers             |
 |                                     |                                       |
@@ -69,7 +71,7 @@ Core event families include:
 
 - `document.deleted` – records soft deletions with byte-size, checksum, delete reason, and the actor/source that initiated the removal.
 - `configuration.created`, `configuration.updated`, `configuration.activated` – capture configuration titles, versions, activation state, and which actor changed them.
-- `job.created`, `job.status.*`, `job.results.published` – log job creation, state transitions, and when outputs/metrics are published.
+- `job.created`, `job.status.*`, `job.metrics.updated` – log job creation, state transitions, and when metrics snapshots change.
 
 The API surfaces these records directly.
 
@@ -194,7 +196,7 @@ Jobs append events as they are created, progress through statuses, and publish o
 
 ```jsonc
 {
-  "event_type": "job.results.published",
+  "event_type": "job.metrics.updated",
   "entity_type": "job",
   "actor_label": "api",
   "payload": {
@@ -202,12 +204,6 @@ Jobs append events as they are created, progress through statuses, and publish o
     "configuration_id": "01JCFG7890ABCDEFFEDCBA3210",
     "configuration_version": 7,
     "status": "completed",
-    "outputs": {
-      "json": {
-        "uri": "var/outputs/remit_final.json",
-        "expires_at": "2026-01-01T00:00:00Z"
-      }
-    },
     "metrics": {
       "rows_extracted": 125,
       "processing_time_ms": 4180,
@@ -224,8 +220,8 @@ Logging is additive—failures to append an event are logged but do not roll bac
 ## How the system flows
 1. Upload documents through the UI or `POST /documents`. The backend writes the file to `var/documents/uploads/{document_id}` using the document ULID and returns canonical metadata (including the `stored_uri` jobs reference later).
 2. Create or edit configurations, then activate the configuration that should run by default for the document type.
-3. Launch a job via the UI or `POST /jobs`. The processor applies the active configuration and records job inputs, outputs, metrics, and logs.
-4. Poll `GET /jobs/{job_id}` (or list with `GET /jobs`) to review progress, download output artefacts, and inspect metrics.
+3. Launch a job via the UI or `POST /jobs`, supplying the `input_document_id` for the source file. The processor applies the active configuration and records metrics and logs alongside the job. Derived outputs are uploaded later by calling `POST /documents` with `produced_by_job_id` set to the job identifier.
+4. Poll `GET /jobs/{job_id}` (or list with `GET /jobs`, optionally filtering by `input_document_id`) to review progress, download output artefacts, and inspect metrics. Use `GET /documents/{document_id}/jobs` to show the processing history for a specific file without scanning the full job list.
 5. Promote new configurations when results look right; only one active configuration exists per document type at a time.
 
 ---
@@ -244,22 +240,36 @@ Jobs returned by the API and displayed in the UI always use the same JSON struct
   "updated_at": "2025-09-17T18:45:11Z",
   "created_by": "jkropp",
 
-  "input": {
-    "uri": "var/documents/remit_2025-09.pdf",
-    "hash": "sha256:a93c...ff12",
-    "expires_at": "2025-10-01T00:00:00Z"
+  "input_document": {
+    "document_id": "01J8Z0Z4YV6N9Q8XCN5P7Q2RSD",
+    "original_filename": "remittance.pdf",
+    "content_type": "application/pdf",
+    "byte_size": 542118,
+    "created_at": "2025-09-17T18:42:00Z",
+    "is_deleted": false,
+    "download_url": "/documents/01J8Z0Z4YV6N9Q8XCN5P7Q2RSD/download"
   },
 
-  "outputs": {
-    "json": {
-      "uri": "var/outputs/remit_2025-09.json",
-      "expires_at": "2026-01-01T00:00:00Z"
+  "output_documents": [
+    {
+      "document_id": "01J8Z0Z4YV6N9Q8XCN5P7Q2RSE",
+      "original_filename": "remit.json",
+      "content_type": "application/json",
+      "byte_size": 12345,
+      "created_at": "2025-09-17T18:45:10Z",
+      "is_deleted": false,
+      "download_url": "/documents/01J8Z0Z4YV6N9Q8XCN5P7Q2RSE/download"
     },
-    "excel": {
-      "uri": "var/outputs/remit_2025-09.xlsx",
-      "expires_at": "2026-01-01T00:00:00Z"
+    {
+      "document_id": "01J8Z0Z4YV6N9Q8XCN5P7Q2RSF",
+      "original_filename": "remit.xlsx",
+      "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "byte_size": 98765,
+      "created_at": "2025-09-17T18:45:11Z",
+      "is_deleted": false,
+      "download_url": "/documents/01J8Z0Z4YV6N9Q8XCN5P7Q2RSF/download"
     }
-  },
+  ],
 
   "metrics": {
     "rows_extracted": 125,
@@ -276,13 +286,16 @@ Jobs returned by the API and displayed in the UI always use the same JSON struct
 }
 ```
 
+
+`input_document` and `output_documents` keep the UI aware of every related file without parsing storage URIs. The persisted pointers are `input_document_id` on the job and `produced_by_job_id` on each document.
+
 ---
 
 ## Document ingestion workflow
 
 1. `POST /documents` accepts a multipart upload (`file` field). The API streams the payload into `var/documents/uploads/{document_id}` and returns metadata including `document_id`, byte size, digest, and the canonical `stored_uri`.
 2. Every upload creates a fresh document record with its own storage path, even if the raw bytes match a prior submission.
-3. `GET /documents` lists records newest first, `GET /documents/{document_id}` returns metadata for a single file, `GET /documents/{document_id}/download` streams the stored bytes (with `Content-Disposition` set to the original filename), and `DELETE /documents/{document_id}` removes the bytes while recording who initiated the deletion. `GET /documents/{document_id}/events` exposes the immutable history of deletion events for that record and includes an `entity` summary with the filename, type, byte size, checksum, expiration, and deletion markers. Configuration revisions use `GET /configurations/{configuration_id}/events` and jobs use `GET /jobs/{job_id}/events`; all timeline endpoints share pagination and filtering behaviour with the global events feed and embed the headline fields the UI needs. When `/events` is filtered to a specific entity, it inlines the same summary block so consumers see consistent context across feeds.
+3. `GET /documents` lists records newest first, `GET /documents/{document_id}` returns metadata for a single file, `GET /documents/{document_id}/download` streams the stored bytes (with `Content-Disposition` set to the original filename), and `DELETE /documents/{document_id}` removes the bytes while recording who initiated the deletion. `GET /documents/{document_id}/events` exposes the immutable history of deletion events for that record and includes an `entity` summary with the filename, type, byte size, checksum, expiration, and deletion markers. `GET /documents/{document_id}/jobs` lists the jobs linked to that document (respecting the same `limit`/`offset` bounds as the other timelines), and `/jobs` accepts an `input_document_id` query parameter when the global list needs to be filtered. Configuration revisions use `GET /configurations/{configuration_id}/events` and jobs use `GET /jobs/{job_id}/events`; all timeline endpoints share pagination and filtering behaviour with the global events feed and embed the headline fields the UI needs. When `/events` is filtered to a specific entity, it inlines the same summary block so consumers see consistent context across feeds.
 4. `POST /documents` enforces the configurable `max_upload_bytes` cap (defaults to 25 MiB). Payloads that exceed the limit return HTTP 413 with `{ "detail": {"error": "document_too_large", "max_upload_bytes": <bytes>, "received_bytes": <bytes>}}` so operators know the request failed before any data is persisted.
 5. Document retention and deletion workflows are defined in `docs/document_retention_and_deletion.md`. The API records manual deletions, logs them to the shared events feed, runs an automatic purge sweep on startup (and hourly by default), and still exposes a maintenance CLI (`python -m backend.app.maintenance.purge`) for manual runs.
 
