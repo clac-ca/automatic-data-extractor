@@ -1,13 +1,14 @@
-# 🔄 Next Task — Use FastAPI dependency to resolve API key tokens
+# 🔄 Next Task — Implement API key provisioning endpoints for operators
 
 ## Context
-`get_authenticated_identity` currently depends on both the bearer Authorization header and the `X-API-Key` header separately, then invokes `_resolve_api_key_token` to figure out which credential was supplied. Wrapping that check in a shared dependency mirrors the new session cookie helper, keeps signatures lean, and relies on FastAPI's injection system instead of manual branching.
+API key tokens already authenticate requests through `ApiKey` rows and `get_authenticated_identity`, yet there is no supported workflow for issuing or revoking credentials. Operators must still seed the database by hand, which bypasses event logging and makes it easy to leak raw tokens. Shipping a small admin-facing API will let us create, list, and revoke API keys deterministically while keeping token material hashed at rest.
 
 ## Goals
-1. Add a public dependency in `backend/app/services/auth.py` that combines the bearer and header schemes to return the API key token when present (without raising when neither is supplied).
-2. Update `get_authenticated_identity` and any other call sites to depend on the new helper instead of passing two security dependencies and calling `_resolve_api_key_token` directly.
-3. Ensure existing authentication behaviour is preserved by re-running the auth test suite.
+1. Add service helpers in `backend/app/services/auth.py` to mint and revoke API keys: generate a random token, persist the hashed form plus a stable prefix, record creation/revocation events, and update usage metadata when keys are touched.
+2. Introduce Pydantic schemas and FastAPI routes (e.g. `/auth/api-keys`) that require an admin identity, return API key metadata, emit the raw token only on creation, and allow revoking keys without deleting rows.
+3. Extend `backend/tests/test_auth.py` to cover create/list/revoke flows end to end, confirming that revoked keys fail authentication and that events are recorded.
 
 ## Definition of done
-- Auth dependencies no longer accept raw `HTTPAuthorizationCredentials` or header values just to resolve API key tokens; they use the new helper instead.
-- Authentication tests continue to pass without regressions.
+- Admins can manage API keys entirely via the API without manual database edits; creation responses include the token once, while only hashed values persist.
+- Listing endpoints surface active and revoked keys with usage metadata, and revocation flips `revoked_at` so authentication rejects the token.
+- Authentication and API key management tests pass, exercising both the new service helpers and HTTP routes.
