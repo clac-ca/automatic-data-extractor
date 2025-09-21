@@ -1,19 +1,19 @@
-# 🔄 Next Task — Inline RequestAuthContext into AuthenticatedIdentity
+# 🔄 Next Task — Collapse AuthResolution into get_authenticated_identity
 
 ## Context
-With request state mirrors removed, the standalone `RequestAuthContext` dataclass no longer serves a unique purpose: its fields duplicate information available on the `AuthenticatedIdentity`, the resolved `User`, and optional session or API key models. Dropping the extra wrapper would further simplify how downstream dependencies access authentication metadata.
+Flattening `RequestAuthContext` left `AuthResolution` and `AuthFailure` as the last indirection between resolved credentials and the FastAPI dependency. Those dataclasses now duplicate the shape of `AuthenticatedIdentity` and only exist so `get_authenticated_identity` can branch on success or failure. We can simplify the authentication flow further by letting the resolution step return an `AuthenticatedIdentity` directly (or raise an HTTP-aware error), eliminating the extra wrappers.
 
 ## Goals
-1. Remove the `RequestAuthContext` dataclass and move its fields onto `AuthenticatedIdentity` (e.g. `mode`, `session_id`, `api_key_id`, `subject`).
-2. Update authentication helpers, routes, and tests to rely on the flattened identity object instead of a nested context attribute.
-3. Ensure serialised responses (like `/auth/me` and session refresh) continue to expose the same payloads.
+1. Remove the `AuthResolution` dataclass and return an `AuthenticatedIdentity` (or raise) from the credential resolver.
+2. Raise clear HTTP errors for invalid sessions and API keys without the intermediary dataclass, keeping any required headers (e.g. `WWW-Authenticate`).
+3. Update callers and tests to rely on the streamlined dependency so nothing references `AuthResolution` or `AuthFailure`.
 
 ## Implementation notes
-- Grep for `RequestAuthContext` to identify constructor and attribute usage before deleting the dataclass.
-- Adjust any helper functions that previously called `RequestAuthContext.from_user` to populate the new identity fields directly.
-- Refresh fixtures or helper stubs in tests so they build `AuthenticatedIdentity` instances without the nested context wrapper.
+- Inline or rewrite `resolve_credentials` so it either yields an `AuthenticatedIdentity` or raises `HTTPException`. Keep the lazy-commit logic around session revocation intact.
+- Adjust unit tests that currently inspect `AuthResolution` to assert against the new return value or captured exceptions.
+- Ensure the exported surface in `auth_service.__all__` reflects the new structure (dropping removed names).
 
 ## Definition of done
-- `RequestAuthContext` is removed from the codebase and all dependencies compile without referencing it.
-- `AuthenticatedIdentity` directly exposes the metadata needed by routes and services (mode, session/api key identifiers, SSO subject).
+- `AuthResolution` and `AuthFailure` are removed from the codebase.
+- `resolve_credentials` (or its replacement) returns the flattened identity or raises an `HTTPException` that matches previous behaviour.
 - `pytest backend/tests/test_auth.py` passes.

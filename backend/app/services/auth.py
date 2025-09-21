@@ -539,44 +539,16 @@ def _resolve_api_key_token(
 
 
 @dataclass(slots=True)
-class RequestAuthContext:
-    """Lightweight container for request-level authentication metadata."""
-
-    user_id: str
-    email: str
-    mode: str
-    session_id: str | None = None
-    api_key_id: str | None = None
-    subject: str | None = None
-
-    @classmethod
-    def from_user(
-        cls,
-        user: User,
-        mode: str,
-        *,
-        session_id: str | None = None,
-        api_key_id: str | None = None,
-        subject: str | None = None,
-    ) -> "RequestAuthContext":
-        return cls(
-            user_id=user.user_id,
-            email=user.email,
-            mode=mode,
-            session_id=session_id,
-            api_key_id=api_key_id,
-            subject=subject,
-        )
-
-
-@dataclass(slots=True)
 class AuthenticatedIdentity:
     """Resolved authentication details for the current request."""
 
     user: User
-    context: RequestAuthContext
+    mode: str
     session: UserSession | None = None
     api_key: ApiKey | None = None
+    session_id: str | None = None
+    api_key_id: str | None = None
+    subject: str | None = None
 
 
 def get_authenticated_identity(
@@ -588,8 +560,7 @@ def get_authenticated_identity(
     header_token: str | None = Depends(_api_key_header),
 ) -> AuthenticatedIdentity:
     if settings.auth_disabled:
-        context = RequestAuthContext.from_user(_OPEN_ACCESS_USER, "none")
-        return AuthenticatedIdentity(user=_OPEN_ACCESS_USER, context=context)
+        return AuthenticatedIdentity(user=_OPEN_ACCESS_USER, mode="none")
 
     ip_address, user_agent = _client_context(request)
     api_key_token = _resolve_api_key_token(bearer_credentials, header_token)
@@ -619,18 +590,14 @@ def get_authenticated_identity(
 
         subject: str | None = resolution.user.sso_subject
 
-        context = RequestAuthContext.from_user(
-            resolution.user,
-            mode,
+        return AuthenticatedIdentity(
+            user=resolution.user,
+            mode=mode,
+            session=session_model,
+            api_key=api_key_model,
             session_id=session_id,
             api_key_id=api_key_id,
             subject=subject,
-        )
-        return AuthenticatedIdentity(
-            user=resolution.user,
-            context=context,
-            session=session_model,
-            api_key=api_key_model,
         )
 
     failure = resolution.failure
