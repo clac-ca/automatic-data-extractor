@@ -280,7 +280,8 @@ def current_user_profile(
     status_code=status.HTTP_307_TEMPORARY_REDIRECT,
     openapi_extra={"security": []},
 )
-def sso_login() -> Response:
+def sso_login(
+) -> Response:
     settings = config.get_settings()
     if "sso" not in settings.auth_mode_sequence:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="SSO is not enabled")
