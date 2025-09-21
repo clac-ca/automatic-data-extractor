@@ -437,11 +437,10 @@ def get_authenticated_identity(
 
     ip_address, user_agent = _client_context(request)
     api_key_token = _resolve_api_key_token(bearer_credentials, header_token)
-    pending_commit = False
-    session_exception: HTTPException | None = None
 
     if session_token:
         session_model = get_session(db, session_token)
+        mutated = False
         if session_model:
             user = db.get(User, session_model.user_id)
             if user and user.is_active:
@@ -462,11 +461,8 @@ def get_authenticated_identity(
                         session_id=refreshed.session_id,
                         subject=user.sso_subject,
                     )
-                revoke_session(db, session_model, commit=False)
-                pending_commit = True
-            else:
-                revoke_session(db, session_model, commit=False)
-                pending_commit = True
+            revoke_session(db, session_model, commit=False)
+            mutated = True
         else:
             token_hash = hash_session_token(session_token)
             orphan = (
@@ -476,27 +472,28 @@ def get_authenticated_identity(
             )
             if orphan is not None:
                 revoke_session(db, orphan, commit=False)
-                pending_commit = True
-        session_exception = HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            detail="Invalid session token",
-        )
+                mutated = True
+
+        if mutated:
+            db.commit()
+        else:
+            db.rollback()
+
+        if api_key_token is None:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail="Invalid session token",
+            )
 
     if api_key_token is not None:
         api_key = get_api_key(db, api_key_token)
         if api_key is None:
-            if pending_commit:
-                db.commit()
-            else:
-                db.rollback()
+            db.rollback()
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Invalid API key")
 
         user = db.get(User, api_key.user_id)
         if user is None or not user.is_active:
-            if pending_commit:
-                db.commit()
-            else:
-                db.rollback()
+            db.rollback()
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Invalid API key")
 
         updated_api_key = touch_api_key_usage(db, api_key, commit=False)
@@ -508,13 +505,6 @@ def get_authenticated_identity(
             api_key_id=updated_api_key.api_key_id,
             subject=user.sso_subject,
         )
-
-    if session_exception is not None:
-        if pending_commit:
-            db.commit()
-        else:
-            db.rollback()
-        raise session_exception
 
     db.rollback()
     raise HTTPException(

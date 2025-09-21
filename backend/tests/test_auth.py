@@ -589,6 +589,37 @@ def test_get_authenticated_identity_invalid_session(app_client) -> None:
     assert exc_info.value.detail == "Invalid session token"
 
 
+def test_get_authenticated_identity_invalid_session_rescued_by_api_key(app_client) -> None:
+    client, _, _ = app_client
+    settings = config.get_settings()
+
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        user = db.query(User).filter(User.email == "admin@example.com").one()
+
+    token = "resolver-mixed-credentials"
+    _insert_api_key(user, token)
+
+    with session_factory() as db:
+        request = _make_request_stub()
+        request.client.host = "resolver-test"
+        request.headers["user-agent"] = "pytest-agent"
+        identity = auth_service.get_authenticated_identity(
+            request,
+            db=db,
+            settings=settings,
+            session_token="invalid-token",
+            bearer_credentials=None,
+            header_token=token,
+        )
+
+    assert identity.user.user_id == user.user_id
+    assert identity.mode == "api-key"
+    assert identity.session is None
+    assert identity.session_id is None
+    assert identity.api_key is not None
+
+
 def test_get_authenticated_identity_api_key_success(app_client) -> None:
     client, _, _ = app_client
     settings = config.get_settings()
