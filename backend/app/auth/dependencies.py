@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from .. import config
 from ..db import get_db
-from ..models import User, UserRole, UserSession
+from ..models import User, UserRole
 from . import service
 
 _WWW_AUTH_HEADER = 'Bearer realm="ADE"'
@@ -92,98 +92,57 @@ def get_current_user(
     ip_address, user_agent = _client_context(request)
     cookie_value = session_token
     api_key_token = _resolve_api_key_token(bearer_credentials, header_token)
-    session_error: HTTPException | None = None
-    pending_commit = False
+    resolution = service.resolve_credentials(
+        db,
+        settings,
+        session_token=cookie_value,
+        api_key_token=api_key_token,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
 
-    if cookie_value:
-        session_model = service.get_session(db, cookie_value)
-        if session_model:
-            user = db.get(User, session_model.user_id)
-            if user and user.is_active:
-                refreshed = service.touch_session(
-                    db,
-                    session_model,
-                    settings=settings,
-                    ip_address=ip_address,
-                    user_agent=user_agent,
-                    commit=False,
+    if resolution.user is not None:
+        mode = resolution.mode
+        if mode is None:
+            raise RuntimeError("Resolved authenticated user without an auth mode")
+        if mode == "session":
+            if resolution.session is not None:
+                request.state.auth_session = resolution.session
+                _set_request_context(
+                    request,
+                    resolution.user,
+                    mode,
+                    session_id=resolution.session.session_id,
                 )
-                if refreshed is not None:
-                    request.state.auth_session = refreshed
-                    _set_request_context(
-                        request,
-                        user,
-                        "session",
-                        session_id=refreshed.session_id,
-                    )
-                    db.commit()
-                    return user
-                service.revoke_session(db, session_model, commit=False)
-                pending_commit = True
             else:
-                service.revoke_session(db, session_model, commit=False)
-                pending_commit = True
+                _set_request_context(request, resolution.user, mode)
+        elif mode == "api-key":
+            if resolution.api_key is not None:
+                request.state.api_key = resolution.api_key
+                _set_request_context(
+                    request,
+                    resolution.user,
+                    mode,
+                    api_key_id=resolution.api_key.api_key_id,
+                )
+            else:
+                _set_request_context(request, resolution.user, mode)
         else:
-            token_hash = service.hash_session_token(cookie_value)
-            orphan = (
-                db.query(UserSession)
-                .filter(UserSession.token_hash == token_hash)
-                .one_or_none()
-            )
-            if orphan is not None:
-                service.revoke_session(db, orphan, commit=False)
-                pending_commit = True
-        session_error = HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            detail="Invalid session token",
+            _set_request_context(request, resolution.user, mode)
+        return resolution.user
+
+    failure = resolution.failure
+    if failure is None:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": _WWW_AUTH_HEADER},
         )
 
-    if api_key_token is not None:
-        api_key = service.get_api_key(db, api_key_token)
-        if api_key is None:
-            if pending_commit:
-                db.commit()
-            else:
-                db.rollback()
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                detail="Invalid API key",
-            )
-
-        user = db.get(User, api_key.user_id)
-        if user is None or not user.is_active:
-            if pending_commit:
-                db.commit()
-            else:
-                db.rollback()
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                detail="Invalid API key",
-            )
-
-        updated_api_key = service.touch_api_key_usage(db, api_key, commit=False)
-        request.state.api_key = updated_api_key
-        _set_request_context(
-            request,
-            user,
-            "api-key",
-            api_key_id=api_key.api_key_id,
-        )
-        db.commit()
-        return user
-
-    if session_error is not None:
-        if pending_commit:
-            db.commit()
-        else:
-            db.rollback()
-        raise session_error
-
-    db.rollback()
     raise HTTPException(
-        status.HTTP_401_UNAUTHORIZED,
-        detail="Authentication required",
-        headers={"WWW-Authenticate": _WWW_AUTH_HEADER},
+        failure.status_code,
+        detail=failure.detail,
+        headers=failure.headers,
     )
 
 
