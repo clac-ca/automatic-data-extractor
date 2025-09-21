@@ -1,9 +1,9 @@
-# ✅ Completed Task — Inject shared Settings dependency into auth routes
+# ✅ Completed Task — Reuse FastAPI's cookie dependency for session validation
 
 ## Context
-Every `/auth` handler fetched configuration via `config.get_settings()` inside the function body, hiding the dependency chain and duplicating setup logic. Surfacing the `Settings` object as an explicit dependency makes it obvious when handlers rely on runtime configuration and keeps FastAPI's injection model consistent across the service.
+`/auth/session` previously fetched the session cookie from `request.cookies` and raised HTTP errors by hand. Exposing a shared dependency built on FastAPI's `APIKeyCookie` keeps cookie access consistent and leans on the framework for error handling.
 
 ## Outcome
-- Added a `config.Settings` dependency parameter to each auth route so FastAPI injects the cached configuration instead of recreating it per-call.
-- Removed the inline `config.get_settings()` lookups and threaded the injected settings through existing helper calls for cookie management and response shaping.
-- Verified the behaviour stays identical by running the authentication test suite (`pytest backend/tests/test_auth.py`).
+- Added `require_session_cookie` in `backend/app/services/auth.py` so routes obtain the raw cookie through FastAPI's dependency system and automatically return `401` when it is absent.
+- Updated `/auth/session` to rely on the new dependency when refreshing sessions, eliminating direct cookie lookups and reusing the validated token when issuing the replacement cookie.
+- Verified the authentication flow remains unchanged by running `pytest backend/tests/test_auth.py`.

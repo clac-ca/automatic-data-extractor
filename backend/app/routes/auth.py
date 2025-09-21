@@ -157,17 +157,14 @@ def logout(
     openapi_extra={"security": []},
 )
 def session_status(
-    request: Request,
     response: Response,
+    session_token: str = Depends(auth_service.require_session_cookie),
     settings: config.Settings = Depends(config.get_settings),
     identity: auth_service.AuthenticatedIdentity = Depends(
         auth_service.get_authenticated_identity
     ),
     db: Session = Depends(get_db),
 ) -> AuthSessionResponse:
-    cookie_value = request.cookies.get(settings.session_cookie_name)
-    if not cookie_value:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session cookie missing")
 
     session_model = identity.session
     if session_model is None:
@@ -189,7 +186,7 @@ def session_status(
         commit=False,
     )
     db.commit()
-    _set_session_cookie(response, settings, cookie_value)
+    _set_session_cookie(response, settings, session_token)
     return _auth_response(identity.user, settings, session_model=session_model)
 
 
