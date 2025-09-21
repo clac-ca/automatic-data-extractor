@@ -15,8 +15,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 from fastapi import HTTPException
-from fastapi.security import HTTPBasicCredentials
-from sqlalchemy.orm import Session
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBasicCredentials
 
 from backend.app import cli as ade_cli
 from backend.app import config
@@ -172,40 +171,21 @@ def _resolve_identity(
     request: SimpleNamespace,
     *,
     settings: config.Settings,
-    db: Session,
     session_token: str | None = None,
     header_token: str | None = None,
     bearer_token: str | None = None,
 ) -> auth_service.AuthenticatedIdentity:
-    if session_token is not None:
-        session_result = auth_service._resolve_session_identity_with_db(
-            db,
-            request=request,
-            token=session_token,
-            settings=settings,
-        )
-    else:
-        session_result = auth_service.CredentialResolution()
-
-    token: str | None = None
+    bearer_credentials: HTTPAuthorizationCredentials | None = None
     if bearer_token is not None:
-        token = bearer_token
-    elif header_token is not None:
-        token = header_token
-
-    if token is not None:
-        api_key_result = auth_service._resolve_api_key_identity_with_db(
-            db,
-            token=token,
-            settings=settings,
+        bearer_credentials = HTTPAuthorizationCredentials(
+            scheme="Bearer", credentials=bearer_token
         )
-    else:
-        api_key_result = auth_service.CredentialResolution()
-
     return auth_service.get_authenticated_identity(
+        request=request,
         settings=settings,
-        session_result=session_result,
-        api_key_result=api_key_result,
+        session_token=session_token,
+        bearer_credentials=bearer_credentials,
+        header_token=header_token,
     )
 
 
@@ -376,7 +356,6 @@ def test_get_authenticated_identity_for_session(monkeypatch, tmp_path) -> None:
             identity = _resolve_identity(
                 request,
                 settings=settings,
-                db=db,
                 session_token=raw_token,
             )
 
@@ -405,14 +384,12 @@ def test_get_authenticated_identity_for_api_key(monkeypatch, tmp_path) -> None:
         token = "identity-api-token"
         _insert_api_key(user, token)
 
-        with session_factory() as db:
-            request = _make_request_stub()
-            identity = _resolve_identity(
-                request,
-                settings=settings,
-                db=db,
-                header_token=token,
-            )
+        request = _make_request_stub()
+        identity = _resolve_identity(
+            request,
+            settings=settings,
+            header_token=token,
+        )
 
         assert identity.user.user_id == user_id
         assert identity.session is None
@@ -790,17 +767,14 @@ def test_get_authenticated_identity_session_success(app_client) -> None:
     cookie_value = client.cookies.get(settings.session_cookie_name)
     assert cookie_value is not None
 
-    session_factory = get_sessionmaker()
-    with session_factory() as db:
-        request = _make_request_stub()
-        request.client.host = "resolver-test"
-        request.headers["user-agent"] = "pytest-agent"
-        identity = _resolve_identity(
-            request,
-            settings=settings,
-            db=db,
-            session_token=cookie_value,
-        )
+    request = _make_request_stub()
+    request.client.host = "resolver-test"
+    request.headers["user-agent"] = "pytest-agent"
+    identity = _resolve_identity(
+        request,
+        settings=settings,
+        session_token=cookie_value,
+    )
 
     assert identity.user is not None
     assert identity.mode == "session"
@@ -814,18 +788,15 @@ def test_get_authenticated_identity_invalid_session(app_client) -> None:
     del client
     settings = config.get_settings()
 
-    session_factory = get_sessionmaker()
-    with session_factory() as db:
-        request = _make_request_stub()
-        request.client.host = "resolver-test"
-        request.headers["user-agent"] = "pytest-agent"
-        with pytest.raises(HTTPException) as exc_info:
-            _resolve_identity(
-                request,
-                settings=settings,
-                db=db,
-                session_token="invalid-token",
-            )
+    request = _make_request_stub()
+    request.client.host = "resolver-test"
+    request.headers["user-agent"] = "pytest-agent"
+    with pytest.raises(HTTPException) as exc_info:
+        _resolve_identity(
+            request,
+            settings=settings,
+            session_token="invalid-token",
+        )
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Invalid session token"
@@ -842,17 +813,15 @@ def test_get_authenticated_identity_invalid_session_rescued_by_api_key(app_clien
     token = "resolver-mixed-credentials"
     _insert_api_key(user, token)
 
-    with session_factory() as db:
-        request = _make_request_stub()
-        request.client.host = "resolver-test"
-        request.headers["user-agent"] = "pytest-agent"
-        identity = _resolve_identity(
-            request,
-            settings=settings,
-            db=db,
-            session_token="invalid-token",
-            header_token=token,
-        )
+    request = _make_request_stub()
+    request.client.host = "resolver-test"
+    request.headers["user-agent"] = "pytest-agent"
+    identity = _resolve_identity(
+        request,
+        settings=settings,
+        session_token="invalid-token",
+        header_token=token,
+    )
 
     assert identity.user.user_id == user.user_id
     assert identity.mode == "api-key"
@@ -872,21 +841,109 @@ def test_get_authenticated_identity_api_key_success(app_client) -> None:
     token = "resolver-api-token"
     _insert_api_key(user, token)
 
-    with session_factory() as db:
-        request = _make_request_stub()
-        request.client.host = "resolver-test"
-        request.headers["user-agent"] = "pytest-agent"
-        identity = _resolve_identity(
-            request,
-            settings=settings,
-            db=db,
-            header_token=token,
-        )
+    request = _make_request_stub()
+    request.client.host = "resolver-test"
+    request.headers["user-agent"] = "pytest-agent"
+    identity = _resolve_identity(
+        request,
+        settings=settings,
+        header_token=token,
+    )
 
     assert identity.user is not None
     assert identity.mode == "api-key"
     assert identity.api_key is not None
     assert identity.api_key.last_used_at is not None
+
+
+def test_get_authenticated_identity_caches_request_state(app_client, monkeypatch) -> None:
+    client, _, _ = app_client
+    settings = config.get_settings()
+    cookie_value = client.cookies.get(settings.session_cookie_name)
+    assert cookie_value is not None
+
+    request = _make_request_stub()
+
+    call_count = 0
+    original_sessionmaker = auth_service.get_sessionmaker
+
+    def _counting_sessionmaker():
+        nonlocal call_count
+        call_count += 1
+        return original_sessionmaker()
+
+    monkeypatch.setattr(auth_service, "get_sessionmaker", _counting_sessionmaker)
+
+    first_identity = auth_service.get_authenticated_identity(
+        request=request,
+        settings=settings,
+        session_token=cookie_value,
+        bearer_credentials=None,
+        header_token=None,
+    )
+
+    assert getattr(request.state, "authenticated_identity") is first_identity
+    assert call_count == 1
+
+    second_identity = auth_service.get_authenticated_identity(
+        request=request,
+        settings=settings,
+        session_token=cookie_value,
+        bearer_credentials=None,
+        header_token=None,
+    )
+
+    assert second_identity is first_identity
+    assert call_count == 1
+
+
+def test_router_and_route_dependencies_share_identity(app_client, monkeypatch) -> None:
+    client, _, _ = app_client
+    settings = config.get_settings()
+    cookie_value = client.cookies.get(settings.session_cookie_name)
+    assert cookie_value is not None
+
+    request = _make_request_stub()
+    request.client.host = "shared-dependency"
+    request.headers["user-agent"] = "pytest-shared"
+
+    call_count = 0
+    original_sessionmaker = auth_service.get_sessionmaker
+
+    def _counting_sessionmaker():
+        nonlocal call_count
+        call_count += 1
+        return original_sessionmaker()
+
+    monkeypatch.setattr(auth_service, "get_sessionmaker", _counting_sessionmaker)
+
+    def _resolve_current_user() -> User:
+        identity = auth_service.get_authenticated_identity(
+            request=request,
+            settings=settings,
+            session_token=cookie_value,
+            bearer_credentials=None,
+            header_token=None,
+        )
+        return auth_service.get_current_user(identity=identity)
+
+    user = _resolve_current_user()
+    assert user.email == "admin@example.com"
+    assert call_count == 1
+
+    identity = auth_service.get_authenticated_identity(
+        request=request,
+        settings=settings,
+        session_token=cookie_value,
+        bearer_credentials=None,
+        header_token=None,
+    )
+
+    assert identity.user.user_id == user.user_id
+    assert identity.session is not None
+    assert identity.session.last_seen_user_agent == "pytest-shared"
+    assert getattr(request.state, "authenticated_identity") is identity
+    assert call_count == 1
 
 
 def test_protected_routes_require_authentication(app_client_factory, tmp_path, monkeypatch) -> None:
@@ -1103,13 +1160,10 @@ def test_open_access_mode_disables_auth(app_client_factory, tmp_path, monkeypatc
 
         request = _make_request_stub()
         settings = config.get_settings()
-        session_factory = get_sessionmaker()
-        with session_factory() as db:
-            identity = _resolve_identity(
-                request,
-                settings=settings,
-                db=db,
-            )
+        identity = _resolve_identity(
+            request,
+            settings=settings,
+        )
 
         assert identity.user.email == "open-access@ade.local"
         assert identity.mode == "none"
