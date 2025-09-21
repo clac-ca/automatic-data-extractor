@@ -1,21 +1,21 @@
-# 🔄 Next Task — Expose RequestAuthContext from Request State
+# 🔄 Next Task — Provide AuthenticatedIdentity Dependency
 
 ## Context
-`RequestAuthContext` now centralises how request metadata is built, but FastAPI routes still reach into `request.state.auth_context` as an untyped dictionary. Each consumer has to guard against missing keys and manually extract values such as `mode`, `session_id`, or `subject`. Providing a typed accessor keeps the calling code simple while retaining backwards compatibility for callers that still expect the dictionary.
+`RequestAuthContext` is now attached to each request as a dataclass, but FastAPI routes still need direct access to `Request` so they can pull sessions, API keys, and context from `request.state`. A dedicated dependency that returns a typed bundle would let routes declare what they need via dependency injection, trim per-route boilerplate, and move us closer to standard FastAPI patterns instead of custom state juggling.
 
 ## Goals
-1. Update `set_request_auth_context` so the constructed `RequestAuthContext` instance is stored on the request (for example `request.state.auth_context_model`) alongside the existing dictionary.
-2. Add a lightweight helper in `services/auth.py` that returns the `RequestAuthContext` for a request, falling back to reconstructing it from the dictionary when necessary.
-3. Refactor `/auth` routes (especially `current_user_profile`) and any other call sites to rely on the new helper instead of manually digging through the dictionary.
-4. Preserve behaviour for existing consumers that read `request.state.auth_context`, `request.state.auth_session`, or `request.state.api_key` directly.
+1. Introduce a lightweight `AuthenticatedIdentity` dataclass in `backend/app/services/auth.py` that packages the current `User`, `RequestAuthContext`, and any associated `UserSession` or `ApiKey` instances.
+2. Implement a new dependency (for example `get_authenticated_identity`) that reuses the existing credential resolution logic to populate the dataclass without duplicating state manipulation. The helper should rely on FastAPI's DI (`Depends`) instead of manual request plumbing.
+3. Update the `/auth` routes (`logout`, `session_status`, `current_user_profile`) to consume the new dependency rather than reading from `request.state` directly.
+4. Keep `get_current_user` available for other routers by delegating to the new dependency or otherwise reusing the same code path so behaviour stays consistent.
 
 ## Implementation notes
-- Keep the helper free of FastAPI dependencies beyond `Request` and avoid changing response schemas.
-- The accessor should return `None` when no context has been set and should tolerate partially populated dictionaries to remain robust with older tests.
-- Extend or adjust unit tests to cover the helper and ensure the dataclass is attached to the request state.
+- The dataclass should allow `session` and `api_key` to be `None` while still exposing the underlying models when present.
+- Prefer building on `set_request_auth_context`/`get_request_auth_context` to avoid mutating request state in multiple places.
+- Add or update unit tests to cover the new dependency and the refactored routes, keeping the test suite deterministic.
 
 ## Definition of done
-- `set_request_auth_context` stores both the dictionary and dataclass on the request state.
-- A helper exists to retrieve the `RequestAuthContext` instance from a FastAPI request.
-- `/auth` routes consume the helper instead of raw dictionary access.
+- `AuthenticatedIdentity` (or equivalent) is defined and used by a new dependency in `services/auth.py`.
+- `/auth/logout`, `/auth/session`, and `/auth/me` rely on the new dependency rather than `request.state` lookups.
+- `get_current_user` still returns the `User` object and continues to pass existing tests.
 - `pytest backend/tests/test_auth.py` passes.

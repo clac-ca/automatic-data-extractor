@@ -10,6 +10,7 @@ import json
 import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -152,6 +153,66 @@ def test_password_hashing_roundtrip() -> None:
     assert hashed != password
     assert auth_service.verify_password(password, hashed)
     assert not auth_service.verify_password("other", hashed)
+
+
+def test_set_request_auth_context_stores_model() -> None:
+    request = SimpleNamespace(state=SimpleNamespace())
+    context = auth_service.RequestAuthContext(
+        user_id="user-1",
+        email="user@example.com",
+        mode="session",
+        session_id="session-1",
+        subject="subject-1",
+    )
+
+    auth_service.set_request_auth_context(request, context)
+
+    assert getattr(request.state, "auth_context_model") is context
+    assert getattr(request.state, "auth_context") == context.to_dict()
+
+
+def test_get_request_auth_context_prefers_model_instance() -> None:
+    request = SimpleNamespace(state=SimpleNamespace())
+    context = auth_service.RequestAuthContext(
+        user_id="user-2",
+        email="user2@example.com",
+        mode="api-key",
+        api_key_id="api-1",
+    )
+    request.state.auth_context_model = context
+    request.state.auth_context = {"user_id": "ignored", "email": "ignored", "mode": "basic"}
+
+    resolved = auth_service.get_request_auth_context(request)
+
+    assert resolved is context
+
+
+def test_get_request_auth_context_reconstructs_from_dict() -> None:
+    request = SimpleNamespace(state=SimpleNamespace())
+    request.state.auth_context = {
+        "user_id": "user-3",
+        "email": "user3@example.com",
+        "mode": "api-key",
+        "api_key_id": "api-2",
+        "subject": "subject-2",
+    }
+
+    resolved = auth_service.get_request_auth_context(request)
+
+    assert isinstance(resolved, auth_service.RequestAuthContext)
+    assert resolved.api_key_id == "api-2"
+    assert resolved.subject == "subject-2"
+    assert getattr(request.state, "auth_context_model") is resolved
+
+
+def test_get_request_auth_context_handles_partial_dict() -> None:
+    request = SimpleNamespace(state=SimpleNamespace())
+    request.state.auth_context = {"user_id": "user-4"}
+
+    resolved = auth_service.get_request_auth_context(request)
+
+    assert resolved is None
+    assert not hasattr(request.state, "auth_context_model")
 
 
 def test_complete_login_helper_commits_session(monkeypatch, tmp_path) -> None:
