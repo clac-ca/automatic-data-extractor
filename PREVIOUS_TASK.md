@@ -1,9 +1,9 @@
-# ✅ Completed Task — Make get_authenticated_identity the sole credential resolver
+# ✅ Completed Task — Simplify get_authenticated_identity transaction handling
 
 ## Context
-`resolve_credentials` still exposed a parallel public API alongside `get_authenticated_identity`, leaving FastAPI consumers with two imports and duplicated resolution logic.
+`get_authenticated_identity` still carried deferred commit bookkeeping from the deprecated resolver helper, complicating control flow and delaying session errors.
 
 ## Outcome
-- Inlined the session and API key resolution workflow inside `get_authenticated_identity`, keeping the lazy commit/rollback behaviour for token revocation and metadata updates intact.
-- Dropped the exported `resolve_credentials` helper so only the dependency remains part of the public surface.
-- Updated authentication tests to cover the dependency directly and reran `pytest backend/tests/test_auth.py` to confirm behaviour.
+- Finalised session revocation immediately within the dependency, removing the `pending_commit` state machine.
+- Raised session authentication failures as soon as they occur unless an API key token is available to recover the request.
+- Added coverage for the mixed credential path (invalid session + valid API key) and re-ran `pytest backend/tests/test_auth.py` to confirm behaviour.
