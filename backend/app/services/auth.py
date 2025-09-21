@@ -304,6 +304,128 @@ def touch_api_key_usage(db: Session, api_key: ApiKey, *, commit: bool = True) ->
     return api_key
 
 
+def _api_key_token_exists(db: Session, *, prefix: str, token_hash: str) -> bool:
+    prefix_match = db.scalar(
+        select(ApiKey.api_key_id).where(ApiKey.token_prefix == prefix).limit(1)
+    )
+    if prefix_match is not None:
+        return True
+    hash_match = db.scalar(
+        select(ApiKey.api_key_id).where(ApiKey.token_hash == token_hash).limit(1)
+    )
+    return hash_match is not None
+
+
+def mint_api_key(
+    db: Session,
+    *,
+    user: User,
+    name: str,
+    actor: User,
+    commit: bool = True,
+) -> tuple[ApiKey, str]:
+    """Persist a new API key and return it with the raw token."""
+
+    candidate_name = name.strip()
+    if not candidate_name:
+        msg = "API key name cannot be empty"
+        raise ValueError(msg)
+
+    while True:
+        raw_token = secrets.token_urlsafe(48)
+        prefix = raw_token[:12]
+        token_hash = hash_api_key_token(raw_token)
+        if not _api_key_token_exists(db, prefix=prefix, token_hash=token_hash):
+            break
+
+    api_key = ApiKey(
+        user_id=user.user_id,
+        name=candidate_name,
+        token_prefix=prefix,
+        token_hash=token_hash,
+    )
+    db.add(api_key)
+    db.flush()
+
+    record_event(
+        db,
+        EventRecord(
+            event_type="api-key.created",
+            entity_type="api-key",
+            entity_id=api_key.api_key_id,
+            actor_type="user",
+            actor_id=actor.user_id,
+            actor_label=actor.email,
+            source="api",
+            payload={
+                "user_id": user.user_id,
+                "name": candidate_name,
+                "token_prefix": prefix,
+            },
+        ),
+        commit=False,
+    )
+
+    if commit:
+        db.commit()
+        db.refresh(api_key)
+    else:
+        db.flush()
+
+    return api_key, raw_token
+
+
+def revoke_api_key(
+    db: Session,
+    api_key: ApiKey,
+    *,
+    actor: User,
+    reason: str | None = None,
+    commit: bool = True,
+) -> ApiKey:
+    """Mark an API key as revoked and record an audit event."""
+
+    if api_key.revoked_at is not None:
+        if reason and api_key.revoked_reason != reason:
+            api_key.revoked_reason = reason
+            if commit:
+                db.commit()
+                db.refresh(api_key)
+            else:
+                db.flush()
+        return api_key
+
+    api_key.revoked_at = _format_timestamp(_now())
+    api_key.revoked_reason = reason
+
+    record_event(
+        db,
+        EventRecord(
+            event_type="api-key.revoked",
+            entity_type="api-key",
+            entity_id=api_key.api_key_id,
+            actor_type="user",
+            actor_id=actor.user_id,
+            actor_label=actor.email,
+            source="api",
+            payload={
+                "user_id": api_key.user_id,
+                "token_prefix": api_key.token_prefix,
+                "reason": reason,
+            },
+        ),
+        commit=False,
+    )
+
+    if commit:
+        db.commit()
+        db.refresh(api_key)
+    else:
+        db.flush()
+
+    return api_key
+
+
 # ---------------------------------------------------------------------------
 # Auth resolution
 # ---------------------------------------------------------------------------
@@ -1434,10 +1556,12 @@ __all__ = [
     "hash_password",
     "hash_session_token",
     "issue_session",
+    "mint_api_key",
     "main",
     "register_cli",
     "require_basic_auth_user",
     "require_admin",
+    "revoke_api_key",
     "revoke_session",
     "touch_api_key_usage",
     "touch_session",
