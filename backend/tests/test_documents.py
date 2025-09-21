@@ -8,8 +8,9 @@ from typing import Any
 import pytest
 
 from backend.app.db import get_sessionmaker
-from backend.app.models import Document
+from backend.app.models import Document, User
 from backend.app.services.documents import delete_document as delete_document_service
+from backend.tests.conftest import DEFAULT_USER_EMAIL
 
 
 def _upload_document(
@@ -556,6 +557,14 @@ def test_update_document_defaults_event_type_and_source(app_client) -> None:
     assert event["event_type"] == "document.metadata.updated"
     assert event["source"] == "api"
     assert event["payload"]["metadata"] == {"label": "scanned"}
+    assert event["actor_type"] == "user"
+
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        user = db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one()
+
+    assert event["actor_id"] == user.user_id
+    assert event["actor_label"] == user.email
 
 
 def test_document_event_timeline_paginates_and_filters(app_client) -> None:
