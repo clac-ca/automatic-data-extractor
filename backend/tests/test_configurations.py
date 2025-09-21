@@ -10,12 +10,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.db import get_sessionmaker
+from backend.app.models import User
 from backend.app.services.events import EventRecord, record_event
 from backend.app.services.configurations import (
     ActiveConfigurationNotFoundError,
     ConfigurationMismatchError,
     resolve_configuration,
 )
+from backend.tests.conftest import DEFAULT_USER_EMAIL
 
 
 def _create_sample_configuration(
@@ -252,6 +254,8 @@ def test_delete_configuration_removes_record(app_client) -> None:
 def test_create_configuration_records_events(app_client) -> None:
     client, _, _ = app_client
 
+    user_id = _default_user_id()
+
     payload = {
         "document_type": "invoice",
         "title": "Initial config",
@@ -282,7 +286,9 @@ def test_create_configuration_records_events(app_client) -> None:
         for item in payload_events["items"]
         if item["event_type"] == "configuration.created"
     )
-    assert created_event["actor_label"] == "api"
+    assert created_event["actor_type"] == "user"
+    assert created_event["actor_id"] == user_id
+    assert created_event["actor_label"] == DEFAULT_USER_EMAIL
     assert created_event["source"] == "api"
     assert created_event["payload"]["title"] == payload["title"]
     assert created_event["payload"]["version"] == configuration["version"]
@@ -294,11 +300,15 @@ def test_create_configuration_records_events(app_client) -> None:
         if item["event_type"] == "configuration.activated"
     )
     assert activated_event["payload"]["is_active"] is True
-    assert activated_event["actor_label"] == "api"
+    assert activated_event["actor_type"] == "user"
+    assert activated_event["actor_id"] == user_id
+    assert activated_event["actor_label"] == DEFAULT_USER_EMAIL
 
 
 def test_update_configuration_appends_events(app_client) -> None:
     client, _, _ = app_client
+
+    user_id = _default_user_id()
 
     created = _create_sample_configuration(client, is_active=False)
 
@@ -334,7 +344,9 @@ def test_update_configuration_appends_events(app_client) -> None:
         if item["event_type"] == "configuration.updated"
     )
     assert updated_event["payload"]["changed_fields"] == ["title"]
-    assert updated_event["actor_label"] == "api"
+    assert updated_event["actor_type"] == "user"
+    assert updated_event["actor_id"] == user_id
+    assert updated_event["actor_label"] == DEFAULT_USER_EMAIL
 
     activate_response = client.patch(
         f"/configurations/{created['configuration_id']}",
@@ -361,7 +373,9 @@ def test_update_configuration_appends_events(app_client) -> None:
 
     activated = activation_events["configuration.activated"]
     assert activated["payload"]["is_active"] is True
-    assert activated["actor_label"] == "api"
+    assert activated["actor_type"] == "user"
+    assert activated["actor_id"] == user_id
+    assert activated["actor_label"] == DEFAULT_USER_EMAIL
 
     updated_activation = next(
         item
@@ -711,3 +725,11 @@ def test_configuration_event_timeline_returns_404_for_missing_configuration(app_
         response.json()["detail"]
         == "Configuration 'does-not-exist' was not found"
     )
+
+
+def _default_user_id() -> str:
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        user = db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one()
+        return user.user_id
+
