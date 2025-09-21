@@ -1,19 +1,19 @@
-# 🔄 Next Task — Remove RequestAuthContext Request State Storage
+# 🔄 Next Task — Inline RequestAuthContext into AuthenticatedIdentity
 
 ## Context
-`AuthenticatedIdentity` already carries the authenticated user, session, API key, and a `RequestAuthContext` instance for downstream dependencies. The service still writes that context onto `request.state.auth_context_model`, and the login routes call `set_request_auth_context` to keep it in sync. No production code reads from `request.state`, so the extra mutation path increases indirection without providing value.
+With request state mirrors removed, the standalone `RequestAuthContext` dataclass no longer serves a unique purpose: its fields duplicate information available on the `AuthenticatedIdentity`, the resolved `User`, and optional session or API key models. Dropping the extra wrapper would further simplify how downstream dependencies access authentication metadata.
 
 ## Goals
-1. Remove the `set_request_auth_context` and `get_request_auth_context` helpers that read or write `request.state.auth_context_model`.
-2. Update authentication dependencies and routes to rely on the `AuthenticatedIdentity` payload instead of request state for context propagation.
-3. Simplify tests to assert against the dependency return values rather than request state mutation.
+1. Remove the `RequestAuthContext` dataclass and move its fields onto `AuthenticatedIdentity` (e.g. `mode`, `session_id`, `api_key_id`, `subject`).
+2. Update authentication helpers, routes, and tests to rely on the flattened identity object instead of a nested context attribute.
+3. Ensure serialised responses (like `/auth/me` and session refresh) continue to expose the same payloads.
 
 ## Implementation notes
-- Search for `set_request_auth_context` and `get_request_auth_context` usage before deleting the helpers.
-- Update the login flows and open-access mode to surface the refreshed context through return values or response payloads.
-- Ensure any documentation that references `request.state.auth_context_model` is updated or removed.
+- Grep for `RequestAuthContext` to identify constructor and attribute usage before deleting the dataclass.
+- Adjust any helper functions that previously called `RequestAuthContext.from_user` to populate the new identity fields directly.
+- Refresh fixtures or helper stubs in tests so they build `AuthenticatedIdentity` instances without the nested context wrapper.
 
 ## Definition of done
-- No code writes to or reads from `request.state.auth_context_model` during authentication.
-- `AuthenticatedIdentity` remains the single source of truth for the resolved user, session, API key, and context data.
+- `RequestAuthContext` is removed from the codebase and all dependencies compile without referencing it.
+- `AuthenticatedIdentity` directly exposes the metadata needed by routes and services (mode, session/api key identifiers, SSO subject).
 - `pytest backend/tests/test_auth.py` passes.

@@ -579,20 +579,6 @@ class AuthenticatedIdentity:
     api_key: ApiKey | None = None
 
 
-def set_request_auth_context(request: Request, context: RequestAuthContext) -> None:
-    request.state.auth_context_model = context
-
-
-def get_request_auth_context(request: Request) -> RequestAuthContext | None:
-    """Return the ``RequestAuthContext`` stored on the request, if any."""
-
-    existing = getattr(request.state, "auth_context_model", None)
-    if isinstance(existing, RequestAuthContext):
-        return existing
-
-    return None
-
-
 def get_authenticated_identity(
     request: Request,
     db: Session = Depends(get_db),
@@ -603,7 +589,6 @@ def get_authenticated_identity(
 ) -> AuthenticatedIdentity:
     if settings.auth_disabled:
         context = RequestAuthContext.from_user(_OPEN_ACCESS_USER, "none")
-        set_request_auth_context(request, context)
         return AuthenticatedIdentity(user=_OPEN_ACCESS_USER, context=context)
 
     ip_address, user_agent = _client_context(request)
@@ -632,13 +617,7 @@ def get_authenticated_identity(
             api_key_model = resolution.api_key
             api_key_id = api_key_model.api_key_id
 
-        existing_context = get_request_auth_context(request)
-        subject: str | None = None
-        if (
-            existing_context is not None
-            and existing_context.user_id == resolution.user.user_id
-        ):
-            subject = existing_context.subject
+        subject: str | None = resolution.user.sso_subject
 
         context = RequestAuthContext.from_user(
             resolution.user,
@@ -647,7 +626,6 @@ def get_authenticated_identity(
             api_key_id=api_key_id,
             subject=subject,
         )
-        set_request_auth_context(request, context)
         return AuthenticatedIdentity(
             user=resolution.user,
             context=context,
@@ -1478,7 +1456,6 @@ __all__ = [
     "get_api_key",
     "get_authenticated_identity",
     "get_current_user",
-    "get_request_auth_context",
     "get_session",
     "hash_api_key_token",
     "hash_password",
@@ -1488,7 +1465,6 @@ __all__ = [
     "require_admin",
     "resolve_credentials",
     "revoke_session",
-    "set_request_auth_context",
     "touch_api_key_usage",
     "touch_session",
     "validate_settings",

@@ -155,46 +155,6 @@ def test_password_hashing_roundtrip() -> None:
     assert not auth_service.verify_password("other", hashed)
 
 
-def test_set_request_auth_context_stores_model() -> None:
-    request = SimpleNamespace(state=SimpleNamespace())
-    context = auth_service.RequestAuthContext(
-        user_id="user-1",
-        email="user@example.com",
-        mode="session",
-        session_id="session-1",
-        subject="subject-1",
-    )
-
-    auth_service.set_request_auth_context(request, context)
-
-    assert getattr(request.state, "auth_context_model") is context
-    assert not hasattr(request.state, "auth_context")
-
-
-def test_get_request_auth_context_returns_model_instance() -> None:
-    request = SimpleNamespace(state=SimpleNamespace())
-    context = auth_service.RequestAuthContext(
-        user_id="user-2",
-        email="user2@example.com",
-        mode="api-key",
-        api_key_id="api-1",
-    )
-    request.state.auth_context_model = context
-
-    resolved = auth_service.get_request_auth_context(request)
-
-    assert resolved is context
-
-
-def test_get_request_auth_context_returns_none_when_missing() -> None:
-    request = SimpleNamespace(state=SimpleNamespace())
-
-    resolved = auth_service.get_request_auth_context(request)
-
-    assert resolved is None
-    assert not hasattr(request.state, "auth_context_model")
-
-
 def _make_request_stub() -> SimpleNamespace:
     return SimpleNamespace(
         state=SimpleNamespace(),
@@ -240,7 +200,6 @@ def test_get_authenticated_identity_for_session(monkeypatch, tmp_path) -> None:
             assert identity.session.session_id == session_model.session_id
             assert identity.api_key is None
             assert identity.context.mode == "session"
-            assert auth_service.get_request_auth_context(request) is identity.context
 
 
 def test_get_authenticated_identity_for_api_key(monkeypatch, tmp_path) -> None:
@@ -276,7 +235,6 @@ def test_get_authenticated_identity_for_api_key(monkeypatch, tmp_path) -> None:
         assert identity.api_key is not None
         assert identity.api_key.token_prefix == token[:12]
         assert identity.context.mode == "api-key"
-        assert auth_service.get_request_auth_context(request) is identity.context
 
 
 def test_complete_login_helper_commits_session(monkeypatch, tmp_path) -> None:
@@ -790,29 +748,29 @@ def test_open_access_mode_disables_auth(app_client_factory, tmp_path, monkeypatc
     monkeypatch.setenv("AUTH_DISABLED", "1")
     with app_client_factory(database_url, documents_dir) as client:
         client.auth = None
-        captured: dict[str, object] = {}
-
-        original = auth_service.set_request_auth_context
-
-        def capture_context(request, context):
-            captured["context"] = context
-            return original(request, context)
-
-        monkeypatch.setattr(auth_service, "set_request_auth_context", capture_context)
-
         login = client.post("/auth/login/basic")
         assert login.status_code == 404
 
         documents = client.get("/documents")
         assert documents.status_code == 200
 
-        assert "context" in captured
-        context = captured["context"]
-        assert isinstance(context, auth_service.RequestAuthContext)
-        assert context.email == "open-access@ade.local"
-        assert context.mode == "none"
-        assert context.session_id is None
-        assert context.api_key_id is None
+        request = _make_request_stub()
+        settings = config.get_settings()
+        session_factory = get_sessionmaker()
+        with session_factory() as db:
+            identity = auth_service.get_authenticated_identity(
+                request,
+                db=db,
+                settings=settings,
+                session_token=None,
+                bearer_credentials=None,
+                header_token=None,
+            )
+
+        assert identity.user.email == "open-access@ade.local"
+        assert identity.context.mode == "none"
+        assert identity.context.session_id is None
+        assert identity.context.api_key_id is None
 
         profile = client.get("/auth/me")
         assert profile.status_code == 200
