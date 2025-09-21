@@ -1,9 +1,9 @@
-# ✅ Completed Task — Inline Authentication Event Logging
+# ✅ Completed Task — Remove Legacy Request Auth Context Fallback
 
 ## Context
-Event logging for authentication actions relied on thin helper wrappers in `services/auth.py`. Each routed call first invoked a helper that delegated to `record_event`, pushing event metadata away from the triggering behaviour and adding needless indirection. Simplifying these call sites keeps event payloads close to the logic that assembles them and removes redundant abstractions.
+`AuthenticatedIdentity` now propagates a `RequestAuthContext` dataclass through FastAPI requests, but the middleware still mirrored that data into a legacy `request.state.auth_context` dictionary. The duplicate storage path was unused and forced conversion logic that obscured the single source of truth.
 
 ## Outcome
-- Removed the `login_success`, `login_failure`, `logout`, `session_refreshed`, and `cli_action` helpers and emitted events directly where actions occur.
-- Updated API routes and CLI commands to call `record_event` inline while preserving payload structure, actors, and sources.
-- Refreshed authentication tests to align with the simplified logging paths; `pytest backend/tests/test_auth.py` passes.
+- Updated `set_request_auth_context` to store only the dataclass instance on `request.state`.
+- Simplified `get_request_auth_context` so it returns the stored dataclass or `None`, eliminating dictionary reconstruction and legacy handling.
+- Refreshed authentication tests to reflect the streamlined storage strategy.
