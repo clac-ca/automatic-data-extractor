@@ -1,14 +1,15 @@
-# 🔄 Next Task — Inject settings dependency into auth routes
+# 🔄 Next Task — Document and smoke-test the new ADE CLI entrypoint
 
 ## Context
-Auth route handlers still reach for `config.get_settings()` inside each function, hiding their configuration dependency and repeating boilerplate. FastAPI can supply the settings object directly via dependency injection, letting the framework manage overrides and reducing manual calls.
+The authentication commands now live behind a shared `backend.app.cli` module and can be invoked with `python -m backend.app`.
+Documenting the workflow and adding a light integration test will help future contributors discover and trust the CLI.
 
 ## Goals
-1. Accept `settings: config.Settings = Depends(config.get_settings)` in each auth route instead of calling `config.get_settings()` manually.
-2. Update helper usage so settings come from the injected object without re-fetching inside helper calls.
-3. Keep behaviour and response shapes unchanged while ensuring tests cover the updated dependency wiring.
+1. Update the relevant documentation (README or DOCUMENTATION.md) with examples showing how to run `python -m backend.app auth ...`.
+2. Add a quick integration test that invokes the new top-level CLI entry point (e.g. `backend.app.cli.main([...])`) to ensure the wiring works.
+3. Keep existing auth CLI behaviours intact; the new test should reuse the configured SQLite fixture.
 
 ## Definition of done
-- Every handler in `backend/app/routes/auth.py` relies on an injected settings dependency.
-- Tests continue to pass with the new dependency signatures.
-- `pytest backend/tests/test_auth.py` succeeds.
+- Documentation clearly explains how to reach the ADE CLI and the available auth subcommands.
+- A test covers the `backend.app.cli.main()` path to guard the new entry point.
+- `pytest backend/tests/test_auth.py` continues to pass.

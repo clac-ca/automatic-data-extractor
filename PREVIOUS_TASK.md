@@ -1,9 +1,11 @@
-# ✅ Completed Task — Simplify get_authenticated_identity transaction handling
+# ✅ Completed Task — Restore simple settings access and centralise the auth CLI
 
 ## Context
-`get_authenticated_identity` still carried deferred commit bookkeeping from the deprecated resolver helper, complicating control flow and delaying session errors.
+FastAPI dependency injection for configuration felt heavier than necessary, and the user management CLI lived inside the auth
+service module with no shared entry point. Aligning with the goal of simplicity required reverting the settings change and
+making the CLI easier to discover across services.
 
 ## Outcome
-- Finalised session revocation immediately within the dependency, removing the `pending_commit` state machine.
-- Raised session authentication failures as soon as they occur unless an API key token is available to recover the request.
-- Added coverage for the mixed credential path (invalid session + valid API key) and re-ran `pytest backend/tests/test_auth.py` to confirm behaviour.
+- Reverted auth route handlers to call `config.get_settings()` directly, removing the dependency injection churn.
+- Added a shared `backend/app/cli.py` entry point (and `python -m backend.app`) that will host CLI commands for every service.
+- Updated the auth service to register its subcommands with the shared CLI so existing flows keep working while paving the way for future commands.
