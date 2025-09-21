@@ -709,6 +709,16 @@ class RequestAuthContext:
         )
 
 
+@dataclass(slots=True)
+class AuthenticatedIdentity:
+    """Resolved authentication details for the current request."""
+
+    user: User
+    context: RequestAuthContext
+    session: UserSession | None = None
+    api_key: ApiKey | None = None
+
+
 def set_request_auth_context(request: Request, context: RequestAuthContext) -> None:
     request.state.auth_context_model = context
     request.state.auth_context = context.to_dict()
@@ -756,28 +766,25 @@ def get_request_auth_context(request: Request) -> RequestAuthContext | None:
     return None
 
 
-def get_current_user(
+def get_authenticated_identity(
     request: Request,
     db: Session = Depends(get_db),
     settings: config.Settings = Depends(config.get_settings),
     session_token: str | None = Depends(_session_cookie_value),
     bearer_credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
     header_token: str | None = Depends(_api_key_header),
-) -> User:
+) -> AuthenticatedIdentity:
     if settings.auth_disabled:
-        set_request_auth_context(
-            request,
-            RequestAuthContext.from_user(_OPEN_ACCESS_USER, "none"),
-        )
-        return _OPEN_ACCESS_USER
+        context = RequestAuthContext.from_user(_OPEN_ACCESS_USER, "none")
+        set_request_auth_context(request, context)
+        return AuthenticatedIdentity(user=_OPEN_ACCESS_USER, context=context)
 
     ip_address, user_agent = _client_context(request)
-    cookie_value = session_token
     api_key_token = _resolve_api_key_token(bearer_credentials, header_token)
     resolution = resolve_credentials(
         db,
         settings,
-        session_token=cookie_value,
+        session_token=session_token,
         api_key_token=api_key_token,
         ip_address=ip_address,
         user_agent=user_agent,
@@ -787,24 +794,41 @@ def get_current_user(
         mode = resolution.mode
         if mode is None:
             raise RuntimeError("Resolved authenticated user without an auth mode")
+        session_model: UserSession | None = None
+        api_key_model: ApiKey | None = None
         session_id: str | None = None
         api_key_id: str | None = None
-        if mode == "session":
-            if resolution.session is not None:
-                request.state.auth_session = resolution.session
-                session_id = resolution.session.session_id
-        elif mode == "api-key":
-            if resolution.api_key is not None:
-                request.state.api_key = resolution.api_key
-                api_key_id = resolution.api_key.api_key_id
+        if mode == "session" and resolution.session is not None:
+            session_model = resolution.session
+            session_id = session_model.session_id
+            request.state.auth_session = session_model
+        elif mode == "api-key" and resolution.api_key is not None:
+            api_key_model = resolution.api_key
+            api_key_id = api_key_model.api_key_id
+            request.state.api_key = api_key_model
+
+        existing_context = get_request_auth_context(request)
+        subject: str | None = None
+        if (
+            existing_context is not None
+            and existing_context.user_id == resolution.user.user_id
+        ):
+            subject = existing_context.subject
+
         context = RequestAuthContext.from_user(
             resolution.user,
             mode,
             session_id=session_id,
             api_key_id=api_key_id,
+            subject=subject,
         )
         set_request_auth_context(request, context)
-        return resolution.user
+        return AuthenticatedIdentity(
+            user=resolution.user,
+            context=context,
+            session=session_model,
+            api_key=api_key_model,
+        )
 
     failure = resolution.failure
     if failure is None:
@@ -819,6 +843,25 @@ def get_current_user(
         detail=failure.detail,
         headers=failure.headers,
     )
+
+
+def get_current_user(
+    request: Request,
+    db: Session = Depends(get_db),
+    settings: config.Settings = Depends(config.get_settings),
+    session_token: str | None = Depends(_session_cookie_value),
+    bearer_credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    header_token: str | None = Depends(_api_key_header),
+) -> User:
+    identity = get_authenticated_identity(
+        request,
+        db=db,
+        settings=settings,
+        session_token=session_token,
+        bearer_credentials=bearer_credentials,
+        header_token=header_token,
+    )
+    return identity.user
 
 
 def require_admin(user: User = Depends(get_current_user)) -> User:
@@ -1563,6 +1606,7 @@ def main(argv: list[str] | None = None) -> int:
 
 __all__ = [
     "AdminUser",
+    "AuthenticatedIdentity",
     "AuthFailure",
     "AuthResolution",
     "CurrentUser",
@@ -1574,6 +1618,7 @@ __all__ = [
     "complete_login",
     "exchange_code",
     "get_api_key",
+    "get_authenticated_identity",
     "get_current_user",
     "get_request_auth_context",
     "get_session",
