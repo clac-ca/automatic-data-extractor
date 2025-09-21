@@ -7,7 +7,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from ..auth.dependencies import get_current_user
+from ..services.auth import get_current_user
 from ..db import get_db
 from ..models import Event
 from ..schemas import (

@@ -28,8 +28,7 @@ _A future diagram asset will live at `docs/assets/system-overview.png` once rend
 - **Backend (`backend/app/`)** — FastAPI entry point with routes, services, authentication, and persistence helpers. Modules include:
   - `config.py` — Central settings loaded from `ADE_` environment variables.
   - `routes/` — HTTP endpoints for documents, configurations, jobs, events, health, and authentication.
-  - `services/` — Deterministic helpers for documents, events, configurations, and maintenance tasks.
-  - `auth/` — Password hashing, session management, and optional SSO utilities.
+  - `services/` — Deterministic helpers for documents, events, configurations, authentication, and maintenance tasks.
   - `maintenance/` — Scheduler and CLI tooling for document purge operations.
 - **Processor (`backend/processor/`)** — Pure functions that detect tables, map columns, and emit audit notes without side effects.
 - **Storage** — SQLite database (`data/db/ade.sqlite`) and filesystem-backed document store (`data/documents/`). Both paths mount as volumes in production to simplify backup.
@@ -37,8 +36,8 @@ _A future diagram asset will live at `docs/assets/system-overview.png` once rend
 ## Integration surfaces
 
 - **Configuration UI** — Preferred path for drafting, validating, and publishing configuration revisions. The UI calls the same REST endpoints documented for automation, but keeps guard rails (role checks, payload validation, event previews) in front of day-to-day users.
-- **REST API** — Used by the UI and automation clients. Session cookies remain the current authentication mechanism, and the upcoming API key flow will add a static header (for example, `ADE-API-Key: <token>`) so service accounts can integrate without interactive login. Until the API key feature lands, automation should continue storing the issued session cookie after authenticating.
-- **Command-line helpers** — Targeted scripts (for example, `python -m backend.app.auth.manage`) handle administrative tasks that need direct database access or bulk operations.
+- **REST API** — Used by the UI and automation clients. Humans authenticate with Basic or SSO to receive a session cookie; service accounts send `Authorization: Bearer <API_KEY>` tokens that ADE verifies against the `api_keys` table.
+- **Command-line helpers** — Targeted scripts (for example, `python -m backend.app auth ...`) handle administrative tasks that need direct database access or bulk operations.
 
 These interfaces share the same event log and configuration versioning, ensuring architecture discussions can focus on system behaviour rather than transport differences.
 

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from backend.app.db import get_sessionmaker
+from backend.app.models import Event
 from backend.app.schemas import (
     ConfigurationTimelineSummary,
     DocumentTimelineSummary,
@@ -27,6 +28,8 @@ def db_session(app_client):
     del client
     session_factory = get_sessionmaker()
     with session_factory() as session:
+        session.query(Event).delete()
+        session.commit()
         yield session
 
 
