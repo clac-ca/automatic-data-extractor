@@ -1,14 +1,14 @@
-# 🔄 Next Task — Make get_authenticated_identity the sole credential resolver
+# 🔄 Next Task — Simplify get_authenticated_identity transaction handling
 
 ## Context
-With `resolve_credentials` now returning an `AuthenticatedIdentity` (or raising), `get_authenticated_identity` only checks for the open-access mode before delegating. Keeping both functions as public entrypoints creates surface area we no longer need.
+With credential resolution now fully inlined, `get_authenticated_identity` still carries `pending_commit` bookkeeping and defers raising session errors until after API key checks. This state machine is a holdover from the old helper and can be replaced with straightforward control flow that finalises database mutations immediately.
 
 ## Goals
-1. Inline the credential resolution logic into `get_authenticated_identity` (or make the helper private) so FastAPI consumers have a single dependency to import.
-2. Preserve the existing lazy commit/rollback behaviour for session revocation and API key usage updates.
-3. Update tests to exercise `get_authenticated_identity` directly and drop any references to a public `resolve_credentials` helper.
+1. Finalise session revocation (or rollbacks) inline so the dependency no longer tracks `pending_commit` state.
+2. Raise session errors immediately when no API key token is provided, while still allowing an API key to rescue a failed session attempt when present.
+3. Preserve the lazy commit semantics for session revocation and API key usage updates, and extend tests to cover the mixed-credential path (invalid session + valid API key).
 
 ## Definition of done
-- `resolve_credentials` is either removed or renamed private and no longer exported.
-- Tests cover authentication flows through `get_authenticated_identity` without importing the helper.
+- `get_authenticated_identity` no longer relies on `pending_commit` or deferred exceptions.
+- Tests cover both failure-only and mixed credential flows directly through the dependency.
 - `pytest backend/tests/test_auth.py` passes.
