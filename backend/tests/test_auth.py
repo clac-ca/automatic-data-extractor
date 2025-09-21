@@ -215,6 +215,92 @@ def test_get_request_auth_context_handles_partial_dict() -> None:
     assert not hasattr(request.state, "auth_context_model")
 
 
+def _make_request_stub() -> SimpleNamespace:
+    return SimpleNamespace(
+        state=SimpleNamespace(),
+        client=SimpleNamespace(host="127.0.0.1"),
+        headers={"user-agent": "pytest"},
+        cookies={},
+    )
+
+
+def test_get_authenticated_identity_for_session(monkeypatch, tmp_path) -> None:
+    with _configured_settings(monkeypatch, tmp_path) as (settings, session_factory):
+        with session_factory() as db:
+            user = User(
+                email="identity@example.com",
+                password_hash=auth_service.hash_password("secret"),
+                role=UserRole.ADMIN,
+                is_active=True,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+            session_model, raw_token = auth_service.issue_session(
+                db,
+                user,
+                settings=settings,
+            )
+
+            request = _make_request_stub()
+            request.cookies[settings.session_cookie_name] = raw_token
+
+            identity = auth_service.get_authenticated_identity(
+                request,
+                db=db,
+                settings=settings,
+                session_token=raw_token,
+                bearer_credentials=None,
+                header_token=None,
+            )
+
+            assert identity.user.user_id == user.user_id
+            assert identity.session is not None
+            assert identity.session.session_id == session_model.session_id
+            assert identity.api_key is None
+            assert identity.context.mode == "session"
+            assert getattr(request.state, "auth_session") is identity.session
+            assert auth_service.get_request_auth_context(request) is identity.context
+
+
+def test_get_authenticated_identity_for_api_key(monkeypatch, tmp_path) -> None:
+    with _configured_settings(monkeypatch, tmp_path) as (settings, session_factory):
+        with session_factory() as db:
+            user = User(
+                email="apikey@example.com",
+                password_hash=None,
+                role=UserRole.ADMIN,
+                is_active=True,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            user_id = user.user_id
+
+        token = "identity-api-token"
+        _insert_api_key(user, token)
+
+        with session_factory() as db:
+            request = _make_request_stub()
+            identity = auth_service.get_authenticated_identity(
+                request,
+                db=db,
+                settings=settings,
+                session_token=None,
+                bearer_credentials=None,
+                header_token=token,
+            )
+
+        assert identity.user.user_id == user_id
+        assert identity.session is None
+        assert identity.api_key is not None
+        assert identity.api_key.token_prefix == token[:12]
+        assert identity.context.mode == "api-key"
+        assert getattr(request.state, "api_key") is identity.api_key
+        assert auth_service.get_request_auth_context(request) is identity.context
+
+
 def test_complete_login_helper_commits_session(monkeypatch, tmp_path) -> None:
     overrides = {
         "ADE_DATABASE_URL": f"sqlite:///{tmp_path / 'complete-login.sqlite'}",
