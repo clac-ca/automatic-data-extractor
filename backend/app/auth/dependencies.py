@@ -5,15 +5,18 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security.utils import get_authorization_scheme_param
+from fastapi.security import APIKeyCookie, APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from .. import config
-from ..db import get_db, get_sessionmaker
-from ..models import ApiKey, User, UserRole, UserSession
+from ..db import get_db
+from ..models import User, UserRole, UserSession
 from . import api_keys, sessions
 
 _WWW_AUTH_HEADER = 'Bearer realm="ADE"'
+
+_bearer_scheme = HTTPBearer(auto_error=False)
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 # Synthetic admin identity returned when ADE_AUTH_MODES=none.
 _OPEN_ACCESS_USER = User(
@@ -33,14 +36,26 @@ def _client_context(request: Request) -> tuple[str | None, str | None]:
     return ip_address, user_agent
 
 
-def _extract_bearer_token(request: Request) -> str | None:
-    header = request.headers.get("authorization")
-    if not header:
-        return None
-    scheme, credentials = get_authorization_scheme_param(header)
-    if scheme.lower() != "bearer" or not credentials:
-        return None
-    return credentials
+async def _session_cookie_value(
+    request: Request,
+    settings: config.Settings = Depends(config.get_settings),
+) -> str | None:
+    cookie = APIKeyCookie(name=settings.session_cookie_name, auto_error=False)
+    token = await cookie(request)
+    if token:
+        return token
+    return None
+
+
+def _resolve_api_key_token(
+    bearer_credentials: HTTPAuthorizationCredentials | None,
+    header_token: str | None,
+) -> str | None:
+    if bearer_credentials and bearer_credentials.credentials:
+        return bearer_credentials.credentials
+    if header_token:
+        return header_token
+    return None
 
 
 def _set_request_context(
@@ -62,35 +77,37 @@ def _set_request_context(
         request.state.auth_context["api_key_id"] = api_key_id
 
 
-def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
-    settings = config.get_settings()
+def get_current_user(
+    request: Request,
+    db: Session = Depends(get_db),
+    settings: config.Settings = Depends(config.get_settings),
+    session_token: str | None = Depends(_session_cookie_value),
+    bearer_credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    header_token: str | None = Depends(_api_key_header),
+) -> User:
     if settings.auth_disabled:
         _set_request_context(request, _OPEN_ACCESS_USER, "none")
         return _OPEN_ACCESS_USER
 
     ip_address, user_agent = _client_context(request)
-    cookie_value = request.cookies.get(settings.session_cookie_name)
+    cookie_value = session_token
+    api_key_token = _resolve_api_key_token(bearer_credentials, header_token)
     session_error: HTTPException | None = None
+    pending_commit = False
 
     if cookie_value:
         session_model = sessions.get_session(db, cookie_value)
         if session_model:
             user = db.get(User, session_model.user_id)
             if user and user.is_active:
-                session_factory = get_sessionmaker()
-                with session_factory() as metadata_db:
-                    persistent = metadata_db.get(UserSession, session_model.session_id)
-                    if persistent is not None:
-                        refreshed = sessions.touch_session(
-                            metadata_db,
-                            persistent,
-                            settings=settings,
-                            ip_address=ip_address,
-                            user_agent=user_agent,
-                            commit=True,
-                        )
-                    else:
-                        refreshed = None
+                refreshed = sessions.touch_session(
+                    db,
+                    session_model,
+                    settings=settings,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    commit=False,
+                )
                 if refreshed is not None:
                     request.state.auth_session = refreshed
                     _set_request_context(
@@ -101,32 +118,33 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
                     )
                     db.commit()
                     return user
-            session_factory = get_sessionmaker()
-            with session_factory() as metadata_db:
-                persistent = metadata_db.get(UserSession, session_model.session_id)
-                if persistent is not None:
-                    sessions.revoke_session(metadata_db, persistent, commit=True)
+                sessions.revoke_session(db, session_model, commit=False)
+                pending_commit = True
+            else:
+                sessions.revoke_session(db, session_model, commit=False)
+                pending_commit = True
         else:
-            session_factory = get_sessionmaker()
-            with session_factory() as metadata_db:
-                token_hash = sessions.hash_session_token(cookie_value)
-                orphan = (
-                    metadata_db.query(UserSession)
-                    .filter(UserSession.token_hash == token_hash)
-                    .one_or_none()
-                )
-                if orphan is not None:
-                    sessions.revoke_session(metadata_db, orphan, commit=True)
-        db.rollback()
+            token_hash = sessions.hash_session_token(cookie_value)
+            orphan = (
+                db.query(UserSession)
+                .filter(UserSession.token_hash == token_hash)
+                .one_or_none()
+            )
+            if orphan is not None:
+                sessions.revoke_session(db, orphan, commit=False)
+                pending_commit = True
         session_error = HTTPException(
             status.HTTP_403_FORBIDDEN,
             detail="Invalid session token",
         )
 
-    token = _extract_bearer_token(request)
-    if token is not None:
-        api_key = api_keys.get_api_key(db, token)
+    if api_key_token is not None:
+        api_key = api_keys.get_api_key(db, api_key_token)
         if api_key is None:
+            if pending_commit:
+                db.commit()
+            else:
+                db.rollback()
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 detail="Invalid API key",
@@ -134,21 +152,17 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
 
         user = db.get(User, api_key.user_id)
         if user is None or not user.is_active:
+            if pending_commit:
+                db.commit()
+            else:
+                db.rollback()
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 detail="Invalid API key",
             )
 
-        session_factory = get_sessionmaker()
-        with session_factory() as metadata_db:
-            persistent = metadata_db.get(ApiKey, api_key.api_key_id)
-            if persistent is None:
-                raise HTTPException(
-                    status.HTTP_403_FORBIDDEN,
-                    detail="Invalid API key",
-                )
-            api_keys.touch_api_key_usage(metadata_db, persistent, commit=True)
-        request.state.api_key = persistent
+        updated_api_key = api_keys.touch_api_key_usage(db, api_key, commit=False)
+        request.state.api_key = updated_api_key
         _set_request_context(
             request,
             user,
@@ -159,7 +173,10 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         return user
 
     if session_error is not None:
-        db.rollback()
+        if pending_commit:
+            db.commit()
+        else:
+            db.rollback()
         raise session_error
 
     db.rollback()
