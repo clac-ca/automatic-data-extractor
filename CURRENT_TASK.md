@@ -1,14 +1,14 @@
-# 🔄 Next Task — Expose a helper for reading the cached identity from the request
+# 🔄 Next Task — Adopt the cached identity helper across stateful routers
 
 ## Context
-`get_authenticated_identity` now caches the resolved `AuthenticatedIdentity` on `request.state`, but route handlers and services still need a clean way to retrieve it when they already depend on router-level authentication. Providing a tiny accessor keeps downstream code from re-declaring authentication dependencies just to get at the user and makes the new cache easier to adopt.
+`get_cached_authenticated_identity` now exposes the resolved `AuthenticatedIdentity` for any route running behind router-level authentication. Most routers still import `get_current_user` directly and reimplement actor metadata defaults, so we have an opportunity to standardise on the helper and trim redundant wiring.
 
 ## Goals
-1. Add a helper (for example `auth_service.get_cached_identity(request: Request)`) that returns the cached identity or raises a clear error if authentication has not run yet.
-2. Update at least one router that currently uses `Depends(get_current_user)` inside a route handler despite having a router-level dependency, demonstrating the helper in action.
-3. Document and test the helper so contributors know how and when to use it, including behaviour when the cache is missing.
+1. Update the configurations, jobs, and events routers to import `auth_service` once and rely on `get_cached_authenticated_identity(request)` whenever handler logic needs the current user.
+2. Ensure event-producing endpoints (e.g., configuration updates, job mutations) automatically default `actor_type`, `actor_id`, and `actor_label` from the cached identity when callers omit them.
+3. Remove any remaining per-handler `Depends(get_current_user)` declarations made redundant by router-level authentication, and document the pattern in the developer docs or inline comments.
 
 ## Definition of done
-- The helper reads `request.state` without re-running authentication and returns the same identity object set by `get_authenticated_identity`.
-- A representative route handler uses the helper instead of a redundant dependency, with no change to behaviour or authorisation checks.
-- Tests cover successful retrieval and the error path when the cache is absent, and documentation or inline notes describe the helper’s usage.
+- Routers behind authentication consistently use `auth_service` plus the cached identity helper instead of re-declaring dependencies.
+- Event metadata defaults to the authenticated user without altering behaviour when clients supply explicit overrides.
+- Tests cover the new defaults, and documentation or inline notes describe when to use the helper versus `Depends(get_authenticated_identity)`.

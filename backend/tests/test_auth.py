@@ -897,6 +897,35 @@ def test_get_authenticated_identity_caches_request_state(app_client, monkeypatch
     assert call_count == 1
 
 
+def test_get_cached_authenticated_identity_returns_cached_value(app_client) -> None:
+    client, _, _ = app_client
+    settings = config.get_settings()
+    cookie_value = client.cookies.get(settings.session_cookie_name)
+    assert cookie_value is not None
+
+    request = _make_request_stub()
+
+    identity = auth_service.get_authenticated_identity(
+        request=request,
+        settings=settings,
+        session_token=cookie_value,
+        bearer_credentials=None,
+        header_token=None,
+    )
+
+    cached = auth_service.get_cached_authenticated_identity(request)
+    assert cached is identity
+
+
+def test_get_cached_authenticated_identity_raises_without_cache() -> None:
+    request = _make_request_stub()
+
+    with pytest.raises(RuntimeError) as exc_info:
+        auth_service.get_cached_authenticated_identity(request)
+
+    assert "Authenticated identity has not been resolved" in str(exc_info.value)
+
+
 def test_router_and_route_dependencies_share_identity(app_client, monkeypatch) -> None:
     client, _, _ = app_client
     settings = config.get_settings()

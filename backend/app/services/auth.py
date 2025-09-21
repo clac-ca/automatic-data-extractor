@@ -789,6 +789,27 @@ def get_authenticated_identity(
     )
 
 
+def get_cached_authenticated_identity(request: Request) -> AuthenticatedIdentity:
+    """Return the identity cached on ``request.state``.
+
+    ``get_authenticated_identity`` stores the resolved ``AuthenticatedIdentity``
+    on the request so router-level dependencies can run once per request.  This
+    helper retrieves that cached object without re-running authentication.  It
+    raises ``RuntimeError`` when authentication has not executed yet, signalling
+    that the route or router is missing the appropriate dependency.
+    """
+
+    identity = getattr(request.state, _REQUEST_IDENTITY_STATE_KEY, None)
+    if identity is None:
+        msg = (
+            "Authenticated identity has not been resolved for this request. "
+            "Add Depends(get_authenticated_identity) or a router-level "
+            "dependency before calling get_cached_authenticated_identity()."
+        )
+        raise RuntimeError(msg)
+    return identity
+
+
 def get_current_user(
     identity: AuthenticatedIdentity = Depends(get_authenticated_identity),
 ) -> User:
@@ -1743,6 +1764,7 @@ __all__ = [
     "exchange_code",
     "get_api_key",
     "get_authenticated_identity",
+    "get_cached_authenticated_identity",
     "get_current_user",
     "get_session",
     "hash_api_key_token",
