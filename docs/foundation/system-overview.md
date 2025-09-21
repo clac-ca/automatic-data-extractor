@@ -37,7 +37,7 @@ _A future diagram asset will live at `docs/assets/system-overview.png` once rend
 
 - **Configuration UI** — Preferred path for drafting, validating, and publishing configuration revisions. The UI calls the same REST endpoints documented for automation, but keeps guard rails (role checks, payload validation, event previews) in front of day-to-day users.
 - **REST API** — Used by the UI and automation clients. Humans authenticate with Basic or SSO to receive a session cookie; service accounts send `Authorization: Bearer <API_KEY>` tokens that ADE verifies against the `api_keys` table.
-- **Command-line helpers** — Targeted scripts (for example, `python -m backend.app.services.auth`) handle administrative tasks that need direct database access or bulk operations.
+- **Command-line helpers** — Targeted scripts (for example, `python -m backend.app auth ...`) handle administrative tasks that need direct database access or bulk operations.
 
 These interfaces share the same event log and configuration versioning, ensuring architecture discussions can focus on system behaviour rather than transport differences.
 
