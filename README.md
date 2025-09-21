@@ -76,7 +76,7 @@ variables include:
 
 API keys now complement these modes for automation clients. Provision a key once, store its hashed form in the database, and have integrations send `Authorization: Bearer <API_KEY>` on every request while humans continue using cookie sessions.
 
-User accounts live in the `users` table. A lightweight CLI (`python -m backend.app.auth.manage`) manages accounts with
+User accounts live in the `users` table. A lightweight CLI (`python -m backend.app.services.auth`) manages accounts with
 `create-user`, `reset-password`, `deactivate`, `promote`, and `list-users` commands. CLI operations emit events so audit logs
 capture administrative changes even when the API is offline.
 

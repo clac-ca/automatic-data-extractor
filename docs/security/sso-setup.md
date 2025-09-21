@@ -46,8 +46,9 @@ Restart ADE after updating environment variables to ensure settings reload.
 To clear caches manually (e.g., after rotating keys), open a Python shell in the deployment and run:
 
 ```python
-from backend.app.auth import sso
-sso.clear_caches()
+from backend.app.services import auth as auth_service
+
+auth_service.clear_caches()
 ```
 
 Alternatively, restart the service to drop caches.
@@ -67,7 +68,7 @@ If login fails, review logs for `SSOConfigurationError` (missing settings) or `S
 ### Rotate secrets or keys
 
 1. Update `ADE_SSO_CLIENT_SECRET` (and other credentials) in the environment.
-2. Call `sso.clear_caches()` or restart the service.
+2. Call `auth_service.clear_caches()` or restart the service.
 3. Validate by logging in again and confirming events and logs reflect the new run.
 
 ### Clear stale caches without redeploying

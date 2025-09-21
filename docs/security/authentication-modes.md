@@ -9,7 +9,7 @@ Escalate to: Security lead if login flows fail, password hashing drifts from pol
 
 # Authentication modes
 
-Authentication is implemented in `backend/app/config.py`, `backend/app/auth/manage.py`, and `backend/app/auth/service.py`. ADE supports deterministic login behaviour with optional OIDC SSO layered on top of HTTP Basic and cookie sessions.
+Authentication is implemented in `backend/app/config.py` and `backend/app/services/auth.py`. ADE supports deterministic login behaviour with optional OIDC SSO layered on top of HTTP Basic and cookie sessions.
 
 ## 1. Choose an auth mode
 
@@ -37,7 +37,7 @@ Settings are parsed via `Settings.auth_mode_sequence`; invalid values raise a `V
 
 Restart ADE after changing these variables or call `config.reset_settings_cache()` in development.
 
-## 2. Configure session cookies (`backend/app/auth/service.py`)
+## 2. Configure session cookies (`backend/app/services/auth.py`)
 
 `service.py` issues and refreshes session tokens, resolves API keys, and records authentication events. Key details:
 
@@ -47,16 +47,16 @@ Restart ADE after changing these variables or call `config.reset_settings_cache(
 
 Validation: Log in, inspect the `Set-Cookie` header, and ensure TTL, domain, and SameSite attributes match expectations.
 
-## 3. Manage users via CLI (`backend/app/auth/manage.py`)
+## 3. Manage users via CLI (`backend/app/services/auth.py`)
 
 Use the bundled CLI to provision accounts even when the API is offline:
 
 ```bash
-python -m backend.app.auth.manage create-user admin@example.com --password change-me --role admin
-python -m backend.app.auth.manage reset-password admin@example.com --password another-secret
-python -m backend.app.auth.manage deactivate user@example.com
-python -m backend.app.auth.manage promote operator@example.com
-python -m backend.app.auth.manage list-users
+python -m backend.app.services.auth create-user admin@example.com --password change-me --role admin
+python -m backend.app.services.auth reset-password admin@example.com --password another-secret
+python -m backend.app.services.auth deactivate user@example.com
+python -m backend.app.services.auth promote operator@example.com
+python -m backend.app.services.auth list-users
 ```
 
 Each command emits `user.*` events (actor_type `system`, source `cli`) so audit logs record administrative actions.
@@ -87,7 +87,7 @@ curl -H "Authorization: Bearer $ADE_API_KEY" https://ade.example.com/documents
 
 - Log in with HTTP Basic credentials and confirm a session cookie is issued.
 - Call `POST /auth/refresh` and ensure the cookie expiry advances.
-- Run `python -m backend.app.auth.manage list-users` to verify CLI access.
+- Run `python -m backend.app.services.auth list-users` to verify CLI access.
 - Inspect `/events?event_type=user.session.*` to confirm authentication events are captured.
 
 For SSO-specific configuration (client IDs, discovery caching, recovery), continue to [SSO setup and recovery](./sso-setup.md).
