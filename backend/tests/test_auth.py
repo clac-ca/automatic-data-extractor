@@ -538,7 +538,7 @@ def test_session_request_updates_last_seen_metadata(app_client) -> None:
         assert datetime.fromisoformat(refreshed.last_seen_at) > original_seen
 
 
-def test_resolve_credentials_session_success(app_client) -> None:
+def test_get_authenticated_identity_session_success(app_client) -> None:
     client, _, _ = app_client
     settings = config.get_settings()
     cookie_value = client.cookies.get(settings.session_cookie_name)
@@ -546,13 +546,16 @@ def test_resolve_credentials_session_success(app_client) -> None:
 
     session_factory = get_sessionmaker()
     with session_factory() as db:
-        identity = auth_service.resolve_credentials(
-            db,
-            settings,
+        request = _make_request_stub()
+        request.client.host = "resolver-test"
+        request.headers["user-agent"] = "pytest-agent"
+        identity = auth_service.get_authenticated_identity(
+            request,
+            db=db,
+            settings=settings,
             session_token=cookie_value,
-            api_key_token=None,
-            ip_address="resolver-test",
-            user_agent="pytest-agent",
+            bearer_credentials=None,
+            header_token=None,
         )
 
     assert identity.user is not None
@@ -562,28 +565,31 @@ def test_resolve_credentials_session_success(app_client) -> None:
     assert identity.session.last_seen_user_agent == "pytest-agent"
 
 
-def test_resolve_credentials_invalid_session(app_client) -> None:
+def test_get_authenticated_identity_invalid_session(app_client) -> None:
     client, _, _ = app_client
     del client
     settings = config.get_settings()
 
     session_factory = get_sessionmaker()
     with session_factory() as db:
+        request = _make_request_stub()
+        request.client.host = "resolver-test"
+        request.headers["user-agent"] = "pytest-agent"
         with pytest.raises(HTTPException) as exc_info:
-            auth_service.resolve_credentials(
-                db,
-                settings,
+            auth_service.get_authenticated_identity(
+                request,
+                db=db,
+                settings=settings,
                 session_token="invalid-token",
-                api_key_token=None,
-                ip_address="resolver-test",
-                user_agent="pytest-agent",
+                bearer_credentials=None,
+                header_token=None,
             )
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Invalid session token"
 
 
-def test_resolve_credentials_api_key_success(app_client) -> None:
+def test_get_authenticated_identity_api_key_success(app_client) -> None:
     client, _, _ = app_client
     settings = config.get_settings()
 
@@ -595,13 +601,16 @@ def test_resolve_credentials_api_key_success(app_client) -> None:
     _insert_api_key(user, token)
 
     with session_factory() as db:
-        identity = auth_service.resolve_credentials(
-            db,
-            settings,
+        request = _make_request_stub()
+        request.client.host = "resolver-test"
+        request.headers["user-agent"] = "pytest-agent"
+        identity = auth_service.get_authenticated_identity(
+            request,
+            db=db,
+            settings=settings,
             session_token=None,
-            api_key_token=token,
-            ip_address="resolver-test",
-            user_agent="pytest-agent",
+            bearer_credentials=None,
+            header_token=token,
         )
 
     assert identity.user is not None

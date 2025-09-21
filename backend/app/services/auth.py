@@ -307,110 +307,6 @@ def touch_api_key_usage(db: Session, api_key: ApiKey, *, commit: bool = True) ->
 # ---------------------------------------------------------------------------
 
 
-def resolve_credentials(
-    db: Session,
-    settings: config.Settings,
-    *,
-    session_token: str | None,
-    api_key_token: str | None,
-    ip_address: str | None = None,
-    user_agent: str | None = None,
-) -> "AuthenticatedIdentity":
-    """Resolve the supplied credentials to an authenticated identity.
-
-    The function commits or rolls back session mutations as needed and raises
-    ``HTTPException`` when the supplied credentials are invalid.
-    """
-
-    pending_commit = False
-    session_error: tuple[int, str, dict[str, str] | None] | None = None
-
-    if session_token:
-        session_model = get_session(db, session_token)
-        if session_model:
-            user = db.get(User, session_model.user_id)
-            if user and user.is_active:
-                refreshed = touch_session(
-                    db,
-                    session_model,
-                    settings=settings,
-                    ip_address=ip_address,
-                    user_agent=user_agent,
-                    commit=False,
-                )
-                if refreshed is not None:
-                    db.commit()
-                    return AuthenticatedIdentity(
-                        user=user,
-                        mode="session",
-                        session=refreshed,
-                        session_id=refreshed.session_id,
-                        subject=user.sso_subject,
-                    )
-                revoke_session(db, session_model, commit=False)
-                pending_commit = True
-            else:
-                revoke_session(db, session_model, commit=False)
-                pending_commit = True
-        else:
-            token_hash = hash_session_token(session_token)
-            orphan = (
-                db.query(UserSession)
-                .filter(UserSession.token_hash == token_hash)
-                .one_or_none()
-            )
-            if orphan is not None:
-                revoke_session(db, orphan, commit=False)
-                pending_commit = True
-        session_error = (
-            status.HTTP_403_FORBIDDEN,
-            "Invalid session token",
-            None,
-        )
-
-    if api_key_token is not None:
-        api_key = get_api_key(db, api_key_token)
-        if api_key is None:
-            if pending_commit:
-                db.commit()
-            else:
-                db.rollback()
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Invalid API key")
-
-        user = db.get(User, api_key.user_id)
-        if user is None or not user.is_active:
-            if pending_commit:
-                db.commit()
-            else:
-                db.rollback()
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Invalid API key")
-
-        updated_api_key = touch_api_key_usage(db, api_key, commit=False)
-        db.commit()
-        return AuthenticatedIdentity(
-            user=user,
-            mode="api-key",
-            api_key=updated_api_key,
-            api_key_id=updated_api_key.api_key_id,
-            subject=user.sso_subject,
-        )
-
-    if session_error is not None:
-        if pending_commit:
-            db.commit()
-        else:
-            db.rollback()
-        status_code, detail, headers = session_error
-        raise HTTPException(status_code, detail=detail, headers=headers)
-
-    db.rollback()
-    raise HTTPException(
-        status.HTTP_401_UNAUTHORIZED,
-        detail="Authentication required",
-        headers={"WWW-Authenticate": _WWW_AUTH_HEADER},
-    )
-
-
 def complete_login(
     db: Session,
     settings: config.Settings,
@@ -541,13 +437,90 @@ def get_authenticated_identity(
 
     ip_address, user_agent = _client_context(request)
     api_key_token = _resolve_api_key_token(bearer_credentials, header_token)
-    return resolve_credentials(
-        db,
-        settings,
-        session_token=session_token,
-        api_key_token=api_key_token,
-        ip_address=ip_address,
-        user_agent=user_agent,
+    pending_commit = False
+    session_exception: HTTPException | None = None
+
+    if session_token:
+        session_model = get_session(db, session_token)
+        if session_model:
+            user = db.get(User, session_model.user_id)
+            if user and user.is_active:
+                refreshed = touch_session(
+                    db,
+                    session_model,
+                    settings=settings,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    commit=False,
+                )
+                if refreshed is not None:
+                    db.commit()
+                    return AuthenticatedIdentity(
+                        user=user,
+                        mode="session",
+                        session=refreshed,
+                        session_id=refreshed.session_id,
+                        subject=user.sso_subject,
+                    )
+                revoke_session(db, session_model, commit=False)
+                pending_commit = True
+            else:
+                revoke_session(db, session_model, commit=False)
+                pending_commit = True
+        else:
+            token_hash = hash_session_token(session_token)
+            orphan = (
+                db.query(UserSession)
+                .filter(UserSession.token_hash == token_hash)
+                .one_or_none()
+            )
+            if orphan is not None:
+                revoke_session(db, orphan, commit=False)
+                pending_commit = True
+        session_exception = HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail="Invalid session token",
+        )
+
+    if api_key_token is not None:
+        api_key = get_api_key(db, api_key_token)
+        if api_key is None:
+            if pending_commit:
+                db.commit()
+            else:
+                db.rollback()
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Invalid API key")
+
+        user = db.get(User, api_key.user_id)
+        if user is None or not user.is_active:
+            if pending_commit:
+                db.commit()
+            else:
+                db.rollback()
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Invalid API key")
+
+        updated_api_key = touch_api_key_usage(db, api_key, commit=False)
+        db.commit()
+        return AuthenticatedIdentity(
+            user=user,
+            mode="api-key",
+            api_key=updated_api_key,
+            api_key_id=updated_api_key.api_key_id,
+            subject=user.sso_subject,
+        )
+
+    if session_exception is not None:
+        if pending_commit:
+            db.commit()
+        else:
+            db.rollback()
+        raise session_exception
+
+    db.rollback()
+    raise HTTPException(
+        status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required",
+        headers={"WWW-Authenticate": _WWW_AUTH_HEADER},
     )
 
 
@@ -1364,7 +1337,6 @@ __all__ = [
     "issue_session",
     "main",
     "require_admin",
-    "resolve_credentials",
     "revoke_session",
     "touch_api_key_usage",
     "touch_session",
