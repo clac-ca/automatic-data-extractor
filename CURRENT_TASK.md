@@ -1,36 +1,22 @@
-# ✅ Follow-up Task — Harden Authentication Coverage & Edge Cases
+# 🔄 Next Task — Streamline Auth Dependency & FastAPI Security Wiring
 
 ## Context
-The simplified authentication stack is now in place. Sessions, API keys, and SSO all share the same dependency, and routes expose
-clear OpenAPI metadata. Before we move on, we need stronger regression coverage that exercises the new control flow and makes sure
-we do not regress on critical edge cases (API-key clients, SSO-only tenants, and environments with auth disabled).
+The authentication regression tests now cover API keys, sessions, SSO auto-provisioning, and auth-disabled mode. With safety nets in place we can simplify the runtime dependency itself. The current `get_current_user` implementation manually parses headers/cookies and manages state; FastAPI offers first-class primitives for this logic. Aligning with the lighter architecture target will make ongoing maintenance easier and keep behaviour consistent with the new tests.
 
 ## Goals
-1. Cover the most important success paths with end-to-end tests so we can refactor safely.
-2. Lock down failure cases (bad credentials, revoked keys, expired SSO tokens) so we surface the intended HTTP statuses.
-3. Verify helper utilities (`api_keys.touch_api_key_usage`, `sessions.touch_session`) behave correctly when invoked through
-   real requests instead of direct unit calls.
+1. Replace hand-rolled header parsing in `auth.dependencies` with FastAPI security utilities (`HTTPBearer`, `APIKeyHeader`, cookie extraction helpers) while keeping behaviour identical.
+2. Trim duplicate session/API-key metadata lookups so the dependency issues exactly one DB transaction per request.
+3. Preserve the request context contract (`request.state.auth_context`, `request.state.auth_session`, `request.state.api_key`) now validated by the test suite.
+4. Ensure OpenAPI security metadata still reflects available modes (basic, sso, api-key, none).
 
-## Implementation guidelines
-- **API key flows**
-  - Add an integration test that hits `/auth/logout` while authenticated only via API key (should remain authorised because only
-    cookies are cleared).
-  - Assert that `touch_api_key_usage` updates `last_used_at` when a request is made with an API key.
-  - Add a negative test for a revoked API key (mark an existing key as revoked and ensure requests return 403).
-- **SSO regression checks**
-  - Extend the existing SSO callback test to assert that cached discovery/JWKS responses are respected and that repeated
-    callbacks reuse the cache without hitting the fake endpoints multiple times.
-  - Add a test that covers an SSO login for a user that is provisioned on the fly (`sso_auto_provision=True`) and confirm
-    sessions are issued correctly.
-  - Include a failure test for an unexpected nonce to guarantee the dependency raises a 400 with the correct detail.
-- **AUTH_DISABLED coverage**
-  - Add tests verifying that `/auth/login/basic` and `/auth/logout` respond with 404/200 appropriately when `AUTH_DISABLED` is
-    set, and that request-scoped auth context matches the synthetic admin user.
-- Keep new tests deterministic; use fixtures to clean the `Event` and `ApiKey` tables where required.
-- If any helper needs a minor tweak to surface observability (e.g. returning refreshed objects), keep the implementation simple
-  and update existing call sites.
+## Implementation notes
+- Reuse FastAPI's built-in security classes instead of parsing Authorization headers manually.
+- Keep the synthetic admin user behaviour when `AUTH_DISABLED` is set; verify using the new tests.
+- Make sure revoked sessions/api keys still return 403, and that logout clears only cookies.
+- Update or extend tests only if the refactor requires different assertions; prefer adapting the dependency to satisfy existing expectations.
+- Avoid introducing new abstractions—prefer clear, direct functions.
 
 ## Definition of done
-- New or updated tests cover each of the scenarios above.
-- `pytest` passes without race conditions or flakiness.
-- No regressions to current behaviour (manual smoke test against `/auth/session` is optional but encouraged).
+- `auth.dependencies` delegates header/cookie parsing to FastAPI primitives and contains minimal control flow.
+- All regression tests in `backend/tests/test_auth.py` pass without changes to their intent.
+- No new dependencies added; OpenAPI schema remains accurate.
