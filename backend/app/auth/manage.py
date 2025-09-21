@@ -14,8 +14,7 @@ from .. import config
 from ..db import get_sessionmaker
 from ..db_migrations import ensure_schema
 from ..models import User, UserRole
-from . import passwords
-from .events import cli_action
+from . import passwords, service
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +117,7 @@ def _create_user(db: Session, settings: config.Settings, args: argparse.Namespac
     db.add(user)
     db.flush()
 
-    cli_action(
+    service.cli_action(
         db,
         user=user,
         event_type="user.created",
@@ -138,7 +137,7 @@ def _reset_password(db: Session, settings: config.Settings, args: argparse.Names
 
     user.password_hash = passwords.hash_password(args.password)
     db.flush()
-    cli_action(
+    service.cli_action(
         db,
         user=user,
         event_type="user.password.reset",
@@ -157,7 +156,7 @@ def _deactivate_user(db: Session, settings: config.Settings, args: argparse.Name
 
     user.is_active = False
     db.flush()
-    cli_action(
+    service.cli_action(
         db,
         user=user,
         event_type="user.deactivated",
@@ -177,7 +176,7 @@ def _promote_user(db: Session, settings: config.Settings, args: argparse.Namespa
     _enforce_admin_allowlist(settings, email)
     user.role = UserRole.ADMIN
     db.flush()
-    cli_action(
+    service.cli_action(
         db,
         user=user,
         event_type="user.promoted",
