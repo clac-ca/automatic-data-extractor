@@ -1,19 +1,14 @@
-# 🔄 Next Task — Collapse AuthResolution into get_authenticated_identity
+# 🔄 Next Task — Make get_authenticated_identity the sole credential resolver
 
 ## Context
-Flattening `RequestAuthContext` left `AuthResolution` and `AuthFailure` as the last indirection between resolved credentials and the FastAPI dependency. Those dataclasses now duplicate the shape of `AuthenticatedIdentity` and only exist so `get_authenticated_identity` can branch on success or failure. We can simplify the authentication flow further by letting the resolution step return an `AuthenticatedIdentity` directly (or raise an HTTP-aware error), eliminating the extra wrappers.
+With `resolve_credentials` now returning an `AuthenticatedIdentity` (or raising), `get_authenticated_identity` only checks for the open-access mode before delegating. Keeping both functions as public entrypoints creates surface area we no longer need.
 
 ## Goals
-1. Remove the `AuthResolution` dataclass and return an `AuthenticatedIdentity` (or raise) from the credential resolver.
-2. Raise clear HTTP errors for invalid sessions and API keys without the intermediary dataclass, keeping any required headers (e.g. `WWW-Authenticate`).
-3. Update callers and tests to rely on the streamlined dependency so nothing references `AuthResolution` or `AuthFailure`.
-
-## Implementation notes
-- Inline or rewrite `resolve_credentials` so it either yields an `AuthenticatedIdentity` or raises `HTTPException`. Keep the lazy-commit logic around session revocation intact.
-- Adjust unit tests that currently inspect `AuthResolution` to assert against the new return value or captured exceptions.
-- Ensure the exported surface in `auth_service.__all__` reflects the new structure (dropping removed names).
+1. Inline the credential resolution logic into `get_authenticated_identity` (or make the helper private) so FastAPI consumers have a single dependency to import.
+2. Preserve the existing lazy commit/rollback behaviour for session revocation and API key usage updates.
+3. Update tests to exercise `get_authenticated_identity` directly and drop any references to a public `resolve_credentials` helper.
 
 ## Definition of done
-- `AuthResolution` and `AuthFailure` are removed from the codebase.
-- `resolve_credentials` (or its replacement) returns the flattened identity or raises an `HTTPException` that matches previous behaviour.
+- `resolve_credentials` is either removed or renamed private and no longer exported.
+- Tests cover authentication flows through `get_authenticated_identity` without importing the helper.
 - `pytest backend/tests/test_auth.py` passes.
