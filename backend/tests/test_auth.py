@@ -15,10 +15,8 @@ import httpx
 import pytest
 
 from backend.app import config
-from backend.app.auth import dependencies, sessions as session_service, sso
-from backend.app.auth.api_keys import hash_api_key_token
+from backend.app.auth import dependencies, service as auth_service, sso
 from backend.app.auth.passwords import hash_password, verify_password
-from backend.app.auth.sessions import hash_session_token
 from backend.app.auth.sso import SSOExchangeError
 from backend.app.db import get_sessionmaker
 from backend.app.db_migrations import ensure_schema
@@ -38,7 +36,7 @@ def _insert_api_key(user: User, token: str, *, name: str = "automation") -> None
             user_id=user.user_id,
             name=name,
             token_prefix=token[:12],
-            token_hash=hash_api_key_token(token),
+            token_hash=auth_service.hash_api_key_token(token),
         )
         db.add(api_key)
         db.commit()
@@ -167,7 +165,7 @@ def test_basic_login_issues_session_cookie(app_client) -> None:
     assert body["session"] is not None
     cookie = client.cookies.get(config.get_settings().session_cookie_name)
     assert cookie is not None
-    assert hash_session_token(cookie)
+    assert auth_service.hash_session_token(cookie)
 
 
 def test_login_failure_records_event(app_client) -> None:
@@ -212,17 +210,17 @@ def test_revoke_session_is_idempotent(app_client) -> None:
     session_factory = get_sessionmaker()
     with session_factory() as db:
         user = db.query(User).filter(User.email == "admin@example.com").one()
-        session_model, _ = session_service.issue_session(
+        session_model, _ = auth_service.issue_session(
             db,
             user,
             settings=settings,
             commit=False,
         )
         session_id = session_model.session_id
-        session_service.revoke_session(db, session_model, commit=False)
+        auth_service.revoke_session(db, session_model, commit=False)
         first_revoked = session_model.revoked_at
         assert first_revoked is not None
-        session_service.revoke_session(db, session_model, commit=False)
+        auth_service.revoke_session(db, session_model, commit=False)
         assert session_model.revoked_at == first_revoked
         db.commit()
 
@@ -238,7 +236,7 @@ def test_touch_session_updates_metadata_commit_false(app_client) -> None:
     session_factory = get_sessionmaker()
     with session_factory() as db:
         user = db.query(User).filter(User.email == "admin@example.com").one()
-        session_model, _ = session_service.issue_session(
+        session_model, _ = auth_service.issue_session(
             db,
             user,
             settings=settings,
@@ -246,7 +244,7 @@ def test_touch_session_updates_metadata_commit_false(app_client) -> None:
         )
         original_expiry = datetime.fromisoformat(session_model.expires_at)
         agent = "Mozilla/5.0" * 40
-        refreshed = session_service.touch_session(
+        refreshed = auth_service.touch_session(
             db,
             session_model,
             settings=settings,
@@ -273,13 +271,13 @@ def test_touch_session_rejects_revoked_and_expired(app_client) -> None:
     session_factory = get_sessionmaker()
     with session_factory() as db:
         user = db.query(User).filter(User.email == "admin@example.com").one()
-        revoked_session, _ = session_service.issue_session(
+        revoked_session, _ = auth_service.issue_session(
             db,
             user,
             settings=settings,
             commit=True,
         )
-        expired_session, _ = session_service.issue_session(
+        expired_session, _ = auth_service.issue_session(
             db,
             user,
             settings=settings,
@@ -294,7 +292,7 @@ def test_touch_session_rejects_revoked_and_expired(app_client) -> None:
 
     with session_factory() as db:
         record = db.get(UserSession, revoked_session.session_id)
-        result = session_service.touch_session(
+        result = auth_service.touch_session(
             db,
             record,
             settings=settings,
@@ -313,7 +311,7 @@ def test_touch_session_rejects_revoked_and_expired(app_client) -> None:
 
     with session_factory() as db:
         record = db.get(UserSession, expired_session.session_id)
-        result = session_service.touch_session(
+        result = auth_service.touch_session(
             db,
             record,
             settings=settings,
@@ -353,7 +351,7 @@ def test_session_request_updates_last_seen_metadata(app_client) -> None:
     cookie_value = client.cookies.get(settings.session_cookie_name)
     assert cookie_value is not None
 
-    token_hash = hash_session_token(cookie_value)
+    token_hash = auth_service.hash_session_token(cookie_value)
     session_factory = get_sessionmaker()
     with session_factory() as db:
         record = (
@@ -448,7 +446,7 @@ def test_api_key_logout_only_clears_cookies(app_client) -> None:
     with session_factory() as db:
         api_key = (
             db.query(ApiKey)
-            .filter(ApiKey.token_hash == hash_api_key_token(token))
+            .filter(ApiKey.token_hash == auth_service.hash_api_key_token(token))
             .one()
         )
         assert api_key.revoked_at is None
@@ -475,7 +473,7 @@ def test_api_key_usage_updates_last_used_at(app_client) -> None:
     with session_factory() as db:
         api_key = (
             db.query(ApiKey)
-            .filter(ApiKey.token_hash == hash_api_key_token(token))
+            .filter(ApiKey.token_hash == auth_service.hash_api_key_token(token))
             .one()
         )
         assert api_key.last_used_at is not None
@@ -496,7 +494,7 @@ def test_revoked_api_key_is_rejected(app_client) -> None:
     with session_factory() as db:
         api_key = (
             db.query(ApiKey)
-            .filter(ApiKey.token_hash == hash_api_key_token(token))
+            .filter(ApiKey.token_hash == auth_service.hash_api_key_token(token))
             .one()
         )
         api_key.revoked_at = datetime.now(timezone.utc).isoformat()

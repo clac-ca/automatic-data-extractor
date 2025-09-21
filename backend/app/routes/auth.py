@@ -11,8 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import config
-from ..auth import dependencies, sessions, sso
-from ..auth.events import login_failure, login_success, logout as logout_event, session_refreshed
+from ..auth import dependencies, service, sso
 from ..auth.passwords import verify_password
 from ..auth.sso import SSOExchangeError
 from ..db import get_db
@@ -143,20 +142,20 @@ def login_basic(  # noqa: PLR0915 - clarity over cleverness
 
     user = _get_user_by_email(db, email)
     if user is None or not user.password_hash:
-        login_failure(db, email=email, mode="basic", source="api", reason="unknown-user")
+        service.login_failure(db, email=email, mode="basic", source="api", reason="unknown-user")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if not user.is_active:
-        login_failure(db, email=email, mode="basic", source="api", reason="inactive")
+        service.login_failure(db, email=email, mode="basic", source="api", reason="inactive")
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Account is inactive")
     if not verify_password(password, user.password_hash):
-        login_failure(db, email=email, mode="basic", source="api", reason="invalid-password")
+        service.login_failure(db, email=email, mode="basic", source="api", reason="invalid-password")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     ip_address, user_agent = _request_metadata(request)
     now_iso = datetime.now(timezone.utc).isoformat()
     user.last_login_at = now_iso
 
-    session_model, raw_token = sessions.issue_session(
+    session_model, raw_token = service.issue_session(
         db,
         user,
         settings=settings,
@@ -165,7 +164,7 @@ def login_basic(  # noqa: PLR0915 - clarity over cleverness
         commit=False,
     )
 
-    login_success(
+    service.login_success(
         db,
         user,
         mode="basic",
@@ -204,8 +203,8 @@ def logout(
 
     session_model = getattr(request.state, "auth_session", None)
     if session_model and session_model.user_id == current_user.user_id:
-        sessions.revoke_session(db, session_model, commit=False)
-        logout_event(
+        service.revoke_session(db, session_model, commit=False)
+        service.logout(
             db,
             current_user,
             source="api",
@@ -238,7 +237,7 @@ def session_status(
         _clear_session_cookie(response, settings)
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Session expired")
 
-    session_refreshed(
+    service.session_refreshed(
         db,
         current_user,
         source="api",
@@ -328,7 +327,7 @@ def sso_callback(
     now_iso = datetime.now(timezone.utc).isoformat()
     user.last_login_at = now_iso
 
-    session_model, raw_token = sessions.issue_session(
+    session_model, raw_token = service.issue_session(
         db,
         user,
         settings=settings,
@@ -337,7 +336,7 @@ def sso_callback(
         commit=False,
     )
 
-    login_success(
+    service.login_success(
         db,
         user,
         mode="sso",

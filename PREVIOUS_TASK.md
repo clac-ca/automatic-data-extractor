@@ -1,25 +1,29 @@
-# 🔄 Next Task — Harden SSO State Token Verification
+# 🔄 Next Task — Consolidate Authentication Service Layer
 
 ## Context
-While aligning the auth routes with the shared dependency we observed the SSO callback tests occasionally fail with
-`Invalid state token signature`. The `_verify_state_token` helper currently splits the base64 payload with
-`decoded.rsplit(b".", 1)`, which breaks whenever the HMAC signature itself contains a dot byte. That makes the SSO login
-round-trip flaky and can reject legitimate callbacks.
+The `backend/app/auth` package has grown into several small modules (`api_keys.py`, `sessions.py`, `events.py`, `passwords.py`,
+and a CLI helper) that all wrap the same database tables. This fragmentation makes it difficult to see the full login story and
+prevents us from leaning on FastAPI's built-in security helpers without a maze of cross-imports. By collapsing the hot-path
+logic (session issuance/refresh, API key lookups, login event recording) into a single service module we can keep the auth
+routes and dependencies short, auditable, and aligned with FastAPI conventions.
 
 ## Goals
-1. Update the state token packing and `_verify_state_token` parsing so arbitrary HMAC bytes are handled without relying on
-   delimiter characters that may appear in the signature.
-2. Add a regression test that exercises a signature containing dot bytes to prove the fix and keep the behaviour stable.
-3. Keep the state token format backwards compatible for tokens minted before the change, or provide a short compatibility
-   shim so active login attempts are still honoured.
-4. Ensure the existing negative-path tests (unexpected nonce, expired state, etc.) still pass without code duplication.
+1. Introduce a focused `auth/service.py` (or equivalent) that provides the minimal primitives the routes need: issue/refresh
+   sessions, revoke sessions, resolve API keys, and record login/logout events.
+2. Update `dependencies.py` and the auth routes to call this consolidated service while relying on FastAPI's `HTTPBasic`,
+   `HTTPBearer`, and `APIKeyHeader` dependencies for credential parsing instead of bespoke wrappers.
+3. Delete or inline the now-redundant modules (`api_keys.py`, `sessions.py`, `events.py`) once their functionality is
+   transplanted, keeping the CLI manageable with the new service.
+4. Ensure the simplified layout keeps existing authentication behaviours identical and the regression suite stays green.
 
 ## Implementation notes
-- Consider encoding the signature separately (e.g. base64) or prefixing lengths to avoid delimiter collisions.
-- Focus on clear, linear control flow—no new abstractions or generic helpers beyond what is needed for correctness.
-- Update or extend only the SSO-specific tests that cover this bug; avoid touching unrelated authentication flows.
+- Map each helper function to its call sites before moving it so we do not accidentally drop required logic.
+- Keep the new service functions straightforward—no generic abstractions or class hierarchies.
+- Preserve the deterministic hashing helpers used in tests (e.g. session token hashing) by re-exposing them from the new
+  module.
 
 ## Definition of done
-- SSO callbacks consistently succeed for valid states; the regression suite no longer flakes on `Invalid state token signature`.
-- New tests cover the previously failing scenario.
-- No new dependencies introduced.
+- `backend/app/auth` exposes a single service module plus `dependencies.py`/`passwords.py`; the legacy helper modules are
+  removed.
+- Authentication (basic login, session refresh, API key access, SSO) continues to pass the current test suite.
+- No new dependencies are added.
