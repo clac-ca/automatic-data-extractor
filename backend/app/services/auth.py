@@ -14,9 +14,8 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from hmac import compare_digest
-from http import HTTPStatus
 from threading import Lock
-from typing import Annotated, Any, Callable, Literal
+from typing import Annotated, Any, Callable
 
 import httpx
 from fastapi import Depends, HTTPException, Request, status
@@ -308,26 +307,6 @@ def touch_api_key_usage(db: Session, api_key: ApiKey, *, commit: bool = True) ->
 # ---------------------------------------------------------------------------
 
 
-@dataclass(slots=True)
-class AuthFailure:
-    """Structured authentication failure returned by credential resolution."""
-
-    status_code: int
-    detail: str
-    headers: dict[str, str] | None = None
-
-
-@dataclass(slots=True)
-class AuthResolution:
-    """Result of resolving incoming credentials."""
-
-    user: User | None = None
-    mode: Literal["session", "api-key"] | None = None
-    session: UserSession | None = None
-    api_key: ApiKey | None = None
-    failure: AuthFailure | None = None
-
-
 def resolve_credentials(
     db: Session,
     settings: config.Settings,
@@ -336,11 +315,15 @@ def resolve_credentials(
     api_key_token: str | None,
     ip_address: str | None = None,
     user_agent: str | None = None,
-) -> AuthResolution:
-    """Resolve the supplied credentials to a user or an auth failure."""
+) -> "AuthenticatedIdentity":
+    """Resolve the supplied credentials to an authenticated identity.
+
+    The function commits or rolls back session mutations as needed and raises
+    ``HTTPException`` when the supplied credentials are invalid.
+    """
 
     pending_commit = False
-    session_failure: AuthFailure | None = None
+    session_error: tuple[int, str, dict[str, str] | None] | None = None
 
     if session_token:
         session_model = get_session(db, session_token)
@@ -357,10 +340,12 @@ def resolve_credentials(
                 )
                 if refreshed is not None:
                     db.commit()
-                    return AuthResolution(
+                    return AuthenticatedIdentity(
                         user=user,
                         mode="session",
                         session=refreshed,
+                        session_id=refreshed.session_id,
+                        subject=user.sso_subject,
                     )
                 revoke_session(db, session_model, commit=False)
                 pending_commit = True
@@ -377,9 +362,10 @@ def resolve_credentials(
             if orphan is not None:
                 revoke_session(db, orphan, commit=False)
                 pending_commit = True
-        session_failure = AuthFailure(
-            status_code=int(HTTPStatus.FORBIDDEN),
-            detail="Invalid session token",
+        session_error = (
+            status.HTTP_403_FORBIDDEN,
+            "Invalid session token",
+            None,
         )
 
     if api_key_token is not None:
@@ -389,12 +375,7 @@ def resolve_credentials(
                 db.commit()
             else:
                 db.rollback()
-            return AuthResolution(
-                failure=AuthFailure(
-                    status_code=int(HTTPStatus.FORBIDDEN),
-                    detail="Invalid API key",
-                )
-            )
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Invalid API key")
 
         user = db.get(User, api_key.user_id)
         if user is None or not user.is_active:
@@ -402,35 +383,31 @@ def resolve_credentials(
                 db.commit()
             else:
                 db.rollback()
-            return AuthResolution(
-                failure=AuthFailure(
-                    status_code=int(HTTPStatus.FORBIDDEN),
-                    detail="Invalid API key",
-                )
-            )
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Invalid API key")
 
         updated_api_key = touch_api_key_usage(db, api_key, commit=False)
         db.commit()
-        return AuthResolution(
+        return AuthenticatedIdentity(
             user=user,
             mode="api-key",
             api_key=updated_api_key,
+            api_key_id=updated_api_key.api_key_id,
+            subject=user.sso_subject,
         )
 
-    if session_failure is not None:
+    if session_error is not None:
         if pending_commit:
             db.commit()
         else:
             db.rollback()
-        return AuthResolution(failure=session_failure)
+        status_code, detail, headers = session_error
+        raise HTTPException(status_code, detail=detail, headers=headers)
 
     db.rollback()
-    return AuthResolution(
-        failure=AuthFailure(
-            status_code=int(HTTPStatus.UNAUTHORIZED),
-            detail="Authentication required",
-            headers={"WWW-Authenticate": 'Bearer realm="ADE"'},
-        )
+    raise HTTPException(
+        status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required",
+        headers={"WWW-Authenticate": _WWW_AUTH_HEADER},
     )
 
 
@@ -564,54 +541,13 @@ def get_authenticated_identity(
 
     ip_address, user_agent = _client_context(request)
     api_key_token = _resolve_api_key_token(bearer_credentials, header_token)
-    resolution = resolve_credentials(
+    return resolve_credentials(
         db,
         settings,
         session_token=session_token,
         api_key_token=api_key_token,
         ip_address=ip_address,
         user_agent=user_agent,
-    )
-
-    if resolution.user is not None:
-        mode = resolution.mode
-        if mode is None:
-            raise RuntimeError("Resolved authenticated user without an auth mode")
-        session_model: UserSession | None = None
-        api_key_model: ApiKey | None = None
-        session_id: str | None = None
-        api_key_id: str | None = None
-        if mode == "session" and resolution.session is not None:
-            session_model = resolution.session
-            session_id = session_model.session_id
-        elif mode == "api-key" and resolution.api_key is not None:
-            api_key_model = resolution.api_key
-            api_key_id = api_key_model.api_key_id
-
-        subject: str | None = resolution.user.sso_subject
-
-        return AuthenticatedIdentity(
-            user=resolution.user,
-            mode=mode,
-            session=session_model,
-            api_key=api_key_model,
-            session_id=session_id,
-            api_key_id=api_key_id,
-            subject=subject,
-        )
-
-    failure = resolution.failure
-    if failure is None:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": _WWW_AUTH_HEADER},
-        )
-
-    raise HTTPException(
-        failure.status_code,
-        detail=failure.detail,
-        headers=failure.headers,
     )
 
 
@@ -1411,8 +1347,6 @@ def main(argv: list[str] | None = None) -> int:
 __all__ = [
     "AdminUser",
     "AuthenticatedIdentity",
-    "AuthFailure",
-    "AuthResolution",
     "CurrentUser",
     "OIDCMetadata",
     "SSOConfigurationError",

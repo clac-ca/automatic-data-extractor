@@ -1,9 +1,9 @@
-# ✅ Completed Task — Inline RequestAuthContext into AuthenticatedIdentity
+# ✅ Completed Task — Collapse AuthResolution into get_authenticated_identity
 
 ## Context
-`RequestAuthContext` duplicated fields that were already available on the resolved user, session, and API key. Flattening those attributes onto `AuthenticatedIdentity` keeps authentication metadata in one place and simplifies how dependencies read it.
+`AuthResolution` and `AuthFailure` were the last wrappers between credential resolution and FastAPI dependencies. They duplicated the shape of `AuthenticatedIdentity` and forced callers to branch on success vs. failure.
 
 ## Outcome
-- Removed the `RequestAuthContext` dataclass and taught `AuthenticatedIdentity` to expose the auth mode, session/api key identifiers, and SSO subject directly.
-- Simplified `get_authenticated_identity` to populate the flattened fields for session, API key, and open-access flows without constructing an intermediate context object.
-- Updated authentication tests to assert against the new attributes (and added checks for the derived IDs) before rerunning `pytest backend/tests/test_auth.py` to confirm behaviour.
+- Reworked `resolve_credentials` to return `AuthenticatedIdentity` directly or raise an `HTTPException`, keeping the lazy commit logic for revoked sessions intact.
+- Simplified `get_authenticated_identity` to delegate to the resolver without additional branching while still supporting the open-access mode.
+- Updated authentication tests to expect the flattened return value (or captured exceptions) and reran `pytest backend/tests/test_auth.py` to confirm behaviour.
