@@ -322,6 +322,7 @@ def mint_api_key(
     user: User,
     name: str,
     actor: User,
+    source: str = "api",
     commit: bool = True,
 ) -> tuple[ApiKey, str]:
     """Persist a new API key and return it with the raw token."""
@@ -356,7 +357,7 @@ def mint_api_key(
             actor_type="user",
             actor_id=actor.user_id,
             actor_label=actor.email,
-            source="api",
+            source=source,
             payload={
                 "user_id": user.user_id,
                 "name": candidate_name,
@@ -381,6 +382,7 @@ def revoke_api_key(
     *,
     actor: User,
     reason: str | None = None,
+    source: str = "api",
     commit: bool = True,
 ) -> ApiKey:
     """Mark an API key as revoked and record an audit event."""
@@ -407,7 +409,7 @@ def revoke_api_key(
             actor_type="user",
             actor_id=actor.user_id,
             actor_label=actor.email,
-            source="api",
+            source=source,
             payload={
                 "user_id": api_key.user_id,
                 "token_prefix": api_key.token_prefix,
@@ -1283,6 +1285,21 @@ def _load_user(db: Session, email: str) -> User | None:
     return db.execute(statement).scalar_one_or_none()
 
 
+def _require_admin_operator(db: Session, email: str | None) -> User:
+    if not email:
+        raise ValueError("Operator email is required for this command")
+
+    operator = _load_user(db, _normalise_email(email))
+    if operator is None:
+        raise ValueError("Operator not found")
+    if not operator.is_active:
+        raise ValueError("Operator account is inactive")
+    if operator.role != UserRole.ADMIN:
+        raise ValueError("Operator must be an administrator")
+
+    return operator
+
+
 def _enforce_admin_allowlist(settings: config.Settings, email: str) -> None:
     if not settings.admin_email_allowlist_enabled:
         return
@@ -1436,6 +1453,103 @@ def _list_users(db: Session, settings: config.Settings, args: argparse.Namespace
         print(f"{user.email} ({user.role.value}, {status_label}){sso_info}")
 
 
+def _format_api_key_row(api_key: ApiKey, user: User) -> str:
+    parts = [
+        api_key.api_key_id,
+        f"user={user.email}",
+        f"name={api_key.name}",
+        f"prefix={api_key.token_prefix}",
+    ]
+    if api_key.last_used_at:
+        parts.append(f"last_used_at={api_key.last_used_at}")
+
+    if api_key.revoked_at:
+        parts.append("status=revoked")
+        parts.append(f"revoked_at={api_key.revoked_at}")
+        if api_key.revoked_reason:
+            parts.append(f"reason={api_key.revoked_reason}")
+    else:
+        parts.append("status=active")
+
+    return " ".join(parts)
+
+
+def _list_api_keys_cli(
+    db: Session, settings: config.Settings, args: argparse.Namespace
+) -> None:
+    statement = (
+        select(ApiKey, User)
+        .join(User, ApiKey.user_id == User.user_id)
+        .order_by(ApiKey.created_at.desc())
+    )
+    if args.user_email:
+        statement = statement.where(User.email == _normalise_email(args.user_email))
+
+    rows = db.execute(statement).all()
+    for api_key, user in rows:
+        print(_format_api_key_row(api_key, user))
+
+
+def _create_api_key_cli(
+    db: Session, settings: config.Settings, args: argparse.Namespace
+) -> None:
+    owner_email = _normalise_email(args.email)
+    user = _load_user(db, owner_email)
+    if user is None:
+        raise ValueError("User not found")
+
+    operator = _require_admin_operator(db, args.operator_email)
+
+    name = args.name.strip()
+    if not name:
+        raise ValueError("API key name cannot be empty")
+
+    duplicate = (
+        db.query(ApiKey)
+        .filter(ApiKey.user_id == user.user_id, ApiKey.name == name)
+        .one_or_none()
+    )
+    if duplicate is not None:
+        raise ValueError("API key name already exists for this user")
+
+    api_key, token = mint_api_key(
+        db,
+        user=user,
+        name=name,
+        actor=operator,
+        source="cli",
+    )
+
+    print(f"Created API key {api_key.api_key_id} for {user.email} ({api_key.name})")
+    print(f"Token: {token}")
+
+
+def _revoke_api_key_cli(
+    db: Session, settings: config.Settings, args: argparse.Namespace
+) -> None:
+    operator = _require_admin_operator(db, args.operator_email)
+    api_key = db.get(ApiKey, args.api_key_id)
+    if api_key is None:
+        raise ValueError("API key not found")
+
+    user = db.get(User, api_key.user_id)
+    if user is None:
+        raise ValueError("User not found")
+
+    updated = revoke_api_key(
+        db,
+        api_key,
+        actor=operator,
+        reason=args.reason,
+        source="cli",
+    )
+
+    print(
+        f"Revoked API key {updated.api_key_id} for {user.email}"
+        + (f" ({updated.revoked_reason})" if updated.revoked_reason else "")
+    )
+
+
 def _with_session(func: Callable[[Session, config.Settings, argparse.Namespace], None], args: argparse.Namespace) -> None:
     settings = config.get_settings()
     session_factory = get_sessionmaker()
@@ -1466,9 +1580,12 @@ def register_cli(
     )
     auth_commands = auth_parser.add_subparsers(dest="command", required=True)
 
-    def _add_operator_argument(command: argparse.ArgumentParser) -> None:
+    def _add_operator_argument(
+        command: argparse.ArgumentParser, *, required: bool = False
+    ) -> None:
         command.add_argument(
             "--operator-email",
+            required=required,
             help="Email address recorded as the actor for emitted events",
         )
 
@@ -1526,6 +1643,34 @@ def register_cli(
         "--show-inactive", action="store_true", help="Include deactivated accounts"
     )
     list_users.set_defaults(handler=_cli_runner(_list_users))
+
+    list_api_keys = auth_commands.add_parser(
+        "list-api-keys", help="Display API keys and their status"
+    )
+    list_api_keys.add_argument(
+        "--user-email",
+        help="Filter results to a specific user",
+    )
+    list_api_keys.set_defaults(handler=_cli_runner(_list_api_keys_cli))
+
+    create_api_key = auth_commands.add_parser(
+        "create-api-key", help="Mint an API key for an existing user"
+    )
+    create_api_key.add_argument("email", help="Email address of the key owner")
+    create_api_key.add_argument("name", help="Display name recorded with the key")
+    _add_operator_argument(create_api_key, required=True)
+    _bind(create_api_key, _create_api_key_cli)
+
+    revoke_api_key = auth_commands.add_parser(
+        "revoke-api-key", help="Revoke an existing API key"
+    )
+    revoke_api_key.add_argument("api_key_id", help="Identifier of the API key")
+    revoke_api_key.add_argument(
+        "--reason",
+        help="Optional explanation stored alongside the revocation",
+    )
+    _add_operator_argument(revoke_api_key, required=True)
+    _bind(revoke_api_key, _revoke_api_key_cli)
 
 
 def main(argv: list[str] | None = None) -> int:

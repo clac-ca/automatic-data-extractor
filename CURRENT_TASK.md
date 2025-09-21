@@ -1,14 +1,13 @@
-# 🔄 Next Task — Add CLI commands for API key lifecycle management
+# 🔄 Next Task — Simplify request authentication dependencies
 
 ## Context
-Operators can now manage API keys through the REST API, but ADE's bundled CLI still lacks any workflow for bootstrapping keys in environments without HTTP access. Mirroring the API functionality at the command line keeps automation simple and ensures every credential change continues to emit audit events.
+`backend/app/services/auth.py` still resolves browser sessions and API keys inside a single monolithic dependency that manually juggles rollbacks, token revocation, and error handling. The flow is hard to audit and diverges from FastAPI's composable security patterns, making it expensive to extend or reason about failures.
 
 ## Goals
-1. Extend `backend/app/services/auth.py` CLI registration to include subcommands for listing, creating, and revoking API keys, returning the raw token to stdout only when a key is created.
-2. Reuse the existing `mint_api_key` and `revoke_api_key` helpers so the CLI follows the same hashing, prefix collision handling, and event logging as the API.
-3. Expand `backend/tests/test_auth.py` with coverage for the new CLI commands, including assertions that revoked keys are unusable and that events are recorded.
+1. Break the current authentication dependency into smaller FastAPI dependencies that each resolve one credential type (session cookie, bearer token, API key header), leaning on the framework's `Security` utilities instead of hand-written parsing.
+2. Remove manual transaction management from read-only code paths so the dependency uses straightforward `Session` semantics, only mutating state (and committing) when refreshing sessions or updating API key usage.
+3. Update routes, CLI helpers, and tests to use the new dependencies while preserving existing behaviour and coverage for successful authentication and failure cases.
 
 ## Definition of done
-- CLI invocations allow operators to mint, list, and revoke API keys without touching the database directly.
-- CLI output includes the token value exactly once during creation while other commands surface only metadata.
-- Authentication and event tests pass, demonstrating that CLI-managed keys behave identically to those provisioned via the API.
+- Authentication resolution is expressed through clear, composable dependencies without explicit `db.rollback()` calls on read-only paths.
+- Tests demonstrate that session and API key authentication still succeed, invalid credentials still return the same HTTP errors, and audit events continue to fire when state changes.
