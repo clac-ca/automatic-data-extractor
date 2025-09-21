@@ -228,26 +228,38 @@ def current_user_profile(
     if session_model and session_model.user_id != current_user.user_id:
         session_model = None
 
-    existing = getattr(request.state, "auth_context", None)
-    subject = None
-    mode: str | None = None
-    if isinstance(existing, dict):
-        mode = existing.get("mode")
-        subject = existing.get("subject")
+    context = auth_service.get_request_auth_context(request)
+    if context is not None and context.user_id != current_user.user_id:
+        context = None
 
-    if mode is None:
-        if session_model is not None:
-            mode = "session"
-        elif getattr(request.state, "api_key", None) is not None:
-            mode = "api-key"
-        else:
-            mode = "basic"
+    api_key_model = getattr(request.state, "api_key", None)
+    api_key_id: str | None = None
+    if api_key_model is not None and getattr(api_key_model, "user_id", None) == current_user.user_id:
+        raw_api_key_id = getattr(api_key_model, "api_key_id", None)
+        if isinstance(raw_api_key_id, str):
+            api_key_id = raw_api_key_id
+    elif context is not None:
+        api_key_id = context.api_key_id
+
+    subject = context.subject if context is not None else None
+
+    if session_model is not None:
+        mode = "session"
+        session_id = session_model.session_id
+    elif api_key_id is not None:
+        mode = "api-key"
+        session_id = None
+    else:
+        mode = context.mode if context is not None else "basic"
+        session_id = None
+
     auth_service.set_request_auth_context(
         request,
         auth_service.RequestAuthContext.from_user(
             current_user,
             mode=mode,
-            session_id=session_model.session_id if session_model else None,
+            session_id=session_id,
+            api_key_id=api_key_id,
             subject=subject,
         ),
     )

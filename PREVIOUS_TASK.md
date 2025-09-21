@@ -1,19 +1,21 @@
-# ✅ Completed Task — Unify Request Auth Context Handling
+# ✅ Completed Task — Expose RequestAuthContext from Request State
 
 ## Context
-The authentication refactor consolidated service helpers, but request-state updates are still split between `routes/auth.py` and `services/auth.py`. Each module defines its own `_set_request_context` with slightly different fields (`subject` vs `api_key_id`). Maintaining parallel implementations risks drift and makes it harder to add future metadata (for example, MFA markers or login sources) in a single place.
+`RequestAuthContext` now centralises how request metadata is built, but FastAPI routes still reach into `request.state.auth_context` as an untyped dictionary. Each consumer has to guard against missing keys and manually extract values such as `mode`, `session_id`, or `subject`. Providing a typed accessor keeps the calling code simple while retaining backwards compatibility for callers that still expect the dictionary.
 
 ## Goals
-1. Introduce a small dataclass or helper in `backend/app/services/auth.py` that builds the request auth context dictionary with optional `session_id`, `api_key_id`, and `subject` fields.
-2. Update both the FastAPI dependency and the `/auth` routes to rely on this shared helper so request state is populated consistently.
-3. Keep backwards compatibility for downstream code that reads `request.state.auth_context`, `request.state.auth_session`, or `request.state.api_key`.
+1. Update `set_request_auth_context` so the constructed `RequestAuthContext` instance is stored on the request (for example `request.state.auth_context_model`) alongside the existing dictionary.
+2. Add a lightweight helper in `services/auth.py` that returns the `RequestAuthContext` for a request, falling back to reconstructing it from the dictionary when necessary.
+3. Refactor `/auth` routes (especially `current_user_profile`) and any other call sites to rely on the new helper instead of manually digging through the dictionary.
+4. Preserve behaviour for existing consumers that read `request.state.auth_context`, `request.state.auth_session`, or `request.state.api_key` directly.
 
 ## Implementation notes
-- Prefer a dataclass with a `to_dict()` helper for clarity, but keep it lightweight and free of FastAPI imports.
-- Ensure the helper accepts optional subject information so SSO logins continue to store the subject when available.
-- Add or update tests around request context capture to cover the shared helper.
+- Keep the helper free of FastAPI dependencies beyond `Request` and avoid changing response schemas.
+- The accessor should return `None` when no context has been set and should tolerate partially populated dictionaries to remain robust with older tests.
+- Extend or adjust unit tests to cover the helper and ensure the dataclass is attached to the request state.
 
 ## Definition of done
-- Only one code path is responsible for building the auth context dictionary.
-- `routes/auth.py` delegates request-state mutation to the shared helper.
-- `pytest backend/tests/test_auth.py` continues to pass.
+- `set_request_auth_context` stores both the dictionary and dataclass on the request state.
+- A helper exists to retrieve the `RequestAuthContext` instance from a FastAPI request.
+- `/auth` routes consume the helper instead of raw dictionary access.
+- `pytest backend/tests/test_auth.py` passes.
