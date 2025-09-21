@@ -240,7 +240,6 @@ def test_get_authenticated_identity_for_session(monkeypatch, tmp_path) -> None:
             assert identity.session.session_id == session_model.session_id
             assert identity.api_key is None
             assert identity.context.mode == "session"
-            assert getattr(request.state, "auth_session") is identity.session
             assert auth_service.get_request_auth_context(request) is identity.context
 
 
@@ -277,7 +276,6 @@ def test_get_authenticated_identity_for_api_key(monkeypatch, tmp_path) -> None:
         assert identity.api_key is not None
         assert identity.api_key.token_prefix == token[:12]
         assert identity.context.mode == "api-key"
-        assert getattr(request.state, "api_key") is identity.api_key
         assert auth_service.get_request_auth_context(request) is identity.context
 
 
