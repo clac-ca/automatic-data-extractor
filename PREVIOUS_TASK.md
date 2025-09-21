@@ -1,9 +1,9 @@
-# ✅ Completed Task — Simplify request authentication dependencies
+# ✅ Completed Task — Cache authenticated identities on the request
 
 ## Context
-Authenticating requests mixed session cookies, bearer tokens, and API keys inside a single dependency that manually managed SQLAlchemy transactions. The flow was difficult to follow and frequently opened transactions on the shared request session even when the call path should have been read-only.
+Repeated dependency calls to `get_authenticated_identity` re-opened SQLAlchemy sessions and re-ran credential resolution whenever router-level and route-level dependencies both requested the current user. Route handlers also had to declare the dependency just to access the resolved identity.
 
 ## Outcome
-- Split authentication into composable FastAPI dependencies that individually resolve session cookies and API/API bearer tokens, using SQLAlchemy session factories inside the dependency to avoid leaking transactions into route handlers.
-- Introduced a small `CredentialResolution` dataclass and helper functions so that `get_authenticated_identity` now just orchestrates the dependency results and emits consistent HTTP errors without hand-written rollbacks.
-- Updated the authentication tests to exercise the new helpers directly, keeping coverage for session refreshes, API key usage, and open-access mode while maintaining the existing behaviour under the simplified architecture.
+- Stored the first resolved `AuthenticatedIdentity` on `request.state` so subsequent dependencies can reuse it without performing new database work.
+- Simplified the FastAPI dependency stack by inlining the session and API key resolution logic inside `get_authenticated_identity`, removing the now-redundant dependency wrappers.
+- Added targeted tests that exercise both cold and cached paths—including a router/route combination—and documented how dependency overrides should clear the cached state in tests.

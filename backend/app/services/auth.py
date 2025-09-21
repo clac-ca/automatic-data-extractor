@@ -494,6 +494,7 @@ def complete_login(
 
 _BASIC_WWW_AUTH_HEADER = 'Basic realm="ADE"'
 _WWW_AUTH_HEADER = 'Bearer realm="ADE"'
+_REQUEST_IDENTITY_STATE_KEY = "authenticated_identity"
 
 _basic_scheme = HTTPBasic(auto_error=False)
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -694,26 +695,6 @@ def _resolve_session_identity_with_db(
     )
 
 
-def resolve_session_identity(
-    request: Request,
-    token: SessionCookieToken,
-    settings: config.Settings = Depends(config.get_settings),
-) -> CredentialResolution:
-    if settings.auth_disabled:
-        return CredentialResolution()
-    if token is None:
-        return CredentialResolution()
-
-    session_factory = get_sessionmaker()
-    with session_factory() as database:
-        return _resolve_session_identity_with_db(
-            database,
-            request=request,
-            token=token,
-            settings=settings,
-        )
-
-
 def _resolve_api_key_identity_with_db(
     db: Session,
     *,
@@ -741,44 +722,57 @@ def _resolve_api_key_identity_with_db(
     )
 
 
-def resolve_api_key_identity(
+def get_authenticated_identity(
+    request: Request,
+    session_token: SessionCookieToken,
     bearer_credentials: BearerCredentials,
     header_token: APIKeyHeaderToken,
     settings: config.Settings = Depends(config.get_settings),
-) -> CredentialResolution:
+) -> AuthenticatedIdentity:
+    # When dependency overrides return synthetic identities in tests, ensure
+    # ``request.state.authenticated_identity`` is cleared so the override is
+    # not shadowed by a cached value.
+    cached_identity = getattr(request.state, _REQUEST_IDENTITY_STATE_KEY, None)
+    if cached_identity is not None:
+        return cached_identity
+
     if settings.auth_disabled:
-        return CredentialResolution()
+        identity = AuthenticatedIdentity(user=_OPEN_ACCESS_USER, mode="none")
+        setattr(request.state, _REQUEST_IDENTITY_STATE_KEY, identity)
+        return identity
+
+    session_result = CredentialResolution()
+    if session_token is not None:
+        session_factory = get_sessionmaker()
+        with session_factory() as database:
+            session_result = _resolve_session_identity_with_db(
+                database,
+                request=request,
+                token=session_token,
+                settings=settings,
+            )
+        if session_result.identity is not None:
+            setattr(request.state, _REQUEST_IDENTITY_STATE_KEY, session_result.identity)
+            return session_result.identity
 
     token: str | None = None
     if bearer_credentials and bearer_credentials.credentials:
         token = bearer_credentials.credentials
     elif header_token:
         token = header_token
-    if token is None:
-        return CredentialResolution()
 
-    session_factory = get_sessionmaker()
-    with session_factory() as database:
-        return _resolve_api_key_identity_with_db(
-            database,
-            token=token,
-            settings=settings,
-        )
-
-
-def get_authenticated_identity(
-    settings: config.Settings = Depends(config.get_settings),
-    session_result: CredentialResolution = Depends(resolve_session_identity),
-    api_key_result: CredentialResolution = Depends(resolve_api_key_identity),
-) -> AuthenticatedIdentity:
-    if settings.auth_disabled:
-        return AuthenticatedIdentity(user=_OPEN_ACCESS_USER, mode="none")
-
-    if session_result.identity is not None:
-        return session_result.identity
-
-    if api_key_result.identity is not None:
-        return api_key_result.identity
+    api_key_result = CredentialResolution()
+    if token is not None:
+        session_factory = get_sessionmaker()
+        with session_factory() as database:
+            api_key_result = _resolve_api_key_identity_with_db(
+                database,
+                token=token,
+                settings=settings,
+            )
+        if api_key_result.identity is not None:
+            setattr(request.state, _REQUEST_IDENTITY_STATE_KEY, api_key_result.identity)
+            return api_key_result.identity
 
     if api_key_result.provided:
         detail = api_key_result.error_detail or "Invalid API key"
@@ -1760,8 +1754,6 @@ __all__ = [
     "register_cli",
     "require_basic_auth_user",
     "require_admin",
-    "resolve_api_key_identity",
-    "resolve_session_identity",
     "revoke_api_key",
     "revoke_session",
     "touch_api_key_usage",

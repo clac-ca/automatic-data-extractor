@@ -1,14 +1,14 @@
-# 🔄 Next Task — Cache authenticated identities on the request
+# 🔄 Next Task — Expose a helper for reading the cached identity from the request
 
 ## Context
-`get_authenticated_identity` now composes small dependencies for session and API key resolution, but repeated dependency calls within the same request still retrace the lookup flow and reopen database sessions. Routes that combine router-level `Depends(get_current_user)` with additional user-dependent dependencies could perform redundant work, and downstream code still needs to call the dependency explicitly to access the resolved identity.
+`get_authenticated_identity` now caches the resolved `AuthenticatedIdentity` on `request.state`, but route handlers and services still need a clean way to retrieve it when they already depend on router-level authentication. Providing a tiny accessor keeps downstream code from re-declaring authentication dependencies just to get at the user and makes the new cache easier to adopt.
 
 ## Goals
-1. Attach the resolved `AuthenticatedIdentity` to `request.state` within the authentication dependency so subsequent dependencies or route handlers can reuse it without repeating database lookups.
-2. Ensure repeated calls to `get_authenticated_identity` during a single request return the cached value and do not reopen sessions when the state is already populated.
-3. Update FastAPI routes and tests to exercise the cached identity path, including scenarios where both a router dependency and a route-level dependency request the current user.
+1. Add a helper (for example `auth_service.get_cached_identity(request: Request)`) that returns the cached identity or raises a clear error if authentication has not run yet.
+2. Update at least one router that currently uses `Depends(get_current_user)` inside a route handler despite having a router-level dependency, demonstrating the helper in action.
+3. Document and test the helper so contributors know how and when to use it, including behaviour when the cache is missing.
 
 ## Definition of done
-- The first resolution of `get_authenticated_identity` stores the identity on the request and later calls for the same request reuse it instead of requerying the database.
-- Unit and integration tests cover both the cold path (initial resolution) and the cached path, proving that repeated dependencies return the same identity and still refresh sessions/API keys as expected.
-- Documentation or inline notes clarify how request state caching interacts with dependency overrides in tests.
+- The helper reads `request.state` without re-running authentication and returns the same identity object set by `get_authenticated_identity`.
+- A representative route handler uses the helper instead of a redundant dependency, with no change to behaviour or authorisation checks.
+- Tests cover successful retrieval and the error path when the cache is absent, and documentation or inline notes describe the helper’s usage.
