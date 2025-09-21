@@ -1,9 +1,9 @@
-# ✅ Completed Task — Implement API key provisioning endpoints for operators
+# ✅ Completed Task — Add CLI commands for API key lifecycle management
 
 ## Context
-Authentication already trusts rows in the `api_keys` table, but administrators lacked a safe workflow for issuing or revoking credentials. This task aimed to expose a concise API so operators can mint, inspect, and revoke API keys without touching the database directly.
+Operators can now mint and revoke API keys over HTTP, but the bundled CLI lacked equivalent workflows. Providing lifecycle commands keeps air-gapped environments manageable and ensures CLI actions emit the same audit trail as API-driven changes.
 
 ## Outcome
-- Added `mint_api_key` and `revoke_api_key` helpers in `backend/app/services/auth.py` to issue random secrets, persist hashed tokens with stable prefixes, and emit audit events on creation and revocation.
-- Introduced admin-only `/auth/api-keys` endpoints plus Pydantic schemas that list existing keys, mint new ones while returning the secret once, and mark keys as revoked without deleting rows.
-- Expanded `backend/tests/test_auth.py` with end-to-end coverage for the provisioning flow, confirming that audit events are recorded and revoked keys can no longer authenticate requests.
+- Extended `mint_api_key` and `revoke_api_key` to accept a `source` label so non-HTTP actors can reuse the helpers while emitting accurate audit metadata.
+- Added `list-api-keys`, `create-api-key`, and `revoke-api-key` CLI subcommands that reuse the existing helpers, require an administrator operator for write operations, and print the raw token exactly once during creation.
+- Expanded `backend/tests/test_auth.py` with coverage for the new commands, asserting that events are recorded with the `cli` source and that revoked keys immediately lose access.

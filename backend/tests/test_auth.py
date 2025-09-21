@@ -198,6 +198,117 @@ def test_cli_main_auth_group_invokes_commands(monkeypatch, tmp_path, capsys) -> 
             assert auth_service.verify_password("cli-pass", user.password_hash)
 
 
+def test_cli_api_key_commands_manage_lifecycle(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    with _configured_settings(monkeypatch, tmp_path) as (_, session_factory):
+        operator_email = "admin@example.com"
+        service_email = "service@example.com"
+
+        assert (
+            ade_cli.main(
+                [
+                    "auth",
+                    "create-user",
+                    operator_email,
+                    "--password",
+                    "operator-pass",
+                    "--role",
+                    UserRole.ADMIN.value,
+                ]
+            )
+            == 0
+        )
+        capsys.readouterr()
+
+        assert (
+            ade_cli.main(
+                [
+                    "auth",
+                    "create-user",
+                    service_email,
+                    "--password",
+                    "service-pass",
+                    "--operator-email",
+                    operator_email,
+                ]
+            )
+            == 0
+        )
+        capsys.readouterr()
+
+        assert (
+            ade_cli.main(
+                [
+                    "auth",
+                    "create-api-key",
+                    service_email,
+                    "automation",
+                    "--operator-email",
+                    operator_email,
+                ]
+            )
+            == 0
+        )
+        creation_output = capsys.readouterr().out.splitlines()
+        token_line = next(line for line in creation_output if line.startswith("Token: "))
+        token = token_line.split("Token: ", 1)[1].strip()
+        assert token
+
+        with session_factory() as db:
+            api_key = (
+                db.query(ApiKey)
+                .join(User, ApiKey.user_id == User.user_id)
+                .filter(User.email == service_email)
+                .one()
+            )
+            api_key_id = api_key.api_key_id
+
+        assert ade_cli.main(["auth", "list-api-keys"]) == 0
+        list_output = capsys.readouterr().out
+        assert api_key_id in list_output
+        assert token not in list_output
+
+        with session_factory() as db:
+            stored_key = auth_service.get_api_key(db, token)
+            assert stored_key is not None
+            assert stored_key.api_key_id == api_key_id
+
+        assert (
+            ade_cli.main(
+                [
+                    "auth",
+                    "revoke-api-key",
+                    api_key_id,
+                    "--operator-email",
+                    operator_email,
+                    "--reason",
+                    "rotation",
+                ]
+            )
+            == 0
+        )
+        revoke_output = capsys.readouterr().out
+        assert "Revoked API key" in revoke_output
+
+        with session_factory() as db:
+            assert auth_service.get_api_key(db, token) is None
+
+            events = (
+                db.query(Event)
+                .filter(Event.entity_id == api_key_id)
+                .order_by(Event.occurred_at)
+                .all()
+            )
+            event_types = [event.event_type for event in events]
+            assert "api-key.created" in event_types
+            assert "api-key.revoked" in event_types
+            for event in events:
+                if event.event_type.startswith("api-key."):
+                    assert event.source == "cli"
+                    assert event.actor_label == operator_email
+
+
 def test_get_authenticated_identity_for_session(monkeypatch, tmp_path) -> None:
     with _configured_settings(monkeypatch, tmp_path) as (settings, session_factory):
         with session_factory() as db:
