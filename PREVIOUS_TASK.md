@@ -1,22 +1,29 @@
-# 🔄 Next Task — Streamline Auth Dependency & FastAPI Security Wiring
+# 🔄 Next Task — Reuse Auth Dependency State in Session & Profile Endpoints
 
 ## Context
-The authentication regression tests now cover API keys, sessions, SSO auto-provisioning, and auth-disabled mode. With safety nets in place we can simplify the runtime dependency itself. The current `get_current_user` implementation manually parses headers/cookies and manages state; FastAPI offers first-class primitives for this logic. Aligning with the lighter architecture target will make ongoing maintenance easier and keep behaviour consistent with the new tests.
+The `get_current_user` dependency now relies on FastAPI security primitives and records the active session or API key on
+`request.state`. The session refresh (`/auth/session`), logout, and `/auth/me` endpoints still re-implement the same lookups and
+commit logic, issuing extra queries and diverging from the new code path. Aligning these routes with the dependency keeps the
+behaviour consistent and removes the duplicated cookie handling that the recent refactor eliminated.
 
 ## Goals
-1. Replace hand-rolled header parsing in `auth.dependencies` with FastAPI security utilities (`HTTPBearer`, `APIKeyHeader`, cookie extraction helpers) while keeping behaviour identical.
-2. Trim duplicate session/API-key metadata lookups so the dependency issues exactly one DB transaction per request.
-3. Preserve the request context contract (`request.state.auth_context`, `request.state.auth_session`, `request.state.api_key`) now validated by the test suite.
-4. Ensure OpenAPI security metadata still reflects available modes (basic, sso, api-key, none).
+1. Update `/auth/logout`, `/auth/session`, and `/auth/me` to consume `request.state.auth_session`, `request.state.api_key`, and
+   `request.state.auth_context` when present instead of re-querying sessions and users from scratch.
+2. Ensure session refreshes and revocations share the single database transaction established by the dependency (no
+   `get_sessionmaker()` round-trips inside the routes).
+3. Keep response payloads and audit events unchanged so the existing regression tests continue to pass.
+4. Verify the dependency still populates context for API-key-only requests so `/auth/logout` can remain a no-op for those
+   clients.
 
 ## Implementation notes
-- Reuse FastAPI's built-in security classes instead of parsing Authorization headers manually.
-- Keep the synthetic admin user behaviour when `AUTH_DISABLED` is set; verify using the new tests.
-- Make sure revoked sessions/api keys still return 403, and that logout clears only cookies.
-- Update or extend tests only if the refactor requires different assertions; prefer adapting the dependency to satisfy existing expectations.
-- Avoid introducing new abstractions—prefer clear, direct functions.
+- Call `dependencies.get_current_user` once per request and rely on the state it sets; only fall back to manual lookups when
+  absolutely necessary (e.g. cookie missing).
+- Use `request.state.auth_session` to decide whether to refresh or revoke the session, and avoid redundant `sessions.get_session`
+  queries.
+- Preserve cookie clearing semantics and log events in the same circumstances as today.
+- Keep the code straightforward: prefer direct `if` checks and explicit commits over new abstractions.
 
 ## Definition of done
-- `auth.dependencies` delegates header/cookie parsing to FastAPI primitives and contains minimal control flow.
-- All regression tests in `backend/tests/test_auth.py` pass without changes to their intent.
-- No new dependencies added; OpenAPI schema remains accurate.
+- The auth routes no longer open ad-hoc database sessions or duplicate cookie parsing; they rely on the dependency’s state.
+- Regression tests in `backend/tests/test_auth.py` still succeed without behavioural changes.
+- No new dependencies or helper modules introduced.
