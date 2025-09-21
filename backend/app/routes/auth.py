@@ -3,15 +3,26 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import config
 from ..services import EventRecord, auth as auth_service, record_event
 from ..db import get_db
-from ..models import User, UserSession
-from ..schemas import AuthSessionResponse, SessionSummary, UserProfile
+from ..models import ApiKey, User, UserSession
+from ..schemas import (
+    ApiKeyCreateRequest,
+    ApiKeyCreateResponse,
+    ApiKeyListResponse,
+    ApiKeyResponse,
+    ApiKeyRevokeRequest,
+    AuthSessionResponse,
+    SessionSummary,
+    UserProfile,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +43,19 @@ def _session_summary(session_model: UserSession | None) -> SessionSummary | None
     if session_model is None:
         return None
     return SessionSummary(session_id=session_model.session_id, expires_at=session_model.expires_at)
+
+
+def _api_key_payload(api_key: ApiKey, user: User) -> dict[str, Any]:
+    return {
+        "api_key_id": api_key.api_key_id,
+        "name": api_key.name,
+        "token_prefix": api_key.token_prefix,
+        "created_at": api_key.created_at,
+        "last_used_at": api_key.last_used_at,
+        "revoked_at": api_key.revoked_at,
+        "revoked_reason": api_key.revoked_reason,
+        "user": _user_profile(user),
+    }
 
 
 def _available_modes(settings: config.Settings) -> list[str]:
@@ -188,6 +212,80 @@ def session_status(
     db.commit()
     _set_session_cookie(response, settings, session_token)
     return _auth_response(identity.user, settings, session_model=session_model)
+
+
+@router.get("/api-keys", response_model=ApiKeyListResponse)
+def list_api_keys(
+    _admin: auth_service.AdminUser,
+    db: Session = Depends(get_db),
+) -> ApiKeyListResponse:
+    statement = (
+        select(ApiKey, User)
+        .join(User, ApiKey.user_id == User.user_id)
+        .order_by(ApiKey.created_at.desc())
+    )
+    rows = db.execute(statement).all()
+    items = [ApiKeyResponse(**_api_key_payload(api_key, user)) for api_key, user in rows]
+    return ApiKeyListResponse(items=items)
+
+
+@router.post(
+    "/api-keys",
+    response_model=ApiKeyCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_api_key(
+    payload: ApiKeyCreateRequest,
+    admin: auth_service.AdminUser,
+    db: Session = Depends(get_db),
+) -> ApiKeyCreateResponse:
+    user = db.get(User, payload.user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    name = payload.name.strip()
+    existing = (
+        db.query(ApiKey)
+        .filter(ApiKey.user_id == user.user_id, ApiKey.name == name)
+        .one_or_none()
+    )
+    if existing is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="API key name already exists for this user",
+        )
+
+    api_key, token = auth_service.mint_api_key(
+        db,
+        user=user,
+        name=name,
+        actor=admin,
+    )
+    return ApiKeyCreateResponse(token=token, **_api_key_payload(api_key, user))
+
+
+@router.post("/api-keys/{api_key_id}/revoke", response_model=ApiKeyResponse)
+def revoke_api_key(
+    api_key_id: str,
+    payload: ApiKeyRevokeRequest,
+    admin: auth_service.AdminUser,
+    db: Session = Depends(get_db),
+) -> ApiKeyResponse:
+    api_key = db.get(ApiKey, api_key_id)
+    if api_key is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="API key not found")
+
+    user = db.get(User, api_key.user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    updated = auth_service.revoke_api_key(
+        db,
+        api_key,
+        actor=admin,
+        reason=payload.reason,
+    )
+    return ApiKeyResponse(**_api_key_payload(updated, user))
 
 
 @router.get(
