@@ -1,9 +1,9 @@
-# ✅ Completed Task — Add CLI commands for API key lifecycle management
+# ✅ Completed Task — Simplify request authentication dependencies
 
 ## Context
-Operators can now mint and revoke API keys over HTTP, but the bundled CLI lacked equivalent workflows. Providing lifecycle commands keeps air-gapped environments manageable and ensures CLI actions emit the same audit trail as API-driven changes.
+Authenticating requests mixed session cookies, bearer tokens, and API keys inside a single dependency that manually managed SQLAlchemy transactions. The flow was difficult to follow and frequently opened transactions on the shared request session even when the call path should have been read-only.
 
 ## Outcome
-- Extended `mint_api_key` and `revoke_api_key` to accept a `source` label so non-HTTP actors can reuse the helpers while emitting accurate audit metadata.
-- Added `list-api-keys`, `create-api-key`, and `revoke-api-key` CLI subcommands that reuse the existing helpers, require an administrator operator for write operations, and print the raw token exactly once during creation.
-- Expanded `backend/tests/test_auth.py` with coverage for the new commands, asserting that events are recorded with the `cli` source and that revoked keys immediately lose access.
+- Split authentication into composable FastAPI dependencies that individually resolve session cookies and API/API bearer tokens, using SQLAlchemy session factories inside the dependency to avoid leaking transactions into route handlers.
+- Introduced a small `CredentialResolution` dataclass and helper functions so that `get_authenticated_identity` now just orchestrates the dependency results and emits consistent HTTP errors without hand-written rollbacks.
+- Updated the authentication tests to exercise the new helpers directly, keeping coverage for session refreshes, API key usage, and open-access mode while maintaining the existing behaviour under the simplified architecture.
