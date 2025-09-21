@@ -1,13 +1,13 @@
-# 🔄 Next Task — Reuse FastAPI's cookie dependency for session validation
+# 🔄 Next Task — Use FastAPI dependency to resolve API key tokens
 
 ## Context
-`/auth/session` still reads the session cookie directly from `request.cookies` and raises HTTP errors manually. The auth service already wraps FastAPI's `APIKeyCookie` helper inside `_session_cookie_value`, but that dependency is private and optional. Promoting a shared dependency for required session cookies keeps auth routes consistent, trims duplicate error handling, and leans on FastAPI's built-in security tooling.
+`get_authenticated_identity` currently depends on both the bearer Authorization header and the `X-API-Key` header separately, then invokes `_resolve_api_key_token` to figure out which credential was supplied. Wrapping that check in a shared dependency mirrors the new session cookie helper, keeps signatures lean, and relies on FastAPI's injection system instead of manual branching.
 
 ## Goals
-1. Expose a public dependency in `backend/app/services/auth.py` that uses `APIKeyCookie` to retrieve the configured session cookie and raise `401` when it is missing.
-2. Update `/auth/session` (and any other routes that need the raw cookie) to consume the new dependency instead of accessing `request.cookies` directly.
-3. Ensure the behaviour and responses remain unchanged by relying on existing helpers for audit logging and cookie refreshes.
+1. Add a public dependency in `backend/app/services/auth.py` that combines the bearer and header schemes to return the API key token when present (without raising when neither is supplied).
+2. Update `get_authenticated_identity` and any other call sites to depend on the new helper instead of passing two security dependencies and calling `_resolve_api_key_token` directly.
+3. Ensure existing authentication behaviour is preserved by re-running the auth test suite.
 
 ## Definition of done
-- Auth routes no longer call `request.cookies.get(settings.session_cookie_name)` directly; they use the shared dependency instead.
-- Authentication tests continue to pass without behavioural regressions.
+- Auth dependencies no longer accept raw `HTTPAuthorizationCredentials` or header values just to resolve API key tokens; they use the new helper instead.
+- Authentication tests continue to pass without regressions.

@@ -404,6 +404,19 @@ async def _session_cookie_value(
     return None
 
 
+def require_session_cookie(
+    token: Annotated[str | None, Depends(_session_cookie_value)],
+) -> str:
+    """Return the raw session cookie or raise ``401`` if it is missing."""
+
+    if token is None:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail="Session cookie missing",
+        )
+    return token
+
+
 def _resolve_api_key_token(
     bearer_credentials: HTTPAuthorizationCredentials | None,
     header_token: str | None,
