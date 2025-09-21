@@ -16,6 +16,7 @@ import httpx
 import pytest
 from fastapi import HTTPException
 
+from backend.app import cli as ade_cli
 from backend.app import config
 import backend.app.services.auth as auth_service
 from backend.app.db import get_sessionmaker
@@ -163,6 +164,37 @@ def _make_request_stub() -> SimpleNamespace:
         headers={"user-agent": "pytest"},
         cookies={},
     )
+
+
+def test_cli_main_auth_group_invokes_commands(monkeypatch, tmp_path, capsys) -> None:
+    with _configured_settings(monkeypatch, tmp_path) as (_, session_factory):
+        operator = "ops@example.com"
+        assert (
+            ade_cli.main(
+                [
+                    "auth",
+                    "create-user",
+                    "cli@example.com",
+                    "--password",
+                    "cli-pass",
+                    "--operator-email",
+                    operator,
+                ]
+            )
+            == 0
+        )
+
+        capsys.readouterr()  # discard creation log lines
+
+        assert ade_cli.main(["auth", "list-users"]) == 0
+        listed = capsys.readouterr().out
+        assert "cli@example.com" in listed
+
+        with session_factory() as db:
+            user = db.query(User).filter(User.email == "cli@example.com").one()
+            assert user.is_active
+            assert user.role == UserRole.VIEWER
+            assert auth_service.verify_password("cli-pass", user.password_hash)
 
 
 def test_get_authenticated_identity_for_session(monkeypatch, tmp_path) -> None:
