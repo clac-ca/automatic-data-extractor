@@ -15,7 +15,7 @@ import httpx
 import pytest
 
 from backend.app import config
-from backend.app.auth import sessions as session_service, sso
+from backend.app.auth import dependencies, sessions as session_service, sso
 from backend.app.auth.api_keys import hash_api_key_token
 from backend.app.auth.passwords import hash_password, verify_password
 from backend.app.auth.sessions import hash_session_token
@@ -347,6 +347,40 @@ def test_deactivated_user_cannot_use_basic_or_session(app_client) -> None:
     assert retry_login.status_code in {401, 403}
 
 
+def test_session_request_updates_last_seen_metadata(app_client) -> None:
+    client, _, _ = app_client
+    settings = config.get_settings()
+    cookie_value = client.cookies.get(settings.session_cookie_name)
+    assert cookie_value is not None
+
+    token_hash = hash_session_token(cookie_value)
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        record = (
+            db.query(UserSession)
+            .filter(UserSession.token_hash == token_hash)
+            .one()
+        )
+        original_seen = datetime.fromisoformat(record.last_seen_at)
+        record.last_seen_ip = None
+        record.last_seen_user_agent = None
+        db.commit()
+
+    headers = {"User-Agent": "pytest-session-check"}
+    response = client.get("/documents", headers=headers)
+    assert response.status_code == 200
+
+    with session_factory() as db:
+        refreshed = (
+            db.query(UserSession)
+            .filter(UserSession.token_hash == token_hash)
+            .one()
+        )
+        assert refreshed.last_seen_ip == "testclient"
+        assert refreshed.last_seen_user_agent == "pytest-session-check"
+        assert datetime.fromisoformat(refreshed.last_seen_at) > original_seen
+
+
 def test_protected_routes_require_authentication(app_client_factory, tmp_path, monkeypatch) -> None:
     db_path = tmp_path / "auth.sqlite"
     documents_dir = tmp_path / "docs"
@@ -390,6 +424,93 @@ def test_invalid_api_key_returns_403(app_client) -> None:
     assert response.status_code == 403
 
 
+def test_api_key_logout_only_clears_cookies(app_client) -> None:
+    client, _, _ = app_client
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        user = db.query(User).filter(User.email == "admin@example.com").one()
+
+    token = "machine-token-logout"
+    _insert_api_key(user, token)
+    client.auth = None
+    client.cookies.clear()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    first = client.get("/documents", headers=headers)
+    assert first.status_code == 200
+
+    logout = client.post("/auth/logout", headers=headers)
+    assert logout.status_code == 204
+
+    repeat = client.get("/documents", headers=headers)
+    assert repeat.status_code == 200
+
+    with session_factory() as db:
+        api_key = (
+            db.query(ApiKey)
+            .filter(ApiKey.token_hash == hash_api_key_token(token))
+            .one()
+        )
+        assert api_key.revoked_at is None
+
+
+def test_api_key_usage_updates_last_used_at(app_client) -> None:
+    client, _, _ = app_client
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        user = db.query(User).filter(User.email == "admin@example.com").one()
+
+    token = "machine-token-usage"
+    _insert_api_key(user, token)
+    client.auth = None
+    client.cookies.clear()
+    before = datetime.now(timezone.utc)
+
+    response = client.get(
+        "/documents",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+
+    with session_factory() as db:
+        api_key = (
+            db.query(ApiKey)
+            .filter(ApiKey.token_hash == hash_api_key_token(token))
+            .one()
+        )
+        assert api_key.last_used_at is not None
+        recorded = datetime.fromisoformat(api_key.last_used_at)
+        assert recorded >= before - timedelta(seconds=5)
+        assert recorded <= datetime.now(timezone.utc) + timedelta(seconds=5)
+
+
+def test_revoked_api_key_is_rejected(app_client) -> None:
+    client, _, _ = app_client
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        user = db.query(User).filter(User.email == "admin@example.com").one()
+
+    token = "machine-token-revoked"
+    _insert_api_key(user, token)
+
+    with session_factory() as db:
+        api_key = (
+            db.query(ApiKey)
+            .filter(ApiKey.token_hash == hash_api_key_token(token))
+            .one()
+        )
+        api_key.revoked_at = datetime.now(timezone.utc).isoformat()
+        db.commit()
+
+    client.auth = None
+    client.cookies.clear()
+    response = client.get(
+        "/documents",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 403
+
+
 def test_open_access_mode_disables_auth(app_client_factory, tmp_path, monkeypatch) -> None:
     db_path = tmp_path / "open.sqlite"
     documents_dir = tmp_path / "docs"
@@ -398,13 +519,45 @@ def test_open_access_mode_disables_auth(app_client_factory, tmp_path, monkeypatc
     monkeypatch.setenv("AUTH_DISABLED", "1")
     with app_client_factory(database_url, documents_dir) as client:
         client.auth = None
+        captured: dict[str, object] = {}
+
+        original = dependencies._set_request_context
+
+        def capture_context(request, user, mode, *, session_id=None, api_key_id=None):
+            captured["user"] = user
+            captured["mode"] = mode
+            captured["session_id"] = session_id
+            captured["api_key_id"] = api_key_id
+            return original(
+                request,
+                user,
+                mode,
+                session_id=session_id,
+                api_key_id=api_key_id,
+            )
+
+        monkeypatch.setattr(dependencies, "_set_request_context", capture_context)
+
+        login = client.post("/auth/login/basic")
+        assert login.status_code == 404
+
         documents = client.get("/documents")
         assert documents.status_code == 200
+
+        assert captured["user"].email == "open-access@ade.local"
+        assert captured["mode"] == "none"
+        assert captured["session_id"] is None
+        assert captured["api_key_id"] is None
+
         profile = client.get("/auth/me")
         assert profile.status_code == 200
         body = profile.json()
         assert body["modes"] == ["none"]
         assert body["user"]["role"] == "admin"
+        assert body["user"]["email"] == "open-access@ade.local"
+
+        logout = client.post("/auth/logout")
+        assert logout.status_code == 204
 
 
 def test_basic_login_disabled_when_mode_missing(app_client_factory, tmp_path, monkeypatch) -> None:
@@ -422,7 +575,14 @@ def test_basic_login_disabled_when_mode_missing(app_client_factory, tmp_path, mo
         assert response.status_code == 404
 
 
-def _encode_hs256_token(secret: bytes, issuer: str, audience: str, nonce: str) -> str:
+def _encode_hs256_token(
+    secret: bytes,
+    issuer: str,
+    audience: str,
+    nonce: str,
+    *,
+    overrides: dict[str, object] | None = None,
+) -> str:
     header = {"alg": "HS256", "typ": "JWT", "kid": "test-key"}
     now = int(time.time())
     payload = {
@@ -434,6 +594,9 @@ def _encode_hs256_token(secret: bytes, issuer: str, audience: str, nonce: str) -
         "iat": now,
         "exp": now + 3600,
     }
+
+    if overrides:
+        payload.update(overrides)
 
     signing_input = ".".join(
         [
@@ -489,8 +652,11 @@ def test_sso_callback_issues_session(app_client_factory, tmp_path, monkeypatch) 
             db.commit()
 
         state_holder: dict[str, str] = {}
+        get_calls: list[str] = []
+        post_calls = 0
 
         def fake_get(url: str, *args, **kwargs) -> httpx.Response:
+            get_calls.append(url)
             if url == discovery_url:
                 return httpx.Response(
                     200,
@@ -506,7 +672,9 @@ def test_sso_callback_issues_session(app_client_factory, tmp_path, monkeypatch) 
             raise AssertionError(f"Unexpected GET {url}")
 
         def fake_post(url: str, *args, **kwargs) -> httpx.Response:
+            nonlocal post_calls
             assert url == token_endpoint
+            post_calls += 1
             nonce = state_holder["nonce"]
             token = _encode_hs256_token(secret, issuer, "client-123", nonce)
             return httpx.Response(200, json={"id_token": token})
@@ -528,6 +696,200 @@ def test_sso_callback_issues_session(app_client_factory, tmp_path, monkeypatch) 
         assert body["user"]["email"] == "sso@example.com"
         cookie = client.cookies.get(config.get_settings().session_cookie_name)
         assert cookie is not None
+        assert get_calls == [discovery_url, jwks_url]
+        assert post_calls == 1
+
+        client.cookies.clear()
+        second_redirect = client.get("/auth/sso/login")
+        assert second_redirect.status_code == 307
+        second_location = second_redirect.headers["Location"]
+        second_query = urllib.parse.parse_qs(urllib.parse.urlparse(second_location).query)
+        state_holder["nonce"] = second_query["nonce"][0]
+        second_state = second_query["state"][0]
+        second_callback = client.get(
+            "/auth/sso/callback",
+            params={"code": "def", "state": second_state},
+        )
+        assert second_callback.status_code == 200
+        assert post_calls == 2
+        assert get_calls == [discovery_url, jwks_url]
+
+
+def test_sso_callback_auto_provisions_user(app_client_factory, tmp_path, monkeypatch) -> None:
+    issuer = "https://sso.example.com"
+    db_path = tmp_path / "sso-auto.sqlite"
+    documents_dir = tmp_path / "docs"
+    database_url = f"sqlite:///{db_path}"
+    monkeypatch.setenv("ADE_AUTH_MODES", "sso")
+    monkeypatch.setenv("ADE_SESSION_COOKIE_SECURE", "0")
+    monkeypatch.setenv("ADE_SSO_CLIENT_ID", "client-123")
+    monkeypatch.setenv("ADE_SSO_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("ADE_SSO_ISSUER", issuer)
+    monkeypatch.setenv("ADE_SSO_REDIRECT_URL", "https://ade.internal/auth/sso/callback")
+    monkeypatch.setenv("ADE_SSO_AUTO_PROVISION", "1")
+
+    discovery_url = f"{issuer}/.well-known/openid-configuration"
+    token_endpoint = f"{issuer}/token"
+    jwks_url = f"{issuer}/jwks"
+
+    secret = b"client-secret"
+    jwks = {
+        "keys": [
+            {
+                "kty": "oct",
+                "use": "sig",
+                "alg": "HS256",
+                "kid": "test-key",
+                "k": base64.urlsafe_b64encode(secret).decode("ascii").rstrip("="),
+            }
+        ]
+    }
+
+    with app_client_factory(database_url, documents_dir) as client:
+        session_factory = get_sessionmaker()
+        with session_factory() as db:
+            assert (
+                db.query(User)
+                .filter(User.email == "auto@example.com")
+                .count()
+                == 0
+            )
+
+        state_holder: dict[str, str] = {}
+
+        def fake_get(url: str, *args, **kwargs) -> httpx.Response:
+            if url == discovery_url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "issuer": issuer,
+                        "authorization_endpoint": f"{issuer}/authorize",
+                        "token_endpoint": token_endpoint,
+                        "jwks_uri": jwks_url,
+                    },
+                )
+            if url == jwks_url:
+                return httpx.Response(200, json=jwks)
+            raise AssertionError(f"Unexpected GET {url}")
+
+        def fake_post(url: str, *args, **kwargs) -> httpx.Response:
+            assert url == token_endpoint
+            nonce = state_holder["nonce"]
+            token = _encode_hs256_token(
+                secret,
+                issuer,
+                "client-123",
+                nonce,
+                overrides={"email": "auto@example.com", "sub": "oidc-auto"},
+            )
+            return httpx.Response(200, json={"id_token": token})
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+        monkeypatch.setattr(httpx, "post", fake_post)
+
+        client.auth = None
+        login_redirect = client.get("/auth/sso/login")
+        assert login_redirect.status_code == 307
+        location = login_redirect.headers["Location"]
+        parsed = urllib.parse.urlparse(location)
+        query = urllib.parse.parse_qs(parsed.query)
+        state_holder["nonce"] = query["nonce"][0]
+        state = query["state"][0]
+
+        callback = client.get("/auth/sso/callback", params={"code": "auto", "state": state})
+        assert callback.status_code == 200
+        body = callback.json()
+        assert body["user"]["email"] == "auto@example.com"
+        assert body["user"]["role"] == "viewer"
+
+        cookie = client.cookies.get(config.get_settings().session_cookie_name)
+        assert cookie is not None
+
+        with session_factory() as db:
+            user = db.query(User).filter(User.email == "auto@example.com").one()
+            assert user.sso_provider == issuer
+            assert user.sso_subject == "oidc-auto"
+            assert user.password_hash is None
+            session_record = (
+                db.query(UserSession)
+                .filter(UserSession.user_id == user.user_id)
+                .order_by(UserSession.issued_at.desc())
+                .first()
+            )
+            assert session_record is not None
+
+    sso.clear_caches()
+
+
+def test_sso_callback_rejects_unexpected_nonce(app_client_factory, tmp_path, monkeypatch) -> None:
+    issuer = "https://sso.example.com"
+    db_path = tmp_path / "sso-nonce.sqlite"
+    documents_dir = tmp_path / "docs"
+    database_url = f"sqlite:///{db_path}"
+    monkeypatch.setenv("ADE_AUTH_MODES", "basic,sso")
+    monkeypatch.setenv("ADE_SESSION_COOKIE_SECURE", "0")
+    monkeypatch.setenv("ADE_SSO_CLIENT_ID", "client-123")
+    monkeypatch.setenv("ADE_SSO_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("ADE_SSO_ISSUER", issuer)
+    monkeypatch.setenv("ADE_SSO_REDIRECT_URL", "https://ade.internal/auth/sso/callback")
+
+    discovery_url = f"{issuer}/.well-known/openid-configuration"
+    token_endpoint = f"{issuer}/token"
+    jwks_url = f"{issuer}/jwks"
+
+    secret = b"client-secret"
+    jwks = {
+        "keys": [
+            {
+                "kty": "oct",
+                "use": "sig",
+                "alg": "HS256",
+                "kid": "test-key",
+                "k": base64.urlsafe_b64encode(secret).decode("ascii").rstrip("="),
+            }
+        ]
+    }
+
+    with app_client_factory(database_url, documents_dir) as client:
+        state_holder: dict[str, str] = {}
+
+        def fake_get(url: str, *args, **kwargs) -> httpx.Response:
+            if url == discovery_url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "issuer": issuer,
+                        "authorization_endpoint": f"{issuer}/authorize",
+                        "token_endpoint": token_endpoint,
+                        "jwks_uri": jwks_url,
+                    },
+                )
+            if url == jwks_url:
+                return httpx.Response(200, json=jwks)
+            raise AssertionError(f"Unexpected GET {url}")
+
+        def fake_post(url: str, *args, **kwargs) -> httpx.Response:
+            assert url == token_endpoint
+            token = _encode_hs256_token(secret, issuer, "client-123", "unexpected")
+            return httpx.Response(200, json={"id_token": token})
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+        monkeypatch.setattr(httpx, "post", fake_post)
+
+        client.auth = None
+        login_redirect = client.get("/auth/sso/login")
+        assert login_redirect.status_code == 307
+        location = login_redirect.headers["Location"]
+        parsed = urllib.parse.urlparse(location)
+        query = urllib.parse.parse_qs(parsed.query)
+        state_holder["nonce"] = query["nonce"][0]
+        state = query["state"][0]
+
+        callback = client.get("/auth/sso/callback", params={"code": "abc", "state": state})
+        assert callback.status_code == 400
+        assert callback.json()["detail"] == "Unexpected nonce in ID token"
+
+    sso.clear_caches()
 
 
 def test_verify_bearer_token_rs256(monkeypatch, tmp_path) -> None:
