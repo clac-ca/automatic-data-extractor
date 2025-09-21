@@ -434,142 +434,6 @@ def resolve_credentials(
     )
 
 
-# ---------------------------------------------------------------------------
-# Event helpers and login orchestration
-# ---------------------------------------------------------------------------
-
-
-def login_success(
-    db: Session,
-    user: User,
-    *,
-    mode: str,
-    source: str,
-    payload: dict[str, Any] | None = None,
-    commit: bool = False,
-) -> None:
-    event_payload = {"mode": mode}
-    if payload:
-        event_payload.update(payload)
-    record_event(
-        db,
-        EventRecord(
-            event_type="user.login.succeeded",
-            entity_type="user",
-            entity_id=user.user_id,
-            actor_type="user",
-            actor_id=user.user_id,
-            actor_label=user.email,
-            source=source,
-            payload=event_payload,
-        ),
-        commit=commit,
-    )
-
-
-def login_failure(
-    db: Session,
-    *,
-    email: str,
-    mode: str,
-    source: str,
-    reason: str,
-    commit: bool = True,
-) -> None:
-    event_payload = {"mode": mode, "reason": reason}
-    record_event(
-        db,
-        EventRecord(
-            event_type="user.login.failed",
-            entity_type="user",
-            entity_id=email,
-            actor_type="user",
-            actor_label=email,
-            source=source,
-            payload=event_payload,
-        ),
-        commit=commit,
-    )
-
-
-def logout(
-    db: Session,
-    user: User,
-    *,
-    source: str,
-    payload: dict[str, Any] | None = None,
-    commit: bool = False,
-) -> None:
-    record_event(
-        db,
-        EventRecord(
-            event_type="user.logout",
-            entity_type="user",
-            entity_id=user.user_id,
-            actor_type="user",
-            actor_id=user.user_id,
-            actor_label=user.email,
-            source=source,
-            payload=payload or {},
-        ),
-        commit=commit,
-    )
-
-
-def session_refreshed(
-    db: Session,
-    user: User,
-    *,
-    source: str,
-    payload: dict[str, Any] | None = None,
-    commit: bool = False,
-) -> None:
-    event_payload = payload or {}
-    record_event(
-        db,
-        EventRecord(
-            event_type="user.session.refreshed",
-            entity_type="user",
-            entity_id=user.user_id,
-            actor_type="user",
-            actor_id=user.user_id,
-            actor_label=user.email,
-            source=source,
-            payload=event_payload,
-        ),
-        commit=commit,
-    )
-
-
-def cli_action(
-    db: Session,
-    *,
-    user: User,
-    event_type: str,
-    operator_email: str | None,
-    payload: dict[str, Any] | None = None,
-    commit: bool = False,
-) -> None:
-    event_payload = {"email": user.email}
-    if payload:
-        event_payload.update(payload)
-    actor_label = operator_email or "cli"
-    record_event(
-        db,
-        EventRecord(
-            event_type=event_type,
-            entity_type="user",
-            entity_id=user.user_id,
-            actor_type="system",
-            actor_id=operator_email,
-            actor_label=actor_label,
-            source="cli",
-            payload=event_payload,
-        ),
-        commit=commit,
-    )
-
-
 def complete_login(
     db: Session,
     settings: config.Settings,
@@ -596,16 +460,26 @@ def complete_login(
         commit=False,
     )
 
-    payload: dict[str, Any] = {"ip": ip_address, "user_agent": user_agent}
+    event_payload: dict[str, Any] = {
+        "mode": mode,
+        "ip": ip_address,
+        "user_agent": user_agent,
+    }
     if include_subject or subject is not None:
-        payload["subject"] = subject
+        event_payload["subject"] = subject
 
-    login_success(
+    record_event(
         db,
-        user,
-        mode=mode,
-        source=source,
-        payload=payload,
+        EventRecord(
+            event_type="user.login.succeeded",
+            entity_type="user",
+            entity_id=user.user_id,
+            actor_type="user",
+            actor_id=user.user_id,
+            actor_label=user.email,
+            source=source,
+            payload=event_payload,
+        ),
         commit=False,
     )
 
@@ -1488,12 +1362,20 @@ def _create_user(db: Session, settings: config.Settings, args: argparse.Namespac
     db.add(user)
     db.flush()
 
-    cli_action(
+    operator_email = args.operator_email
+    actor_label = operator_email or "cli"
+    record_event(
         db,
-        user=user,
-        event_type="user.created",
-        operator_email=args.operator_email,
-        payload={"role": role.value},
+        EventRecord(
+            event_type="user.created",
+            entity_type="user",
+            entity_id=user.user_id,
+            actor_type="system",
+            actor_id=operator_email,
+            actor_label=actor_label,
+            source="cli",
+            payload={"email": user.email, "role": role.value},
+        ),
         commit=False,
     )
     db.commit()
@@ -1508,11 +1390,20 @@ def _reset_password(db: Session, settings: config.Settings, args: argparse.Names
 
     user.password_hash = hash_password(args.password)
     db.flush()
-    cli_action(
+    operator_email = args.operator_email
+    actor_label = operator_email or "cli"
+    record_event(
         db,
-        user=user,
-        event_type="user.password.reset",
-        operator_email=args.operator_email,
+        EventRecord(
+            event_type="user.password.reset",
+            entity_type="user",
+            entity_id=user.user_id,
+            actor_type="system",
+            actor_id=operator_email,
+            actor_label=actor_label,
+            source="cli",
+            payload={"email": user.email},
+        ),
         commit=False,
     )
     db.commit()
@@ -1527,11 +1418,20 @@ def _deactivate_user(db: Session, settings: config.Settings, args: argparse.Name
 
     user.is_active = False
     db.flush()
-    cli_action(
+    operator_email = args.operator_email
+    actor_label = operator_email or "cli"
+    record_event(
         db,
-        user=user,
-        event_type="user.deactivated",
-        operator_email=args.operator_email,
+        EventRecord(
+            event_type="user.deactivated",
+            entity_type="user",
+            entity_id=user.user_id,
+            actor_type="system",
+            actor_id=operator_email,
+            actor_label=actor_label,
+            source="cli",
+            payload={"email": user.email},
+        ),
         commit=False,
     )
     db.commit()
@@ -1547,12 +1447,20 @@ def _promote_user(db: Session, settings: config.Settings, args: argparse.Namespa
     _enforce_admin_allowlist(settings, email)
     user.role = UserRole.ADMIN
     db.flush()
-    cli_action(
+    operator_email = args.operator_email
+    actor_label = operator_email or "cli"
+    record_event(
         db,
-        user=user,
-        event_type="user.promoted",
-        operator_email=args.operator_email,
-        payload={"role": UserRole.ADMIN.value},
+        EventRecord(
+            event_type="user.promoted",
+            entity_type="user",
+            entity_id=user.user_id,
+            actor_type="system",
+            actor_id=operator_email,
+            actor_label=actor_label,
+            source="cli",
+            payload={"email": user.email, "role": UserRole.ADMIN.value},
+        ),
         commit=False,
     )
     db.commit()
@@ -1614,7 +1522,6 @@ __all__ = [
     "SSOConfigurationError",
     "SSOExchangeError",
     "clear_caches",
-    "cli_action",
     "complete_login",
     "exchange_code",
     "get_api_key",
@@ -1626,14 +1533,10 @@ __all__ = [
     "hash_password",
     "hash_session_token",
     "issue_session",
-    "login_failure",
-    "login_success",
-    "logout",
     "main",
     "require_admin",
     "resolve_credentials",
     "revoke_session",
-    "session_refreshed",
     "set_request_auth_context",
     "touch_api_key_usage",
     "touch_session",

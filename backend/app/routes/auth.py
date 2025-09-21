@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import config
-from ..services import auth as auth_service
+from ..services import EventRecord, auth as auth_service, record_event
 from ..db import get_db
 from ..models import User, UserSession
 from ..schemas import AuthSessionResponse, SessionSummary, UserProfile
@@ -120,13 +120,46 @@ def login_basic(  # noqa: PLR0915 - clarity over cleverness
 
     user = _get_user_by_email(db, email)
     if user is None or not user.password_hash:
-        auth_service.login_failure(db, email=email, mode="basic", source="api", reason="unknown-user")
+        record_event(
+            db,
+            EventRecord(
+                event_type="user.login.failed",
+                entity_type="user",
+                entity_id=email,
+                actor_type="user",
+                actor_label=email,
+                source="api",
+                payload={"mode": "basic", "reason": "unknown-user"},
+            ),
+        )
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if not user.is_active:
-        auth_service.login_failure(db, email=email, mode="basic", source="api", reason="inactive")
+        record_event(
+            db,
+            EventRecord(
+                event_type="user.login.failed",
+                entity_type="user",
+                entity_id=email,
+                actor_type="user",
+                actor_label=email,
+                source="api",
+                payload={"mode": "basic", "reason": "inactive"},
+            ),
+        )
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Account is inactive")
     if not auth_service.verify_password(password, user.password_hash):
-        auth_service.login_failure(db, email=email, mode="basic", source="api", reason="invalid-password")
+        record_event(
+            db,
+            EventRecord(
+                event_type="user.login.failed",
+                entity_type="user",
+                entity_id=email,
+                actor_type="user",
+                actor_label=email,
+                source="api",
+                payload={"mode": "basic", "reason": "invalid-password"},
+            ),
+        )
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     ip_address, user_agent = _request_metadata(request)
@@ -171,11 +204,22 @@ def logout(
     session_model = identity.session
     if session_model is not None:
         auth_service.revoke_session(db, session_model, commit=False)
-        auth_service.logout(
+        record_event(
             db,
-            identity.user,
-            source="api",
-            payload={"session_id": session_model.session_id, "ip": ip_address, "user_agent": user_agent},
+            EventRecord(
+                event_type="user.logout",
+                entity_type="user",
+                entity_id=identity.user.user_id,
+                actor_type="user",
+                actor_id=identity.user.user_id,
+                actor_label=identity.user.email,
+                source="api",
+                payload={
+                    "session_id": session_model.session_id,
+                    "ip": ip_address,
+                    "user_agent": user_agent,
+                },
+            ),
             commit=False,
         )
         db.commit()
@@ -206,11 +250,18 @@ def session_status(
         _clear_session_cookie(response, settings)
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Session expired")
 
-    auth_service.session_refreshed(
+    record_event(
         db,
-        identity.user,
-        source="api",
-        payload={"session_id": session_model.session_id},
+        EventRecord(
+            event_type="user.session.refreshed",
+            entity_type="user",
+            entity_id=identity.user.user_id,
+            actor_type="user",
+            actor_id=identity.user.user_id,
+            actor_label=identity.user.email,
+            source="api",
+            payload={"session_id": session_model.session_id},
+        ),
         commit=False,
     )
     db.commit()
