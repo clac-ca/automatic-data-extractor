@@ -5,13 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import TypeAdapter, ValidationError
 from pydantic.types import StringConstraints
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..services.auth import get_current_user
+from ..services import auth as auth_service
 from ..db import get_db
 from ..models import Event, Configuration
 from ..schemas import (
@@ -37,7 +37,8 @@ from ..services.configurations import (
 router = APIRouter(
     prefix="/configurations",
     tags=["configurations"],
-    dependencies=[Depends(get_current_user)],
+    # Resolve authentication once per request so handlers can read the cached identity.
+    dependencies=[Depends(auth_service.get_authenticated_identity)],
 )
 
 _document_type_adapter = TypeAdapter(
@@ -64,9 +65,14 @@ def _event_to_response(event: Event) -> EventResponse:
     status_code=status.HTTP_201_CREATED,
 )
 def create_configuration_endpoint(
-    payload: ConfigurationCreate, db: Session = Depends(get_db)
+    payload: ConfigurationCreate,
+    request: Request,
+    db: Session = Depends(get_db),
 ) -> ConfigurationResponse:
     """Create a new configuration version."""
+
+    identity = auth_service.get_cached_authenticated_identity(request)
+    actor_defaults = auth_service.event_actor_from_identity(identity)
 
     try:
         configuration = create_configuration(
@@ -75,8 +81,9 @@ def create_configuration_endpoint(
             title=payload.title,
             payload=payload.payload,
             is_active=payload.is_active,
-            event_actor_type="system",
-            event_actor_label="api",
+            event_actor_type=actor_defaults["actor_type"],
+            event_actor_id=actor_defaults["actor_id"],
+            event_actor_label=actor_defaults["actor_label"],
             event_source="api",
         )
     except IntegrityError as exc:
@@ -187,18 +194,23 @@ def list_configuration_events(
 def update_configuration_endpoint(
     configuration_id: str,
     payload: ConfigurationUpdate,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> ConfigurationResponse:
     """Update configuration metadata."""
 
     update_kwargs = payload.model_dump(exclude_unset=True)
+    identity = auth_service.get_cached_authenticated_identity(request)
+    actor_defaults = auth_service.event_actor_from_identity(identity)
+
     try:
         configuration = update_configuration(
             db,
             configuration_id,
             **update_kwargs,
-            event_actor_type="system",
-            event_actor_label="api",
+            event_actor_type=actor_defaults["actor_type"],
+            event_actor_id=actor_defaults["actor_id"],
+            event_actor_label=actor_defaults["actor_label"],
             event_source="api",
         )
     except ConfigurationNotFoundError as exc:
