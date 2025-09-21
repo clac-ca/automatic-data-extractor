@@ -1,6 +1,6 @@
 # ADE frontend master blueprint
 
-Great products feel inevitable. This living blueprint distils ADE’s product truths, articulates the end-to-end user journey, and decomposes the UI and frontend architecture so designers and engineers can craft an experience that feels effortless while staying maintainable.
+Great products feel inevitable. This living blueprint distils ADE’s product truths, articulates the end-to-end user journey, and decomposes the UI and frontend architecture so designers and engineers can craft an experience that feels effortless while staying maintainable. This revision filters out experiments and emphasises the flows and tooling required for the first production release.
 
 ---
 
@@ -67,34 +67,27 @@ Document types do **not** have a lifecycle—they are logical containers. Keep g
 - Metadata rails reveal lineage (who activated, when, diff summary) to maintain auditability.
 
 ### 3.3 Frontend technology commitments
-- **Foundations** – Vite + React + TypeScript anchor the project for fast feedback, first-class typing, and tree-shakeable bundl
-  es. React Router (v6) owns routing and data loaders so navigation feels native across nested layouts.
-- **Data layer** – TanStack Query handles reads/mutations, background refresh, and cache invalidation keyed by workspace, docum
-  ent type, configuration ID, and run. Derived data stays inside selectors and hooks—no ambient global stores.
-- **Forms & validation** – React Hook Form paired with Zod schemas keeps wizard steps and column editors declarative while ensu
-  ring backend parity. Shared schema utilities live beside API clients to avoid drift.
-- **Complex flows** – XState powers multi-step wizards, checklist progress, and upload queues where explicit state charts beat
-  boolean soup. Hooks expose the machine interface; UI components stay dumb.
-- **Editors & grids** – `@monaco-editor/react` wraps Monaco with sensible defaults. Column grids, results tables, and diff view
-  s use `@tanstack/react-table` plus `@tanstack/react-virtual` for virtualization without locking us into heavyweight UI kits.
-- **Styling** – CSS variables define design tokens. Components use CSS Modules for scoping; utility classes cover layout and sp
-  acing to keep bundle size predictable. Radix UI primitives supply accessible structure without imposing styling opinions.
-- **Real-time & side effects** – Native WebSocket clients funnel events through dedicated services that fan updates into TanSta
-  ck Query caches. Local storage is accessed via a typed wrapper to keep hydration deterministic.
+- **Foundations** – Vite + React + TypeScript remain the core so we gain fast feedback, typed components, and simple bundling. React Router (v6) owns routing/data loaders for nested layouts without bespoke plumbing.
+- **Data layer** – TanStack Query orchestrates server reads/mutations with explicit cache keys (workspace, document type, configuration, run). Derived projections live in hooks inside the features that need them; no additional global store is planned.
+- **Forms & validation** – React Hook Form with Zod keeps wizard steps and column editors declarative and aligned with backend schemas. Shared schema utilities sit beside API clients to avoid drift.
+- **Stateful flows** – XState is adopted only where diagrams improve clarity (document type wizard, upload queue). Simple toggles and panels stick to local component state.
+- **Editors & grids** – `@monaco-editor/react` provides the script editing surface. Column grids, run results, and diff views use `@tanstack/react-table` with `@tanstack/react-virtual` for virtualization without adding a heavy UI kit.
+- **Styling & theming** – Design tokens live as CSS variables. Components use CSS Modules for scoping; lightweight utility classes cover layout/spacing. Radix UI primitives supply accessible structure while letting us own the look.
+- **Real-time & side effects** – Native WebSocket clients stream events into dedicated services that update TanStack Query caches. Local storage access flows through a typed helper so hydration stays deterministic.
 
 ### 3.4 External dependency evaluation
 | Dependency | Decision | Rationale |
 | --- | --- | --- |
 | Vite, React, TypeScript | ✅ Adopt | Proven trio for ADE’s scale; already required for TS-first workflow. |
 | React Router v6 loaders | ✅ Adopt | Handles nested layouts, preloading, and redirects cleanly without custom plumbing. |
-| @tanstack/react-query | ✅ Adopt | Battle-tested cache + mutation layer; keeps API usage consistent across views. |
-| React Hook Form + Zod | ✅ Adopt | Lightweight, type-safe validation for wizards and editors; mirrors backend validation rul
-es. |
+| @tanstack/react-query | ✅ Adopt | Cache + mutation layer that keeps API usage consistent across views. |
+| React Hook Form + Zod | ✅ Adopt | Lightweight, type-safe validation for wizards and editors; mirrors backend validation rules. |
 | @tanstack/react-table + @tanstack/react-virtual | ✅ Adopt | Composable tables with virtualization for large runs and diff matrices. |
 | Radix UI primitives | ✅ Adopt | Accessibility-first building blocks; we own styling while inheriting correct semantics. |
 | @monaco-editor/react | ✅ Adopt | Maintains parity with IDE editing experience without hand-rolling integrations. |
-| XState | ✅ Targeted | Use for flows needing explicit state charts (wizards, uploads); avoid for simple toggles. |
-| File upload helper (Uppy or tus-js-client) | 🔍 Evaluate | Start with fetch + chunked uploads; introduce a library only if resumable flows get hairy. |
+| XState | ✅ Targeted | Reserved for flows that benefit from explicit state charts (wizard + uploads). |
+| Storybook | ✅ Adopt | Local component workbench; snapshot tests keep tokens honest without SaaS lock-in. |
+| File upload helper (Uppy or tus-js-client) | 🕵 Evaluate later | Start with fetch + chunked uploads; add a helper only if resumable flows outgrow native APIs. |
 | Charting library (e.g., Recharts) | ⏳ Defer | No charts in MVP; revisit once analytics dashboards exist. |
 
 Avoid cargo-cult additions: no Redux, Moment.js, or sprawling UI suites. Prefer the standard library (`Intl`, `URL`, `Array`) a
@@ -107,13 +100,13 @@ nd targeted utilities we can audit.
 Each stage lists the desired user experience, implementation hooks, and instrumentation guardrails. Treat onboarding to mastery as a repeatable loop: orient → configure → validate → run → learn.
 
 ### 4.1 Onboard & build trust
-- **Experience**: Minimal SSO/magic-link pane routes directly into a focused onboarding checklist. “How ADE works” stays discoverable but out of the way.
-- **Implementation**: A React Router loader exchanges auth tokens, then prefetches `workspaceSummary` via TanStack Query so the checklist paints with real data on first render. Dismissed tips persist through a typed local-storage helper and hydrate on login. Keep the onboarding checklist state machine in XState so copy/ordering changes remain low-risk.
-- **Instrumentation**: Track first-login completions and drop-off per checklist task to refine messaging.
+- **Experience**: Minimal SSO/magic-link entry flows route directly into a focused onboarding checklist. Intro copy clarifies the overall loop without blocking setup.
+- **Implementation**: A React Router loader exchanges auth tokens then prefetches `workspaceSummary` via TanStack Query so the checklist renders with data on first paint. Dismissed tips persist through a typed local-storage helper, and a simple reducer keeps checklist progress predictable—no state machine needed yet.
+- **Instrumentation**: Track first-login completion and drop-off per checklist task to tune messaging.
 
 ### 4.2 Home zero state
-- **Experience**: One checklist spelling out the core loop (“Create type → Add configuration → Upload → Run”) guiding users to a first successful run in under five minutes. Optional tips stay collapsed until requested; the command palette tutorial unlocks after checklist completion and resurfaces contextually later.
-- **Implementation**: `useQuery(['workspace','summary'])` keeps the checklist, zero states, and quick links coherent. Actions (e.g., “Create document type”) call React Router mutations so navigation and analytics happen in one place. Persisted dismissals reuse the onboarding storage helper; a `useCommandPaletteCoachMarks` hook gates the tutorial unlock.
+- **Experience**: One checklist spelling out the core loop (“Create type → Add configuration → Upload → Run”) guiding users to a first successful run in under five minutes. Optional tips stay collapsed until requested.
+- **Implementation**: `useQuery(['workspace','summary'])` keeps the checklist, zero states, and quick links coherent. Actions (e.g., “Create document type”) call React Router mutations so navigation and analytics happen in one place. Persisted dismissals reuse the onboarding storage helper.
 - **Guardrails**: Empty states must list the *next* safe action (e.g., “Create a document type”) with copy matching backend terminology.
 
 ### 4.3 Define a document type
@@ -128,7 +121,7 @@ Each stage lists the desired user experience, implementation hooks, and instrume
 
 ### 4.5 Build the configuration workspace
 - **Experience**: Draft workspace opens with seeded columns, inline education about detection/validation/transformation, and autosave reassurance.
-- **Implementation**: The column grid uses `@tanstack/react-table` + `react-virtual` for smooth scrolling. `@monaco-editor/react` lazy-loads editors the first time a column is opened and reuses instances thereafter. Autosave runs through a debounced TanStack Query mutation (5 s trailing edge) so PATCHes stay predictable; an inline status chip shows the last sync time and error recovery path. Publish modals read from cached diff endpoints—full activity timelines stay in backlog.
+- **Implementation**: The column grid uses `@tanstack/react-table` + `@tanstack/react-virtual` for smooth scrolling. `@monaco-editor/react` lazy-loads editors the first time a column is opened and reuses instances thereafter. Autosave runs through a debounced TanStack Query mutation (5 s trailing edge) so PATCHes stay predictable; an inline status chip shows the last sync time and error recovery path. Publish modals read from cached diff endpoints—full activity timelines stay in backlog.
 - **Support hooks**: Inline help links jump to precise anchors within `DOCUMENTATION.md` so terminology stays aligned.
 
 ### 4.6 Column scripting & testing
@@ -143,7 +136,7 @@ Each stage lists the desired user experience, implementation hooks, and instrume
 
 ### 4.8 Upload & run
 - **Experience**: Upload console defaults to the latest published configuration with a toggle to add the active config or other published versions (max three total) using colour-coded pills; resilient queue with per-file statuses.
-- **Implementation**: A dedicated upload machine coordinates drag-and-drop, file validation, and chunked uploads using the Fetch API; if resumable requirements exceed native capabilities we upgrade to Uppy/tus. Run selections persist in the URL so reloads rehydrate the same queue. WebSocket events hydrate a TanStack Query observer that fans updates into the run timeline.
+- **Implementation**: A dedicated upload machine coordinates drag-and-drop, client-side validation, and chunked uploads using the Fetch API (`File.slice`, `ReadableStream`, `AbortController`). If resumable requirements exceed native capabilities we upgrade to Uppy/tus. Run selections persist in the URL so reloads rehydrate the same queue. WebSocket events hydrate a TanStack Query observer that fans updates into the run timeline.
 - **Offline resilience**: If a socket drops, show reconnection attempts and keep the queue paused rather than silently failing.
 
 ### 4.9 Review results & iterate
@@ -151,9 +144,9 @@ Each stage lists the desired user experience, implementation hooks, and instrume
 - **Implementation**: `useQuery(['runs', id, 'results'])` hydrates structured data for TanStack Table; virtualization keeps scrolling at 60 fps on reference hardware. Diff highlights reuse configuration colour tokens and fall back to patterns for colour-blind safety. Deep links leverage React Router search params to reopen the exact column + callable that produced a flagged cell.
 - **Iteration loop**: From results view users can jump straight back to the configuration column responsible for a flagged cell via deep-link anchors.
 
-### 4.10 Ongoing mastery (post-MVP growth)
-- **Experience**: Activity feeds, advanced shortcuts, help centre, and comparison snapshots support continuous improvement once the core loop is sticky.
-- **Backlog anchors**: Multiplayer presence, saved comparison sets, and script catalogs remain flagged for future prioritisation. Keep space for them in the navigation but behind feature flags and lazy-loaded routes so baseline users stay fast.
+### 4.10 Post-MVP backlog
+- **Experience**: Activity feeds, advanced shortcuts, help centre, and comparison snapshots support continuous improvement once the core loop is stable.
+- **Backlog anchors**: Command palette, multiplayer presence, saved comparison sets, and script catalogues stay behind feature flags and lazy-loaded routes so baseline users remain fast.
 
 ---
 
@@ -162,7 +155,7 @@ Each stage lists the desired user experience, implementation hooks, and instrume
 ### 5.1 Shell & navigation
 - Global shell anchors the workspace selector, breadcrumb trail, and primary call-to-action area using React Router layout routes so nested views inherit structure without prop drilling.
 - Left navigation groups by lifecycle: **Home**, **Document Types**, **Runs**, **Comparisons**, **Admin** (feature-flagged). Counts/badges pull from TanStack Query selectors; avoid nested accordions—use contextual tabs inside views.
-- Command palette (⌘K) is backed by a shared registry of actions. It routes via React Router, triggers mutations, and surfaces help shortcuts from a single source of truth.
+- Secondary actions stay contextual within page headers. A global command palette remains a backlog experiment until usage data proves the need.
 
 ### 5.2 Component tiers
 - **Primitives** (Buttons, Inputs, Tabs, Dialogs) expose consistent props, support full keyboard handling, and follow WAI-ARIA guidance. Radix UI seeds behaviour; styling layers atop CSS Modules + tokens.
@@ -193,7 +186,7 @@ Each stage lists the desired user experience, implementation hooks, and instrume
 - Component library built with headless primitives (e.g., Radix UI) plus custom styling to ensure accessibility and brand alignment. Shared layout utilities live in `design/layout.css`.
 - Theme file exports CSS variables consumed by both the application shell and Monaco editor for visual cohesion. Monaco receives the palette through `defineTheme` on mount.
 - Global theming supports light/dark parity; Monaco theme switches in lockstep with the app theme to avoid cognitive dissonance.
-- Storybook (with Chromatic) acts as the living spec; documentation mode outlines usage, props, and accessibility notes for every component. Visual regression checks gate merges touching shared components.
+- Storybook acts as the living spec; documentation mode outlines usage, props, and accessibility notes for every component. Add automated visual regression (Playwright or Chromatic) once manual reviews surface drift.
 
 ---
 
@@ -214,7 +207,7 @@ Each stage lists the desired user experience, implementation hooks, and instrume
 | Layer | Tooling | Focus |
 | --- | --- | --- |
 | Unit & interaction | Vitest + Testing Library | Component logic, accessibility, keyboard flows. |
-| Visual regression | Storybook + Chromatic | Layout stability, token adherence. |
+| Visual regression | Storybook + Playwright image snapshots (Chromatic later if needed) | Layout stability, token adherence. |
 | Contract tests | Vitest against mocked backend | API request/response fidelity, error edge cases. |
 | End-to-end | Playwright | Smoke flows: first login → create document type → build configuration → run comparison. |
 
@@ -231,7 +224,7 @@ Each stage lists the desired user experience, implementation hooks, and instrume
 - Accessibility regression suite executed pre-release; failures block deployment until resolved.
 
 ### 8.4 Support & recovery
-- Floating help beacon exposes contextual docs, keyboard cheat sheet, and support contact. Editor tooltips reference vetted callable examples rather than speculative AI completions.
+- Contextual docs and keyboard references live within the help menu inside each feature shell; keep them lightweight to avoid distracting from core tasks.
 - Results view offers “Rerun with previous active configuration” as a safe fallback.
 - Production support playbook documents triage steps, escalation paths, and communication templates for incidents.
 
@@ -240,28 +233,27 @@ Each stage lists the desired user experience, implementation hooks, and instrume
 ## 9. Implementation roadmap
 
 1. **Foundation sprint**
-   - Scaffold Vite + React + TypeScript project with React Router, TanStack Query, and Storybook wired into CI.
+   - Scaffold Vite + React + TypeScript with React Router, TanStack Query, testing tooling, and Storybook wired into CI.
    - Ship Home zero state with checklist fed by workspace summary endpoint and persisted onboarding storage helper.
-   - Spike Monaco/editor integration (including accessibility/perf evaluation) to lock constraints early and document fallback modes.
+   - Spike Monaco/editor integration (accessibility + performance) to lock constraints early and document fallback modes.
 2. **Document Type core**
    - Build library grid, creation wizard (Basics → Columns → Review), and detail overview.
-   - Wire React Hook Form + Zod schemas, XState wizard machine, and React Query caches/activity feed stubs.
+   - Wire React Hook Form + Zod schemas, targeted XState wizard machine, and React Query caches.
 3. **Configuration workspace**
    - Column grid + right rail skeleton; integrate Monaco; autosave indicator + inline test plumbing.
    - Deliver validation readiness checker and publish/activate modal with required schema diff plus cache invalidation sweep.
 4. **Upload & run console**
-   - Drag-and-drop uploads, resumable queue, configuration multi-select, resilient WebSocket progress timeline with reconnect/backoff baked in.
+   - Drag-and-drop uploads, resilient queue, configuration multi-select, WebSocket progress timeline with reconnect/backoff baked in.
    - Stress-test native upload queue; document criteria for introducing Uppy/tus if native stack struggles.
-5. **Results & comparison centre**
+5. **Results & hardening**
    - Table view with virtualisation, diff matrix, validation issue stack, promote/revert actions wired into React Router deep links.
-6. **Collaboration & polish**
-   - Command palette, keyboard shortcuts, presence indicators, notification inbox, advanced analytics hooks + targeted performance profiling.
+   - Instrument accessibility audits, error handling paths, and performance budgets before release.
 
 Each milestone includes UX reviews, accessibility validation, analytics instrumentation, and documentation updates before exit.
 
 **Definition of done per milestone**
 - **Design sign-off**: Figma specs, interaction notes, and accessibility annotations reviewed with design lead.
-- **Engineering validation**: Component stories, unit tests, and API mocks merged; performance budget evaluated via Lighthouse/React Profiler snapshots.
+- **Engineering validation**: Component stories, unit tests, and API mocks merged; performance budget evaluated via Lighthouse/React Profiler snapshots or equivalent.
 - **Product acceptance**: Demo recorded for stakeholders, instrumentation dashboards updated, rollout plan defined (feature flags + changelog copy).
 
 **Risks & mitigations**
@@ -279,9 +271,8 @@ Each milestone includes UX reviews, accessibility validation, analytics instrume
 3. Component inventory with state diagrams (loading, empty, error) for major UI elements.
 4. Dependency integration dossier: React Query key map, wizard/upload state machine sketches, and design token ownership plan.
 5. Prototype of script editor showing inline test execution, diff preview, and error surfacing.
-6. API contract review confirming fields for onboarding status, run state machine, comparison diffs, audit logs, and presence.
+6. API contract review confirming fields for onboarding status, run state machine, comparison diffs, and audit logs.
 7. Accessibility plan documenting focus order, keyboard shortcuts, and screen reader narratives for grids/editors.
-8. Support playbook outline covering incident response, communication templates, and tooling checkpoints.
 
 ---
 
