@@ -1,9 +1,9 @@
-# ✅ Completed Task — Remove RequestAuthContext Request State Storage
+# ✅ Completed Task — Inline RequestAuthContext into AuthenticatedIdentity
 
 ## Context
-`AuthenticatedIdentity` already exposes the resolved user, session, API key, and a `RequestAuthContext`. We still mirrored the context onto `request.state.auth_context_model` via helper functions, even though nothing in production read it. The extra mutation path made login flows and dependencies harder to follow.
+`RequestAuthContext` duplicated fields that were already available on the resolved user, session, and API key. Flattening those attributes onto `AuthenticatedIdentity` keeps authentication metadata in one place and simplifies how dependencies read it.
 
 ## Outcome
-- Deleted the `set_request_auth_context` and `get_request_auth_context` helpers and stopped mutating `request.state` during authentication.
-- Taught `get_authenticated_identity` to derive SSO subjects from the loaded user model so context stays populated without per-request state.
-- Simplified login routes and tests to assert directly against the dependency return values, then re-ran `pytest backend/tests/test_auth.py` to verify behaviour.
+- Removed the `RequestAuthContext` dataclass and taught `AuthenticatedIdentity` to expose the auth mode, session/api key identifiers, and SSO subject directly.
+- Simplified `get_authenticated_identity` to populate the flattened fields for session, API key, and open-access flows without constructing an intermediate context object.
+- Updated authentication tests to assert against the new attributes (and added checks for the derived IDs) before rerunning `pytest backend/tests/test_auth.py` to confirm behaviour.
