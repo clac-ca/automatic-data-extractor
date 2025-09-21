@@ -37,7 +37,7 @@ _A future diagram asset will live at `docs/assets/system-overview.png` once rend
 ## Integration surfaces
 
 - **Configuration UI** — Preferred path for drafting, validating, and publishing configuration revisions. The UI calls the same REST endpoints documented for automation, but keeps guard rails (role checks, payload validation, event previews) in front of day-to-day users.
-- **REST API** — Used by the UI and automation clients. Session cookies remain the current authentication mechanism, and the upcoming API key flow will add a static header (for example, `ADE-API-Key: <token>`) so service accounts can integrate without interactive login. Until the API key feature lands, automation should continue storing the issued session cookie after authenticating.
+- **REST API** — Used by the UI and automation clients. Humans authenticate with Basic or SSO to receive a session cookie; service accounts send `Authorization: Bearer <API_KEY>` tokens that ADE verifies against the `api_keys` table.
 - **Command-line helpers** — Targeted scripts (for example, `python -m backend.app.auth.manage`) handle administrative tasks that need direct database access or bulk operations.
 
 These interfaces share the same event log and configuration versioning, ensuring architecture discussions can focus on system behaviour rather than transport differences.

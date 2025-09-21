@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.auth.passwords import hash_password
 from backend.app.db import get_sessionmaker
-from backend.app.models import User, UserRole
+from backend.app.models import Event, User, UserRole
 
 DEFAULT_USER_EMAIL = "admin@example.com"
 DEFAULT_USER_PASSWORD = "password123"
@@ -75,12 +75,25 @@ def _test_client(
     import backend.app.db as db_module
     db_module.reset_database_state()
 
+    import backend.app.auth.sso as sso_module
+    sso_module.clear_caches()
+
     import backend.app.main as main_module
 
     try:
         with TestClient(main_module.app, follow_redirects=False) as client:
             _seed_default_user()
-            client.auth = (DEFAULT_USER_EMAIL, DEFAULT_USER_PASSWORD)
+            settings = config_module.get_settings()
+            if "basic" in settings.auth_mode_sequence:
+                client.auth = (DEFAULT_USER_EMAIL, DEFAULT_USER_PASSWORD)
+                login_response = client.post("/auth/login/basic")
+                assert login_response.status_code == 200
+            else:
+                client.auth = None
+            session_factory = get_sessionmaker()
+            with session_factory() as db:
+                db.query(Event).delete()
+                db.commit()
             yield client
     finally:
         config_module.reset_settings_cache()
