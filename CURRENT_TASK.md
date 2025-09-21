@@ -1,13 +1,13 @@
-# 🔄 Next Task — Inject shared Settings dependency into auth routes
+# 🔄 Next Task — Reuse FastAPI's cookie dependency for session validation
 
 ## Context
-`backend/app/routes/auth.py` calls `config.get_settings()` inside every handler, which hides the dependency chain FastAPI already provides. Surfacing the configuration as a dependency will cut duplication and make it obvious which endpoints rely on the runtime settings.
+`/auth/session` still reads the session cookie directly from `request.cookies` and raises HTTP errors manually. The auth service already wraps FastAPI's `APIKeyCookie` helper inside `_session_cookie_value`, but that dependency is private and optional. Promoting a shared dependency for required session cookies keeps auth routes consistent, trims duplicate error handling, and leans on FastAPI's built-in security tooling.
 
 ## Goals
-1. Update the `/auth` route handlers to receive `config.Settings` via FastAPI dependency injection instead of calling `config.get_settings()` inline.
-2. Thread the injected settings through helper functions where needed so responses, cookie handling, and available auth modes continue to use the central configuration.
-3. Keep the HTTP responses and audit logging identical by refreshing or extending tests only if the new signatures require it.
+1. Expose a public dependency in `backend/app/services/auth.py` that uses `APIKeyCookie` to retrieve the configured session cookie and raise `401` when it is missing.
+2. Update `/auth/session` (and any other routes that need the raw cookie) to consume the new dependency instead of accessing `request.cookies` directly.
+3. Ensure the behaviour and responses remain unchanged by relying on existing helpers for audit logging and cookie refreshes.
 
 ## Definition of done
-- All functions in `backend/app/routes/auth.py` use an injected `Settings` object rather than calling `config.get_settings()` manually.
-- Authentication tests (`backend/tests/test_auth.py`) still pass without behavioural changes.
+- Auth routes no longer call `request.cookies.get(settings.session_cookie_name)` directly; they use the shared dependency instead.
+- Authentication tests continue to pass without behavioural regressions.

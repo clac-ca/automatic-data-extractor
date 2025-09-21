@@ -1,9 +1,9 @@
-# ✅ Completed Task — Streamline HTTP Basic login with a reusable dependency
+# ✅ Completed Task — Inject shared Settings dependency into auth routes
 
 ## Context
-Inline credential parsing inside `/auth/login/basic` made the handler noisy and hard to reuse. Moving the logic into a FastAPI dependency keeps authentication behaviour consistent wherever HTTP Basic is supported.
+Every `/auth` handler fetched configuration via `config.get_settings()` inside the function body, hiding the dependency chain and duplicating setup logic. Surfacing the `Settings` object as an explicit dependency makes it obvious when handlers rely on runtime configuration and keeps FastAPI's injection model consistent across the service.
 
 ## Outcome
-- Added `auth.require_basic_auth_user`, a dependency that uses FastAPI's `HTTPBasic` helper to look up users, enforce active status, and record the existing failure events before returning an authenticated user.
-- Simplified `/auth/login/basic` so it just consumes the dependency, issues the session via `auth_service.complete_login`, and sets the cookie.
-- Expanded the authentication test suite to cover successful and failing dependency paths, verifying that audit events and responses stay consistent.
+- Added a `config.Settings` dependency parameter to each auth route so FastAPI injects the cached configuration instead of recreating it per-call.
+- Removed the inline `config.get_settings()` lookups and threaded the injected settings through existing helper calls for cookie management and response shaping.
+- Verified the behaviour stays identical by running the authentication test suite (`pytest backend/tests/test_auth.py`).

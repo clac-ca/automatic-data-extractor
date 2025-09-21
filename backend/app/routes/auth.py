@@ -90,10 +90,10 @@ def _clear_session_cookie(response: Response, settings: config.Settings) -> None
 def login_basic(
     request: Request,
     response: Response,
+    settings: config.Settings = Depends(config.get_settings),
     user: User = Depends(auth_service.require_basic_auth_user),
     db: Session = Depends(get_db),
 ) -> AuthSessionResponse:
-    settings = config.get_settings()
     ip_address, user_agent = _request_metadata(request)
 
     session_model, raw_token = auth_service.complete_login(
@@ -117,12 +117,12 @@ def login_basic(
 def logout(
     request: Request,
     response: Response,
+    settings: config.Settings = Depends(config.get_settings),
     identity: auth_service.AuthenticatedIdentity = Depends(
         auth_service.get_authenticated_identity
     ),
     db: Session = Depends(get_db),
 ) -> Response:
-    settings = config.get_settings()
     ip_address, user_agent = _request_metadata(request)
 
     session_model = identity.session
@@ -159,12 +159,12 @@ def logout(
 def session_status(
     request: Request,
     response: Response,
+    settings: config.Settings = Depends(config.get_settings),
     identity: auth_service.AuthenticatedIdentity = Depends(
         auth_service.get_authenticated_identity
     ),
     db: Session = Depends(get_db),
 ) -> AuthSessionResponse:
-    settings = config.get_settings()
     cookie_value = request.cookies.get(settings.session_cookie_name)
     if not cookie_value:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session cookie missing")
@@ -199,11 +199,11 @@ def session_status(
     openapi_extra={"security": []},
 )
 def current_user_profile(
+    settings: config.Settings = Depends(config.get_settings),
     identity: auth_service.AuthenticatedIdentity = Depends(
         auth_service.get_authenticated_identity
     ),
 ) -> AuthSessionResponse:
-    settings = config.get_settings()
     return _auth_response(identity.user, settings, session_model=identity.session)
 
 
@@ -213,8 +213,8 @@ def current_user_profile(
     openapi_extra={"security": []},
 )
 def sso_login(
+    settings: config.Settings = Depends(config.get_settings),
 ) -> Response:
-    settings = config.get_settings()
     if "sso" not in settings.auth_mode_sequence:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="SSO is not enabled")
     location = auth_service.build_authorization_url(settings)
@@ -233,9 +233,9 @@ def sso_callback(
     response: Response,
     code: str,
     state: str,
+    settings: config.Settings = Depends(config.get_settings),
     db: Session = Depends(get_db),
 ) -> AuthSessionResponse:
-    settings = config.get_settings()
     if "sso" not in settings.auth_mode_sequence:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="SSO is not enabled")
     try:
