@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .. import config
-from ..auth.dependencies import get_current_user
+from ..services.auth import get_current_user
 from ..db import get_db
 from ..models import Event, Document
 from ..schemas import (

@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 
 from . import config
-from .auth.validation import validate_settings
+from .services.auth import validate_settings
 from .db_migrations import SchemaState, ensure_schema
 from .maintenance import AutoPurgeScheduler
 from .routes.auth import router as auth_router

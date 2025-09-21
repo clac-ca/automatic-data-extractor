@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -11,9 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import config
-from ..auth import dependencies, service, sso
-from ..auth.passwords import verify_password
-from ..auth.sso import SSOExchangeError
+from ..services import auth as auth_service
 from ..db import get_db
 from ..models import User, UserSession
 from ..schemas import AuthSessionResponse, SessionSummary, UserProfile
@@ -142,41 +139,26 @@ def login_basic(  # noqa: PLR0915 - clarity over cleverness
 
     user = _get_user_by_email(db, email)
     if user is None or not user.password_hash:
-        service.login_failure(db, email=email, mode="basic", source="api", reason="unknown-user")
+        auth_service.login_failure(db, email=email, mode="basic", source="api", reason="unknown-user")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if not user.is_active:
-        service.login_failure(db, email=email, mode="basic", source="api", reason="inactive")
+        auth_service.login_failure(db, email=email, mode="basic", source="api", reason="inactive")
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Account is inactive")
-    if not verify_password(password, user.password_hash):
-        service.login_failure(db, email=email, mode="basic", source="api", reason="invalid-password")
+    if not auth_service.verify_password(password, user.password_hash):
+        auth_service.login_failure(db, email=email, mode="basic", source="api", reason="invalid-password")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     ip_address, user_agent = _request_metadata(request)
-    now_iso = datetime.now(timezone.utc).isoformat()
-    user.last_login_at = now_iso
 
-    session_model, raw_token = service.issue_session(
+    session_model, raw_token = auth_service.complete_login(
         db,
-        user,
-        settings=settings,
-        ip_address=ip_address,
-        user_agent=user_agent,
-        commit=False,
-    )
-
-    service.login_success(
-        db,
+        settings,
         user,
         mode="basic",
         source="api",
-        payload={"ip": ip_address, "user_agent": user_agent},
-        commit=False,
+        ip_address=ip_address,
+        user_agent=user_agent,
     )
-
-    db.commit()
-    db.refresh(user)
-    db.refresh(session_model)
-    assert raw_token is not None  # for type checkers
     _set_session_cookie(response, settings, raw_token)
     _set_request_context(
         request,
@@ -195,7 +177,7 @@ def login_basic(  # noqa: PLR0915 - clarity over cleverness
 def logout(
     request: Request,
     response: Response,
-    current_user=Depends(dependencies.get_current_user),
+    current_user=Depends(auth_service.get_current_user),
     db: Session = Depends(get_db),
 ) -> Response:
     settings = config.get_settings()
@@ -203,8 +185,8 @@ def logout(
 
     session_model = getattr(request.state, "auth_session", None)
     if session_model and session_model.user_id == current_user.user_id:
-        service.revoke_session(db, session_model, commit=False)
-        service.logout(
+        auth_service.revoke_session(db, session_model, commit=False)
+        auth_service.logout(
             db,
             current_user,
             source="api",
@@ -224,7 +206,7 @@ def logout(
 def session_status(
     request: Request,
     response: Response,
-    current_user=Depends(dependencies.get_current_user),
+    current_user=Depends(auth_service.get_current_user),
     db: Session = Depends(get_db),
 ) -> AuthSessionResponse:
     settings = config.get_settings()
@@ -237,7 +219,7 @@ def session_status(
         _clear_session_cookie(response, settings)
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Session expired")
 
-    service.session_refreshed(
+    auth_service.session_refreshed(
         db,
         current_user,
         source="api",
@@ -256,7 +238,7 @@ def session_status(
 )
 def current_user_profile(
     request: Request,
-    current_user=Depends(dependencies.get_current_user),
+    current_user=Depends(auth_service.get_current_user),
 ) -> AuthSessionResponse:
     settings = config.get_settings()
     session_model = getattr(request.state, "auth_session", None)
@@ -296,7 +278,7 @@ def sso_login() -> Response:
     settings = config.get_settings()
     if "sso" not in settings.auth_mode_sequence:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="SSO is not enabled")
-    location = sso.build_authorization_url(settings)
+    location = auth_service.build_authorization_url(settings)
     response = Response(status_code=status.HTTP_307_TEMPORARY_REDIRECT)
     response.headers["Location"] = location
     return response
@@ -318,36 +300,23 @@ def sso_callback(
     if "sso" not in settings.auth_mode_sequence:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="SSO is not enabled")
     try:
-        user, claims = sso.exchange_code(settings, code=code, state=state, db=db)
-    except SSOExchangeError as exc:
+        user, claims = auth_service.exchange_code(settings, code=code, state=state, db=db)
+    except auth_service.SSOExchangeError as exc:
         logger.warning("SSO code exchange failed", extra={"reason": str(exc)})
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     ip_address, user_agent = _request_metadata(request)
-    now_iso = datetime.now(timezone.utc).isoformat()
-    user.last_login_at = now_iso
-
-    session_model, raw_token = service.issue_session(
+    session_model, raw_token = auth_service.complete_login(
         db,
-        user,
-        settings=settings,
-        ip_address=ip_address,
-        user_agent=user_agent,
-        commit=False,
-    )
-
-    service.login_success(
-        db,
+        settings,
         user,
         mode="sso",
         source="api",
-        payload={"ip": ip_address, "user_agent": user_agent, "subject": claims.get("sub")},
-        commit=False,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        subject=claims.get("sub"),
+        include_subject=True,
     )
-    db.commit()
-    db.refresh(user)
-    db.refresh(session_model)
-    assert raw_token is not None
     _set_session_cookie(response, settings, raw_token)
     _set_request_context(
         request,

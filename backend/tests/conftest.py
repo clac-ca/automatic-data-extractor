@@ -11,7 +11,7 @@ from typing import ContextManager
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.app.auth.passwords import hash_password
+from backend.app.services.auth import hash_password
 from backend.app.db import get_sessionmaker
 from backend.app.models import Event, User, UserRole
 
@@ -75,8 +75,8 @@ def _test_client(
     import backend.app.db as db_module
     db_module.reset_database_state()
 
-    import backend.app.auth.sso as sso_module
-    sso_module.clear_caches()
+    import backend.app.services.auth as auth_module
+    auth_module.clear_caches()
 
     import backend.app.main as main_module
 
