@@ -892,6 +892,38 @@ def test_sso_callback_rejects_unexpected_nonce(app_client_factory, tmp_path, mon
     sso.clear_caches()
 
 
+def test_sso_state_token_accepts_signature_with_dot(monkeypatch, tmp_path) -> None:
+    issuer = "https://sso.example.com"
+    overrides = {
+        "ADE_AUTH_MODES": "sso",
+        "ADE_SSO_CLIENT_SECRET": "compat-secret",
+        "ADE_SSO_CLIENT_ID": "client-123",
+        "ADE_SSO_ISSUER": issuer,
+        "ADE_SSO_REDIRECT_URL": "https://ade.internal/auth/callback",
+    }
+
+    with _configured_settings(monkeypatch, tmp_path, **overrides) as (settings, _):
+        assert settings.sso_client_secret == "compat-secret"
+        secret = settings.sso_client_secret.encode("utf-8")
+        expiry = int(time.time()) + 300
+
+        for attempt in range(1024):
+            nonce = f"nonce-{attempt}"
+            payload = {"exp": expiry, "nonce": nonce}
+            body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+            signature = hmac.new(secret, body, hashlib.sha256).digest()
+            if b"." not in signature:
+                continue
+
+            legacy = base64.urlsafe_b64encode(body + b"." + signature).decode("ascii").rstrip("=")
+            parsed = sso._verify_state_token(settings, legacy)
+            assert parsed["nonce"] == nonce
+            assert parsed["exp"] == expiry
+            break
+        else:  # pragma: no cover - defensive
+            pytest.fail("Unable to generate signature containing dot byte")
+
+
 def test_verify_bearer_token_rs256(monkeypatch, tmp_path) -> None:
     issuer = "https://sso.example.com"
     discovery_url = f"{issuer}/.well-known/openid-configuration"

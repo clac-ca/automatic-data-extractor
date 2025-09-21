@@ -179,20 +179,30 @@ def _build_state_token(settings: config.Settings) -> tuple[str, dict[str, Any]]:
     }
     body = json.dumps(state_payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
     signature = hmac.new(settings.sso_client_secret.encode("utf-8"), body, hashlib.sha256).digest()
-    packed = _b64url_encode(body + b"." + signature)
+    packed = f"{_b64url_encode(body)}.{_b64url_encode(signature)}"
     return packed, state_payload
 
 
 def _verify_state_token(settings: config.Settings, token: str) -> dict[str, Any]:
     assert settings.sso_client_secret is not None
-    padding = "=" * (-len(token) % 4)
+    key_bytes = settings.sso_client_secret.encode("utf-8")
     try:
-        decoded = base64.urlsafe_b64decode(token + padding)
-        body, signature = decoded.rsplit(b".", 1)
+        if "." in token:
+            body_b64, signature_b64 = token.split(".", 1)
+            if not body_b64 or not signature_b64:
+                raise ValueError("Missing state token components")
+            body = _b64url_decode(body_b64)
+            signature = _b64url_decode(signature_b64)
+        else:
+            decoded = _b64url_decode(token)
+            if len(decoded) < 33 or decoded[-33] != 0x2E:
+                raise ValueError("Invalid legacy state token format")
+            body = decoded[:-33]
+            signature = decoded[-32:]
     except (ValueError, binascii.Error) as exc:  # pragma: no cover - defensive
         raise SSOExchangeError("Invalid state token") from exc
 
-    expected = hmac.new(settings.sso_client_secret.encode("utf-8"), body, hashlib.sha256).digest()
+    expected = hmac.new(key_bytes, body, hashlib.sha256).digest()
     if not compare_digest(signature, expected):
         raise SSOExchangeError("Invalid state token signature")
 
