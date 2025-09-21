@@ -1,15 +1,19 @@
-# 🔄 Next Task — Document and smoke-test the new ADE CLI entrypoint
+# 🔄 Next Task — Streamline HTTP Basic login with a reusable dependency
 
 ## Context
-The authentication commands now live behind a shared `backend.app.cli` module and can be invoked with `python -m backend.app`.
-Documenting the workflow and adding a light integration test will help future contributors discover and trust the CLI.
+The `/auth/login/basic` route currently performs credential parsing, validation, and event logging inline. Moving that logic
+into a dedicated dependency built on FastAPI's `HTTPBasic` helper will shrink the route handler and make the authentication
+workflow easier to reuse elsewhere.
 
 ## Goals
-1. Update the relevant documentation (README or DOCUMENTATION.md) with examples showing how to run `python -m backend.app auth ...`.
-2. Add a quick integration test that invokes the new top-level CLI entry point (e.g. `backend.app.cli.main([...])`) to ensure the wiring works.
-3. Keep existing auth CLI behaviours intact; the new test should reuse the configured SQLite fixture.
+1. Introduce a dependency in `backend.app.services.auth` that validates HTTP Basic credentials, records the existing
+   success/failure events, and returns an active `User`.
+2. Update the `/auth/login/basic` route to consume the new dependency so the handler only needs to call
+   `auth_service.complete_login(...)` and set the cookie.
+3. Extend or adjust tests in `backend/tests/test_auth.py` to cover both successful and failure paths via the new dependency.
+4. Ensure no behavioural regressions for CLI-driven user management or API key authentication.
 
 ## Definition of done
-- Documentation clearly explains how to reach the ADE CLI and the available auth subcommands.
-- A test covers the `backend.app.cli.main()` path to guard the new entry point.
-- `pytest backend/tests/test_auth.py` continues to pass.
+- The new dependency encapsulates HTTP Basic verification and event logging, and the route uses it instead of inline logic.
+- Login success and failure responses (status codes, error messages, audit events) match the current behaviour.
+- `pytest backend/tests/test_auth.py` passes.

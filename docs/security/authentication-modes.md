@@ -52,11 +52,11 @@ Validation: Log in, inspect the `Set-Cookie` header, and ensure TTL, domain, and
 Use the bundled CLI to provision accounts even when the API is offline:
 
 ```bash
-python -m backend.app.services.auth create-user admin@example.com --password change-me --role admin
-python -m backend.app.services.auth reset-password admin@example.com --password another-secret
-python -m backend.app.services.auth deactivate user@example.com
-python -m backend.app.services.auth promote operator@example.com
-python -m backend.app.services.auth list-users
+python -m backend.app auth create-user admin@example.com --password change-me --role admin
+python -m backend.app auth reset-password admin@example.com --password another-secret
+python -m backend.app auth deactivate user@example.com
+python -m backend.app auth promote operator@example.com
+python -m backend.app auth list-users
 ```
 
 Each command emits `user.*` events (actor_type `system`, source `cli`) so audit logs record administrative actions.
@@ -87,7 +87,7 @@ curl -H "Authorization: Bearer $ADE_API_KEY" https://ade.example.com/documents
 
 - Log in with HTTP Basic credentials and confirm a session cookie is issued.
 - Call `POST /auth/refresh` and ensure the cookie expiry advances.
-- Run `python -m backend.app.services.auth list-users` to verify CLI access.
+- Run `python -m backend.app auth list-users` to verify CLI access.
 - Inspect `/events?event_type=user.session.*` to confirm authentication events are captured.
 
 For SSO-specific configuration (client IDs, discovery caching, recovery), continue to [SSO setup and recovery](./sso-setup.md).
