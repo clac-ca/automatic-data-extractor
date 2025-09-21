@@ -1,29 +1,19 @@
-# 🔄 Next Task — Centralize Login Session Issuance
+# 🔄 Next Task — Unify Request Auth Context Handling
 
 ## Context
-With credential resolution handled by `auth/service.resolve_credentials`, the Basic and SSO login endpoints still duplicate the
-sequence of issuing a session, recording the login success event, committing the transaction, refreshing ORM models, and updating
-FastAPI request state. This duplication makes future auth modes harder to add and risks behavioural drift if one path forgets to
-update telemetry or metadata. Consolidating the shared work into a focused helper keeps each route small and ensures the login
-pipeline stays consistent.
+The authentication refactor consolidated service helpers, but request-state updates are still split between `routes/auth.py` and `services/auth.py`. Each module defines its own `_set_request_context` with slightly different fields (`subject` vs `api_key_id`). Maintaining parallel implementations risks drift and makes it harder to add future metadata (for example, MFA markers or login sources) in a single place.
 
 ## Goals
-1. Add a helper to `auth/service.py` (or a narrow companion module) that accepts the database session, settings, target user,
-   login mode, and request metadata (IP address, user agent, optional subject) and returns the persisted session plus the raw
-   session token.
-2. Replace the duplicated logic in `/auth/login/basic` and `/auth/sso/callback` with calls to this helper so the routes only need
-   to manage FastAPI surfaces like cookie handling and response serialization.
-3. Preserve existing login success telemetry — payload fields such as IP, user agent, and subject (for SSO) must remain
-   unchanged.
+1. Introduce a small dataclass or helper in `backend/app/services/auth.py` that builds the request auth context dictionary with optional `session_id`, `api_key_id`, and `subject` fields.
+2. Update both the FastAPI dependency and the `/auth` routes to rely on this shared helper so request state is populated consistently.
+3. Keep backwards compatibility for downstream code that reads `request.state.auth_context`, `request.state.auth_session`, or `request.state.api_key`.
 
 ## Implementation notes
-- Reuse `service.issue_session` and `service.login_success` inside the helper rather than reimplementing token handling.
-- Keep the helper synchronous and side-effect free beyond database writes; it should not touch FastAPI `Request` or `Response`
-  objects.
-- Extend the authentication tests to cover the new helper directly and prove both login endpoints still behave the same.
-- Confirm cookie attributes and request context updates inside the routes remain identical to today's behaviour.
+- Prefer a dataclass with a `to_dict()` helper for clarity, but keep it lightweight and free of FastAPI imports.
+- Ensure the helper accepts optional subject information so SSO logins continue to store the subject when available.
+- Add or update tests around request context capture to cover the shared helper.
 
 ## Definition of done
-- Both Basic and SSO login routes delegate session issuance and event recording to the new helper.
-- Login success events still emit the same payload structure and values as before the refactor.
-- `pytest backend/tests/test_auth.py` continues to pass without regressions.
+- Only one code path is responsible for building the auth context dictionary.
+- `routes/auth.py` delegates request-state mutation to the shared helper.
+- `pytest backend/tests/test_auth.py` continues to pass.

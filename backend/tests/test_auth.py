@@ -15,9 +15,7 @@ import httpx
 import pytest
 
 from backend.app import config
-from backend.app.auth import dependencies, service as auth_service, sso
-from backend.app.auth.passwords import hash_password, verify_password
-from backend.app.auth.sso import SSOExchangeError
+import backend.app.services.auth as auth_service
 from backend.app.db import get_sessionmaker
 from backend.app.db_migrations import ensure_schema
 from backend.app.models import ApiKey, Event, User, UserRole, UserSession
@@ -150,10 +148,85 @@ def _rs256_jwk(kid: str) -> dict[str, str]:
 
 def test_password_hashing_roundtrip() -> None:
     password = "s3cret!"
-    hashed = hash_password(password)
+    hashed = auth_service.hash_password(password)
     assert hashed != password
-    assert verify_password(password, hashed)
-    assert not verify_password("other", hashed)
+    assert auth_service.verify_password(password, hashed)
+    assert not auth_service.verify_password("other", hashed)
+
+
+def test_complete_login_helper_commits_session(monkeypatch, tmp_path) -> None:
+    overrides = {
+        "ADE_DATABASE_URL": f"sqlite:///{tmp_path / 'complete-login.sqlite'}",
+        "ADE_AUTH_MODES": "basic,sso",
+        "ADE_SESSION_COOKIE_SECURE": "0",
+    }
+
+    with _configured_settings(monkeypatch, tmp_path, **overrides) as (settings, session_factory):
+        with session_factory() as db:
+            user = User(
+                email="helper@example.com",
+                password_hash=auth_service.hash_password("secret"),
+                role=UserRole.ADMIN,
+                is_active=True,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+            session_model, raw_token = auth_service.complete_login(
+                db,
+                settings,
+                user,
+                mode="basic",
+                source="api",
+                ip_address="127.0.0.1",
+                user_agent="pytest-client",
+            )
+
+            user_id = user.user_id
+            assert raw_token
+            assert session_model.last_seen_ip == "127.0.0.1"
+            assert session_model.last_seen_user_agent == "pytest-client"
+            assert user.last_login_at is not None
+
+        with session_factory() as db:
+            events = (
+                db.query(Event)
+                .filter(Event.entity_id == user_id, Event.event_type == "user.login.succeeded")
+                .order_by(Event.occurred_at)
+                .all()
+            )
+            assert events
+            payload = events[-1].payload
+            assert payload["mode"] == "basic"
+            assert payload["ip"] == "127.0.0.1"
+            assert payload["user_agent"] == "pytest-client"
+            assert "subject" not in payload
+
+        with session_factory() as db:
+            user = db.query(User).filter(User.user_id == user_id).one()
+            auth_service.complete_login(
+                db,
+                settings,
+                user,
+                mode="sso",
+                source="api",
+                ip_address=None,
+                user_agent=None,
+                subject=None,
+                include_subject=True,
+            )
+
+        with session_factory() as db:
+            final_event = (
+                db.query(Event)
+                .filter(Event.entity_id == user_id, Event.event_type == "user.login.succeeded")
+                .order_by(Event.occurred_at.desc())
+                .first()
+            )
+            assert final_event is not None
+            assert "subject" in final_event.payload
+            assert final_event.payload["subject"] is None
 
 
 def test_basic_login_issues_session_cookie(app_client) -> None:
@@ -594,7 +667,7 @@ def test_open_access_mode_disables_auth(app_client_factory, tmp_path, monkeypatc
         client.auth = None
         captured: dict[str, object] = {}
 
-        original = dependencies._set_request_context
+        original = auth_service._set_request_context
 
         def capture_context(request, user, mode, *, session_id=None, api_key_id=None):
             captured["user"] = user
@@ -609,7 +682,7 @@ def test_open_access_mode_disables_auth(app_client_factory, tmp_path, monkeypatc
                 api_key_id=api_key_id,
             )
 
-        monkeypatch.setattr(dependencies, "_set_request_context", capture_context)
+        monkeypatch.setattr(auth_service, "_set_request_context", capture_context)
 
         login = client.post("/auth/login/basic")
         assert login.status_code == 404
@@ -641,7 +714,7 @@ def test_basic_login_disabled_when_mode_missing(app_client_factory, tmp_path, mo
     monkeypatch.setenv("ADE_SESSION_COOKIE_SECURE", "0")
     monkeypatch.setenv("ADE_SSO_CLIENT_ID", "client-123")
     monkeypatch.setenv("ADE_SSO_CLIENT_SECRET", "secret")
-    monkeypatch.setenv("ADE_SSO_ISSUER", "https://sso.example.com")
+    monkeypatch.setenv("ADE_SSO_ISSUER", "https://auth_service.example.com")
     monkeypatch.setenv("ADE_SSO_REDIRECT_URL", "https://ade.example.com/auth/callback")
     with app_client_factory(database_url, documents_dir) as client:
         response = client.post("/auth/login/basic", auth=("admin@example.com", "password123"))
@@ -682,8 +755,8 @@ def _encode_hs256_token(
 
 
 def test_sso_callback_issues_session(app_client_factory, tmp_path, monkeypatch) -> None:
-    issuer = "https://sso.example.com"
-    db_path = tmp_path / "sso.sqlite"
+    issuer = "https://auth_service.example.com"
+    db_path = tmp_path / "auth_service.sqlite"
     documents_dir = tmp_path / "docs"
     database_url = f"sqlite:///{db_path}"
     monkeypatch.setenv("ADE_AUTH_MODES", "basic,sso")
@@ -789,7 +862,7 @@ def test_sso_callback_issues_session(app_client_factory, tmp_path, monkeypatch) 
 
 
 def test_sso_callback_auto_provisions_user(app_client_factory, tmp_path, monkeypatch) -> None:
-    issuer = "https://sso.example.com"
+    issuer = "https://auth_service.example.com"
     db_path = tmp_path / "sso-auto.sqlite"
     documents_dir = tmp_path / "docs"
     database_url = f"sqlite:///{db_path}"
@@ -891,11 +964,11 @@ def test_sso_callback_auto_provisions_user(app_client_factory, tmp_path, monkeyp
             )
             assert session_record is not None
 
-    sso.clear_caches()
+    auth_service.clear_caches()
 
 
 def test_sso_callback_rejects_unexpected_nonce(app_client_factory, tmp_path, monkeypatch) -> None:
-    issuer = "https://sso.example.com"
+    issuer = "https://auth_service.example.com"
     db_path = tmp_path / "sso-nonce.sqlite"
     documents_dir = tmp_path / "docs"
     database_url = f"sqlite:///{db_path}"
@@ -962,11 +1035,11 @@ def test_sso_callback_rejects_unexpected_nonce(app_client_factory, tmp_path, mon
         assert callback.status_code == 400
         assert callback.json()["detail"] == "Unexpected nonce in ID token"
 
-    sso.clear_caches()
+    auth_service.clear_caches()
 
 
 def test_sso_state_token_accepts_signature_with_dot(monkeypatch, tmp_path) -> None:
-    issuer = "https://sso.example.com"
+    issuer = "https://auth_service.example.com"
     overrides = {
         "ADE_AUTH_MODES": "sso",
         "ADE_SSO_CLIENT_SECRET": "compat-secret",
@@ -989,7 +1062,7 @@ def test_sso_state_token_accepts_signature_with_dot(monkeypatch, tmp_path) -> No
                 continue
 
             legacy = base64.urlsafe_b64encode(body + b"." + signature).decode("ascii").rstrip("=")
-            parsed = sso._verify_state_token(settings, legacy)
+            parsed = auth_service._verify_state_token(settings, legacy)
             assert parsed["nonce"] == nonce
             assert parsed["exp"] == expiry
             break
@@ -998,10 +1071,10 @@ def test_sso_state_token_accepts_signature_with_dot(monkeypatch, tmp_path) -> No
 
 
 def test_verify_bearer_token_rs256(monkeypatch, tmp_path) -> None:
-    issuer = "https://sso.example.com"
+    issuer = "https://auth_service.example.com"
     discovery_url = f"{issuer}/.well-known/openid-configuration"
     jwks_url = f"{issuer}/jwks"
-    sso.clear_caches()
+    auth_service.clear_caches()
     jwks_payload = {"keys": [_rs256_jwk("rs256-key")]} 
     get_calls: list[str] = []
 
@@ -1051,25 +1124,25 @@ def test_verify_bearer_token_rs256(monkeypatch, tmp_path) -> None:
         token = _encode_rs256_token(issuer, "client-123")
 
         with session_factory() as db:
-            resolved, claims = sso.verify_bearer_token(settings, token=token, db=db)
+            resolved, claims = auth_service.verify_bearer_token(settings, token=token, db=db)
             first_user_id = resolved.user_id
             assert claims["sub"] == "sso-user-1"
 
         assert get_calls == [discovery_url, jwks_url]
 
         with session_factory() as db:
-            second, _ = sso.verify_bearer_token(settings, token=token, db=db)
+            second, _ = auth_service.verify_bearer_token(settings, token=token, db=db)
             assert second.user_id == first_user_id
 
         assert get_calls == [discovery_url, jwks_url]
-    sso.clear_caches()
+    auth_service.clear_caches()
 
 
 def test_verify_bearer_token_rejects_unknown_kid(monkeypatch, tmp_path) -> None:
-    issuer = "https://sso.example.com"
+    issuer = "https://auth_service.example.com"
     discovery_url = f"{issuer}/.well-known/openid-configuration"
     jwks_url = f"{issuer}/jwks"
-    sso.clear_caches()
+    auth_service.clear_caches()
     jwks_payload = {"keys": [_rs256_jwk("rs256-key")]}
     get_calls: list[str] = []
 
@@ -1116,24 +1189,24 @@ def test_verify_bearer_token_rejects_unknown_kid(monkeypatch, tmp_path) -> None:
 
         valid = _encode_rs256_token(issuer, "client-123", kid="rs256-key")
         with session_factory() as db:
-            sso.verify_bearer_token(settings, token=valid, db=db)
+            auth_service.verify_bearer_token(settings, token=valid, db=db)
 
         assert get_calls == [discovery_url, jwks_url]
 
         unknown = _encode_rs256_token(issuer, "client-123", kid="other-key")
         with session_factory() as db:
-            with pytest.raises(SSOExchangeError, match="Signing key not found"):
-                sso.verify_bearer_token(settings, token=unknown, db=db)
+            with pytest.raises(auth_service.SSOExchangeError, match="Signing key not found"):
+                auth_service.verify_bearer_token(settings, token=unknown, db=db)
 
         assert get_calls == [discovery_url, jwks_url]
-    sso.clear_caches()
+    auth_service.clear_caches()
 
 
 def test_verify_bearer_token_rejects_expired_token(monkeypatch, tmp_path) -> None:
-    issuer = "https://sso.example.com"
+    issuer = "https://auth_service.example.com"
     discovery_url = f"{issuer}/.well-known/openid-configuration"
     jwks_url = f"{issuer}/jwks"
-    sso.clear_caches()
+    auth_service.clear_caches()
     jwks_payload = {"keys": [_rs256_jwk("rs256-key")]} 
 
     def fake_get(url: str, *args, **kwargs) -> httpx.Response:
@@ -1170,16 +1243,16 @@ def test_verify_bearer_token_rejects_expired_token(monkeypatch, tmp_path) -> Non
             overrides={"exp": int(time.time()) - 10},
         )
         with session_factory() as db:
-            with pytest.raises(SSOExchangeError, match="ID token expired"):
-                sso.verify_bearer_token(settings, token=token, db=db)
-    sso.clear_caches()
+            with pytest.raises(auth_service.SSOExchangeError, match="ID token expired"):
+                auth_service.verify_bearer_token(settings, token=token, db=db)
+    auth_service.clear_caches()
 
 
 def test_verify_bearer_token_rejects_audience_mismatch(monkeypatch, tmp_path) -> None:
-    issuer = "https://sso.example.com"
+    issuer = "https://auth_service.example.com"
     discovery_url = f"{issuer}/.well-known/openid-configuration"
     jwks_url = f"{issuer}/jwks"
-    sso.clear_caches()
+    auth_service.clear_caches()
     jwks_payload = {"keys": [_rs256_jwk("rs256-key")]} 
 
     def fake_get(url: str, *args, **kwargs) -> httpx.Response:
@@ -1212,14 +1285,12 @@ def test_verify_bearer_token_rejects_audience_mismatch(monkeypatch, tmp_path) ->
     with _configured_settings(monkeypatch, tmp_path, **overrides) as (settings, session_factory):
         token = _encode_rs256_token(issuer, "client-123", overrides={"aud": "other-audience"})
         with session_factory() as db:
-            with pytest.raises(SSOExchangeError, match="audience mismatch"):
-                sso.verify_bearer_token(settings, token=token, db=db)
-    sso.clear_caches()
+            with pytest.raises(auth_service.SSOExchangeError, match="audience mismatch"):
+                auth_service.verify_bearer_token(settings, token=token, db=db)
+    auth_service.clear_caches()
 
 
 def test_manage_cli_flows(tmp_path, monkeypatch) -> None:
-    from backend.app.auth import manage
-
     db_path = tmp_path / "manage.sqlite"
     documents_dir = tmp_path / "docs"
     monkeypatch.setenv("ADE_DATABASE_URL", f"sqlite:///{db_path}")
@@ -1229,7 +1300,7 @@ def test_manage_cli_flows(tmp_path, monkeypatch) -> None:
     operator = "ops@example.com"
     try:
         assert (
-            manage.main([
+            auth_service.main([
                 "create-user",
                 "cli@example.com",
                 "--password",
@@ -1242,7 +1313,7 @@ def test_manage_cli_flows(tmp_path, monkeypatch) -> None:
             == 0
         )
         assert (
-            manage.main([
+            auth_service.main([
                 "promote",
                 "cli@example.com",
                 "--operator-email",
@@ -1251,7 +1322,7 @@ def test_manage_cli_flows(tmp_path, monkeypatch) -> None:
             == 0
         )
         assert (
-            manage.main(
+            auth_service.main(
                 [
                     "reset-password",
                     "cli@example.com",
@@ -1264,7 +1335,7 @@ def test_manage_cli_flows(tmp_path, monkeypatch) -> None:
             == 0
         )
         assert (
-            manage.main([
+            auth_service.main([
                 "deactivate",
                 "cli@example.com",
                 "--operator-email",
@@ -1278,7 +1349,7 @@ def test_manage_cli_flows(tmp_path, monkeypatch) -> None:
             user = db.query(User).filter(User.email == "cli@example.com").one()
             assert user.role == UserRole.ADMIN
             assert not user.is_active
-            assert verify_password("new-pass", user.password_hash)
+            assert auth_service.verify_password("new-pass", user.password_hash)
             user_id = user.user_id
 
         with session_factory() as db:
@@ -1307,6 +1378,6 @@ def test_manage_cli_flows(tmp_path, monkeypatch) -> None:
         assert events[2].payload == {"email": "cli@example.com"}
         assert events[3].payload == {"email": "cli@example.com"}
 
-        assert manage.main(["list-users"]) == 0
+        assert auth_service.main(["list-users"]) == 0
     finally:
         config.reset_settings_cache()
