@@ -37,6 +37,7 @@ Validation tip: After changing scheduler settings, restart ADE and check `GET /h
 | Variable | Default | Allowed values / notes | Restart required |
 | --- | --- | --- | --- |
 | `ADE_AUTH_MODES` | `basic` | Comma-separated list drawn from `none`, `basic`, `sso`. `none` cannot combine with others. | Yes |
+| `AUTH_DISABLED` | `false` | When truthy (`1`, `true`, `yes`), bypasses authentication entirely (same as `ADE_AUTH_MODES=none`). | Yes |
 | `ADE_SESSION_COOKIE_NAME` | `ade_session` | Non-empty string; browser cookie name. | Yes |
 | `ADE_SESSION_TTL_MINUTES` | `720` | Positive integer; minutes before sessions expire. | No (affects next refresh) |
 | `ADE_SESSION_COOKIE_SECURE` | `false` | `true` / `false`; mark cookies as Secure. Required when SameSite=`none`. | Yes |
@@ -44,7 +45,7 @@ Validation tip: After changing scheduler settings, restart ADE and check `GET /h
 | `ADE_SESSION_COOKIE_PATH` | `/` | Cookie path. | Yes |
 | `ADE_SESSION_COOKIE_SAME_SITE` | `lax` | `lax`, `strict`, or `none`. Validation enforced in `Settings._validate_same_site`. | Yes |
 
-Validation tip: After adjusting session settings, log in via `/auth/login` and inspect returned cookies to verify attributes.
+Validation tip: After adjusting session settings, log in via `/auth/login/basic` and inspect returned cookies to verify attributes.
 
 ## SSO configuration
 
@@ -59,15 +60,11 @@ Validation tip: After adjusting session settings, log in via `/auth/login` and i
 | `ADE_SSO_CACHE_TTL_SECONDS` | `300` | Positive integer; cache lifetime for discovery and JWKS payloads. | No (clears automatically after TTL or on restart) |
 | `ADE_SSO_AUTO_PROVISION` | `false` | `true` / `false`; automatically create users for valid SSO identities. | Yes |
 
-Validation tip: Hit `/auth/sso/login` after configuration. Inspect redirect URLs and ensure JWKS responses refresh within the configured cache window. Use `python -m backend.app.auth.sso clear_caches` (via Python REPL) or restart ADE to clear caches early.
+Validation tip: Hit `/auth/sso/login` after configuration. Inspect redirect URLs and ensure JWKS responses refresh within the configured cache window. Use a Python shell to run `from backend.app.services import auth as auth_service; auth_service.clear_caches()` or restart ADE to clear caches early.
 
-## Integration credentials (roadmap)
+## API keys
 
-| Variable | Default | Allowed values / notes | Restart required |
-| --- | --- | --- | --- |
-| `ADE_API_KEY` | _(unset)_ | Reserved for the upcoming API key feature. Store per-integration secrets here so clients can forward them as the `ADE-API-Key` header when support lands. | No (header-based) |
-
-Until keys are live, leave the variable unset. Clients relying on it should fall back to session cookies without additional configuration changes.
+API keys are persisted in the database (`api_keys` table) with hashed tokens. They are not configured via environment variables. When a key is provisioned, the client must send `Authorization: Bearer <API_KEY>` on every request. Remove or rotate keys by updating the database (CLI automation is planned).
 
 ## Administrative controls
 
@@ -76,7 +73,7 @@ Until keys are live, leave the variable unset. Clients relying on it should fall
 | `ADE_ADMIN_EMAIL_ALLOWLIST_ENABLED` | `false` | `true` / `false`; enforce administrator allowlist. | Yes |
 | `ADE_ADMIN_EMAIL_ALLOWLIST` | _(unset)_ | Comma-separated list of email addresses permitted to hold admin role. | Yes |
 
-When toggling allowlist enforcement, verify administrator logins and run `python -m backend.app.auth.manage list-users` to confirm only expected accounts retain elevated roles.
+When toggling allowlist enforcement, verify administrator logins and run `python -m backend.app auth list-users` to confirm only expected accounts retain elevated roles.
 
 ## Cache resets during runtime
 

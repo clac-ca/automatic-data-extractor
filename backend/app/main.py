@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import AsyncIterator
 
 from fastapi import FastAPI
+from fastapi.openapi.utils import get_openapi
 
 from . import config
-from .auth.validation import validate_settings
+from .services.auth import validate_settings
 from .db_migrations import SchemaState, ensure_schema
 from .maintenance import AutoPurgeScheduler
 from .routes.auth import router as auth_router
@@ -71,6 +72,35 @@ app.include_router(configurations_router)
 app.include_router(jobs_router)
 app.include_router(documents_router)
 app.include_router(events_router)
+
+
+def _build_openapi_schema() -> dict[str, object]:
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    components = openapi_schema.setdefault("components", {}).setdefault("securitySchemes", {})
+    components.setdefault("basicAuth", {"type": "http", "scheme": "basic"})
+    components.setdefault("bearerAuth", {"type": "http", "scheme": "bearer"})
+    components.setdefault(
+        "cookieAuth",
+        {
+            "type": "apiKey",
+            "in": "cookie",
+            "name": config.get_settings().session_cookie_name,
+        },
+    )
+    openapi_schema.setdefault("security", [{"cookieAuth": []}, {"bearerAuth": []}])
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = _build_openapi_schema  # type: ignore[assignment]
 
 
 __all__ = ["app"]

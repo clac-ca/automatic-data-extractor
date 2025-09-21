@@ -74,11 +74,16 @@ variables include:
   `ADE_SSO_CACHE_TTL_SECONDS` – configure
   standards-compliant code exchanges when `sso` mode is active.
 
-API key authentication is under development and will sit alongside these modes. Integrations should prepare to send an `ADE-API-Key` header sourced from a per-service secret (for example, `ADE_API_KEY`) while still honouring the session cookie the UI relies on.
+API keys now complement these modes for automation clients. Provision a key once, store its hashed form in the database, and have integrations send `Authorization: Bearer <API_KEY>` on every request while humans continue using cookie sessions.
 
-User accounts live in the `users` table. A lightweight CLI (`python -m backend.app.auth.manage`) manages accounts with
+User accounts live in the `users` table. A lightweight CLI (`python -m backend.app auth ...`) manages accounts with
 `create-user`, `reset-password`, `deactivate`, `promote`, and `list-users` commands. CLI operations emit events so audit logs
 capture administrative changes even when the API is offline.
+
+```bash
+python -m backend.app auth create-user admin@example.com --password change-me --role admin
+python -m backend.app auth list-users
+```
 
 SSO environments expect RS256-signed ID tokens. ADE caches the provider discovery document and JWKS payloads for the configured
 TTL (`ADE_SSO_CACHE_TTL_SECONDS`) while still rejecting expired tokens or IDs signed by unknown keys.

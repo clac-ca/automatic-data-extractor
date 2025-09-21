@@ -2,19 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.security import HTTPBasicCredentials
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import config
-from ..auth import dependencies, sessions, sso
-from ..auth.events import login_failure, login_success, logout as logout_event, session_refreshed
-from ..auth.passwords import verify_password
-from ..auth.sso import SSOExchangeError
+from ..services import EventRecord, auth as auth_service, record_event
 from ..db import get_db
 from ..models import User, UserSession
 from ..schemas import AuthSessionResponse, SessionSummary, UserProfile
@@ -22,6 +18,7 @@ from ..schemas import AuthSessionResponse, SessionSummary, UserProfile
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+basic_auth = HTTPBasic(auto_error=False)
 
 
 def _request_metadata(request: Request) -> tuple[str | None, str | None]:
@@ -40,6 +37,20 @@ def _session_summary(session_model: UserSession | None) -> SessionSummary | None
     return SessionSummary(session_id=session_model.session_id, expires_at=session_model.expires_at)
 
 
+def _available_modes(settings: config.Settings) -> list[str]:
+    if settings.auth_disabled:
+        return ["none"]
+
+    configured = settings.auth_mode_sequence
+    modes: list[str] = []
+    if "basic" in configured:
+        modes.append("basic")
+    if "sso" in configured:
+        modes.append("sso")
+    modes.append("api-key")
+    return modes
+
+
 def _auth_response(
     user: User,
     settings: config.Settings,
@@ -48,7 +59,7 @@ def _auth_response(
 ) -> AuthSessionResponse:
     return AuthSessionResponse(
         user=_user_profile(user),
-        modes=list(settings.auth_mode_sequence),
+        modes=_available_modes(settings),
         session=_session_summary(session_model),
     )
 
@@ -79,41 +90,24 @@ def _clear_session_cookie(response: Response, settings: config.Settings) -> None
     )
 
 
-def _set_request_context(
-    request: Request,
-    user: User,
-    *,
-    mode: str,
-    session_id: str | None = None,
-    subject: str | None = None,
-) -> None:
-    request.state.auth_context = {
-        "user_id": user.user_id,
-        "email": user.email,
-        "mode": mode,
-    }
-    if session_id is not None:
-        request.state.auth_context["session_id"] = session_id
-    if subject is not None:
-        request.state.auth_context["subject"] = subject
-
-
-@router.post("/login", response_model=AuthSessionResponse)
-def login(  # noqa: PLR0915 - clarity over cleverness
+@router.post(
+    "/login/basic",
+    response_model=AuthSessionResponse,
+    openapi_extra={"security": []},
+)
+def login_basic(  # noqa: PLR0915 - clarity over cleverness
     request: Request,
     response: Response,
+    credentials: HTTPBasicCredentials | None = Depends(basic_auth),
     db: Session = Depends(get_db),
 ) -> AuthSessionResponse:
     settings = config.get_settings()
-    modes = settings.auth_mode_sequence
-
-    if "basic" not in modes:
+    if "basic" not in settings.auth_mode_sequence:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
             detail="HTTP Basic authentication is not enabled",
         )
 
-    credentials: HTTPBasicCredentials | None = dependencies.extract_basic_credentials(request)
     if credentials is None:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
@@ -126,81 +120,116 @@ def login(  # noqa: PLR0915 - clarity over cleverness
 
     user = _get_user_by_email(db, email)
     if user is None or not user.password_hash:
-        login_failure(db, email=email, mode="basic", source="api", reason="unknown-user")
+        record_event(
+            db,
+            EventRecord(
+                event_type="user.login.failed",
+                entity_type="user",
+                entity_id=email,
+                actor_type="user",
+                actor_label=email,
+                source="api",
+                payload={"mode": "basic", "reason": "unknown-user"},
+            ),
+        )
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if not user.is_active:
-        login_failure(db, email=email, mode="basic", source="api", reason="inactive")
+        record_event(
+            db,
+            EventRecord(
+                event_type="user.login.failed",
+                entity_type="user",
+                entity_id=email,
+                actor_type="user",
+                actor_label=email,
+                source="api",
+                payload={"mode": "basic", "reason": "inactive"},
+            ),
+        )
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Account is inactive")
-    if not verify_password(password, user.password_hash):
-        login_failure(db, email=email, mode="basic", source="api", reason="invalid-password")
+    if not auth_service.verify_password(password, user.password_hash):
+        record_event(
+            db,
+            EventRecord(
+                event_type="user.login.failed",
+                entity_type="user",
+                entity_id=email,
+                actor_type="user",
+                actor_label=email,
+                source="api",
+                payload={"mode": "basic", "reason": "invalid-password"},
+            ),
+        )
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     ip_address, user_agent = _request_metadata(request)
-    now_iso = datetime.now(timezone.utc).isoformat()
-    user.last_login_at = now_iso
 
-    session_model, raw_token = sessions.issue_session(
+    session_model, raw_token = auth_service.complete_login(
         db,
-        user,
-        settings=settings,
-        ip_address=ip_address,
-        user_agent=user_agent,
-        commit=False,
-    )
-
-    login_success(
-        db,
+        settings,
         user,
         mode="basic",
         source="api",
-        payload={"ip": ip_address, "user_agent": user_agent},
-        commit=False,
+        ip_address=ip_address,
+        user_agent=user_agent,
     )
-
-    db.commit()
-    db.refresh(user)
-    db.refresh(session_model)
-    assert raw_token is not None  # for type checkers
     _set_session_cookie(response, settings, raw_token)
-    _set_request_context(
-        request,
-        user,
-        mode="session",
-        session_id=session_model.session_id,
-    )
     return _auth_response(user, settings, session_model=session_model)
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    openapi_extra={"security": []},
+)
 def logout(
     request: Request,
     response: Response,
-    current_user=Depends(dependencies.get_current_user),
+    identity: auth_service.AuthenticatedIdentity = Depends(
+        auth_service.get_authenticated_identity
+    ),
     db: Session = Depends(get_db),
 ) -> Response:
     settings = config.get_settings()
-    cookie_value = request.cookies.get(settings.session_cookie_name)
     ip_address, user_agent = _request_metadata(request)
 
-    if cookie_value:
-        session_model = sessions.get_session(db, cookie_value)
-        if session_model and session_model.user_id == current_user.user_id:
-            sessions.revoke_session(db, session_model, commit=True)
-            logout_event(
-                db,
-                current_user,
+    session_model = identity.session
+    if session_model is not None:
+        auth_service.revoke_session(db, session_model, commit=False)
+        record_event(
+            db,
+            EventRecord(
+                event_type="user.logout",
+                entity_type="user",
+                entity_id=identity.user.user_id,
+                actor_type="user",
+                actor_id=identity.user.user_id,
+                actor_label=identity.user.email,
                 source="api",
-                payload={"session_id": session_model.session_id, "ip": ip_address, "user_agent": user_agent},
-                commit=True,
-            )
+                payload={
+                    "session_id": session_model.session_id,
+                    "ip": ip_address,
+                    "user_agent": user_agent,
+                },
+            ),
+            commit=False,
+        )
+        db.commit()
     _clear_session_cookie(response, settings)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/session", response_model=AuthSessionResponse)
+@router.get(
+    "/session",
+    response_model=AuthSessionResponse,
+    openapi_extra={"security": []},
+)
 def session_status(
     request: Request,
     response: Response,
+    identity: auth_service.AuthenticatedIdentity = Depends(
+        auth_service.get_authenticated_identity
+    ),
     db: Session = Depends(get_db),
 ) -> AuthSessionResponse:
     settings = config.get_settings()
@@ -208,89 +237,65 @@ def session_status(
     if not cookie_value:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session cookie missing")
 
-    session_model = sessions.get_session(db, cookie_value)
+    session_model = identity.session
     if session_model is None:
         _clear_session_cookie(response, settings)
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session expired")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Session expired")
 
-    user = db.get(User, session_model.user_id)
-    if user is None or not user.is_active:
-        sessions.revoke_session(db, session_model, commit=True)
-        _clear_session_cookie(response, settings)
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session invalid")
-
-    ip_address, user_agent = _request_metadata(request)
-    refreshed = sessions.touch_session(
+    record_event(
         db,
-        session_model,
-        settings=settings,
-        ip_address=ip_address,
-        user_agent=user_agent,
-        commit=True,
+        EventRecord(
+            event_type="user.session.refreshed",
+            entity_type="user",
+            entity_id=identity.user.user_id,
+            actor_type="user",
+            actor_id=identity.user.user_id,
+            actor_label=identity.user.email,
+            source="api",
+            payload={"session_id": session_model.session_id},
+        ),
+        commit=False,
     )
-    if refreshed is None:
-        sessions.revoke_session(db, session_model, commit=True)
-        _clear_session_cookie(response, settings)
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session expired")
-
-    session_refreshed(
-        db,
-        user,
-        source="api",
-        payload={"session_id": refreshed.session_id},
-        commit=True,
-    )
+    db.commit()
     _set_session_cookie(response, settings, cookie_value)
-    _set_request_context(
-        request,
-        user,
-        mode="session",
-        session_id=refreshed.session_id,
-    )
-    return _auth_response(user, settings, session_model=refreshed)
+    return _auth_response(identity.user, settings, session_model=session_model)
 
 
-@router.get("/me", response_model=AuthSessionResponse)
+@router.get(
+    "/me",
+    response_model=AuthSessionResponse,
+    openapi_extra={"security": []},
+)
 def current_user_profile(
-    request: Request,
-    current_user=Depends(dependencies.get_current_user),
-    db: Session = Depends(get_db),
+    identity: auth_service.AuthenticatedIdentity = Depends(
+        auth_service.get_authenticated_identity
+    ),
 ) -> AuthSessionResponse:
     settings = config.get_settings()
-    session_model = None
-    cookie_value = request.cookies.get(settings.session_cookie_name)
-    if cookie_value:
-        candidate = sessions.get_session(db, cookie_value)
-        if candidate and candidate.user_id == current_user.user_id:
-            session_model = candidate
-    existing = getattr(request.state, "auth_context", None)
-    mode = "basic"
-    subject = None
-    if isinstance(existing, dict):
-        mode = existing.get("mode", mode)
-        subject = existing.get("subject")
-    _set_request_context(
-        request,
-        current_user,
-        mode=mode,
-        session_id=session_model.session_id if session_model else None,
-        subject=subject,
-    )
-    return _auth_response(current_user, settings, session_model=session_model)
+    return _auth_response(identity.user, settings, session_model=identity.session)
 
 
-@router.get("/sso/login", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
-def sso_login() -> Response:
+@router.get(
+    "/sso/login",
+    status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+    openapi_extra={"security": []},
+)
+def sso_login(
+) -> Response:
     settings = config.get_settings()
     if "sso" not in settings.auth_mode_sequence:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="SSO is not enabled")
-    location = sso.build_authorization_url(settings)
+    location = auth_service.build_authorization_url(settings)
     response = Response(status_code=status.HTTP_307_TEMPORARY_REDIRECT)
     response.headers["Location"] = location
     return response
 
 
-@router.get("/sso/callback", response_model=AuthSessionResponse)
+@router.get(
+    "/sso/callback",
+    response_model=AuthSessionResponse,
+    openapi_extra={"security": []},
+)
 def sso_callback(
     request: Request,
     response: Response,
@@ -302,42 +307,23 @@ def sso_callback(
     if "sso" not in settings.auth_mode_sequence:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="SSO is not enabled")
     try:
-        user, claims = sso.exchange_code(settings, code=code, state=state, db=db)
-    except SSOExchangeError as exc:
+        user, claims = auth_service.exchange_code(settings, code=code, state=state, db=db)
+    except auth_service.SSOExchangeError as exc:
         logger.warning("SSO code exchange failed", extra={"reason": str(exc)})
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     ip_address, user_agent = _request_metadata(request)
-    now_iso = datetime.now(timezone.utc).isoformat()
-    user.last_login_at = now_iso
-
-    session_model, raw_token = sessions.issue_session(
+    subject = claims.get("sub")
+    session_model, raw_token = auth_service.complete_login(
         db,
-        user,
-        settings=settings,
-        ip_address=ip_address,
-        user_agent=user_agent,
-        commit=False,
-    )
-
-    login_success(
-        db,
+        settings,
         user,
         mode="sso",
         source="api",
-        payload={"ip": ip_address, "user_agent": user_agent, "subject": claims.get("sub")},
-        commit=False,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        subject=subject,
+        include_subject=True,
     )
-    db.commit()
-    db.refresh(user)
-    db.refresh(session_model)
-    assert raw_token is not None
     _set_session_cookie(response, settings, raw_token)
-    _set_request_context(
-        request,
-        user,
-        mode="session",
-        session_id=session_model.session_id,
-        subject=claims.get("sub"),
-    )
     return _auth_response(user, settings, session_model=session_model)
