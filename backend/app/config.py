@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
@@ -56,6 +56,11 @@ class Settings(BaseSettings):
         default=3600,
         ge=1,
         description="Number of seconds to wait between automatic purge sweeps",
+    )
+    auth_disabled_override: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("AUTH_DISABLED", "ADE_AUTH_DISABLED"),
+        description="Disable authentication for local testing or health checks",
     )
     auth_modes: str = Field(
         default="basic",
@@ -154,6 +159,9 @@ class Settings(BaseSettings):
     def auth_mode_sequence(self) -> tuple[str, ...]:
         """Return configured authentication modes in declaration order."""
 
+        if self.auth_disabled_override:
+            return ("none",)
+
         modes: list[str] = []
         allowed = {"none", "basic", "sso"}
         for raw in self.auth_modes.split(","):
@@ -203,6 +211,12 @@ class Settings(BaseSettings):
             self.database_url = f"sqlite:///{default_sqlite}"
 
         return self
+
+    @property
+    def auth_disabled(self) -> bool:
+        """Return True when authentication checks are disabled."""
+
+        return self.auth_mode_sequence == ("none",)
 
 
 @lru_cache

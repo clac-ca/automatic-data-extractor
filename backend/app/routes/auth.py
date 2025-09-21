@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.security import HTTPBasicCredentials
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,7 @@ from ..schemas import AuthSessionResponse, SessionSummary, UserProfile
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+basic_auth = HTTPBasic(auto_error=False)
 
 
 def _request_metadata(request: Request) -> tuple[str | None, str | None]:
@@ -40,6 +41,20 @@ def _session_summary(session_model: UserSession | None) -> SessionSummary | None
     return SessionSummary(session_id=session_model.session_id, expires_at=session_model.expires_at)
 
 
+def _available_modes(settings: config.Settings) -> list[str]:
+    if settings.auth_disabled:
+        return ["none"]
+
+    configured = settings.auth_mode_sequence
+    modes: list[str] = []
+    if "basic" in configured:
+        modes.append("basic")
+    if "sso" in configured:
+        modes.append("sso")
+    modes.append("api-key")
+    return modes
+
+
 def _auth_response(
     user: User,
     settings: config.Settings,
@@ -48,7 +63,7 @@ def _auth_response(
 ) -> AuthSessionResponse:
     return AuthSessionResponse(
         user=_user_profile(user),
-        modes=list(settings.auth_mode_sequence),
+        modes=_available_modes(settings),
         session=_session_summary(session_model),
     )
 
@@ -98,22 +113,24 @@ def _set_request_context(
         request.state.auth_context["subject"] = subject
 
 
-@router.post("/login", response_model=AuthSessionResponse)
-def login(  # noqa: PLR0915 - clarity over cleverness
+@router.post(
+    "/login/basic",
+    response_model=AuthSessionResponse,
+    openapi_extra={"security": []},
+)
+def login_basic(  # noqa: PLR0915 - clarity over cleverness
     request: Request,
     response: Response,
+    credentials: HTTPBasicCredentials | None = Depends(basic_auth),
     db: Session = Depends(get_db),
 ) -> AuthSessionResponse:
     settings = config.get_settings()
-    modes = settings.auth_mode_sequence
-
-    if "basic" not in modes:
+    if "basic" not in settings.auth_mode_sequence:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
             detail="HTTP Basic authentication is not enabled",
         )
 
-    credentials: HTTPBasicCredentials | None = dependencies.extract_basic_credentials(request)
     if credentials is None:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
@@ -171,7 +188,11 @@ def login(  # noqa: PLR0915 - clarity over cleverness
     return _auth_response(user, settings, session_model=session_model)
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    openapi_extra={"security": []},
+)
 def logout(
     request: Request,
     response: Response,
@@ -197,7 +218,11 @@ def logout(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/session", response_model=AuthSessionResponse)
+@router.get(
+    "/session",
+    response_model=AuthSessionResponse,
+    openapi_extra={"security": []},
+)
 def session_status(
     request: Request,
     response: Response,
@@ -211,13 +236,13 @@ def session_status(
     session_model = sessions.get_session(db, cookie_value)
     if session_model is None:
         _clear_session_cookie(response, settings)
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session expired")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Session expired")
 
     user = db.get(User, session_model.user_id)
     if user is None or not user.is_active:
         sessions.revoke_session(db, session_model, commit=True)
         _clear_session_cookie(response, settings)
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session invalid")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Session invalid")
 
     ip_address, user_agent = _request_metadata(request)
     refreshed = sessions.touch_session(
@@ -231,7 +256,7 @@ def session_status(
     if refreshed is None:
         sessions.revoke_session(db, session_model, commit=True)
         _clear_session_cookie(response, settings)
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session expired")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Session expired")
 
     session_refreshed(
         db,
@@ -250,7 +275,11 @@ def session_status(
     return _auth_response(user, settings, session_model=refreshed)
 
 
-@router.get("/me", response_model=AuthSessionResponse)
+@router.get(
+    "/me",
+    response_model=AuthSessionResponse,
+    openapi_extra={"security": []},
+)
 def current_user_profile(
     request: Request,
     current_user=Depends(dependencies.get_current_user),
@@ -279,7 +308,11 @@ def current_user_profile(
     return _auth_response(current_user, settings, session_model=session_model)
 
 
-@router.get("/sso/login", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+@router.get(
+    "/sso/login",
+    status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+    openapi_extra={"security": []},
+)
 def sso_login() -> Response:
     settings = config.get_settings()
     if "sso" not in settings.auth_mode_sequence:
@@ -290,7 +323,11 @@ def sso_login() -> Response:
     return response
 
 
-@router.get("/sso/callback", response_model=AuthSessionResponse)
+@router.get(
+    "/sso/callback",
+    response_model=AuthSessionResponse,
+    openapi_extra={"security": []},
+)
 def sso_callback(
     request: Request,
     response: Response,

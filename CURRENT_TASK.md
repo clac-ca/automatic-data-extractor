@@ -1,60 +1,36 @@
-# 📋 AI Agent Prompt — Simplify Authentication (Native FastAPI, Best Practice)
+# ✅ Follow-up Task — Harden Authentication Coverage & Edge Cases
 
 ## Context
-This is a small internal app. We don’t want complicated auth chains or custom exporters.  
-We want to follow **standard, best-practice patterns** using **native FastAPI security features** only.
+The simplified authentication stack is now in place. Sessions, API keys, and SSO all share the same dependency, and routes expose
+clear OpenAPI metadata. Before we move on, we need stronger regression coverage that exercises the new control flow and makes sure
+we do not regress on critical edge cases (API-key clients, SSO-only tenants, and environments with auth disabled).
 
-## Requirements
+## Goals
+1. Cover the most important success paths with end-to-end tests so we can refactor safely.
+2. Lock down failure cases (bad credentials, revoked keys, expired SSO tokens) so we surface the intended HTTP statuses.
+3. Verify helper utilities (`api_keys.touch_api_key_usage`, `sessions.touch_session`) behave correctly when invoked through
+   real requests instead of direct unit calls.
 
-### Supported authentication
-- **Basic Auth** — simple username/password login for internal users.
-- **OAuth2 (Bearer tokens)** — for delegated access or SSO/OIDC logins.
-- **API Keys** — for programmatic clients, passed as `Authorization: Bearer <API_KEY>`.
+## Implementation guidelines
+- **API key flows**
+  - Add an integration test that hits `/auth/logout` while authenticated only via API key (should remain authorised because only
+    cookies are cleared).
+  - Assert that `touch_api_key_usage` updates `last_used_at` when a request is made with an API key.
+  - Add a negative test for a revoked API key (mark an existing key as revoked and ensure requests return 403).
+- **SSO regression checks**
+  - Extend the existing SSO callback test to assert that cached discovery/JWKS responses are respected and that repeated
+    callbacks reuse the cache without hitting the fake endpoints multiple times.
+  - Add a test that covers an SSO login for a user that is provisioned on the fly (`sso_auto_provision=True`) and confirm
+    sessions are issued correctly.
+  - Include a failure test for an unexpected nonce to guarantee the dependency raises a 400 with the correct detail.
+- **AUTH_DISABLED coverage**
+  - Add tests verifying that `/auth/login/basic` and `/auth/logout` respond with 404/200 appropriately when `AUTH_DISABLED` is
+    set, and that request-scoped auth context matches the synthetic admin user.
+- Keep new tests deterministic; use fixtures to clean the `Event` and `ApiKey` tables where required.
+- If any helper needs a minor tweak to surface observability (e.g. returning refreshed objects), keep the implementation simple
+  and update existing call sites.
 
-### Goals
-- **One verification path**: All requests check either a cookie session or a Bearer token.  
-  - Humans: login with Basic or OAuth2 → get a server-side session cookie.  
-  - Machines: use API key as a Bearer token.  
-- **No multi-step fallback chains** (don’t parse Basic or OAuth headers on every request).
-- **Minimal OpenAPI extension**: Let FastAPI generate docs, only add `securitySchemes` for:
-  - `basicAuth` (http: basic)
-  - `bearerAuth` (http: bearer for OAuth2 and API keys)
-  - optionally `cookieAuth` (apiKey in: cookie, name: `ade_session`)
-- **Errors**: Stick to native FastAPI (`HTTPException`, validation errors). Show examples in docs.
-- **Keep it async-native**: Use `async def` for I/O and wrap blocking calls with `run_in_threadpool`.
-
-### Implementation guidelines
-1. **Login flows**:  
-   - `POST /auth/login/basic` → verify Basic, create session, set cookie.  
-   - `GET /auth/sso/callback` → verify OAuth2 provider, create session, set cookie.  
-   - `POST /auth/logout` → clear cookie.  
-   - API keys are created once and stored hashed.
-
-2. **Per-request auth**:  
-   - Dependency `get_current_user()` does exactly one thing:  
-     - Extract session cookie OR Bearer token.  
-     - Verify against session store or API key table.  
-     - Return `UserIdentity` or raise `HTTPException`.
-
-3. **OpenAPI**:  
-   - Use `HTTPBasic`, `OAuth2PasswordBearer`, and `APIKeyHeader` directly.  
-   - Expose `/openapi.json` with these schemes.  
-   - Mark `/health` and `/auth/*` routes as public (`security=[]`).
-
-4. **Docs**:  
-   - Show how to login with Basic, OAuth2, and how to use API keys.  
-   - Provide cURL examples for each.  
-
-5. **Tests**:  
-   - 401 when no creds.  
-   - 403 when invalid API key/session.  
-   - 200 with valid session or API key.  
-   - `AUTH_DISABLED` bypasses auth.
-
-## Deliverable
-Refactor the codebase so ADE uses a **simple, idiomatic FastAPI auth setup**:  
-- Sessions for humans.  
-- API keys for machines.  
-- OAuth2 only at login.  
-- No per-request fallback chains.  
-- Minimal, clean OpenAPI schema.  
+## Definition of done
+- New or updated tests cover each of the scenarios above.
+- `pytest` passes without race conditions or flakiness.
+- No regressions to current behaviour (manual smoke test against `/auth/session` is optional but encouraged).
