@@ -174,14 +174,6 @@ def login_basic(  # noqa: PLR0915 - clarity over cleverness
         user_agent=user_agent,
     )
     _set_session_cookie(response, settings, raw_token)
-    auth_service.set_request_auth_context(
-        request,
-        auth_service.RequestAuthContext.from_user(
-            user,
-            mode="session",
-            session_id=session_model.session_id,
-        ),
-    )
     return _auth_response(user, settings, session_model=session_model)
 
 
@@ -333,13 +325,4 @@ def sso_callback(
         include_subject=True,
     )
     _set_session_cookie(response, settings, raw_token)
-    auth_service.set_request_auth_context(
-        request,
-        auth_service.RequestAuthContext.from_user(
-            user,
-            mode="session",
-            session_id=session_model.session_id,
-            subject=subject,
-        ),
-    )
     return _auth_response(user, settings, session_model=session_model)
