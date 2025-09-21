@@ -1,29 +1,25 @@
-# 🔄 Next Task — Reuse Auth Dependency State in Session & Profile Endpoints
+# 🔄 Next Task — Harden SSO State Token Verification
 
 ## Context
-The `get_current_user` dependency now relies on FastAPI security primitives and records the active session or API key on
-`request.state`. The session refresh (`/auth/session`), logout, and `/auth/me` endpoints still re-implement the same lookups and
-commit logic, issuing extra queries and diverging from the new code path. Aligning these routes with the dependency keeps the
-behaviour consistent and removes the duplicated cookie handling that the recent refactor eliminated.
+While aligning the auth routes with the shared dependency we observed the SSO callback tests occasionally fail with
+`Invalid state token signature`. The `_verify_state_token` helper currently splits the base64 payload with
+`decoded.rsplit(b".", 1)`, which breaks whenever the HMAC signature itself contains a dot byte. That makes the SSO login
+round-trip flaky and can reject legitimate callbacks.
 
 ## Goals
-1. Update `/auth/logout`, `/auth/session`, and `/auth/me` to consume `request.state.auth_session`, `request.state.api_key`, and
-   `request.state.auth_context` when present instead of re-querying sessions and users from scratch.
-2. Ensure session refreshes and revocations share the single database transaction established by the dependency (no
-   `get_sessionmaker()` round-trips inside the routes).
-3. Keep response payloads and audit events unchanged so the existing regression tests continue to pass.
-4. Verify the dependency still populates context for API-key-only requests so `/auth/logout` can remain a no-op for those
-   clients.
+1. Update the state token packing and `_verify_state_token` parsing so arbitrary HMAC bytes are handled without relying on
+   delimiter characters that may appear in the signature.
+2. Add a regression test that exercises a signature containing dot bytes to prove the fix and keep the behaviour stable.
+3. Keep the state token format backwards compatible for tokens minted before the change, or provide a short compatibility
+   shim so active login attempts are still honoured.
+4. Ensure the existing negative-path tests (unexpected nonce, expired state, etc.) still pass without code duplication.
 
 ## Implementation notes
-- Call `dependencies.get_current_user` once per request and rely on the state it sets; only fall back to manual lookups when
-  absolutely necessary (e.g. cookie missing).
-- Use `request.state.auth_session` to decide whether to refresh or revoke the session, and avoid redundant `sessions.get_session`
-  queries.
-- Preserve cookie clearing semantics and log events in the same circumstances as today.
-- Keep the code straightforward: prefer direct `if` checks and explicit commits over new abstractions.
+- Consider encoding the signature separately (e.g. base64) or prefixing lengths to avoid delimiter collisions.
+- Focus on clear, linear control flow—no new abstractions or generic helpers beyond what is needed for correctness.
+- Update or extend only the SSO-specific tests that cover this bug; avoid touching unrelated authentication flows.
 
 ## Definition of done
-- The auth routes no longer open ad-hoc database sessions or duplicate cookie parsing; they rely on the dependency’s state.
-- Regression tests in `backend/tests/test_auth.py` still succeed without behavioural changes.
-- No new dependencies or helper modules introduced.
+- SSO callbacks consistently succeed for valid states; the regression suite no longer flakes on `Invalid state token signature`.
+- New tests cover the previously failing scenario.
+- No new dependencies introduced.
