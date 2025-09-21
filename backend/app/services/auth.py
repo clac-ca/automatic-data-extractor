@@ -18,7 +18,7 @@ from threading import Lock
 from typing import Annotated, Any, Callable
 
 import httpx
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import (
     APIKeyCookie,
     APIKeyHeader,
@@ -528,9 +528,14 @@ async def _session_cookie_value(
     return None
 
 
-def require_session_cookie(
-    token: Annotated[str | None, Depends(_session_cookie_value)],
-) -> str:
+SessionCookieToken = Annotated[str | None, Depends(_session_cookie_value)]
+BearerCredentials = Annotated[
+    HTTPAuthorizationCredentials | None, Security(_bearer_scheme)
+]
+APIKeyHeaderToken = Annotated[str | None, Security(_api_key_header)]
+
+
+def require_session_cookie(token: SessionCookieToken) -> str:
     """Return the raw session cookie or raise ``401`` if it is missing."""
 
     if token is None:
@@ -539,17 +544,6 @@ def require_session_cookie(
             detail="Session cookie missing",
         )
     return token
-
-
-def _resolve_api_key_token(
-    bearer_credentials: HTTPAuthorizationCredentials | None,
-    header_token: str | None,
-) -> str | None:
-    if bearer_credentials and bearer_credentials.credentials:
-        return bearer_credentials.credentials
-    if header_token:
-        return header_token
-    return None
 
 
 def require_basic_auth_user(
@@ -639,89 +633,161 @@ class AuthenticatedIdentity:
     subject: str | None = None
 
 
-def get_authenticated_identity(
+@dataclass(slots=True)
+class CredentialResolution:
+    """Outcome of attempting to resolve a credential."""
+
+    identity: AuthenticatedIdentity | None = None
+    provided: bool = False
+    error_detail: str | None = None
+
+
+def _invalidate_session_token(db: Session, token: str) -> None:
+    token_hash = hash_session_token(token)
+    orphan = (
+        db.query(UserSession)
+        .filter(UserSession.token_hash == token_hash)
+        .one_or_none()
+    )
+    if orphan is not None and orphan.revoked_at is None:
+        revoke_session(db, orphan)
+
+
+def _resolve_session_identity_with_db(
+    db: Session,
+    *,
     request: Request,
-    db: Session = Depends(get_db),
-    settings: config.Settings = Depends(config.get_settings),
-    session_token: str | None = Depends(_session_cookie_value),
-    bearer_credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
-    header_token: str | None = Depends(_api_key_header),
-) -> AuthenticatedIdentity:
-    if settings.auth_disabled:
-        return AuthenticatedIdentity(user=_OPEN_ACCESS_USER, mode="none")
-
+    token: str,
+    settings: config.Settings,
+) -> CredentialResolution:
     ip_address, user_agent = _client_context(request)
-    api_key_token = _resolve_api_key_token(bearer_credentials, header_token)
+    session_model = get_session(db, token)
+    if session_model is None:
+        _invalidate_session_token(db, token)
+        return CredentialResolution(provided=True, error_detail="Invalid session token")
 
-    if session_token:
-        session_model = get_session(db, session_token)
-        mutated = False
-        if session_model:
-            user = db.get(User, session_model.user_id)
-            if user and user.is_active:
-                refreshed = touch_session(
-                    db,
-                    session_model,
-                    settings=settings,
-                    ip_address=ip_address,
-                    user_agent=user_agent,
-                    commit=False,
-                )
-                if refreshed is not None:
-                    db.commit()
-                    return AuthenticatedIdentity(
-                        user=user,
-                        mode="session",
-                        session=refreshed,
-                        session_id=refreshed.session_id,
-                        subject=user.sso_subject,
-                    )
-            revoke_session(db, session_model, commit=False)
-            mutated = True
-        else:
-            token_hash = hash_session_token(session_token)
-            orphan = (
-                db.query(UserSession)
-                .filter(UserSession.token_hash == token_hash)
-                .one_or_none()
-            )
-            if orphan is not None:
-                revoke_session(db, orphan, commit=False)
-                mutated = True
+    user = db.get(User, session_model.user_id)
+    if user is None or not user.is_active:
+        revoke_session(db, session_model)
+        return CredentialResolution(provided=True, error_detail="Invalid session token")
 
-        if mutated:
-            db.commit()
-        else:
-            db.rollback()
+    refreshed = touch_session(
+        db,
+        session_model,
+        settings=settings,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+    if refreshed is None:
+        revoke_session(db, session_model)
+        return CredentialResolution(provided=True, error_detail="Invalid session token")
 
-        if api_key_token is None:
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                detail="Invalid session token",
-            )
+    return CredentialResolution(
+        identity=AuthenticatedIdentity(
+            user=user,
+            mode="session",
+            session=refreshed,
+            session_id=refreshed.session_id,
+            subject=user.sso_subject,
+        ),
+        provided=True,
+    )
 
-    if api_key_token is not None:
-        api_key = get_api_key(db, api_key_token)
-        if api_key is None:
-            db.rollback()
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Invalid API key")
 
-        user = db.get(User, api_key.user_id)
-        if user is None or not user.is_active:
-            db.rollback()
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Invalid API key")
+def resolve_session_identity(
+    request: Request,
+    token: SessionCookieToken,
+    settings: config.Settings = Depends(config.get_settings),
+) -> CredentialResolution:
+    if settings.auth_disabled:
+        return CredentialResolution()
+    if token is None:
+        return CredentialResolution()
 
-        updated_api_key = touch_api_key_usage(db, api_key, commit=False)
-        db.commit()
-        return AuthenticatedIdentity(
+    session_factory = get_sessionmaker()
+    with session_factory() as database:
+        return _resolve_session_identity_with_db(
+            database,
+            request=request,
+            token=token,
+            settings=settings,
+        )
+
+
+def _resolve_api_key_identity_with_db(
+    db: Session,
+    *,
+    token: str,
+    settings: config.Settings,
+) -> CredentialResolution:
+    api_key = get_api_key(db, token)
+    if api_key is None:
+        return CredentialResolution(provided=True, error_detail="Invalid API key")
+
+    user = db.get(User, api_key.user_id)
+    if user is None or not user.is_active:
+        return CredentialResolution(provided=True, error_detail="Invalid API key")
+
+    updated_api_key = touch_api_key_usage(db, api_key)
+    return CredentialResolution(
+        identity=AuthenticatedIdentity(
             user=user,
             mode="api-key",
             api_key=updated_api_key,
             api_key_id=updated_api_key.api_key_id,
             subject=user.sso_subject,
+        ),
+        provided=True,
+    )
+
+
+def resolve_api_key_identity(
+    bearer_credentials: BearerCredentials,
+    header_token: APIKeyHeaderToken,
+    settings: config.Settings = Depends(config.get_settings),
+) -> CredentialResolution:
+    if settings.auth_disabled:
+        return CredentialResolution()
+
+    token: str | None = None
+    if bearer_credentials and bearer_credentials.credentials:
+        token = bearer_credentials.credentials
+    elif header_token:
+        token = header_token
+    if token is None:
+        return CredentialResolution()
+
+    session_factory = get_sessionmaker()
+    with session_factory() as database:
+        return _resolve_api_key_identity_with_db(
+            database,
+            token=token,
+            settings=settings,
         )
 
-    db.rollback()
+
+def get_authenticated_identity(
+    settings: config.Settings = Depends(config.get_settings),
+    session_result: CredentialResolution = Depends(resolve_session_identity),
+    api_key_result: CredentialResolution = Depends(resolve_api_key_identity),
+) -> AuthenticatedIdentity:
+    if settings.auth_disabled:
+        return AuthenticatedIdentity(user=_OPEN_ACCESS_USER, mode="none")
+
+    if session_result.identity is not None:
+        return session_result.identity
+
+    if api_key_result.identity is not None:
+        return api_key_result.identity
+
+    if api_key_result.provided:
+        detail = api_key_result.error_detail or "Invalid API key"
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=detail)
+
+    if session_result.provided:
+        detail = session_result.error_detail or "Invalid session token"
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=detail)
+
     raise HTTPException(
         status.HTTP_401_UNAUTHORIZED,
         detail="Authentication required",
@@ -730,21 +796,8 @@ def get_authenticated_identity(
 
 
 def get_current_user(
-    request: Request,
-    db: Session = Depends(get_db),
-    settings: config.Settings = Depends(config.get_settings),
-    session_token: str | None = Depends(_session_cookie_value),
-    bearer_credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
-    header_token: str | None = Depends(_api_key_header),
+    identity: AuthenticatedIdentity = Depends(get_authenticated_identity),
 ) -> User:
-    identity = get_authenticated_identity(
-        request,
-        db=db,
-        settings=settings,
-        session_token=session_token,
-        bearer_credentials=bearer_credentials,
-        header_token=header_token,
-    )
     return identity.user
 
 
@@ -1686,6 +1739,7 @@ def main(argv: list[str] | None = None) -> int:
 __all__ = [
     "AdminUser",
     "AuthenticatedIdentity",
+    "CredentialResolution",
     "CurrentUser",
     "OIDCMetadata",
     "SSOConfigurationError",
@@ -1706,6 +1760,8 @@ __all__ = [
     "register_cli",
     "require_basic_auth_user",
     "require_admin",
+    "resolve_api_key_identity",
+    "resolve_session_identity",
     "revoke_api_key",
     "revoke_session",
     "touch_api_key_usage",
