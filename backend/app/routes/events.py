@@ -7,7 +7,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from ..services.auth import get_current_user
+from ..services import auth as auth_service
 from ..db import get_db
 from ..models import Event
 from ..schemas import (
@@ -32,7 +32,8 @@ from ..services.jobs import JobNotFoundError, get_job as get_job_service
 router = APIRouter(
     prefix="/events",
     tags=["events"],
-    dependencies=[Depends(get_current_user)],
+    # Authentication runs once per request so handlers can use the cached identity when needed.
+    dependencies=[Depends(auth_service.get_authenticated_identity)],
 )
 
 
