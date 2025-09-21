@@ -1,14 +1,14 @@
-# 🔄 Next Task — Simplify get_authenticated_identity transaction handling
+# 🔄 Next Task — Inject settings dependency into auth routes
 
 ## Context
-With credential resolution now fully inlined, `get_authenticated_identity` still carries `pending_commit` bookkeeping and defers raising session errors until after API key checks. This state machine is a holdover from the old helper and can be replaced with straightforward control flow that finalises database mutations immediately.
+Auth route handlers still reach for `config.get_settings()` inside each function, hiding their configuration dependency and repeating boilerplate. FastAPI can supply the settings object directly via dependency injection, letting the framework manage overrides and reducing manual calls.
 
 ## Goals
-1. Finalise session revocation (or rollbacks) inline so the dependency no longer tracks `pending_commit` state.
-2. Raise session errors immediately when no API key token is provided, while still allowing an API key to rescue a failed session attempt when present.
-3. Preserve the lazy commit semantics for session revocation and API key usage updates, and extend tests to cover the mixed-credential path (invalid session + valid API key).
+1. Accept `settings: config.Settings = Depends(config.get_settings)` in each auth route instead of calling `config.get_settings()` manually.
+2. Update helper usage so settings come from the injected object without re-fetching inside helper calls.
+3. Keep behaviour and response shapes unchanged while ensuring tests cover the updated dependency wiring.
 
 ## Definition of done
-- `get_authenticated_identity` no longer relies on `pending_commit` or deferred exceptions.
-- Tests cover both failure-only and mixed credential flows directly through the dependency.
-- `pytest backend/tests/test_auth.py` passes.
+- Every handler in `backend/app/routes/auth.py` relies on an injected settings dependency.
+- Tests continue to pass with the new dependency signatures.
+- `pytest backend/tests/test_auth.py` succeeds.
