@@ -5,8 +5,6 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import config
@@ -18,7 +16,6 @@ from ..schemas import AuthSessionResponse, SessionSummary, UserProfile
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-basic_auth = HTTPBasic(auto_error=False)
 
 
 def _request_metadata(request: Request) -> tuple[str | None, str | None]:
@@ -64,11 +61,6 @@ def _auth_response(
     )
 
 
-def _get_user_by_email(db: Session, email: str) -> User | None:
-    statement = select(User).where(User.email == email)
-    return db.execute(statement).scalar_one_or_none()
-
-
 def _set_session_cookie(response: Response, settings: config.Settings, token: str) -> None:
     response.set_cookie(
         key=settings.session_cookie_name,
@@ -95,73 +87,13 @@ def _clear_session_cookie(response: Response, settings: config.Settings) -> None
     response_model=AuthSessionResponse,
     openapi_extra={"security": []},
 )
-def login_basic(  # noqa: PLR0915 - clarity over cleverness
+def login_basic(
     request: Request,
     response: Response,
-    credentials: HTTPBasicCredentials | None = Depends(basic_auth),
+    user: User = Depends(auth_service.require_basic_auth_user),
     db: Session = Depends(get_db),
 ) -> AuthSessionResponse:
     settings = config.get_settings()
-    if "basic" not in settings.auth_mode_sequence:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            detail="HTTP Basic authentication is not enabled",
-        )
-
-    if credentials is None:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            detail="HTTP Basic credentials required",
-            headers={"WWW-Authenticate": 'Basic realm="ADE"'},
-        )
-
-    email = credentials.username.strip().lower()
-    password = credentials.password or ""
-
-    user = _get_user_by_email(db, email)
-    if user is None or not user.password_hash:
-        record_event(
-            db,
-            EventRecord(
-                event_type="user.login.failed",
-                entity_type="user",
-                entity_id=email,
-                actor_type="user",
-                actor_label=email,
-                source="api",
-                payload={"mode": "basic", "reason": "unknown-user"},
-            ),
-        )
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    if not user.is_active:
-        record_event(
-            db,
-            EventRecord(
-                event_type="user.login.failed",
-                entity_type="user",
-                entity_id=email,
-                actor_type="user",
-                actor_label=email,
-                source="api",
-                payload={"mode": "basic", "reason": "inactive"},
-            ),
-        )
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Account is inactive")
-    if not auth_service.verify_password(password, user.password_hash):
-        record_event(
-            db,
-            EventRecord(
-                event_type="user.login.failed",
-                entity_type="user",
-                entity_id=email,
-                actor_type="user",
-                actor_label=email,
-                source="api",
-                payload={"mode": "basic", "reason": "invalid-password"},
-            ),
-        )
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-
     ip_address, user_agent = _request_metadata(request)
 
     session_model, raw_token = auth_service.complete_login(

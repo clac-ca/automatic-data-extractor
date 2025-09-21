@@ -23,6 +23,8 @@ from fastapi.security import (
     APIKeyCookie,
     APIKeyHeader,
     HTTPAuthorizationCredentials,
+    HTTPBasic,
+    HTTPBasicCredentials,
     HTTPBearer,
 )
 from sqlalchemy import select
@@ -366,8 +368,10 @@ def complete_login(
 # FastAPI dependencies
 # ---------------------------------------------------------------------------
 
+_BASIC_WWW_AUTH_HEADER = 'Basic realm="ADE"'
 _WWW_AUTH_HEADER = 'Bearer realm="ADE"'
 
+_basic_scheme = HTTPBasic(auto_error=False)
 _bearer_scheme = HTTPBearer(auto_error=False)
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -409,6 +413,80 @@ def _resolve_api_key_token(
     if header_token:
         return header_token
     return None
+
+
+def require_basic_auth_user(
+    credentials: HTTPBasicCredentials | None = Depends(_basic_scheme),
+    db: Session = Depends(get_db),
+    settings: config.Settings = Depends(config.get_settings),
+) -> User:
+    """Return the active user represented by HTTP Basic credentials."""
+
+    if "basic" not in settings.auth_mode_sequence:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail="HTTP Basic authentication is not enabled",
+        )
+
+    if credentials is None:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail="HTTP Basic credentials required",
+            headers={"WWW-Authenticate": _BASIC_WWW_AUTH_HEADER},
+        )
+
+    email = credentials.username.strip().lower()
+    password = credentials.password or ""
+
+    statement = select(User).where(User.email == email)
+    user = db.execute(statement).scalar_one_or_none()
+
+    if user is None or not user.password_hash:
+        record_event(
+            db,
+            EventRecord(
+                event_type="user.login.failed",
+                entity_type="user",
+                entity_id=email,
+                actor_type="user",
+                actor_label=email,
+                source="api",
+                payload={"mode": "basic", "reason": "unknown-user"},
+            ),
+        )
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if not user.is_active:
+        record_event(
+            db,
+            EventRecord(
+                event_type="user.login.failed",
+                entity_type="user",
+                entity_id=email,
+                actor_type="user",
+                actor_label=email,
+                source="api",
+                payload={"mode": "basic", "reason": "inactive"},
+            ),
+        )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Account is inactive")
+
+    if not verify_password(password, user.password_hash):
+        record_event(
+            db,
+            EventRecord(
+                event_type="user.login.failed",
+                entity_type="user",
+                entity_id=email,
+                actor_type="user",
+                actor_label=email,
+                source="api",
+                payload={"mode": "basic", "reason": "invalid-password"},
+            ),
+        )
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    return user
 
 
 @dataclass(slots=True)
@@ -1345,6 +1423,7 @@ __all__ = [
     "issue_session",
     "main",
     "register_cli",
+    "require_basic_auth_user",
     "require_admin",
     "revoke_session",
     "touch_api_key_usage",
