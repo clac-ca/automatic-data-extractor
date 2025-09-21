@@ -11,7 +11,6 @@ requires-python = ">=3.11"
 authors = [{ name = "ADE Team" }]
 
 # Runtime deps — pinned for reproducible builds
-[project]
 dependencies = [
   "fastapi==0.117.0",
   "uvicorn[standard]==0.36.0",
