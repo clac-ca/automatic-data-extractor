@@ -40,8 +40,8 @@ Great products feel inevitable. This document distils ADE’s product truths, ar
 
 ```
 Workspace (tenant)
-└── Document Type
-    └── Configuration (versioned; one active)
+└── Document Type (stable container for configurations)
+    └── Configuration (versioned; one active at a time)
         └── Column (metadata + callable scripts)
             ├── Detection callable (required)
             ├── Validation callable (optional)
@@ -50,10 +50,11 @@ Workspace (tenant)
 ```
 
 **State vocabulary**
-- Document Type: Draft → Active → Archived.
-- Configuration: Draft → Under Review → Active → Retired.
+- Configuration: Draft → Published → Active → Retired.
 - Column: Ready → Needs Attention (missing callable, failing tests, deprecated).
 - Run: Queued → Running → Validating → Complete / Failed.
+
+Document types themselves do **not** have a lifecycle—they are logical containers. Use configuration-level flags (e.g., `needsApproval`, `awaitingSamples`) alongside the state machine above when governance cues are required without inventing extra states.
 
 **UI cues**
 - Breadcrumbs show the hierarchy explicitly (`Workspace / Invoice / Config v3 / Column: Due Date`).
@@ -67,12 +68,12 @@ Workspace (tenant)
 Each stage below lists the ideal user experience **and** the implementation hooks required to realise it.
 
 ### 2.1 Login & trust handshake
-- **Experience**: Minimal SSO/magic-link pane, secondary panel cycling through “How ADE works” cards, microcopy promising a five-minute first win.
-- **Implementation**: Reuse backend auth endpoints; prefetch workspace summary post-login to personalise the home zero state.
+- **Experience**: Minimal SSO/magic-link pane that routes directly into a focused onboarding checklist. Reserve the “How ADE works” narrative for an optional help link so first-use isn’t cluttered.
+- **Implementation**: Reuse backend auth endpoints; prefetch workspace summary post-login so the checklist can render instantly with contextual first task (“Create your first configuration”).
 
 ### 2.2 Home zero state
-- **Experience**: Personalized checklist (“Create document type”, “Upload sample”, “Invite teammate”) with progress tracking; command palette tutorial triggered by `?`.
-- **Implementation**: `GET /workspace/summary` powers checklist; local storage records dismissed tips; analytics log first checklist completion.
+- **Experience**: Checklist-driven guidance spelling out the core loop (“Create type → Add configuration → Upload → Run”). Optional tips stay collapsed until the user asks for them; the command palette tutorial triggers via `?` only after the first task is complete.
+- **Implementation**: `GET /workspace/summary` powers checklist state; local storage records dismissed tips; analytics logs first checklist completion for onboarding health.
 
 ### 2.3 Create first document type
 - **Experience**: Three-step wizard (**Basics → Column blueprint → Review**) that feels lightweight yet guides schema creation.
@@ -84,18 +85,18 @@ Each stage below lists the ideal user experience **and** the implementation hook
 
 ### 2.5 Build first configuration
 - **Experience**: Draft workspace opens with seeded columns, inline education about detection/validation/transformation, autosave reassurance.
-- **Implementation**: Monaco editor loaded lazily; autosave throttled (5s) to PATCH draft endpoint; change log component tracks field-level diffs.
+- **Implementation**: Monaco editor loaded lazily; autosave throttled (5s) to PATCH draft endpoint; surface a lightweight “unsaved changes” summary instead of full change logs (defer granular history to later releases).
 
 ### 2.6 Column scripting & testing
 - **Experience**: Selecting column opens right rail with Monaco editors, optional panels collapsed by default, universal **Test callable** button (⌘↵) running against selected sample docs.
-- **Implementation**: Run tests via `POST /configurations/{id}/test` with payload identifying callable type + sample document ID; streaming output displayed in log panel; persist last three runs per column in local store.
+- **Implementation**: Run tests via `POST /configurations/{id}/test` with payload identifying callable type + sample document ID; streaming output displayed in log panel. Callables are owned per column and snapshotted when the configuration is published, so persist only the last successful run plus the current run per column (keep broader history on the backlog).
 
 ### 2.7 Pre-activation validation
-- **Experience**: “Review readiness” card summarises missing callables, failing tests, schema conflicts; once resolved, “Activate configuration” reveals diff vs. current active version.
-- **Implementation**: Frontend validator mirrors backend constraints; activation modal fetches diff data (added/changed/removed columns, script diffs) and prevents promotion if backend fails preflight.
+- **Experience**: “Review readiness” card summarises missing callables, failing tests, schema conflicts; once resolved, “Publish configuration” reveals diff vs. current active version with schema diff surfaced first.
+- **Implementation**: Frontend validator mirrors backend constraints; publish/activate modal always fetches schema and callable diffs and prevents promotion if backend fails preflight or flags (e.g., `needsApproval`) remain unresolved.
 
 ### 2.8 Upload & run
-- **Experience**: Upload console defaults to active config, optional toggle to compare up to three configs with colour-coded pills; resilient queue with per-file statuses.
+- **Experience**: Upload console defaults to the latest published configuration, with a simple toggle to add the active config or other published versions (max three total) using colour-coded pills; resilient queue with per-file statuses.
 - **Implementation**: Drag-and-drop component with resumable uploads; multi-select limited by schema compatibility; WebSocket channel streams run updates; refresh resilience via run ID stored in URL params.
 
 ### 2.9 Review results & iterate
@@ -121,8 +122,8 @@ Each stage below lists the ideal user experience **and** the implementation hook
 | --- | --- | --- | --- |
 | **Home** | Understand status, finish onboarding, jump back into recent work | Checklist, recent activity, spotlight metrics, “What’s new” card | Empty workspace, partial onboarding, active runs |
 | **Document Type Library** | Browse, search, and manage document types | Data grid with owner/tag filters, inline quick actions | Empty, filtered-no-results, bulk select |
-| **Document Type Detail** | Monitor health, inspect lineage, manage configs & samples | Overview hero, tabs (Overview/Configurations/Activity/Samples), metadata rail | Draft vs. Active, missing samples, failing health |
-| **Configuration Workspace** | Author, test, and prepare versions | Header with breadcrumbs + status chips, column grid, right rail editors, change log drawer | Draft, Under Review, conflicting schema, collaborative editing |
+| **Document Type Detail** | Monitor health, inspect lineage, manage configs & samples | Overview hero, tabs (Overview/Configurations/Activity/Samples), metadata rail | Highlight latest active config, outstanding drafts, missing samples, failing health |
+| **Configuration Workspace** | Author, test, and prepare versions | Header with breadcrumbs + status chips, column grid, right rail editors, lightweight change summary | Draft, Published awaiting activation, flagged (needsApproval), collaborative editing |
 | **Upload & Run Console** | Queue documents, select configs, watch progress | Upload dropzone, run summary cards, configuration multi-select, live log panel | Idle, uploading, paused network, failed run |
 | **Results & Comparison Center** | Validate outputs, compare versions, take action | Column diff matrix, table viewer, validation issue stack, CTA row (promote, rerun, annotate) | No diff, validation failures, schema mismatch |
 
@@ -136,12 +137,12 @@ Each surface should ship with documented empty/loading/error states and instrume
 ### 3.2 Document type library & detail
 - **Library grid**: Column headers (Name, Owner, Last Run, Active Config, Health). Quick actions appear on hover (Open, Duplicate, Archive).
 - **Filtering**: Saved views for owner/team; tag chips support multi-select AND/OR logic.
-- **Detail page**: Sticky header with type metadata and CTA; tab content loads lazily; activity timeline groups events by day with inline diffs for activations.
+- **Detail page**: Sticky header with type metadata and CTA; tab content loads lazily; activity timeline groups events by day with inline diffs for publishes/activations.
 - **Implementation**: Grid virtualization for 100+ types; detail tabs share cached config data; activity timeline consumes audit log endpoint with pagination.
 
 ### 3.3 Configuration workspace deep layout
-- **Header**: Breadcrumbs, status chip, autosave indicator, primary actions (Test entire configuration, Review readiness, Activate when eligible).
-- **Canvas**: Column grid occupying central area; right rail toggled for script editing; change log drawer slides from right below editors to avoid occluding code.
+- **Header**: Breadcrumbs, status chip, autosave indicator, primary actions (Test entire configuration, Review readiness, Publish/Activate when eligible).
+- **Canvas**: Column grid occupying central area; right rail toggled for script editing; lightweight change summary panel sits below editors (full history and diff viewer reserved for later iterations).
 - **Focus management**: Keyboard navigation highlights row + opens right rail; command palette exposes “Jump to validation errors”.
 - **Implementation**: Column grid built on accessible table semantics; right rail is resizable; autosave status derived from mutation promises.
 
@@ -160,7 +161,7 @@ Each surface should ship with documented empty/loading/error states and instrume
 ### 3.6 North-star user narratives
 - **First-time success**: New configuration engineer guided from zero state to first activated configuration within one session, with checklists updating in real time and contextual docs at every step.
 - **Operational triage**: Reviewer receives alert about validation failures, jumps directly to affected run, filters diff matrix to failing columns, and exports annotated report for stakeholders in <5 minutes.
-- **Continuous improvement**: Ops lead explores analytics on comparison frequency, reviews change log insights, and schedules targeted regression runs, all within a cohesive dashboard experience.
+- **Continuous improvement**: Ops lead explores analytics on comparison frequency, reviews publish diff insights, and schedules targeted regression runs, all within a cohesive dashboard experience.
 
 ---
 
@@ -177,28 +178,29 @@ Each surface should ship with documented empty/loading/error states and instrume
 
 **Selection model**
 - Column grid supports keyboard navigation, multi-select for bulk actions (duplicate, mark optional, reorder via drag handles).
+- Callables are scoped per column and snapshotted at publish—there’s no shared callable library to manage in the workspace.
 
 **Right rail structure**
 1. Column summary (description, data type, nullability, tags).
 2. Detection editor (required) with linting + snippet gallery.
 3. Validation panel (optional) collapsed but surfaced when failing tests.
 4. Transformation panel (optional) with preview toggle.
-5. Inline test history with ability to pin “golden” outputs for quick comparison.
+5. Inline test panel surfaces the current run alongside the last successful result (pinning full histories is deferred).
 
 **Test callable experience**
 - Single button chooses callable scope based on focused panel; advanced dropdown for “Run detection+transformation pipeline”.
 - Test execution overlay shows spinner with expected duration; results include stdout, structured return value, and line-highlighted errors.
-- Last successful output persists to guide future edits; ability to revert to last active callable via change log.
+- Last successful output persists to guide future edits; offer quick compare vs. the last published callable snapshot (full change log comes later).
 
 **Implementation hooks**
 - Monaco configured with Python language server, inline diagnostics from backend lint endpoint.
-- Code diff viewer for pending vs. active scripts to aid review before activation.
+- Publish modal provides the authoritative script/schema diff; inline editor simply references “Last published” for context to keep the workspace lean.
 - Local cache of unsaved edits to handle offline/resume scenarios.
 
 **Edge-case choreography**
 - Empty script slots show “Start with template” shortcuts seeded from common detection/validation scenarios.
 - When backend linting fails, surface actionable message with link to docs and highlight offending lines; do not dismiss until user confirms understanding.
-- Guard against simultaneous edits by prompting users to pull latest changes; merge panel visualizes conflicting sections.
+- Guard against simultaneous edits by prompting users to pull latest changes; advanced merge tooling can wait for future releases.
 - Offer AI-assisted snippet generator (future) with explicit review checklist to keep accountability clear.
 
 ---
@@ -206,7 +208,7 @@ Each surface should ship with documented empty/loading/error states and instrume
 ## 6. Multi-configuration selection & comparison mechanics
 
 **Selection guardrails**
-- Default to active configuration; optional “Compare additional configurations” toggle reveals searchable list limited to three selections.
+- Default to the latest published configuration (which is often the active one); optional “Compare additional configurations” toggle reveals searchable list limited to three selections.
 - Disabled options show tooltip reason (schema mismatch, retired, already selected).
 
 **Visual language**
@@ -215,17 +217,17 @@ Each surface should ship with documented empty/loading/error states and instrume
 **Comparison view**
 - Matrix rows = output columns; columns = configurations.
 - Cell states: identical (neutral), value diff (highlight), validation failure (warning), missing data (striped placeholder).
-- Side-by-side script diff available for columns with changed callables.
+- Side-by-side script diff references published snapshots for columns with changed callables.
 
 **Implementation**
 - React Query query composes `GET /runs/{id}/comparison` data; virtualization ensures performance for 100+ columns.
 - Diff calculations handled in web worker to keep UI responsive.
-- Promote/revert actions check backend gating (only Draft/Under Review configs promotable).
+- Promote/activate actions check backend gating (only Draft or Published configs promotable).
 
 **Scenarios to design for**
 - **Quick sanity check**: Analyst runs active vs. draft configuration; diff view defaults to “Show changes only”.
-- **Regression hunt**: Ops lead selects three historical versions; timeline view overlays run metrics (accuracy, completion time).
-- **Schema divergence**: If columns mismatch, matrix groups columns by shared keys and surfaces missing ones separately with guidance to align schemas.
+- **Schema verification**: Publish modal already surfaces schema diff; comparison view reinforces column-level mismatches with grouped callouts.
+- **Backlog**: Timeline overlays, regression hunt analytics, and deeper run metrics are explicitly deferred until the core workflow feels effortless.
 
 **Interaction guardrails**
 - Persist comparison selections in URL so recipients land in identical view.
@@ -237,7 +239,7 @@ Each surface should ship with documented empty/loading/error states and instrume
 ## 7. Upload & run execution flow
 
 1. **Queue documents** – Drag-and-drop with file type validation, manual select fallback, inline metadata editing (tags, notes).
-2. **Choose configurations** – Active config preselected; multi-select as above; warning banner if mixing versions with incompatible schemas.
+2. **Choose configurations** – Latest published config preselected; multi-select as above; warning banner if mixing versions with incompatible schemas.
 3. **Run summary** – Card summarizing configs chosen, expected duration, last run status.
 4. **Progress tracking** – Timeline reflecting backend state machine; live logs collapsible; per-file cards show detection/validation progression.
 5. **Completion** – Toast linking to results/comparison; queue retains run history for quick reruns.
@@ -261,7 +263,7 @@ Each surface should ship with documented empty/loading/error states and instrume
 
 ## 8. Interaction patterns & micro-interactions
 
-- **Autosave & undo**: Draft changes autosave every 5 s (debounced) and on blur; change log offers per-field undo and snapshot restore.
+- **Autosave & undo**: Draft changes autosave every 5 s (debounced) and on blur; provide quick undo to the last autosave or last published snapshot (full per-field history is future scope).
 - **Guided discovery**: Contextual coach marks retire after two dismissals; help icon opens side-panel docs instead of new tab to maintain focus.
 - **Keyboard coverage**: Tab order mirrors visual layout; grid navigation with arrows/home/end; command palette exposes high-value actions (“Create configuration”, “Test callable”).
 - **Empty & loading states**: Skeleton placeholders maintain structure; friendly illustrations lighten zero-data screens; instructive copy clarifies next action.
@@ -273,7 +275,7 @@ Each surface should ship with documented empty/loading/error states and instrume
 ## 9. Accessibility, responsiveness, and performance commitments
 
 - **WCAG 2.1 AA**: 4.5:1 contrast, focus outlines, skip links, ARIA roles for grids/editors, accessible command palette fallback (Ctrl+/).
-- **Assistive support**: Screen readers announce column position within grids; editors expose lint errors via ARIA live regions; voice-over friendly tooltips.
+- **Assistive support**: Screen readers announce column position within grids; editors expose lint errors via ARIA live regions; voice-over friendly tooltips. Validate Monaco focus management and screen reader hints with early usability passes because this is a known risk area.
 - **Responsive design**: Down to 1024 px tablets and 768 px mobile; tables pivot to card stacks with disclosure drawers; sticky action bars keep primary controls reachable.
 - **Performance**: Code-split Monaco, diff views, and comparison matrix; prefetch configuration metadata on hover; throttle WebSocket log rendering; use IntersectionObserver to lazily load heavy panels.
 
@@ -285,6 +287,10 @@ Each surface should ship with documented empty/loading/error states and instrume
 - React + TypeScript + Vite (Next.js optional if SSR/SEO required).
 - React Router for routing, React Query for server state, Zustand or XState for complex local flows (wizard, comparison selection).
 - Monaco editor for Python callables with custom workers for linting and completion.
+
+**Backbone first**
+- Prioritise Configuration grid + right rail editing, inline callable testing, and the comparison workbench before investing in activity feeds, presence, or advanced analytics.
+- Keep change-tracking simple in MVP—lean on publish snapshots and schema diff modals rather than bespoke history systems.
 
 **Suggested directory structure**
 ```
@@ -322,7 +328,7 @@ frontend/
 
 **State management contracts**
 - Wizard/coach-mark flows handled via state machines to avoid ad-hoc boolean flags.
-- Local draft state separated from server snapshots; merge conflicts resolved through change log diffing.
+- Local draft state separated from server snapshots; when conflicts arise prompt users to reload or duplicate—full diffing can wait for future tooling.
 - Comparison selections stored in URL query params for shareable states.
 
 **Documentation & governance**
@@ -353,8 +359,8 @@ frontend/
    - Build library grid, creation wizard (Basics → Columns → Review), and detail overview.
    - Implement React Query caches and activity feed stubs.
 3. **Configuration workspace**
-   - Column grid + right rail skeleton; integrate Monaco; autosave + change log; inline test plumbing.
-   - Deliver validation readiness checker and activation modal.
+   - Column grid + right rail skeleton; integrate Monaco; autosave + lightweight change summary; inline test plumbing.
+   - Deliver validation readiness checker and publish/activate modal with required schema diff.
 4. **Upload & run console**
    - Drag-and-drop uploads, resumable queue, configuration multi-select, WebSocket progress timeline.
 5. **Results & comparison center**
@@ -379,7 +385,7 @@ Each milestone should include UX reviews, accessibility validation, analytics in
 
 ## 12. Quality, security, and support scaffolding
 
-- **Instrumentation**: Track onboarding completion, test callable usage, activation approvals, comparison diffs resolved, rerun frequency.
+- **Instrumentation**: Start with time-to-first-run, test callable usage, and publish/activation success rate. Layer in comparison diffs resolved and rerun frequency once the core loop proves stable.
 - **Security**: Enforce role-based access on edit vs. view actions; scrub sensitive payloads from client-side logs; use secure storage for auth tokens.
 - **Error handling**: Inline stack traces trimmed and linked to docs; results view offers “Rerun with previous active configuration” fallback.
 - **Support**: Floating help beacon exposes contextual docs, keyboard cheat sheet, and support contact; AI assistant surfaces code hints within editors.
