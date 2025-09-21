@@ -664,23 +664,53 @@ def _resolve_api_key_token(
     return None
 
 
-def _set_request_context(
-    request: Request,
-    user: User,
-    mode: str,
-    *,
-    session_id: str | None = None,
-    api_key_id: str | None = None,
-) -> None:
-    request.state.auth_context = {
-        "user_id": user.user_id,
-        "email": user.email,
-        "mode": mode,
-    }
-    if session_id is not None:
-        request.state.auth_context["session_id"] = session_id
-    if api_key_id is not None:
-        request.state.auth_context["api_key_id"] = api_key_id
+@dataclass(slots=True)
+class RequestAuthContext:
+    """Lightweight container for request-level authentication metadata."""
+
+    user_id: str
+    email: str
+    mode: str
+    session_id: str | None = None
+    api_key_id: str | None = None
+    subject: str | None = None
+
+    def to_dict(self) -> dict[str, str]:
+        payload: dict[str, str] = {
+            "user_id": self.user_id,
+            "email": self.email,
+            "mode": self.mode,
+        }
+        if self.session_id is not None:
+            payload["session_id"] = self.session_id
+        if self.api_key_id is not None:
+            payload["api_key_id"] = self.api_key_id
+        if self.subject is not None:
+            payload["subject"] = self.subject
+        return payload
+
+    @classmethod
+    def from_user(
+        cls,
+        user: User,
+        mode: str,
+        *,
+        session_id: str | None = None,
+        api_key_id: str | None = None,
+        subject: str | None = None,
+    ) -> "RequestAuthContext":
+        return cls(
+            user_id=user.user_id,
+            email=user.email,
+            mode=mode,
+            session_id=session_id,
+            api_key_id=api_key_id,
+            subject=subject,
+        )
+
+
+def set_request_auth_context(request: Request, context: RequestAuthContext) -> None:
+    request.state.auth_context = context.to_dict()
 
 
 def get_current_user(
@@ -692,7 +722,10 @@ def get_current_user(
     header_token: str | None = Depends(_api_key_header),
 ) -> User:
     if settings.auth_disabled:
-        _set_request_context(request, _OPEN_ACCESS_USER, "none")
+        set_request_auth_context(
+            request,
+            RequestAuthContext.from_user(_OPEN_ACCESS_USER, "none"),
+        )
         return _OPEN_ACCESS_USER
 
     ip_address, user_agent = _client_context(request)
@@ -711,30 +744,23 @@ def get_current_user(
         mode = resolution.mode
         if mode is None:
             raise RuntimeError("Resolved authenticated user without an auth mode")
+        session_id: str | None = None
+        api_key_id: str | None = None
         if mode == "session":
             if resolution.session is not None:
                 request.state.auth_session = resolution.session
-                _set_request_context(
-                    request,
-                    resolution.user,
-                    mode,
-                    session_id=resolution.session.session_id,
-                )
-            else:
-                _set_request_context(request, resolution.user, mode)
+                session_id = resolution.session.session_id
         elif mode == "api-key":
             if resolution.api_key is not None:
                 request.state.api_key = resolution.api_key
-                _set_request_context(
-                    request,
-                    resolution.user,
-                    mode,
-                    api_key_id=resolution.api_key.api_key_id,
-                )
-            else:
-                _set_request_context(request, resolution.user, mode)
-        else:
-            _set_request_context(request, resolution.user, mode)
+                api_key_id = resolution.api_key.api_key_id
+        context = RequestAuthContext.from_user(
+            resolution.user,
+            mode,
+            session_id=session_id,
+            api_key_id=api_key_id,
+        )
+        set_request_auth_context(request, context)
         return resolution.user
 
     failure = resolution.failure

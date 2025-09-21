@@ -90,25 +90,6 @@ def _clear_session_cookie(response: Response, settings: config.Settings) -> None
     )
 
 
-def _set_request_context(
-    request: Request,
-    user: User,
-    *,
-    mode: str,
-    session_id: str | None = None,
-    subject: str | None = None,
-) -> None:
-    request.state.auth_context = {
-        "user_id": user.user_id,
-        "email": user.email,
-        "mode": mode,
-    }
-    if session_id is not None:
-        request.state.auth_context["session_id"] = session_id
-    if subject is not None:
-        request.state.auth_context["subject"] = subject
-
-
 @router.post(
     "/login/basic",
     response_model=AuthSessionResponse,
@@ -160,11 +141,13 @@ def login_basic(  # noqa: PLR0915 - clarity over cleverness
         user_agent=user_agent,
     )
     _set_session_cookie(response, settings, raw_token)
-    _set_request_context(
+    auth_service.set_request_auth_context(
         request,
-        user,
-        mode="session",
-        session_id=session_model.session_id,
+        auth_service.RequestAuthContext.from_user(
+            user,
+            mode="session",
+            session_id=session_model.session_id,
+        ),
     )
     return _auth_response(user, settings, session_model=session_model)
 
@@ -259,12 +242,14 @@ def current_user_profile(
             mode = "api-key"
         else:
             mode = "basic"
-    _set_request_context(
+    auth_service.set_request_auth_context(
         request,
-        current_user,
-        mode=mode,
-        session_id=session_model.session_id if session_model else None,
-        subject=subject,
+        auth_service.RequestAuthContext.from_user(
+            current_user,
+            mode=mode,
+            session_id=session_model.session_id if session_model else None,
+            subject=subject,
+        ),
     )
     return _auth_response(current_user, settings, session_model=session_model)
 
@@ -306,6 +291,7 @@ def sso_callback(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     ip_address, user_agent = _request_metadata(request)
+    subject = claims.get("sub")
     session_model, raw_token = auth_service.complete_login(
         db,
         settings,
@@ -314,15 +300,17 @@ def sso_callback(
         source="api",
         ip_address=ip_address,
         user_agent=user_agent,
-        subject=claims.get("sub"),
+        subject=subject,
         include_subject=True,
     )
     _set_session_cookie(response, settings, raw_token)
-    _set_request_context(
+    auth_service.set_request_auth_context(
         request,
-        user,
-        mode="session",
-        session_id=session_model.session_id,
-        subject=claims.get("sub"),
+        auth_service.RequestAuthContext.from_user(
+            user,
+            mode="session",
+            session_id=session_model.session_id,
+            subject=subject,
+        ),
     )
     return _auth_response(user, settings, session_model=session_model)

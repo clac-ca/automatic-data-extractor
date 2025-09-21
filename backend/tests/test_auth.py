@@ -667,22 +667,13 @@ def test_open_access_mode_disables_auth(app_client_factory, tmp_path, monkeypatc
         client.auth = None
         captured: dict[str, object] = {}
 
-        original = auth_service._set_request_context
+        original = auth_service.set_request_auth_context
 
-        def capture_context(request, user, mode, *, session_id=None, api_key_id=None):
-            captured["user"] = user
-            captured["mode"] = mode
-            captured["session_id"] = session_id
-            captured["api_key_id"] = api_key_id
-            return original(
-                request,
-                user,
-                mode,
-                session_id=session_id,
-                api_key_id=api_key_id,
-            )
+        def capture_context(request, context):
+            captured["context"] = context
+            return original(request, context)
 
-        monkeypatch.setattr(auth_service, "_set_request_context", capture_context)
+        monkeypatch.setattr(auth_service, "set_request_auth_context", capture_context)
 
         login = client.post("/auth/login/basic")
         assert login.status_code == 404
@@ -690,10 +681,13 @@ def test_open_access_mode_disables_auth(app_client_factory, tmp_path, monkeypatc
         documents = client.get("/documents")
         assert documents.status_code == 200
 
-        assert captured["user"].email == "open-access@ade.local"
-        assert captured["mode"] == "none"
-        assert captured["session_id"] is None
-        assert captured["api_key_id"] is None
+        assert "context" in captured
+        context = captured["context"]
+        assert isinstance(context, auth_service.RequestAuthContext)
+        assert context.email == "open-access@ade.local"
+        assert context.mode == "none"
+        assert context.session_id is None
+        assert context.api_key_id is None
 
         profile = client.get("/auth/me")
         assert profile.status_code == 200
