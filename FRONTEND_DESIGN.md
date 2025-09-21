@@ -60,7 +60,7 @@ Document types are logical containers without lifecycle. Governance metadata liv
 
 ---
 
-## 4. Layout framework
+## 4. Layout architecture
 
 ### 4.1 Application shell
 - **Navigation** – Persistent left rail with sections: *Document Types*, *Runs*, *Settings*. Collapse to an overlay drawer ≤1024 px while keeping top-level links available inside the drawer header.
@@ -68,50 +68,57 @@ Document types are logical containers without lifecycle. Governance metadata liv
 - **Content frame** – Page header (title, status chip, primary actions) followed by a body region organized with CSS grid. Default max width 1440 px with 32 px gutters; the grid snaps to an 8 px baseline to keep spacing predictable.
 - **Feedback** – Toast stack anchored to the top-right corner of the content frame. Long-running actions surface inline progress rows aligned with the element that triggered them.
 
-### 4.2 Layout primitives & styling
+### 4.2 Layout primitives & tokens
 - Core layout primitives (`Stack`, `Columns`, `Sidebar`, `Card`) live in `frontend/src/components/primitives/` and only express flex/grid behavior plus spacing hooks.
 - Primitives consume CSS variables exported from `frontend/src/styles/tokens.ts`. Tokens cover color, spacing, radius, typography, elevation, and focus rings. Choosing accessible color pairs now keeps dark mode viable later without extra work.
 - Route-specific styles live alongside the page component using CSS modules. We avoid global overrides and utility soup to keep styles predictable.
 
+### 4.3 Route skeleton
+
+```
+/document-types                 # Library overview
+/document-types/:id             # Governance view for a document type
+/configurations/:id             # Column editing workspace
+/runs/new                       # Upload & run console
+/runs/:id                       # Run results & comparison
+```
+
+Nested routes share the shell so navigation and feedback remain consistent.
+
 ---
 
-## 5. Primary product surfaces
+## 5. Core product surfaces
 
 Each surface description covers layout, essential interactions, and implementation notes so we can estimate work and backend contracts confidently.
 
-### 5.1 Document type library
-- **Purpose** – Give operations and engineers a fast way to size work and open the relevant configuration.
+### 5.1 Document type library (`/document-types`)
 - **Layout** – Page header with title, status filter chips, and primary action “Create document type”. Body renders a dense table showing document type name, active configuration label, draft count, latest run status summary, and attention badge column.
 - **Core interactions** – Row click routes to detail view. Inline actions limited to “Open active configuration” and “Create new draft” to avoid accidental promotions.
 - **Data contract** – `GET /document-types` returns document type metadata, counts of draft/published configurations, last run summary (status, finishedAt), and boolean `hasAttentionItems`.
 - **Implementation notes** – Table uses TanStack Table with server-driven pagination. Empty/error states are deterministic and documented in Storybook. Badges and filter chips reuse Radix primitives for accessibility.
 
-### 5.2 Document type detail
-- **Purpose** – Provide the governance view: understand what is deployed, what is in flight, and what requires review.
+### 5.2 Document type detail (`/document-types/:id`)
 - **Layout** – Two-pane composition. Left rail lists configurations (name, status chip, last updated, owner). Right pane shows summary of the selected configuration with sections for readiness score, outstanding issues, recent runs, and contextual actions.
 - **Core interactions** – Create configuration (modal with name + optional copy-from source), promote published configuration to active, open configuration workspace in a new route.
 - **Data contract** – `GET /document-types/:id` returns document type metadata, ordered configurations with promotion eligibility flags, aggregated readiness score, outstanding issues count, and last three runs.
 - **Implementation notes** – Promotion flow uses Radix `AlertDialog` with explicit copy describing downstream impact. We refresh the configuration list after mutations resolve instead of optimistic updates so ordering stays deterministic.
 
-### 5.3 Configuration workspace
-- **Purpose** – Allow configuration engineers to edit column logic, validate behavior, and monitor column health in one surface.
+### 5.3 Configuration workspace (`/configurations/:id`)
 - **Layout** – Three-column grid on desktop, stacking into two sections on smaller widths:
-  1. **Column list** – Compact list with readiness filter chips (All, Ready, Needs attention) and iconography for script presence.
+  1. **Column list** – Compact list with readiness filter chips (All, Ready, Needs Attention) and iconography for script presence.
   2. **Editor canvas** – Tabbed Monaco editor for detection/validation/transformation scripts. Test output panel expands directly under the active tab.
   3. **Inspector rail** – Metadata (description, field type, optional/required toggle, sample values). History view can be added later once API support exists.
 - **Core interactions** – Edit scripts with explicit “Save draft” action, execute column tests, publish configuration, inspect recent validation errors.
 - **Data contract** – `GET /configurations/:id` returns column list with readiness indicators, script bodies, validation errors, and metadata. `POST /configurations/:id/columns/:columnId/test` returns structured logs, sample output, and pass/fail boolean.
 - **Implementation notes** – Save actions dispatch React Query mutations with undo-friendly error handling; dirty state feeds the shell indicator. Monaco integrates via `@monaco-editor/react` with a thin wrapper for language mode, formatting, and `onRunTest` callback.
 
-### 5.4 Upload & run console
-- **Purpose** – Provide a straightforward path to submit documents to a configuration and understand execution progress at a glance.
+### 5.4 Upload & run console (`/runs/new`)
 - **Layout** – Split view. Left pane contains drag-and-drop area with queued files table (filename, size, validation status). Right pane contains run setup form (configuration multi-select, run name, notes) and a progress timeline that appears after submission.
 - **Core interactions** – Add/remove files, start a run, observe live progress, retry failed documents individually.
 - **Data contract** – `POST /runs` accepts metadata and file handles, responding with run ID. `GET /runs/:id` returns summary status, timeline events, and per-document outcomes. `/runs/:id/stream` (SSE) emits incremental updates keyed by document ID.
 - **Implementation notes** – Use `react-dropzone` for accessible drag-and-drop. Uploads rely on multi-part `FormData` via native `fetch`; chunking and resumable uploads are deferred. Progress timeline entries use Radix `Accordion` for optional log expansion, and SSE events hydrate React Query caches with derived status for each file.
 
-### 5.5 Run results & comparison
-- **Purpose** – Let reviewers validate run accuracy, compare against a baseline, and escalate issues without leaving the page.
+### 5.5 Run results & comparison (`/runs/:id`)
 - **Layout** – Page header summarizing status, duration, triggering user, and primary action “Mark as reviewed”. Body contains tabs: **Results** (paged table of extracted rows) and **Diff** (side-by-side comparison with baseline configuration).
 - **Core interactions** – Toggle tabs, filter/sort results, export CSV, mark run as reviewed, and deep-link to the configuration workspace for problematic columns.
 - **Data contract** – `GET /runs/:id/results` supports pagination, column metadata, validation flags, and CSV export URL. `GET /runs/:id/diff` returns baseline run metadata plus column-level diffs and severity.
@@ -119,9 +126,9 @@ Each surface description covers layout, essential interactions, and implementati
 
 ---
 
-## 6. Interaction patterns & component layering
+## 6. Component architecture & interaction patterns
 
-- **Component structure** – Domain screens live under `frontend/src/features/<domain>/pages`. Shared widgets sit in `frontend/src/components/`. Hooks encapsulating data fetching or mutations live in `frontend/src/features/<domain>/hooks`. This separation keeps presentation and data concerns testable in isolation.
+- **File organization** – Domain screens live under `frontend/src/features/<domain>/pages`. Shared widgets sit in `frontend/src/components/`. Hooks encapsulating data fetching or mutations live in `frontend/src/features/<domain>/hooks`. This separation keeps presentation and data concerns testable in isolation.
 - **Forms** – React Hook Form + Zod handle validation. Inputs surface inline errors on blur or submit. Submit buttons stay disabled while pending and re-enable on error with retry guidance.
 - **Tables & lists** – TanStack Table powers sorting/filtering. A shared `DataTable` wrapper owns skeleton, empty, and error states so every table has consistent affordances.
 - **Script editing** – A dedicated `ScriptEditor` component wraps Monaco, providing language mode switching, lint annotations, formatting, and the `onRunTest` handler. Height expands to show test output without reflowing surrounding columns.
@@ -153,53 +160,25 @@ We intentionally avoid full design-system frameworks to keep styling predictable
 
 ---
 
-## 8. Data & state management
+## 8. Data flow & state management
 
-- **HTTP client** – Typed wrapper around `fetch` with AbortController support in `frontend/src/lib/apiClient.ts`. The same module exposes helpers for SSE consumption that translate events into React Query cache updates.
+- **HTTP client** – Typed wrapper around `fetch` with `AbortController` support lives in `frontend/src/lib/apiClient.ts`. The same module exposes helpers for SSE consumption that translate events into React Query cache updates.
+- **Route loaders** – React Router loaders fetch primary data for each page, streamlining skeleton states and letting error boundaries surface API issues without extra code.
 - **Query keys** – Use explicit tuples (`['workspace', workspaceId, 'documentTypes']`) so invalidation stays precise. Mutations return typed payloads that update caches via `queryClient.setQueryData` when feasible.
+- **Error handling** – Loader errors route to descriptive boundaries; in-component mutations map server validation errors to field-level messages. Toasts reinforce blocking issues.
 - **Data shaping** – Backend responses should already be normalized; frontend selectors derive computed summaries (e.g., readiness score) instead of mutating cached objects in place.
-- **Optimistic updates** – Restrict to low-risk fields (names, descriptions). Promotions, publish actions, and uploads wait for backend confirmation before altering UI state.
-- **Error handling** – Route-level error boundaries expose retry actions. Global fatal errors surface in a support panel with linkable context for operations.
-- **Local persistence** – Store only display preferences (column visibility, collapsed sections) in `localStorage` via typed helpers; business data stays server-backed.
+- **Streaming updates** – SSE endpoints feed a `useEventStream` helper that batches updates to avoid thrashing renders while keeping progress indicators responsive.
 
 ---
 
-## 9. Pre-build alignment checkpoints
+## 9. Implementation checkpoints
 
-1. **API contracts** – Backend confirms payload shape for document types, configurations, columns, runs, diff responses, and SSE message schema before hooks are generated.
-2. **Fixtures** – Anonymized JSON fixtures cover empty, loading, and failure states. Storybook stories rely on MSW handlers to exercise edge cases without manual setup.
-3. **Design tokens** – Finalize color palette, typography scale, spacing tokens, and focus outlines before component build-out to avoid rework.
-4. **Testing hooks** – Backend exposes stable identifiers (IDs, data attributes) so Playwright tests and React Testing Library selectors remain deterministic.
-5. **Environment parity** – Local `.env` mirrors staging domains and feature flags, keeping React Query cache keys and CORS expectations consistent.
+To keep delivery predictable, start with shared scaffolding and add vertical slices in this order:
 
----
-
-## 10. Implementation path (v1 focus)
-
-1. **Foundation**
-   - Scaffold Vite + React + Router + React Query with Vitest, Storybook (with MSW), and Playwright wired into CI.
-   - Build application shell (navigation, top bar, toast system) and implement design tokens/layout primitives.
-   - Establish primitives (Stack, Columns, Sidebar, Card) and shared table wrapper.
-2. **Document type views**
-   - Implement library table with filters and creation modal, including Storybook coverage for empty/error states.
-   - Deliver detail view with configuration rail, summary panel, and promotion flow.
-3. **Configuration workspace**
-   - Ship column list, Monaco editor tabs, inspector rail, explicit save workflow, and inline testing with API responses mocked via MSW.
-   - Add publish/promote flows with confirmation dialogs once save/test paths are stable.
-4. **Run management & results**
-   - Build upload console with `react-dropzone` queue, run setup form, and SSE-driven progress timeline.
-   - Implement results/diff view with paged table, CSV export, and deep links back to the workspace.
-
-Each milestone includes accessibility review and regression tests before handoff.
-
----
-
-## 11. Explicitly out of scope for v1
-
-- Onboarding tours, contextual walkthroughs, marketing pages.
-- Global search or command palette.
-- Real-time collaboration, presence indicators, annotations, or comments.
-- Mobile portrait layouts.
-- Advanced analytics dashboards or bespoke visualizations.
-
-Keep this document current as we learn from users. Clear rationale prevents churn and keeps engineering, design, and AI agents aligned while we deliver ADE’s core UI.
+1. Establish design tokens, layout primitives, and Storybook stories for the shell.
+2. Build the application shell and navigation, backed by mocked loaders.
+3. Implement the `DataTable` wrapper and document type library with MSW fixtures.
+4. Layer in the configuration detail flows (document type detail + configuration workspace) with React Query hooks.
+5. Add the upload console and SSE plumbing, validating concurrency and retry behaviors with mocked endpoints.
+6. Deliver the run results surface, ensuring table filters, diff visuals, and CSV export interactions are test-covered.
+7. Harden through Playwright smoke tests covering save/publish, upload/run, and review flows before shipping.
