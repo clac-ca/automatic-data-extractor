@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 authors = [{ name = "ADE Team" }]
 
 # Runtime deps — pinned for reproducible builds
+[project]
 dependencies = [
   "fastapi==0.117.0",
   "uvicorn[standard]==0.36.0",
@@ -20,8 +21,8 @@ dependencies = [
   "pydantic-settings==2.10.1",
   "python-multipart==0.0.20",
   "httpx==0.28.1",
-  # 2025-09-20 (JK): Replace ulid-py with the actively maintained python-ulid:
-  "python-ulid[pydantic]==3.1.0"
+  "python-ulid[pydantic]==3.1.0",
+  "pyjwt[crypto]==2.10.1"  # NEW: JWT/JWKS verification
 ]
 
 [project.optional-dependencies]
