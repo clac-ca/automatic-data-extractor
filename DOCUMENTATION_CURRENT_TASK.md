@@ -1,47 +1,39 @@
-# Documentation Plan — Simplified Structure & API Key Readiness
+# Documentation Plan — API key provisioning workflows
 
 ## Goal
-
-Produce a clear, durable documentation foundation for ADE. Visualize the architecture and prepare teams for API key rollout, while also simplifying the documentation structure so it is intuitive and easy to navigate.
+Equip operators with clear guidance for issuing, revoking, and auditing API keys through the new admin endpoints while reinforcing secure token handling and event visibility.
 
 ## Deliverables (execute in order)
 
-1. **Streamline folder structure**
+1. **Author the API key management guide**
 
-   * Minimize the number of subfolders; avoid deep nesting unless truly necessary.
-   * Group related docs by audience and purpose (e.g., `docs/architecture/`, `docs/user/`, `docs/admin/`).
-   * Eliminate redundant folders (`docs/foundation/` vs `docs/core/`, etc.)—choose the simplest path that “just makes sense.”
+   * Create `docs/security/api-key-management.md` describing the lifecycle (creation, storage expectations, revocation) and include HTTP request/response samples plus curl snippets.
+   * Highlight how the raw token is returned once and how to store it securely.
+   * Document the events emitted for creation and revocation so audit teams know what to monitor.
 
-2. **Publish the core architecture diagram**
+2. **Update navigation and references**
 
-   * Export the system overview diagram to `docs/architecture/system-overview.png`.
-   * Reference it from `docs/architecture/system-overview.md`.
-   * Provide an accessibility-friendly text alternative in the same document.
+   * Link the new guide from `docs/security/README.md` with a short summary.
+   * Surface the guide in `docs/README.md` under the security/operations sections so automation owners can find it quickly.
 
-3. **Metadata & ownership**
+3. **Call out operational safeguards**
 
-   * Each asset entry in `docs/README.md` should list its source, last validation date, and owning maintainer.
-   * Avoid scattering metadata across multiple README files—consolidate where possible.
-
-4. **Simplify supporting material**
-
-   * Include only what’s essential for understanding workflows, security, and API key upgrades.
-   * Use examples (tables, screenshots, CLI snippets) inline with explanations instead of sprawling into multiple files.
+   * Note in the operations runbook index (`docs/operations/README.md`) that API key rotation guidance now lives in the security section.
+   * Add TODO placeholders for future UI-based key management once designs land.
 
 ## Out of scope
 
-* Automated diagram generation.
-* Backend authentication code changes.
-* Extended runbooks beyond configuration, storage, security, and API key setup.
+* Building UI affordances for API key management.
+* Revisiting authentication mode documentation beyond references needed for the new guide.
 
 ## Source material
 
-* Existing `system-overview.md` summary.
-* UI prototypes or live screenshots for configuration workflows.
-* Security docs for session handling and API key requirements.
+* Newly added API endpoints and Pydantic schemas.
+* Existing authentication mode documentation and event log references.
+* Backend service helpers for API keys in `backend/app/services/auth.py`.
 
 ## Definition of done
 
-* Navigation is clean and shallow (1–2 levels max).
-* New docs include metadata, clear explanations, and inline examples.
-* Assets reference validation dates and owners centrally.
+* Security docs explain how to create, revoke, and audit API keys using the API.
+* Repository navigation points to the new guide from security and operations sections.
+* Follow-up TODOs capture UI work without leaving gaps in the interim guidance.
