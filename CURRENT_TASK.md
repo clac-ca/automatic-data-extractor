@@ -1,19 +1,19 @@
-# 🔄 Next Task — Drop Request State Mirrors for Session and API Key Models
+# 🔄 Next Task — Remove RequestAuthContext Request State Storage
 
 ## Context
-`AuthenticatedIdentity` now exposes the resolved session and API key models directly to route dependencies. The authentication service still mirrors those ORM objects onto `request.state.auth_session` and `request.state.api_key`, but no runtime code reads those attributes. Keeping the redundant copies increases mutation on the request object without providing value.
+`AuthenticatedIdentity` already carries the authenticated user, session, API key, and a `RequestAuthContext` instance for downstream dependencies. The service still writes that context onto `request.state.auth_context_model`, and the login routes call `set_request_auth_context` to keep it in sync. No production code reads from `request.state`, so the extra mutation path increases indirection without providing value.
 
 ## Goals
-1. Stop writing `request.state.auth_session` and `request.state.api_key` inside `get_authenticated_identity`.
-2. Update tests to reference the `AuthenticatedIdentity` payload instead of the removed request state attributes.
-3. Confirm there are no remaining call sites that rely on the request state mirrors.
+1. Remove the `set_request_auth_context` and `get_request_auth_context` helpers that read or write `request.state.auth_context_model`.
+2. Update authentication dependencies and routes to rely on the `AuthenticatedIdentity` payload instead of request state for context propagation.
+3. Simplify tests to assert against the dependency return values rather than request state mutation.
 
 ## Implementation notes
-- Search the codebase for `auth_session` and `request.state.api_key` reads before removing the writes.
-- If downstream code needs the session or API key, document how to access it from `AuthenticatedIdentity`.
-- Maintain the existing behaviour for anonymous/open-access requests.
+- Search for `set_request_auth_context` and `get_request_auth_context` usage before deleting the helpers.
+- Update the login flows and open-access mode to surface the refreshed context through return values or response payloads.
+- Ensure any documentation that references `request.state.auth_context_model` is updated or removed.
 
 ## Definition of done
-- `get_authenticated_identity` no longer mutates `request.state` with session or API key objects.
-- Tests only assert against `AuthenticatedIdentity` for session/API key access.
+- No code writes to or reads from `request.state.auth_context_model` during authentication.
+- `AuthenticatedIdentity` remains the single source of truth for the resolved user, session, API key, and context data.
 - `pytest backend/tests/test_auth.py` passes.

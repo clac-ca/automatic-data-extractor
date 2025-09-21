@@ -628,11 +628,9 @@ def get_authenticated_identity(
         if mode == "session" and resolution.session is not None:
             session_model = resolution.session
             session_id = session_model.session_id
-            request.state.auth_session = session_model
         elif mode == "api-key" and resolution.api_key is not None:
             api_key_model = resolution.api_key
             api_key_id = api_key_model.api_key_id
-            request.state.api_key = api_key_model
 
         existing_context = get_request_auth_context(request)
         subject: str | None = None
