@@ -1054,58 +1054,6 @@ def verify_bearer_token(
     return user, claims
 
 
-# ---------------------------------------------------------------------------
-# CLI utilities
-# ---------------------------------------------------------------------------
-
-
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Manage ADE user accounts.")
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    def _add_operator_argument(command: argparse.ArgumentParser) -> None:
-        command.add_argument(
-            "--operator-email",
-            help="Email address recorded as the actor for emitted events",
-        )
-
-    create = subparsers.add_parser("create-user", help="Create a new ADE user")
-    create.add_argument("email", help="Email address of the user")
-    create.add_argument("--password", help="Password for HTTP Basic authentication")
-    create.add_argument(
-        "--role",
-        choices=[role.value for role in UserRole],
-        default=UserRole.VIEWER.value,
-        help="Role assigned to the user",
-    )
-    create.add_argument("--sso-provider", help="OIDC provider identifier")
-    create.add_argument("--sso-subject", help="OIDC subject identifier")
-    create.add_argument("--inactive", action="store_true", help="Create the account in a disabled state")
-
-    _add_operator_argument(create)
-
-    reset = subparsers.add_parser("reset-password", help="Set a new password for an existing user")
-    reset.add_argument("email", help="Email address of the user")
-    reset.add_argument("--password", required=True, help="New password value")
-
-    _add_operator_argument(reset)
-
-    deactivate = subparsers.add_parser("deactivate", help="Deactivate a user account")
-    deactivate.add_argument("email", help="Email address of the user")
-
-    _add_operator_argument(deactivate)
-
-    promote = subparsers.add_parser("promote", help="Grant administrator privileges to a user")
-    promote.add_argument("email", help="Email address of the user")
-
-    _add_operator_argument(promote)
-
-    list_users = subparsers.add_parser("list-users", help="Display all user accounts")
-    list_users.add_argument("--show-inactive", action="store_true", help="Include deactivated accounts")
-
-    return parser
-
-
 def _ensure_schema() -> None:
     ensure_schema()
 
@@ -1282,29 +1230,99 @@ def _with_session(func: Callable[[Session, config.Settings, argparse.Namespace],
         func(db, settings, args)
 
 
-def main(argv: list[str] | None = None) -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    parser = _build_parser()
-    args = parser.parse_args(argv)
-
-    try:
+def _cli_runner(
+    func: Callable[[Session, config.Settings, argparse.Namespace], None]
+) -> Callable[[argparse.Namespace], int]:
+    def _wrapped(args: argparse.Namespace) -> int:
         _ensure_schema()
-        command_map: dict[str, Callable[[Session, config.Settings, argparse.Namespace], None]] = {
-            "create-user": _create_user,
-            "reset-password": _reset_password,
-            "deactivate": _deactivate_user,
-            "promote": _promote_user,
-            "list-users": _list_users,
-        }
-        handler = command_map[args.command]
-        _with_session(handler, args)
+        _with_session(func, args)
         return 0
-    except ValueError as exc:
-        logger.error(str(exc))
-        return 1
-    except Exception:  # pragma: no cover - defensive logging
-        logger.exception("User management command failed")
-        return 1
+
+    return _wrapped
+
+
+def register_cli(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Register authentication commands on the shared ADE CLI."""
+
+    auth_parser = subparsers.add_parser(
+        "auth",
+        help="Manage ADE user accounts and authentication settings",
+        description="Utilities for user creation, password resets, and account maintenance.",
+    )
+    auth_commands = auth_parser.add_subparsers(dest="command", required=True)
+
+    def _add_operator_argument(command: argparse.ArgumentParser) -> None:
+        command.add_argument(
+            "--operator-email",
+            help="Email address recorded as the actor for emitted events",
+        )
+
+    def _bind(
+        command: argparse.ArgumentParser,
+        func: Callable[[Session, config.Settings, argparse.Namespace], None],
+    ) -> None:
+        command.set_defaults(handler=_cli_runner(func))
+
+    create = auth_commands.add_parser("create-user", help="Create a new ADE user")
+    create.add_argument("email", help="Email address of the user")
+    create.add_argument("--password", help="Password for HTTP Basic authentication")
+    create.add_argument(
+        "--role",
+        choices=[role.value for role in UserRole],
+        default=UserRole.VIEWER.value,
+        help="Role assigned to the user",
+    )
+    create.add_argument("--sso-provider", help="OIDC provider identifier")
+    create.add_argument("--sso-subject", help="OIDC subject identifier")
+    create.add_argument(
+        "--inactive",
+        action="store_true",
+        help="Create the account in a disabled state",
+    )
+    _add_operator_argument(create)
+    _bind(create, _create_user)
+
+    reset = auth_commands.add_parser(
+        "reset-password", help="Set a new password for an existing user"
+    )
+    reset.add_argument("email", help="Email address of the user")
+    reset.add_argument("--password", required=True, help="New password value")
+    _add_operator_argument(reset)
+    _bind(reset, _reset_password)
+
+    deactivate = auth_commands.add_parser(
+        "deactivate", help="Deactivate a user account"
+    )
+    deactivate.add_argument("email", help="Email address of the user")
+    _add_operator_argument(deactivate)
+    _bind(deactivate, _deactivate_user)
+
+    promote = auth_commands.add_parser(
+        "promote", help="Grant administrator privileges to a user"
+    )
+    promote.add_argument("email", help="Email address of the user")
+    _add_operator_argument(promote)
+    _bind(promote, _promote_user)
+
+    list_users = auth_commands.add_parser(
+        "list-users", help="Display all user accounts"
+    )
+    list_users.add_argument(
+        "--show-inactive", action="store_true", help="Include deactivated accounts"
+    )
+    list_users.set_defaults(handler=_cli_runner(_list_users))
+
+
+def main(argv: list[str] | None = None) -> int:
+    from .. import cli as ade_cli
+
+    if argv is None:
+        args = ["auth", *sys.argv[1:]]
+    else:
+        args = ["auth", *argv]
+    return ade_cli.main(args)
 
 
 __all__ = [
@@ -1326,6 +1344,7 @@ __all__ = [
     "hash_session_token",
     "issue_session",
     "main",
+    "register_cli",
     "require_admin",
     "revoke_session",
     "touch_api_key_usage",
