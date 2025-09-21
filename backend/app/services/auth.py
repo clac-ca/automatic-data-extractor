@@ -549,20 +549,6 @@ class RequestAuthContext:
     api_key_id: str | None = None
     subject: str | None = None
 
-    def to_dict(self) -> dict[str, str]:
-        payload: dict[str, str] = {
-            "user_id": self.user_id,
-            "email": self.email,
-            "mode": self.mode,
-        }
-        if self.session_id is not None:
-            payload["session_id"] = self.session_id
-        if self.api_key_id is not None:
-            payload["api_key_id"] = self.api_key_id
-        if self.subject is not None:
-            payload["subject"] = self.subject
-        return payload
-
     @classmethod
     def from_user(
         cls,
@@ -595,7 +581,6 @@ class AuthenticatedIdentity:
 
 def set_request_auth_context(request: Request, context: RequestAuthContext) -> None:
     request.state.auth_context_model = context
-    request.state.auth_context = context.to_dict()
 
 
 def get_request_auth_context(request: Request) -> RequestAuthContext | None:
@@ -604,38 +589,6 @@ def get_request_auth_context(request: Request) -> RequestAuthContext | None:
     existing = getattr(request.state, "auth_context_model", None)
     if isinstance(existing, RequestAuthContext):
         return existing
-
-    legacy = getattr(request.state, "auth_context", None)
-    if isinstance(legacy, RequestAuthContext):
-        request.state.auth_context_model = legacy
-        return legacy
-
-    if isinstance(legacy, dict):
-        user_id = legacy.get("user_id")
-        email = legacy.get("email")
-        mode = legacy.get("mode")
-
-        if not (
-            isinstance(user_id, str)
-            and isinstance(email, str)
-            and isinstance(mode, str)
-        ):
-            return None
-
-        session_id = legacy.get("session_id")
-        api_key_id = legacy.get("api_key_id")
-        subject = legacy.get("subject")
-
-        context = RequestAuthContext(
-            user_id=user_id,
-            email=email,
-            mode=mode,
-            session_id=session_id if isinstance(session_id, str) else None,
-            api_key_id=api_key_id if isinstance(api_key_id, str) else None,
-            subject=subject if isinstance(subject, str) else None,
-        )
-        request.state.auth_context_model = context
-        return context
 
     return None
 
