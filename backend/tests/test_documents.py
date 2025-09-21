@@ -10,7 +10,6 @@ import pytest
 from backend.app.db import get_sessionmaker
 from backend.app.models import Document
 from backend.app.services.documents import delete_document as delete_document_service
-from backend.app.services.events import EventRecord, record_event
 
 
 def _upload_document(

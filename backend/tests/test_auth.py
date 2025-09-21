@@ -16,18 +16,32 @@ import pytest
 
 from backend.app import config
 from backend.app.auth import sessions as session_service, sso
+from backend.app.auth.api_keys import hash_api_key_token
 from backend.app.auth.passwords import hash_password, verify_password
 from backend.app.auth.sessions import hash_session_token
 from backend.app.auth.sso import SSOExchangeError
 from backend.app.db import get_sessionmaker
 from backend.app.db_migrations import ensure_schema
-from backend.app.models import Event, User, UserRole, UserSession
+from backend.app.models import ApiKey, Event, User, UserRole, UserSession
 
 
 def _all_sessions() -> list[UserSession]:
     session_factory = get_sessionmaker()
     with session_factory() as db:
         return list(db.query(UserSession).order_by(UserSession.issued_at).all())
+
+
+def _insert_api_key(user: User, token: str, *, name: str = "automation") -> None:
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        api_key = ApiKey(
+            user_id=user.user_id,
+            name=name,
+            token_prefix=token[:12],
+            token_hash=hash_api_key_token(token),
+        )
+        db.add(api_key)
+        db.commit()
 
 
 def _b64url(data: bytes) -> str:
@@ -146,7 +160,7 @@ def test_password_hashing_roundtrip() -> None:
 
 def test_basic_login_issues_session_cookie(app_client) -> None:
     client, _, _ = app_client
-    response = client.post("/auth/login")
+    response = client.post("/auth/login/basic")
     assert response.status_code == 200
     body = response.json()
     assert body["user"]["email"] == "admin@example.com"
@@ -158,7 +172,7 @@ def test_basic_login_issues_session_cookie(app_client) -> None:
 
 def test_login_failure_records_event(app_client) -> None:
     client, _, _ = app_client
-    response = client.post("/auth/login", auth=("unknown@example.com", "nope"))
+    response = client.post("/auth/login/basic", auth=("unknown@example.com", "nope"))
     assert response.status_code == 401
     events = client.get(
         "/events",
@@ -169,26 +183,26 @@ def test_login_failure_records_event(app_client) -> None:
 
 def test_session_refresh_extends_expiry(app_client) -> None:
     client, _, _ = app_client
-    assert client.post("/auth/login").status_code == 200
-    session = _all_sessions()[0]
+    assert client.post("/auth/login/basic").status_code == 200
+    session = _all_sessions()[-1]
     original_expiry = datetime.fromisoformat(session.expires_at)
     response = client.get("/auth/session")
     assert response.status_code == 200
-    refreshed = _all_sessions()[0]
+    refreshed = _all_sessions()[-1]
     refreshed_expiry = datetime.fromisoformat(refreshed.expires_at)
     assert refreshed_expiry > original_expiry
 
 
 def test_session_endpoint_rejects_expired_cookie(app_client) -> None:
     client, _, _ = app_client
-    assert client.post("/auth/login").status_code == 200
+    assert client.post("/auth/login/basic").status_code == 200
     session_factory = get_sessionmaker()
     with session_factory() as db:
-        session = db.query(UserSession).first()
+        session = db.query(UserSession).order_by(UserSession.issued_at.desc()).first()
         session.expires_at = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
         db.commit()
     response = client.get("/auth/session")
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 
 def test_revoke_session_is_idempotent(app_client) -> None:
@@ -315,7 +329,7 @@ def test_touch_session_rejects_revoked_and_expired(app_client) -> None:
 def test_deactivated_user_cannot_use_basic_or_session(app_client) -> None:
     client, _, _ = app_client
     settings = config.get_settings()
-    login = client.post("/auth/login")
+    login = client.post("/auth/login/basic")
     assert login.status_code == 200
     cookie = client.cookies.get(settings.session_cookie_name)
     assert cookie is not None
@@ -327,9 +341,9 @@ def test_deactivated_user_cannot_use_basic_or_session(app_client) -> None:
         db.commit()
 
     session_response = client.get("/auth/session")
-    assert session_response.status_code == 401
+    assert session_response.status_code == 403
 
-    retry_login = client.post("/auth/login")
+    retry_login = client.post("/auth/login/basic")
     assert retry_login.status_code in {401, 403}
 
 
@@ -341,6 +355,7 @@ def test_protected_routes_require_authentication(app_client_factory, tmp_path, m
     monkeypatch.setenv("ADE_SESSION_COOKIE_SECURE", "0")
     with app_client_factory(database_url, documents_dir) as client:
         client.auth = None
+        client.cookies.clear()
         response = client.get("/documents")
         assert response.status_code == 401
         assert "WWW-Authenticate" in response.headers
@@ -348,12 +363,39 @@ def test_protected_routes_require_authentication(app_client_factory, tmp_path, m
         assert health.status_code == 200
 
 
+def test_api_key_allows_access(app_client) -> None:
+    client, _, _ = app_client
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        user = db.query(User).filter(User.email == "admin@example.com").one()
+    token = "machine-token-1234567890"
+    _insert_api_key(user, token)
+    client.auth = None
+    client.cookies.clear()
+    response = client.get(
+        "/documents",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+
+
+def test_invalid_api_key_returns_403(app_client) -> None:
+    client, _, _ = app_client
+    client.auth = None
+    client.cookies.clear()
+    response = client.get(
+        "/documents",
+        headers={"Authorization": "Bearer invalid-token"},
+    )
+    assert response.status_code == 403
+
+
 def test_open_access_mode_disables_auth(app_client_factory, tmp_path, monkeypatch) -> None:
     db_path = tmp_path / "open.sqlite"
     documents_dir = tmp_path / "docs"
     database_url = f"sqlite:///{db_path}"
-    monkeypatch.setenv("ADE_AUTH_MODES", "none")
     monkeypatch.setenv("ADE_SESSION_COOKIE_SECURE", "0")
+    monkeypatch.setenv("AUTH_DISABLED", "1")
     with app_client_factory(database_url, documents_dir) as client:
         client.auth = None
         documents = client.get("/documents")
@@ -376,7 +418,7 @@ def test_basic_login_disabled_when_mode_missing(app_client_factory, tmp_path, mo
     monkeypatch.setenv("ADE_SSO_ISSUER", "https://sso.example.com")
     monkeypatch.setenv("ADE_SSO_REDIRECT_URL", "https://ade.example.com/auth/callback")
     with app_client_factory(database_url, documents_dir) as client:
-        response = client.post("/auth/login", auth=("admin@example.com", "password123"))
+        response = client.post("/auth/login/basic", auth=("admin@example.com", "password123"))
         assert response.status_code == 404
 
 

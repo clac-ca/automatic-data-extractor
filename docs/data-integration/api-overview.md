@@ -9,41 +9,35 @@ Escalate to: Platform administrators if endpoints respond unexpectedly or schema
 
 # API overview
 
-ADE exposes a single REST API implemented under `backend/app/routes/`. Endpoints require authentication unless the deployment runs in `ADE_AUTH_MODES=none`. This guide summarises the routes available today and how to exercise them while noting how the upcoming API key fits into the picture.
+ADE exposes a single REST API implemented under `backend/app/routes/`. Endpoints require authentication unless the deployment runs with `AUTH_DISABLED` or `ADE_AUTH_MODES=none`. This guide summarises the routes available today and shows how session cookies and API keys fit together.
 
-## Authentication roadmap
+## Authentication options
 
 | Mode | Status | Typical usage |
 | --- | --- | --- |
-| API key header | **Planned.** Will issue a static secret per integration and expect a header such as `ADE-API-Key: <token>`. | Service accounts, scheduled exports, and partner integrations. |
-| Session cookie | **Available today.** Authenticate once with HTTP Basic credentials and persist the returned cookie. | Browser UI and automation scripts until API keys ship. |
+| API key bearer token | **Available.** Issue a long-lived token per integration and send `Authorization: Bearer <API_KEY>` on every request. | Service accounts, scheduled exports, partner integrations. |
+| Session cookie | **Available.** Authenticate via HTTP Basic or SSO to receive the `ade_session` cookie. | Browser UI, human operators, temporary automation. |
 
-While API key support is under development, new integrations should still be written to inject a header so the switch is trivial once the feature lands. Use the session cookie flow as the temporary authentication step.
+Humans typically start with Basic or SSO to obtain a cookie, while machines rely on API keys. Both mechanisms share the same authorisation checks for routes.
 
-### Current session-based login
+### Session-based login
 
-1. Call `POST /auth/login` with HTTP Basic credentials (see `backend/app/routes/auth.py`). ADE issues an opaque session token as an HttpOnly cookie.
+1. Call `POST /auth/login/basic` with HTTP Basic credentials (see `backend/app/routes/auth.py`). ADE issues an opaque session token as an HttpOnly cookie.
 2. Include the cookie on subsequent requests. Rotate credentials or log out via `POST /auth/logout` when done.
-3. Refresh the session periodically by calling `POST /auth/refresh`.
+3. Refresh the session periodically by calling `GET /auth/session` to extend the expiry window.
 
 Session semantics and environment toggles live in [Authentication modes](../security/authentication-modes.md).
 
-### Prepare for the API key
+### API key requests
 
-Design clients to read an environment variable (for example, `ADE_API_KEY`) and attach it to every request once available:
+When using an API key, include the header on every call:
 
 ```python
-import os
-import requests
-
-headers = {
-    "ADE-API-Key": os.environ["ADE_API_KEY"],
-    "Content-Type": "application/json",
-}
-response = requests.get("https://ade.example.com/jobs", headers=headers, cookies=session_cookie)
+headers = {"Authorization": f"Bearer {api_key}"}
+response = requests.get("https://ade.example.com/jobs", headers=headers, timeout=10)
 ```
 
-Until ADE issues keys, leave the header absent and rely on the session cookie alone. No backend changes are required when the header becomes mandatory; clients simply start populating it.
+No session cookie is required when using a valid API key.
 
 ## Documents (`backend/app/routes/documents.py`)
 
@@ -103,7 +97,7 @@ Events follow the canonical structure described in `backend/app/schemas.py` (`Ev
 # 1. Authenticate and capture the session cookie
 curl -i -c ade-cookie.txt -X POST \
   -u "admin@example.com:change-me" \
-  https://ade.example.com/auth/login
+  https://ade.example.com/auth/login/basic
 
 # 2. Upload a document (expires in 7 days)
 curl -b ade-cookie.txt -X POST \
@@ -125,4 +119,4 @@ curl -b ade-cookie.txt -X POST \
 curl -b ade-cookie.txt https://ade.example.com/jobs/job_2024_01_01_0001
 ```
 
-If any call returns 401, refresh the session via `/auth/refresh` or repeat the login. Unexpected 5xx responses should be escalated with timestamp, request ID (from headers), and payload details.
+If any call returns 401, refresh the session via `GET /auth/session` or repeat the login. Unexpected 5xx responses should be escalated with timestamp, request ID (from headers), and payload details.
