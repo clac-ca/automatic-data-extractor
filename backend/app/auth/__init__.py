@@ -1,8 +1,9 @@
 """Authentication helpers for the ADE backend."""
 
-from . import dependencies, events, passwords, sessions, sso, validation
+from . import api_keys, dependencies, events, passwords, sessions, sso, validation
 
 __all__ = [
+    "api_keys",
     "dependencies",
     "events",
     "passwords",

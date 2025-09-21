@@ -13,7 +13,12 @@ from ..services.maintenance_status import get_auto_purge_status
 router = APIRouter()
 
 
-@router.get("/health", response_model=HealthResponse, tags=["health"])
+@router.get(
+    "/health",
+    response_model=HealthResponse,
+    tags=["health"],
+    openapi_extra={"security": []},
+)
 def health_check(db: Session = Depends(get_db)) -> HealthResponse:
     """Return service health and validate the database connection."""
 
