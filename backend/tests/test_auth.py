@@ -14,6 +14,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from fastapi import HTTPException
 
 from backend.app import config
 import backend.app.services.auth as auth_service
@@ -545,7 +546,7 @@ def test_resolve_credentials_session_success(app_client) -> None:
 
     session_factory = get_sessionmaker()
     with session_factory() as db:
-        result = auth_service.resolve_credentials(
+        identity = auth_service.resolve_credentials(
             db,
             settings,
             session_token=cookie_value,
@@ -554,12 +555,11 @@ def test_resolve_credentials_session_success(app_client) -> None:
             user_agent="pytest-agent",
         )
 
-    assert result.failure is None
-    assert result.user is not None
-    assert result.mode == "session"
-    assert result.session is not None
-    assert result.session.last_seen_ip == "resolver-test"
-    assert result.session.last_seen_user_agent == "pytest-agent"
+    assert identity.user is not None
+    assert identity.mode == "session"
+    assert identity.session is not None
+    assert identity.session.last_seen_ip == "resolver-test"
+    assert identity.session.last_seen_user_agent == "pytest-agent"
 
 
 def test_resolve_credentials_invalid_session(app_client) -> None:
@@ -569,19 +569,18 @@ def test_resolve_credentials_invalid_session(app_client) -> None:
 
     session_factory = get_sessionmaker()
     with session_factory() as db:
-        result = auth_service.resolve_credentials(
-            db,
-            settings,
-            session_token="invalid-token",
-            api_key_token=None,
-            ip_address="resolver-test",
-            user_agent="pytest-agent",
-        )
+        with pytest.raises(HTTPException) as exc_info:
+            auth_service.resolve_credentials(
+                db,
+                settings,
+                session_token="invalid-token",
+                api_key_token=None,
+                ip_address="resolver-test",
+                user_agent="pytest-agent",
+            )
 
-    assert result.user is None
-    assert result.failure is not None
-    assert result.failure.status_code == 403
-    assert result.failure.detail == "Invalid session token"
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Invalid session token"
 
 
 def test_resolve_credentials_api_key_success(app_client) -> None:
@@ -596,7 +595,7 @@ def test_resolve_credentials_api_key_success(app_client) -> None:
     _insert_api_key(user, token)
 
     with session_factory() as db:
-        result = auth_service.resolve_credentials(
+        identity = auth_service.resolve_credentials(
             db,
             settings,
             session_token=None,
@@ -605,11 +604,10 @@ def test_resolve_credentials_api_key_success(app_client) -> None:
             user_agent="pytest-agent",
         )
 
-    assert result.failure is None
-    assert result.user is not None
-    assert result.mode == "api-key"
-    assert result.api_key is not None
-    assert result.api_key.last_used_at is not None
+    assert identity.user is not None
+    assert identity.mode == "api-key"
+    assert identity.api_key is not None
+    assert identity.api_key.last_used_at is not None
 
 
 def test_protected_routes_require_authentication(app_client_factory, tmp_path, monkeypatch) -> None:
