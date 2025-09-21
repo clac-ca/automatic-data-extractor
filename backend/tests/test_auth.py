@@ -850,6 +850,74 @@ def test_api_key_usage_updates_last_used_at(app_client) -> None:
         assert recorded <= datetime.now(timezone.utc) + timedelta(seconds=5)
 
 
+def test_api_key_provisioning_flow(app_client) -> None:
+    client, _, _ = app_client
+    session_factory = get_sessionmaker()
+
+    with session_factory() as db:
+        user = db.query(User).filter(User.email == "admin@example.com").one()
+        user_id = user.user_id
+
+    create = client.post(
+        "/auth/api-keys",
+        json={"user_id": user_id, "name": "Automation"},
+    )
+    assert create.status_code == 201
+    body = create.json()
+    assert body["user"]["user_id"] == user_id
+    assert body["name"] == "Automation"
+    assert body["token_prefix"] == body["token"][:12]
+
+    raw_token = body["token"]
+    api_key_id = body["api_key_id"]
+    token_prefix = body["token_prefix"]
+
+    with session_factory() as db:
+        stored = db.get(ApiKey, api_key_id)
+        assert stored is not None
+        assert stored.token_prefix == token_prefix
+        assert stored.token_hash == auth_service.hash_api_key_token(raw_token)
+
+    listing = client.get("/auth/api-keys")
+    assert listing.status_code == 200
+    items = listing.json()["items"]
+    assert any(item["api_key_id"] == api_key_id for item in items)
+    listed = next(item for item in items if item["api_key_id"] == api_key_id)
+    assert listed["user"]["email"] == "admin@example.com"
+    assert listed["token_prefix"] == token_prefix
+    assert "token" not in listed
+
+    revoke = client.post(
+        f"/auth/api-keys/{api_key_id}/revoke",
+        json={"reason": "rotation"},
+    )
+    assert revoke.status_code == 200
+    revoked = revoke.json()
+    assert revoked["revoked_at"] is not None
+    assert revoked["revoked_reason"] == "rotation"
+
+    with session_factory() as db:
+        events = (
+            db.query(Event)
+            .filter(Event.entity_type == "api-key", Event.entity_id == api_key_id)
+            .order_by(Event.occurred_at)
+            .all()
+        )
+        assert [event.event_type for event in events] == [
+            "api-key.created",
+            "api-key.revoked",
+        ]
+        assert events[1].payload.get("reason") == "rotation"
+
+    client.auth = None
+    client.cookies.clear()
+    denied = client.get(
+        "/documents",
+        headers={"Authorization": f"Bearer {raw_token}"},
+    )
+    assert denied.status_code == 403
+
+
 def test_revoked_api_key_is_rejected(app_client) -> None:
     client, _, _ = app_client
     session_factory = get_sessionmaker()
