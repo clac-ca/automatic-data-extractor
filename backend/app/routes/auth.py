@@ -160,18 +160,20 @@ def login_basic(  # noqa: PLR0915 - clarity over cleverness
 def logout(
     request: Request,
     response: Response,
-    current_user=Depends(auth_service.get_current_user),
+    identity: auth_service.AuthenticatedIdentity = Depends(
+        auth_service.get_authenticated_identity
+    ),
     db: Session = Depends(get_db),
 ) -> Response:
     settings = config.get_settings()
     ip_address, user_agent = _request_metadata(request)
 
-    session_model = getattr(request.state, "auth_session", None)
-    if session_model and session_model.user_id == current_user.user_id:
+    session_model = identity.session
+    if session_model is not None:
         auth_service.revoke_session(db, session_model, commit=False)
         auth_service.logout(
             db,
-            current_user,
+            identity.user,
             source="api",
             payload={"session_id": session_model.session_id, "ip": ip_address, "user_agent": user_agent},
             commit=False,
@@ -189,7 +191,9 @@ def logout(
 def session_status(
     request: Request,
     response: Response,
-    current_user=Depends(auth_service.get_current_user),
+    identity: auth_service.AuthenticatedIdentity = Depends(
+        auth_service.get_authenticated_identity
+    ),
     db: Session = Depends(get_db),
 ) -> AuthSessionResponse:
     settings = config.get_settings()
@@ -197,21 +201,21 @@ def session_status(
     if not cookie_value:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session cookie missing")
 
-    session_model = getattr(request.state, "auth_session", None)
-    if session_model is None or session_model.user_id != current_user.user_id:
+    session_model = identity.session
+    if session_model is None:
         _clear_session_cookie(response, settings)
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Session expired")
 
     auth_service.session_refreshed(
         db,
-        current_user,
+        identity.user,
         source="api",
         payload={"session_id": session_model.session_id},
         commit=False,
     )
     db.commit()
     _set_session_cookie(response, settings, cookie_value)
-    return _auth_response(current_user, settings, session_model=session_model)
+    return _auth_response(identity.user, settings, session_model=session_model)
 
 
 @router.get(
@@ -220,50 +224,12 @@ def session_status(
     openapi_extra={"security": []},
 )
 def current_user_profile(
-    request: Request,
-    current_user=Depends(auth_service.get_current_user),
+    identity: auth_service.AuthenticatedIdentity = Depends(
+        auth_service.get_authenticated_identity
+    ),
 ) -> AuthSessionResponse:
     settings = config.get_settings()
-    session_model = getattr(request.state, "auth_session", None)
-    if session_model and session_model.user_id != current_user.user_id:
-        session_model = None
-
-    context = auth_service.get_request_auth_context(request)
-    if context is not None and context.user_id != current_user.user_id:
-        context = None
-
-    api_key_model = getattr(request.state, "api_key", None)
-    api_key_id: str | None = None
-    if api_key_model is not None and getattr(api_key_model, "user_id", None) == current_user.user_id:
-        raw_api_key_id = getattr(api_key_model, "api_key_id", None)
-        if isinstance(raw_api_key_id, str):
-            api_key_id = raw_api_key_id
-    elif context is not None:
-        api_key_id = context.api_key_id
-
-    subject = context.subject if context is not None else None
-
-    if session_model is not None:
-        mode = "session"
-        session_id = session_model.session_id
-    elif api_key_id is not None:
-        mode = "api-key"
-        session_id = None
-    else:
-        mode = context.mode if context is not None else "basic"
-        session_id = None
-
-    auth_service.set_request_auth_context(
-        request,
-        auth_service.RequestAuthContext.from_user(
-            current_user,
-            mode=mode,
-            session_id=session_id,
-            api_key_id=api_key_id,
-            subject=subject,
-        ),
-    )
-    return _auth_response(current_user, settings, session_model=session_model)
+    return _auth_response(identity.user, settings, session_model=identity.session)
 
 
 @router.get(
