@@ -1,12 +1,3 @@
----
-Audience: Product design, Frontend engineering, Product management
-Goal: Capture the ADE experience and implementation blueprint so the team can deliver an intuitive, rigorous UI that mirrors the backend’s deterministic model.
-Prerequisites: Familiarity with ADE document types, configurations, callables, execution lifecycle, and glossary terms.
-When to use: During discovery, journey mapping, architecture planning, estimation, and onboarding of new contributors (human or AI).
-Validation: Prototype flows against `backend/app/routes/` contracts; usability-test key journeys before build milestone gates.
-Escalate to: Head of Product Design when experience changes impact accessibility, compliance, or core workflows.
----
-
 # ADE frontend master blueprint
 
 Great products feel inevitable. This document distils ADE’s product truths, articulates the end-to-end user journey, and decomposes the UI and frontend architecture so designers and engineers can craft an experience that feels effortless while staying maintainable.
