@@ -1,11 +1,10 @@
-# ✅ Completed Task — Restore simple settings access and centralise the auth CLI
+# ✅ Completed Task — Document and smoke-test the new ADE CLI entrypoint
 
 ## Context
-FastAPI dependency injection for configuration felt heavier than necessary, and the user management CLI lived inside the auth
-service module with no shared entry point. Aligning with the goal of simplicity required reverting the settings change and
-making the CLI easier to discover across services.
+The authentication commands now hang off `backend.app.cli`, so the documentation and tests needed to surface the new
+`python -m backend.app auth ...` entrypoint.
 
 ## Outcome
-- Reverted auth route handlers to call `config.get_settings()` directly, removing the dependency injection churn.
-- Added a shared `backend/app/cli.py` entry point (and `python -m backend.app`) that will host CLI commands for every service.
-- Updated the auth service to register its subcommands with the shared CLI so existing flows keep working while paving the way for future commands.
+- Updated the README and security docs to show the new CLI syntax and example commands.
+- Refreshed the system overview and environment variable reference so every auth guide now points at `python -m backend.app auth`.
+- Added a CLI integration test that exercises `backend.app.cli.main()` to create and list users against the SQLite fixture.

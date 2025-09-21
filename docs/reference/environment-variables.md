@@ -73,7 +73,7 @@ API keys are persisted in the database (`api_keys` table) with hashed tokens. Th
 | `ADE_ADMIN_EMAIL_ALLOWLIST_ENABLED` | `false` | `true` / `false`; enforce administrator allowlist. | Yes |
 | `ADE_ADMIN_EMAIL_ALLOWLIST` | _(unset)_ | Comma-separated list of email addresses permitted to hold admin role. | Yes |
 
-When toggling allowlist enforcement, verify administrator logins and run `python -m backend.app.services.auth list-users` to confirm only expected accounts retain elevated roles.
+When toggling allowlist enforcement, verify administrator logins and run `python -m backend.app auth list-users` to confirm only expected accounts retain elevated roles.
 
 ## Cache resets during runtime
 
