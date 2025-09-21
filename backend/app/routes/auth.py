@@ -200,20 +200,19 @@ def logout(
     db: Session = Depends(get_db),
 ) -> Response:
     settings = config.get_settings()
-    cookie_value = request.cookies.get(settings.session_cookie_name)
     ip_address, user_agent = _request_metadata(request)
 
-    if cookie_value:
-        session_model = sessions.get_session(db, cookie_value)
-        if session_model and session_model.user_id == current_user.user_id:
-            sessions.revoke_session(db, session_model, commit=True)
-            logout_event(
-                db,
-                current_user,
-                source="api",
-                payload={"session_id": session_model.session_id, "ip": ip_address, "user_agent": user_agent},
-                commit=True,
-            )
+    session_model = getattr(request.state, "auth_session", None)
+    if session_model and session_model.user_id == current_user.user_id:
+        sessions.revoke_session(db, session_model, commit=False)
+        logout_event(
+            db,
+            current_user,
+            source="api",
+            payload={"session_id": session_model.session_id, "ip": ip_address, "user_agent": user_agent},
+            commit=False,
+        )
+        db.commit()
     _clear_session_cookie(response, settings)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -226,6 +225,7 @@ def logout(
 def session_status(
     request: Request,
     response: Response,
+    current_user=Depends(dependencies.get_current_user),
     db: Session = Depends(get_db),
 ) -> AuthSessionResponse:
     settings = config.get_settings()
@@ -233,46 +233,21 @@ def session_status(
     if not cookie_value:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session cookie missing")
 
-    session_model = sessions.get_session(db, cookie_value)
-    if session_model is None:
-        _clear_session_cookie(response, settings)
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Session expired")
-
-    user = db.get(User, session_model.user_id)
-    if user is None or not user.is_active:
-        sessions.revoke_session(db, session_model, commit=True)
-        _clear_session_cookie(response, settings)
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Session invalid")
-
-    ip_address, user_agent = _request_metadata(request)
-    refreshed = sessions.touch_session(
-        db,
-        session_model,
-        settings=settings,
-        ip_address=ip_address,
-        user_agent=user_agent,
-        commit=True,
-    )
-    if refreshed is None:
-        sessions.revoke_session(db, session_model, commit=True)
+    session_model = getattr(request.state, "auth_session", None)
+    if session_model is None or session_model.user_id != current_user.user_id:
         _clear_session_cookie(response, settings)
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Session expired")
 
     session_refreshed(
         db,
-        user,
+        current_user,
         source="api",
-        payload={"session_id": refreshed.session_id},
-        commit=True,
+        payload={"session_id": session_model.session_id},
+        commit=False,
     )
+    db.commit()
     _set_session_cookie(response, settings, cookie_value)
-    _set_request_context(
-        request,
-        user,
-        mode="session",
-        session_id=refreshed.session_id,
-    )
-    return _auth_response(user, settings, session_model=refreshed)
+    return _auth_response(current_user, settings, session_model=session_model)
 
 
 @router.get(
@@ -283,21 +258,26 @@ def session_status(
 def current_user_profile(
     request: Request,
     current_user=Depends(dependencies.get_current_user),
-    db: Session = Depends(get_db),
 ) -> AuthSessionResponse:
     settings = config.get_settings()
-    session_model = None
-    cookie_value = request.cookies.get(settings.session_cookie_name)
-    if cookie_value:
-        candidate = sessions.get_session(db, cookie_value)
-        if candidate and candidate.user_id == current_user.user_id:
-            session_model = candidate
+    session_model = getattr(request.state, "auth_session", None)
+    if session_model and session_model.user_id != current_user.user_id:
+        session_model = None
+
     existing = getattr(request.state, "auth_context", None)
-    mode = "basic"
     subject = None
+    mode: str | None = None
     if isinstance(existing, dict):
-        mode = existing.get("mode", mode)
+        mode = existing.get("mode")
         subject = existing.get("subject")
+
+    if mode is None:
+        if session_model is not None:
+            mode = "session"
+        elif getattr(request.state, "api_key", None) is not None:
+            mode = "api-key"
+        else:
+            mode = "basic"
     _set_request_context(
         request,
         current_user,
