@@ -198,8 +198,9 @@ def test_get_authenticated_identity_for_session(monkeypatch, tmp_path) -> None:
             assert identity.user.user_id == user.user_id
             assert identity.session is not None
             assert identity.session.session_id == session_model.session_id
+            assert identity.session_id == session_model.session_id
             assert identity.api_key is None
-            assert identity.context.mode == "session"
+            assert identity.mode == "session"
 
 
 def test_get_authenticated_identity_for_api_key(monkeypatch, tmp_path) -> None:
@@ -234,7 +235,8 @@ def test_get_authenticated_identity_for_api_key(monkeypatch, tmp_path) -> None:
         assert identity.session is None
         assert identity.api_key is not None
         assert identity.api_key.token_prefix == token[:12]
-        assert identity.context.mode == "api-key"
+        assert identity.api_key_id == identity.api_key.api_key_id
+        assert identity.mode == "api-key"
 
 
 def test_complete_login_helper_commits_session(monkeypatch, tmp_path) -> None:
@@ -768,9 +770,9 @@ def test_open_access_mode_disables_auth(app_client_factory, tmp_path, monkeypatc
             )
 
         assert identity.user.email == "open-access@ade.local"
-        assert identity.context.mode == "none"
-        assert identity.context.session_id is None
-        assert identity.context.api_key_id is None
+        assert identity.mode == "none"
+        assert identity.session_id is None
+        assert identity.api_key_id is None
 
         profile = client.get("/auth/me")
         assert profile.status_code == 200
