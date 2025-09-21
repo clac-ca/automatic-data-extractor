@@ -1,9 +1,9 @@
-# ✅ Completed Task — Collapse AuthResolution into get_authenticated_identity
+# ✅ Completed Task — Make get_authenticated_identity the sole credential resolver
 
 ## Context
-`AuthResolution` and `AuthFailure` were the last wrappers between credential resolution and FastAPI dependencies. They duplicated the shape of `AuthenticatedIdentity` and forced callers to branch on success vs. failure.
+`resolve_credentials` still exposed a parallel public API alongside `get_authenticated_identity`, leaving FastAPI consumers with two imports and duplicated resolution logic.
 
 ## Outcome
-- Reworked `resolve_credentials` to return `AuthenticatedIdentity` directly or raise an `HTTPException`, keeping the lazy commit logic for revoked sessions intact.
-- Simplified `get_authenticated_identity` to delegate to the resolver without additional branching while still supporting the open-access mode.
-- Updated authentication tests to expect the flattened return value (or captured exceptions) and reran `pytest backend/tests/test_auth.py` to confirm behaviour.
+- Inlined the session and API key resolution workflow inside `get_authenticated_identity`, keeping the lazy commit/rollback behaviour for token revocation and metadata updates intact.
+- Dropped the exported `resolve_credentials` helper so only the dependency remains part of the public surface.
+- Updated authentication tests to cover the dependency directly and reran `pytest backend/tests/test_auth.py` to confirm behaviour.
