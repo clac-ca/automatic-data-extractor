@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from .. import config
 from ..db import get_db
 from ..models import User, UserRole, UserSession
-from . import api_keys, sessions
+from . import service
 
 _WWW_AUTH_HEADER = 'Bearer realm="ADE"'
 
@@ -96,11 +96,11 @@ def get_current_user(
     pending_commit = False
 
     if cookie_value:
-        session_model = sessions.get_session(db, cookie_value)
+        session_model = service.get_session(db, cookie_value)
         if session_model:
             user = db.get(User, session_model.user_id)
             if user and user.is_active:
-                refreshed = sessions.touch_session(
+                refreshed = service.touch_session(
                     db,
                     session_model,
                     settings=settings,
@@ -118,20 +118,20 @@ def get_current_user(
                     )
                     db.commit()
                     return user
-                sessions.revoke_session(db, session_model, commit=False)
+                service.revoke_session(db, session_model, commit=False)
                 pending_commit = True
             else:
-                sessions.revoke_session(db, session_model, commit=False)
+                service.revoke_session(db, session_model, commit=False)
                 pending_commit = True
         else:
-            token_hash = sessions.hash_session_token(cookie_value)
+            token_hash = service.hash_session_token(cookie_value)
             orphan = (
                 db.query(UserSession)
                 .filter(UserSession.token_hash == token_hash)
                 .one_or_none()
             )
             if orphan is not None:
-                sessions.revoke_session(db, orphan, commit=False)
+                service.revoke_session(db, orphan, commit=False)
                 pending_commit = True
         session_error = HTTPException(
             status.HTTP_403_FORBIDDEN,
@@ -139,7 +139,7 @@ def get_current_user(
         )
 
     if api_key_token is not None:
-        api_key = api_keys.get_api_key(db, api_key_token)
+        api_key = service.get_api_key(db, api_key_token)
         if api_key is None:
             if pending_commit:
                 db.commit()
@@ -161,7 +161,7 @@ def get_current_user(
                 detail="Invalid API key",
             )
 
-        updated_api_key = api_keys.touch_api_key_usage(db, api_key, commit=False)
+        updated_api_key = service.touch_api_key_usage(db, api_key, commit=False)
         request.state.api_key = updated_api_key
         _set_request_context(
             request,

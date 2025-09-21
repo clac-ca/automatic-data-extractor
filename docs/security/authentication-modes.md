@@ -9,7 +9,7 @@ Escalate to: Security lead if login flows fail, password hashing drifts from pol
 
 # Authentication modes
 
-Authentication is implemented in `backend/app/config.py`, `backend/app/auth/manage.py`, and `backend/app/auth/sessions.py`. ADE supports deterministic login behaviour with optional OIDC SSO layered on top of HTTP Basic and cookie sessions.
+Authentication is implemented in `backend/app/config.py`, `backend/app/auth/manage.py`, and `backend/app/auth/service.py`. ADE supports deterministic login behaviour with optional OIDC SSO layered on top of HTTP Basic and cookie sessions.
 
 ## 1. Choose an auth mode
 
@@ -37,7 +37,9 @@ Settings are parsed via `Settings.auth_mode_sequence`; invalid values raise a `V
 
 Restart ADE after changing these variables or call `config.reset_settings_cache()` in development.
 
-## 2. Configure session cookies (`backend/app/auth/sessions.py`)
+## 2. Configure session cookies (`backend/app/auth/service.py`)
+
+`service.py` issues and refreshes session tokens, resolves API keys, and records authentication events. Key details:
 
 - Session tokens are opaque values stored hashed (`SHA-256`) in the `user_sessions` table.
 - The session cookie is HttpOnly and inherits Secure/SameSite flags from the environment configuration.
