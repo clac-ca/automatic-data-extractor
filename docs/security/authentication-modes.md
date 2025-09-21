@@ -47,6 +47,15 @@ Restart ADE after changing these variables or call `config.reset_settings_cache(
 
 Validation: Log in, inspect the `Set-Cookie` header, and ensure TTL, domain, and SameSite attributes match expectations.
 
+### Backend integration tip
+
+FastAPI routers that declare `Depends(auth_service.get_current_user)` (imported from
+`backend.app.services import auth as auth_service`) can read the resolved identity from the
+`Request` without re-running authentication. Call
+`auth_service.get_cached_authenticated_identity(request)` inside the route handler to access
+the cached `AuthenticatedIdentity`. The helper raises `RuntimeError` when authentication has
+not executed, surfacing missing dependencies during development.
+
 ## 3. Manage users via CLI (`backend/app/services/auth.py`)
 
 Use the bundled CLI to provision accounts even when the API is offline:

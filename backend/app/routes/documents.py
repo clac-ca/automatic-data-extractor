@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .. import config
-from ..services.auth import get_current_user
+from ..services import auth as auth_service
 from ..db import get_db
 from ..models import Event, Document
 from ..schemas import (
@@ -42,7 +42,7 @@ from ..services.jobs import JobNotFoundError, get_job, list_jobs, summarise_job
 router = APIRouter(
     prefix="/documents",
     tags=["documents"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(auth_service.get_current_user)],
 )
 
 
@@ -205,8 +205,15 @@ def update_document(
     override_occurred_at = request.headers.get("X-Test-Occurred-At")
     update_kwargs = payload.model_dump(exclude_unset=True)
 
+    identity = auth_service.get_cached_authenticated_identity(request)
+
     if not update_kwargs.get("source"):
         update_kwargs.setdefault("source", "api")
+
+    update_kwargs.setdefault("actor_type", "user")
+    update_kwargs.setdefault("actor_id", identity.user.user_id)
+    default_label = identity.user.email or identity.user.user_id
+    update_kwargs.setdefault("actor_label", default_label)
 
     if ("occurred_at" not in update_kwargs or update_kwargs["occurred_at"] is None) and override_occurred_at:
         update_kwargs["occurred_at"] = override_occurred_at

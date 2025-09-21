@@ -1,9 +1,9 @@
-# ✅ Completed Task — Cache authenticated identities on the request
+# ✅ Completed Task — Expose a helper for cached authentication identities
 
 ## Context
-Repeated dependency calls to `get_authenticated_identity` re-opened SQLAlchemy sessions and re-ran credential resolution whenever router-level and route-level dependencies both requested the current user. Route handlers also had to declare the dependency just to access the resolved identity.
+Routes already relying on router-level authentication needed a straightforward way to reuse the cached `AuthenticatedIdentity` without re-declaring `Depends(get_current_user)`. We also wanted a guardrail that fails loudly when authentication has not executed.
 
 ## Outcome
-- Stored the first resolved `AuthenticatedIdentity` on `request.state` so subsequent dependencies can reuse it without performing new database work.
-- Simplified the FastAPI dependency stack by inlining the session and API key resolution logic inside `get_authenticated_identity`, removing the now-redundant dependency wrappers.
-- Added targeted tests that exercise both cold and cached paths—including a router/route combination—and documented how dependency overrides should clear the cached state in tests.
+- Added `get_cached_authenticated_identity(request)` to return the identity stored on `request.state` and raise a descriptive `RuntimeError` when it is missing.
+- Updated the documents router to import `auth_service` once, reuse the cached identity, and automatically populate event actor metadata without redundant dependencies.
+- Documented the helper in the authentication guide and expanded tests to cover both the happy path and the missing-cache failure.
