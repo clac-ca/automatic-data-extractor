@@ -1,19 +1,13 @@
-# 🔄 Next Task — Streamline HTTP Basic login with a reusable dependency
+# 🔄 Next Task — Inject shared Settings dependency into auth routes
 
 ## Context
-The `/auth/login/basic` route currently performs credential parsing, validation, and event logging inline. Moving that logic
-into a dedicated dependency built on FastAPI's `HTTPBasic` helper will shrink the route handler and make the authentication
-workflow easier to reuse elsewhere.
+`backend/app/routes/auth.py` calls `config.get_settings()` inside every handler, which hides the dependency chain FastAPI already provides. Surfacing the configuration as a dependency will cut duplication and make it obvious which endpoints rely on the runtime settings.
 
 ## Goals
-1. Introduce a dependency in `backend.app.services.auth` that validates HTTP Basic credentials, records the existing
-   success/failure events, and returns an active `User`.
-2. Update the `/auth/login/basic` route to consume the new dependency so the handler only needs to call
-   `auth_service.complete_login(...)` and set the cookie.
-3. Extend or adjust tests in `backend/tests/test_auth.py` to cover both successful and failure paths via the new dependency.
-4. Ensure no behavioural regressions for CLI-driven user management or API key authentication.
+1. Update the `/auth` route handlers to receive `config.Settings` via FastAPI dependency injection instead of calling `config.get_settings()` inline.
+2. Thread the injected settings through helper functions where needed so responses, cookie handling, and available auth modes continue to use the central configuration.
+3. Keep the HTTP responses and audit logging identical by refreshing or extending tests only if the new signatures require it.
 
 ## Definition of done
-- The new dependency encapsulates HTTP Basic verification and event logging, and the route uses it instead of inline logic.
-- Login success and failure responses (status codes, error messages, audit events) match the current behaviour.
-- `pytest backend/tests/test_auth.py` passes.
+- All functions in `backend/app/routes/auth.py` use an injected `Settings` object rather than calling `config.get_settings()` manually.
+- Authentication tests (`backend/tests/test_auth.py`) still pass without behavioural changes.

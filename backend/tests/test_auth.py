@@ -15,6 +15,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 from fastapi import HTTPException
+from fastapi.security import HTTPBasicCredentials
 
 from backend.app import cli as ade_cli
 from backend.app import config
@@ -368,6 +369,70 @@ def test_login_failure_records_event(app_client) -> None:
         params={"entity_type": "user", "entity_id": "unknown@example.com"},
     ).json()
     assert any(item["event_type"] == "user.login.failed" for item in events["items"])
+
+
+def test_basic_auth_dependency_returns_user(monkeypatch, tmp_path) -> None:
+    with _configured_settings(monkeypatch, tmp_path) as (settings, session_factory):
+        with session_factory() as db:
+            user = User(
+                email="basic-user@example.com",
+                password_hash=auth_service.hash_password("valid-pass"),
+                role=UserRole.ADMIN,
+                is_active=True,
+            )
+            db.add(user)
+            db.commit()
+
+        with session_factory() as db:
+            credentials = HTTPBasicCredentials(
+                username="basic-user@example.com",
+                password="valid-pass",
+            )
+            resolved = auth_service.require_basic_auth_user(
+                credentials=credentials,
+                db=db,
+                settings=settings,
+            )
+            assert resolved.user_id == user.user_id
+
+        with session_factory() as db:
+            assert db.query(Event).count() == 0
+
+
+def test_basic_auth_dependency_records_failure(monkeypatch, tmp_path) -> None:
+    with _configured_settings(monkeypatch, tmp_path) as (settings, session_factory):
+        with session_factory() as db:
+            user = User(
+                email="basic-user@example.com",
+                password_hash=auth_service.hash_password("valid-pass"),
+                role=UserRole.ADMIN,
+                is_active=True,
+            )
+            db.add(user)
+            db.commit()
+
+        with session_factory() as db:
+            credentials = HTTPBasicCredentials(
+                username="basic-user@example.com",
+                password="wrong-pass",
+            )
+            with pytest.raises(HTTPException) as exc_info:
+                auth_service.require_basic_auth_user(
+                    credentials=credentials,
+                    db=db,
+                    settings=settings,
+                )
+            assert exc_info.value.status_code == 401
+
+        with session_factory() as db:
+            events = (
+                db.query(Event)
+                .filter(Event.entity_id == "basic-user@example.com")
+                .all()
+            )
+            assert len(events) == 1
+            assert events[0].event_type == "user.login.failed"
+            assert events[0].payload["reason"] == "invalid-password"
 
 
 def test_session_refresh_extends_expiry(app_client) -> None:
