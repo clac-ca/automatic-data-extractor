@@ -710,7 +710,50 @@ class RequestAuthContext:
 
 
 def set_request_auth_context(request: Request, context: RequestAuthContext) -> None:
+    request.state.auth_context_model = context
     request.state.auth_context = context.to_dict()
+
+
+def get_request_auth_context(request: Request) -> RequestAuthContext | None:
+    """Return the ``RequestAuthContext`` stored on the request, if any."""
+
+    existing = getattr(request.state, "auth_context_model", None)
+    if isinstance(existing, RequestAuthContext):
+        return existing
+
+    legacy = getattr(request.state, "auth_context", None)
+    if isinstance(legacy, RequestAuthContext):
+        request.state.auth_context_model = legacy
+        return legacy
+
+    if isinstance(legacy, dict):
+        user_id = legacy.get("user_id")
+        email = legacy.get("email")
+        mode = legacy.get("mode")
+
+        if not (
+            isinstance(user_id, str)
+            and isinstance(email, str)
+            and isinstance(mode, str)
+        ):
+            return None
+
+        session_id = legacy.get("session_id")
+        api_key_id = legacy.get("api_key_id")
+        subject = legacy.get("subject")
+
+        context = RequestAuthContext(
+            user_id=user_id,
+            email=email,
+            mode=mode,
+            session_id=session_id if isinstance(session_id, str) else None,
+            api_key_id=api_key_id if isinstance(api_key_id, str) else None,
+            subject=subject if isinstance(subject, str) else None,
+        )
+        request.state.auth_context_model = context
+        return context
+
+    return None
 
 
 def get_current_user(
@@ -1532,6 +1575,7 @@ __all__ = [
     "exchange_code",
     "get_api_key",
     "get_current_user",
+    "get_request_auth_context",
     "get_session",
     "hash_api_key_token",
     "hash_password",
@@ -1545,6 +1589,7 @@ __all__ = [
     "resolve_credentials",
     "revoke_session",
     "session_refreshed",
+    "set_request_auth_context",
     "touch_api_key_usage",
     "touch_session",
     "validate_settings",
