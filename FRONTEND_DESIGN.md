@@ -1,47 +1,45 @@
-# ADE frontend master blueprint
+# ADE frontend core blueprint
 
-Great products feel inevitable. This blueprint narrows ADE's frontend down to the essential surfaces we must ship for a credible
-v1. Nice-to-haves (onboarding tours, advanced analytics, bespoke visualizations) live in the backlog. The focus here is
-structuring the core UI, clarifying dependencies, and ensuring engineering can move without second-guessing intent.
+ADE's frontend must make complex extraction workflows feel approachable. This document captures the minimum structure we need to
+ship a credible v1: which screens exist, how they are laid out, which dependencies unlock velocity, and what the backend must
+provide. Anything outside these foundations can wait.
 
 ---
 
 ## 1. Purpose & scope
 
-- **Source of truth** – When questions arise about how ADE's frontend should look, feel, or behave, this file provides the answer.
-- **Scope** – Web frontend only: information architecture, interaction patterns, component strategy, and integration touchpoints
-  with backend services.
-- **Change hygiene** – Treat edits like code. Capture the reason for each change so future contributors understand the context and
-  can revisit assumptions.
+- **Source of truth** – Defines layout, interaction patterns, and supporting tooling for ADE's web client.
+- **Scope** – Desktop-first React application. Mobile portrait layouts and onboarding flows are intentionally out of scope.
+- **Change hygiene** – Update this file with rationale whenever we refine layout decisions or add dependencies.
 
 ---
 
 ## 2. Product truths & guardrails
 
 ### 2.1 Why ADE exists
-- Convert messy spreadsheets/PDFs into trustworthy tables without opaque automation.
-- Give operations teams confidence to iterate, compare, and promote extraction logic safely.
+- Turn messy spreadsheets/PDFs into trustworthy tables with auditable logic.
+- Let operations teams iterate, compare, and promote extraction logic without touching backend code.
 
 ### 2.2 First principles
-1. **Clarity first** – Every surface should answer “What am I looking at?” before exposing controls.
-2. **Progress with reassurance** – Users always know what changed, what is running, and how to undo it.
-3. **Iteration is the happy path** – Testing, comparing, and promoting configurations should feel routine, not advanced.
+1. **Immediate clarity** – Each surface answers “What is this and what changed?” before exposing controls.
+2. **Confidence while iterating** – Users should see progress, test outcomes, and promotion states without hunting.
+3. **Deterministic actions** – Buttons and shortcuts do exactly what they say; avoid cleverness that obscures state.
 
-### 2.3 Experience anti-goals
-- Avoid dense data dumps without framing copy or clear next steps.
-- Never hide destructive actions behind ambiguous icons; clarity beats minimalism when stakes are high.
-- Resist modal overload—prefer inline rails/drawers so users maintain spatial orientation.
+### 2.3 Anti-goals
+- No dense data dumps without framing copy or empty-state guidance.
+- No destructive actions hidden behind icons or nested menus.
+- Minimize modal usage; prefer inline rails/drawers so spatial context remains intact.
 
 ### 2.4 Personas anchoring decisions
 | Persona | Core needs | Success signal |
 | --- | --- | --- |
-| **Operations Lead** | Governance, approvals, adoption metrics. | Can review readiness and approve promotions without digging into code. |
-| **Configuration Engineer** | Scripting, debugging, rapid iteration. | Can author, test, and publish callables without context switching. |
-| **Reviewer / Analyst** | Uploading docs, validating, comparing results. | Can spot regressions and confirm fixes quickly. |
+| **Operations Lead** | Governance, approvals, adoption metrics. | Can review readiness and approve promotions without code. |
+| **Configuration Engineer** | Author scripts, debug failures, iterate quickly. | Can edit, test, and publish callables in one workspace. |
+| **Reviewer / Analyst** | Upload docs, validate outputs, compare revisions. | Can confirm fixes and spot regressions quickly. |
 
 ---
 
-## 3. System mental model
+## 3. Domain model & key states
 
 ```
 Workspace (tenant)
@@ -54,190 +52,157 @@ Workspace (tenant)
 └── Run (executes one or more configurations on uploaded docs)
 ```
 
-### 3.1 State vocabulary
-| Entity | States | Notes |
+| Entity | Lifecycle states | Notes |
 | --- | --- | --- |
-| Configuration | Draft → Published → Active → Retired | Only one Active per Document Type. Promotions always flow through Published. |
-| Column | Ready ↔ Needs Attention | Needs Attention surfaces missing callables, failing tests, or deprecated APIs. |
-| Run | Queued → Running → Validating → Complete / Failed | Metadata flags (e.g., `needsApproval`) accompany states but never mutate them. |
+| Configuration | Draft → Published → Active → Retired | Only one Active per Document Type. Promotions flow Draft → Published → Active. |
+| Column | Ready ↔ Needs Attention | Needs Attention indicates missing callables, failing tests, or deprecated APIs. |
+| Run | Queued → Running → Validating → Complete / Failed | Metadata flags (e.g., `needsApproval`) augment but never override states. |
 
-Document types do **not** have a lifecycle—they are logical containers. Governance metadata lives on configurations and columns.
-
----
-
-## 4. Foundational layout decisions
-
-### 4.1 Application shell
-- **Structure** – Persistent left navigation paired with a top utility bar keeps primary routes visible without crowding content.
-  On tablet widths (≤1024 px) the nav collapses into a slide-in drawer; phone support is out of scope for v1.
-- **Navigation** – Sections: *Document Types*, *Runs*, *Settings*. Badge counts highlight drafts needing attention and failed
-  runs. Search is deferred until we validate navigation pain points.
-- **Top bar** – Shows workspace selector, current user menu, and system notices. Keep it shallow (no command palette) so we ship
-  faster and avoid premature keyboard choreography.
-- **Content area** – Each route renders a page header (title, status chip, key actions) followed by tabs or split panes depending
-  on the surface. Use CSS grid with an 8 px spacing scale so components align predictably.
-- **Feedback** – Toasts appear above the content area near the top-right. Long-running processes expose inline progress indicators
-  rather than blocking modals.
-
-### 4.2 Design tokens & theming
-- Global tokens (`color`, `spacing`, `radius`, `typography`) live in `frontend/src/styles/tokens.ts` and power both component
-  styling and Monaco's theme.
-- Dark mode is not required for v1; choose colors that degrade gracefully if we add it later.
-- Layout primitives (stack, cluster, sidebar) should be defined as lightweight components instead of ad-hoc flexbox in every
-  screen.
+Document types are logical containers without lifecycle. Governance metadata lives on configurations and columns.
 
 ---
 
-## 5. Primary flows & surfaces
+## 4. Application shell & layout primitives
 
-The tables below describe the minimum viable experience for launch. Anything beyond these bullets belongs in the backlog.
+### 4.1 Shell structure
+- **Navigation** – Persistent left rail with sections: *Document Types*, *Runs*, *Settings*. Collapse to a slide-in drawer ≤1024 px.
+- **Top bar** – Workspace selector, user menu, and inline system notices. No command palette in v1.
+- **Content frame** – Page header (title, status chip, critical actions) followed by body area arranged with CSS grid using an 8 px spacing scale.
+- **Feedback** – Toast stack in the upper-right of the content frame. Long-running actions surface inline progress rows, not blocking modals.
+
+### 4.2 Layout primitives
+- Define lightweight `Stack`, `Columns`, and `Sidebar` components backed by CSS variables from `frontend/src/styles/tokens.ts`.
+- Tokens cover color, spacing, radius, typography, and elevation. Dark mode can follow later if we choose colors with accessible contrast out of the gate.
+
+---
+
+## 5. Core product surfaces
+
+Each surface description includes layout, must-have interactions, and implementation notes so engineers can size work accurately.
 
 ### 5.1 Document type library
-- **Purpose** – Understand which document types exist, their health, and entry points into configuration work.
-- **Layout** – Page header with “Create document type” button and filters (status, owner). Below, a responsive table listing type
-  name, active configuration, draft count, last run summary, and attention badge.
-- **Key interactions** – Row click opens the detail view. Inline actions limited to “Open active configuration” and “Create new
-  draft” so we do not overcomplicate v1.
-- **Data needs** – `GET /document-types` returns array with counts, most recent run status, and last updated timestamp.
-- **Deferred** – Duplicating/archiving document types, bulk actions, and heavy virtualization come later once list size demands it.
+- **Purpose** – Discover document types, assess health, and jump into work.
+- **Layout** – Page header with primary action “Create document type” and filters for status/owner. Below, a table listing name, active configuration, draft count, latest run summary, and attention badge.
+- **Key interactions** – Row click opens detail view. Inline actions limited to “Open active configuration” and “Create new draft”.
+- **Implementation notes**
+  - Data from `GET /document-types` must include counts and last-run metadata; seed fixtures for empty/error states.
+  - Table built with TanStack Table (no virtualization). Badges leverage Radix `Badge` primitives for consistency.
 
 ### 5.2 Document type detail
-- **Purpose** – Inspect a document type, switch between configurations, and launch new iterations.
-- **Layout** – Two-pane arrangement: left rail lists configurations (status chip, updated timestamp, owner), right pane shows the
-  selected configuration summary.
-- **Key interactions** – Create configuration (modal form with name + optional copy-from), promote published configuration to
-  active, open configuration workspace.
-- **Data needs** – `GET /document-types/:id` returns metadata plus list of configurations with status, version tag, last run stats,
-  and promotion eligibility.
-- **Deferred** – Rich diff summaries and downloadable specs ship after the baseline experience is stable.
+- **Purpose** – Inspect a document type, switch configurations, and launch new drafts.
+- **Layout** – Two-pane view: left rail lists configurations (status chip, updated timestamp, owner); right pane shows summary of the selected configuration (description, readiness, recent run outcomes) with quick actions.
+- **Key interactions** – Create configuration (modal with name + optional copy-from), promote published configuration to active, open configuration workspace.
+- **Implementation notes**
+  - Endpoint `GET /document-types/:id` returns metadata plus configuration list and promotion eligibility flags.
+  - Promotion flow uses confirm dialog from Radix `AlertDialog`; optimistic updates avoided until backend confirms transition.
 
 ### 5.3 Configuration workspace
-- **Purpose** – Author and validate extraction logic for each column with minimal context switching.
-- **Layout** – Three-column grid on desktop, collapsing to stacked panes on smaller screens:
-  1. **Column list** – Compact table with column name, type, readiness badge, and filter chips (ready, needs attention, hidden).
-  2. **Editor canvas** – Tabbed Monaco editor for detection/validation/transformation callables. Inline test results appear beneath
-     the editor with expandable log output.
-  3. **Inspector rail** – Metadata (description, sample values, validation checks) and controls (mark optional/required, view
-     column history).
-- **Key interactions** – Autosave edits (React Query mutation with debounce), run column test, publish configuration, view change
-  history (read-only list for v1).
-- **Data needs** – Endpoints for columns (`GET/PUT /configurations/:id/columns/:columnId`), test execution (`POST
-  /configurations/:id/columns/:columnId/test`), and configuration status transitions.
-- **Deferred** – Live collaborative editing, inline diffing between draft versions, and comment threads.
+- **Purpose** – Author and validate column-level logic without leaving the screen.
+- **Layout** – Three-column grid on desktop, collapsing to stacked panes ≤1280 px:
+  1. **Column list** – Compact list with readiness filter chips (all, ready, needs attention).
+  2. **Editor canvas** – Tabbed Monaco editor for detection/validation/transformation scripts; inline test results expand below the editor.
+  3. **Inspector rail** – Metadata (description, type, sample values) and switches (optional/required). Read-only history list sits at the bottom.
+- **Key interactions** – Autosave edits with debounce, execute column test, publish configuration, view change history.
+- **Implementation notes**
+  - Use React Query mutations for autosave + invalidation; persist unsaved state indicator in the header.
+  - `POST /configurations/:id/columns/:columnId/test` powers inline test results; ensure backend payload includes logs and sample output.
+  - Monaco editor packaged via `@monaco-editor/react` with custom theme derived from tokens.
 
 ### 5.4 Upload & run console
-- **Purpose** – Manage uploads, select configurations, and monitor run progress without leaving the page.
-- **Layout** – Split view with left pane for file queue (drag-and-drop area plus status list) and right pane for run setup
-  (configuration multi-select, run name/notes) followed by a timeline of progress events.
-- **Key interactions** – Add/remove files, start run, watch progress updates, retry failed documents.
-- **Data needs** – Chunked upload API (`POST /runs/uploads`), run creation (`POST /runs`), progress feed (Server-Sent Events or
-  WebSocket, whichever backend supports first), and log retrieval.
-- **Deferred** – Offline detection, resumable uploads, and bulk schedule management. Polling + SSE gets us to v1 faster than a
-  fully managed resumable library.
+- **Purpose** – Queue documents, select configurations, and monitor run progress.
+- **Layout** – Split view: left pane hosts drag-and-drop queue with file status list; right pane holds run setup form (configuration multi-select, run name, notes) and a progress timeline beneath.
+- **Key interactions** – Add/remove files, start run, observe live progress, retry failed documents.
+- **Implementation notes**
+  - Uploads use native `fetch` with chunking; wrap in a `FileQueue` helper that exposes derived statuses for React Query.
+  - Run creation via `POST /runs`; progress stream delivered over Server-Sent Events (`/runs/:id/stream`) with polling fallback for browsers lacking SSE.
+  - Timeline entries rendered with Radix `Accordion` for expandable log details.
 
 ### 5.5 Run results & comparison
-- **Purpose** – Validate output accuracy and approve promotions with confidence.
-- **Layout** – Page header summarizing run outcome (status, duration, triggering user) plus tabs for **Results** and **Diff**.
-  - **Results** – Virtualized data grid showing extracted rows, column-level validation messages, and inline filters.
-  - **Diff** – Side-by-side comparison between the current run and baseline (active configuration). Differences use color-coded
-    highlights; validation issues list links back to the configuration workspace.
-- **Key interactions** – Toggle between tabs, export CSV, mark run as reviewed, jump to related configuration.
-- **Data needs** – `GET /runs/:id/results` (paged data + validation metadata) and `GET /runs/:id/diff` (structured diff summary).
-- **Deferred** – Document previews, custom charting, and shareable annotations.
+- **Purpose** – Validate output accuracy and compare against baseline runs.
+- **Layout** – Header summarizing status, duration, triggering user. Tabs: **Results** (data grid) and **Diff** (side-by-side comparison against baseline configuration).
+- **Key interactions** – Toggle tabs, filter results, export CSV, mark run as reviewed, deep-link to configuration workspace.
+- **Implementation notes**
+  - Results grid uses TanStack Table plus `@tanstack/react-virtual` for large datasets; load data in paged chunks from `GET /runs/:id/results`.
+  - Diff view consumes `GET /runs/:id/diff` and renders column-level highlights; reuse tokenized colors for additions/removals to maintain accessibility.
+  - “Mark as reviewed” mutation updates run metadata and invalidates relevant caches.
 
 ---
 
 ## 6. Interaction patterns & component layering
 
-- **Forms** – React Hook Form backed by Zod schemas for type-safe validation. Inline validation messages appear on blur. Submit
-  buttons disable while pending to prevent duplicate mutations.
-- **Tables & lists** – TanStack Table handles sorting/filtering. Start without virtualization; add `@tanstack/react-virtual` once
-  performance requires it.
-- **Script editing** – `@monaco-editor/react` wrapped in a `ScriptEditor` component controlling language, theme, validation
-  overlays, and `onRunTest` hooks.
-- **File input** – Native drag-and-drop (`DataTransfer`) with progressive enhancement. Wrap uploads in a `FileQueue` service that
-  exposes derived status for React Query.
-- **Feedback** – Global toast system for success/error, lightweight confirmation dialog for destructive actions, and inline alerts
-  near the impacted component.
-- **Keyboard support** – Provide shortcuts for switching editor tabs, triggering tests, and navigating tables. Always preserve
-  visible focus outlines.
+- **Forms** – React Hook Form + Zod for validation; errors show on blur or submit. Submit buttons disable while pending to prevent duplicate mutations.
+- **Tables & lists** – TanStack Table for sorting/filtering; use shared table components that handle loading, empty, and error states.
+- **Script editing** – Wrap Monaco in a `ScriptEditor` component controlling language mode, theme, lint annotations, and `onRunTest` wiring.
+- **File input** – Drag-and-drop built on native `DataTransfer`. Custom hook owns chunking logic and surfaces queue state to UI components.
+- **Feedback** – Toast provider for global success/error, inline `Callout` component for contextual warnings, `AlertDialog` for destructive confirmation.
+- **Keyboard support** – Provide shortcuts for switching editor tabs and triggering tests; always preserve visible focus outlines using tokens.
 
 ---
 
-## 7. Technology & dependency plan
+## 7. Dependencies & tooling decisions
 
 | Dependency | Decision | Rationale |
 | --- | --- | --- |
-| Vite, React, TypeScript | ✅ Adopt | Proven trio for fast feedback and a TypeScript-first workflow. |
-| React Router v6 data APIs | ✅ Adopt | Nested layouts and loader/action model align with our route structure and error handling needs. |
-| @tanstack/react-query | ✅ Adopt | Centralizes server state, caching, and request lifecycle handling. |
-| React Hook Form + Zod | ✅ Adopt | Lightweight, type-safe form management mirroring backend validation rules. |
-| @tanstack/react-table | ✅ Adopt | Composable tables with headless primitives that match our data needs. |
-| @tanstack/react-virtual | ⏸️ Defer | Only introduce once result sets are large enough to require virtualization. |
-| @monaco-editor/react | ✅ Adopt | IDE-grade script editing with minimal integration code. |
-| Radix UI primitives | ✅ Adopt | Accessible building blocks we can skin to ADE’s design language. |
-| Storybook | ✅ Adopt | Local component workbench and spec documentation for shared components. |
-| Playwright | ✅ Adopt | Deterministic end-to-end and visual regression coverage without SaaS lock-in. |
-| File upload helpers (Uppy / tus-js-client) | ⏸️ Defer | Start with native fetch + chunking; revisit if resumable uploads prove complex. |
-
-We deliberately avoid Redux-like global state, heavyweight charting libraries, or bespoke design systems until the core surfaces
-ship and justify them.
+| Vite, React, TypeScript | ✅ Adopt | Fast feedback loop and TS-first developer experience. |
+| React Router v6 data APIs | ✅ Adopt | Nested layouts + loader/action pattern match our route structure and error handling needs. |
+| @tanstack/react-query | ✅ Adopt | Manages server state, caching, and mutation lifecycles with minimal boilerplate. |
+| React Hook Form + Zod | ✅ Adopt | Lightweight, type-safe forms aligned with backend validation. |
+| Radix UI primitives | ✅ Adopt | Accessible building blocks for modals, tabs, accordions, and badges without custom a11y work. |
+| @tanstack/react-table | ✅ Adopt | Headless table utilities reused across library and results screens. |
+| @tanstack/react-virtual | ✅ Adopt (Results view only) | Required to keep run results responsive with large datasets. |
+| @monaco-editor/react | ✅ Adopt | Script editing with minimal integration cost. |
+| Storybook | ✅ Adopt | Component workbench for shared primitives (navigation, table states, toasts). |
+| Playwright | ✅ Adopt | Deterministic end-to-end and smoke tests for critical flows. |
+| File upload helpers (Uppy / tus-js-client) | ⏸️ Defer | Native chunked uploads are sufficient until we hit resumable/parallel needs. |
 
 ---
 
 ## 8. Data & state management
 
-- **HTTP client** – Typed wrapper around `fetch` with abort controller support lives in `frontend/src/lib/apiClient.ts`.
-- **Query structure** – React Query keys follow `['workspace', workspaceId, 'documentTypes']` patterns. Mutations invalidate the
-  narrowest scope necessary (e.g., column update invalidates the configuration detail and column list only).
-- **Normalisation** – Mutations return normalized objects so UI components render deterministically without manual refetches.
-- **Optimistic updates** – Reserve for safe fields (names, descriptions). Risky actions (publish, promote) wait for server
-  confirmation.
-- **Error handling** – Route-level error boundaries surface friendly copy and retry controls; global errors route to a support
-  panel with context.
-- **Local persistence** – Typed helpers gate access to `localStorage`/`sessionStorage` for ephemeral settings (theme preference,
-  table column visibility). Avoid storing business data client-side.
+- **HTTP client** – Typed wrapper around `fetch` with AbortController support lives in `frontend/src/lib/apiClient.ts`.
+- **Query keys** – Follow `['workspace', workspaceId, 'documentTypes']` patterns; invalidate only scopes impacted by a mutation.
+- **Normalization** – API responses return normalized objects so UI can update deterministically without manual refetches.
+- **Optimistic updates** – Restrict to low-risk fields (names, descriptions). Publishing/promoting waits for backend confirmation.
+- **Error handling** – Route-level error boundaries with retry controls; global errors surface in a dedicated support panel with context.
+- **Local persistence** – Only store UI preferences (e.g., table column visibility) in `localStorage` via typed helpers.
 
 ---
 
-## 9. Pre-build requirements & assumptions
+## 9. Pre-build requirements
 
-1. **Data contracts** – Backend must confirm payloads for document types, configurations, columns, runs, and diff responses before
-   we wire any API calls.
-2. **Sample data** – Provide anonymized fixtures for each primary surface so we can stub UI states (empty, success, error) without
-   guessing field names.
-3. **Design tokens** – Agree on the initial color/typography scale with design so component styling does not churn mid-sprint.
-4. **Testing hooks** – Backend exposes predictable IDs or attributes where end-to-end tests need to anchor (e.g., upload job IDs).
-5. **Environment parity** – Local `.env` mirrors staging domains to keep React Query cache keys and CORS expectations consistent.
+1. **API contracts** – Backend confirms payload shape for document types, configurations, columns, runs, and diff responses before API hooks are written.
+2. **Fixtures** – Provide anonymized data for empty, loading, and failure states across key surfaces to unblock Storybook states.
+3. **Design tokens** – Finalize color palette, typography scale, and spacing tokens before component build-out to avoid churn.
+4. **Testing hooks** – Backend exposes stable IDs/attributes (e.g., run IDs) so Playwright tests can target elements reliably.
+5. **Environment parity** – Local `.env` aligns with staging domains to keep React Query cache keys and CORS expectations consistent.
 
 ---
 
-## 10. Implementation roadmap (v1 focus)
+## 10. Implementation path (v1 focus)
 
-1. **Foundation sprint**
-   - Scaffold Vite + React + TypeScript with Router, React Query, Vitest, Playwright, and Storybook wired into CI.
-   - Build application shell (navigation, header, toast system) with placeholder routes and design tokens.
-2. **Document type surfaces**
-   - Implement library table with filtering and creation modal.
-   - Deliver document type detail view with configuration rail and summary panel.
+1. **Foundation**
+   - Scaffold Vite + React + Router + React Query with Vitest, Storybook, and Playwright wired into CI.
+   - Build application shell (navigation, top bar, toast system) and implement design tokens/layout primitives.
+2. **Document type views**
+   - Implement library table with filters and creation modal.
+   - Deliver detail view with configuration rail and summary panel.
 3. **Configuration workspace**
-   - Ship column list + inspector layout, Monaco-based editor tabs, autosave, and inline testing workflow.
-   - Wire publish/promote flows with confirmation dialogs.
+   - Ship column list, Monaco editor tabs, inspector rail, autosave, and inline testing workflow.
+   - Add publish/promote flows with confirmation dialogs.
 4. **Run management & results**
    - Build upload console with queue, run setup form, and SSE-driven progress timeline.
-   - Implement results/diff view with table, validation issue stack, and deep links back to the workspace.
+   - Implement results/diff view with paged table, virtualization, validation stack, and deep links back to workspace.
 
-Each milestone includes UX review, accessibility checks, and regression tests before handoff.
+Each milestone includes accessibility review and regression tests before handoff.
 
 ---
 
 ## 11. Explicitly out of scope for v1
 
-- Onboarding tours, contextual walkthroughs, or marketing pages.
-- Global command palette or fuzzy entity search.
-- Real-time collaboration, presence indicators, or comments.
+- Onboarding tours, contextual walkthroughs, marketing pages.
+- Global search or command palette.
+- Real-time collaboration, presence indicators, annotations, or comments.
 - Mobile portrait layouts.
-- Advanced analytics dashboards or custom visualization suites.
+- Advanced analytics dashboards or bespoke visualizations.
 
-This document evolves with user insights. Keep revisions versioned so designers, engineers, and AI agents stay aligned while
-bringing ADE’s core UI to life.
+Keep this document current as we learn from users. Clear rationale prevents churn and keeps engineering, design, and AI agents aligned while we deliver ADE’s core UI.
