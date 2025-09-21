@@ -810,6 +810,17 @@ def get_cached_authenticated_identity(request: Request) -> AuthenticatedIdentity
     return identity
 
 
+def event_actor_from_identity(identity: AuthenticatedIdentity) -> dict[str, str]:
+    """Return default event metadata for the supplied ``identity``."""
+
+    actor_label = identity.user.email or identity.user.user_id
+    return {
+        "actor_type": "user",
+        "actor_id": identity.user.user_id,
+        "actor_label": actor_label,
+    }
+
+
 def get_current_user(
     identity: AuthenticatedIdentity = Depends(get_authenticated_identity),
 ) -> User:
@@ -1762,6 +1773,7 @@ __all__ = [
     "clear_caches",
     "complete_login",
     "exchange_code",
+    "event_actor_from_identity",
     "get_api_key",
     "get_authenticated_identity",
     "get_cached_authenticated_identity",

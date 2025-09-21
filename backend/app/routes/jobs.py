@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from ..services.auth import get_current_user
+from ..services import auth as auth_service
 from ..db import get_db
 from ..models import Event, Job
 from ..schemas import (
@@ -39,7 +39,8 @@ from ..services.jobs import (
 router = APIRouter(
     prefix="/jobs",
     tags=["jobs"],
-    dependencies=[Depends(get_current_user)],
+    # Resolve authentication once per request so handlers can reuse the cached identity.
+    dependencies=[Depends(auth_service.get_authenticated_identity)],
 )
 
 
@@ -58,8 +59,15 @@ def _event_to_response(event: Event) -> EventResponse:
     response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
 )
-def create_job_endpoint(payload: JobCreate, db: Session = Depends(get_db)) -> JobResponse:
+def create_job_endpoint(
+    payload: JobCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> JobResponse:
     """Create a job for the supplied document type."""
+
+    identity = auth_service.get_cached_authenticated_identity(request)
+    actor_defaults = auth_service.event_actor_from_identity(identity)
 
     try:
         job = create_job(
@@ -71,8 +79,9 @@ def create_job_endpoint(payload: JobCreate, db: Session = Depends(get_db)) -> Jo
             metrics=payload.metrics,
             logs=payload.logs,
             configuration_id=payload.configuration_id,
-            event_actor_type="user",
-            event_actor_label=payload.created_by,
+            event_actor_type=actor_defaults["actor_type"],
+            event_actor_id=actor_defaults["actor_id"],
+            event_actor_label=actor_defaults["actor_label"],
             event_source="api",
         )
     except ConfigurationNotFoundError as exc:
@@ -180,19 +189,26 @@ def list_job_events(
     response_model_exclude_none=True,
 )
 def update_job_endpoint(
-    job_id: str, payload: JobUpdate, db: Session = Depends(get_db)
+    job_id: str,
+    payload: JobUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
 ) -> JobResponse:
     """Update mutable job fields."""
 
     update_kwargs = payload.model_dump(exclude_unset=True)
+
+    identity = auth_service.get_cached_authenticated_identity(request)
+    actor_defaults = auth_service.event_actor_from_identity(identity)
 
     try:
         job = update_job(
             db,
             job_id,
             **update_kwargs,
-            event_actor_type="system",
-            event_actor_label="api",
+            event_actor_type=actor_defaults["actor_type"],
+            event_actor_id=actor_defaults["actor_id"],
+            event_actor_label=actor_defaults["actor_label"],
             event_source="api",
         )
     except JobNotFoundError as exc:

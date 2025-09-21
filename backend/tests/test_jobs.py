@@ -2,6 +2,10 @@ import io
 from datetime import datetime, timezone
 from typing import Any
 
+from backend.app.db import get_sessionmaker
+from backend.app.models import User
+from backend.tests.conftest import DEFAULT_USER_EMAIL
+
 def _activate_configuration(
     client, *, document_type: str = "remittance", title: str = "Active configuration"
 ) -> dict[str, Any]:
@@ -57,6 +61,13 @@ def _create_job(
     response = client.post("/jobs", json=payload)
     assert response.status_code == 201
     return response.json()
+
+
+def _default_user_id() -> str:
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        user = db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one()
+        return user.user_id
 
 
 def _soft_delete_document(client, document_id: str, *, deleted_by: str = "tester") -> None:
@@ -287,4 +298,50 @@ def test_update_job_updates_metrics(app_client) -> None:
     payload = response.json()
     assert payload["metrics"] == update["metrics"]
     assert payload["logs"] == update["logs"]
+
+
+def test_job_events_default_actor_metadata(app_client) -> None:
+    client, _, _ = app_client
+    configuration = _activate_configuration(client)
+    document = _upload_document(client)
+    user_id = _default_user_id()
+
+    job = _create_job(client, configuration, document)
+
+    initial_events = client.get(
+        "/events",
+        params={"entity_type": "job", "entity_id": job["job_id"]},
+    )
+    assert initial_events.status_code == 200
+    initial_payload = initial_events.json()
+    assert initial_payload["total"] == 1
+    created_event = next(
+        item
+        for item in initial_payload["items"]
+        if item["event_type"] == "job.created"
+    )
+    assert created_event["actor_type"] == "user"
+    assert created_event["actor_id"] == user_id
+    assert created_event["actor_label"] == DEFAULT_USER_EMAIL
+
+    update_response = client.patch(
+        f"/jobs/{job['job_id']}", json={"status": "completed"}
+    )
+    assert update_response.status_code == 200
+
+    updated_events = client.get(
+        "/events",
+        params={"entity_type": "job", "entity_id": job["job_id"]},
+    )
+    assert updated_events.status_code == 200
+    updated_payload = updated_events.json()
+    assert updated_payload["total"] == 2
+    status_event = next(
+        item
+        for item in updated_payload["items"]
+        if item["event_type"] == "job.status.completed"
+    )
+    assert status_event["actor_type"] == "user"
+    assert status_event["actor_id"] == user_id
+    assert status_event["actor_label"] == DEFAULT_USER_EMAIL
 
