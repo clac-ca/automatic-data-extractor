@@ -1,8 +1,8 @@
 # ADE frontend core blueprint
 
-ADE's frontend must make complex extraction workflows feel approachable. This revision focuses on the smallest set of screens and
-patterns required for a reliable v1. Anything beyond these fundamentals—tours, advanced analytics, theming—remains out of scope
-until the core surfaces are live and stable.
+ADE's frontend must make complex extraction workflows feel approachable. This revision narrows the blueprint to the smallest set
+of layouts, interactions, and dependencies required for a reliable v1. Anything beyond these fundamentals—tours, heavy
+customization, deep analytics—stays out of scope until the core surfaces are live and stable.
 
 ---
 
@@ -10,7 +10,9 @@ until the core surfaces are live and stable.
 
 - **Source of truth** – Defines layout, interaction patterns, and supporting tooling for ADE's web client.
 - **Scope** – Desktop-first React application built for analysts and engineers. Portrait mobile layouts, onboarding flows, and
-  growth features are intentionally deferred.
+  growth hooks are intentionally deferred.
+- **Maintainability** – Favor predictable layouts, typed APIs, and clear seams for testing. Prefer shipping fewer, sturdier
+  components over speculative abstractions.
 - **Change hygiene** – Update this file whenever layout decisions, dependencies, or API expectations shift. Capture rationale so
   future contributors understand trade-offs.
 
@@ -26,6 +28,7 @@ until the core surfaces are live and stable.
 1. **Immediate clarity** – Every surface answers “What is this and what changed?” before exposing controls.
 2. **Confidence while iterating** – Users should see progress, test outcomes, and promotion states without hunting.
 3. **Deterministic actions** – Buttons, shortcuts, and navigation affordances do exactly what they say. No hidden side effects.
+4. **Layered complexity** – Start with the smallest workable feature slice and leave obvious seams for follow-on enhancements.
 
 ### 2.3 Anti-goals
 - No dense data dumps without framing copy or empty-state guidance.
@@ -139,7 +142,8 @@ backend contracts verified upfront.
   validation errors.
 - **Implementation approach** – Monaco integrates via `@monaco-editor/react` wrapped by `ScriptEditor` to manage language mode,
   formatting, and keyboard shortcuts. Save actions dispatch React Query mutations; dirty state feeds both local banners and the
-  shell indicator. Test execution renders streaming logs as structured rows; failures pin the inspector to the relevant metadata.
+  shell indicator. Test execution renders the API response logs in order; no streaming in v1. Failures highlight the related
+  metadata section inside the inspector.
 
 ### 5.4 Upload & run console (`/runs/new`)
 - **Layout** – Split view. Left pane contains drag-and-drop area with queued files table (filename, size, validation status).
@@ -148,10 +152,10 @@ backend contracts verified upfront.
 - **Primary data** – `POST /runs` accepts metadata and file handles, responding with run ID. `GET /runs/:id` returns summary
   status, timeline events, and per-document outcomes.
 - **Key interactions** – Add/remove files, start a run, observe progress, retry failed documents individually.
-- **Implementation approach** – Use `react-dropzone` with a `useFileQueue` hook managing acceptance rules and deduplication. After
-  submission, poll `GET /runs/:id` via React Query with an exponential backoff interval; upgrade to SSE once backend endpoints
-  stabilize. Timeline entries use Radix `Accordion` for optional log expansion. Retry action re-queues a single file via
-  `POST /runs/:id/retry` and refreshes the run query.
+- **Implementation approach** – Use `react-dropzone` with a `useFileQueue` hook managing acceptance rules and deduplication.
+  After submission, poll `GET /runs/:id` at a modest fixed interval; capture the interval in a hook so upgrading to server
+  events later is isolated. Timeline entries render simple status rows, with optional expansion handled via Radix `Accordion`.
+  Retry action re-queues a single file via `POST /runs/:id/retry` and refreshes the run query.
 
 ### 5.5 Run results & comparison (`/runs/:id`)
 - **Layout** – Page header summarizing status, duration, triggering user, and primary action “Mark as reviewed”. Body contains
@@ -160,9 +164,15 @@ backend contracts verified upfront.
   /runs/:id/diff` returns baseline run metadata plus column-level diffs and severity indicators.
 - **Key interactions** – Toggle tabs, filter/sort results, export CSV, mark run as reviewed, deep-link to the configuration
   workspace for problematic columns.
-- **Implementation approach** – Results tab reuses the shared `DataTable` wrapper with server pagination. Diff tab presents
-  summary stats followed by grouped rows showing additions/removals using semantic tokens; virtualization is avoided to keep
-  behavior deterministic. “Mark as reviewed” triggers a mutation invalidating run list and document type library caches.
+- **Implementation approach** – Results tab reuses the shared `DataTable` wrapper with server pagination. Diff tab reuses the
+  same table shell to render grouped additions/removals with semantic tokens; keep the layout deterministic and avoid
+  virtualization. “Mark as reviewed” triggers a mutation invalidating run list and document type library caches.
+
+### 5.6 Deferred for post-v1
+- In-app tours, onboarding checklists, and personalization.
+- Inline commenting, version timelines, and advanced audit diff visualizations.
+- Realtime run streaming and resumable uploads.
+- Theming, per-user preferences, and complex analytics dashboards.
 
 ---
 
@@ -248,3 +258,13 @@ We intentionally avoid full design-system frameworks to keep styling predictable
 
 Before starting implementation, confirm the backend exposes the endpoints listed in Section 5, finalizes payload schemas, and
 documents authentication headers. Any gaps should be captured as follow-up tasks rather than patched in ad hoc.
+
+---
+
+## 9. Integration checkpoints
+- **Authentication** – Lock the header format, refresh behavior, and how credentials surface in local development.
+- **Error contract** – Capture the JSON error envelope (code, message, field errors) so hooks can normalize consistently.
+- **Sample data** – Gather anonymized documents and canonical API responses to drive Storybook stories and Playwright fixtures.
+- **Environment config** – Decide on a single entry point for runtime configuration (e.g., `window.__ADE_CONFIG__`) to avoid
+  hardcoding URLs in bundles.
+- **Permissions** – Clarify whether routes hide or disable actions based on roles; defer to backend feature flags when uncertain.
