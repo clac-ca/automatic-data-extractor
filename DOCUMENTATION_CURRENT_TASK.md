@@ -1,39 +1,45 @@
-# Documentation Plan — API key provisioning workflows
+# Documentation Plan — Describe SSO login and API key usage plainly
 
 ## Goal
-Equip operators with clear guidance for issuing, revoking, and auditing API keys through the new admin endpoints while reinforcing secure token handling and event visibility.
+Document the reintroduced authentication options so operators and integrators know exactly how to use SSO redirects and API key
+authentication without wading through legacy comparisons.
 
 ## Deliverables (execute in order)
 
-1. **Author the API key management guide**
+1. **SSO quick-start page**
 
-   * Create `docs/security/api-key-management.md` describing the lifecycle (creation, storage expectations, revocation) and include HTTP request/response samples plus curl snippets.
-   * Highlight how the raw token is returned once and how to store it securely.
-   * Document the events emitted for creation and revocation so audit teams know what to monitor.
+   * Create `docs/security/sso-login.md` that sketches the browser redirect → consent → callback sequence, shows the minimal
+     environment variables (`ADE_SSO_CLIENT_ID`, `ADE_SSO_CLIENT_SECRET`, `ADE_SSO_ISSUER`, `ADE_SSO_REDIRECT_URL`), and explains
+     that ADE issues its own access token after verifying the IdP’s ID/access token.
+   * Include a short troubleshooting section covering common OIDC errors (mismatched redirect URI, missing audience, unverified
+     email).
 
-2. **Update navigation and references**
+2. **API key how-to**
 
-   * Link the new guide from `docs/security/README.md` with a short summary.
-   * Surface the guide in `docs/README.md` under the security/operations sections so automation owners can find it quickly.
+   * Update or create `docs/security/api-keys.md` describing how to generate a key (admin CLI/endpoint), how the key format works
+     (`prefix.secret`), and how to send it via `X-API-Key`.
+   * Note storage expectations (copy once, treat as a secret, rotate via the admin endpoint) and highlight that verification is
+     constant-time with throttled last-seen updates.
 
-3. **Call out operational safeguards**
+3. **Navigation refresh**
 
-   * Note in the operations runbook index (`docs/operations/README.md`) that API key rotation guidance now lives in the security section.
-   * Add TODO placeholders for future UI-based key management once designs land.
+   * Link both guides from `docs/security/README.md`, `docs/README.md`, and any relevant integration indexes.
+   * Remove lingering references to the deprecated multi-mode auth stack so the documentation simply presents the current
+     behavior.
 
 ## Out of scope
 
-* Building UI affordances for API key management.
-* Revisiting authentication mode documentation beyond references needed for the new guide.
+* Alternative providers or advanced SSO federation patterns (stick to the single-authority flow).
+* UI-based key management (document API-first workflow only).
 
 ## Source material
 
-* Newly added API endpoints and Pydantic schemas.
-* Existing authentication mode documentation and event log references.
-* Backend service helpers for API keys in `backend/app/services/auth.py`.
+* Simplified OIDC and API key implementation outlined in `CURRENT_TASK.md`.
+* Existing FastAPI routes and identity helpers.
+* Auth tests covering token verification, throttling, and uniqueness.
 
 ## Definition of done
 
-* Security docs explain how to create, revoke, and audit API keys using the API.
-* Repository navigation points to the new guide from security and operations sections.
-* Follow-up TODOs capture UI work without leaving gaps in the interim guidance.
+* New or updated guides plainly explain how to complete an SSO login and how to call the API with an API key.
+* Navigation surfaces both guides without referencing the retired authentication modes.
+* Operators have actionable instructions without cross-referencing historical docs.

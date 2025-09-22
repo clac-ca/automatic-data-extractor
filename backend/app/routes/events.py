@@ -32,8 +32,7 @@ from ..services.jobs import JobNotFoundError, get_job as get_job_service
 router = APIRouter(
     prefix="/events",
     tags=["events"],
-    # Authentication runs once per request so handlers can use the cached identity when needed.
-    dependencies=[Depends(auth_service.get_authenticated_identity)],
+    dependencies=[Depends(auth_service.get_current_user)],
 )
 
 

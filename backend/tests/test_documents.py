@@ -366,11 +366,17 @@ def test_delete_document_removes_file_and_marks_metadata(app_client) -> None:
     events_payload = events_response.json()
     assert events_payload["total"] == 1
     assert events_payload["limit"] == 50
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        user = db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one()
     event = events_payload["items"][0]
     assert event["event_type"] == "document.deleted"
     assert event["entity_id"] == payload["document_id"]
-    assert event["actor_label"] == "ops@ade.local"
+    assert event["actor_type"] == "user"
+    assert event["actor_id"] == user.user_id
+    assert event["actor_label"] == user.email
     assert event["source"] == "api"
+    assert event["payload"]["deleted_by"] == "ops@ade.local"
     assert event["payload"]["delete_reason"] == "cleanup"
     assert "missing_before_delete" not in event["payload"]
 
@@ -465,6 +471,8 @@ def test_update_document_merges_metadata_and_emits_event(app_client) -> None:
         json={
             "metadata": {"status": "processed", "tags": ["initial"]},
             "event_type": "document.status.updated",
+            "actor_type": "service",
+            "actor_id": "sync-engine",
             "actor_label": "processor",
             "source": "api",
         },
@@ -480,6 +488,8 @@ def test_update_document_merges_metadata_and_emits_event(app_client) -> None:
     assert events_payload["total"] == 1
     event = events_payload["items"][0]
     assert event["event_type"] == "document.status.updated"
+    assert event["actor_type"] == "service"
+    assert event["actor_id"] == "sync-engine"
     assert event["actor_label"] == "processor"
     assert event["source"] == "api"
     assert event["payload"]["metadata"] == {"status": "processed", "tags": ["initial"]}
