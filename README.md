@@ -57,36 +57,30 @@ documents under `data/documents/` (with dedicated `uploads/` and `output/` child
 tree, or override `ADE_DATABASE_URL` / `ADE_DOCUMENTS_DIR` for bespoke paths.
 
 ### Authentication
-ADE exposes a small set of authentication modes controlled by the `ADE_AUTH_MODES` environment variable:
+ADE now issues short-lived JWT access tokens for every authenticated user. Humans typically obtain a token by submitting their
+email and password to `POST /auth/token` or by following the `/auth/sso/login` → `/auth/sso/callback` OpenID Connect flow. The
+SSO callback exchanges the authorization code with PKCE, validates the returned ID token against the provider JWKS, provisions
+verified users automatically, and finally returns an ADE token identical to the password flow. Automation clients authenticate
+with API keys stored as salted SHA-256 hashes; integrations send them in the `X-API-Key` header and reuse the same
+authorisation rules as human operators.
 
-- `basic` (default) – enable HTTP Basic credentials plus the cookie-backed sessions the UI expects.
-- `sso` – layer OIDC sign-in alongside the default sessions.
-- `none` – disable authentication entirely so every request runs with administrator privileges (handy for demos).
+Important environment variables:
 
-Session cookies are always issued when authentication is active, so there is no separate `session` toggle. Key environment
-variables include:
+- `ADE_AUTH_DISABLED` – bypass authentication entirely for local development (never use in production).
+- `ADE_JWT_SECRET_KEY` / `ADE_ACCESS_TOKEN_EXP_MINUTES` – configure the symmetric signing key and token lifetime.
+- `ADE_SSO_CLIENT_ID`, `ADE_SSO_CLIENT_SECRET`, `ADE_SSO_ISSUER`, `ADE_SSO_REDIRECT_URL`, `ADE_SSO_SCOPE`,
+  `ADE_SSO_RESOURCE_AUDIENCE` – enable the OIDC authorization-code flow.
+- `ADE_API_KEY_TOUCH_INTERVAL_SECONDS` – throttle how often API key `last_seen` fields are updated.
 
-- `ADE_AUTH_MODES` – comma separated list drawn from `none`, `basic`, and `sso` (default: `basic`).
-
-- `ADE_SESSION_COOKIE_NAME`, `ADE_SESSION_TTL_MINUTES`, `ADE_SESSION_COOKIE_SECURE`, `ADE_SESSION_COOKIE_DOMAIN`,
-  `ADE_SESSION_COOKIE_SAME_SITE` – control browser session behaviour.
-- `ADE_SSO_CLIENT_ID`, `ADE_SSO_CLIENT_SECRET`, `ADE_SSO_ISSUER`, `ADE_SSO_REDIRECT_URL`, `ADE_SSO_AUDIENCE`,
-  `ADE_SSO_CACHE_TTL_SECONDS` – configure
-  standards-compliant code exchanges when `sso` mode is active.
-
-API keys now complement these modes for automation clients. Provision a key once, store its hashed form in the database, and have integrations send `Authorization: Bearer <API_KEY>` on every request while humans continue using cookie sessions.
-
-User accounts live in the `users` table. A lightweight CLI (`python -m backend.app auth ...`) manages accounts with
-`create-user`, `reset-password`, `deactivate`, `promote`, and `list-users` commands. CLI operations emit events so audit logs
-capture administrative changes even when the API is offline.
+User accounts and API keys are both managed through the CLI:
 
 ```bash
 python -m backend.app auth create-user admin@example.com --password change-me --role admin
-python -m backend.app auth list-users
+python -m backend.app auth create-api-key admin@example.com --expires-in-days 90
 ```
 
-SSO environments expect RS256-signed ID tokens. ADE caches the provider discovery document and JWKS payloads for the configured
-TTL (`ADE_SSO_CACHE_TTL_SECONDS`) while still rejecting expired tokens or IDs signed by unknown keys.
+ADE caches the provider discovery document and JWKS payloads for active SSO integrations so repeated logins avoid network
+round-trips while still rejecting expired or unrecognised keys.
 
 ### Identifier strategy
 Documents, configurations, and events share the same ULID format for their primary keys and, in the case of documents, their stored filenames. UUIDv4 identifiers are widely standardised and perfectly random, which makes them a safe universal default, but that randomness also scatters writes across a database index and increases fragmentation. ULIDs remain 128-bit identifiers while adding a 48-bit timestamp prefix, so new values stay lexicographically sorted, keep SQLite indexes append-friendly, and preserve chronological ordering even if multiple workers generate IDs. We will stick with ULIDs for ADE’s ingestion-heavy workflows, while reserving UUIDv4s for situations where external interoperability or strict standards compliance outweigh those locality benefits.

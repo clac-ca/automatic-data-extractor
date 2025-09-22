@@ -9,33 +9,34 @@ Escalate to: Security lead if tokens stop validating, secrets leak, or anonymous
 
 # Authentication
 
-ADE's authentication stack is intentionally small. Users authenticate with an email/password pair and receive a JSON Web Token
-(JWT). The token must accompany every subsequent request via the standard `Authorization: Bearer <token>` header.
+ADE ships with three complementary authentication flows that all converge on the same authorisation checks:
 
-There is **no session state or API key subsystem**. Removing those pieces makes the code auditable, avoids hidden database writes,
-and keeps operational knobs to a minimum.
+1. **Email/password** – call `POST /auth/token` to receive a short-lived JWT.
+2. **OIDC single sign-on** – redirect to `/auth/sso/login`, complete the provider's authorisation flow, and exchange the code at `/auth/sso/callback`.
+3. **API keys** – issue hashed keys for automation clients and send them in the `X-API-Key` header.
 
-## 1. Configure the signer
-
-All tokens are signed with a symmetric key. Set the following environment variables before starting the API:
+## 1. Configure the core settings
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `ADE_JWT_SECRET_KEY` | _(unset)_ | Required unless authentication is explicitly disabled. Use a high-entropy value. |
-| `ADE_JWT_ALGORITHM` | `HS256` | Algorithm passed to PyJWT. Stick with the default unless you control all clients. |
-| `ADE_ACCESS_TOKEN_EXP_MINUTES` | `60` | Minutes until an issued token expires. Shorter lifetimes reduce blast radius. |
-| `ADE_AUTH_DISABLED` | `false` | Set to `true` to bypass authentication entirely for local demos. Never use in production. |
+| `ADE_AUTH_DISABLED` | `false` | Set to `true` only for local demos. All requests run as an administrator when disabled. |
+| `ADE_JWT_SECRET_KEY` | _(unset)_ | Required whenever authentication is enabled. Use a high-entropy string. |
+| `ADE_JWT_ALGORITHM` | `HS256` | Algorithm passed to PyJWT when signing ADE-issued tokens. |
+| `ADE_ACCESS_TOKEN_EXP_MINUTES` | `60` | Lifetime for ADE access tokens returned by both password and SSO flows. |
+| `ADE_SSO_CLIENT_ID` | _(unset)_ | OIDC client identifier used during `/auth/sso/login`. Required for SSO. |
+| `ADE_SSO_CLIENT_SECRET` | _(unset)_ | Confidential client secret presented to the token endpoint. |
+| `ADE_SSO_ISSUER` | _(unset)_ | Issuer URL used to download the discovery document and JWKS payloads. |
+| `ADE_SSO_REDIRECT_URL` | _(unset)_ | Redirect URI registered with the identity provider (must match `/auth/sso/callback`). |
+| `ADE_SSO_SCOPE` | `openid email profile` | Space-separated scope string requested during the authorisation step. |
+| `ADE_SSO_RESOURCE_AUDIENCE` | _(unset)_ | Optional audience to require on provider access tokens. Leave blank for IdPs that do not include an audience claim. |
+| `ADE_API_KEY_TOUCH_INTERVAL_SECONDS` | `300` | Minimum gap between `last_seen` updates for API keys. Increase to reduce write load on busy integrations. |
 
-Settings are cached on startup. In development you can call `config.reset_settings_cache()` to re-read the environment without a
-restart.
+`validate_settings()` runs during application start-up and fails fast if the signer or SSO configuration is incomplete.
 
-`validate_settings()` runs during app start-up and fails fast if authentication is enabled without a signing key. When
-`ADE_AUTH_DISABLED=true`, the API logs a loud warning and treats every request as an "anonymous" administrator, mirroring the
-previous development-only behaviour.
+## 2. Email/password tokens
 
-## 2. Issue tokens
-
-Clients obtain a token by POSTing form-encoded credentials to `/auth/token`:
+The password flow remains a simple form-encoded POST. Clients submit credentials to `/auth/token` and receive a JSON payload
+containing the access token:
 
 ```bash
 curl -X POST https://ade.internal/auth/token \
@@ -43,43 +44,38 @@ curl -X POST https://ade.internal/auth/token \
   -d "username=admin@example.com&password=secret123"
 ```
 
-Successful responses contain:
+The returned token embeds the user ID, email address, role, and expiry. Include it on subsequent calls via
+`Authorization: Bearer <token>`. `GET /auth/me` resolves the current user and is useful for smoke tests or debugging new
+integrations.
 
-```json
-{"access_token": "<JWT>", "token_type": "bearer"}
+## 3. Single sign-on
+
+Configure the OIDC environment variables listed above to enable `/auth/sso/login`. The endpoint performs the following steps:
+
+1. Fetch and cache the provider discovery document to locate the authorisation and token endpoints.
+2. Generate a PKCE code verifier/challenge pair plus a signed state cookie (`ade_sso_state`).
+3. Redirect the browser to the provider's authorisation URL.
+
+When the provider calls back into `/auth/sso/callback`, ADE exchanges the code, validates the RS256 ID token via the JWKS cache,
+optionally enforces an access-token audience, and provisions the user automatically when `email_verified` is true. Successful
+callbacks return the same ADE bearer token produced by the password flow, so the frontend and API clients do not need separate
+handling.
+
+## 4. API keys
+
+Issue API keys for automation clients with the CLI:
+
+```bash
+python -m backend.app auth create-api-key analyst@example.com --expires-in-days 30
 ```
 
-The token encodes the user ID, email address, role, and expiry. ADE verifies `exp` and `iat` on every request. Expired tokens
-raise `401 Token expired` and callers must authenticate again.
+The CLI prints the raw key once. Store it securely and present it on every request using the `X-API-Key` header. ADE stores only
+the prefix and a salted SHA-256 hash and updates the `last_seen_at`, `last_seen_ip`, and `last_seen_user_agent` columns at most
+once per the configured touch interval. Keys automatically stop working after their optional expiry timestamp.
 
-The `/auth/me` endpoint returns the current user's profile, making it easy to confirm which identity a token represents.
+## 5. Manage users and roles
 
-## 3. Secure routes
-
-Protected routers declare `Depends(auth_service.get_current_user)`. The dependency decodes the bearer token, looks up the user,
-and injects the ORM model into your handler. For event logging, call `auth_service.event_actor_from_user(current_user)` to obtain
-consistent `actor_*` metadata.
-
-Example route snippet:
-
-```python
-from fastapi import APIRouter, Depends
-from backend.app.services import auth as auth_service
-from backend.app.models import User
-
-router = APIRouter(prefix="/reports", dependencies=[Depends(auth_service.get_current_user)])
-
-@router.get("/me")
-def who_am_i(current_user: User = Depends(auth_service.get_current_user)) -> dict[str, str]:
-    return {"email": current_user.email, "role": current_user.role.value}
-```
-
-If a request omits the header or the token fails verification, FastAPI returns `401 Not authenticated` with a `WWW-Authenticate:
-Bearer` challenge, signalling clients to re-authenticate.
-
-## 4. Manage users
-
-Use the CLI helpers defined in `backend/app/services/auth.py`:
+User management is unchanged: use the CLI for provisioning and password resets.
 
 ```bash
 python -m backend.app auth create-user admin@example.com --password change-me --role admin
@@ -87,21 +83,15 @@ python -m backend.app auth set-password analyst@example.com --password new-secre
 python -m backend.app auth list-users
 ```
 
-CLI commands operate directly on the database and log structured messages (`user.created`, `user.password-updated`) for audit
-trails. Passwords are hashed with the standard library `hashlib.scrypt` parameters defined in the same module.
-
-## 5. Development shortcuts
-
-For rapid prototyping you can disable authentication entirely by setting `ADE_AUTH_DISABLED=true`. The server logs a warning and
-injects a synthetic administrator user so existing dependencies continue to work. Remember to remove the override before
-shipping any build beyond local development.
+All commands emit structured logs for audit trails. Passwords continue to use `hashlib.scrypt` with fixed parameters in
+`auth_service.hash_password()`.
 
 ## Validation checklist
 
-- `POST /auth/token` succeeds for known credentials and fails for incorrect ones.
-- `GET /auth/me` returns the expected email and role when presented with the issued token.
-- Requests without `Authorization: Bearer` headers are rejected with `401 Not authenticated`.
-- Tokens with manipulated signatures or expired timestamps raise `401 Invalid token`.
-- CLI user management commands run without errors and emit audit logs.
-
-This simplified model keeps the authentication surface small, auditable, and easy to operate.
+- `POST /auth/token` succeeds for valid credentials and fails for invalid ones.
+- `/auth/sso/login` redirects to the configured identity provider and `/auth/sso/callback` returns an ADE token for verified
+  users.
+- API requests with `X-API-Key` resolve to the expected user while malformed keys return `401 Invalid API key`.
+- `GET /auth/me` returns the correct profile for both bearer tokens and API keys.
+- Requests without credentials receive `401 Not authenticated` with a `WWW-Authenticate: Bearer` challenge.
+- CLI user and API key commands run without errors and write audit logs.

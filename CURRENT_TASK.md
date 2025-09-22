@@ -1,42 +1,31 @@
-# 🔄 Next Task — Reintroduce SSO login and API keys with simple, standard patterns
+# 🔄 Next Task — Finish API key lifecycle management and audit coverage
 
 ## Context
-We stripped ADE down to local email/password sign-in with first-party JWTs. The next iteration should restore single sign-on for
-human users and API keys for automation without reintroducing the sprawling auth matrix we removed. We can lean on standard OIDC
-flows and deterministic token hashing so the implementation stays compact while matching industry expectations.
+API keys can now be issued, but administrators cannot inspect existing keys, rotate them, or see when they were last used. We
+also lack audit events for API key creation and SSO logins. The next iteration should expose the lifecycle endpoints and surface
+activity so operators can manage credentials without digging into the database.
 
 ## Goals
-1. **Rebuild SSO around a textbook OIDC authorization-code flow** using the discovery metadata we already cache and PyJWT for
-   token validation.
-2. **Provide programmatic access with hashed API keys** that reuse our existing identity wiring and touch throttling.
-3. **Refresh docs and references to describe the new capabilities directly** (no legacy call-outs, because nothing in
-   production depends on the old stack).
+1. Provide read/revoke endpoints for API keys, including last-seen metadata and optional expiry updates.
+2. Emit structured events whenever API keys are issued or revoked and when SSO logins succeed or fail.
+3. Update documentation and OpenAPI descriptions to reflect the management APIs and new audit fields.
 
 ## Plan of attack
-1. **SSO login (OIDC authorization-code + PKCE)**
-   * Add config for `sso_client_id`, `sso_client_secret`, `sso_issuer`, `sso_redirect_url`, and a default scope string.
-   * Expose `/auth/sso/login` that redirects to `{issuer}/authorize` with `response_type=code`, `code_challenge` (PKCE),
-     `client_id`, `redirect_uri`, and `scope`.
-   * Implement `/auth/sso/callback` that exchanges the code at the provider’s token endpoint via `httpx`, validates the returned
-     ID token with `verify_jwt_via_jwks`, and accepts only access tokens for downstream API calls (`audience = resource_audience`).
-   * Map `sub`/`email` to an ADE user (auto-provision when `email_verified` is true), then issue our standard ADE access token so
-     the rest of the stack keeps working unchanged.
+1. **API key listing/revocation**
+   * Add `GET /auth/api-keys` (admin-only) returning issued keys with `token_prefix`, `expires_at`, and last-seen metadata.
+   * Implement `DELETE /auth/api-keys/{api_key_id}` to revoke keys immediately and clear their hashes.
+   * Extend the CLI with `list-api-keys`/`revoke-api-key` commands that wrap the new service functions.
 
-2. **API key issuance and verification**
-   * Define an `api_keys` table with `id`, `user_id`, `token_prefix`, `token_hash`, optional `expires_at`, timestamps, and
-     uniqueness on `token_prefix`/`token_hash`.
-   * Provide an admin CLI/endpoint that generates `prefix.random_secret`, stores `hash(secret)` (e.g., `hashlib.sha256` + base64),
-     and returns the raw key once. Keep touch throttling so we update `last_seen` at most every few minutes.
-   * Accept the key through an `X-API-Key` header, parse the prefix to narrow the lookup, compare hashes in constant time, and
-     reuse `get_authenticated_identity` to attach the user.
+2. **Audit events and logging**
+   * Record `auth.api_key.created`/`auth.api_key.revoked` events with actor metadata, and `auth.sso.login.*` events capturing
+     provider, email, and outcome.
+   * Ensure events reuse the existing event recording service so they appear in `/events` feeds.
 
-3. **Documentation refresh**
-   * Update `README.md`, security docs, and integration guides to describe the SSO redirect/callback flow and API key usage at a
-     high level.
-   * Remove transitional notes about the now-removed legacy stack—simply document the new capabilities as the authoritative
-     behavior.
+3. **Docs and OpenAPI refresh**
+   * Document the new endpoints and CLI commands in the authentication guides and reference tables.
+   * Update the OpenAPI schema to describe the API key response model and the new audit events.
 
 ## Definition of done
-- Human users can authenticate through an external IdP via OIDC and receive ADE-issued JWTs for API access.
-- Automation clients can use API keys backed by hashed storage and existing throttled touch semantics.
-- Documentation explains both flows without referencing deprecated approaches.
+- Administrators can list and revoke API keys via API or CLI, and responses include last-seen information.
+- SSO logins and API key lifecycle actions emit audit events visible through the existing event APIs.
+- Documentation and OpenAPI reflect the management endpoints and describe the new audit signals.
