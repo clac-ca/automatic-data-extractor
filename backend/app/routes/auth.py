@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from .. import config
 from ..db import get_db
 from ..models import User
-from ..schemas import TokenResponse, UserProfile
+from ..schemas import (
+    APIKeyIssueRequest,
+    APIKeyIssueResponse,
+    TokenResponse,
+    UserProfile,
+)
 from ..services import auth as auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -38,7 +46,7 @@ def issue_access_token(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
     token = auth_service.create_access_token(user, settings)
-    return TokenResponse(access_token=token, token_type="bearer")
+    return TokenResponse(access_token=token)
 
 
 @router.get("/me", response_model=UserProfile)
@@ -46,6 +54,126 @@ async def who_am_i(current_user: User = Depends(auth_service.get_current_user)) 
     """Return the profile for the currently authenticated user."""
 
     return UserProfile.model_validate(current_user)
+
+
+@router.get("/sso/login", openapi_extra={"security": []})
+async def start_sso_login(
+    request: Request,
+    settings: config.Settings = Depends(config.get_settings),
+) -> RedirectResponse:
+    """Initiate an authorization-code flow with PKCE."""
+
+    challenge = await auth_service.prepare_sso_login(settings)
+    redirect = RedirectResponse(challenge.redirect_url, status_code=status.HTTP_302_FOUND)
+    secure_cookie = request.url.scheme == "https"
+    redirect.set_cookie(
+        key=auth_service.SSO_STATE_COOKIE,
+        value=challenge.state_token,
+        httponly=True,
+        secure=secure_cookie,
+        max_age=challenge.expires_in,
+        samesite="lax",
+        path="/auth/sso",
+    )
+    return redirect
+
+
+@router.get("/sso/callback", response_model=TokenResponse, openapi_extra={"security": []})
+async def finish_sso_login(
+    request: Request,
+    response: Response,
+    code: str | None = None,
+    state: str | None = None,
+    db: Session = Depends(get_db),
+    settings: config.Settings = Depends(config.get_settings),
+) -> TokenResponse:
+    """Complete the SSO flow and issue an ADE access token."""
+
+    if not settings.sso_enabled:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="SSO not configured")
+    if not code or not state:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Missing authorization code or state")
+
+    state_cookie = request.cookies.get(auth_service.SSO_STATE_COOKIE)
+    if not state_cookie:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Missing SSO state cookie")
+
+    try:
+        stored_state = auth_service.decode_sso_state(state_cookie, settings)
+    finally:
+        response.delete_cookie(auth_service.SSO_STATE_COOKIE, path="/auth/sso")
+
+    if stored_state.state != state:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="State mismatch")
+
+    token_response = await auth_service.exchange_authorization_code(
+        settings,
+        code=code,
+        code_verifier=stored_state.code_verifier,
+    )
+    metadata = await auth_service.get_oidc_metadata(settings)
+
+    id_token = token_response.get("id_token")
+    access_token = token_response.get("access_token")
+    token_type = str(token_response.get("token_type", "")).lower()
+    if not id_token or not access_token or token_type != "bearer":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid token response from identity provider")
+
+    id_claims = auth_service.verify_jwt_via_jwks(
+        id_token,
+        metadata.jwks_uri,
+        audience=settings.sso_client_id,
+        issuer=settings.sso_issuer,
+        nonce=stored_state.nonce,
+    )
+
+    if settings.sso_resource_audience:
+        auth_service.verify_jwt_via_jwks(
+            access_token,
+            metadata.jwks_uri,
+            audience=settings.sso_resource_audience,
+            issuer=settings.sso_issuer,
+        )
+
+    email = id_claims.get("email")
+    subject = id_claims.get("sub")
+    email_verified = bool(id_claims.get("email_verified"))
+    if not email or not subject:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Identity provider response missing required claims")
+
+    user = auth_service.resolve_sso_user(
+        db,
+        provider=settings.sso_issuer,
+        subject=str(subject),
+        email=str(email),
+        email_verified=email_verified,
+    )
+
+    token = auth_service.create_access_token(user, settings)
+    return TokenResponse(access_token=token)
+
+
+@router.post("/api-keys", response_model=APIKeyIssueResponse)
+def create_api_key(
+    payload: APIKeyIssueRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(auth_service.require_admin),
+) -> APIKeyIssueResponse:
+    """Issue a new API key for the requested user."""
+
+    target_email = payload.email.strip().lower()
+    target = db.query(User).filter(User.email == target_email).one_or_none()
+    if target is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found")
+    if not target.is_active:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Target user is inactive")
+
+    expires_at_dt = None
+    if payload.expires_in_days is not None:
+        expires_at_dt = datetime.now(timezone.utc) + timedelta(days=payload.expires_in_days)
+
+    raw_key, api_key = auth_service.issue_api_key(db, target, expires_at=expires_at_dt)
+    return APIKeyIssueResponse(api_key=raw_key, expires_at=api_key.expires_at)
 
 
 __all__ = ["router"]
