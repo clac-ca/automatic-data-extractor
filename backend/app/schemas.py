@@ -75,6 +75,22 @@ class APIKeyIssueResponse(BaseModel):
     expires_at: str | None = None
 
 
+class APIKeySummary(BaseModel):
+    """Metadata describing an issued API key."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    api_key_id: str
+    user_id: str
+    user_email: str
+    token_prefix: str
+    created_at: str
+    expires_at: str | None = None
+    last_seen_at: str | None = None
+    last_seen_ip: str | None = None
+    last_seen_user_agent: str | None = None
+
+
 class DocumentResponse(BaseModel):
     """API representation of stored document metadata."""
 

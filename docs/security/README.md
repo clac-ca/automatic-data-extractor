@@ -13,7 +13,9 @@ ADE ships with deterministic authentication logic and lightweight account manage
 
 ## Available guides
 
-- [Authentication modes](./authentication-modes.md) — compare HTTP Basic, cookie sessions, and OIDC SSO; includes environment variable matrix.
+- [Authentication modes](./authentication-modes.md) — overview of password logins, OIDC SSO, and API keys with environment variables.
+- [SSO login quick start](./sso-login.md) — walk through the redirect flow, PKCE state handling, and troubleshooting tips.
+- [API key management](./api-keys.md) — issue, rotate, revoke, and audit automation credentials.
 - [SSO setup and recovery](./sso-setup.md) — configure discovery, callbacks, and JWKS caching behaviour; covers validation and recovery steps.
 
 ## Planned runbooks (TODO)

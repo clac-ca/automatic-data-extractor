@@ -73,6 +73,10 @@ The CLI prints the raw key once. Store it securely and present it on every reque
 the prefix and a salted SHA-256 hash and updates the `last_seen_at`, `last_seen_ip`, and `last_seen_user_agent` columns at most
 once per the configured touch interval. Keys automatically stop working after their optional expiry timestamp.
 
+Use `GET /auth/api-keys` or `python -m backend.app auth list-api-keys` to review active keys, and `DELETE /auth/api-keys/{api_key_id}`
+or `python -m backend.app auth revoke-api-key <api_key_id>` to revoke credentials immediately. Both creation and revocation emit
+audit events so operators can track who issued or disabled a key.
+
 ## 5. Manage users and roles
 
 User management is unchanged: use the CLI for provisioning and password resets.

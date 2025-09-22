@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 
 from sqlalchemy import MetaData, create_engine
 from sqlalchemy.engine import Engine, URL, make_url
