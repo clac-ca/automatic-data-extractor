@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from .. import config
 from ..db import get_db, get_sessionmaker
 from ..models import APIKey, User, UserRole
+from .events import EventRecord, record_event
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,21 @@ _SCRYPT_P = 1
 
 _API_KEY_PREFIX_LEN = 8
 _API_KEY_SECRET_BYTES = 32
+
+
+@dataclass(frozen=True, slots=True)
+class APIKeyListing:
+    """Serialised representation of an issued API key."""
+
+    api_key_id: str
+    user_id: str
+    user_email: str
+    token_prefix: str
+    created_at: str
+    expires_at: str | None
+    last_seen_at: str | None
+    last_seen_ip: str | None
+    last_seen_user_agent: str | None
 
 SSO_STATE_COOKIE = "ade_sso_state"
 _SSO_STATE_TTL_SECONDS = 300
@@ -163,11 +179,62 @@ def _generate_api_key_components() -> tuple[str, str]:
     return prefix, secret
 
 
+def _build_api_key_event_payload(
+    api_key: APIKey,
+    *,
+    user_email: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "user_id": api_key.user_id,
+        "user_email": user_email,
+        "token_prefix": api_key.token_prefix,
+        "expires_at": api_key.expires_at,
+        "created_at": api_key.created_at,
+        "last_seen_at": api_key.last_seen_at,
+        "last_seen_ip": api_key.last_seen_ip,
+        "last_seen_user_agent": api_key.last_seen_user_agent,
+    }
+
+
+def record_api_key_event(
+    db: Session,
+    *,
+    event_type: str,
+    api_key: APIKey,
+    actor: Mapping[str, str] | None = None,
+    source: str | None = None,
+    user_email: str | None = None,
+) -> None:
+    if user_email is None:
+        user_email = (
+            db.query(User.email).filter(User.user_id == api_key.user_id).scalar()
+        )
+
+    actor_payload = actor or {}
+    payload = _build_api_key_event_payload(api_key, user_email=user_email)
+    record_event(
+        db,
+        EventRecord(
+            event_type=event_type,
+            entity_type="api_key",
+            entity_id=api_key.api_key_id,
+            payload=payload,
+            actor_type=actor_payload.get("actor_type"),
+            actor_id=actor_payload.get("actor_id"),
+            actor_label=actor_payload.get("actor_label"),
+            source=source,
+        ),
+        commit=False,
+    )
+
+
 def issue_api_key(
     db: Session,
     user: User,
     *,
     expires_at: datetime | None = None,
+    actor: Mapping[str, str] | None = None,
+    source: str | None = None,
 ) -> tuple[str, APIKey]:
     """Create a new API key for the supplied user and return the raw secret."""
 
@@ -182,11 +249,72 @@ def issue_api_key(
     db.add(api_key)
     db.flush()
     db.refresh(api_key)
+    record_api_key_event(
+        db,
+        event_type="auth.api_key.created",
+        api_key=api_key,
+        actor=actor,
+        source=source,
+        user_email=user.email,
+    )
     logger.info(
         "Issued API key",
         extra={"api_key_id": api_key.api_key_id, "user_id": user.user_id},
     )
     return f"{prefix}.{secret}", api_key
+
+
+def list_api_keys(db: Session) -> list[APIKeyListing]:
+    """Return active API keys ordered by creation time."""
+
+    rows = (
+        db.query(APIKey, User.email)
+        .join(User, APIKey.user_id == User.user_id)
+        .order_by(APIKey.created_at.desc())
+        .all()
+    )
+    return [
+        APIKeyListing(
+            api_key_id=api_key.api_key_id,
+            user_id=api_key.user_id,
+            user_email=email,
+            token_prefix=api_key.token_prefix,
+            created_at=api_key.created_at,
+            expires_at=api_key.expires_at,
+            last_seen_at=api_key.last_seen_at,
+            last_seen_ip=api_key.last_seen_ip,
+            last_seen_user_agent=api_key.last_seen_user_agent,
+        )
+        for api_key, email in rows
+    ]
+
+
+def revoke_api_key(
+    db: Session,
+    api_key_id: str,
+    *,
+    actor: Mapping[str, str] | None = None,
+    source: str | None = None,
+) -> None:
+    """Delete an API key and emit a revocation event."""
+
+    api_key = db.get(APIKey, api_key_id)
+    if api_key is None:
+        msg = f"API key {api_key_id!r} not found"
+        raise ValueError(msg)
+
+    record_api_key_event(
+        db,
+        event_type="auth.api_key.revoked",
+        api_key=api_key,
+        actor=actor,
+        source=source,
+    )
+    logger.info(
+        "Revoked API key",
+        extra={"api_key_id": api_key.api_key_id, "user_id": api_key.user_id},
+    )
+    db.delete(api_key)
 
 
 def _parse_timestamp(value: str | None) -> datetime | None:
@@ -757,6 +885,25 @@ def register_cli(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]
     )
     api_key_parser.set_defaults(handler=_cli_create_api_key)
 
+    list_keys_parser = commands.add_parser(
+        "list-api-keys", help="List issued API keys"
+    )
+    list_keys_parser.set_defaults(handler=_cli_list_api_keys)
+
+    revoke_parser = commands.add_parser(
+        "revoke-api-key", help="Revoke an API key by identifier"
+    )
+    revoke_parser.add_argument("api_key_id", help="API key ULID to revoke")
+    revoke_parser.set_defaults(handler=_cli_revoke_api_key)
+
+
+_CLI_ACTOR: Mapping[str, str] = {
+    "actor_type": "system",
+    "actor_id": "cli",
+    "actor_label": "auth cli",
+}
+_CLI_SOURCE = "cli"
+
 
 def _with_session(func: Callable[[Session, argparse.Namespace], None]) -> Callable[[argparse.Namespace], int]:
     def _wrapper(args: argparse.Namespace) -> int:
@@ -800,9 +947,47 @@ def _cli_create_api_key(db: Session, args: argparse.Namespace) -> None:  # pragm
             raise ValueError("expires-in-days must be positive")
         expires_at = _now() + timedelta(days=args.expires_in_days)
 
-    raw_key, _ = issue_api_key(db, user, expires_at=expires_at)
+    raw_key, _ = issue_api_key(
+        db,
+        user,
+        expires_at=expires_at,
+        actor=_CLI_ACTOR,
+        source=_CLI_SOURCE,
+    )
     db.commit()
     print(raw_key)
+
+
+@_with_session
+def _cli_list_api_keys(db: Session, args: argparse.Namespace) -> None:  # pragma: no cover - CLI output
+    del args  # unused container for argparse namespace
+    keys = list_api_keys(db)
+    if not keys:
+        print("No API keys issued")
+        return
+
+    for key in keys:
+        expires = key.expires_at or "-"
+        last_seen = key.last_seen_at or "-"
+        print(
+            f"{key.api_key_id} {key.token_prefix} {key.user_email} "
+            f"expires={expires} last_seen={last_seen}"
+        )
+
+
+@_with_session
+def _cli_revoke_api_key(db: Session, args: argparse.Namespace) -> None:
+    try:
+        revoke_api_key(
+            db,
+            args.api_key_id,
+            actor=_CLI_ACTOR,
+            source=_CLI_SOURCE,
+        )
+        db.commit()
+        print(f"Revoked {args.api_key_id}")  # pragma: no cover - CLI output
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
 
 
 __all__ = [
@@ -828,4 +1013,8 @@ __all__ = [
     "validate_settings",
     "verify_jwt_via_jwks",
     "verify_password",
+    "APIKeyListing",
+    "list_api_keys",
+    "revoke_api_key",
+    "record_api_key_event",
 ]

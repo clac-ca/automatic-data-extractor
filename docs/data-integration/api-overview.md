@@ -9,7 +9,7 @@ Escalate to: Platform administrators if endpoints respond unexpectedly or schema
 
 # API overview
 
-ADE exposes a single REST API implemented under `backend/app/routes/`. Endpoints require authentication unless the deployment runs with `AUTH_DISABLED` or `ADE_AUTH_MODES=none`. This guide summarises the routes available today and shows how session cookies and API keys fit together.
+ADE exposes a single REST API implemented under `backend/app/routes/`. Endpoints require authentication unless the deployment runs with `ADE_AUTH_DISABLED=1`. This guide summarises the routes available today and shows how bearer tokens, SSO, and API keys fit together.
 
 ## Authentication options
 
@@ -19,9 +19,9 @@ ADE offers three entry points for authenticated requests:
 | --- | --- |
 | `POST /auth/token` | Operators submitting email/password credentials. Returns a JWT for `Authorization: Bearer <token>`. |
 | `/auth/sso/login` → `/auth/sso/callback` | Browser-based OIDC flows. The callback responds with the same JWT as the password endpoint. |
-| API key (`X-API-Key`) | Automation clients that need non-interactive access. |
+| API key (`X-API-Key`) | Automation clients that need non-interactive access. Issue, list, and revoke keys via `/auth/api-keys`. |
 
-Bearer tokens and API keys drive the same authorisation checks across every router.
+Bearer tokens and API keys drive the same authorisation checks across every router. Administrators manage API keys through `POST /auth/api-keys`, `GET /auth/api-keys`, and `DELETE /auth/api-keys/{api_key_id}` or the equivalent CLI commands described in [API key management](../security/api-keys.md).
 
 ### Password login
 
@@ -48,7 +48,7 @@ headers = {"X-API-Key": api_key}
 response = requests.get("https://ade.example.com/jobs", headers=headers, timeout=10)
 ```
 
-API keys are hashed at rest and track `last_seen` metadata automatically; no additional session state is required.
+API keys are hashed at rest and track `last_seen` metadata automatically; no additional session state is required. Every creation and revocation emits audit events so automation access can be monitored alongside interactive logins.
 
 ## Documents (`backend/app/routes/documents.py`)
 

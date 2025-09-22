@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import config
 from backend.app.db import get_sessionmaker
-from backend.app.models import APIKey, User, UserRole
+from backend.app.models import APIKey, Event, User, UserRole
 from backend.app.services import auth as auth_service
 from backend.tests.conftest import DEFAULT_USER_EMAIL, DEFAULT_USER_PASSWORD
 
@@ -71,7 +71,9 @@ def test_protected_endpoint_requires_token(app_client_factory, tmp_path) -> None
         assert authorised.status_code == 200
 
 
-def test_decode_access_token_with_expired_token_raises(monkeypatch) -> None:
+def test_decode_access_token_with_expired_token_raises(monkeypatch, app_client) -> None:
+    client, _, _ = app_client
+    del client
     monkeypatch.setenv("ADE_JWT_SECRET_KEY", "expire-test-secret")
     config.reset_settings_cache()
     settings = config.get_settings()
@@ -263,7 +265,149 @@ def test_sso_login_and_callback_creates_user(monkeypatch, app_client_factory) ->
         assert profile.json()["email"] == "sso-user@example.com"
 
         session_factory = get_sessionmaker()
+    with session_factory() as db:
+        user = db.query(User).filter(User.email == "sso-user@example.com").one()
+        assert user.sso_provider == "https://issuer.example.com"
+        assert user.sso_subject == "user-123"
+
+        events = (
+            db.query(Event)
+            .filter(Event.event_type == "auth.sso.login.succeeded")
+            .all()
+        )
+        assert len(events) == 1
+        event = events[0]
+        assert event.entity_id == user.user_id
+        assert event.payload["provider"] == "https://issuer.example.com"
+        assert event.actor_id == user.user_id
+        assert event.actor_label == user.email
+
+
+def test_list_api_keys_returns_metadata(app_client) -> None:
+    client, _, _ = app_client
+    create = client.post(
+        "/auth/api-keys",
+        json={"email": DEFAULT_USER_EMAIL},
+    )
+    assert create.status_code == 200, create.text
+    issued = create.json()
+    raw_key = issued["api_key"]
+    prefix, _secret = raw_key.split(".", 1)
+
+    admin_token = client.headers["Authorization"]
+    client.headers.pop("Authorization", None)
+    client.headers["X-API-Key"] = raw_key
+    assert client.get("/auth/me").status_code == 200
+    client.headers.pop("X-API-Key", None)
+    client.headers["Authorization"] = admin_token
+
+    response = client.get("/auth/api-keys")
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    record = payload[0]
+    assert record["token_prefix"] == prefix
+    assert record["user_email"] == DEFAULT_USER_EMAIL
+    assert record["last_seen_at"] is not None
+
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        admin = db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one()
+        events = (
+            db.query(Event)
+            .filter(Event.event_type == "auth.api_key.created")
+            .all()
+        )
+        assert len(events) == 1
+        event = events[0]
+        assert event.entity_id == record["api_key_id"]
+        assert event.payload["token_prefix"] == prefix
+        assert event.payload["user_email"] == DEFAULT_USER_EMAIL
+        assert event.actor_id == admin.user_id
+
+
+def test_revoke_api_key_revokes_and_records_event(app_client) -> None:
+    client, _, _ = app_client
+    create = client.post(
+        "/auth/api-keys",
+        json={"email": DEFAULT_USER_EMAIL},
+    )
+    assert create.status_code == 200, create.text
+    raw_key = create.json()["api_key"]
+
+    listing = client.get("/auth/api-keys")
+    assert listing.status_code == 200
+    key_id = listing.json()[0]["api_key_id"]
+
+    revoke = client.delete(f"/auth/api-keys/{key_id}")
+    assert revoke.status_code == 204
+
+    admin_token = client.headers["Authorization"]
+    client.headers.pop("Authorization", None)
+    client.headers["X-API-Key"] = raw_key
+    denied = client.get("/auth/me")
+    assert denied.status_code == 401
+    client.headers.pop("X-API-Key", None)
+    client.headers["Authorization"] = admin_token
+
+    remaining = client.get("/auth/api-keys")
+    assert remaining.status_code == 200
+    assert remaining.json() == []
+
+    session_factory = get_sessionmaker()
+    with session_factory() as db:
+        admin = db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one()
+        events = (
+            db.query(Event)
+            .filter(Event.event_type == "auth.api_key.revoked")
+            .all()
+        )
+        assert len(events) == 1
+        event = events[0]
+        assert event.entity_id == key_id
+        assert event.payload["user_email"] == DEFAULT_USER_EMAIL
+        assert event.actor_id == admin.user_id
+
+
+def test_sso_login_failure_records_event(monkeypatch, app_client_factory) -> None:
+    monkeypatch.setenv("ADE_SSO_CLIENT_ID", "demo-client")
+    monkeypatch.setenv("ADE_SSO_CLIENT_SECRET", "demo-secret")
+    monkeypatch.setenv("ADE_SSO_ISSUER", "https://issuer.example.com")
+    monkeypatch.setenv("ADE_SSO_REDIRECT_URL", "https://ade.example.com/auth/sso/callback")
+    monkeypatch.setenv("ADE_SSO_SCOPE", "openid email profile")
+    config.reset_settings_cache()
+
+    metadata = auth_service.OIDCProviderMetadata(
+        authorization_endpoint="https://issuer.example.com/authorize",
+        token_endpoint="https://issuer.example.com/token",
+        jwks_uri="https://issuer.example.com/jwks",
+    )
+
+    async def fake_metadata(_settings: config.Settings) -> auth_service.OIDCProviderMetadata:
+        return metadata
+
+    monkeypatch.setattr(auth_service, "get_oidc_metadata", fake_metadata)
+
+    with app_client_factory(None, None) as client:
+        login = client.get("/auth/sso/login", follow_redirects=False)
+        assert login.status_code in (302, 307)
+        assert auth_service.SSO_STATE_COOKIE in client.cookies
+
+        callback = client.get(
+            "/auth/sso/callback",
+            params={"code": "auth-code", "state": "wrong-state"},
+        )
+        assert callback.status_code == 400
+
+        session_factory = get_sessionmaker()
         with session_factory() as db:
-            user = db.query(User).filter(User.email == "sso-user@example.com").one()
-            assert user.sso_provider == "https://issuer.example.com"
-            assert user.sso_subject == "user-123"
+            events = (
+                db.query(Event)
+                .filter(Event.event_type == "auth.sso.login.failed")
+                .all()
+            )
+            assert len(events) == 1
+            event = events[0]
+            assert event.payload["provider"] == "https://issuer.example.com"
+            assert event.payload["status_code"] == 400
+            assert "State mismatch" in event.payload["detail"]
