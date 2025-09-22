@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from backend.app import config
+from backend.app.auth.email import EmailValidationError, canonicalize_email, normalize_email
 from backend.app.db import get_sessionmaker
 from backend.app.models import APIKey, Event, User, UserRole
 from backend.app.services import auth as auth_service
@@ -33,6 +34,39 @@ def _login(client: TestClient, email: str, password: str) -> dict[str, str]:
     return response
 
 
+def test_canonicalize_email_handles_unicode_domain() -> None:
+    canonical = canonicalize_email(" Admin@Exämple.com ")
+    assert canonical == "admin@xn--exmple-cua.com"
+
+
+def test_normalize_email_preserves_display_formatting() -> None:
+    result = normalize_email(" Admin@Exämple.com ")
+    assert result.original == "Admin@Exämple.com"
+    assert result.canonical == "admin@xn--exmple-cua.com"
+
+
+def test_canonicalize_email_casefolds_local_part() -> None:
+    canonical = canonicalize_email("MiXeD.Case@Example.com")
+    assert canonical == "mixed.case@example.com"
+
+
+def test_canonicalize_email_preserves_provider_tags() -> None:
+    tagged = canonicalize_email("user.name+tag@Example.com")
+    assert tagged == "user.name+tag@example.com"
+
+
+def test_canonicalize_email_normalises_unicode_local_parts() -> None:
+    accented = canonicalize_email("Jörg@bücher.example")
+    decomposed = canonicalize_email("jörg@bücher.example")
+    assert accented == decomposed
+    assert accented == "jörg@xn--bcher-kva.example"
+
+
+def test_canonicalize_email_rejects_invalid_addresses() -> None:
+    with pytest.raises(EmailValidationError):
+        canonicalize_email("not-an-email")
+
+
 def test_login_issues_bearer_token(app_client) -> None:
     client, _, _ = app_client
     response = _login(client, DEFAULT_USER_EMAIL, DEFAULT_USER_PASSWORD)
@@ -46,6 +80,20 @@ def test_login_rejects_invalid_credentials(app_client) -> None:
     client, _, _ = app_client
     response = _login(client, DEFAULT_USER_EMAIL, "wrong-password")
     assert response.status_code == 401
+
+
+def test_login_rejects_malformed_email(app_client) -> None:
+    client, _, _ = app_client
+    response = _login(client, "invalid", DEFAULT_USER_PASSWORD)
+    assert response.status_code == 401
+
+
+def test_login_accepts_case_insensitive_email(app_client) -> None:
+    client, _, _ = app_client
+    response = _login(client, DEFAULT_USER_EMAIL.upper(), DEFAULT_USER_PASSWORD)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["token_type"] == "bearer"
 
 
 def test_me_endpoint_returns_profile(app_client) -> None:
@@ -79,7 +127,11 @@ def test_decode_access_token_with_expired_token_raises(monkeypatch, app_client) 
     settings = config.get_settings()
     session_factory = get_sessionmaker()
     with session_factory() as db:
-        user = db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one()
+        user = (
+            db.query(User)
+            .filter(User.email_canonical == canonicalize_email(DEFAULT_USER_EMAIL))
+            .one()
+        )
         expired = auth_service.create_access_token(
             user,
             settings,
@@ -134,7 +186,11 @@ def test_api_key_allows_access(app_client) -> None:
     client, _, _ = app_client
     session_factory = get_sessionmaker()
     with session_factory() as db:
-        user = db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one()
+        user = (
+            db.query(User)
+            .filter(User.email_canonical == canonicalize_email(DEFAULT_USER_EMAIL))
+            .one()
+        )
         raw_key, _ = auth_service.issue_api_key(db, user)
         db.commit()
 
@@ -154,7 +210,11 @@ def test_api_key_last_seen_throttled(monkeypatch, app_client_factory) -> None:
         client.headers.pop("Authorization", None)
         session_factory = get_sessionmaker()
         with session_factory() as db:
-            user = db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one()
+            user = (
+                db.query(User)
+                .filter(User.email_canonical == canonicalize_email(DEFAULT_USER_EMAIL))
+                .one()
+            )
             raw_key, api_key = auth_service.issue_api_key(db, user)
             key_id = api_key.api_key_id
             db.commit()
@@ -266,7 +326,11 @@ def test_sso_login_and_callback_creates_user(monkeypatch, app_client_factory) ->
 
         session_factory = get_sessionmaker()
     with session_factory() as db:
-        user = db.query(User).filter(User.email == "sso-user@example.com").one()
+        user = (
+            db.query(User)
+            .filter(User.email_canonical == canonicalize_email("sso-user@example.com"))
+            .one()
+        )
         assert user.sso_provider == "https://issuer.example.com"
         assert user.sso_subject == "user-123"
 
@@ -312,7 +376,11 @@ def test_list_api_keys_returns_metadata(app_client) -> None:
 
     session_factory = get_sessionmaker()
     with session_factory() as db:
-        admin = db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one()
+        admin = (
+            db.query(User)
+            .filter(User.email_canonical == canonicalize_email(DEFAULT_USER_EMAIL))
+            .one()
+        )
         events = (
             db.query(Event)
             .filter(Event.event_type == "auth.api_key.created")
@@ -356,7 +424,11 @@ def test_revoke_api_key_revokes_and_records_event(app_client) -> None:
 
     session_factory = get_sessionmaker()
     with session_factory() as db:
-        admin = db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one()
+        admin = (
+            db.query(User)
+            .filter(User.email_canonical == canonicalize_email(DEFAULT_USER_EMAIL))
+            .one()
+        )
         events = (
             db.query(Event)
             .filter(Event.event_type == "auth.api_key.revoked")

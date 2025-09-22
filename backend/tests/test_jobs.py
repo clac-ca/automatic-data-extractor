@@ -2,6 +2,7 @@ import io
 from datetime import datetime, timezone
 from typing import Any
 
+from backend.app.auth.email import canonicalize_email
 from backend.app.db import get_sessionmaker
 from backend.app.models import User
 from backend.tests.conftest import DEFAULT_USER_EMAIL
@@ -66,7 +67,11 @@ def _create_job(
 def _default_user_id() -> str:
     session_factory = get_sessionmaker()
     with session_factory() as db:
-        user = db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one()
+        user = (
+            db.query(User)
+            .filter(User.email_canonical == canonicalize_email(DEFAULT_USER_EMAIL))
+            .one()
+        )
         return user.user_id
 
 

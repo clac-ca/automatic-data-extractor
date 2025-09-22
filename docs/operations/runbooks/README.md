@@ -14,6 +14,7 @@ Runbooks apply a consistent structure so responders can triage ADE incidents qui
 ## Current runbooks
 
 - [Expired document purge](./expired-document-purge.md)
+- [Email canonical collision remediation](./email-canonical-collisions.md)
 
 ## Planned additions (TODO)
 
