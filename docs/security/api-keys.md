@@ -13,10 +13,10 @@ API keys provide non-interactive access to ADE's REST API. Each key is scoped to
 
 ## 1. Issue a key
 
-API keys contain a short prefix and a random secret separated by a dot (`prefix.secret`). ADE stores only the prefix and a salted SHA-256 hash of the secret.
+API keys contain a short prefix and a random secret separated by a dot (`prefix.secret`). ADE stores only the prefix and a salted SHA-256 hash of the secret; the raw key is printed exactly once.
 
 ```bash
-# CLI
+# CLI (requires admin)
 python -m backend.app auth create-api-key analyst@example.com --expires-in-days 30
 
 # HTTP (requires admin bearer token)
@@ -26,23 +26,25 @@ curl -X POST https://ade.example.com/auth/api-keys \
   -d '{"email": "analyst@example.com", "expires_in_days": 30}'
 ```
 
-Copy the returned key once and store it in your secret manager. Treat it like a password—ADE cannot recover the secret after creation.
+Copy the returned key once and store it in your secret manager. Treat it like a password. ADE cannot recover the secret after creation. Keys linked to inactive users or those past their optional expiry stop authenticating automatically.
 
 ## 2. Authenticate with the key
 
-Clients send the raw key in the `X-API-Key` header. ADE matches on the prefix, compares the hashed secret, and (at most once per configured interval) updates the `last_seen_at`, `last_seen_ip`, and `last_seen_user_agent` fields.
+Clients send the raw key in the `X-API-Key` header. ADE matches on the prefix, compares the hashed secret, and (at most once per configured interval) updates the `last_seen_at`, `last_seen_ip`, and `last_seen_user_agent` fields. Set `ADE_API_KEY_TOUCH_INTERVAL_SECONDS=0` to record every request or increase the interval to reduce database writes.
 
 ```bash
 curl https://ade.example.com/documents \
   -H "X-API-Key: ab12cd34.N6b1PX2U2pK2H1wAajy-dJ0gi8o"
 ```
 
+If the same request also includes `Authorization: Bearer <token>`, the bearer token takes precedence and the API key is ignored. This mirrors the backend dependency order when resolving the current user.
+
 ## 3. Review active keys
 
 Administrators can list issued keys and inspect last-seen metadata via API or CLI. The response includes the ULID, owner, prefix, optional expiry, and most recent activity.
 
 ```bash
-# HTTP
+# HTTP (admin token required)
 curl https://ade.example.com/auth/api-keys \
   -H "Authorization: Bearer <admin-token>"
 
@@ -69,4 +71,5 @@ When rotating, create the replacement key first, update dependent systems, and t
 
 ## 5. Audit activity
 
-Every creation and revocation emits structured events with the key's prefix, owner, and actor metadata. Query `/events?event_type=auth.api_key.created` (or `auth.api_key.revoked`) to review issuance history, or subscribe to the event feed for alerting.
+Every creation and revocation emits structured events with the key's prefix, owner, and actor metadata. Query `/events?event_type=auth.api_key.created` (or `auth.api_key.revoked`) to review issuance history, or subscribe to the event feed for alerting. The events also capture the actor details (`user` vs `system`) so you can distinguish API-initiated actions from CLI maintenance runs.
+
