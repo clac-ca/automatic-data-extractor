@@ -1,102 +1,107 @@
 ---
 Audience: Platform administrators, Security teams
-Goal: Compare ADE authentication modes and document the configuration steps for each, including session management.
+Goal: Explain ADE's authentication model and document the minimal configuration required to operate it safely.
 Prerequisites: Ability to manage environment variables, restart ADE, and provision user accounts.
-When to use: Decide which authentication mode to enable, adjust session cookie settings, or review password handling.
-Validation: After updating settings, restart ADE, log in via `/auth/login/basic`, and confirm sessions behave as documented.
-Escalate to: Security lead if login flows fail, password hashing drifts from policy, or unauthenticated access becomes possible unexpectedly.
+When to use: Enable or disable authentication, rotate the signing secret, or review how operators obtain API access.
+Validation: After updating settings, restart ADE, call `POST /auth/token`, and verify protected routes reject unsigned requests.
+Escalate to: Security lead if tokens stop validating, secrets leak, or anonymous access is observed unexpectedly.
 ---
 
-# Authentication modes
+# Authentication
 
-Authentication is implemented in `backend/app/config.py` and `backend/app/services/auth.py`. ADE supports deterministic login behaviour with optional OIDC SSO layered on top of HTTP Basic and cookie sessions.
+ADE's authentication stack is intentionally small. Users authenticate with an email/password pair and receive a JSON Web Token
+(JWT). The token must accompany every subsequent request via the standard `Authorization: Bearer <token>` header.
 
-## 1. Choose an auth mode
+There is **no session state or API key subsystem**. Removing those pieces makes the code auditable, avoids hidden database writes,
+and keeps operational knobs to a minimum.
 
-Configure `ADE_AUTH_MODES` with a comma-separated list drawn from `basic`, `sso`, and `none`.
+## 1. Configure the signer
 
-- `basic` — Enables HTTP Basic login plus cookie sessions (default).
-- `sso` — Adds OIDC single sign-on endpoints; still relies on cookie sessions.
-- `none` — Disables authentication entirely (use only for local demos). Cannot be combined with other modes.
+All tokens are signed with a symmetric key. Set the following environment variables before starting the API:
 
-API keys complement these modes for automation clients. Humans still log in with Basic or SSO to receive a session cookie; services send `Authorization: Bearer <API_KEY>` on every request.
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `ADE_JWT_SECRET_KEY` | _(unset)_ | Required unless authentication is explicitly disabled. Use a high-entropy value. |
+| `ADE_JWT_ALGORITHM` | `HS256` | Algorithm passed to PyJWT. Stick with the default unless you control all clients. |
+| `ADE_ACCESS_TOKEN_EXP_MINUTES` | `60` | Minutes until an issued token expires. Shorter lifetimes reduce blast radius. |
+| `ADE_AUTH_DISABLED` | `false` | Set to `true` to bypass authentication entirely for local demos. Never use in production. |
 
-Settings are parsed via `Settings.auth_mode_sequence`; invalid values raise a `ValueError` during startup.
+Settings are cached on startup. In development you can call `config.reset_settings_cache()` to re-read the environment without a
+restart.
 
-### Environment variables
+`validate_settings()` runs during app start-up and fails fast if authentication is enabled without a signing key. When
+`ADE_AUTH_DISABLED=true`, the API logs a loud warning and treats every request as an "anonymous" administrator, mirroring the
+previous development-only behaviour.
 
-| Variable | Description |
-| --- | --- |
-| `ADE_AUTH_MODES` | Allowed modes: `none`, `basic`, `sso`. `none` must be the only value when used. |
-| `ADE_SESSION_COOKIE_NAME` | Name of the issued session cookie (default `ade_session`). |
-| `ADE_SESSION_TTL_MINUTES` | Session lifetime in minutes before expiry (default `720`). |
-| `ADE_SESSION_COOKIE_SECURE` | `true` / `false`; mark cookies Secure. Required when SameSite=`none`. |
-| `ADE_SESSION_COOKIE_SAME_SITE` | `lax`, `strict`, or `none`. Validated in `Settings._validate_same_site`. |
-| `ADE_SESSION_COOKIE_DOMAIN` | Optional domain attribute for multi-host deployments. |
-| `ADE_SESSION_COOKIE_PATH` | Path scope for the cookie (default `/`). |
+## 2. Issue tokens
 
-Restart ADE after changing these variables or call `config.reset_settings_cache()` in development.
+Clients obtain a token by POSTing form-encoded credentials to `/auth/token`:
 
-## 2. Configure session cookies (`backend/app/services/auth.py`)
+```bash
+curl -X POST https://ade.internal/auth/token \
+  -H "content-type: application/x-www-form-urlencoded" \
+  -d "username=admin@example.com&password=secret123"
+```
 
-`service.py` issues and refreshes session tokens, resolves API keys, and records authentication events. Key details:
+Successful responses contain:
 
-- Session tokens are opaque values stored hashed (`SHA-256`) in the `user_sessions` table.
-- The session cookie is HttpOnly and inherits Secure/SameSite flags from the environment configuration.
-- Refreshing a session issues a new expiry (`session_ttl_minutes`) and records `user.session.refreshed` events.
+```json
+{"access_token": "<JWT>", "token_type": "bearer"}
+```
 
-Validation: Log in, inspect the `Set-Cookie` header, and ensure TTL, domain, and SameSite attributes match expectations.
+The token encodes the user ID, email address, role, and expiry. ADE verifies `exp` and `iat` on every request. Expired tokens
+raise `401 Token expired` and callers must authenticate again.
 
-### Backend integration tip
+The `/auth/me` endpoint returns the current user's profile, making it easy to confirm which identity a token represents.
 
-FastAPI routers that declare `Depends(auth_service.get_current_user)` (imported from
-`backend.app.services import auth as auth_service`) can read the resolved identity from the
-`Request` without re-running authentication. Call
-`auth_service.get_cached_authenticated_identity(request)` inside the route handler to access
-the cached `AuthenticatedIdentity`. The helper raises `RuntimeError` when authentication has
-not executed, surfacing missing dependencies during development.
+## 3. Secure routes
 
-## 3. Manage users via CLI (`backend/app/services/auth.py`)
+Protected routers declare `Depends(auth_service.get_current_user)`. The dependency decodes the bearer token, looks up the user,
+and injects the ORM model into your handler. For event logging, call `auth_service.event_actor_from_user(current_user)` to obtain
+consistent `actor_*` metadata.
 
-Use the bundled CLI to provision accounts even when the API is offline:
+Example route snippet:
+
+```python
+from fastapi import APIRouter, Depends
+from backend.app.services import auth as auth_service
+from backend.app.models import User
+
+router = APIRouter(prefix="/reports", dependencies=[Depends(auth_service.get_current_user)])
+
+@router.get("/me")
+def who_am_i(current_user: User = Depends(auth_service.get_current_user)) -> dict[str, str]:
+    return {"email": current_user.email, "role": current_user.role.value}
+```
+
+If a request omits the header or the token fails verification, FastAPI returns `401 Not authenticated` with a `WWW-Authenticate:
+Bearer` challenge, signalling clients to re-authenticate.
+
+## 4. Manage users
+
+Use the CLI helpers defined in `backend/app/services/auth.py`:
 
 ```bash
 python -m backend.app auth create-user admin@example.com --password change-me --role admin
-python -m backend.app auth reset-password admin@example.com --password another-secret
-python -m backend.app auth deactivate user@example.com
-python -m backend.app auth promote operator@example.com
+python -m backend.app auth set-password analyst@example.com --password new-secret
 python -m backend.app auth list-users
 ```
 
-Each command emits `user.*` events (actor_type `system`, source `cli`) so audit logs record administrative actions.
+CLI commands operate directly on the database and log structured messages (`user.created`, `user.password-updated`) for audit
+trails. Passwords are hashed with the standard library `hashlib.scrypt` parameters defined in the same module.
 
-## 4. Understand the login flow (`backend/app/routes/auth.py`)
+## 5. Development shortcuts
 
-1. Client submits HTTP Basic credentials to `POST /auth/login/basic`.
-2. ADE validates credentials against the `users` table (passwords hashed with `hashlib.scrypt` using `N=16384`, `r=8`, `p=1`).
-3. On success, ADE issues an opaque session token, stores its SHA-256 hash, and sets the cookie defined above.
-4. Subsequent requests must present either the session cookie or `Authorization: Bearer <API_KEY>`. HTTP Basic and OAuth tokens are accepted only on the dedicated login endpoints.
-5. `POST /auth/logout` revokes the hash and clears the cookie.
-
-Password hashing policy lives entirely in the standard library; no external dependencies are required. Each stored hash records the original parameters, so verification always uses the same work factors.
-
-## 5. API keys for automation
-
-- **Header contract:** Integrations must send `Authorization: Bearer <API_KEY>` on every request. ADE verifies the hashed token stored in the `api_keys` table.
-- **Storage:** Keys are stored hashed; distribute the raw token once at creation time. Rotation is a database operation until dedicated tooling ships.
-- **Coexistence with sessions:** Human operators continue to rely on cookie sessions. API keys provide a deterministic credential for service accounts without impacting the UI.
-
-Example client request using an API key:
-
-```bash
-curl -H "Authorization: Bearer $ADE_API_KEY" https://ade.example.com/documents
-```
+For rapid prototyping you can disable authentication entirely by setting `ADE_AUTH_DISABLED=true`. The server logs a warning and
+injects a synthetic administrator user so existing dependencies continue to work. Remember to remove the override before
+shipping any build beyond local development.
 
 ## Validation checklist
 
-- Log in with HTTP Basic credentials and confirm a session cookie is issued.
-- Call `POST /auth/refresh` and ensure the cookie expiry advances.
-- Run `python -m backend.app auth list-users` to verify CLI access.
-- Inspect `/events?event_type=user.session.*` to confirm authentication events are captured.
+- `POST /auth/token` succeeds for known credentials and fails for incorrect ones.
+- `GET /auth/me` returns the expected email and role when presented with the issued token.
+- Requests without `Authorization: Bearer` headers are rejected with `401 Not authenticated`.
+- Tokens with manipulated signatures or expired timestamps raise `401 Invalid token`.
+- CLI user management commands run without errors and emit audit logs.
 
-For SSO-specific configuration (client IDs, discovery caching, recovery), continue to [SSO setup and recovery](./sso-setup.md).
+This simplified model keeps the authentication surface small, auditable, and easy to operate.

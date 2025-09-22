@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import TypeAdapter, ValidationError
 from pydantic.types import StringConstraints
 from sqlalchemy.exc import IntegrityError
@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from ..services import auth as auth_service
 from ..db import get_db
-from ..models import Event, Configuration
+from ..models import Configuration, Event, User
 from ..schemas import (
     EventListResponse,
     EventResponse,
@@ -37,8 +37,8 @@ from ..services.configurations import (
 router = APIRouter(
     prefix="/configurations",
     tags=["configurations"],
-    # Resolve authentication once per request so handlers can read the cached identity.
-    dependencies=[Depends(auth_service.get_authenticated_identity)],
+    # Resolve authentication once per request so handlers can read the authenticated user.
+    dependencies=[Depends(auth_service.get_current_user)],
 )
 
 _document_type_adapter = TypeAdapter(
@@ -66,13 +66,12 @@ def _event_to_response(event: Event) -> EventResponse:
 )
 def create_configuration_endpoint(
     payload: ConfigurationCreate,
-    request: Request,
     db: Session = Depends(get_db),
+    current_user: User = Depends(auth_service.get_current_user),
 ) -> ConfigurationResponse:
     """Create a new configuration version."""
 
-    identity = auth_service.get_cached_authenticated_identity(request)
-    actor_defaults = auth_service.event_actor_from_identity(identity)
+    actor_defaults = auth_service.event_actor_from_user(current_user)
 
     try:
         configuration = create_configuration(
@@ -194,14 +193,13 @@ def list_configuration_events(
 def update_configuration_endpoint(
     configuration_id: str,
     payload: ConfigurationUpdate,
-    request: Request,
     db: Session = Depends(get_db),
+    current_user: User = Depends(auth_service.get_current_user),
 ) -> ConfigurationResponse:
     """Update configuration metadata."""
 
     update_kwargs = payload.model_dump(exclude_unset=True)
-    identity = auth_service.get_cached_authenticated_identity(request)
-    actor_defaults = auth_service.event_actor_from_identity(identity)
+    actor_defaults = auth_service.event_actor_from_user(current_user)
 
     try:
         configuration = update_configuration(

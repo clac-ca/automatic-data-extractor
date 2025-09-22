@@ -249,59 +249,6 @@ class User(Base):
         return f"User(user_id={self.user_id!r}, email={self.email!r})"
 
 
-class UserSession(Base):
-    """Persistent browser session backed by a hashed token."""
-
-    __tablename__ = "user_sessions"
-
-    session_id: Mapped[str] = mapped_column(
-        String(26), primary_key=True, default=_generate_ulid
-    )
-    user_id: Mapped[str] = mapped_column(
-        String(26), ForeignKey("users.user_id"), nullable=False
-    )
-    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
-    issued_at: Mapped[str] = mapped_column(String(32), default=_timestamp, nullable=False)
-    expires_at: Mapped[str] = mapped_column(String(32), nullable=False)
-    last_seen_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    last_seen_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
-    last_seen_user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    revoked_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
-
-    __table_args__ = (Index("ix_user_sessions_user_id", "user_id"),)
-
-    def __repr__(self) -> str:
-        return f"UserSession(session_id={self.session_id!r}, user_id={self.user_id!r})"
-
-
-class ApiKey(Base):
-    """Long-lived token for automated clients."""
-
-    __tablename__ = "api_keys"
-
-    api_key_id: Mapped[str] = mapped_column(
-        String(26), primary_key=True, default=_generate_ulid
-    )
-    user_id: Mapped[str] = mapped_column(
-        String(26), ForeignKey("users.user_id"), nullable=False
-    )
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    token_prefix: Mapped[str] = mapped_column(String(12), nullable=False)
-    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
-    created_at: Mapped[str] = mapped_column(String(32), default=_timestamp, nullable=False)
-    last_used_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    revoked_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    revoked_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-    __table_args__ = (
-        UniqueConstraint("user_id", "name"),
-        UniqueConstraint("token_prefix"),
-    )
-
-    def __repr__(self) -> str:
-        return f"ApiKey(api_key_id={self.api_key_id!r}, user_id={self.user_id!r})"
-
-
 __all__ = [
     "Configuration",
     "Job",
@@ -309,7 +256,5 @@ __all__ = [
     "Event",
     "MaintenanceStatus",
     "User",
-    "UserSession",
-    "ApiKey",
     "UserRole",
 ]

@@ -46,59 +46,11 @@ class UserProfile(BaseModel):
     is_active: bool
 
 
-class SessionSummary(BaseModel):
-    """Metadata about an active browser session."""
+class TokenResponse(BaseModel):
+    """Bearer token issued after a successful login."""
 
-    session_id: str
-    expires_at: str
-
-
-class AuthSessionResponse(BaseModel):
-    """Response envelope for authentication endpoints."""
-
-    user: UserProfile
-    modes: list[str]
-    session: SessionSummary | None = None
-
-
-class ApiKeyResponse(BaseModel):
-    """Metadata returned for API keys."""
-
-    api_key_id: str
-    name: str
-    token_prefix: str
-    created_at: str
-    last_used_at: str | None = None
-    revoked_at: str | None = None
-    revoked_reason: str | None = None
-    user: UserProfile
-
-
-class ApiKeyCreateResponse(ApiKeyResponse):
-    """Creation response including the raw token."""
-
-    token: str
-
-
-class ApiKeyListResponse(BaseModel):
-    """Container for API key listings."""
-
-    items: list[ApiKeyResponse]
-
-
-class ApiKeyCreateRequest(BaseModel):
-    """Payload for minting a new API key."""
-
-    user_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
-    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
-
-
-class ApiKeyRevokeRequest(BaseModel):
-    """Payload for revoking an API key."""
-
-    reason: Annotated[
-        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
-    ] | None = None
+    access_token: str
+    token_type: str = "bearer"
 
 
 class DocumentResponse(BaseModel):
@@ -431,6 +383,8 @@ class JobResponse(BaseModel):
 
 __all__ = [
     "HealthResponse",
+    "UserProfile",
+    "TokenResponse",
     "DocumentResponse",
     "DocumentDeleteRequest",
     "DocumentUpdate",

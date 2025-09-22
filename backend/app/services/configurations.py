@@ -189,7 +189,8 @@ def create_configuration(
 
     payload_data: dict[str, Any] = {} if payload is None else payload
 
-    with db.begin():
+    transaction = db.begin_nested() if db.in_transaction() else db.begin()
+    with transaction:
         configuration = Configuration(
             document_type=document_type,
             title=title,
@@ -253,7 +254,8 @@ def update_configuration(
 ) -> Configuration:
     """Update and return the configuration with the given ID."""
 
-    with db.begin():
+    transaction = db.begin_nested() if db.in_transaction() else db.begin()
+    with transaction:
         configuration = get_configuration(db, configuration_id)
         changed_fields: list[str] = []
         became_active = False
