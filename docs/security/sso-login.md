@@ -30,13 +30,13 @@ export ADE_SSO_SCOPE="openid email profile"
 # export ADE_SSO_RESOURCE_AUDIENCE="api://ade"
 ```
 
-Restart ADE so the new settings take effect. The backend caches the discovery document and JWKS keys, so routine logins do not hammer the identity provider.
+Restart ADE so the new settings take effect. The backend caches the discovery document and JWKS keys, so routine logins do not hammer the identity provider. Keep `ADE_JWT_SECRET_KEY` stable across restarts; ADE signs the five-minute `ade_sso_state` cookie and access tokens with the same secret, so rotating it invalidates in-flight logins and all issued tokens.
 
 ## 3. Walk through the flow
 
-1. Browse to `/auth/sso/login`. ADE fetches the discovery metadata (once), generates a PKCE verifier, and sets a signed `ade_sso_state` cookie.
-2. After the redirect, authenticate with a user whose email address is verified by the provider.
-3. The provider calls back to `/auth/sso/callback` with the code and state. ADE validates the state cookie, verifies the ID token via JWKS, and issues its own bearer token in the JSON response.
+1. Browse to `/auth/sso/login`. ADE fetches the discovery metadata (once), generates a PKCE verifier, sets a signed `ade_sso_state` cookie (valid for five minutes), and redirects to the provider.
+2. After the redirect, authenticate with a user whose email address is verified by the provider before the cookie expires.
+3. The provider calls back to `/auth/sso/callback` with the code and state. ADE validates the state cookie, verifies the ID token via JWKS (using the nonce and client ID), optionally checks the access-token audience, and issues its own bearer token in the JSON response.
 4. Call `/auth/me` with the returned `Authorization: Bearer <token>` header to confirm the resolved ADE user and role.
 
 ## 4. Troubleshoot common issues
@@ -44,9 +44,10 @@ Restart ADE so the new settings take effect. The backend caches the discovery do
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
 | `400 Missing authorization code or state` | The provider removed parameters or the callback URL is incorrect. | Confirm the redirect URI exactly matches the registered value. |
-| `400 State mismatch` | The `ade_sso_state` cookie is missing or stale. | Clear cookies for the ADE domain and restart the flow. |
+| `400 State mismatch` | The `ade_sso_state` cookie is missing, expired, or belongs to a different ADE secret. | Clear cookies for the ADE domain, ensure time is in sync, and retry the flow within five minutes. |
 | `400 Invalid token response from identity provider` | The provider did not return `id_token`, `access_token`, or `token_type=Bearer`. | Enable the standard OIDC scopes and ensure the client is authorised for them. |
 | `400 Identity provider response missing required claims` | The ID token lacked `email` or `sub`. | Configure the provider to include a verified email claim or pre-provision the user and map the subject manually. |
 | `502 Unable to contact identity provider` | Network or configuration issue fetching the discovery document/token endpoint. | Validate the issuer URL and check network access between ADE and the IdP. |
 
 Successful and failed login attempts emit `auth.sso.login.succeeded` and `auth.sso.login.failed` events. Use `/events` to audit who signed in and why a callback failed during incident response.
+
