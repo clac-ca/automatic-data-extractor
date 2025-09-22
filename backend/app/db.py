@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from typing import Any
+from typing import Any, Generator
 
 from sqlalchemy import MetaData, create_engine
 from sqlalchemy.engine import Engine, URL, make_url
@@ -112,6 +112,10 @@ def get_db() -> Generator[Session, None, None]:
     db = session_factory()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 

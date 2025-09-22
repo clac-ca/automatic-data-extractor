@@ -2,14 +2,16 @@
 Audience: Platform administrators, Data teams
 Goal: Capture ADE configuration settings and defaults as defined in `backend/app/config.py`.
 Prerequisites: Ability to edit deployment environment variables and restart ADE services.
-When to use: Review when configuring new environments, auditing security posture, or troubleshooting behaviour tied to settings.
-Validation: After changing settings, compare against `backend/app/config.py` and call `GET /health` (and other relevant endpoints) to confirm the new values applied.
+When to use: Configure new environments, audit security posture, or troubleshoot behaviour tied to settings.
+Validation: After changing settings, compare against `backend/app/config.py` and call `GET /health` (and other relevant
+endpoints) to confirm the new values applied.
 Escalate to: Platform owner when runtime behaviour does not match the documented defaults or allowed values.
 ---
 
 # Environment variables
 
-ADE reads all runtime configuration through `backend/app/config.py`. The table below groups settings by theme, documenting defaults, allowed values, and whether a service restart is required (most changes need one because settings are cached at startup).
+ADE reads all runtime configuration through `backend/app/config.py`. Settings are cached at startup; restart the API or call
+`config.reset_settings_cache()` in development to pick up changes.
 
 ## Database and storage
 
@@ -32,49 +34,17 @@ ADE reads all runtime configuration through `backend/app/config.py`. The table b
 
 Validation tip: After changing scheduler settings, restart ADE and check `GET /health` for the `purge` block to confirm the new cadence.
 
-## Authentication and sessions
+## Authentication
 
 | Variable | Default | Allowed values / notes | Restart required |
 | --- | --- | --- | --- |
-| `ADE_AUTH_MODES` | `basic` | Comma-separated list drawn from `none`, `basic`, `sso`. `none` cannot combine with others. | Yes |
-| `AUTH_DISABLED` | `false` | When truthy (`1`, `true`, `yes`), bypasses authentication entirely (same as `ADE_AUTH_MODES=none`). | Yes |
-| `ADE_SESSION_COOKIE_NAME` | `ade_session` | Non-empty string; browser cookie name. | Yes |
-| `ADE_SESSION_TTL_MINUTES` | `720` | Positive integer; minutes before sessions expire. | No (affects next refresh) |
-| `ADE_SESSION_COOKIE_SECURE` | `false` | `true` / `false`; mark cookies as Secure. Required when SameSite=`none`. | Yes |
-| `ADE_SESSION_COOKIE_DOMAIN` | _(unset)_ | Optional domain attribute for the session cookie. | Yes |
-| `ADE_SESSION_COOKIE_PATH` | `/` | Cookie path. | Yes |
-| `ADE_SESSION_COOKIE_SAME_SITE` | `lax` | `lax`, `strict`, or `none`. Validation enforced in `Settings._validate_same_site`. | Yes |
+| `ADE_AUTH_DISABLED` | `false` | `true` / `false`; bypasses authentication and issues an "anonymous" administrator identity for every request. | Yes |
+| `ADE_JWT_SECRET_KEY` | _(unset)_ | Required when authentication is enabled. Provide a high-entropy symmetric secret. | Yes |
+| `ADE_JWT_ALGORITHM` | `HS256` | Algorithm passed to PyJWT. `HS256` is recommended unless all clients support a different choice. | Yes |
+| `ADE_ACCESS_TOKEN_EXP_MINUTES` | `60` | Positive integer; minutes until issued tokens expire. | Yes (tokens minted after the change honour the new value) |
 
-Validation tip: After adjusting session settings, log in via `/auth/login/basic` and inspect returned cookies to verify attributes.
+Validation tip: After adjusting authentication settings, call `POST /auth/token` to ensure credentials are accepted and verify that unauthenticated requests receive `401 Not authenticated` responses.
 
-## SSO configuration
+## Runtime cache resets
 
-| Variable | Default | Allowed values / notes | Restart required |
-| --- | --- | --- | --- |
-| `ADE_SSO_CLIENT_ID` | _(unset)_ | Required when enabling `sso` mode. | Yes |
-| `ADE_SSO_CLIENT_SECRET` | _(unset)_ | Required when enabling `sso` mode; used for state token signing. | Yes |
-| `ADE_SSO_ISSUER` | _(unset)_ | Base URL for the OIDC provider discovery document. | Yes |
-| `ADE_SSO_REDIRECT_URL` | _(unset)_ | Must match registered redirect URL. | Yes |
-| `ADE_SSO_AUDIENCE` | _(unset)_ | Optional expected audience; defaults to client ID. | Yes |
-| `ADE_SSO_SCOPES` | `openid email profile` | Space-delimited list of requested scopes. | Yes |
-| `ADE_SSO_CACHE_TTL_SECONDS` | `300` | Positive integer; cache lifetime for discovery and JWKS payloads. | No (clears automatically after TTL or on restart) |
-| `ADE_SSO_AUTO_PROVISION` | `false` | `true` / `false`; automatically create users for valid SSO identities. | Yes |
-
-Validation tip: Hit `/auth/sso/login` after configuration. Inspect redirect URLs and ensure JWKS responses refresh within the configured cache window. Use a Python shell to run `from backend.app.services import auth as auth_service; auth_service.clear_caches()` or restart ADE to clear caches early.
-
-## API keys
-
-API keys are persisted in the database (`api_keys` table) with hashed tokens. They are not configured via environment variables. When a key is provisioned, the client must send `Authorization: Bearer <API_KEY>` on every request. Remove or rotate keys by updating the database (CLI automation is planned).
-
-## Administrative controls
-
-| Variable | Default | Allowed values / notes | Restart required |
-| --- | --- | --- | --- |
-| `ADE_ADMIN_EMAIL_ALLOWLIST_ENABLED` | `false` | `true` / `false`; enforce administrator allowlist. | Yes |
-| `ADE_ADMIN_EMAIL_ALLOWLIST` | _(unset)_ | Comma-separated list of email addresses permitted to hold admin role. | Yes |
-
-When toggling allowlist enforcement, verify administrator logins and run `python -m backend.app auth list-users` to confirm only expected accounts retain elevated roles.
-
-## Cache resets during runtime
-
-ADE caches settings via `backend/app/config.get_settings()`. To re-read environment variables without a full restart in development, call `config.reset_settings_cache()` inside a Python shell before reloading components. Production deployments should restart the process to guarantee consistency.
+`config.get_settings()` caches the loaded configuration. Call `config.reset_settings_cache()` inside a Python shell before reloading components in development. Production deployments should restart the process to guarantee consistency.

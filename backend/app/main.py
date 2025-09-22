@@ -85,17 +85,11 @@ def _build_openapi_schema() -> dict[str, object]:
         routes=app.routes,
     )
     components = openapi_schema.setdefault("components", {}).setdefault("securitySchemes", {})
-    components.setdefault("basicAuth", {"type": "http", "scheme": "basic"})
-    components.setdefault("bearerAuth", {"type": "http", "scheme": "bearer"})
     components.setdefault(
-        "cookieAuth",
-        {
-            "type": "apiKey",
-            "in": "cookie",
-            "name": config.get_settings().session_cookie_name,
-        },
+        "bearerAuth",
+        {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"},
     )
-    openapi_schema.setdefault("security", [{"cookieAuth": []}, {"bearerAuth": []}])
+    openapi_schema.setdefault("security", [{"bearerAuth": []}])
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 

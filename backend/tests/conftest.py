@@ -64,10 +64,8 @@ def _test_client(
         monkeypatch.setenv("ADE_PURGE_SCHEDULE_ENABLED", "0")
     if "ADE_PURGE_SCHEDULE_RUN_ON_STARTUP" not in os.environ:
         monkeypatch.setenv("ADE_PURGE_SCHEDULE_RUN_ON_STARTUP", "0")
-    if "ADE_AUTH_MODES" not in os.environ:
-        monkeypatch.setenv("ADE_AUTH_MODES", "basic")
-    if "ADE_SESSION_COOKIE_SECURE" not in os.environ:
-        monkeypatch.setenv("ADE_SESSION_COOKIE_SECURE", "0")
+    if "ADE_JWT_SECRET_KEY" not in os.environ:
+        monkeypatch.setenv("ADE_JWT_SECRET_KEY", "insecure-test-secret")
 
     import backend.app.config as config_module
     config_module.reset_settings_cache()
@@ -84,12 +82,19 @@ def _test_client(
         with TestClient(main_module.app, follow_redirects=False) as client:
             _seed_default_user()
             settings = config_module.get_settings()
-            if "basic" in settings.auth_mode_sequence:
-                client.auth = (DEFAULT_USER_EMAIL, DEFAULT_USER_PASSWORD)
-                login_response = client.post("/auth/login/basic")
-                assert login_response.status_code == 200
+            if settings.auth_disabled:
+                client.headers.pop("Authorization", None)
             else:
-                client.auth = None
+                login_response = client.post(
+                    "/auth/token",
+                    data={
+                        "username": DEFAULT_USER_EMAIL,
+                        "password": DEFAULT_USER_PASSWORD,
+                    },
+                )
+                assert login_response.status_code == 200, login_response.text
+                token = login_response.json()["access_token"]
+                client.headers.update({"Authorization": f"Bearer {token}"})
             session_factory = get_sessionmaker()
             with session_factory() as db:
                 db.query(Event).delete()
