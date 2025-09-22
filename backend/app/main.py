@@ -89,7 +89,11 @@ def _build_openapi_schema() -> dict[str, object]:
         "bearerAuth",
         {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"},
     )
-    openapi_schema.setdefault("security", [{"bearerAuth": []}])
+    components.setdefault(
+        "apiKeyAuth",
+        {"type": "apiKey", "in": "header", "name": "X-API-Key"},
+    )
+    openapi_schema.setdefault("security", [{"bearerAuth": []}, {"apiKeyAuth": []}])
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 

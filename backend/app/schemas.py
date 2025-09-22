@@ -53,6 +53,28 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class APIKeyIssueRequest(BaseModel):
+    """Payload for issuing a new API key."""
+
+    email: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=3, max_length=320),
+    ]
+    expires_in_days: int | None = Field(
+        default=None,
+        ge=1,
+        le=3650,
+        description="Optional number of days before the key expires",
+    )
+
+
+class APIKeyIssueResponse(BaseModel):
+    """Raw API key returned immediately after creation."""
+
+    api_key: str
+    expires_at: str | None = None
+
+
 class DocumentResponse(BaseModel):
     """API representation of stored document metadata."""
 
@@ -385,6 +407,8 @@ __all__ = [
     "HealthResponse",
     "UserProfile",
     "TokenResponse",
+    "APIKeyIssueRequest",
+    "APIKeyIssueResponse",
     "DocumentResponse",
     "DocumentDeleteRequest",
     "DocumentUpdate",

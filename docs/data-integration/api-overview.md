@@ -1,7 +1,7 @@
 ---
 Audience: Data teams
 Goal: Summarise the REST API surface exposed today, including authentication requirements and key request/response shapes.
-Prerequisites: API credentials (basic auth or session token) and access to the ADE deployment URL.
+Prerequisites: API credentials (JWT bearer token, SSO access, or API key) and access to the ADE deployment URL.
 When to use: Start here when automating document ingestion, fetching job results, or wiring ADE into downstream systems.
 Validation: Issue sample requests against `/health` and `/documents` (read-only) to confirm connectivity before integrating.
 Escalate to: Platform administrators if endpoints respond unexpectedly or schema contracts change without notice.
@@ -13,31 +13,42 @@ ADE exposes a single REST API implemented under `backend/app/routes/`. Endpoints
 
 ## Authentication options
 
-| Mode | Status | Typical usage |
-| --- | --- | --- |
-| API key bearer token | **Available.** Issue a long-lived token per integration and send `Authorization: Bearer <API_KEY>` on every request. | Service accounts, scheduled exports, partner integrations. |
-| Session cookie | **Available.** Authenticate via HTTP Basic or SSO to receive the `ade_session` cookie. | Browser UI, human operators, temporary automation. |
+ADE offers three entry points for authenticated requests:
 
-Humans typically start with Basic or SSO to obtain a cookie, while machines rely on API keys. Both mechanisms share the same authorisation checks for routes.
+| Mode | Typical usage |
+| --- | --- |
+| `POST /auth/token` | Operators submitting email/password credentials. Returns a JWT for `Authorization: Bearer <token>`. |
+| `/auth/sso/login` → `/auth/sso/callback` | Browser-based OIDC flows. The callback responds with the same JWT as the password endpoint. |
+| API key (`X-API-Key`) | Automation clients that need non-interactive access. |
 
-### Session-based login
+Bearer tokens and API keys drive the same authorisation checks across every router.
 
-1. Call `POST /auth/login/basic` with HTTP Basic credentials (see `backend/app/routes/auth.py`). ADE issues an opaque session token as an HttpOnly cookie.
-2. Include the cookie on subsequent requests. Rotate credentials or log out via `POST /auth/logout` when done.
-3. Refresh the session periodically by calling `GET /auth/session` to extend the expiry window.
+### Password login
 
-Session semantics and environment toggles live in [Authentication modes](../security/authentication-modes.md).
+```python
+import requests
+
+resp = requests.post(
+    "https://ade.example.com/auth/token",
+    data={"username": "admin@example.com", "password": "secret123"},
+    timeout=10,
+)
+token = resp.json()["access_token"]
+headers = {"Authorization": f"Bearer {token}"}
+```
+
+### SSO login
+
+Direct a browser to `/auth/sso/login`. ADE handles the PKCE challenge, exchanges the authorisation code at the provider's token endpoint, and responds with the standard ADE bearer token from `/auth/sso/callback`. The frontend can then store the token client-side or relay it to downstream tooling.
 
 ### API key requests
 
-When using an API key, include the header on every call:
-
 ```python
-headers = {"Authorization": f"Bearer {api_key}"}
+headers = {"X-API-Key": api_key}
 response = requests.get("https://ade.example.com/jobs", headers=headers, timeout=10)
 ```
 
-No session cookie is required when using a valid API key.
+API keys are hashed at rest and track `last_seen` metadata automatically; no additional session state is required.
 
 ## Documents (`backend/app/routes/documents.py`)
 
@@ -94,29 +105,30 @@ Events follow the canonical structure described in `backend/app/schemas.py` (`Ev
 ## Sample workflow
 
 ```bash
-# 1. Authenticate and capture the session cookie
-curl -i -c ade-cookie.txt -X POST \
-  -u "admin@example.com:change-me" \
-  https://ade.example.com/auth/login/basic
+# 1. Authenticate and capture the bearer token
+token=$(curl -s -X POST \
+  -H "content-type: application/x-www-form-urlencoded" \
+  -d "username=admin@example.com&password=change-me" \
+  https://ade.example.com/auth/token | jq -r .access_token)
 
 # 2. Upload a document (expires in 7 days)
-curl -b ade-cookie.txt -X POST \
+curl -H "Authorization: Bearer ${token}" -X POST \
   -F "file=@invoice.pdf" \
   -F "document_type=invoice" \
   -F "expires_at=$(date -u -d '+7 days' '+%Y-%m-%dT%H:%M:%SZ')" \
   https://ade.example.com/documents
 
 # 3. Resolve the active configuration for the document type
-curl -b ade-cookie.txt https://ade.example.com/configurations/active/invoice
+curl -H "Authorization: Bearer ${token}" https://ade.example.com/configurations/active/invoice
 
 # 4. Queue a job
-curl -b ade-cookie.txt -X POST \
+curl -H "Authorization: Bearer ${token}" -X POST \
   -H "Content-Type: application/json" \
   -d '{"document_id": "doc_01H...", "document_type": "invoice"}' \
   https://ade.example.com/jobs
 
 # 5. Inspect job status
-curl -b ade-cookie.txt https://ade.example.com/jobs/job_2024_01_01_0001
+curl -H "Authorization: Bearer ${token}" https://ade.example.com/jobs/job_2024_01_01_0001
 ```
 
-If any call returns 401, refresh the session via `GET /auth/session` or repeat the login. Unexpected 5xx responses should be escalated with timestamp, request ID (from headers), and payload details.
+If any call returns 401, obtain a fresh token or re-issue the API key. Unexpected 5xx responses should be escalated with timestamp, request ID (from headers), and payload details.
