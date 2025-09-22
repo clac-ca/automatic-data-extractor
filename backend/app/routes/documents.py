@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from .. import config
 from ..services import auth as auth_service
 from ..db import get_db
-from ..models import Event, Document
+from ..models import Document, Event, User
 from ..schemas import (
     EventListResponse,
     EventResponse,
@@ -199,21 +199,21 @@ def update_document(
     payload: DocumentUpdate,
     request: Request,
     db: Session = Depends(get_db),
+    current_user: User = Depends(auth_service.get_current_user),
 ) -> DocumentResponse:
     """Update document metadata and record an event."""
 
     override_occurred_at = request.headers.get("X-Test-Occurred-At")
     update_kwargs = payload.model_dump(exclude_unset=True)
 
-    identity = auth_service.get_cached_authenticated_identity(request)
+    actor_defaults = auth_service.event_actor_from_user(current_user)
 
     if not update_kwargs.get("source"):
-        update_kwargs.setdefault("source", "api")
+        update_kwargs["source"] = "api"
 
-    update_kwargs.setdefault("actor_type", "user")
-    update_kwargs.setdefault("actor_id", identity.user.user_id)
-    default_label = identity.user.email or identity.user.user_id
-    update_kwargs.setdefault("actor_label", default_label)
+    for key, value in actor_defaults.items():
+        if update_kwargs.get(key) is None:
+            update_kwargs[key] = value
 
     if ("occurred_at" not in update_kwargs or update_kwargs["occurred_at"] is None) and override_occurred_at:
         update_kwargs["occurred_at"] = override_occurred_at
@@ -288,14 +288,16 @@ def download_document(
     )
     return response
 
-
 @router.delete("/{document_id}", response_model=DocumentResponse)
 def delete_document(
     document_id: str,
     payload: DocumentDeleteRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(auth_service.get_current_user),
 ) -> DocumentResponse:
     """Soft delete a stored document and remove its bytes from disk."""
+
+    actor_defaults = auth_service.event_actor_from_user(current_user)
 
     try:
         document = delete_document_service(
@@ -303,8 +305,9 @@ def delete_document(
             document_id,
             deleted_by=payload.deleted_by,
             delete_reason=payload.delete_reason,
-            event_actor_type="user",
-            event_actor_label=payload.deleted_by,
+            event_actor_type=actor_defaults["actor_type"],
+            event_actor_id=actor_defaults["actor_id"],
+            event_actor_label=actor_defaults["actor_label"],
             event_source="api",
         )
     except DocumentNotFoundError as exc:

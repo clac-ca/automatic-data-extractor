@@ -19,7 +19,7 @@ Start with the simple priority order below. Each layer overrides the one beneath
 | --- | --- | --- | --- |
 | Code defaults | `Settings.data_dir = Path("data")` | Reasonable local defaults tracked in Git | Lowest priority |
 | `.env` file | `.env`, `.env.local`, `.env.staging` | Store secrets for a specific environment | Overrides defaults |
-| Process environment | `ADE_DATABASE_URL`, `ADE_SSO_CLIENT_SECRET` | Temporary overrides from shells, CI, or hosts | Highest priority |
+| Process environment | `ADE_DATABASE_URL`, `ADE_JWT_SECRET_KEY` | Temporary overrides from shells, CI, or hosts | Highest priority |
 
 Confirm which values ADE is using by printing the settings inside an activated virtual environment.
 
@@ -46,10 +46,8 @@ ADE_DATA_DIR=data
 # ADE_DATABASE_URL=sqlite:///data/db/ade.sqlite
 # Uncomment to require manual schema upgrades instead of auto-migrating
 # ADE_AUTO_MIGRATE=false
-ADE_AUTH_MODES=basic
-ADE_SESSION_TTL_MINUTES=720
-# Rotate when you refresh sample SSO metadata
-ADE_SSO_CLIENT_SECRET=local-dev-client-secret
+ADE_JWT_SECRET_KEY=local-dev-secret-change-me
+ADE_ACCESS_TOKEN_EXP_MINUTES=60
 ```
 
 By default ADE detects file-based SQLite URLs and applies Alembic migrations on startup. Leave `ADE_AUTO_MIGRATE` unset to rely on the automatic behaviour, or export `ADE_AUTO_MIGRATE=false` before booting if you need to run `python -m backend.app.db_migrations upgrade` (or `alembic upgrade head`) manually.
@@ -62,8 +60,7 @@ Sensitive values should follow a predictable cadence. Treat the table below as t
 
 | Secret | Source | Suggested rotation |
 | --- | --- | --- |
-| `ADE_SSO_CLIENT_SECRET` | Identity provider | Quarterly or immediately after incidents |
-| `ADE_SESSION_COOKIE_SECRET` (future hardening) | Secrets manager | Rotate with every release |
+| `ADE_JWT_SECRET_KEY` | Secrets manager | Rotate at least quarterly or immediately after suspected compromise |
 | `ADE_DATABASE_URL` credentials (if using Postgres) | Database owner | Regenerate when operators change or quarterly |
 
 Store the authoritative copy of each secret in the organisation's vault. Update `.env` files only with short-lived values you can safely rotate.

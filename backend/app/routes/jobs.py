@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ..services import auth as auth_service
 from ..db import get_db
-from ..models import Event, Job
+from ..models import Event, Job, User
 from ..schemas import (
     EventListResponse,
     EventResponse,
@@ -39,8 +39,7 @@ from ..services.jobs import (
 router = APIRouter(
     prefix="/jobs",
     tags=["jobs"],
-    # Resolve authentication once per request so handlers can reuse the cached identity.
-    dependencies=[Depends(auth_service.get_authenticated_identity)],
+    dependencies=[Depends(auth_service.get_current_user)],
 )
 
 
@@ -61,13 +60,12 @@ def _event_to_response(event: Event) -> EventResponse:
 )
 def create_job_endpoint(
     payload: JobCreate,
-    request: Request,
     db: Session = Depends(get_db),
+    current_user: User = Depends(auth_service.get_current_user),
 ) -> JobResponse:
     """Create a job for the supplied document type."""
 
-    identity = auth_service.get_cached_authenticated_identity(request)
-    actor_defaults = auth_service.event_actor_from_identity(identity)
+    actor_defaults = auth_service.event_actor_from_user(current_user)
 
     try:
         job = create_job(
@@ -191,15 +189,14 @@ def list_job_events(
 def update_job_endpoint(
     job_id: str,
     payload: JobUpdate,
-    request: Request,
     db: Session = Depends(get_db),
+    current_user: User = Depends(auth_service.get_current_user),
 ) -> JobResponse:
     """Update mutable job fields."""
 
     update_kwargs = payload.model_dump(exclude_unset=True)
 
-    identity = auth_service.get_cached_authenticated_identity(request)
-    actor_defaults = auth_service.event_actor_from_identity(identity)
+    actor_defaults = auth_service.event_actor_from_user(current_user)
 
     try:
         job = update_job(

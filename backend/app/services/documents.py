@@ -299,7 +299,8 @@ def update_document(
 ) -> Document:
     """Apply metadata changes and optionally record a document event."""
 
-    with db.begin():
+    transaction = db.begin_nested() if db.in_transaction() else db.begin()
+    with transaction:
         document = get_document(db, document_id)
 
         current_metadata = dict(document.metadata_ or {})
@@ -630,7 +631,8 @@ def purge_expired_documents(
         return summary
 
     deleted_documents: list[Document] = []
-    with db.begin():
+    transaction = db.begin_nested() if db.in_transaction() else db.begin()
+    with transaction:
         for batch in iterator:
             for document in batch:
                 deleted_document = delete_document(

@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import AliasChoices, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
@@ -57,89 +57,51 @@ class Settings(BaseSettings):
         ge=1,
         description="Number of seconds to wait between automatic purge sweeps",
     )
-    auth_disabled_override: bool = Field(
+
+    auth_disabled: bool = Field(
         default=False,
-        validation_alias=AliasChoices("AUTH_DISABLED", "ADE_AUTH_DISABLED"),
-        description="Disable authentication for local testing or health checks",
+        description="Allow anonymous access to all endpoints (development only)",
     )
-    auth_modes: str = Field(
-        default="basic",
-        description=(
-            "Comma separated list of enabled authentication mechanisms (none, basic, sso)"
-        ),
-    )
-    session_cookie_name: str = Field(
-        default="ade_session",
-        min_length=1,
-        description="Name of the browser cookie carrying session tokens",
-    )
-    session_ttl_minutes: int = Field(
-        default=720,
-        gt=0,
-        description="Validity window for issued browser sessions",
-    )
-    session_cookie_secure: bool = Field(
-        default=False,
-        description="Mark session cookies as Secure (HTTPS-only)",
-    )
-    session_cookie_domain: str | None = Field(
+    jwt_secret_key: str | None = Field(
         default=None,
-        description="Optional domain attribute to include on session cookies",
+        description="Symmetric secret used to sign access tokens",
     )
-    session_cookie_path: str = Field(
-        default="/",
-        description="Path attribute applied to session cookies",
+    jwt_algorithm: str = Field(
+        default="HS256",
+        description="JWT signing algorithm",
     )
-    session_cookie_same_site: str = Field(
-        default="lax",
-        description="SameSite attribute for session cookies (lax, strict, none)",
-    )
-    sso_client_id: str | None = Field(default=None, description="OIDC client identifier")
-    sso_client_secret: str | None = Field(
-        default=None, description="OIDC client secret for code exchange"
-    )
-    sso_issuer: str | None = Field(
-        default=None,
-        description="OIDC issuer base URL used for discovery",
-    )
-    sso_redirect_url: str | None = Field(
-        default=None,
-        description="Callback URL registered with the OIDC provider",
-    )
-    sso_audience: str | None = Field(
-        default=None,
-        description="Expected ID token audience (defaults to client id when unset)",
-    )
-    sso_scopes: str = Field(
-        default="openid email profile",
-        description="Scopes requested during the OIDC authorisation redirect",
-    )
-    sso_cache_ttl_seconds: int = Field(
-        default=300,
-        gt=0,
-        description="Seconds to cache discovery documents and JWKS responses",
-    )
-    sso_auto_provision: bool = Field(
-        default=False,
-        description="Automatically create users for valid SSO identities",
-    )
-    admin_email_allowlist_enabled: bool = Field(
-        default=False,
-        description="Require administrator accounts to match the configured allowlist",
-    )
-    admin_email_allowlist: str | None = Field(
-        default=None,
-        description="Comma separated list of administrator email addresses",
+    access_token_exp_minutes: int = Field(
+        default=60,
+        ge=1,
+        description="Minutes before issued access tokens expire",
     )
 
-    @field_validator("session_cookie_same_site")
+    @field_validator("jwt_secret_key")
     @classmethod
-    def _validate_same_site(cls, value: str) -> str:
-        candidate = value.lower().strip()
-        if candidate not in {"lax", "strict", "none"}:
-            msg = "session_cookie_same_site must be lax, strict, or none"
-            raise ValueError(msg)
+    def _strip_blank_secret(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("jwt_algorithm")
+    @classmethod
+    def _validate_algorithm(cls, value: str) -> str:
+        candidate = value.strip().upper()
+        if not candidate:
+            raise ValueError("jwt_algorithm must not be empty")
         return candidate
+
+    @model_validator(mode="after")
+    def _derive_paths(self) -> "Settings":
+        if "documents_dir" not in self.model_fields_set:
+            self.documents_dir = self.data_dir / "documents"
+
+        if "database_url" not in self.model_fields_set:
+            default_sqlite = self.data_dir / "db" / "ade.sqlite"
+            self.database_url = f"sqlite:///{default_sqlite}"
+
+        return self
 
     @property
     def database_path(self) -> Path | None:
@@ -156,67 +118,24 @@ class Settings(BaseSettings):
         return Path(database)
 
     @property
-    def auth_mode_sequence(self) -> tuple[str, ...]:
-        """Return configured authentication modes in declaration order."""
+    def auth_required(self) -> bool:
+        """Return True when API requests must present a valid token."""
 
-        if self.auth_disabled_override:
-            return ("none",)
-
-        modes: list[str] = []
-        allowed = {"none", "basic", "sso"}
-        for raw in self.auth_modes.split(","):
-            candidate = raw.strip().lower()
-            if not candidate:
-                continue
-            if candidate not in allowed:
-                msg = f"Unsupported auth mode: {candidate}"
-                raise ValueError(msg)
-            if candidate not in modes:
-                modes.append(candidate)
-
-        if not modes:
-            raise ValueError("At least one authentication mode must be specified")
-
-        if "none" in modes:
-            if len(modes) > 1:
-                raise ValueError("Auth mode 'none' cannot be combined with other modes")
-            return ("none",)
-
-        return tuple(modes)
+        return not self.auth_disabled
 
     @property
-    def admin_allowlist(self) -> tuple[str, ...]:
-        """Return normalised administrator email addresses."""
-
-        source = (self.admin_email_allowlist or "").strip()
-        if not source:
-            return ()
-
-        values: list[str] = []
-        for item in source.split(","):
-            candidate = item.strip().lower()
-            if candidate and candidate not in values:
-                values.append(candidate)
-        return tuple(values)
-
-    @model_validator(mode="after")
-    def _apply_derived_paths(self) -> "Settings":
-        """Derive dependent filesystem locations when unset."""
-
-        if "documents_dir" not in self.model_fields_set:
-            self.documents_dir = self.data_dir / "documents"
-
-        if "database_url" not in self.model_fields_set:
-            default_sqlite = self.data_dir / "db" / "ade.sqlite"
-            self.database_url = f"sqlite:///{default_sqlite}"
-
-        return self
+    def database_is_sqlite_memory(self) -> bool:
+        url = make_url(self.database_url)
+        if url.get_backend_name() != "sqlite":
+            return False
+        database = (url.database or "").strip()
+        if not database or database == ":memory:":
+            return True
+        return database.startswith("file::memory:")
 
     @property
-    def auth_disabled(self) -> bool:
-        """Return True when authentication checks are disabled."""
-
-        return self.auth_mode_sequence == ("none",)
+    def documents_path(self) -> Path:
+        return self.documents_dir
 
 
 @lru_cache
