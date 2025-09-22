@@ -75,6 +75,35 @@ class Settings(BaseSettings):
         ge=1,
         description="Minutes before issued access tokens expire",
     )
+    sso_client_id: str | None = Field(
+        default=None,
+        description="OIDC client identifier for single sign-on",
+    )
+    sso_client_secret: str | None = Field(
+        default=None,
+        description="OIDC client secret used during the token exchange",
+    )
+    sso_issuer: str | None = Field(
+        default=None,
+        description="OIDC issuer URL providing discovery metadata",
+    )
+    sso_redirect_url: str | None = Field(
+        default=None,
+        description="Redirect URL registered with the identity provider",
+    )
+    sso_scope: str = Field(
+        default="openid email profile",
+        description="Space separated scopes requested during SSO login",
+    )
+    sso_resource_audience: str | None = Field(
+        default=None,
+        description="Expected audience claim for provider access tokens",
+    )
+    api_key_touch_interval_seconds: int = Field(
+        default=300,
+        ge=0,
+        description="Minimum seconds between API key last-seen updates",
+    )
 
     @field_validator("jwt_secret_key")
     @classmethod
@@ -92,6 +121,28 @@ class Settings(BaseSettings):
             raise ValueError("jwt_algorithm must not be empty")
         return candidate
 
+    @field_validator(
+        "sso_client_id",
+        "sso_client_secret",
+        "sso_issuer",
+        "sso_redirect_url",
+        "sso_resource_audience",
+    )
+    @classmethod
+    def _strip_blank_sso(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("sso_scope")
+    @classmethod
+    def _normalise_scope(cls, value: str) -> str:
+        candidate = " ".join(part for part in value.split() if part)
+        if not candidate:
+            raise ValueError("sso_scope must not be empty")
+        return candidate
+
     @model_validator(mode="after")
     def _derive_paths(self) -> "Settings":
         if "documents_dir" not in self.model_fields_set:
@@ -100,6 +151,19 @@ class Settings(BaseSettings):
         if "database_url" not in self.model_fields_set:
             default_sqlite = self.data_dir / "db" / "ade.sqlite"
             self.database_url = f"sqlite:///{default_sqlite}"
+
+        if self.sso_client_id or self.sso_client_secret or self.sso_issuer or self.sso_redirect_url:
+            required = [
+                self.sso_client_id,
+                self.sso_issuer,
+                self.sso_redirect_url,
+            ]
+            if any(item is None for item in required):
+                msg = "Incomplete SSO configuration; client_id, issuer, and redirect_url are required"
+                raise ValueError(msg)
+            if self.sso_client_secret is None:
+                msg = "sso_client_secret must be set for confidential SSO flows"
+                raise ValueError(msg)
 
         return self
 
@@ -122,6 +186,17 @@ class Settings(BaseSettings):
         """Return True when API requests must present a valid token."""
 
         return not self.auth_disabled
+
+    @property
+    def sso_enabled(self) -> bool:
+        """Return ``True`` when single sign-on is configured."""
+
+        return bool(
+            self.sso_client_id
+            and self.sso_client_secret
+            and self.sso_issuer
+            and self.sso_redirect_url
+        )
 
     @property
     def database_is_sqlite_memory(self) -> bool:

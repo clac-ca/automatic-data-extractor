@@ -249,6 +249,40 @@ class User(Base):
         return f"User(user_id={self.user_id!r}, email={self.email!r})"
 
 
+class APIKey(Base):
+    """Hashed API key issued for automation clients."""
+
+    __tablename__ = "api_keys"
+
+    api_key_id: Mapped[str] = mapped_column(
+        String(26), primary_key=True, default=_generate_ulid
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
+    )
+    token_prefix: Mapped[str] = mapped_column(String(12), nullable=False, unique=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    expires_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[str] = mapped_column(String(32), default=_timestamp, nullable=False)
+    updated_at: Mapped[str] = mapped_column(
+        String(32), default=_timestamp, onupdate=_timestamp, nullable=False
+    )
+    last_seen_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    last_seen_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    last_seen_user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    __table_args__ = (Index("ix_api_keys_user_id", "user_id"),)
+
+    def __repr__(self) -> str:
+        return (
+            "APIKey("
+            f"api_key_id={self.api_key_id!r}, "
+            f"user_id={self.user_id!r}, "
+            f"token_prefix={self.token_prefix!r}"
+            ")"
+        )
+
+
 __all__ = [
     "Configuration",
     "Job",
@@ -257,4 +291,5 @@ __all__ = [
     "MaintenanceStatus",
     "User",
     "UserRole",
+    "APIKey",
 ]

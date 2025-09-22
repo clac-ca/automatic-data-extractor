@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from pathlib import Path
 from typing import Any, Generator
 
 from sqlalchemy import MetaData, create_engine
@@ -44,6 +45,9 @@ def _create_engine(database_url: str) -> Engine:
     if url.get_backend_name() == "sqlite":
         connect_args["check_same_thread"] = False
         connect_args["timeout"] = 30
+        database = (url.database or "").strip()
+        if database and not _is_sqlite_memory_url(url):
+            Path(database).parent.mkdir(parents=True, exist_ok=True)
         if _is_sqlite_memory_url(url):
             engine_kwargs["poolclass"] = StaticPool
 

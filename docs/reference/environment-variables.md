@@ -42,6 +42,13 @@ Validation tip: After changing scheduler settings, restart ADE and check `GET /h
 | `ADE_JWT_SECRET_KEY` | _(unset)_ | Required when authentication is enabled. Provide a high-entropy symmetric secret. | Yes |
 | `ADE_JWT_ALGORITHM` | `HS256` | Algorithm passed to PyJWT. `HS256` is recommended unless all clients support a different choice. | Yes |
 | `ADE_ACCESS_TOKEN_EXP_MINUTES` | `60` | Positive integer; minutes until issued tokens expire. | Yes (tokens minted after the change honour the new value) |
+| `ADE_SSO_CLIENT_ID` | _(unset)_ | OIDC client identifier used during `/auth/sso/login`. Required to enable SSO. | Yes |
+| `ADE_SSO_CLIENT_SECRET` | _(unset)_ | Confidential client secret presented to the provider's token endpoint. | Yes |
+| `ADE_SSO_ISSUER` | _(unset)_ | Issuer URL exposing `/.well-known/openid-configuration`. | Yes |
+| `ADE_SSO_REDIRECT_URL` | _(unset)_ | Redirect URI registered with the provider (should end with `/auth/sso/callback`). | Yes |
+| `ADE_SSO_SCOPE` | `openid email profile` | Space-separated scope string requested during the authorisation step. | Yes |
+| `ADE_SSO_RESOURCE_AUDIENCE` | _(unset)_ | Optional audience enforced on provider access tokens. Leave unset if not required. | Yes |
+| `ADE_API_KEY_TOUCH_INTERVAL_SECONDS` | `300` | Integer ≥ 0; minimum seconds between API key `last_seen` updates. | No (takes effect on next request) |
 
 Validation tip: After adjusting authentication settings, call `POST /auth/token` to ensure credentials are accepted and verify that unauthenticated requests receive `401 Not authenticated` responses.
 
