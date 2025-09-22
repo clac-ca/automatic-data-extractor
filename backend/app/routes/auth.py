@@ -10,6 +10,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from .. import config
+from ..auth.email import EmailValidationError, normalize_email
 from ..db import get_db
 from ..models import User
 from ..schemas import (
@@ -209,8 +210,18 @@ def create_api_key(
 ) -> APIKeyIssueResponse:
     """Issue a new API key for the requested user."""
 
-    target_email = payload.email.strip().lower()
-    target = db.query(User).filter(User.email == target_email).one_or_none()
+    try:
+        normalised = normalize_email(payload.email)
+    except EmailValidationError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    target = (
+        db.query(User)
+        .filter(User.email_canonical == normalised.canonical)
+        .one_or_none()
+    )
     if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found")
     if not target.is_active:

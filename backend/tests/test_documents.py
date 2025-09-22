@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from backend.app.auth.email import canonicalize_email
 from backend.app.db import get_sessionmaker
 from backend.app.models import Document, User
 from backend.app.services.documents import delete_document as delete_document_service
@@ -368,7 +369,11 @@ def test_delete_document_removes_file_and_marks_metadata(app_client) -> None:
     assert events_payload["limit"] == 50
     session_factory = get_sessionmaker()
     with session_factory() as db:
-        user = db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one()
+        user = (
+            db.query(User)
+            .filter(User.email_canonical == canonicalize_email(DEFAULT_USER_EMAIL))
+            .one()
+        )
     event = events_payload["items"][0]
     assert event["event_type"] == "document.deleted"
     assert event["entity_id"] == payload["document_id"]
@@ -571,7 +576,11 @@ def test_update_document_defaults_event_type_and_source(app_client) -> None:
 
     session_factory = get_sessionmaker()
     with session_factory() as db:
-        user = db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one()
+        user = (
+            db.query(User)
+            .filter(User.email_canonical == canonicalize_email(DEFAULT_USER_EMAIL))
+            .one()
+        )
 
     assert event["actor_id"] == user.user_id
     assert event["actor_label"] == user.email

@@ -19,9 +19,10 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.ext.mutable import MutableDict, MutableList
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, validates
 
 from .db import Base
+from .auth.email import normalize_email
 
 
 def _timestamp() -> str:
@@ -227,7 +228,10 @@ class User(Base):
     user_id: Mapped[str] = mapped_column(
         String(26), primary_key=True, default=_generate_ulid
     )
-    email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    email_canonical: Mapped[str] = mapped_column(
+        String(320), nullable=False, unique=True
+    )
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     role: Mapped[UserRole] = mapped_column(
@@ -247,6 +251,14 @@ class User(Base):
 
     def __repr__(self) -> str:
         return f"User(user_id={self.user_id!r}, email={self.email!r})"
+
+    @validates("email")
+    def _set_email(self, _key: str, value: str) -> str:
+        normalised = normalize_email(value)
+        if not normalised.original:
+            raise ValueError("Email address must not be empty")
+        self.email_canonical = normalised.canonical
+        return normalised.original
 
 
 class APIKey(Base):

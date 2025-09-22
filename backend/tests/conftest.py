@@ -11,6 +11,7 @@ from typing import ContextManager
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.app.auth.email import canonicalize_email
 from backend.app.services.auth import hash_password
 from backend.app.db import get_sessionmaker
 from backend.app.models import Event, User, UserRole
@@ -23,7 +24,9 @@ def _seed_default_user() -> None:
     session_factory = get_sessionmaker()
     with session_factory() as db:
         existing = (
-            db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one_or_none()
+            db.query(User)
+            .filter(User.email_canonical == canonicalize_email(DEFAULT_USER_EMAIL))
+            .one_or_none()
         )
         if existing is not None:
             return

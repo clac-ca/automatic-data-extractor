@@ -49,8 +49,9 @@ Ensure `ADE_JWT_SECRET_KEY` is also set; the same key signs the state cookie and
 5. Send the returned token to `/auth/me` to verify the mapped user and role.
 
 ADE creates a new user automatically when the provider supplies a verified email address that does not already exist in the
-`users` table. Accounts inherit the default `viewer` role; adjust the role manually via the CLI if elevated permissions are
-required.
+`users` table. The canonicalised form stored in `users.email_canonical` ensures future logins match even if the provider changes
+letter casing or Unicode composition. Accounts inherit the default `viewer` role; adjust the role manually via the CLI if
+elevated permissions are required.
 
 ## 4. Troubleshooting tips
 

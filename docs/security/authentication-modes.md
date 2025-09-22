@@ -79,7 +79,11 @@ audit events so operators can track who issued or disabled a key.
 
 ## 5. Manage users and roles
 
-User management is unchanged: use the CLI for provisioning and password resets.
+User management is unchanged: use the CLI for provisioning and password resets. ADE
+validates addresses with the `email-validator` library, stores the canonical form in
+`users.email_canonical`, and keeps the original casing in `users.email` for display.
+Lookups always use the canonical column so operators can sign in regardless of
+case or Unicode composition.
 
 ```bash
 python -m backend.app auth create-user admin@example.com --password change-me --role admin

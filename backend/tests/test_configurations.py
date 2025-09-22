@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.app.auth.email import canonicalize_email
 from backend.app.db import get_sessionmaker
 from backend.app.models import User
 from backend.app.services.events import EventRecord, record_event
@@ -730,6 +731,10 @@ def test_configuration_event_timeline_returns_404_for_missing_configuration(app_
 def _default_user_id() -> str:
     session_factory = get_sessionmaker()
     with session_factory() as db:
-        user = db.query(User).filter(User.email == DEFAULT_USER_EMAIL).one()
+        user = (
+            db.query(User)
+            .filter(User.email_canonical == canonicalize_email(DEFAULT_USER_EMAIL))
+            .one()
+        )
         return user.user_id
 

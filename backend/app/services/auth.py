@@ -21,6 +21,7 @@ from jwt import PyJWKClient
 from sqlalchemy.orm import Session
 
 from .. import config
+from ..auth.email import EmailValidationError, canonicalize_email, normalize_email
 from ..db import get_db, get_sessionmaker
 from ..models import APIKey, User, UserRole
 from .events import EventRecord, record_event
@@ -462,7 +463,15 @@ def decode_access_token(token: str, settings: config.Settings) -> TokenPayload:
 def authenticate_user(db: Session, *, email: str, password: str) -> User | None:
     """Return the authenticated user or ``None`` when credentials are invalid."""
 
-    candidate = db.query(User).filter(User.email == email).one_or_none()
+    try:
+        canonical_email = canonicalize_email(email)
+    except EmailValidationError:
+        return None
+    candidate = (
+        db.query(User)
+        .filter(User.email_canonical == canonical_email)
+        .one_or_none()
+    )
     if candidate is None or not candidate.is_active:
         return None
     if candidate.password_hash is None:
@@ -743,11 +752,6 @@ def verify_jwt_via_jwks(
 
     return payload
 
-
-def _normalise_email(email: str) -> str:
-    return email.strip().lower()
-
-
 def resolve_sso_user(
     db: Session,
     *,
@@ -761,17 +765,27 @@ def resolve_sso_user(
     if not email_verified:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Email not verified by identity provider")
 
-    normalised_email = _normalise_email(email)
+    try:
+        normalised = normalize_email(email)
+    except EmailValidationError as exc:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email provided by identity provider",
+        ) from exc
     user = (
         db.query(User)
         .filter(User.sso_provider == provider, User.sso_subject == subject)
         .one_or_none()
     )
     if user is None:
-        user = db.query(User).filter(User.email == normalised_email).one_or_none()
+        user = (
+            db.query(User)
+            .filter(User.email_canonical == normalised.canonical)
+            .one_or_none()
+        )
         if user is None:
             user = User(
-                email=normalised_email,
+                email=normalised.original,
                 password_hash=None,
                 role=UserRole.VIEWER,
                 is_active=True,
@@ -789,13 +803,13 @@ def resolve_sso_user(
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail="User account is disabled")
             user.sso_provider = provider
             user.sso_subject = subject
-            if user.email != normalised_email:
-                user.email = normalised_email
+            if user.email_canonical != normalised.canonical:
+                user.email = normalised.original
     else:
         if not user.is_active:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="User account is disabled")
-        if user.email != normalised_email:
-            user.email = normalised_email
+        if user.email_canonical != normalised.canonical:
+            user.email = normalised.original
 
     user.last_login_at = _now().isoformat()
     return user
@@ -823,12 +837,25 @@ def clear_caches() -> None:
 
 
 def _create_user(db: Session, *, email: str, password: str, role: UserRole) -> User:
-    existing = db.query(User).filter(User.email == email).one_or_none()
+    try:
+        normalised = normalize_email(email)
+    except EmailValidationError as exc:
+        raise ValueError(str(exc)) from exc
+    existing = (
+        db.query(User)
+        .filter(User.email_canonical == normalised.canonical)
+        .one_or_none()
+    )
     if existing is not None:
-        msg = f"User with email {email!r} already exists"
+        msg = f"User with email {normalised.original!r} already exists"
         raise ValueError(msg)
 
-    user = User(email=email, password_hash=hash_password(password), role=role, is_active=True)
+    user = User(
+        email=normalised.original,
+        password_hash=hash_password(password),
+        role=role,
+        is_active=True,
+    )
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -837,9 +864,17 @@ def _create_user(db: Session, *, email: str, password: str, role: UserRole) -> U
 
 
 def _set_password(db: Session, *, email: str, password: str) -> None:
-    user = db.query(User).filter(User.email == email).one_or_none()
+    try:
+        normalised = normalize_email(email)
+    except EmailValidationError as exc:
+        raise ValueError(str(exc)) from exc
+    user = (
+        db.query(User)
+        .filter(User.email_canonical == normalised.canonical)
+        .one_or_none()
+    )
     if user is None:
-        msg = f"No user found for email {email!r}"
+        msg = f"No user found for email {normalised.original!r}"
         raise ValueError(msg)
     user.password_hash = hash_password(password)
     db.commit()
@@ -936,9 +971,17 @@ def _cli_list_users(db: Session, args: argparse.Namespace) -> None:  # pragma: n
 
 @_with_session
 def _cli_create_api_key(db: Session, args: argparse.Namespace) -> None:  # pragma: no cover - CLI output
-    user = db.query(User).filter(User.email == args.email).one_or_none()
+    try:
+        normalised = normalize_email(args.email)
+    except EmailValidationError as exc:
+        raise ValueError(str(exc)) from exc
+    user = (
+        db.query(User)
+        .filter(User.email_canonical == normalised.canonical)
+        .one_or_none()
+    )
     if user is None:
-        msg = f"No user found for email {args.email!r}"
+        msg = f"No user found for email {normalised.original!r}"
         raise ValueError(msg)
 
     expires_at = None
