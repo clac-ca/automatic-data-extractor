@@ -23,6 +23,8 @@ ADE’s documentation is organised around the core personas described in [DOCUME
   - [Local quickstart (Windows PowerShell)](./platform/quickstart-local.md)
   - [Environment and secret management](./platform/environment-management.md)
   - [Authentication modes](./security/authentication-modes.md)
+  - [SSO login quick start](./security/sso-login.md)
+  - [API key management](./security/api-keys.md)
   - [SSO setup and recovery](./security/sso-setup.md)
   - [Document retention policy](./operations/document-retention.md)
 - **Runbooks:**
@@ -52,7 +54,7 @@ ADE’s documentation is organised around the core personas described in [DOCUME
 ### Data teams
 - **Entry point:** [Integration surface](./data-integration/README.md)
 - **Key guides:**
-  - [API overview](./data-integration/api-overview.md) — highlights the upcoming API key flow alongside the current session-based fallback.
+  - [API overview](./data-integration/api-overview.md) — documents bearer token, SSO, and API key authentication plus core endpoints.
   - [Environment variables reference](./reference/environment-variables.md)
   - SQL access recipes (TODO)
 - **Runbooks:**
