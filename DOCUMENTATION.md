@@ -127,3 +127,4 @@ backend/
 - Assign section owners and review quarterly or after major releases; document the review in the metadata block to keep in-app readers confident the guidance is current.
 
 This structure keeps each persona focused on configuration-driven operations, delivers consistent navigation in GitHub and the in-app viewer, and ensures the most critical operational and configuration workflows are documented first.
+ 
