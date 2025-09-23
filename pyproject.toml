@@ -17,6 +17,7 @@ dependencies = [
   "uvicorn[standard]==0.36.0",
   "sqlalchemy==2.0.43",
   "alembic==1.16.5",
+  "aiosqlite==0.20.0",
   "pydantic==2.11.9",
   "pydantic-settings==2.10.1",
   "python-multipart==0.0.20",
