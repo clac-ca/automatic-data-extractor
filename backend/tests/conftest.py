@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
+from typing import Any
+from uuid import uuid4
 from pathlib import Path
 
 from alembic import command
@@ -15,6 +17,10 @@ from httpx import ASGITransport, AsyncClient
 
 from backend.app.core.settings import reset_settings_cache
 from backend.app.db.engine import render_sync_url, reset_database_state
+from backend.app.db.session import get_sessionmaker
+from backend.app.modules.auth.service import hash_password
+from backend.app.modules.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
+from backend.app.modules.users.models import User, UserRole
 from backend.app.main import create_app
 
 
@@ -60,3 +66,151 @@ async def async_client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
+
+
+@pytest_asyncio.fixture()
+async def seed_identity() -> dict[str, Any]:
+    """Create baseline users and workspace records for identity tests."""
+
+    session_factory = get_sessionmaker()
+    async with session_factory() as session:
+        workspace_slug = f"acme-{uuid4().hex[:8]}"
+        workspace = Workspace(name="Acme Corp", slug=workspace_slug)
+        secondary_workspace = Workspace(
+            name="Globex Corp", slug=f"{workspace_slug}-alt"
+        )
+        admin_password = "admin-password"
+        workspace_owner_password = "workspace-owner-password"
+        member_password = "member-password"
+        member_manage_password = "member-manage-password"
+        orphan_password = "orphan-password"
+        invitee_password = "invitee-password"
+
+        admin_email = f"admin+{workspace_slug}@example.com"
+        workspace_owner_email = f"owner+{workspace_slug}@example.com"
+        member_email = f"member+{workspace_slug}@example.com"
+        member_manage_email = f"member-manage+{workspace_slug}@example.com"
+        orphan_email = f"orphan+{workspace_slug}@example.com"
+        invitee_email = f"invitee+{workspace_slug}@example.com"
+
+        admin = User(
+            email=admin_email,
+            password_hash=hash_password(admin_password),
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
+        workspace_owner = User(
+            email=workspace_owner_email,
+            password_hash=hash_password(workspace_owner_password),
+            role=UserRole.MEMBER,
+            is_active=True,
+        )
+        member = User(
+            email=member_email,
+            password_hash=hash_password(member_password),
+            role=UserRole.MEMBER,
+            is_active=True,
+        )
+        member_with_manage = User(
+            email=member_manage_email,
+            password_hash=hash_password(member_manage_password),
+            role=UserRole.MEMBER,
+            is_active=True,
+        )
+        orphan = User(
+            email=orphan_email,
+            password_hash=hash_password(orphan_password),
+            role=UserRole.MEMBER,
+            is_active=True,
+        )
+        invitee = User(
+            email=invitee_email,
+            password_hash=hash_password(invitee_password),
+            role=UserRole.MEMBER,
+            is_active=True,
+        )
+
+        session.add_all(
+            [
+                workspace,
+                secondary_workspace,
+                admin,
+                workspace_owner,
+                member,
+                member_with_manage,
+                orphan,
+                invitee,
+            ]
+        )
+        await session.flush()
+
+        workspace_owner_membership = WorkspaceMembership(
+            user_id=workspace_owner.id,
+            workspace_id=workspace.id,
+            role=WorkspaceRole.OWNER,
+            is_default=True,
+            permissions=[],
+        )
+        member_membership = WorkspaceMembership(
+            user_id=member.id,
+            workspace_id=workspace.id,
+            role=WorkspaceRole.MEMBER,
+            is_default=True,
+            permissions=["workspace:dashboard:read"],
+        )
+        member_manage_default = WorkspaceMembership(
+            user_id=member_with_manage.id,
+            workspace_id=workspace.id,
+            role=WorkspaceRole.MEMBER,
+            is_default=True,
+            permissions=["workspace:members:manage"],
+        )
+        member_manage_secondary = WorkspaceMembership(
+            user_id=member_with_manage.id,
+            workspace_id=secondary_workspace.id,
+            role=WorkspaceRole.MEMBER,
+            is_default=False,
+            permissions=[],
+        )
+
+        session.add_all(
+            [
+                workspace_owner_membership,
+                member_membership,
+                member_manage_default,
+                member_manage_secondary,
+            ]
+        )
+        await session.commit()
+
+        workspace_id = workspace.id
+        secondary_workspace_id = secondary_workspace.id
+        admin_info = {"email": admin_email, "password": admin_password, "id": admin.id}
+        workspace_owner_info = {
+            "email": workspace_owner_email,
+            "password": workspace_owner_password,
+            "id": workspace_owner.id,
+        }
+        member_info = {"email": member_email, "password": member_password, "id": member.id}
+        member_manage_info = {
+            "email": member_manage_email,
+            "password": member_manage_password,
+            "id": member_with_manage.id,
+        }
+        orphan_info = {"email": orphan_email, "password": orphan_password, "id": orphan.id}
+        invitee_info = {
+            "email": invitee_email,
+            "password": invitee_password,
+            "id": invitee.id,
+        }
+
+    return {
+        "workspace_id": workspace_id,
+        "secondary_workspace_id": secondary_workspace_id,
+        "admin": admin_info,
+        "workspace_owner": workspace_owner_info,
+        "member": member_info,
+        "member_with_manage": member_manage_info,
+        "orphan": orphan_info,
+        "invitee": invitee_info,
+    }
