@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import tomllib
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import InitSettingsSource
 
@@ -72,6 +72,35 @@ class AppSettings(BaseSettings):
         ge=1,
         description="Minutes before issued access tokens expire.",
     )
+    sso_client_id: str | None = Field(
+        default=None,
+        description="OIDC client identifier used during SSO flows.",
+    )
+    sso_client_secret: str | None = Field(
+        default=None,
+        description="Client secret used when exchanging authorization codes.",
+    )
+    sso_issuer: str | None = Field(
+        default=None,
+        description="OIDC issuer URL providing discovery metadata.",
+    )
+    sso_redirect_url: str | None = Field(
+        default=None,
+        description="Callback URL registered with the identity provider.",
+    )
+    sso_scope: str = Field(
+        default="openid email profile",
+        description="Space-separated scopes requested during SSO login.",
+    )
+    sso_resource_audience: str | None = Field(
+        default=None,
+        description="Optional resource audience expected on provider access tokens.",
+    )
+    api_key_touch_interval_seconds: int = Field(
+        default=300,
+        ge=0,
+        description="Minimum seconds between API key last-seen updates.",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="ADE_",
@@ -88,6 +117,40 @@ class AppSettings(BaseSettings):
         if not self.enable_docs:
             return None, None
         return self.docs_url, self.redoc_url
+
+    @property
+    def sso_enabled(self) -> bool:
+        """Return True when single sign-on is fully configured."""
+
+        return bool(
+            self.sso_client_id
+            and self.sso_client_secret
+            and self.sso_issuer
+            and self.sso_redirect_url
+        )
+
+    @field_validator(
+        "sso_client_id",
+        "sso_client_secret",
+        "sso_issuer",
+        "sso_redirect_url",
+        "sso_resource_audience",
+        mode="before",
+    )
+    @classmethod
+    def _strip_blank_sso(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("sso_scope", mode="before")
+    @classmethod
+    def _normalise_scope(cls, value: str) -> str:
+        candidate = " ".join(part for part in value.split() if part)
+        if not candidate:
+            raise ValueError("sso_scope must not be empty")
+        return candidate
 
     @classmethod
     def settings_customise_sources(
