@@ -22,6 +22,34 @@ Every landing page restates prerequisites, required roles/access, and escalation
 5. **Operational boundary** – Troubleshooting covers only supported incidents (storage capacity, Azure Container Apps issues, SSO setup/recovery, admin access recovery, database backup/restore, configuration export/import).
 6. **Metadata discipline** – Each guide begins with a Markdown front-matter block: `Audience`, `Goal`, `Prerequisites`, `When to use`, `Validation`, `Escalate to`. This renders well both on GitHub and in-app.
 
+## Backend directory layout
+The FastAPI backend is being rebuilt from scratch. New development lives under `backend/` while the legacy implementation remains archived in `backend.backup/` for reference-only diffing.
+
+```
+backend/
+├── __init__.py
+├── app/
+│   ├── __init__.py
+│   ├── api.py             # Central router registration
+│   ├── core/              # Settings, schemas, responses, logging, base services
+│   ├── db/                # Async engine, session dependency, declarative base
+│   ├── extensions/        # Middleware, adapters, and shared integrations
+│   ├── main.py            # Application factory entrypoint
+│   ├── migrations/        # Alembic environment + versioned schema scripts
+│   └── modules/
+│       ├── __init__.py
+│       └── health/        # Example module scaffold (router/service/schemas)
+└── tests/                 # Async-first pytest suite (httpx + ASGITransport)
+    ├── __init__.py
+    ├── conftest.py        # Shared fixtures for FastAPI app, Alembic, AsyncClient
+    ├── db/                # Migration + session dependency smoke tests
+    └── modules/
+        └── health/
+            └── test_health.py
+```
+
+`backend.backup/` should never receive new changes; it exists solely so future phases can consult historical behaviour while porting features into the rebuilt architecture.
+
 ## Documentation architecture
 ### Surfaces
 - **Root `README.md`** – Concise product synopsis, links to the docs hub, local quickstart, glossary pointer, and a “Which persona are you?” card deck.
