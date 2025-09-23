@@ -24,6 +24,13 @@ class UsersRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_by_sso_identity(self, provider: str, subject: str) -> User | None:
+        stmt = select(User).where(
+            User.sso_provider == provider, User.sso_subject == subject
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def list_users(self) -> list[User]:
         stmt = select(User).order_by(User.email_canonical)
         result = await self._session.execute(stmt)

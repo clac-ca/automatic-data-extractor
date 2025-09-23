@@ -8,7 +8,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-from typing import Any, Awaitable, Callable, Iterable, Sequence
+from typing import Any, Awaitable, Callable, Iterable, Sequence, Tuple
 
 import jwt
 from fastapi import HTTPException, status
@@ -32,6 +32,9 @@ _KEY_LEN = 32
 _SCRYPT_N = 2**14
 _SCRYPT_R = 8
 _SCRYPT_P = 1
+
+_API_KEY_PREFIX_LEN = 8
+_API_KEY_SECRET_BYTES = 32
 
 
 def _encode(value: bytes) -> str:
@@ -136,6 +139,21 @@ def decode_access_token(*, token: str, secret: str, algorithms: Sequence[str]) -
     )
 
 
+def generate_api_key_components() -> Tuple[str, str]:
+    """Return a prefix/secret pair for a new API key."""
+
+    prefix = secrets.token_hex(_API_KEY_PREFIX_LEN // 2)
+    secret = secrets.token_urlsafe(_API_KEY_SECRET_BYTES)
+    return prefix, secret
+
+
+def hash_api_key(secret: str) -> str:
+    """Return a deterministic hash for the secret component of an API key."""
+
+    digest = hashlib.sha256(secret.encode("utf-8")).digest()
+    return _encode(digest)
+
+
 def access_control(
     *,
     permissions: Iterable[str] | None = None,
@@ -187,8 +205,10 @@ def access_control(
 __all__ = [
     "TokenPayload",
     "hash_password",
+    "hash_api_key",
     "verify_password",
     "create_access_token",
     "decode_access_token",
     "access_control",
+    "generate_api_key_components",
 ]
