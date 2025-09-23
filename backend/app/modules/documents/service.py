@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from ...core.service import BaseService, ServiceContext
 from .exceptions import DocumentNotFoundError
 from .repository import DocumentsRepository
@@ -37,7 +35,7 @@ class DocumentsService(BaseService):
         )
         records = [DocumentRecord.model_validate(document) for document in documents]
 
-        payload: dict[str, Any] = {
+        payload: dict[str, object] = {
             "count": len(records),
             "limit": limit,
             "offset": offset,
@@ -45,24 +43,11 @@ class DocumentsService(BaseService):
         if produced_by_job_id is not None:
             payload["produced_by_job_id"] = produced_by_job_id
 
-        metadata: dict[str, Any] = {"entity_type": "document_collection"}
-        workspace = self.current_workspace
-        workspace_id = None
-        if workspace is not None:
-            workspace_id = getattr(workspace, "workspace_id", None) or getattr(
-                workspace, "id", None
-            )
-        metadata["entity_id"] = str(workspace_id) if workspace_id is not None else "global"
-
-        await self.publish_event("documents.listed", payload, metadata=metadata)
+        await self.publish_event("documents.listed", payload)
         return records
 
     async def get_document(
-        self,
-        *,
-        document_id: str,
-        include_deleted: bool = False,
-        emit_event: bool = True,
+        self, *, document_id: str, include_deleted: bool = False
     ) -> DocumentRecord:
         """Return a single document by identifier."""
 
@@ -71,13 +56,10 @@ class DocumentsService(BaseService):
             raise DocumentNotFoundError(document_id)
 
         record = DocumentRecord.model_validate(document)
-        if emit_event:
-            metadata = {"entity_type": "document", "entity_id": record.document_id}
-            await self.publish_event(
-                "document.viewed",
-                {"document_id": record.document_id},
-                metadata=metadata,
-            )
+        await self.publish_event(
+            "document.viewed",
+            {"document_id": record.document_id},
+        )
         return record
 
 
