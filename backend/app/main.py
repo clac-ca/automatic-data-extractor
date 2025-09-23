@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from .api import register_routers
 from .core.logging import setup_logging
+from .core.message_hub import MessageHub
 from .core.settings import AppSettings, get_settings
 from .extensions.middleware import register_middleware
 
@@ -29,6 +30,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     )
 
     app.state.settings = settings
+    app.state.message_hub = MessageHub()
 
     register_middleware(app)
     register_routers(app)

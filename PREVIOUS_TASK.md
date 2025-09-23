@@ -1,9 +1,8 @@
 ## Context
-The rebuilt FastAPI backend still lacked API key lifecycle management and a functional SSO callback, leaving automation clients without credentials and administrators unable to onboard users through the identity provider.
+Phase 4 began by needing an event dispatcher and the first domain module rebuilt on top of the new authentication and workspace context. We had to wire a message hub through the application so future services and background jobs can react to document lifecycle events.
 
 ## Outcome
-- Added an `APIKey` ORM model with repository/service helpers so keys can be issued, listed with metadata, authenticated via `X-API-Key`, and revoked while recording last-seen details.
-- Exposed `POST /auth/api-keys`, `GET /auth/api-keys`, and `DELETE /auth/api-keys/{api_key_id}` endpoints guarded by the shared access-control decorator, plus integration tests covering rotation and revocation failure paths.
-- Extended the auth dependency stack to accept API keys alongside JWTs, updating request context and throttled last-seen stamps for auditability.
-- Implemented the SSO login redirect + callback flow using provider discovery, PKCE, and user provisioning/lookup, with tests asserting state-mismatch failures.
-- Expanded configuration to cover SSO and API key settings so environments can enable the new authentication paths deterministically.
+- Introduced `backend/app/core/message_hub.py` with subscribe/publish semantics, registered it on application startup, and exposed a `BaseService.publish_event` helper that enriches payloads with correlation, actor, and workspace metadata.
+- Updated the service context to carry the hub so module services can emit events consistently, keeping the FastAPI request state and dependency stack in sync.
+- Scaffolded the `documents` module (SQLAlchemy model, repository, service, dependencies, router, exceptions) with read-only list/detail endpoints guarded by `workspace:documents:read` and emitting hub events for analytics.
+- Added integration tests seeding documents, asserting the new endpoints return data, and verifying message hub handlers receive `documents.listed`/`document.viewed` events alongside negative coverage for 404 responses.
