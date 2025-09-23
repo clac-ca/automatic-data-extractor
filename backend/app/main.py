@@ -8,6 +8,8 @@ from .api import register_routers
 from .core.logging import setup_logging
 from .core.message_hub import MessageHub
 from .core.settings import AppSettings, get_settings
+from .db.session import get_sessionmaker
+from .modules.events.recorder import EventRecorder
 from .extensions.middleware import register_middleware
 
 
@@ -30,7 +32,18 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     )
 
     app.state.settings = settings
-    app.state.message_hub = MessageHub()
+    message_hub = MessageHub()
+    app.state.message_hub = message_hub
+
+    session_factory = get_sessionmaker(settings)
+    event_recorder = EventRecorder(session_factory)
+    message_hub.subscribe_all(event_recorder)
+    app.state.event_recorder = event_recorder
+
+    def _shutdown_event_recorder() -> None:
+        message_hub.unsubscribe("*", event_recorder)
+
+    app.add_event_handler("shutdown", _shutdown_event_recorder)
 
     register_middleware(app)
     register_routers(app)

@@ -7,7 +7,7 @@
   - Phase 1 – Established shared configuration, structured logging, middleware, responses, and base services.
   - Phase 2 – Rebuilt the database backbone with async engine/session factories, Alembic environment, baseline migration, and tests covering migration execution plus request-scoped session injection.
   - Phase 3 – Restored identity flows with API key lifecycle endpoints, SSO login/callback, and coverage for mixed JWT/API key authentication paths.
-  - Phase 4 (in progress) – Added the message hub dispatcher, wired it into the service context, and scaffolded the documents module with read-only list/detail endpoints emitting hub events and backed by integration tests.
+  - Phase 4 (in progress) – Added the message hub dispatcher, wired it into the service context, scaffolded the documents module with read-only list/detail endpoints, and now persist hub events via an events module + recorder feeding a `/documents/{document_id}/events` timeline backed by tests.
 - **Completed Pre-work:** Archived the legacy implementation to `backend.backup/` so we can reference behaviour while rebuilding from scratch.
 
 ## Phase 0 – Scaffold the new FastAPI backend shell ✅ *Complete*
@@ -51,7 +51,7 @@ Implemented an async-first persistence layer with consistent naming conventions 
 
 **Next task**
 
-- Extend Phase 4 by persisting emitted domain events: implement an events repository/service that subscribes to the message hub, records entries in the `events` table, and expose a read-only `/documents/{document_id}/events` timeline with tests covering event capture and retrieval.
+- Continue Phase 4 by scaffolding the jobs module: port the jobs table into SQLAlchemy models, add repository/service layers with workspace-scoped list/detail endpoints, emit job lifecycle events through the hub, and cover the API with integration tests.
 
 **Exit criteria**
 - Protected routes in the identity modules enforce permissions through the shared decorator/dependency infrastructure.

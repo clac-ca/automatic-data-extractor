@@ -1,8 +1,8 @@
 ## Context
-Phase 4 began by needing an event dispatcher and the first domain module rebuilt on top of the new authentication and workspace context. We had to wire a message hub through the application so future services and background jobs can react to document lifecycle events.
+Phase 4 now needed durable event storage so downstream workflows can audit document activity and surface timelines through the API. The message hub already emitted events, but nothing persisted them to the `events` table or exposed a consumer-facing endpoint.
 
 ## Outcome
-- Introduced `backend/app/core/message_hub.py` with subscribe/publish semantics, registered it on application startup, and exposed a `BaseService.publish_event` helper that enriches payloads with correlation, actor, and workspace metadata.
-- Updated the service context to carry the hub so module services can emit events consistently, keeping the FastAPI request state and dependency stack in sync.
-- Scaffolded the `documents` module (SQLAlchemy model, repository, service, dependencies, router, exceptions) with read-only list/detail endpoints guarded by `workspace:documents:read` and emitting hub events for analytics.
-- Added integration tests seeding documents, asserting the new endpoints return data, and verifying message hub handlers receive `documents.listed`/`document.viewed` events alongside negative coverage for 404 responses.
+- Created an `events` module with SQLAlchemy model, repository, service dependency, and an `EventRecorder` subscriber that translates hub messages into persisted rows via an async session factory.
+- Updated the application factory to instantiate the recorder, subscribe it to the hub, and cleanly unsubscribe on shutdown.
+- Extended the documents service to annotate emitted events with entity metadata, optionally suppress view events, and provide a read-only `/documents/{document_id}/events` timeline backed by a shared events service.
+- Added integration coverage ensuring document views populate the timeline endpoint and 404s are returned for unknown documents, re-running the full backend test suite.
