@@ -7,6 +7,8 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
+from backend.app.core.settings import reset_settings_cache
+from backend.app.modules.auth.service import AuthService, OIDCProviderMetadata, SSO_STATE_COOKIE
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
     response = await client.post(
@@ -52,3 +54,155 @@ async def test_profile_requires_authentication(async_client: AsyncClient) -> Non
 
     response = await async_client.get("/auth/me")
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_api_key_rotation_and_revocation(
+    async_client: AsyncClient, seed_identity: dict[str, Any]
+) -> None:
+    """Issued API keys should support rotation and revocation."""
+
+    admin = seed_identity["admin"]
+    token = await _login(async_client, admin["email"], admin["password"])
+
+    headers = {"Authorization": f"Bearer {token}"}
+    first = await async_client.post(
+        "/auth/api-keys",
+        json={"principal_type": "user", "email": admin["email"]},
+        headers=headers,
+    )
+    assert first.status_code == 201, first.text
+    first_key = first.json()["api_key"]
+    first_prefix, _ = first_key.split(".", 1)
+
+    second = await async_client.post(
+        "/auth/api-keys",
+        json={"principal_type": "user", "email": admin["email"]},
+        headers=headers,
+    )
+    assert second.status_code == 201, second.text
+    second_key = second.json()["api_key"]
+    second_prefix, _ = second_key.split(".", 1)
+
+    listing = await async_client.get("/auth/api-keys", headers=headers)
+    assert listing.status_code == 200
+    records = listing.json()
+    assert len(records) == 2
+    record_lookup = {record["token_prefix"]: record for record in records}
+    first_record = record_lookup[first_prefix]
+    second_record = record_lookup[second_prefix]
+    assert first_record["principal_type"] == "user"
+    assert first_record["principal_label"] == admin["email"]
+    assert second_record["principal_type"] == "user"
+    assert second_record["principal_label"] == admin["email"]
+
+    response = await async_client.get("/auth/me", headers={"X-API-Key": first_key})
+    assert response.status_code == 200
+    response = await async_client.get("/auth/me", headers={"X-API-Key": second_key})
+    assert response.status_code == 200
+
+    revoke = await async_client.delete(
+        f"/auth/api-keys/{first_record['api_key_id']}", headers=headers
+    )
+    assert revoke.status_code == 204
+
+    denied = await async_client.get("/auth/me", headers={"X-API-Key": first_key})
+    assert denied.status_code == 401
+    allowed = await async_client.get("/auth/me", headers={"X-API-Key": second_key})
+    assert allowed.status_code == 200
+
+    remaining = await async_client.get("/auth/api-keys", headers=headers)
+    payload = remaining.json()
+    assert [record["token_prefix"] for record in payload] == [second_prefix]
+    assert payload[0]["principal_type"] == "user"
+    assert payload[0]["principal_label"] == admin["email"]
+
+
+@pytest.mark.asyncio
+async def test_service_account_api_keys(
+    async_client: AsyncClient, seed_identity: dict[str, Any]
+) -> None:
+    """Administrators should issue API keys to service accounts."""
+
+    admin = seed_identity["admin"]
+    service_account = seed_identity["service_account"]
+    inactive_service_account = seed_identity["inactive_service_account"]
+    token = await _login(async_client, admin["email"], admin["password"])
+
+    headers = {"Authorization": f"Bearer {token}"}
+    issued = await async_client.post(
+        "/auth/api-keys",
+        json={
+            "principal_type": "service_account",
+            "service_account_id": service_account["id"],
+        },
+        headers=headers,
+    )
+    assert issued.status_code == 201, issued.text
+    data = issued.json()
+    assert data["principal_type"] == "service_account"
+    assert data["principal_id"] == service_account["id"]
+    assert data["principal_label"].startswith("Automation")
+    api_key = data["api_key"]
+
+    listing = await async_client.get("/auth/api-keys", headers=headers)
+    assert listing.status_code == 200
+    records = listing.json()
+    lookup = {record["token_prefix"]: record for record in records}
+    prefix, _ = api_key.split(".", 1)
+    record = lookup[prefix]
+    assert record["principal_type"] == "service_account"
+    assert record["principal_id"] == service_account["id"]
+
+    denied = await async_client.get("/auth/me", headers={"X-API-Key": api_key})
+    assert denied.status_code == 403
+
+    inactive = await async_client.post(
+        "/auth/api-keys",
+        json={
+            "principal_type": "service_account",
+            "service_account_id": inactive_service_account["id"],
+        },
+        headers=headers,
+    )
+    assert inactive.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_sso_callback_rejects_state_mismatch(
+    monkeypatch: pytest.MonkeyPatch, async_client: AsyncClient
+) -> None:
+    """The SSO callback should reject mismatched state tokens."""
+
+    monkeypatch.setenv("ADE_SSO_CLIENT_ID", "demo-client")
+    monkeypatch.setenv("ADE_SSO_CLIENT_SECRET", "demo-secret")
+    monkeypatch.setenv("ADE_SSO_ISSUER", "https://issuer.example.com")
+    monkeypatch.setenv("ADE_SSO_REDIRECT_URL", "https://ade.example.com/auth/sso/callback")
+    monkeypatch.setenv("ADE_SSO_SCOPE", "openid email profile")
+    reset_settings_cache()
+
+    metadata = OIDCProviderMetadata(
+        authorization_endpoint="https://issuer.example.com/authorize",
+        token_endpoint="https://issuer.example.com/token",
+        jwks_uri="https://issuer.example.com/jwks",
+    )
+
+    async def fake_metadata(self: AuthService) -> OIDCProviderMetadata:
+        return metadata
+
+    monkeypatch.setattr(AuthService, "_get_oidc_metadata", fake_metadata)
+
+    try:
+        login = await async_client.get("/auth/sso/login", follow_redirects=False)
+        assert login.status_code in (302, 307)
+        assert SSO_STATE_COOKIE in login.cookies
+        state_cookie = login.cookies[SSO_STATE_COOKIE]
+
+        callback = await async_client.get(
+            "/auth/sso/callback",
+            params={"code": "auth-code", "state": "wrong-state"},
+            cookies={SSO_STATE_COOKIE: state_cookie},
+        )
+        assert callback.status_code == 400
+    finally:
+        reset_settings_cache()
