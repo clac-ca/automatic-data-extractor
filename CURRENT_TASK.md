@@ -1,11 +1,12 @@
 # 🚧 FastAPI Backend Rebuild Plan
 
 ## Status
-- **Current Phase:** Phase 3 – Identity, workspace access, and permission framework *(core auth/workspace scaffolding aligned with best practices; next implement API keys and SSO flows).*
+- **Current Phase:** Phase 4 – Domain modules, events, and background processing *(begin scaffolding document workflows and the message hub on top of the new auth foundation).* 
 - **Completed Work:**
   - Phase 0 – Scaffolded the new FastAPI backend shell (`backend/app/main.py`, `backend/app/api.py`, health module blueprint, async pytest fixtures).
   - Phase 1 – Established shared configuration, structured logging, middleware, responses, and base services.
   - Phase 2 – Rebuilt the database backbone with async engine/session factories, Alembic environment, baseline migration, and tests covering migration execution plus request-scoped session injection.
+  - Phase 3 – Restored identity flows with API key lifecycle endpoints, SSO login/callback, and coverage for mixed JWT/API key authentication paths.
 - **Completed Pre-work:** Archived the legacy implementation to `backend.backup/` so we can reference behaviour while rebuilding from scratch.
 
 ## Phase 0 – Scaffold the new FastAPI backend shell ✅ *Complete*
@@ -32,7 +33,7 @@ Implemented an async-first persistence layer with consistent naming conventions 
 **Exit status**
 - `alembic upgrade head` executes cleanly via the rebuilt environment, and session-aware routes commit/rollback through the shared dependency without manual session management.
 
-## Phase 3 – Identity, tenancy, and permission framework
+## Phase 3 – Identity, tenancy, and permission framework ✅ *Complete*
 **Goal:** Restore authentication/authorization with the class-based decorator approach described in the feedback while keeping dependencies explicit.
 
 - [x] Port `auth`, `users`, and `workspaces` functionality into dedicated `backend/app/modules/<module>/` packages using class-based services and repositories where complexity warrants it.
@@ -41,11 +42,15 @@ Implemented an async-first persistence layer with consistent naming conventions 
 - [x] Ensure authentication dependencies populate context (`current_user`, `workspace_id`, injected sessions via `get_session`) for downstream services without manual parameter threading.
 - [x] Provide tests that cover permission checks, decorator behaviour, and common failure paths (unauthenticated, unauthorized, missing workspace context).
 - [x] Define owner/member workspace roles with deterministic default permissions so container access stays aligned with product requirements.
-- [ ] Expand authentication coverage to include API key issuance/verification and SSO flows migrated from the legacy service once the core scaffolding stabilises.
+- [x] Expand authentication coverage to include API key issuance/verification and SSO flows migrated from the legacy service once the core scaffolding stabilises.
+
+**Exit status**
+- The auth module now issues, lists, and revokes API keys while throttling last-seen updates and allowing the `X-API-Key` header to authenticate automation clients alongside JWTs.
+- SSO login redirects/callbacks run through PKCE and provider discovery, provisioning users or linking identities deterministically with failure-path tests guarding state mismatches.
 
 **Next task**
 
-- Design and implement the API key issuance/verification endpoints and accompanying services, then port the SSO login callback using the new dependency stack. Add accompanying tests covering key rotation, revoked key handling, and SSO failure paths.
+- Kick off Phase 4 by designing the `backend/app/core/message_hub.py` event dispatcher and scaffolding the `documents` module (router/service/repository) with read-only endpoints plus tests exercising the new hub wiring.
 
 **Exit criteria**
 - Protected routes in the identity modules enforce permissions through the shared decorator/dependency infrastructure.
