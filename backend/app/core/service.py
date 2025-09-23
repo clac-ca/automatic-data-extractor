@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, Callable, FrozenSet, TypeVar
+from typing import Any, AsyncIterator, Callable, FrozenSet, Mapping, TypeVar
 
 from fastapi import Depends, Request
 
+from .message_hub import MessageHub
 from .settings import AppSettings, get_settings
 
 try:  # pragma: no cover - optional during type checking
@@ -26,6 +27,7 @@ class ServiceContext:
     service_account: Any | None = None
     workspace: Any | None = None
     permissions: FrozenSet[str] = frozenset()
+    message_hub: MessageHub | None = None
 
     @property
     def correlation_id(self) -> str | None:
@@ -91,10 +93,70 @@ class BaseService:
             return permissions
         return frozenset()
 
+    @property
+    def message_hub(self) -> MessageHub | None:
+        return self._context.message_hub
+
     async def aclose(self) -> None:
         """Hook for cleaning up resources when the request completes."""
 
         return None
+
+    async def publish_event(
+        self,
+        name: str,
+        payload: Mapping[str, Any] | None = None,
+        *,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> None:
+        """Helper that emits ``name`` with context-aware metadata."""
+
+        hub = self._context.message_hub
+        if hub is None:
+            return
+
+        combined_metadata = self._build_event_metadata(metadata)
+        await hub.publish(
+            name,
+            payload=payload or {},
+            correlation_id=self.correlation_id,
+            metadata=combined_metadata,
+        )
+
+    def _build_event_metadata(
+        self, metadata: Mapping[str, Any] | None
+    ) -> dict[str, Any]:
+        base: dict[str, Any] = {}
+        if metadata:
+            base.update(metadata)
+
+        correlation = self.correlation_id
+        if correlation and "correlation_id" not in base:
+            base["correlation_id"] = correlation
+
+        workspace = self.current_workspace
+        if workspace is not None:
+            workspace_id = getattr(workspace, "workspace_id", None) or getattr(
+                workspace, "id", None
+            )
+            if workspace_id and "workspace_id" not in base:
+                base["workspace_id"] = workspace_id
+
+        user = self.current_user
+        if user is not None:
+            base.setdefault("actor_type", "user")
+            base.setdefault("actor_id", getattr(user, "id", None))
+            base.setdefault("actor_label", getattr(user, "email", None))
+        else:
+            service_account = self.current_service_account
+            if service_account is not None:
+                base.setdefault("actor_type", "service_account")
+                base.setdefault("actor_id", getattr(service_account, "id", None))
+                base.setdefault(
+                    "actor_label", getattr(service_account, "display_name", None)
+                )
+
+        return {key: value for key, value in base.items() if value is not None}
 
 
 ServiceT = TypeVar("ServiceT", bound="BaseService")
@@ -111,6 +173,7 @@ def get_service_context(
     service_account = getattr(request.state, "current_service_account", None)
     workspace = getattr(request.state, "current_workspace", None)
     permissions = getattr(request.state, "current_permissions", frozenset())
+    message_hub: MessageHub | None = getattr(request.app.state, "message_hub", None)
 
     if not isinstance(permissions, frozenset):
         permissions = frozenset(permissions)
@@ -123,6 +186,7 @@ def get_service_context(
         service_account=service_account,
         workspace=workspace,
         permissions=permissions,
+        message_hub=message_hub,
     )
 
 
