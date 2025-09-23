@@ -19,6 +19,7 @@ from backend.app.core.settings import reset_settings_cache
 from backend.app.db.engine import render_sync_url, reset_database_state
 from backend.app.db.session import get_sessionmaker
 from backend.app.modules.auth.service import hash_password
+from backend.app.modules.service_accounts.models import ServiceAccount
 from backend.app.modules.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
 from backend.app.modules.users.models import User, UserRole
 from backend.app.main import create_app
@@ -130,6 +131,21 @@ async def seed_identity() -> dict[str, Any]:
             is_active=True,
         )
 
+        automation_account = ServiceAccount(
+            name=f"automation-{workspace_slug}",
+            display_name="Automation Bot",
+            description="Integration user for automation tasks",
+            is_active=True,
+            created_by_user_id=admin.id,
+        )
+        inactive_account = ServiceAccount(
+            name=f"inactive-{workspace_slug}",
+            display_name="Inactive Bot",
+            description="Disabled integration",
+            is_active=False,
+            created_by_user_id=admin.id,
+        )
+
         session.add_all(
             [
                 workspace,
@@ -140,6 +156,8 @@ async def seed_identity() -> dict[str, Any]:
                 member_with_manage,
                 orphan,
                 invitee,
+                automation_account,
+                inactive_account,
             ]
         )
         await session.flush()
@@ -213,4 +231,12 @@ async def seed_identity() -> dict[str, Any]:
         "member_with_manage": member_manage_info,
         "orphan": orphan_info,
         "invitee": invitee_info,
+        "service_account": {
+            "id": automation_account.id,
+            "name": automation_account.name,
+        },
+        "inactive_service_account": {
+            "id": inactive_account.id,
+            "name": inactive_account.name,
+        },
     }
