@@ -1,7 +1,7 @@
 # 🚧 FastAPI Backend Rebuild Plan
 
 ## Status
-- **Current Phase:** Phase 3 – Identity, tenancy, and permission framework *(not started; design only).* 
+- **Current Phase:** Phase 3 – Identity, workspace access, and permission framework *(core auth/workspace scaffolding aligned with best practices; next implement API keys and SSO flows).*
 - **Completed Work:**
   - Phase 0 – Scaffolded the new FastAPI backend shell (`backend/app/main.py`, `backend/app/api.py`, health module blueprint, async pytest fixtures).
   - Phase 1 – Established shared configuration, structured logging, middleware, responses, and base services.
@@ -35,11 +35,17 @@ Implemented an async-first persistence layer with consistent naming conventions 
 ## Phase 3 – Identity, tenancy, and permission framework
 **Goal:** Restore authentication/authorization with the class-based decorator approach described in the feedback while keeping dependencies explicit.
 
-- Port `auth`, `users`, and `tenants` functionality into dedicated `backend/app/modules/<module>/` packages using class-based services and repositories where complexity warrants it.
-- Implement an `access_control` decorator (or FastAPI dependency equivalent) capable of enforcing module/resource/superuser flags using the contextual data stored on service instances.
-- Adopt class-based views via `fastapi-utils` (or a similar utility) so shared dependencies like `commons = Depends(common_deps)` live on the view class, reducing repetition.
-- Ensure authentication dependencies populate context (`current_user`, `tenant_id`, injected sessions via `get_session`) for downstream services without manual parameter threading.
-- Provide tests that cover permission checks, decorator behaviour, and common failure paths (unauthenticated, unauthorized, missing tenant).
+- [x] Port `auth`, `users`, and `workspaces` functionality into dedicated `backend/app/modules/<module>/` packages using class-based services and repositories where complexity warrants it.
+- [x] Implement an `access_control` decorator (or FastAPI dependency equivalent) capable of enforcing module/resource/administrator flags using the contextual data stored on service instances.
+- [x] Adopt class-based views via `fastapi-utils` (or a similar utility) so shared dependencies like `commons = Depends(common_deps)` live on the view class, reducing repetition.
+- [x] Ensure authentication dependencies populate context (`current_user`, `workspace_id`, injected sessions via `get_session`) for downstream services without manual parameter threading.
+- [x] Provide tests that cover permission checks, decorator behaviour, and common failure paths (unauthenticated, unauthorized, missing workspace context).
+- [x] Define owner/member workspace roles with deterministic default permissions so container access stays aligned with product requirements.
+- [ ] Expand authentication coverage to include API key issuance/verification and SSO flows migrated from the legacy service once the core scaffolding stabilises.
+
+**Next task**
+
+- Design and implement the API key issuance/verification endpoints and accompanying services, then port the SSO login callback using the new dependency stack. Add accompanying tests covering key rotation, revoked key handling, and SSO failure paths.
 
 **Exit criteria**
 - Protected routes in the identity modules enforce permissions through the shared decorator/dependency infrastructure.

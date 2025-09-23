@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, Callable, TypeVar
+from typing import Any, AsyncIterator, Callable, FrozenSet, TypeVar
 
 from fastapi import Depends, Request
 
@@ -22,6 +22,9 @@ class ServiceContext:
     settings: AppSettings
     request: Request | None = None
     session: AsyncSession | None = None
+    user: Any | None = None
+    workspace: Any | None = None
+    permissions: FrozenSet[str] = frozenset()
 
     @property
     def correlation_id(self) -> str | None:
@@ -52,6 +55,33 @@ class BaseService:
     def correlation_id(self) -> str | None:
         return self._context.correlation_id
 
+    @property
+    def current_user(self) -> Any | None:
+        if self._context.user is not None:
+            return self._context.user
+        if self.request is not None:
+            return getattr(self.request.state, "current_user", None)
+        return None
+
+    @property
+    def current_workspace(self) -> Any | None:
+        if self._context.workspace is not None:
+            return self._context.workspace
+        if self.request is not None:
+            return getattr(self.request.state, "current_workspace", None)
+        return None
+
+    @property
+    def permissions(self) -> FrozenSet[str]:
+        if self._context.permissions:
+            return self._context.permissions
+        if self.request is not None:
+            permissions = getattr(self.request.state, "current_permissions", frozenset())
+            if not isinstance(permissions, frozenset):
+                permissions = frozenset(permissions)
+            return permissions
+        return frozenset()
+
     async def aclose(self) -> None:
         """Hook for cleaning up resources when the request completes."""
 
@@ -68,7 +98,21 @@ def get_service_context(
     """Aggregate settings and request data for service instantiation."""
 
     session: AsyncSession | None = getattr(request.state, "db_session", None)
-    return ServiceContext(settings=settings, request=request, session=session)
+    user = getattr(request.state, "current_user", None)
+    workspace = getattr(request.state, "current_workspace", None)
+    permissions = getattr(request.state, "current_permissions", frozenset())
+
+    if not isinstance(permissions, frozenset):
+        permissions = frozenset(permissions)
+
+    return ServiceContext(
+        settings=settings,
+        request=request,
+        session=session,
+        user=user,
+        workspace=workspace,
+        permissions=permissions,
+    )
 
 
 def service_dependency(service_cls: type[ServiceT]) -> Callable[[ServiceContext], AsyncIterator[ServiceT]]:

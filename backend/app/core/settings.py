@@ -59,6 +59,19 @@ class AppSettings(BaseSettings):
         ge=1,
         description="Seconds to wait for a free connection before timing out.",
     )
+    auth_token_secret: str = Field(
+        default="development-secret",
+        description="Symmetric secret used to sign authentication tokens.",
+    )
+    auth_token_algorithm: str = Field(
+        default="HS256",
+        description="JWT signing algorithm for issued tokens.",
+    )
+    auth_token_exp_minutes: int = Field(
+        default=60,
+        ge=1,
+        description="Minutes before issued access tokens expire.",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="ADE_",
