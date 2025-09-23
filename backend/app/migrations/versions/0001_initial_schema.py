@@ -105,7 +105,7 @@ def upgrade() -> None:
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column(
             "role",
-            sa.Enum("viewer", "editor", "admin", name="userrole", native_enum=False, length=20),
+            sa.Enum("admin", "member", name="userrole", native_enum=False, length=20),
             nullable=False,
         ),
         sa.Column("sso_provider", sa.String(length=100), nullable=True),
