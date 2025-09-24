@@ -4,25 +4,25 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
-from pathlib import Path
 
-from alembic import command
-from alembic.config import Config
 import pytest
 import pytest_asyncio
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from backend.app.core.settings import reset_settings_cache
 from backend.app.db.engine import render_sync_url, reset_database_state
 from backend.app.db.session import get_sessionmaker
+from backend.app.main import create_app
 from backend.app.modules.auth.service import hash_password
 from backend.app.modules.service_accounts.models import ServiceAccount
-from backend.app.modules.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
 from backend.app.modules.users.models import User, UserRole
-from backend.app.main import create_app
+from backend.app.modules.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
 
 
 @pytest.fixture(scope="session")

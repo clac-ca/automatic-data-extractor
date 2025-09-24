@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import os
+import tomllib
+from collections.abc import Iterable
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
-import tomllib
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import InitSettingsSource
@@ -31,15 +32,42 @@ class AppSettings(BaseSettings):
         default=None,
         description="Directory for uploaded and generated documents.",
     )
-    environment: str = Field(default="local", description="Current runtime environment name.")
-    debug: bool = Field(default=False, description="Enable FastAPI debug mode.")
-    app_name: str = Field(default="Automatic Data Extractor API", description="Displayed API title.")
-    app_version: str = Field(default="0.1.0", description="Semantic version exposed via OpenAPI.")
-    enable_docs: bool = Field(default=True, description="Expose Swagger and ReDoc routes when true.")
-    docs_url: str = Field(default="/docs", description="Relative path to Swagger UI.")
-    redoc_url: str = Field(default="/redoc", description="Relative path to ReDoc documentation.")
-    openapi_url: str = Field(default="/openapi.json", description="Relative path to the OpenAPI schema.")
-    log_level: str = Field(default="INFO", description="Python logging level for the root logger.")
+    environment: str = Field(
+        default="local",
+        description="Current runtime environment name.",
+    )
+    debug: bool = Field(
+        default=False,
+        description="Enable FastAPI debug mode.",
+    )
+    app_name: str = Field(
+        default="Automatic Data Extractor API",
+        description="Displayed API title.",
+    )
+    app_version: str = Field(
+        default="0.1.0",
+        description="Semantic version exposed via OpenAPI.",
+    )
+    enable_docs: bool = Field(
+        default=True,
+        description="Expose Swagger and ReDoc routes when true.",
+    )
+    docs_url: str = Field(
+        default="/docs",
+        description="Relative path to Swagger UI.",
+    )
+    redoc_url: str = Field(
+        default="/redoc",
+        description="Relative path to ReDoc documentation.",
+    )
+    openapi_url: str = Field(
+        default="/openapi.json",
+        description="Relative path to the OpenAPI schema.",
+    )
+    log_level: str = Field(
+        default="INFO",
+        description="Python logging level for the root logger.",
+    )
     cors_allow_origins: list[str] = Field(
         default_factory=list,
         description="Optional CORS allowlist for future middleware wiring.",
@@ -171,7 +199,7 @@ class AppSettings(BaseSettings):
         return candidate
 
     @model_validator(mode="after")
-    def _derive_directories(self) -> "AppSettings":
+    def _derive_directories(self) -> AppSettings:
         """Resolve dependent filesystem paths after initial parsing."""
 
         self.data_dir = Path(self.data_dir).resolve()

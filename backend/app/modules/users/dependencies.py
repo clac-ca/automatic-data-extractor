@@ -5,7 +5,6 @@ from __future__ import annotations
 from ...core.service import service_dependency
 from .service import UsersService
 
-
 get_users_service = service_dependency(UsersService)
 
 

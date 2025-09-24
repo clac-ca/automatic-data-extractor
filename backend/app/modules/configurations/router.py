@@ -18,7 +18,6 @@ from .exceptions import ConfigurationNotFoundError
 from .schemas import ConfigurationRecord
 from .service import ConfigurationsService
 
-
 router = APIRouter(tags=["configurations"])
 
 

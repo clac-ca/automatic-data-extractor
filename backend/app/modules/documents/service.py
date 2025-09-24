@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Any, AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Mapping
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -45,7 +46,7 @@ class DocumentsService(BaseService):
         """Persist ``upload`` to storage and return the resulting metadata record."""
 
         metadata_payload = dict(metadata or {})
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         expiration = self._resolve_expiration(expires_at, now)
         document_id = generate_ulid()
         stored_uri = self._storage.make_stored_uri(document_id)
@@ -114,7 +115,9 @@ class DocumentsService(BaseService):
         )
         return record
 
-    async def stream_document(self, document_id: str) -> tuple[DocumentRecord, AsyncIterator[bytes]]:
+    async def stream_document(
+        self, document_id: str
+    ) -> tuple[DocumentRecord, AsyncIterator[bytes]]:
         """Return a document record and async iterator for its bytes."""
 
         document = await self._get_document(document_id)
@@ -144,7 +147,7 @@ class DocumentsService(BaseService):
         """Soft delete ``document_id`` and remove the stored file."""
 
         document = await self._get_document(document_id)
-        now = datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
+        now = datetime.now(tz=UTC).isoformat(timespec="seconds")
         document.deleted_at = now
         actor = self.current_user
         document.deleted_by = getattr(actor, "id", None)
@@ -210,9 +213,9 @@ class DocumentsService(BaseService):
             ) from exc
 
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
+            parsed = parsed.replace(tzinfo=UTC)
         else:
-            parsed = parsed.astimezone(timezone.utc)
+            parsed = parsed.astimezone(UTC)
 
         if parsed <= now:
             raise InvalidDocumentExpirationError("expires_at must be in the future")

@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, Callable, FrozenSet, Mapping, TypeVar
+from typing import Annotated, Any, TypeVar
 
 from fastapi import Depends, Request
 
+from ..db.session import get_session
 from .message_hub import MessageHub
 from .settings import AppSettings, get_settings
 from .task_queue import TaskQueue
-from ..db.session import get_session
 
 try:  # pragma: no cover - optional during type checking
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +29,7 @@ class ServiceContext:
     user: Any | None = None
     service_account: Any | None = None
     workspace: Any | None = None
-    permissions: FrozenSet[str] = frozenset()
+    permissions: frozenset[str] = frozenset()
     message_hub: MessageHub | None = None
     task_queue: TaskQueue | None = None
 
@@ -86,7 +87,7 @@ class BaseService:
         return None
 
     @property
-    def permissions(self) -> FrozenSet[str]:
+    def permissions(self) -> frozenset[str]:
         if self._context.permissions:
             return self._context.permissions
         if self.request is not None:
@@ -183,9 +184,13 @@ class BaseService:
 ServiceT = TypeVar("ServiceT", bound="BaseService")
 
 
+SettingsDependency = Annotated[AppSettings, Depends(get_settings)]
+SessionDependency = Annotated[AsyncSession, Depends(get_session)]
+
+
 def get_service_context(
     request: Request,
-    settings: AppSettings = Depends(get_settings),
+    settings: SettingsDependency,
 ) -> ServiceContext:
     """Aggregate settings and request data for service instantiation."""
 
@@ -213,12 +218,17 @@ def get_service_context(
     )
 
 
-def service_dependency(service_cls: type[ServiceT]) -> Callable[[ServiceContext], AsyncIterator[ServiceT]]:
+ContextDependency = Annotated[ServiceContext, Depends(get_service_context)]
+
+
+def service_dependency(
+    service_cls: type[ServiceT],
+) -> Callable[[ServiceContext], AsyncIterator[ServiceT]]:
     """Return a dependency that yields the requested service class."""
 
     async def _dependency(
-        session: AsyncSession = Depends(get_session),
-        context: ServiceContext = Depends(get_service_context),
+        session: SessionDependency,
+        context: ContextDependency,
     ) -> AsyncIterator[ServiceT]:
         context.session = session
         service = service_cls(context=context)

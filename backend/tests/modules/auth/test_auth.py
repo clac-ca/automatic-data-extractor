@@ -8,7 +8,8 @@ import pytest
 from httpx import AsyncClient
 
 from backend.app.core.settings import reset_settings_cache
-from backend.app.modules.auth.service import AuthService, OIDCProviderMetadata, SSO_STATE_COOKIE
+from backend.app.modules.auth.service import SSO_STATE_COOKIE, AuthService, OIDCProviderMetadata
+
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
     response = await client.post(

@@ -3,10 +3,11 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
@@ -272,8 +273,11 @@ class AuthService(BaseService):
 
         try:
             prefix, secret = raw_key.split(".", 1)
-        except ValueError:
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+        except ValueError as exc:
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid API key",
+            ) from exc
 
         record = await self._api_keys.get_by_prefix(prefix)
         if record is None:
@@ -381,7 +385,9 @@ class AuthService(BaseService):
 
         secret = self.settings.auth_token_secret
         if not secret:
-            raise RuntimeError("auth_token_secret must be configured when authentication is enabled")
+            raise RuntimeError(
+                "auth_token_secret must be configured when authentication is enabled",
+            )
 
         try:
             payload = jwt.decode(
@@ -469,7 +475,7 @@ class AuthService(BaseService):
     # Internal helpers
 
     def _now(self) -> datetime:
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
 
     @staticmethod
     def _parse_timestamp(value: str | None) -> datetime | None:
@@ -503,7 +509,9 @@ class AuthService(BaseService):
     ) -> str:
         secret = self.settings.auth_token_secret
         if not secret:
-            raise RuntimeError("auth_token_secret must be configured when authentication is enabled")
+            raise RuntimeError(
+                "auth_token_secret must be configured when authentication is enabled",
+            )
 
         payload = {
             "state": state,
@@ -526,9 +534,15 @@ class AuthService(BaseService):
                 response = await client.get(discovery_url, headers={"Accept": "application/json"})
                 response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Failed to load SSO metadata") from exc
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Failed to load SSO metadata",
+            ) from exc
         except httpx.HTTPError as exc:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Unable to contact identity provider") from exc
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail="Unable to contact identity provider",
+            ) from exc
 
         data = response.json()
         try:
@@ -538,7 +552,10 @@ class AuthService(BaseService):
                 jwks_uri=str(data["jwks_uri"]),
             )
         except KeyError as exc:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Incomplete SSO discovery document") from exc
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Incomplete SSO discovery document",
+            ) from exc
 
         _METADATA_CACHE[issuer] = metadata
         return metadata
@@ -573,9 +590,15 @@ class AuthService(BaseService):
                 )
                 response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="SSO token exchange failed") from exc
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="SSO token exchange failed",
+            ) from exc
         except httpx.HTTPError as exc:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Unable to contact identity provider") from exc
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail="Unable to contact identity provider",
+            ) from exc
 
         return response.json()
 
@@ -603,10 +626,16 @@ class AuthService(BaseService):
                 options=options,
             )
         except jwt.InvalidTokenError as exc:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid token from identity provider") from exc
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Invalid token from identity provider",
+            ) from exc
 
         if nonce is not None and payload.get("nonce") != nonce:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid SSO nonce")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Invalid SSO nonce",
+            )
 
         return payload
 
@@ -626,7 +655,10 @@ class AuthService(BaseService):
         email_verified: bool,
     ) -> User:
         if not email_verified:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Email not verified by identity provider")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Email not verified by identity provider",
+            )
 
         canonical = normalise_email(email)
         user = await self._users.get_by_sso_identity(provider, subject)
@@ -646,7 +678,10 @@ class AuthService(BaseService):
                 await self.session.refresh(user)
             else:
                 if not user.is_active:
-                    raise HTTPException(status.HTTP_403_FORBIDDEN, detail="User account is disabled")
+                    raise HTTPException(
+                        status.HTTP_403_FORBIDDEN,
+                        detail="User account is disabled",
+                    )
                 user.sso_provider = provider
                 user.sso_subject = subject
                 if user.email_canonical != canonical:
