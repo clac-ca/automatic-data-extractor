@@ -1,26 +1,30 @@
-"""Repository helpers for user persistence."""
+"""Query helpers for working with ``User`` records."""
 
 from __future__ import annotations
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import User
+from .models import User, UserRole
+
+
+def _canonical_email(value: str) -> str:
+    return value.strip().lower()
 
 
 class UsersRepository:
-    """Persistence operations for ``User`` records."""
+    """High-level persistence helpers for the unified user model."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_by_email(self, email_canonical: str) -> User | None:
-        stmt = select(User).where(User.email_canonical == email_canonical)
+    async def get_by_id(self, user_id: str) -> User | None:
+        stmt = select(User).where(User.id == user_id)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_by_id(self, user_id: str) -> User | None:
-        stmt = select(User).where(User.id == user_id)
+    async def get_by_email(self, email: str) -> User | None:
+        stmt = select(User).where(User.email_canonical == _canonical_email(email))
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -31,10 +35,49 @@ class UsersRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def list_users(self) -> list[User]:
+    async def list_users(
+        self, *, include_service_accounts: bool = True
+    ) -> list[User]:
         stmt = select(User).order_by(User.email_canonical)
+        if not include_service_accounts:
+            stmt = stmt.where(User.is_service_account.is_(False))
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
+    async def list_service_accounts(self) -> list[User]:
+        stmt = (
+            select(User)
+            .where(User.is_service_account.is_(True))
+            .order_by(User.email_canonical)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def create(
+        self,
+        *,
+        email: str,
+        password_hash: str | None = None,
+        display_name: str | None = None,
+        description: str | None = None,
+        is_service_account: bool = False,
+        created_by_user_id: str | None = None,
+        role: UserRole = UserRole.MEMBER,
+        is_active: bool = True,
+    ) -> User:
+        user = User(
+            email=email,
+            password_hash=password_hash,
+            display_name=display_name,
+            description=description,
+            is_service_account=is_service_account,
+            created_by_user_id=created_by_user_id,
+            role=role,
+            is_active=is_active,
+        )
+        self._session.add(user)
+        await self._session.flush()
+        await self._session.refresh(user)
+        return user
 
 __all__ = ["UsersRepository"]

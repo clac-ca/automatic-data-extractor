@@ -1,9 +1,14 @@
 # Service Account Rewrite Plan
 
+## Status
+- ✅ Service accounts now live in `users` with the `is_service_account` flag, optional `display_name`/`description`, and a `created_by_user_id` pointer for provenance.
+- ✅ API keys always reference `users.user_id`; issuance now accepts a user ID or email and derives the actor type from the `User` record.
+- ✅ Fixtures/tests create automation identities via `User(is_service_account=True)` using the convention `{slug}@service.local` and human-friendly display names for logging.
+
 ## Background
-- Service accounts currently live in their own table (`service_accounts`) with bespoke models/repositories.
-- API keys and auth flows branch on two identity types even though both ultimately represent ADE principals.
-- No external consumers rely on the current schema, so we can collapse to the simplest, most consistent design now.
+- Service accounts previously lived in their own table (`service_accounts`) with bespoke models/repositories.
+- API keys and auth flows branched on two identity types even though both ultimately represent ADE principals.
+- No external consumers relied on the schema, allowing us to collapse to the simplest, most consistent design now.
 
 ## Guiding Idea
 Treat every principal as a `User`. A service account is just a user that:
@@ -33,7 +38,7 @@ This keeps identity logic unified and avoids duplicating models or repositories.
      - enforce trimmed strings;
      - ensure any password-based authentication path checks `not is_service_account`.
    - Provide convenience helpers on `User` (e.g., `is_service_account` is the flag, `label` returns `display_name or email`).
-   - Enhance `UsersRepository` with service-account helpers: `create_service_account(...)`, `list_service_accounts()`, `get_by_service_account_email(...)`.
+   - Simplify `UsersRepository` with a single `create(...)` helper that toggles `is_service_account`, plus lightweight listing helpers.
    - Remove `backend/api/modules/service_accounts/` and adjust exports/imports accordingly.
 
 3. **Auth & API key flow**
@@ -42,8 +47,8 @@ This keeps identity logic unified and avoids duplicating models or repositories.
      - Replace `ServiceAccountsRepository` usage with the new `UsersRepository` helpers.
      - Ensure password authentication rejects `is_service_account` users (raise 403).
      - `issue_api_key_for_service_account` now looks up users flagged as service accounts via email/ID.
-     - `authenticate_api_key` returns `AuthenticatedPrincipal` with `principal_type` determined by the user flag.
-   - Update FastAPI dependencies (`bind_current_principal`, `ServiceContext.current_service_account`) so they surface the user object and rely on the flag.
+   - `authenticate_api_key` returns an identity wrapper exposing the resolved `User`; callers inspect `user.is_service_account` when needed.
+   - Update FastAPI dependencies so they surface the user object and rely on the flag.
 
 4. **Fixtures & tests**
    - Modify `backend/tests/conftest.py` fixtures to create service accounts via the user model (e.g., email `automation-{slug}@service.local`, `is_service_account=True`).
