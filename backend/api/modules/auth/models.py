@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from sqlalchemy import CheckConstraint, ForeignKey, String
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ...db import Base
 from ...db.mixins import TimestampMixin, ULIDPrimaryKeyMixin
-from ..service_accounts.models import ServiceAccount
 from ..users.models import User
 
 
@@ -15,13 +14,9 @@ class APIKey(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "api_keys"
     __ulid_field__ = "api_key_id"
 
-    user_id: Mapped[str | None] = mapped_column(
+    user_id: Mapped[str] = mapped_column(
         ForeignKey("users.user_id", ondelete="CASCADE"),
-        nullable=True,
-    )
-    service_account_id: Mapped[str | None] = mapped_column(
-        ForeignKey("service_accounts.service_account_id", ondelete="CASCADE"),
-        nullable=True,
+        nullable=False,
     )
     token_prefix: Mapped[str] = mapped_column(String(12), nullable=False, unique=True)
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
@@ -31,15 +26,6 @@ class APIKey(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     last_seen_user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     user: Mapped[User | None] = relationship(User, lazy="joined")
-    service_account: Mapped[ServiceAccount | None] = relationship(ServiceAccount, lazy="joined")
-
-    __table_args__ = (
-        CheckConstraint(
-            "(user_id IS NOT NULL AND service_account_id IS NULL)"
-            " OR (user_id IS NULL AND service_account_id IS NOT NULL)",
-            name="api_keys_principal_check",
-        ),
-    )
 
 
 __all__ = ["APIKey"]

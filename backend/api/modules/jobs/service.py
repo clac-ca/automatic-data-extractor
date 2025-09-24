@@ -334,13 +334,6 @@ class JobsService(BaseService):
             candidate = getattr(user, "id", None) or getattr(user, "email", None)
             if candidate:
                 return str(candidate)
-        service_account = self.current_service_account
-        if service_account is not None:
-            candidate = getattr(service_account, "id", None) or getattr(
-                service_account, "name", None
-            )
-            if candidate:
-                return str(candidate)
         return "system"
 
     def _collection_entity_id(self) -> str:
