@@ -1,8 +1,5 @@
-"""Documents module exposing upload and metadata endpoints."""
+"""Documents module scaffolding for the backend rewrite."""
 
-__all__ = [
-    "models",
-    "repository",
-    "schemas",
-    "service",
-]
+from . import router
+
+__all__ = ["router"]
