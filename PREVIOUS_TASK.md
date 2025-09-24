@@ -1,21 +1,19 @@
 ## Context
-Delivered the refreshed results workflow so the rewritten services expose
-extracted tables for succeeded jobs while guarding unavailable artefacts.
+Renamed the FastAPI package from `backend/app` to `backend/api` to make the HTTP
+surface explicit before layering on CLI and Dynaconf work.
 
 ## Outcome
-- Hardened `ExtractionResultsService` to validate job status, emit "viewed"
-  events, and surface tables only when the run succeeded.
-- Updated the results router to return structured 409 responses for pending or
-  failed jobs and to bubble up not-found errors for missing tables/documents.
-- Added integration coverage chaining upload → job → results alongside failure
-  and deletion scenarios to verify the new API behaviour.
-- Refreshed documentation (`BACKEND_REWRITE_PLAN.md`, README) to describe the
-  job/results review flow and captured new follow-up milestones.
+- Moved the package with `git mv` and confirmed every module (core, db, modules,
+  services, migrations) survived the transition.
+- Updated imports, Alembic configuration, and test fixtures to reference
+  `backend.api`; refreshed README and planning docs to point at the new path.
+- Verified startup (`uvicorn backend.api.main:app`), `ruff`, `pytest`, and a
+  targeted `mypy` run to ensure no import regressions.
 
 ## Next steps
-- Implement retention/cleanup policies for job records, logs, and extracted
-  tables now that synchronous execution is in place.
-- Seed sensible default permissions so workspace owners automatically gain job
-  and results access.
-- Revisit the event/timeline story once the new workflows are wired into the UI
-  and automation clients.
+- Announce the rename to consumers maintaining private scripts or deployment
+  manifests so they swap to `backend.api` imports.
+- Follow the rewrite roadmap: enforce job/results retention policies and seed
+  default workspace permissions.
+- Proceed with the CLI and Dynaconf milestones now that the package layout is
+  settled.

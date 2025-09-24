@@ -11,10 +11,10 @@ from fastapi import Depends, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.core.service import ServiceContext, get_service_context
-from backend.app.db.engine import get_engine
-from backend.app.db.mixins import generate_ulid
-from backend.app.db.session import get_session
+from backend.api.core.service import ServiceContext, get_service_context
+from backend.api.db.engine import get_engine
+from backend.api.db.mixins import generate_ulid
+from backend.api.db.session import get_session
 
 
 @pytest.mark.asyncio

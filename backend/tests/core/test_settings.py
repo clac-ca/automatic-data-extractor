@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.app.core.settings import AppSettings, get_settings, reset_settings_cache
+from backend.api.core.settings import AppSettings, get_settings, reset_settings_cache
 
 
 @pytest.fixture(autouse=True)

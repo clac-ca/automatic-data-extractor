@@ -6,9 +6,9 @@ from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from backend.app.core.message_hub import Message
-from backend.app.db.session import get_sessionmaker
-from backend.app.modules.configurations.models import Configuration
+from backend.api.core.message_hub import Message
+from backend.api.db.session import get_sessionmaker
+from backend.api.modules.configurations.models import Configuration
 
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:

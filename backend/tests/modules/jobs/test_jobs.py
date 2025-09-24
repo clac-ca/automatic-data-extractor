@@ -6,10 +6,10 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from backend.app.db.session import get_sessionmaker
-from backend.app.modules.configurations.models import Configuration
-from backend.app.modules.results.models import ExtractedTable
-from backend.app.modules.workspaces.models import WorkspaceMembership
+from backend.api.db.session import get_sessionmaker
+from backend.api.modules.configurations.models import Configuration
+from backend.api.modules.results.models import ExtractedTable
+from backend.api.modules.workspaces.models import WorkspaceMembership
 
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:

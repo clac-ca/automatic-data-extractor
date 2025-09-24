@@ -31,7 +31,7 @@ The architecture diagram, component responsibilities, and job lifecycle are docu
 Lives under `frontend/` (Vite + React + TypeScript). It lets reviewers upload documents, monitor jobs, inspect job outputs, and manage configuration revisions. Strict typing and lightweight components keep the UI predictable.
 
 ### Backend
-Resides in `backend/app/` (Python 3.11, FastAPI, SQLAlchemy, Pydantic v2). It owns routing, authentication, orchestration, and
+Resides in `backend/api/` (Python 3.11, FastAPI, SQLAlchemy, Pydantic v2). It owns routing, authentication, orchestration, and
 persistence helpers. Domain logic that manipulates data stays out of request handlers and in focused service modules. The
 initial foundation created here wires together:
 
@@ -75,8 +75,8 @@ Important environment variables:
 User accounts and API keys are both managed through the CLI:
 
 ```bash
-python -m backend.app auth create-user admin@example.com --password change-me --role admin
-python -m backend.app auth create-api-key admin@example.com --expires-in-days 90
+python -m backend.api auth create-user admin@example.com --password change-me --role admin
+python -m backend.api auth create-api-key admin@example.com --expires-in-days 90
 ```
 
 ADE caches the provider discovery document and JWKS payloads for active SSO integrations so repeated logins avoid network
@@ -318,7 +318,7 @@ Jobs returned by the API and displayed in the UI always use the same JSON struct
 2. Every upload creates a fresh document record with its own storage path, even if the raw bytes match a prior submission.
 3. `GET /documents` lists records newest first, `GET /documents/{document_id}` returns metadata for a single file, `GET /documents/{document_id}/download` streams the stored bytes (with `Content-Disposition` set to the original filename), and `DELETE /documents/{document_id}` removes the bytes while recording who initiated the deletion. `GET /documents/{document_id}/tables` lists extracted tables produced from that document for succeeded jobs, while `/jobs` accepts an `input_document_id` query parameter when the global list needs to be filtered.
 4. `POST /documents` enforces the configurable `max_upload_bytes` cap (defaults to 25 MiB). Payloads that exceed the limit return HTTP 413 with `{ "detail": {"error": "document_too_large", "max_upload_bytes": <bytes>, "received_bytes": <bytes>}}` so operators know the request failed before any data is persisted.
-5. Document retention and deletion workflows are defined in `docs/document_retention_and_deletion.md`. The API records manual deletions, logs them to the shared events feed, runs an automatic purge sweep on startup (and hourly by default), and still exposes a maintenance CLI (`python -m backend.app.maintenance.purge`) for manual runs.
+5. Document retention and deletion workflows are defined in `docs/document_retention_and_deletion.md`. The API records manual deletions, logs them to the shared events feed, runs an automatic purge sweep on startup (and hourly by default), and still exposes a maintenance CLI (`python -m backend.api.maintenance.purge`) for manual runs.
 
 ---
 
@@ -363,7 +363,7 @@ naming payloads or configuration elements.
 
 ### Database migrations
 
-- Apply schema changes with `python -m backend.app.db_migrations upgrade` (or `alembic upgrade head`).
+- Apply schema changes with `python -m backend.api.db_migrations upgrade` (or `alembic upgrade head`).
 - File-based SQLite URLs auto-run Alembic migrations on startup. Set `ADE_AUTO_MIGRATE=false` to opt out and manage upgrades manually.
 - The FastAPI lifespan and CLI entry points call `ensure_schema()` at startup so fresh environments create tables automatically.
 - In-memory SQLite URLs (`sqlite:///:memory:`) bypass Alembic and fall back to `Base.metadata.create_all(...)` for lightweight tests.
@@ -378,7 +378,7 @@ naming payloads or configuration elements.
 ### Purging expired documents
 
 - The API checks for expired documents on startup and then every `ADE_PURGE_SCHEDULE_INTERVAL_SECONDS` seconds (default: 3600). Each run logs a structured summary with counts for processed files, missing paths, and reclaimed bytes. The scheduler also persists the latest results in SQLite (`maintenance_status` table) and surfaces them under the `purge` key on `GET /health` so operators can inspect the most recent sweep without scraping logs.
-- Keep the automatic scheduler enabled for day-to-day operations. When troubleshooting or before rolling configuration changes, run `python -m backend.app.maintenance.purge` manually to see the same summary interactively.
+- Keep the automatic scheduler enabled for day-to-day operations. When troubleshooting or before rolling configuration changes, run `python -m backend.api.maintenance.purge` manually to see the same summary interactively.
 - Shorten the cadence locally by exporting `ADE_PURGE_SCHEDULE_INTERVAL_SECONDS=5` before starting the API. Upload a throwaway document and call `/health` to watch the `purge` section update with `status`, counts, timestamps, and the configured interval.
 - `--dry-run` reports the documents that would be removed without touching the filesystem or database so you can alert on upcoming deletions before enabling destructive runs.
 - `--limit` caps how many documents are processed in a single invocation so operators can sweep large queues incrementally.
