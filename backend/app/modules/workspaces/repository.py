@@ -17,7 +17,12 @@ class WorkspacesRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_membership(self, *, user_id: str, workspace_id: str) -> WorkspaceMembership | None:
+    async def get_membership(
+        self,
+        *,
+        user_id: str,
+        workspace_id: str,
+    ) -> WorkspaceMembership | None:
         stmt = (
             select(WorkspaceMembership)
             .options(selectinload(WorkspaceMembership.workspace))

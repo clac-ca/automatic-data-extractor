@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -40,9 +40,14 @@ def get_sessionmaker(settings: AppSettings | None = None) -> async_sessionmaker[
     return _SESSION_FACTORY
 
 
+SessionFactoryDependency = Annotated[
+    async_sessionmaker[AsyncSession], Depends(get_sessionmaker)
+]
+
+
 async def get_session(
     request: Request,
-    session_factory: async_sessionmaker[AsyncSession] = Depends(get_sessionmaker),
+    session_factory: SessionFactoryDependency,
 ) -> AsyncIterator[AsyncSession]:
     """FastAPI dependency that yields an ``AsyncSession`` for the request."""
 

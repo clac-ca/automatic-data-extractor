@@ -14,7 +14,6 @@ from .models import User
 from .schemas import UserProfile, UserSummary
 from .service import UsersService
 
-
 router = APIRouter(tags=["users"])
 
 

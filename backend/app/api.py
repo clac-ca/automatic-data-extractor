@@ -7,10 +7,9 @@ from .modules.configurations.router import router as configurations_router
 from .modules.documents.router import router as documents_router
 from .modules.health.router import router as health_router
 from .modules.jobs.router import router as jobs_router
-from .modules.workspaces.router import router as workspaces_router
 from .modules.results.router import router as results_router
 from .modules.users.router import router as users_router
-
+from .modules.workspaces.router import router as workspaces_router
 
 api_router = APIRouter()
 api_router.include_router(health_router, prefix="/health", tags=["health"])

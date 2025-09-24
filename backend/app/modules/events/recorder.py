@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,7 +45,7 @@ async def persist_event(
         or correlation_id
     )
 
-    occurred_at = datetime.now(tz=timezone.utc).isoformat(timespec="milliseconds")
+    occurred_at = datetime.now(tz=UTC).isoformat(timespec="milliseconds")
 
     await repository.record_event(
         event_type=name,

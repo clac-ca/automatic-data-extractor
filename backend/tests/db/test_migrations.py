@@ -33,7 +33,8 @@ async def test_alembic_upgrade_head(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         async with engine.connect() as connection:
             result = await connection.execute(
                 text(
-                    "SELECT COUNT(1) FROM sqlite_master WHERE type='table' AND name='configurations'"
+                    "SELECT COUNT(1) FROM sqlite_master "
+                    "WHERE type='table' AND name='configurations'"
                 )
             )
             assert result.scalar_one() == 1
