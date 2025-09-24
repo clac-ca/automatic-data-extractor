@@ -1,4 +1,4 @@
-"""Documents module exposing read-only metadata endpoints."""
+"""Documents module exposing upload and metadata endpoints."""
 
 __all__ = [
     "models",
