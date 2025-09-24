@@ -19,7 +19,7 @@
 - `README.md` (project root)
   - Rewritten to introduce ADE, core concepts (documents → jobs → results), and point to `docs/` guides.
 - `docs/README.md`
-  - Landing page describing how documentation is organised, with quick links to User and Admin guides.
+  - Landing page describing how documentation is organised, with quick links to User and Admin guides plus the glossary.
 - `docs/user-guide/README.md` (index)
   - `docs/user-guide/authentication.md` – login methods and tokens.
   - `docs/user-guide/workspaces.md` – `X-Workspace-ID` header and membership.
@@ -34,8 +34,9 @@
   - `docs/admin-guide/database.md` – migrations, URLs, pooling, backups.
   - `docs/admin-guide/operations.md` – logs, correlation IDs, in-process job queue, message hub/events fan-out, retention knobs, health endpoints.
   - `docs/admin-guide/troubleshooting.md` – common errors with actionable fixes.
+- `docs/reference/glossary.md` – concise terminology replacing the legacy `ADE_GLOSSARY.md`.
 - Optional later: `docs/api/README.md` – link to `/openapi.json`, SDK notes, schema change policy.
-- Link to `ADE_GLOSSARY.md` from root and guide indexes for shared terminology.
+- Remove `ADE_GLOSSARY.md` after migrating essential terms into the new reference page.
 
 ## Content Map → Code (coverage checklist)
 - Authentication
@@ -68,6 +69,8 @@
   - Correlation IDs, structured request logs: `backend/app/extensions/middleware.py` and `backend/app/core/logging.py`.
 - Task queue & jobs
   - In‑process queue semantics and subscribers: `backend/app/core/task_queue.py`, `backend/app/modules/jobs/worker.py`.
+- Glossary & naming conventions
+  - Distilled terminology derived from the existing `ADE_GLOSSARY.md` (to be migrated into `docs/reference/glossary.md`).
 
 ## Draft Page Outlines
 
@@ -102,6 +105,10 @@
   - troubleshooting.md
     - 413 upload too large, 401/403 workspace permission errors, 404 document/job/config not found, SSO callback issues.
 
+- docs/reference
+  - glossary.md
+    - Core terms (document, configuration, job, event, workspace, API key) with current API/database references and links back to relevant guide sections.
+
 ## Authoring Conventions
 - Use folder `README.md` as index; keep pages short with task‑based headings.
 - Prefer cURL snippets with environment variables (`$ADE_TOKEN`, `$WORKSPACE_ID`).
@@ -112,11 +119,12 @@
 
 ## Migration Steps (docs only)
 1. Remove the existing `docs/` directory (after archiving anything worth keeping) to start clean.
-2. Scaffold the new structure under `docs/` (`README.md`, `user-guide/`, `admin-guide/`, optional `api/`).
-3. Author the pages listed above with cURL examples and minimal prose.
-4. Rewrite the project root `README.md` with the new quickstart and links to `docs/`.
-5. Remove `DOCUMENTATION.md` and `DOCUMENTATION_CURRENT_TASK.md` once new guides are in place.
-6. Open issues to track post‑migration improvements (images, API reference page, Dynaconf updates).
+2. Scaffold the new structure under `docs/` (`README.md`, `user-guide/`, `admin-guide/`, `reference/`, optional `api/`).
+3. Distil the useful content from `ADE_GLOSSARY.md` into `docs/reference/glossary.md`, then delete the legacy file.
+4. Author the User and Admin guide pages with cURL examples and minimal prose.
+5. Rewrite the project root `README.md` with the new quickstart and links to `docs/`.
+6. Remove `DOCUMENTATION.md` and `DOCUMENTATION_CURRENT_TASK.md` once new guides are in place.
+7. Open issues to track post‑migration improvements (images, API reference page, Dynaconf updates).
 
 ## Rationale & Trade‑offs
 - Persona split keeps each audience in their lane, shortening time‑to‑task.
