@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
@@ -16,7 +18,6 @@ from .service import (
     AuthService,
 )
 
-
 _bearer_scheme = HTTPBearer(auto_error=False)
 _api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -25,10 +26,12 @@ get_auth_service = service_dependency(AuthService)
 
 async def bind_current_principal(
     request: Request,
-    session: AsyncSession = Depends(get_session),
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
-    api_key: str | None = Depends(_api_key_scheme),
-    service: AuthService = Depends(get_auth_service),
+    session: Annotated[AsyncSession, Depends(get_session)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)
+    ],
+    api_key: Annotated[str | None, Depends(_api_key_scheme)],
+    service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> AuthenticatedPrincipal:
     """Resolve the authenticated principal and attach it to the request state."""
 
@@ -59,7 +62,7 @@ async def bind_current_principal(
 
 
 async def bind_current_user(
-    principal: AuthenticatedPrincipal = Depends(bind_current_principal),
+    principal: Annotated[AuthenticatedPrincipal, Depends(bind_current_principal)],
 ) -> User:
     """Resolve the authenticated user principal or reject service account credentials."""
 
@@ -71,13 +74,17 @@ async def bind_current_user(
     return principal.user
 
 
-async def require_authenticated_user(user: User = Depends(bind_current_user)) -> User:
+async def require_authenticated_user(
+    user: Annotated[User, Depends(bind_current_user)]
+) -> User:
     """Dependency alias that ensures the user is authenticated."""
 
     return user
 
 
-async def require_admin_user(user: User = Depends(bind_current_user)) -> User:
+async def require_admin_user(
+    user: Annotated[User, Depends(bind_current_user)]
+) -> User:
     """Ensure the authenticated user holds the administrator role."""
 
     if user.role != UserRole.ADMIN:

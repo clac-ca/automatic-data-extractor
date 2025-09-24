@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ...core.service import BaseService
 from .exceptions import HealthCheckError
@@ -17,7 +17,7 @@ class HealthService(BaseService):
         try:
             return HealthCheckResponse(
                 status="ok",
-                timestamp=datetime.now(tz=timezone.utc),
+                timestamp=datetime.now(tz=UTC),
                 components=[
                     HealthComponentStatus(
                         name="api",

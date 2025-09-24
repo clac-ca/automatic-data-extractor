@@ -63,7 +63,8 @@ class ConfigurationVersionMismatchError(Exception):
         actual_version: int,
     ) -> None:
         message = (
-            f"Configuration {configuration_id!r} is version {actual_version}, not {expected_version}"
+            f"Configuration {configuration_id!r} is version {actual_version}, "
+            f"not {expected_version}"
         )
         super().__init__(message)
         self.configuration_id = configuration_id

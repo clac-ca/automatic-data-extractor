@@ -20,15 +20,14 @@ from .schemas import (
 )
 from .service import WorkspacesService
 
-
 router = APIRouter(tags=["workspaces"])
 
 
 @cbv(router)
 class WorkspaceRoutes:
-    current_user: User = Depends(bind_current_user)
-    session: AsyncSession = Depends(get_session)
-    service: WorkspacesService = Depends(get_workspaces_service)
+    current_user: User = Depends(bind_current_user)  # noqa: B008
+    session: AsyncSession = Depends(get_session)  # noqa: B008
+    service: WorkspacesService = Depends(get_workspaces_service)  # noqa: B008
 
     @router.get(
         "/workspaces",
@@ -48,7 +47,8 @@ class WorkspaceRoutes:
         response_model_exclude_none=True,
     )
     async def current(
-        self, selection: WorkspaceContext = Depends(bind_workspace_context)
+        self,
+        selection: WorkspaceContext = Depends(bind_workspace_context),  # noqa: B008
     ) -> WorkspaceContext:
         return selection
 
@@ -62,7 +62,7 @@ class WorkspaceRoutes:
     async def list_members(
         self,
         workspace_id: str,
-        selection: WorkspaceContext = Depends(bind_workspace_context),
+        selection: WorkspaceContext = Depends(bind_workspace_context),  # noqa: B008
     ) -> DefaultResponse:
         if selection.workspace.workspace_id != workspace_id:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Workspace header mismatch")
@@ -79,7 +79,7 @@ class WorkspaceRoutes:
     async def add_member(
         self,
         workspace_id: str,
-        selection: WorkspaceContext = Depends(bind_workspace_context),
+        selection: WorkspaceContext = Depends(bind_workspace_context),  # noqa: B008
     ) -> WorkspaceMember:
         if selection.workspace.workspace_id != workspace_id:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Workspace header mismatch")

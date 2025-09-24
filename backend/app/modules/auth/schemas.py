@@ -24,7 +24,7 @@ class APIKeyIssueRequest(BaseSchema):
     expires_in_days: int | None = Field(default=None, ge=1, le=3650)
 
     @model_validator(mode="after")
-    def _validate_principal(self) -> "APIKeyIssueRequest":
+    def _validate_principal(self) -> APIKeyIssueRequest:
         principal = APIKeyPrincipalType(self.principal_type)
         self.principal_type = principal
         if principal is APIKeyPrincipalType.USER:

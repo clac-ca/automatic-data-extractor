@@ -55,9 +55,9 @@ def _parse_metadata(metadata: str | None) -> dict[str, Any]:
 
 @cbv(router)
 class DocumentsRoutes:
-    session: AsyncSession = Depends(get_session)
-    selection: WorkspaceContext = Depends(bind_workspace_context)
-    service: DocumentsService = Depends(get_documents_service)
+    session: AsyncSession = Depends(get_session)  # noqa: B008
+    selection: WorkspaceContext = Depends(bind_workspace_context)  # noqa: B008
+    service: DocumentsService = Depends(get_documents_service)  # noqa: B008
 
     @router.post(
         "/documents",
@@ -69,9 +69,9 @@ class DocumentsRoutes:
     @access_control(permissions={"workspace:documents:write"}, require_workspace=True)
     async def upload_document(
         self,
-        file: UploadFile = File(...),
-        metadata: str | None = Form(None),
-        expires_at: str | None = Form(None),
+        file: UploadFile = File(...),  # noqa: B008
+        metadata: str | None = Form(None),  # noqa: B008
+        expires_at: str | None = Form(None),  # noqa: B008
     ) -> DocumentRecord:
         payload = _parse_metadata(metadata)
         try:
@@ -97,8 +97,8 @@ class DocumentsRoutes:
     @access_control(permissions={"workspace:documents:read"}, require_workspace=True)
     async def list_documents(
         self,
-        limit: int = Query(50, ge=1, le=200),
-        offset: int = Query(0, ge=0),
+        limit: int = Query(50, ge=1, le=200),  # noqa: B008
+        offset: int = Query(0, ge=0),  # noqa: B008
     ) -> list[DocumentRecord]:
         return await self.service.list_documents(limit=limit, offset=offset)
 
@@ -146,7 +146,7 @@ class DocumentsRoutes:
     async def delete_document(
         self,
         document_id: str,
-        payload: DocumentDeleteRequest | None = Body(default=None),
+        payload: DocumentDeleteRequest | None = Body(default=None),  # noqa: B008
     ) -> None:
         try:
             await self.service.delete_document(

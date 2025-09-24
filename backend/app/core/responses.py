@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Mapping
+from typing import Any
 from uuid import UUID
 
 from starlette.background import BackgroundTask
@@ -61,7 +62,7 @@ class DefaultResponse(BaseSchema):
         message: str = "OK",
         *,
         details: dict[str, Any] | None = None,
-    ) -> "DefaultResponse":
+    ) -> DefaultResponse:
         """Return a successful response wrapper."""
 
         return cls(status=True, message=message, details=details)
@@ -72,7 +73,7 @@ class DefaultResponse(BaseSchema):
         message: str,
         *,
         details: dict[str, Any] | None = None,
-    ) -> "DefaultResponse":
+    ) -> DefaultResponse:
         """Return a failure response wrapper."""
 
         return cls(status=False, message=message, details=details)
