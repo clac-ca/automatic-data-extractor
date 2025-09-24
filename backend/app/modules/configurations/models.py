@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Index, Integer, JSON, String, UniqueConstraint, text
+from sqlalchemy import JSON, Boolean, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any
 
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
@@ -12,10 +12,10 @@ from sqlalchemy.pool import NullPool, StaticPool
 from ..core.settings import AppSettings, get_settings
 
 _ENGINE: AsyncEngine | None = None
-_ENGINE_KEY: Tuple[Any, ...] | None = None
+_ENGINE_KEY: tuple[Any, ...] | None = None
 
 
-def _cache_key(settings: AppSettings) -> Tuple[Any, ...]:
+def _cache_key(settings: AppSettings) -> tuple[Any, ...]:
     return (
         settings.database_url,
         settings.database_echo,
@@ -106,7 +106,7 @@ def reset_database_state() -> None:
     session_module.reset_session_state()
 
 
-def engine_cache_key(settings: AppSettings) -> Tuple[Any, ...]:
+def engine_cache_key(settings: AppSettings) -> tuple[Any, ...]:
     """Expose the cache key used for engine/session reuse."""
 
     return _cache_key(settings)

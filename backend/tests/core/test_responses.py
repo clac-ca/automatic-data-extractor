@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from backend.app.core.responses import DefaultResponse, JSONResponse
 from backend.app.core.schema import BaseSchema
@@ -19,7 +19,7 @@ class ExampleSchema(BaseSchema):
 def test_json_response_serializes_schema_instance() -> None:
     """JSONResponse should encode BaseSchema instances using ADE helpers."""
 
-    payload = ExampleSchema(name="test", timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc))
+    payload = ExampleSchema(name="test", timestamp=datetime(2024, 1, 1, tzinfo=UTC))
     response = JSONResponse(payload)
 
     assert response.media_type == "application/json"
@@ -32,8 +32,8 @@ def test_json_response_serializes_schema_list() -> None:
     """JSONResponse should serialize lists of BaseSchema objects."""
 
     payload = [
-        ExampleSchema(name="one", timestamp=datetime.now(tz=timezone.utc)),
-        ExampleSchema(name="two", timestamp=datetime.now(tz=timezone.utc)),
+        ExampleSchema(name="one", timestamp=datetime.now(tz=UTC)),
+        ExampleSchema(name="two", timestamp=datetime.now(tz=UTC)),
     ]
     response = JSONResponse(payload)
 
