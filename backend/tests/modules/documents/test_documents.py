@@ -52,6 +52,15 @@ async def _create_document(**overrides: Any) -> str:
     return document_id
 
 
+def _store_document_file(stored_uri: str, payload: bytes) -> Path:
+    settings = get_settings()
+    documents_dir = Path(settings.documents_dir)
+    destination = documents_dir / stored_uri
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(payload)
+    return destination
+
+
 @pytest.mark.asyncio
 async def test_upload_document_persists_file_and_emits_event(
     async_client: AsyncClient,
@@ -244,6 +253,484 @@ async def test_list_documents_emits_event(
     assert event.payload["count"] >= 1
     assert event.metadata.get("workspace_id") == seed_identity["workspace_id"]
     assert event.metadata.get("actor_type") == "user"
+
+
+@pytest.mark.asyncio
+async def test_download_document_streams_file_and_emits_event(
+    async_client: AsyncClient,
+    app: FastAPI,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Downloading a stored document should stream bytes and record events."""
+
+    payload = b"%PDF-1.7\n%%ADE"
+    stored_uri = "uploads/download.pdf"
+    digest = hashlib.sha256(payload).hexdigest()
+
+    document_id = await _create_document(
+        stored_uri=stored_uri,
+        byte_size=len(payload),
+        sha256=digest,
+    )
+    file_path = _store_document_file(stored_uri, payload)
+
+    hub = app.state.message_hub
+    events: list[Message] = []
+
+    async def capture(message: Message) -> None:
+        events.append(message)
+
+    hub.subscribe("document.downloaded", capture)
+    try:
+        member = seed_identity["member"]
+        token = await _login(async_client, member["email"], member["password"])
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "X-Workspace-ID": seed_identity["workspace_id"],
+        }
+
+        response = await async_client.get(
+            f"/documents/{document_id}/download",
+            headers=headers,
+        )
+    finally:
+        hub.unsubscribe("document.downloaded", capture)
+        file_path.unlink(missing_ok=True)
+
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == "application/pdf"
+    assert "attachment" in response.headers["content-disposition"].lower()
+    assert response.headers["x-document-sha256"] == digest
+    assert response.content == payload
+
+    assert events, "Expected a download event to be emitted"
+    download_event = events[0]
+    assert download_event.name == "document.downloaded"
+    assert download_event.payload["document_id"] == document_id
+    assert download_event.payload["sha256"] == digest
+
+    timeline = await async_client.get(
+        f"/documents/{document_id}/events",
+        headers=headers,
+    )
+    assert timeline.status_code == 200
+    timeline_events = timeline.json()
+    assert any(item["event_type"] == "document.downloaded" for item in timeline_events)
+
+
+@pytest.mark.asyncio
+async def test_download_document_missing_file_returns_404(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Missing stored files should return an explicit 404 error."""
+
+    stored_uri = "uploads/missing.pdf"
+    document_id = await _create_document(stored_uri=stored_uri)
+
+    member = seed_identity["member"]
+    token = await _login(async_client, member["email"], member["password"])
+
+    response = await async_client.get(
+        f"/documents/{document_id}/download",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Workspace-ID": seed_identity["workspace_id"],
+        },
+    )
+
+    assert response.status_code == 404
+    detail = response.json()["detail"]
+    assert detail["error"] == "document_file_missing"
+
+
+@pytest.mark.asyncio
+async def test_download_document_requires_workspace_membership(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Users without workspace membership should not be able to download documents."""
+
+    payload = b"restricted"
+    stored_uri = "uploads/restricted.pdf"
+    digest = hashlib.sha256(payload).hexdigest()
+
+    document_id = await _create_document(
+        stored_uri=stored_uri,
+        byte_size=len(payload),
+        sha256=digest,
+    )
+    file_path = _store_document_file(stored_uri, payload)
+
+    orphan = seed_identity["orphan"]
+    token = await _login(async_client, orphan["email"], orphan["password"])
+
+    try:
+        response = await async_client.get(
+            f"/documents/{document_id}/download",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-Workspace-ID": seed_identity["workspace_id"],
+            },
+        )
+    finally:
+        file_path.unlink(missing_ok=True)
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_update_document_metadata_merges_changes_and_emits_event(
+    async_client: AsyncClient,
+    app: FastAPI,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Metadata updates should merge fields, drop removals, and emit events."""
+
+    document_id = await _create_document(metadata_={"kind": "test", "source": "email"})
+
+    hub = app.state.message_hub
+    events: list[Message] = []
+
+    async def capture(message: Message) -> None:
+        events.append(message)
+
+    hub.subscribe("document.metadata.updated", capture)
+    try:
+        member = seed_identity["member"]
+        token = await _login(async_client, member["email"], member["password"])
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "X-Workspace-ID": seed_identity["workspace_id"],
+        }
+
+        response = await async_client.patch(
+            f"/documents/{document_id}",
+            headers=headers,
+            json={"metadata": {"status": "processed", "kind": None}},
+        )
+    finally:
+        hub.unsubscribe("document.metadata.updated", capture)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["metadata"] == {"source": "email", "status": "processed"}
+
+    assert events, "Expected metadata updates to emit a hub event"
+    event = events[0]
+    assert event.name == "document.metadata.updated"
+    assert event.payload["document_id"] == document_id
+    assert event.payload["metadata"] == {"status": "processed"}
+    assert event.payload["removed_keys"] == ["kind"]
+
+    member = seed_identity["member"]
+    token = await _login(async_client, member["email"], member["password"])
+    timeline = await async_client.get(
+        f"/documents/{document_id}/events",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Workspace-ID": seed_identity["workspace_id"],
+        },
+    )
+    assert timeline.status_code == 200
+    events_payload = timeline.json()
+    metadata_event = next(
+        item
+        for item in events_payload
+        if item["event_type"] == "document.metadata.updated"
+    )
+    assert metadata_event["payload"]["metadata"] == {"status": "processed"}
+    assert metadata_event["payload"]["changed_keys"] == ["kind", "status"]
+    assert metadata_event["payload"]["removed_keys"] == ["kind"]
+
+
+@pytest.mark.asyncio
+async def test_update_document_metadata_accepts_custom_event_type(
+    async_client: AsyncClient,
+    app: FastAPI,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Clients may supply a custom event type and payload for metadata updates."""
+
+    document_id = await _create_document(metadata_={"status": "pending"})
+
+    hub = app.state.message_hub
+    events: list[Message] = []
+
+    async def capture(message: Message) -> None:
+        events.append(message)
+
+    hub.subscribe("document.status.updated", capture)
+    try:
+        member = seed_identity["member"]
+        token = await _login(async_client, member["email"], member["password"])
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "X-Workspace-ID": seed_identity["workspace_id"],
+        }
+
+        response = await async_client.patch(
+            f"/documents/{document_id}",
+            headers=headers,
+            json={
+                "metadata": {"status": "complete"},
+                "event_type": "document.status.updated",
+                "event_payload": {"reason": "manual"},
+            },
+        )
+    finally:
+        hub.unsubscribe("document.status.updated", capture)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["metadata"] == {"status": "complete"}
+
+    assert events, "Expected a custom metadata event to be emitted"
+    event = events[0]
+    assert event.name == "document.status.updated"
+    assert event.payload["reason"] == "manual"
+    assert event.payload["metadata"] == {"status": "complete"}
+
+    member = seed_identity["member"]
+    token = await _login(async_client, member["email"], member["password"])
+    timeline = await async_client.get(
+        f"/documents/{document_id}/events",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Workspace-ID": seed_identity["workspace_id"],
+        },
+    )
+    assert timeline.status_code == 200
+    events_payload = timeline.json()
+    metadata_event = next(
+        item
+        for item in events_payload
+        if item["event_type"] == "document.status.updated"
+    )
+    assert metadata_event["payload"]["metadata"] == {"status": "complete"}
+    assert metadata_event["payload"]["reason"] == "manual"
+
+
+@pytest.mark.asyncio
+async def test_update_document_metadata_requires_workspace_membership_for_access(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Workspace outsiders should not be able to update metadata."""
+
+    document_id = await _create_document()
+
+    orphan = seed_identity["orphan"]
+    token = await _login(async_client, orphan["email"], orphan["password"])
+
+    response = await async_client.patch(
+        f"/documents/{document_id}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Workspace-ID": seed_identity["workspace_id"],
+        },
+        json={"metadata": {"status": "denied"}},
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_update_document_metadata_missing_returns_404(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Updating a missing document should return 404."""
+
+    member = seed_identity["member"]
+    token = await _login(async_client, member["email"], member["password"])
+
+    response = await async_client.patch(
+        "/documents/00000000000000000000000000",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Workspace-ID": seed_identity["workspace_id"],
+        },
+        json={"metadata": {"status": "missing"}},
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_document_marks_record_and_emits_event(
+    async_client: AsyncClient,
+    app: FastAPI,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Deleting a document should mark it deleted, remove the file, and emit events."""
+
+    payload = b"obsolete"
+    stored_uri = "uploads/delete.pdf"
+    digest = hashlib.sha256(payload).hexdigest()
+
+    document_id = await _create_document(
+        stored_uri=stored_uri,
+        byte_size=len(payload),
+        sha256=digest,
+    )
+    file_path = _store_document_file(stored_uri, payload)
+
+    hub = app.state.message_hub
+    events: list[Message] = []
+
+    async def capture(message: Message) -> None:
+        events.append(message)
+
+    hub.subscribe("document.deleted", capture)
+    try:
+        member = seed_identity["member"]
+        token = await _login(async_client, member["email"], member["password"])
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "X-Workspace-ID": seed_identity["workspace_id"],
+        }
+
+        response = await async_client.request(
+            "DELETE",
+            f"/documents/{document_id}",
+            headers=headers,
+            json={"reason": "cleanup"},
+        )
+    finally:
+        hub.unsubscribe("document.deleted", capture)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["document_id"] == document_id
+    assert body["deleted_at"] is not None
+    assert body["deleted_by"] == seed_identity["member"]["email"]
+    assert body["delete_reason"] == "cleanup"
+    assert not file_path.exists(), "Stored file should be removed"
+    file_path.unlink(missing_ok=True)
+
+    assert events, "Expected a deletion event to be emitted"
+    event = events[0]
+    assert event.name == "document.deleted"
+    assert event.payload["document_id"] == document_id
+    assert event.payload["delete_reason"] == "cleanup"
+
+    member = seed_identity["member"]
+    token = await _login(async_client, member["email"], member["password"])
+    timeline = await async_client.get(
+        f"/documents/{document_id}/events",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Workspace-ID": seed_identity["workspace_id"],
+        },
+    )
+    assert timeline.status_code == 200
+    events_payload = timeline.json()
+    assert any(item["event_type"] == "document.deleted" for item in events_payload)
+
+
+@pytest.mark.asyncio
+async def test_delete_document_is_idempotent(
+    async_client: AsyncClient,
+    app: FastAPI,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Repeated deletes should succeed without emitting duplicate events."""
+
+    payload = b"redundant"
+    stored_uri = "uploads/delete-idempotent.pdf"
+    digest = hashlib.sha256(payload).hexdigest()
+
+    document_id = await _create_document(
+        stored_uri=stored_uri,
+        byte_size=len(payload),
+        sha256=digest,
+    )
+    file_path = _store_document_file(stored_uri, payload)
+
+    hub = app.state.message_hub
+    events: list[Message] = []
+
+    async def capture(message: Message) -> None:
+        events.append(message)
+
+    hub.subscribe("document.deleted", capture)
+    try:
+        member = seed_identity["member"]
+        token = await _login(async_client, member["email"], member["password"])
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "X-Workspace-ID": seed_identity["workspace_id"],
+        }
+
+        first = await async_client.request(
+            "DELETE",
+            f"/documents/{document_id}",
+            headers=headers,
+            json={"reason": "cleanup"},
+        )
+        assert first.status_code == 200
+        first_body = first.json()
+        first_deleted_at = first_body["deleted_at"]
+
+        second = await async_client.request(
+            "DELETE",
+            f"/documents/{document_id}",
+            headers=headers,
+            json={"reason": "cleanup"},
+        )
+        assert second.status_code == 200
+        second_body = second.json()
+        assert second_body["deleted_at"] == first_deleted_at
+        assert second_body["delete_reason"] == "cleanup"
+    finally:
+        hub.unsubscribe("document.deleted", capture)
+        file_path.unlink(missing_ok=True)
+
+    assert len(events) == 1
+
+
+@pytest.mark.asyncio
+async def test_delete_document_requires_workspace_membership_for_access(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Workspace outsiders should not be able to delete documents."""
+
+    document_id = await _create_document()
+    orphan = seed_identity["orphan"]
+    token = await _login(async_client, orphan["email"], orphan["password"])
+
+    response = await async_client.delete(
+        f"/documents/{document_id}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Workspace-ID": seed_identity["workspace_id"],
+        },
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_delete_document_missing_returns_404(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Deleting a missing document should return 404."""
+
+    member = seed_identity["member"]
+    token = await _login(async_client, member["email"], member["password"])
+
+    response = await async_client.delete(
+        "/documents/00000000000000000000000000",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Workspace-ID": seed_identity["workspace_id"],
+        },
+    )
+
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio
