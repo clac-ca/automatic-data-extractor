@@ -19,4 +19,16 @@ class InputDocumentNotFoundError(Exception):
         self.document_id = document_id
 
 
-__all__ = ["InputDocumentNotFoundError", "JobNotFoundError"]
+class JobExecutionError(Exception):
+    """Raised when the extractor fails during job execution."""
+
+    def __init__(self, job_id: str, message: str) -> None:
+        super().__init__(message)
+        self.job_id = job_id
+
+
+__all__ = [
+    "InputDocumentNotFoundError",
+    "JobExecutionError",
+    "JobNotFoundError",
+]

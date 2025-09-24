@@ -9,4 +9,16 @@ class ExtractedTableNotFoundError(Exception):
         self.table_id = table_id
 
 
-__all__ = ["ExtractedTableNotFoundError"]
+class JobResultsUnavailableError(Exception):
+    """Raised when tables are requested for a job that is not yet accessible."""
+
+    def __init__(self, job_id: str, status: str) -> None:
+        message = (
+            f"Results for job '{job_id}' are not available while status is '{status}'"
+        )
+        super().__init__(message)
+        self.job_id = job_id
+        self.status = status
+
+
+__all__ = ["ExtractedTableNotFoundError", "JobResultsUnavailableError"]
