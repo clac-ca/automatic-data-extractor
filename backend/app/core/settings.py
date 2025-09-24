@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import tomllib
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import InitSettingsSource
 
@@ -23,6 +23,14 @@ ENVIRONMENT_VARIABLES: tuple[str, ...] = ("ADE_ENV", "ADE_APP_ENV", "APP_ENV")
 class AppSettings(BaseSettings):
     """Top-level FastAPI application configuration."""
 
+    data_dir: Path = Field(
+        default=PROJECT_ROOT / "data",
+        description="Root directory for persisted ADE state.",
+    )
+    documents_dir: Path | None = Field(
+        default=None,
+        description="Directory for uploaded and generated documents.",
+    )
     environment: str = Field(default="local", description="Current runtime environment name.")
     debug: bool = Field(default=False, description="Enable FastAPI debug mode.")
     app_name: str = Field(default="Automatic Data Extractor API", description="Displayed API title.")
@@ -101,6 +109,16 @@ class AppSettings(BaseSettings):
         ge=0,
         description="Minimum seconds between API key last-seen updates.",
     )
+    max_upload_bytes: int = Field(
+        default=25 * 1024 * 1024,
+        ge=1,
+        description="Maximum accepted upload size for POST /documents in bytes.",
+    )
+    default_document_retention_days: int = Field(
+        default=30,
+        ge=1,
+        description="Default number of days to retain uploaded documents before expiry.",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="ADE_",
@@ -151,6 +169,17 @@ class AppSettings(BaseSettings):
         if not candidate:
             raise ValueError("sso_scope must not be empty")
         return candidate
+
+    @model_validator(mode="after")
+    def _derive_directories(self) -> "AppSettings":
+        """Resolve dependent filesystem paths after initial parsing."""
+
+        self.data_dir = Path(self.data_dir).resolve()
+        documents_dir = self.documents_dir
+        if documents_dir is None:
+            documents_dir = self.data_dir / "documents"
+        self.documents_dir = Path(documents_dir).resolve()
+        return self
 
     @classmethod
     def settings_customise_sources(

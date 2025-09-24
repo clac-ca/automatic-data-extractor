@@ -8,7 +8,9 @@ from .api import register_routers
 from .core.logging import setup_logging
 from .core.message_hub import MessageHub
 from .core.settings import AppSettings, get_settings
+from .core.task_queue import TaskQueue
 from .extensions.middleware import register_middleware
+from .modules.jobs import register_job_queue_handlers
 
 
 def create_app(settings: AppSettings | None = None) -> FastAPI:
@@ -31,9 +33,11 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
 
     app.state.settings = settings
     app.state.message_hub = MessageHub()
+    app.state.task_queue = TaskQueue()
 
     register_middleware(app)
     register_routers(app)
+    register_job_queue_handlers(app)
 
     return app
 
