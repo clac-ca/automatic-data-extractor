@@ -7,8 +7,8 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-from backend.app.db.session import get_sessionmaker
-from backend.app.modules.workspaces.models import WorkspaceMembership, WorkspaceRole
+from backend.api.db.session import get_sessionmaker
+from backend.api.modules.workspaces.models import WorkspaceMembership, WorkspaceRole
 
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:

@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
-from backend.app.core.responses import DefaultResponse, JSONResponse
-from backend.app.core.schema import BaseSchema
+from backend.api.core.responses import DefaultResponse, JSONResponse
+from backend.api.core.schema import BaseSchema
 
 
 class ExampleSchema(BaseSchema):
