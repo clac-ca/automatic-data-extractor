@@ -1,4 +1,4 @@
-"""Module-specific exceptions for document workflows."""
+"""Exception stubs for the documents module rewrite."""
 
 from __future__ import annotations
 
@@ -12,11 +12,11 @@ class DocumentNotFoundError(Exception):
 
 
 class DocumentFileMissingError(Exception):
-    """Raised when a stored document file is missing from disk."""
+    """Raised when a stored document file cannot be located on disk."""
 
     def __init__(self, *, document_id: str, stored_uri: str) -> None:
         message = (
-            f"Stored file for document {document_id!r} could not be located at {stored_uri!r}."
+            f"Stored file for document {document_id!r} was not found at {stored_uri!r}."
         )
         super().__init__(message)
         self.document_id = document_id

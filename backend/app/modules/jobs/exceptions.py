@@ -1,4 +1,4 @@
-"""Jobs module specific exceptions."""
+"""Exception stubs for the jobs module rewrite."""
 
 from __future__ import annotations
 

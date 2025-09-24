@@ -1,4 +1,4 @@
-"""SQLAlchemy models for the jobs module."""
+"""Lightweight ORM models kept during the jobs module rewrite."""
 
 from __future__ import annotations
 
