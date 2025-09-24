@@ -13,9 +13,9 @@
 
 ## Target Structure
 ```
-backend/app/cli/
+backend/cli/
 ├── __init__.py
-├── app.py          # argparse bootstrap (`python -m backend.app.cli`)
+├── app.py          # argparse bootstrap (`python -m backend.cli`)
 ├── runner.py       # command dispatcher invoked by console script
 ├── context.py      # helpers to load settings and yield AsyncSession instances
 ├── io.py           # formatting + redaction helpers
@@ -27,7 +27,7 @@ backend/app/cli/
     ├── service_accounts.py # service account lifecycle
     └── config.py           # print effective settings / paths
 ```
-- Console script entry in `pyproject.toml`: `[project.scripts] ade = "backend.app.cli.app:main"`.
+- Console script entry in `pyproject.toml`: `[project.scripts] ade = "backend.cli.app:main"`.
 - Every command implemented as an `async` coroutine; `app.py` wraps handlers with `asyncio.run`.
 
 ## Command Surface (v1)
@@ -79,7 +79,7 @@ backend/app/cli/
   - Builds top-level `argparse.ArgumentParser`, registers subparsers, and dispatches to async handlers via a small helper.
 
 ## Implementation Steps
-1. Scaffold `backend/app/cli` package with empty modules and register console script (no commands yet).
+1. Scaffold `backend/cli` package with empty modules and register console script (no commands yet).
 2. Implement `context.py` helpers and unit-test them.
 3. Add Alembic wrappers in `commands/db.py`; ensure project root/alembic path detection mirrors `backend/app/core/settings.py`.
 4. Implement user commands leveraging `UsersRepository` and password utilities.
@@ -91,7 +91,7 @@ backend/app/cli/
 
 ## Testing Strategy
 - Unit tests import command coroutines directly, using pytest async fixtures and temporary SQLite DBs seeded via repositories.
-- Integration tests invoke `python -m backend.app.cli ...` (or the console script) under `pytest` with isolated environment variables to ensure argument parsing works end-to-end.
+- Integration tests invoke `python -m backend.cli ...` (or the console script) under `pytest` with isolated environment variables to ensure argument parsing works end-to-end.
 - Assertions verify exit codes, stdout/stderr, and ensure secrets are redacted unless explicitly requested.
 
 ## Documentation Updates
@@ -101,7 +101,7 @@ backend/app/cli/
 ## Out of Scope
 - Interactive prompts / TUI experiences.
 - Running the extraction worker loop or long-lived daemons (future command once requirements are clear).
-- Windows `.exe` packaging; rely on `python -m backend.app.cli` or the `ade` entry point.
+- Windows `.exe` packaging; rely on `python -m backend.cli` or the `ade` entry point.
 
 ## Risks & Mitigations
 - **Async resource leaks**: ensure every command uses `asyncio.run` + context managers so sessions are closed.
@@ -113,3 +113,4 @@ backend/app/cli/
 1. Get sign-off on this plan.
 2. Submit a scaffold PR creating the CLI package and console script wiring.
 3. Implement command groups iteratively with accompanying tests and docs.
+
