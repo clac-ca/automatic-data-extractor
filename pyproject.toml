@@ -26,6 +26,7 @@ dependencies = [
   "pyjwt[crypto]==2.10.1",
   "email-validator==2.1.0.post1",
   "typing-inspect==0.9.0",
+  "dynaconf==3.2.6"
 ]
 
 [project.optional-dependencies]
