@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 from httpx import AsyncClient
 
-from backend.app.core.settings import get_settings
-from backend.app.db.session import get_sessionmaker
-from backend.app.modules.documents.models import Document
+from backend.api.core.settings import get_settings
+from backend.api.db.session import get_sessionmaker
+from backend.api.modules.documents.models import Document
 
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:

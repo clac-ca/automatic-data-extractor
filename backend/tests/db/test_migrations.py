@@ -9,8 +9,8 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
 
-from backend.app.core.settings import reset_settings_cache
-from backend.app.db.engine import get_engine, render_sync_url, reset_database_state
+from backend.api.core.settings import reset_settings_cache
+from backend.api.db.engine import get_engine, render_sync_url, reset_database_state
 
 
 @pytest.mark.asyncio

@@ -11,7 +11,7 @@ from typing import Any
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic_settings.sources import InitSettingsSource
+from pydantic_settings.sources import InitSettingsSource, PydanticBaseSettingsSource
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_SETTINGS_FILES: tuple[str, ...] = (".settings.toml", "settings.toml")
@@ -213,18 +213,22 @@ class AppSettings(BaseSettings):
     def settings_customise_sources(
         cls,
         settings_cls: type[BaseSettings],
-        init_settings: InitSettingsSource,
-        env_settings: InitSettingsSource,
-        dotenv_settings: InitSettingsSource,
-        file_secret_settings: InitSettingsSource,
-    ) -> tuple[InitSettingsSource, ...]:
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
         """Load settings from env vars, optional TOML files, then filesystem secrets."""
 
         environment = _resolve_environment(settings_cls)
         settings_files = _resolve_files(SETTINGS_FILES_ENV_VAR, DEFAULT_SETTINGS_FILES)
         secrets_files = _resolve_files(SECRETS_FILES_ENV_VAR, DEFAULT_SECRETS_FILES)
 
-        sources: list[InitSettingsSource] = [init_settings, env_settings, dotenv_settings]
+        sources: list[PydanticBaseSettingsSource] = [
+            init_settings,
+            env_settings,
+            dotenv_settings,
+        ]
 
         if settings_files:
             sources.append(_build_toml_source(settings_cls, settings_files, environment))
@@ -272,7 +276,7 @@ def _build_toml_source(
     settings_cls: type[BaseSettings],
     files: list[Path],
     environment: str,
-) -> InitSettingsSource:
+) -> PydanticBaseSettingsSource:
     """Create an InitSettingsSource from the merged TOML configuration files."""
 
     values: dict[str, Any] = {}
