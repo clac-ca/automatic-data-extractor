@@ -21,7 +21,7 @@ from .schemas import (
     TokenResponse,
 )
 from .security import access_control
-from .service import SSO_STATE_COOKIE, APIKeyPrincipalType, AuthService
+from .service import SSO_STATE_COOKIE, AuthService
 
 
 async def _parse_api_key_issue_request(request: Request) -> APIKeyIssueRequest:
@@ -83,42 +83,28 @@ class AuthRoutes:
         payload: APIKeyIssueRequest = Depends(_parse_api_key_issue_request),  # noqa: B008
         _current_user: User = Depends(bind_current_user),  # noqa: B008
     ) -> APIKeyIssueResponse:
-        if payload.principal_type is APIKeyPrincipalType.USER:
+        if payload.user_id is not None:
+            result = await self.service.issue_api_key_for_user_id(
+                user_id=payload.user_id,
+                expires_in_days=payload.expires_in_days,
+            )
+        else:
             email = payload.email
             if email is None:  # pragma: no cover - validated upstream
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    detail="Email required for user API keys",
+                    detail="Email required",
                 )
             result = await self.service.issue_api_key_for_email(
                 email=email,
                 expires_in_days=payload.expires_in_days,
             )
-            user = result.user
-            principal_id = result.api_key.user_id or (user.id if user else "")
-            principal_label = user.email if user else email
-        else:
-            service_account_id = payload.service_account_id
-            if service_account_id is None:  # pragma: no cover - validated upstream
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    detail="Service account ID required",
-                )
-            result = await self.service.issue_api_key_for_service_account(
-                service_account_id=service_account_id,
-                expires_in_days=payload.expires_in_days,
-            )
-            account = result.service_account
-            principal_id = result.api_key.service_account_id or (
-                account.id if account else service_account_id
-            )
-            principal_label = account.display_name if account else ""
 
         return APIKeyIssueResponse(
             api_key=result.raw_key,
             principal_type=result.principal_type,
-            principal_id=principal_id,
-            principal_label=principal_label,
+            principal_id=result.user.id,
+            principal_label=result.principal_label,
             expires_at=result.api_key.expires_at,
         )
 
@@ -138,19 +124,15 @@ class AuthRoutes:
             APIKeySummary(
                 api_key_id=record.id,
                 principal_type=(
-                    APIKeyPrincipalType.USER
-                    if record.user_id
-                    else APIKeyPrincipalType.SERVICE_ACCOUNT
+                    "service_account"
+                    if record.user is not None and record.user.is_service_account
+                    else "user"
                 ),
-                principal_id=record.user_id or record.service_account_id or "",
+                principal_id=record.user_id,
                 principal_label=(
-                    record.user.email
-                    if record.user_id and record.user is not None
-                    else (
-                        record.service_account.display_name
-                        if record.service_account
-                        else ""
-                    )
+                    record.user.label
+                    if record.user is not None
+                    else ""
                 ),
                 token_prefix=record.token_prefix,
                 created_at=record.created_at,
