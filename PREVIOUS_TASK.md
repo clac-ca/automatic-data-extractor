@@ -1,23 +1,21 @@
 ## Context
-Implemented the first functional slice of the rewritten documents workflow so
-uploads, catalog queries, and downloads operate end-to-end on the new backend
-foundation.
+Delivered the refreshed results workflow so the rewritten services expose
+extracted tables for succeeded jobs while guarding unavailable artefacts.
 
 ## Outcome
-- Added `backend/app/services/storage.py` with a `DocumentStorage` adapter that
-  confines file access to `settings.documents_dir`, enforces safe path
-  resolution, and streams blocking I/O via `run_in_threadpool`.
-- Rebuilt the `documents` module with a service + router pair that handles
-  upload/list/detail/download/delete endpoints, emits audit events, and wires in
-  workspace-aware access control.
-- Replaced the placeholder pytest module with targeted unit and integration
-  coverage for storage helpers and the documents HTTP API (happy paths and error
-  cases such as oversize uploads and missing files).
+- Hardened `ExtractionResultsService` to validate job status, emit "viewed"
+  events, and surface tables only when the run succeeded.
+- Updated the results router to return structured 409 responses for pending or
+  failed jobs and to bubble up not-found errors for missing tables/documents.
+- Added integration coverage chaining upload → job → results alongside failure
+  and deletion scenarios to verify the new API behaviour.
+- Refreshed documentation (`BACKEND_REWRITE_PLAN.md`, README) to describe the
+  job/results review flow and captured new follow-up milestones.
 
 ## Next steps
-- Rebuild the synchronous jobs workflow so `/jobs` can submit extraction runs,
-  resolve document/configuration inputs, and persist status transitions.
-- Update the results module once the new job lifecycle is in place so table
-  retrieval routes operate against the rewritten job engine.
-- Document retention follow-ups (purge/TTL) now that soft deletion removes the
-  backing file immediately.
+- Implement retention/cleanup policies for job records, logs, and extracted
+  tables now that synchronous execution is in place.
+- Seed sensible default permissions so workspace owners automatically gain job
+  and results access.
+- Revisit the event/timeline story once the new workflows are wired into the UI
+  and automation clients.

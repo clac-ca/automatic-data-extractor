@@ -1,31 +1,36 @@
 # 🚧 ADE Backend Rewrite – Next Focus
 
 ## Status Snapshot
-- Document storage adapter implemented with safe path resolution and streaming I/O helpers.
-- `/documents` endpoints rebuilt to support upload/list/detail/download/delete flows with audit events.
-- Unit/integration coverage exercises document happy paths plus oversize upload and missing-file scenarios.
+- Synchronous `JobsService` persists metrics/logs, replaces extracted tables, and
+  raises structured failures when the stub processor errors.
+- Results router/service expose job and document table listings, returning 409
+  for pending/failed runs and 404 for missing artefacts.
+- End-to-end tests span upload → job → results, including deletion and failure
+  scenarios.
 
 ## Goal for This Iteration
-Deliver the first working slice of the new jobs workflow: accept job submissions, resolve document/configuration inputs, run the stub extractor synchronously, and expose list/detail endpoints that surface job status and metrics.
+Introduce baseline retention so job metadata, logs, and extracted tables do not
+grow without bound now that the synchronous pipeline is in place.
 
 ## Scope
-1. **Jobs domain foundations**
-   - Implement a synchronous `JobsService` that validates inputs, persists `jobs` rows, and orchestrates the in-process extractor stub while emitting status events.
-   - Reintroduce a `jobs` router with list/detail/submit endpoints aligned with `fastapi-best-practices.md` patterns (class-based views, explicit dependencies, workspace context binding, permission guards).
-   - Capture status transitions (`pending` → `running` → `succeeded`/`failed`) on the existing schema, storing basic metrics/log summaries for responses.
-2. **Extractor hook-up**
-   - Restore the lightweight processor stub under `backend/processor/` (no heavy logic yet) and invoke it from the service using `run_in_threadpool` for blocking work.
-   - Ensure extractor failures propagate cleanly with job status `failed` and reason recorded for API responses/tests.
-3. **Tests & fixtures**
-   - Add integration tests covering successful job submission, invalid document/configuration references, and extractor failure paths.
-   - Provide unit coverage around the service to exercise status transitions and event emission where practical.
-4. **Documentation & follow-ups**
-   - Update `BACKEND_REWRITE_PLAN.md` with the new jobs architecture sketch and any deviations discovered during implementation.
-   - Outline remaining tasks (results module refresh, retention policies) for the subsequent iteration.
+1. **Retention policies**
+   - Add configurable retention windows for jobs, job logs/metrics, and
+     associated extracted tables.
+   - Ensure purging skips recent/succeeded records that fall within the window.
+2. **Cleanup execution path**
+   - Expose a deterministic cleanup entry point (CLI task or scheduled service
+     hook) that removes expired jobs/tables and reports summary metrics.
+   - Cover purge behaviour with tests that seed aged records and verify retained
+     items remain intact.
+3. **Documentation & backlog**
+   - Document the retention settings in `BACKEND_REWRITE_PLAN.md` and README.
+   - Capture follow-ups for permission seeding and timeline rebuild once
+     retention is live.
 
 ## Definition of Done
-- `/jobs` endpoints operate end-to-end against the rewritten service and stub extractor without relying on the old worker queue.
-- Job records reflect status transitions with persisted metrics/log excerpts.
-- Tests cover happy paths and the primary error scenarios (invalid inputs, extractor failure).
-- Repository continues to align with `fastapi-best-practices.md` (thin routers, services owning business logic, blocking work offloaded).
-
+- Configurable cleanup removes expired jobs and tables without touching recent
+  runs.
+- Automated tests cover purge scenarios and ensure metrics/logs persist for
+  retained jobs.
+- Documentation reflects the retention behaviour and records remaining backlog
+  items.
