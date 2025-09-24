@@ -1,7 +1,5 @@
 """Routes for authentication flows."""
 
-from __future__ import annotations
-
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
