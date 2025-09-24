@@ -9,6 +9,8 @@ description = "Internal tooling for deterministic data extraction."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "ADE Team" }]
+license = { text = "Proprietary" }
+urls = { "Repository" = "https://github.com/your-org/automatic-data-extractor" }
 
 # Runtime deps — pinned for reproducible builds
 dependencies = [
@@ -26,21 +28,66 @@ dependencies = [
   "pyjwt[crypto]==2.10.1",
   "email-validator==2.1.0.post1",
   "typing-inspect==0.9.0",
-  "dynaconf==3.2.6"
+  "dynaconf==3.2.6",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest==8.4.2",
   "pytest-asyncio==1.2.0",
+  # Optional but handy:
+  "pytest-cov==5.0.0",
   "mypy==1.18.2",
   "ruff==0.13.1",
   "openapi-spec-validator==0.7.2",
 ]
 
+# Package only the backend/ tree (avoid accidental pickup of data/)
 [tool.setuptools]
 packages = ["backend"]
+include-package-data = true
 
+# Include common non-Python assets if/when they exist
+[tool.setuptools.package-data]
+backend = ["alembic/**/*", "templates/**/*", "static/**/*", "py.typed"]
+
+# Pytest configuration
 [tool.pytest.ini_options]
-pythonpath = ["."]
+minversion = "8.0"
 testpaths = ["backend/tests"]
+asyncio_mode = "auto"
+addopts = "-ra"
+
+# Ruff (linter + formatter)
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]   # pycodestyle/pyflakes/imports/bugbear/pyupgrade
+
+[tool.ruff.format]
+preview = true
+
+# MyPy (type checking)
+[tool.mypy]
+python_version = "3.11"
+plugins = ["pydantic.mypy"]
+warn_unused_ignores = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+pretty = true
+
+# Loosen checks in tests
+[[tool.mypy.overrides]]
+module = "backend.tests.*"
+disallow_untyped_defs = false
+
+# Coverage (optional, used if you run pytest --cov)
+[tool.coverage.run]
+branch = true
+source = ["backend"]
+
+[tool.coverage.report]
+skip_empty = true
+show_missing = true

@@ -8,17 +8,12 @@ The automatic-data-extractor (ADE) aims to transform semi-structured spreadsheet
 ├─ AGENTS.md
 ├─ backend/
 │  ├─ app/            # FastAPI entrypoint, routes, schemas, services
-│  ├─ processor/      # Table detection, column mapping, validation logic
+│  ├─ data/           # Gitignored runtime artefacts (database, documents, caches)
 │  └─ tests/
 ├─ frontend/
 │  ├─ src/            # Pages, components, API client wrappers
 │  └─ tests/
-├─ infra/
-│  ├─ Dockerfile
-│  └─ docker-compose.yaml
 ├─ examples/          # Sample documents used in testing
-├─ runs/              # Example job outputs
-└─ data/              # Gitignored runtime artefacts (database, documents, caches)
 ```
 
 ---
@@ -61,26 +56,6 @@ The automatic-data-extractor (ADE) aims to transform semi-structured spreadsheet
 
 ---
 
-### 2. Code Review
-
-**When**: explicit request for “review” or code shown without a task.
-**Goal**: critique and propose minimal, ADE-aligned rewrites.
-
-**Checklist**:
-
-* **Correctness** – invariants, nulls, uniqueness, race conditions, timezones.
-* **Clarity** – remove dead code, avoid needless abstractions.
-* **Maintainability** – small functions, explicit invariants, clear names.
-* **Consistency** – FastAPI, Pydantic v2, SQLAlchemy patterns.
-* **Performance (contextual)** – avoid N+1 queries, repeated serialization.
-* **Security** – input validation, safe defaults, no sensitive leaks.
-* **Operational** – logging signal/noise, DB constraints, migrations.
-* **Testability** – seams for fixtures, return values > side effects.
-
-**Outputs**: issue list, targeted rewrites, test gaps, ops notes.
-
----
-
 ## Dependencies
 
 Keep the dependency footprint small. ADE should only add a library when it is a **well-maintained, widely used dependency** that makes the code significantly clearer, safer, or simpler. If the same result can be achieved with a few lines of straightforward native code (`pathlib`, `uuid`, `json`, etc.), prefer the standard library.
@@ -98,9 +73,21 @@ If the current task can only be completed after a new dependency is added:
 
 This ensures dependency decisions are explicit, auditable, and reversible.
 
+## Testing
+
+ADE uses **pytest** as the primary test runner, with **pytest-asyncio** for async tests.  
+Tests live under `backend/tests/` and follow the `test_*.py` / `test_*` convention.  
+
+Key tools:
+- **pytest** → run all unit and integration tests.
+- **pytest-asyncio** → allows `async def` tests (`asyncio_mode="auto"` enabled).
+- **pytest-cov** → optional coverage reports.
+- **Ruff** → enforces code style and catches common errors.
+- **MyPy** → type checking with Pydantic plugin.
+
 ---
 
 ## Guiding Principle
 
-**When in doubt → choose simple, auditable solutions.**
-Always leave clear notes for the next contributor or agent.
+**Consistency, clarity, and pragmatism beat cleverness.**
+Structure your code so every developer knows where things live, write routes and dependencies in the simplest correct form, and lean on Pydantic and FastAPI’s patterns rather than inventing your own abstractions. Prefer async where it matters, validate at the edges, and use tools (Ruff, Alembic, type checking) to enforce consistency so the team can focus on business logic instead of style debates.
