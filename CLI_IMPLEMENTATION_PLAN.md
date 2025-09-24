@@ -28,12 +28,12 @@ backend/cli/
 ## Command Surface (v1)
 ```
 ade users create --email EMAIL [--role admin|member]
-                  [--password TEXT | --password-file PATH]
+                  [--password TEXT]
                   [--inactive]
 ade users list [--json]
 ade users activate USER_ID
 ade users deactivate USER_ID
-ade users set-password USER_ID (--password TEXT | --password-file PATH)
+ade users set-password USER_ID (--password TEXT)
 
 ade api-keys issue (--user-id USER_ID | --email EMAIL) [--expires-in DAYS]
 ade api-keys list [--json]
