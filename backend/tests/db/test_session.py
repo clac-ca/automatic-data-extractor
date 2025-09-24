@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Annotated
 
 import pytest
 from fastapi import Depends, Request
@@ -30,7 +31,7 @@ async def test_session_dependency_commits_and_populates_context(
         @app.post(route_path, dependencies=[Depends(get_session)])
         async def _create_configuration(
             request: Request,
-            context: ServiceContext = Depends(get_service_context),
+            context: Annotated[ServiceContext, Depends(get_service_context)],
         ) -> dict[str, bool | str]:
             assert isinstance(context.session, AsyncSession)
             assert request.state.db_session is context.session
@@ -43,8 +44,8 @@ async def test_session_dependency_commits_and_populates_context(
                 "version": 1,
                 "is_active": False,
                 "payload": json.dumps({}),
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             }
             await context.session.execute(
                 text(

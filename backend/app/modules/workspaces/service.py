@@ -14,7 +14,6 @@ from .models import WorkspaceMembership, WorkspaceRole
 from .repository import WorkspacesRepository
 from .schemas import WorkspaceContext, WorkspaceMember, WorkspaceProfile
 
-
 _ROLE_PERMISSION_DEFAULTS: dict[WorkspaceRole, frozenset[str]] = {
     WorkspaceRole.MEMBER: frozenset(
         {

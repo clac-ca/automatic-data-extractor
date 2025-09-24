@@ -1,8 +1,10 @@
 """Routes for authentication flows."""
 
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import RedirectResponse
+from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +21,7 @@ from .schemas import (
     TokenResponse,
 )
 from .security import access_control
-from .service import APIKeyPrincipalType, AuthService, SSO_STATE_COOKIE
+from .service import SSO_STATE_COOKIE, APIKeyPrincipalType, AuthService
 
 
 async def _parse_api_key_issue_request(request: Request) -> APIKeyIssueRequest:
@@ -32,8 +34,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @cbv(router)
 class AuthRoutes:
-    session: AsyncSession = Depends(get_session)
-    service: AuthService = Depends(get_auth_service)
+    session: AsyncSession = Depends(get_session)  # noqa: B008
+    service: AuthService = Depends(get_auth_service)  # noqa: B008
 
     @router.post(
         "/token",
@@ -42,7 +44,10 @@ class AuthRoutes:
         summary="Exchange credentials for an access token",
         openapi_extra={"security": []},
     )
-    async def issue_token(self, form: OAuth2PasswordRequestForm = Depends()) -> TokenResponse:
+    async def issue_token(
+        self,
+        form: OAuth2PasswordRequestForm = Depends(),  # noqa: B008
+    ) -> TokenResponse:
         """Return a JWT for the supplied email/password combination."""
 
         user = await self.service.authenticate(email=form.username, password=form.password)
@@ -58,8 +63,8 @@ class AuthRoutes:
     )
     async def who_am_i(
         self,
-        _current_user: User = Depends(bind_current_user),
-        users_service: UsersService = Depends(get_users_service),
+        _current_user: User = Depends(bind_current_user),  # noqa: B008
+        users_service: UsersService = Depends(get_users_service),  # noqa: B008
     ) -> UserProfile:
         """Return profile information for the active user."""
 
@@ -75,8 +80,8 @@ class AuthRoutes:
     @access_control(require_admin=True)
     async def create_api_key(
         self,
-        payload: APIKeyIssueRequest = Depends(_parse_api_key_issue_request),
-        _current_user: User = Depends(bind_current_user),
+        payload: APIKeyIssueRequest = Depends(_parse_api_key_issue_request),  # noqa: B008
+        _current_user: User = Depends(bind_current_user),  # noqa: B008
     ) -> APIKeyIssueResponse:
         if payload.principal_type is APIKeyPrincipalType.USER:
             email = payload.email
@@ -124,7 +129,10 @@ class AuthRoutes:
         summary="List issued API keys",
     )
     @access_control(require_admin=True)
-    async def list_api_keys(self, _: User = Depends(bind_current_user)) -> list[APIKeySummary]:
+    async def list_api_keys(
+        self,
+        _: User = Depends(bind_current_user),  # noqa: B008
+    ) -> list[APIKeySummary]:
         records = await self.service.list_api_keys()
         return [
             APIKeySummary(
@@ -162,7 +170,7 @@ class AuthRoutes:
     async def revoke_api_key(
         self,
         api_key_id: str,
-        _: User = Depends(bind_current_user),
+        _: User = Depends(bind_current_user),  # noqa: B008
     ) -> Response:
         await self.service.revoke_api_key(api_key_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -203,11 +211,17 @@ class AuthRoutes:
         state: str | None = None,
     ) -> TokenResponse:
         if not code or not state:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Missing authorization code or state")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Missing authorization code or state",
+            )
 
         state_cookie = request.cookies.get(SSO_STATE_COOKIE)
         if not state_cookie:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Missing SSO state cookie")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Missing SSO state cookie",
+            )
 
         try:
             user = await self.service.complete_sso_login(

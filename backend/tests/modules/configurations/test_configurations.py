@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -26,7 +26,7 @@ async def _create_configuration(**overrides: Any) -> str:
         is_active = overrides.get("is_active", False)
         activated_at = overrides.get("activated_at")
         if activated_at is None and is_active:
-            activated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            activated_at = datetime.now(UTC).isoformat(timespec="seconds")
 
         document_type = overrides.get("document_type", "invoice")
         result = await session.execute(

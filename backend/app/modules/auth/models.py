@@ -5,8 +5,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ...db import Base
 from ...db.mixins import TimestampMixin, ULIDPrimaryKeyMixin
-from ..users.models import User
 from ..service_accounts.models import ServiceAccount
+from ..users.models import User
 
 
 class APIKey(ULIDPrimaryKeyMixin, TimestampMixin, Base):

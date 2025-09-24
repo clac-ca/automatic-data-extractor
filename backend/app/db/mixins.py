@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import ClassVar
 
 from sqlalchemy import String
@@ -43,7 +43,7 @@ class TimestampMixin:
 
     @staticmethod
     def _timestamp() -> str:
-        return datetime.now(tz=timezone.utc).isoformat(timespec="milliseconds")
+        return datetime.now(tz=UTC).isoformat(timespec="milliseconds")
 
     created_at: Mapped[str] = mapped_column(
         String(32),

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import AsyncIterator, BinaryIO
+from typing import BinaryIO
 
 from fastapi.concurrency import run_in_threadpool
 

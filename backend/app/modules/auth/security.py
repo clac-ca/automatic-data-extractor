@@ -5,10 +5,11 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from functools import wraps
-from typing import Any, Awaitable, Callable, Iterable, Sequence, Tuple
+from typing import Any
 
 import jwt
 from fastapi import HTTPException, status
@@ -63,12 +64,9 @@ def hash_password(password: str) -> str:
         p=_SCRYPT_P,
         dklen=_KEY_LEN,
     )
-    return "scrypt$%d$%d$%d$%s$%s" % (
-        _SCRYPT_N,
-        _SCRYPT_R,
-        _SCRYPT_P,
-        _encode(salt),
-        _encode(key),
+    return (
+        f"scrypt${_SCRYPT_N}${_SCRYPT_R}${_SCRYPT_P}$"
+        f"{_encode(salt)}${_encode(key)}"
     )
 
 
@@ -111,7 +109,7 @@ def create_access_token(
 ) -> str:
     """Return a signed JWT for the supplied identity."""
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": user_id,
         "email": email,
@@ -127,8 +125,8 @@ def decode_access_token(*, token: str, secret: str, algorithms: Sequence[str]) -
 
     data = jwt.decode(token, secret, algorithms=list(algorithms))
 
-    issued_at = datetime.fromtimestamp(int(data["iat"]), tz=timezone.utc)
-    expires_at = datetime.fromtimestamp(int(data["exp"]), tz=timezone.utc)
+    issued_at = datetime.fromtimestamp(int(data["iat"]), tz=UTC)
+    expires_at = datetime.fromtimestamp(int(data["exp"]), tz=UTC)
     role = UserRole(data["role"])
     return TokenPayload(
         user_id=str(data["sub"]),
@@ -139,7 +137,7 @@ def decode_access_token(*, token: str, secret: str, algorithms: Sequence[str]) -
     )
 
 
-def generate_api_key_components() -> Tuple[str, str]:
+def generate_api_key_components() -> tuple[str, str]:
     """Return a prefix/secret pair for a new API key."""
 
     prefix = secrets.token_hex(_API_KEY_PREFIX_LEN // 2)
@@ -188,12 +186,18 @@ def access_control(
 
             workspace = getattr(service, "current_workspace", None)
             if require_workspace and workspace is None:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Workspace context required")
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail="Workspace context required",
+                )
 
             if required:
                 granted = getattr(service, "permissions", frozenset())
                 if not required.issubset(granted):
-                    raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+                    raise HTTPException(
+                        status.HTTP_403_FORBIDDEN,
+                        detail="Insufficient permissions",
+                    )
 
             return await func(self, *args, **kwargs)
 
