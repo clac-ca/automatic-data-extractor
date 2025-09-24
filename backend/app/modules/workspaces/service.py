@@ -21,6 +21,8 @@ _ROLE_PERMISSION_DEFAULTS: dict[WorkspaceRole, frozenset[str]] = {
             "workspace:read",
             "workspace:documents:read",
             "workspace:documents:write",
+            "workspace:configurations:read",
+            "workspace:jobs:read",
         }
     ),
     WorkspaceRole.OWNER: frozenset(
@@ -28,6 +30,8 @@ _ROLE_PERMISSION_DEFAULTS: dict[WorkspaceRole, frozenset[str]] = {
             "workspace:read",
             "workspace:documents:read",
             "workspace:documents:write",
+            "workspace:configurations:read",
+            "workspace:jobs:read",
             "workspace:members:read",
             "workspace:members:manage",
             "workspace:settings:manage",

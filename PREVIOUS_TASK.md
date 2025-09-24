@@ -1,8 +1,7 @@
 ## Context
-Phase 4 began by needing an event dispatcher and the first domain module rebuilt on top of the new authentication and workspace context. We had to wire a message hub through the application so future services and background jobs can react to document lifecycle events.
+Phase 4 progressed from worker scaffolding to persisting extraction outputs end-to-end.
 
 ## Outcome
-- Introduced `backend/app/core/message_hub.py` with subscribe/publish semantics, registered it on application startup, and exposed a `BaseService.publish_event` helper that enriches payloads with correlation, actor, and workspace metadata.
-- Updated the service context to carry the hub so module services can emit events consistently, keeping the FastAPI request state and dependency stack in sync.
-- Scaffolded the `documents` module (SQLAlchemy model, repository, service, dependencies, router, exceptions) with read-only list/detail endpoints guarded by `workspace:documents:read` and emitting hub events for analytics.
-- Added integration tests seeding documents, asserting the new endpoints return data, and verifying message hub handlers receive `documents.listed`/`document.viewed` events alongside negative coverage for 404 responses.
+- Added an `extracted_tables` model, Alembic migration, repository, service, and router so jobs and documents can list extracted tables via `/jobs/{job_id}/tables` and `/documents/{document_id}/tables` with access control.
+- Enhanced the job worker to persist stub extraction outputs, clear stale artefacts, emit `job.outputs.persisted` hub events, and record table summaries alongside status updates.
+- Expanded integration coverage to assert table persistence, document/job timeline events, and 404 handling for unknown jobs, tables, and documents while updating the processor stub to produce deterministic output.
