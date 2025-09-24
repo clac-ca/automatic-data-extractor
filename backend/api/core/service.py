@@ -27,7 +27,6 @@ class ServiceContext:
     request: Request | None = None
     session: AsyncSession | None = None
     user: Any | None = None
-    service_account: Any | None = None
     workspace: Any | None = None
     permissions: frozenset[str] = frozenset()
     message_hub: MessageHub | None = None
@@ -68,14 +67,6 @@ class BaseService:
             return self._context.user
         if self.request is not None:
             return getattr(self.request.state, "current_user", None)
-        return None
-
-    @property
-    def current_service_account(self) -> Any | None:
-        if self._context.service_account is not None:
-            return self._context.service_account
-        if self.request is not None:
-            return getattr(self.request.state, "current_service_account", None)
         return None
 
     @property
@@ -156,17 +147,12 @@ class BaseService:
 
         user = self.current_user
         if user is not None:
-            base.setdefault("actor_type", "user")
+            actor_label = getattr(user, "label", None) or getattr(user, "email", None)
+            actor_type = "service_account" if getattr(user, "is_service_account", False) else "user"
+            base.setdefault("actor_type", actor_type)
             base.setdefault("actor_id", getattr(user, "id", None))
-            base.setdefault("actor_label", getattr(user, "email", None))
-        else:
-            service_account = self.current_service_account
-            if service_account is not None:
-                base.setdefault("actor_type", "service_account")
-                base.setdefault("actor_id", getattr(service_account, "id", None))
-                base.setdefault(
-                    "actor_label", getattr(service_account, "display_name", None)
-                )
+            if actor_label:
+                base.setdefault("actor_label", actor_label)
 
         return {key: value for key, value in base.items() if value is not None}
 
@@ -196,7 +182,6 @@ def get_service_context(
 
     session: AsyncSession | None = getattr(request.state, "db_session", None)
     user = getattr(request.state, "current_user", None)
-    service_account = getattr(request.state, "current_service_account", None)
     workspace = getattr(request.state, "current_workspace", None)
     permissions = getattr(request.state, "current_permissions", frozenset())
     message_hub: MessageHub | None = getattr(request.app.state, "message_hub", None)
@@ -210,7 +195,6 @@ def get_service_context(
         request=request,
         session=session,
         user=user,
-        service_account=service_account,
         workspace=workspace,
         permissions=permissions,
         message_hub=message_hub,
