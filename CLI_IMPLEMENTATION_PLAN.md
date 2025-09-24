@@ -81,7 +81,7 @@ backend/cli/
 ## Implementation Steps
 1. Scaffold `backend/cli` package with empty modules and register console script (no commands yet).
 2. Implement `context.py` helpers and unit-test them.
-3. Add Alembic wrappers in `commands/db.py`; ensure project root/alembic path detection mirrors `backend/app/core/settings.py`.
+3. Add Alembic wrappers in `commands/db.py`; ensure project root/alembic path detection mirrors `backend/api/core/settings.py`.
 4. Implement user commands leveraging `UsersRepository` and password utilities.
 5. Implement API key commands via `AuthService` (`issue_api_key_for_email`, `issue_api_key_for_service_account`, `list_api_keys`, `revoke_api_key`).
 6. Implement service account commands, including uniqueness checks and deactivate flag updates.

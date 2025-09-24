@@ -25,8 +25,8 @@ The rebuilt backend will offer three core workflows:
    the extraction output.
 
 ## Module boundaries
-The FastAPI application will expose two primary domain modules backed by shared
-infrastructure components:
+The FastAPI application under `backend/api/` exposes two primary domain modules
+backed by shared infrastructure components:
 
 | Module | Responsibility |
 | ------ | -------------- |

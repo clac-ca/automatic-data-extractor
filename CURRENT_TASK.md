@@ -1,30 +1,30 @@
 # 🚧 ADE Backend Rewrite – Next Focus
 
 ## Status Snapshot
-- Jobs service/router restored with synchronous processor integration and green end-to-end tests.
-- Processor runner packaged as standalone stub; jobs now emit metrics/logs for results module.
-- Documentation updated with jobs architecture and backlog notes for retention/timeline work.
+- FastAPI package now lives under `backend/api` with imports, tooling, and docs updated.
+- Jobs service still runs synchronously and records metrics/logs for completed runs.
+- Retention/backfill work for job metadata and extracted tables remains outstanding.
 
 ## Goal for This Iteration
-Rename the FastAPI package from `backend/app` to `backend/api` following `BACKEND_API_RENAME_PLAN.md` so future work (CLI, Dynaconf) builds on the clarified structure without extra churn.
+Introduce a retention policy for jobs, logs, and extracted tables so stale artefacts are
+automatically purged according to configuration.
 
 ## Scope
-1. **Inventory & preparation**
-   - Confirm no external tooling hard-codes `backend.app` (deployment scripts, Procfiles, Docker configs).
-   - Capture the existing tree so we can double-check nothing is dropped during the move.
-2. **Apply rename**
-   - Use `git mv backend/app backend/api` to preserve history.
-   - Adjust any top-level exports or namespace packages that referenced `backend.app`.
-3. **Reference sweep**
-   - Replace `backend.app` imports/strings with `backend.api` across code, tests, scripts, and docs.
-   - Update tooling files (`pyproject.toml`, coverage config, pytest/mypy settings, make/nox tasks, deployment manifests) that point at the old path.
-4. **Docs & task rotation**
-   - Refresh plans (`BACKEND_REWRITE_PLAN.md`, `BACKEND_API_RENAME_PLAN.md`, `CURRENT_TASK.md` → `PREVIOUS_TASK.md`) and README snippets to reflect the new package name.
-   - Note any downstream follow-ups (e.g., developer wiki, CI secrets) that external teams must adjust.
+1. **Configuration & plumbing**
+   - Add retention knobs to settings (days to keep jobs, logs, tables) and expose them via docs.
+   - Ensure scheduler/maintenance entry points read the new values.
+2. **Purge implementation**
+   - Extend the maintenance/purge service to delete expired jobs, logs, and extracted tables.
+   - Persist a summary of the sweep (counts, reclaimed bytes) for observability.
+3. **API & tests**
+   - Provide endpoints or CLI hooks to trigger the purge manually.
+   - Add integration tests covering automatic startup sweep and manual invocation.
+4. **Docs & communication**
+   - Update README and relevant plans to describe the retention behaviour and configuration.
+   - Note follow-up tasks for deployment teams (e.g., updating environment variables, alerting).
 
 ## Definition of Done
-- Repository tree contains `backend/api` with all previous modules intact; `backend/app` no longer exists.
-- `rg "backend\\.app"` returns no matches outside historical notes.
-- `uvicorn backend.api.main:app` starts successfully; `ruff`, `pytest`, and `mypy` (if configured) pass without import errors.
-- Documentation and task tracking reference `backend/api`, and follow-up items for external consumers are recorded.
-
+- Configurable retention settings exist with sensible defaults.
+- Purge routine removes jobs, logs, and tables older than the configured threshold.
+- Tests verify both scheduled and manual purges.
+- Documentation reflects the retention feature and downstream reminders are captured.

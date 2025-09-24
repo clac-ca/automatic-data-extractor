@@ -8,16 +8,16 @@ from fastapi import UploadFile
 from sqlalchemy import func, select
 from starlette.datastructures import Headers
 
-from backend.app.core.message_hub import Message, MessageHub
-from backend.app.core.service import ServiceContext
-from backend.app.core.settings import get_settings
-from backend.app.db.session import get_sessionmaker
-from backend.app.modules.configurations.models import Configuration
-from backend.app.modules.documents.service import DocumentsService
-from backend.app.modules.jobs.exceptions import JobExecutionError
-from backend.app.modules.jobs.models import Job
-from backend.app.modules.jobs.service import JobsService
-from backend.app.modules.results.models import ExtractedTable
+from backend.api.core.message_hub import Message, MessageHub
+from backend.api.core.service import ServiceContext
+from backend.api.core.settings import get_settings
+from backend.api.db.session import get_sessionmaker
+from backend.api.modules.configurations.models import Configuration
+from backend.api.modules.documents.service import DocumentsService
+from backend.api.modules.jobs.exceptions import JobExecutionError
+from backend.api.modules.jobs.models import Job
+from backend.api.modules.jobs.service import JobsService
+from backend.api.modules.results.models import ExtractedTable
 
 
 @pytest.mark.asyncio
