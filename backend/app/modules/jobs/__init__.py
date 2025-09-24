@@ -1,3 +1,5 @@
 """Jobs module scaffolding for the backend rewrite."""
 
-__all__ = []
+from . import router
+
+__all__ = ["router"]

@@ -11,7 +11,7 @@ from ..jobs.exceptions import JobNotFoundError
 from ..workspaces.dependencies import bind_workspace_context
 from ..workspaces.schemas import WorkspaceContext
 from .dependencies import get_results_service
-from .exceptions import ExtractedTableNotFoundError
+from .exceptions import ExtractedTableNotFoundError, JobResultsUnavailableError
 from .schemas import ExtractedTableRecord
 from .service import ExtractionResultsService
 
@@ -37,6 +37,14 @@ class ExtractionResultsRoutes:
             return await self.service.list_tables_for_job(job_id=job_id)
         except JobNotFoundError as exc:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        except JobResultsUnavailableError as exc:
+            detail = {
+                "error": "job_results_unavailable",
+                "job_id": exc.job_id,
+                "status": exc.status,
+                "message": str(exc),
+            }
+            raise HTTPException(status.HTTP_409_CONFLICT, detail=detail) from exc
 
     @router.get(
         "/jobs/{job_id}/tables/{table_id}",
@@ -53,6 +61,14 @@ class ExtractionResultsRoutes:
             return await self.service.get_table(job_id=job_id, table_id=table_id)
         except JobNotFoundError as exc:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        except JobResultsUnavailableError as exc:
+            detail = {
+                "error": "job_results_unavailable",
+                "job_id": exc.job_id,
+                "status": exc.status,
+                "message": str(exc),
+            }
+            raise HTTPException(status.HTTP_409_CONFLICT, detail=detail) from exc
         except ExtractedTableNotFoundError as exc:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
