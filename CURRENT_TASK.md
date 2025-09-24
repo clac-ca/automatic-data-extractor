@@ -7,7 +7,9 @@
   - Phase 1 – Established shared configuration, structured logging, middleware, responses, and base services.
   - Phase 2 – Rebuilt the database backbone with async engine/session factories, Alembic environment, baseline migration, and tests covering migration execution plus request-scoped session injection.
   - Phase 3 – Restored identity flows with API key lifecycle endpoints, SSO login/callback, and coverage for mixed JWT/API key authentication paths.
-  - Phase 4 (in progress) – Added the message hub dispatcher, wired it into the service context, and scaffolded the documents module with read-only list/detail endpoints emitting hub events and backed by integration tests.
+  - Phase 4 (in progress) – Added the message hub dispatcher, wired it into the service context, rebuilt the documents module with read-only list/detail endpoints, persisted hub events inline to power a `/documents/{document_id}/events` timeline, restored the jobs module with list/detail/timeline endpoints plus inline event capture and tests, reintroduced the configurations module with workspace-scoped list/detail/timeline routes backed by inline event recording, restored document ingestion with a POST `/documents` upload that stores files to disk while emitting `document.uploaded` events and tests covering error paths, and introduced job submission with a POST `/jobs` endpoint that validates documents/configurations, persists job records, emits `job.created` events, and enqueues work on the new task queue scaffold alongside integration coverage for success/error paths.
+  - Phase 4 (in progress) – Added a processor scaffold with stub extraction routines, subscribed the task queue to process `jobs.process` messages, updated jobs to commit before enqueueing, and ensured the worker records running/success/failed transitions with persisted events, message hub publications, and integration coverage for the new timeline flows.
+  - Phase 4 (in progress) – Introduced extracted table storage with SQLAlchemy models, migrations, repository/service/router wiring, and worker updates so stub extraction outputs persist alongside `job.outputs.persisted` events, `/jobs/{job_id}/tables` and `/documents/{document_id}/tables` endpoints, and integration coverage for result timelines and error paths.
 - **Completed Pre-work:** Archived the legacy implementation to `backend.backup/` so we can reference behaviour while rebuilding from scratch.
 
 ## Phase 0 – Scaffold the new FastAPI backend shell ✅ *Complete*
@@ -51,7 +53,7 @@ Implemented an async-first persistence layer with consistent naming conventions 
 
 **Next task**
 
-- Extend Phase 4 by persisting emitted domain events: implement an events repository/service that subscribes to the message hub, records entries in the `events` table, and expose a read-only `/documents/{document_id}/events` timeline with tests covering event capture and retrieval.
+- Continue Phase 4 by wiring result exports: persist stub CSV artefacts for each extracted table as produced documents, expose download endpoints that link tables to their generated files, and extend events/tests so job timelines cover the new export lifecycle.
 
 **Exit criteria**
 - Protected routes in the identity modules enforce permissions through the shared decorator/dependency infrastructure.

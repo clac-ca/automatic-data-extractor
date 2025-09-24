@@ -34,10 +34,18 @@ def _database_url(tmp_path_factory: pytest.TempPathFactory) -> str:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _configure_database(_database_url: str) -> AsyncIterator[None]:
+def _configure_database(
+    _database_url: str,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> AsyncIterator[None]:
     """Apply Alembic migrations against the ephemeral test database."""
 
+    data_dir = tmp_path_factory.mktemp("ade-data")
+    documents_dir = data_dir / "documents"
+
     os.environ["ADE_DATABASE_URL"] = _database_url
+    os.environ["ADE_DATA_DIR"] = str(data_dir)
+    os.environ["ADE_DOCUMENTS_DIR"] = str(documents_dir)
     reset_settings_cache()
     reset_database_state()
 
@@ -50,7 +58,8 @@ def _configure_database(_database_url: str) -> AsyncIterator[None]:
     command.downgrade(config, "base")
     reset_database_state()
     reset_settings_cache()
-    os.environ.pop("ADE_DATABASE_URL", None)
+    for env_var in ("ADE_DATABASE_URL", "ADE_DATA_DIR", "ADE_DOCUMENTS_DIR"):
+        os.environ.pop(env_var, None)
 
 
 @pytest.fixture(scope="session")
@@ -67,6 +76,18 @@ async def async_client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _reset_task_queue(app: FastAPI) -> AsyncIterator[None]:
+    """Ensure the in-memory task queue is empty between tests."""
+
+    queue = getattr(app.state, "task_queue", None)
+    if queue is not None:
+        await queue.clear()
+    yield
+    if queue is not None:
+        await queue.clear()
 
 
 @pytest_asyncio.fixture()

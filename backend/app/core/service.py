@@ -9,6 +9,8 @@ from fastapi import Depends, Request
 
 from .message_hub import MessageHub
 from .settings import AppSettings, get_settings
+from .task_queue import TaskQueue
+from ..db.session import get_session
 
 try:  # pragma: no cover - optional during type checking
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +30,7 @@ class ServiceContext:
     workspace: Any | None = None
     permissions: FrozenSet[str] = frozenset()
     message_hub: MessageHub | None = None
+    task_queue: TaskQueue | None = None
 
     @property
     def correlation_id(self) -> str | None:
@@ -97,6 +100,10 @@ class BaseService:
     def message_hub(self) -> MessageHub | None:
         return self._context.message_hub
 
+    @property
+    def task_queue(self) -> TaskQueue | None:
+        return self._context.task_queue
+
     async def aclose(self) -> None:
         """Hook for cleaning up resources when the request completes."""
 
@@ -111,14 +118,18 @@ class BaseService:
     ) -> None:
         """Helper that emits ``name`` with context-aware metadata."""
 
+        combined_metadata = self._build_event_metadata(metadata)
+        payload_data = dict(payload or {})
+
+        await self._persist_event(name, payload_data, combined_metadata)
+
         hub = self._context.message_hub
         if hub is None:
             return
 
-        combined_metadata = self._build_event_metadata(metadata)
         await hub.publish(
             name,
-            payload=payload or {},
+            payload=payload_data,
             correlation_id=self.correlation_id,
             metadata=combined_metadata,
         )
@@ -158,6 +169,16 @@ class BaseService:
 
         return {key: value for key, value in base.items() if value is not None}
 
+    async def _persist_event(
+        self,
+        name: str,
+        payload: Mapping[str, Any],
+        metadata: Mapping[str, Any],
+    ) -> None:
+        """Allow subclasses to persist emitted events."""
+
+        return None
+
 
 ServiceT = TypeVar("ServiceT", bound="BaseService")
 
@@ -174,6 +195,7 @@ def get_service_context(
     workspace = getattr(request.state, "current_workspace", None)
     permissions = getattr(request.state, "current_permissions", frozenset())
     message_hub: MessageHub | None = getattr(request.app.state, "message_hub", None)
+    task_queue: TaskQueue | None = getattr(request.app.state, "task_queue", None)
 
     if not isinstance(permissions, frozenset):
         permissions = frozenset(permissions)
@@ -187,6 +209,7 @@ def get_service_context(
         workspace=workspace,
         permissions=permissions,
         message_hub=message_hub,
+        task_queue=task_queue,
     )
 
 
@@ -194,8 +217,10 @@ def service_dependency(service_cls: type[ServiceT]) -> Callable[[ServiceContext]
     """Return a dependency that yields the requested service class."""
 
     async def _dependency(
+        session: AsyncSession = Depends(get_session),
         context: ServiceContext = Depends(get_service_context),
     ) -> AsyncIterator[ServiceT]:
+        context.session = session
         service = service_cls(context=context)
         try:
             yield service

@@ -11,4 +11,28 @@ class DocumentNotFoundError(Exception):
         self.document_id = document_id
 
 
-__all__ = ["DocumentNotFoundError"]
+class DocumentTooLargeError(Exception):
+    """Raised when an uploaded document exceeds the configured size limit."""
+
+    def __init__(self, *, limit: int, received: int) -> None:
+        message = (
+            f"Uploaded file is {received:,} bytes which exceeds the allowed "
+            f"maximum of {limit:,} bytes."
+        )
+        super().__init__(message)
+        self.limit = limit
+        self.received = received
+
+
+class InvalidDocumentExpirationError(Exception):
+    """Raised when an ``expires_at`` override cannot be parsed or is invalid."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+__all__ = [
+    "DocumentNotFoundError",
+    "DocumentTooLargeError",
+    "InvalidDocumentExpirationError",
+]
