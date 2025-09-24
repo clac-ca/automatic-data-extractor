@@ -85,6 +85,9 @@ workspace permissions.
   Rich audit trails can be reintroduced after the core flow is stable.
 - Continue to store extracted tables in `extracted_tables`, keeping the schema
   consistent with the current migrations.
+- Maintain a single `users` table with an `is_service_account` flag so
+  automation identities share the same role/permission pipeline as humans, and
+  ensure API keys always reference `users.user_id`.
 
 ## Processing lifecycle
 1. Upload document (metadata stored, file persisted on disk).

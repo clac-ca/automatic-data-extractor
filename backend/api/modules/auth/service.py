@@ -6,8 +6,7 @@ import secrets
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlencode
 
 import httpx
@@ -16,8 +15,6 @@ from fastapi import HTTPException, Request, status
 from jwt import PyJWKClient
 
 from ...core.service import BaseService, ServiceContext
-from ..service_accounts.models import ServiceAccount
-from ..service_accounts.repository import ServiceAccountsRepository
 from ..users.models import User, UserRole
 from ..users.repository import UsersRepository
 from .models import APIKey
@@ -39,37 +36,32 @@ class APIKeyIssueResult:
 
     raw_key: str
     api_key: APIKey
-    principal_type: APIKeyPrincipalType
-    user: User | None = None
-    service_account: ServiceAccount | None = None
+    user: User
 
+    @property
+    def principal_type(self) -> str:
+        return "service_account" if self.user.is_service_account else "user"
 
-class APIKeyPrincipalType(StrEnum):
-    """Supported principals that can own API keys."""
-
-    USER = "user"
-    SERVICE_ACCOUNT = "service_account"
+    @property
+    def principal_label(self) -> str:
+        return self.user.label
 
 
 @dataclass(slots=True)
-class AuthenticatedPrincipal:
-    """Principal resolved during authentication."""
+class AuthenticatedIdentity:
+    """Identity resolved during authentication."""
 
-    principal_type: APIKeyPrincipalType
+    user: User
+    credentials: Literal["access_token", "api_key"]
     api_key: APIKey | None = None
-    user: User | None = None
-    service_account: ServiceAccount | None = None
 
     @property
     def label(self) -> str:
-        if self.principal_type == APIKeyPrincipalType.USER and self.user is not None:
-            return self.user.email
-        if (
-            self.principal_type == APIKeyPrincipalType.SERVICE_ACCOUNT
-            and self.service_account is not None
-        ):
-            return self.service_account.display_name
-        return "unknown"
+        return self.user.label
+
+    @property
+    def is_service_account(self) -> bool:
+        return bool(self.user.is_service_account)
 
 
 @dataclass(slots=True)
@@ -124,7 +116,6 @@ class AuthService(BaseService):
         if self.session is None:
             raise RuntimeError("AuthService requires a database session")
         self._users = UsersRepository(self.session)
-        self._service_accounts = ServiceAccountsRepository(self.session)
         self._api_keys = APIKeysRepository(self.session)
 
     # ------------------------------------------------------------------
@@ -135,7 +126,14 @@ class AuthService(BaseService):
 
         canonical = normalise_email(email)
         user = await self._users.get_by_email(canonical)
-        if user is None or not user.password_hash:
+        if user is None:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        if user.is_service_account:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail="Service accounts cannot authenticate with passwords",
+            )
+        if not user.password_hash:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
         if not verify_password(password, user.password_hash):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
@@ -202,58 +200,44 @@ class AuthService(BaseService):
     async def issue_api_key(
         self,
         *,
-        user: User | None = None,
-        service_account: ServiceAccount | None = None,
+        user: User,
         expires_at: datetime | None = None,
     ) -> APIKeyIssueResult:
-        """Persist an API key for the supplied principal and return the raw secret."""
-
-        if (user is None) == (service_account is None):
-            msg = "Exactly one principal must be provided"
-            raise ValueError(msg)
+        """Persist an API key for ``user`` and return the raw secret."""
 
         prefix, secret = generate_api_key_components()
         token_hash = hash_api_key(secret)
         record = await self._api_keys.create(
-            user_id=user.id if user else None,
-            service_account_id=service_account.id if service_account else None,
+            user_id=user.id,
             token_prefix=prefix,
             token_hash=token_hash,
             expires_at=expires_at.isoformat(timespec="seconds") if expires_at else None,
         )
-        principal_type = (
-            APIKeyPrincipalType.USER if user is not None else APIKeyPrincipalType.SERVICE_ACCOUNT
-        )
         return APIKeyIssueResult(
             raw_key=f"{prefix}.{secret}",
             api_key=record,
-            principal_type=principal_type,
             user=user,
-            service_account=service_account,
         )
 
-    async def issue_api_key_for_service_account(
+    async def issue_api_key_for_user_id(
         self,
         *,
-        service_account_id: str,
+        user_id: str,
         expires_in_days: int | None = None,
     ) -> APIKeyIssueResult:
-        """Issue an API key for the service account identified by ``service_account_id``."""
+        """Issue an API key for the active user identified by ``user_id``."""
 
-        record = await self._service_accounts.get_by_id(service_account_id)
-        if record is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Service account not found")
-        if not record.is_active:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail="Target service account is inactive",
-            )
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found")
+        if not user.is_active:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Target user is inactive")
 
         expires_at = None
         if expires_in_days is not None:
             expires_at = self._now() + timedelta(days=expires_in_days)
 
-        return await self.issue_api_key(service_account=record, expires_at=expires_at)
+        return await self.issue_api_key(user=user, expires_at=expires_at)
 
     async def list_api_keys(self) -> list[APIKey]:
         """Return all issued API keys ordered by creation time."""
@@ -268,8 +252,8 @@ class AuthService(BaseService):
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="API key not found")
         await self._api_keys.delete(record)
 
-    async def authenticate_api_key(self, raw_key: str) -> AuthenticatedPrincipal:
-        """Return the principal associated with ``raw_key`` if valid."""
+    async def authenticate_api_key(self, raw_key: str) -> AuthenticatedIdentity:
+        """Return the identity associated with ``raw_key`` if valid."""
 
         try:
             prefix, secret = raw_key.split(".", 1)
@@ -292,37 +276,20 @@ class AuthService(BaseService):
         if not secrets.compare_digest(expected, record.token_hash):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
-        principal: AuthenticatedPrincipal | None = None
-        if record.user_id:
-            user = record.user
-            if user is None:
-                user = await self._users.get_by_id(record.user_id)
-            if user is None or not user.is_active:
-                raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
-            principal = AuthenticatedPrincipal(
-                principal_type=APIKeyPrincipalType.USER,
-                api_key=record,
-                user=user,
-            )
-        elif record.service_account_id:
-            account = record.service_account
-            if account is None:
-                account = await self._service_accounts.get_by_id(record.service_account_id)
-            if account is None or not account.is_active:
-                raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
-            principal = AuthenticatedPrincipal(
-                principal_type=APIKeyPrincipalType.SERVICE_ACCOUNT,
-                api_key=record,
-                service_account=account,
-            )
-        else:
+        user = record.user
+        if user is None:
+            user = await self._users.get_by_id(record.user_id)
+        if user is None or not user.is_active:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+        principal = AuthenticatedIdentity(
+            user=user,
+            api_key=record,
+            credentials="api_key",
+        )
 
         request = self.request
         if request is not None:
             await self._touch_api_key(record, request=request)
-        if principal is None:  # pragma: no cover - defensive safety net
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
         return principal
 
     async def _touch_api_key(self, record: APIKey, *, request: Request) -> None:
@@ -699,8 +666,7 @@ class AuthService(BaseService):
 
 __all__ = [
     "APIKeyIssueResult",
-    "APIKeyPrincipalType",
-    "AuthenticatedPrincipal",
+    "AuthenticatedIdentity",
     "AuthService",
     "OIDCProviderMetadata",
     "SSOLoginChallenge",
