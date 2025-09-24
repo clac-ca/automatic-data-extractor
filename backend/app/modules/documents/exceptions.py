@@ -11,6 +11,18 @@ class DocumentNotFoundError(Exception):
         self.document_id = document_id
 
 
+class DocumentFileMissingError(Exception):
+    """Raised when a stored document file is missing from disk."""
+
+    def __init__(self, *, document_id: str, stored_uri: str) -> None:
+        message = (
+            f"Stored file for document {document_id!r} could not be located at {stored_uri!r}."
+        )
+        super().__init__(message)
+        self.document_id = document_id
+        self.stored_uri = stored_uri
+
+
 class DocumentTooLargeError(Exception):
     """Raised when an uploaded document exceeds the configured size limit."""
 
@@ -33,6 +45,7 @@ class InvalidDocumentExpirationError(Exception):
 
 __all__ = [
     "DocumentNotFoundError",
+    "DocumentFileMissingError",
     "DocumentTooLargeError",
     "InvalidDocumentExpirationError",
 ]

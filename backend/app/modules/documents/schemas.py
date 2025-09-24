@@ -9,6 +9,34 @@ from pydantic import Field
 from ...core.schema import BaseSchema
 
 
+class DocumentDeleteRequest(BaseSchema):
+    """Payload accepted when deleting a document."""
+
+    reason: str | None = Field(
+        default=None,
+        max_length=1024,
+        description="Optional explanation recorded alongside the deletion event.",
+    )
+
+
+class DocumentMetadataUpdateRequest(BaseSchema):
+    """Payload accepted when updating document metadata."""
+
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        description="Partial metadata updates to merge into the stored record.",
+    )
+    event_type: str | None = Field(
+        default=None,
+        max_length=128,
+        description="Optional override for the emitted event type.",
+    )
+    event_payload: dict[str, Any] | None = Field(
+        default=None,
+        description="Additional context merged into the event payload.",
+    )
+
+
 class DocumentRecord(BaseSchema):
     """Serialised representation of document metadata."""
 
@@ -32,4 +60,8 @@ class DocumentRecord(BaseSchema):
     produced_by_job_id: str | None = Field(default=None, serialization_alias="produced_by_job_id")
 
 
-__all__ = ["DocumentRecord"]
+__all__ = [
+    "DocumentDeleteRequest",
+    "DocumentMetadataUpdateRequest",
+    "DocumentRecord",
+]

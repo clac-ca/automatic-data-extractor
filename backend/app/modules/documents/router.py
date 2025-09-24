@@ -1,6 +1,20 @@
 """API routes exposing document metadata."""
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+import json
+from typing import Any
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    Query,
+    UploadFile,
+    status,
+)
+from fastapi.responses import FileResponse
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,11 +28,16 @@ from ..workspaces.schemas import WorkspaceContext
 from .dependencies import get_documents_service
 from ..jobs.exceptions import JobNotFoundError
 from .exceptions import (
+    DocumentFileMissingError,
     DocumentNotFoundError,
     DocumentTooLargeError,
     InvalidDocumentExpirationError,
 )
-from .schemas import DocumentRecord
+from .schemas import (
+    DocumentDeleteRequest,
+    DocumentMetadataUpdateRequest,
+    DocumentRecord,
+)
 from .service import DocumentUploadPayload, DocumentsService
 from ..users.models import UserRole
 
@@ -84,7 +103,11 @@ class DocumentsRoutes:
         offset: int = Query(0, ge=0),
     ) -> list[EventRecord]:
         try:
-            await self.service.get_document(document_id=document_id, emit_event=False)
+            await self.service.get_document(
+                document_id=document_id,
+                include_deleted=True,
+                emit_event=False,
+            )
         except DocumentNotFoundError as exc:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -94,6 +117,156 @@ class DocumentsRoutes:
             offset=offset,
         )
         return events
+
+
+@router.patch(
+    "/documents/{document_id}",
+    response_model=DocumentRecord,
+    status_code=status.HTTP_200_OK,
+    summary="Update document metadata for the active workspace",
+    response_model_exclude_none=True,
+)
+async def update_document_metadata(
+    document_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    selection: WorkspaceContext = Depends(bind_workspace_context),
+    service: DocumentsService = Depends(get_documents_service),
+) -> DocumentRecord:
+    del session  # request-scoped dependency; session is bound via request.state
+    del selection  # ensure workspace context dependency runs
+
+    user = service.current_user
+    if user is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+
+    if getattr(user, "role", None) != UserRole.ADMIN:
+        workspace = service.current_workspace
+        if workspace is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Workspace context required")
+
+        required = {"workspace:documents:write"}
+        if not required.issubset(service.permissions):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+    raw_body = await request.body()
+    payload_data: dict[str, Any] | None = None
+    if raw_body:
+        try:
+            payload_data = json.loads(raw_body)
+        except json.JSONDecodeError as exc:  # pragma: no cover - defensive parsing
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid JSON body") from exc
+    payload = DocumentMetadataUpdateRequest.model_validate(payload_data or {})
+
+    try:
+        record = await service.update_document_metadata(
+            document_id=document_id,
+            metadata=payload.metadata,
+            event_type=payload.event_type,
+            event_payload=payload.event_payload,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return record
+
+
+@router.get(
+    "/documents/{document_id}/download",
+    status_code=status.HTTP_200_OK,
+    summary="Download the original uploaded document",
+    response_class=FileResponse,
+)
+async def download_document(
+    document_id: str,
+    session: AsyncSession = Depends(get_session),
+    selection: WorkspaceContext = Depends(bind_workspace_context),
+    service: DocumentsService = Depends(get_documents_service),
+) -> FileResponse:
+    del session  # request-scoped dependency; session is bound via request.state
+    del selection  # ensure workspace context dependency runs
+
+    user = service.current_user
+    if user is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+
+    if getattr(user, "role", None) != UserRole.ADMIN:
+        workspace = service.current_workspace
+        if workspace is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Workspace context required")
+
+        required = {"workspace:documents:read"}
+        if not required.issubset(service.permissions):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+    try:
+        download = await service.prepare_document_download(document_id=document_id)
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentFileMissingError as exc:
+        detail = {"error": "document_file_missing", "message": str(exc)}
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=detail) from exc
+
+    headers = {
+        "X-Document-ID": download.document_id,
+        "X-Document-SHA256": download.sha256,
+    }
+    media_type = download.content_type or "application/octet-stream"
+
+    return FileResponse(
+        download.path,
+        media_type=media_type,
+        filename=download.filename,
+        headers=headers,
+    )
+
+
+@router.delete(
+    "/documents/{document_id}",
+    response_model=DocumentRecord,
+    status_code=status.HTTP_200_OK,
+    summary="Soft delete a document from the active workspace",
+    response_model_exclude_none=True,
+)
+async def delete_document(
+    document_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    selection: WorkspaceContext = Depends(bind_workspace_context),
+    service: DocumentsService = Depends(get_documents_service),
+) -> DocumentRecord:
+    del session  # request-scoped dependency; session is bound via request.state
+    del selection  # ensure workspace context dependency runs
+
+    user = service.current_user
+    if user is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+
+    if getattr(user, "role", None) != UserRole.ADMIN:
+        workspace = service.current_workspace
+        if workspace is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Workspace context required")
+
+        required = {"workspace:documents:write"}
+        if not required.issubset(service.permissions):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+    raw_body = await request.body()
+    payload_data: dict[str, Any] | None = None
+    if raw_body:
+        try:
+            payload_data = json.loads(raw_body)
+        except json.JSONDecodeError as exc:  # pragma: no cover - defensive parsing
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid JSON body") from exc
+    delete_request = DocumentDeleteRequest.model_validate(payload_data or {})
+    reason = delete_request.reason
+
+    try:
+        record = await service.delete_document(document_id=document_id, reason=reason)
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return record
 
 
 @router.post(

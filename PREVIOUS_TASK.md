@@ -1,7 +1,7 @@
 ## Context
-Phase 4 progressed from worker scaffolding to persisting extraction outputs end-to-end.
+Phase 4 continued by wiring document metadata editing into the rebuilt documents module.
 
 ## Outcome
-- Added an `extracted_tables` model, Alembic migration, repository, service, and router so jobs and documents can list extracted tables via `/jobs/{job_id}/tables` and `/documents/{document_id}/tables` with access control.
-- Enhanced the job worker to persist stub extraction outputs, clear stale artefacts, emit `job.outputs.persisted` hub events, and record table summaries alongside status updates.
-- Expanded integration coverage to assert table persistence, document/job timeline events, and 404 handling for unknown jobs, tables, and documents while updating the processor stub to produce deterministic output.
+- Added a `DocumentMetadataUpdateRequest` schema and `DocumentsService.update_document_metadata` helper that merges changes, removes cleared keys, emits diff-aware events, and accepts optional event overrides.
+- Exposed a guarded `PATCH /documents/{document_id}` route that mirrors upload permissions, publishes `document.metadata.updated` events, and propagates custom event types/payloads to the message hub and timeline.
+- Expanded integration coverage to assert metadata merge/remove behaviour, custom event overrides, permission enforcement, and missing-document responses while validating hub payloads and timeline diffs.
