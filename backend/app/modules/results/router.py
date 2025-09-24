@@ -15,7 +15,6 @@ from .exceptions import ExtractedTableNotFoundError
 from .schemas import ExtractedTableRecord
 from .service import ExtractionResultsService
 
-
 router = APIRouter(tags=["results"])
 
 

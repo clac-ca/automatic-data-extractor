@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Enum, ForeignKey, JSON, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Enum, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ...db import Base
@@ -28,7 +28,7 @@ class Workspace(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
 
-    memberships: Mapped[list["WorkspaceMembership"]] = relationship(
+    memberships: Mapped[list[WorkspaceMembership]] = relationship(
         "WorkspaceMembership",
         back_populates="workspace",
     )
@@ -40,7 +40,10 @@ class WorkspaceMembership(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "workspace_memberships"
     __ulid_field__ = "workspace_membership_id"
 
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.user_id", ondelete="CASCADE"),
+        nullable=False,
+    )
     workspace_id: Mapped[str] = mapped_column(
         ForeignKey("workspaces.workspace_id", ondelete="CASCADE"),
         nullable=False,

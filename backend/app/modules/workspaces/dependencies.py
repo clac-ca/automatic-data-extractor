@@ -14,17 +14,19 @@ from ..users.models import User
 from .schemas import WorkspaceContext, WorkspaceProfile
 from .service import WorkspacesService
 
-
 get_workspaces_service = service_dependency(WorkspacesService)
 WorkspaceHeader = Annotated[str | None, Header(alias="X-Workspace-ID")]
+UserDependency = Annotated[User, Depends(bind_current_user)]
+SessionDependency = Annotated[AsyncSession, Depends(get_session)]
+WorkspaceServiceDependency = Annotated[WorkspacesService, Depends(get_workspaces_service)]
 
 
 async def bind_workspace_context(
     request: Request,
-    current_user: User = Depends(bind_current_user),
-    session: AsyncSession = Depends(get_session),
+    current_user: UserDependency,
+    session: SessionDependency,
+    service: WorkspaceServiceDependency,
     workspace_header: WorkspaceHeader = None,
-    service: WorkspacesService = Depends(get_workspaces_service),
 ) -> WorkspaceContext:
     """Resolve and attach the workspace context to the request."""
 
@@ -37,9 +39,9 @@ async def bind_workspace_context(
 
 
 async def list_user_workspaces(
-    current_user: User = Depends(bind_current_user),
-    session: AsyncSession = Depends(get_session),
-    service: WorkspacesService = Depends(get_workspaces_service),
+    current_user: UserDependency,
+    session: SessionDependency,
+    service: WorkspaceServiceDependency,
 ) -> list[WorkspaceProfile]:
     """Return all workspace memberships for the authenticated user."""
 

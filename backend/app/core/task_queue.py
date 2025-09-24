@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Mapping
+from datetime import UTC, datetime
+from typing import Any
 
 TaskHandler = Callable[["TaskMessage"], Awaitable[None]]
 
@@ -20,7 +21,7 @@ class TaskMessage:
     correlation_id: str | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
     enqueued_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
 
