@@ -16,15 +16,13 @@ class APIKeysRepository:
     async def create(
         self,
         *,
-        user_id: str | None,
-        service_account_id: str | None,
+        user_id: str,
         token_prefix: str,
         token_hash: str,
         expires_at: str | None,
     ) -> APIKey:
         api_key = APIKey(
             user_id=user_id,
-            service_account_id=service_account_id,
             token_prefix=token_prefix,
             token_hash=token_hash,
             expires_at=expires_at,
@@ -37,10 +35,7 @@ class APIKeysRepository:
     async def list_api_keys(self) -> list[APIKey]:
         stmt = (
             select(APIKey)
-            .options(
-                selectinload(APIKey.user),
-                selectinload(APIKey.service_account),
-            )
+            .options(selectinload(APIKey.user))
             .order_by(APIKey.created_at.desc())
         )
         result = await self._session.execute(stmt)
@@ -49,7 +44,7 @@ class APIKeysRepository:
     async def get_by_prefix(self, token_prefix: str) -> APIKey | None:
         stmt = (
             select(APIKey)
-            .options(selectinload(APIKey.user), selectinload(APIKey.service_account))
+            .options(selectinload(APIKey.user))
             .where(APIKey.token_prefix == token_prefix)
         )
         result = await self._session.execute(stmt)
@@ -58,7 +53,7 @@ class APIKeysRepository:
     async def get_by_id(self, api_key_id: str) -> APIKey | None:
         stmt = (
             select(APIKey)
-            .options(selectinload(APIKey.user), selectinload(APIKey.service_account))
+            .options(selectinload(APIKey.user))
             .where(APIKey.id == api_key_id)
         )
         result = await self._session.execute(stmt)

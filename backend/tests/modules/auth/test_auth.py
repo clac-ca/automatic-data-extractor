@@ -69,7 +69,7 @@ async def test_api_key_rotation_and_revocation(
     headers = {"Authorization": f"Bearer {token}"}
     first = await async_client.post(
         "/auth/api-keys",
-        json={"principal_type": "user", "email": admin["email"]},
+        json={"email": admin["email"]},
         headers=headers,
     )
     assert first.status_code == 201, first.text
@@ -78,7 +78,7 @@ async def test_api_key_rotation_and_revocation(
 
     second = await async_client.post(
         "/auth/api-keys",
-        json={"principal_type": "user", "email": admin["email"]},
+        json={"email": admin["email"]},
         headers=headers,
     )
     assert second.status_code == 201, second.text
@@ -134,8 +134,7 @@ async def test_service_account_api_keys(
     issued = await async_client.post(
         "/auth/api-keys",
         json={
-            "principal_type": "service_account",
-            "service_account_id": service_account["id"],
+            "user_id": service_account["id"],
         },
         headers=headers,
     )
@@ -143,7 +142,7 @@ async def test_service_account_api_keys(
     data = issued.json()
     assert data["principal_type"] == "service_account"
     assert data["principal_id"] == service_account["id"]
-    assert data["principal_label"].startswith("Automation")
+    assert data["principal_label"] == service_account["display_name"]
     api_key = data["api_key"]
 
     listing = await async_client.get("/auth/api-keys", headers=headers)
@@ -154,6 +153,7 @@ async def test_service_account_api_keys(
     record = lookup[prefix]
     assert record["principal_type"] == "service_account"
     assert record["principal_id"] == service_account["id"]
+    assert record["principal_label"] == service_account["display_name"]
 
     denied = await async_client.get("/auth/me", headers={"X-API-Key": api_key})
     assert denied.status_code == 403
@@ -161,12 +161,25 @@ async def test_service_account_api_keys(
     inactive = await async_client.post(
         "/auth/api-keys",
         json={
-            "principal_type": "service_account",
-            "service_account_id": inactive_service_account["id"],
+            "user_id": inactive_service_account["id"],
         },
         headers=headers,
     )
     assert inactive.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_service_account_password_login_blocked(
+    async_client: AsyncClient, seed_identity: dict[str, Any]
+) -> None:
+    """Password login should return 403 for service accounts."""
+
+    service_account = seed_identity["service_account"]
+    response = await async_client.post(
+        "/auth/token",
+        data={"username": service_account["email"], "password": "irrelevant"},
+    )
+    assert response.status_code == 403
 
 
 @pytest.mark.asyncio

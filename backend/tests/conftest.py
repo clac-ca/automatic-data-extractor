@@ -20,7 +20,6 @@ from backend.api.db.engine import render_sync_url, reset_database_state
 from backend.api.db.session import get_sessionmaker
 from backend.api.main import create_app
 from backend.api.modules.auth.service import hash_password
-from backend.api.modules.service_accounts.models import ServiceAccount
 from backend.api.modules.users.models import User, UserRole
 from backend.api.modules.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
 
@@ -152,21 +151,6 @@ async def seed_identity() -> dict[str, Any]:
             is_active=True,
         )
 
-        automation_account = ServiceAccount(
-            name=f"automation-{workspace_slug}",
-            display_name="Automation Bot",
-            description="Integration user for automation tasks",
-            is_active=True,
-            created_by_user_id=admin.id,
-        )
-        inactive_account = ServiceAccount(
-            name=f"inactive-{workspace_slug}",
-            display_name="Inactive Bot",
-            description="Disabled integration",
-            is_active=False,
-            created_by_user_id=admin.id,
-        )
-
         session.add_all(
             [
                 workspace,
@@ -177,10 +161,27 @@ async def seed_identity() -> dict[str, Any]:
                 member_with_manage,
                 orphan,
                 invitee,
-                automation_account,
-                inactive_account,
             ]
         )
+        await session.flush()
+
+        automation_account = User(
+            email=f"automation-{workspace_slug}@service.local",
+            display_name="Automation Bot",
+            description="Integration user for automation tasks",
+            is_service_account=True,
+            is_active=True,
+            created_by_user_id=admin.id,
+        )
+        inactive_account = User(
+            email=f"inactive-{workspace_slug}@service.local",
+            display_name="Inactive Bot",
+            description="Disabled integration",
+            is_service_account=True,
+            is_active=False,
+            created_by_user_id=admin.id,
+        )
+        session.add_all([automation_account, inactive_account])
         await session.flush()
 
         workspace_owner_membership = WorkspaceMembership(
@@ -254,10 +255,12 @@ async def seed_identity() -> dict[str, Any]:
         "invitee": invitee_info,
         "service_account": {
             "id": automation_account.id,
-            "name": automation_account.name,
+            "email": automation_account.email,
+            "display_name": automation_account.display_name,
         },
         "inactive_service_account": {
             "id": inactive_account.id,
-            "name": inactive_account.name,
+            "email": inactive_account.email,
+            "display_name": inactive_account.display_name,
         },
     }

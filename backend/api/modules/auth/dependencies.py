@@ -12,11 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.service import service_dependency
 from ...db.session import get_session
 from ..users.models import User, UserRole
-from .service import (
-    APIKeyPrincipalType,
-    AuthenticatedPrincipal,
-    AuthService,
-)
+from .service import AuthenticatedIdentity, AuthService
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 _api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -32,8 +28,8 @@ async def bind_current_principal(
     ],
     api_key: Annotated[str | None, Depends(_api_key_scheme)],
     service: Annotated[AuthService, Depends(get_auth_service)],
-) -> AuthenticatedPrincipal:
-    """Resolve the authenticated principal and attach it to the request state."""
+) -> AuthenticatedIdentity:
+    """Resolve the authenticated identity and attach it to the request state."""
 
     if credentials is not None:
         try:
@@ -42,36 +38,28 @@ async def bind_current_principal(
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
         user = await service.resolve_user(payload)
         request.state.current_user = user
-        request.state.current_service_account = None
-        return AuthenticatedPrincipal(
-            principal_type=APIKeyPrincipalType.USER,
-            user=user,
-        )
+        return AuthenticatedIdentity(user=user, credentials="access_token")
 
     if api_key:
-        principal = await service.authenticate_api_key(api_key)
-        if principal.principal_type == APIKeyPrincipalType.USER:
-            request.state.current_user = principal.user
-            request.state.current_service_account = None
-        else:
-            request.state.current_user = None
-            request.state.current_service_account = principal.service_account
-        return principal
+        identity = await service.authenticate_api_key(api_key)
+        request.state.current_user = identity.user
+        return identity
 
     raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
 
 
 async def bind_current_user(
-    principal: Annotated[AuthenticatedPrincipal, Depends(bind_current_principal)],
+    principal: Annotated[AuthenticatedIdentity, Depends(bind_current_principal)],
 ) -> User:
     """Resolve the authenticated user principal or reject service account credentials."""
 
-    if principal.principal_type != APIKeyPrincipalType.USER or principal.user is None:
+    user = principal.user
+    if user.is_service_account:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             detail="User credentials required",
         )
-    return principal.user
+    return user
 
 
 async def require_authenticated_user(

@@ -71,6 +71,6 @@ ade api-keys revoke API_KEY_ID
    - Add quickstart snippet to README.
 
 ## Future Enhancements
-- Introduce `--service-account` flag and related commands once service-account rewrite merges.
+- Introduce a `--service-account` flag that creates users with `is_service_account=True` and emits automation-friendly labels.
 - Add migration/job tooling subcommands only when requirements appear.
 - Optionally extend `core/output` with table formatting if administrators request richer output.
