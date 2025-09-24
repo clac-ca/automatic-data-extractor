@@ -32,6 +32,7 @@ infrastructure components:
 | ------ | -------------- |
 | `documents` | Manage metadata, storage lifecycle, and download helpers. |
 | `jobs` | Submit extraction runs, track status, and link inputs/outputs. |
+| `results` | Surface extracted tables and related artefacts for review. |
 
 Cross-cutting helpers will live outside the modules:
 
@@ -57,8 +58,25 @@ _Status:_ Implemented in the current iteration with storage safeguards, audit ev
 - GET `/jobs/` lists recent jobs with status fields (`pending`, `running`,
   `succeeded`, `failed`).
 - GET `/jobs/{job_id}` returns detailed metrics and any log entries.
-- GET `/jobs/{job_id}/results` streams the extracted tables (served from the
-  tables repository introduced in the previous rebuild).
+
+_Status:_ Implemented with a synchronous `JobsService` that writes `jobs`
+records, manages status transitions, and executes the stub extractor via
+`backend/processor`. The service persists metrics/logs, replaces extracted
+tables through the results repository, and emits status events captured by the
+message hub and timeline storage.
+
+### Results module sketch
+- GET `/jobs/{job_id}/tables` returns extracted tables for succeeded jobs,
+  rejecting requests for pending or failed runs.
+- GET `/jobs/{job_id}/tables/{table_id}` retrieves a single table associated
+  with the job when available.
+- GET `/documents/{document_id}/tables` lists tables produced from the
+  specified document while respecting soft deletion flags.
+
+_Status:_ Implemented with an `ExtractionResultsService` that verifies job
+status, emits "viewed" events, and reads persisted tables from the shared
+repository. The router exposes job- and document-centric endpoints guarded by
+workspace permissions.
 
 ## Data model checkpoints
 - Reuse the existing `documents` and `jobs` tables for now so we can layer the
@@ -83,12 +101,9 @@ for asynchronous execution. The single-process synchronous worker keeps the
 implementation easy to understand during the rewrite.
 
 ## Upcoming milestones
-1. Ship the synchronous jobs workflow (service + router + processor stub) so
-   `/jobs` submissions validate inputs, run the extractor, and surface status
-   transitions.
-2. Refresh the results module once jobs emit table outputs, ensuring document
-   and job timelines stay consistent.
-3. Extend smoke coverage to span upload → job → results using the stub
-   extractor to guard the new flow.
-4. Formalise retention follow-ups (purge/TTL policies) now that soft deletion
-   removes stored files immediately.
+1. Introduce retention/cleanup policies for job metadata, logs, and extracted
+   tables now that the synchronous path is stable.
+2. Expand permissions seeding so workspace owners receive job/results access by
+   default instead of relying on per-test grants.
+3. Revisit timeline/event projections once the new workflows are exercised by
+   the UI and automation clients.
