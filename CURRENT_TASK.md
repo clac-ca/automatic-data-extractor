@@ -1,22 +1,25 @@
 # ADE Backend Rewrite - Next Focus
 
-## Goal for This Iteration
-Execute the Dynaconf migration described in `DYNACONF_MIGRATION_PLAN.md`, replacing the Pydantic-based settings system with the new central configuration module and directory layout.
+## Status Snapshot
+- AppSettings still injects the full configuration schema into OpenAPI, exposing internal knobs in `/openapi.json`.
+- FastAPI health is restored after the Response annotation fix, so we can refactor configuration without blocking runtime.
+- No external users are live yet, letting us rework configuration loading without migration constraints.
 
-No migrations are needed as no users are using the app yet.
+## Goal for This Iteration
+Adopt an `.env`-driven configuration loader that keeps settings out of FastAPI/Pydantic schemas and retires the `AppSettings` dependency injection path.
 
 ## Scope
-1. **Bootstrap Dynaconf**
-   - Add the `config/` directory with committed templates (`settings.toml`, `.env.example`, README) and wire Dynaconf as a dependency.
+1. **Establish `.env` workflow**
+   - Add `.env`, `.env.example`, and supporting docs; ensure secrets stay gitignored and tests can seed defaults.
 2. **Implement `backend/api/config.py`**
-   - Instantiate the Dynaconf singleton, expose typed helpers, and ensure FastAPI initialisation stores the settings on `app.state`.
-3. **Rewire backend consumers**
-   - Update modules that previously imported `AppSettings` or `get_settings` (logging, DB session/engine, service context, middleware, job queue, CLI/processor entry points) to pull from the new configuration interface.
-4. **Tests and documentation**
-   - Refresh fixtures to support temporary Dynaconf overrides, remove obsolete tests, and document the new workflow in `config/README.md` plus relevant project docs.
+   - Load environment variables (parse `.env` during local development), expose a typed helper, and stash the config on `app.state` during startup.
+3. **Remove `AppSettings` usage**
+   - Update modules that currently depend on `AppSettings`/`get_settings` (logging, DB factories, service context, middleware, job queue, CLI/processor entrypoints) to use the new config helper.
+4. **Validation & docs**
+   - Adjust fixtures to override env vars safely, prune obsolete tests, and document the `.env` workflow so `/openapi.json` stays free of configuration entries.
 
 ## Definition of Done
-- Dynaconf-backed `backend/api/config.py` replaces `core/settings.py`, and all runtime consumers read from it.
-- New configuration artefacts live under `config/` with example/default files committed and secrets/gitignore rules in place.
-- Test suite, Ruff, and MyPy succeed with the new configuration stack; CLI/Alembic/processor entry points load settings correctly.
-- Documentation reflects the migration, including developer guidance for overrides and environment management.
+- `AppSettings` and related helpers are removed, and runtime components read from the new `.env`-backed config module.
+- `.env` artefacts and documentation are in place with secrets excluded from Git history.
+- `/openapi.json` no longer exposes configuration fields; FastAPI starts with settings sourced from environment values.
+- Test suite, Ruff, and MyPy succeed with the environment-based loader; CLI/Alembic/processor entry points resolve configuration via the new helper.
