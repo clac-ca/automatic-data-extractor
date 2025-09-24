@@ -1,25 +1,25 @@
-# ADE Backend Rewrite - Next Focus
+# ADE Config Simplicity – Next Task
 
-## Status Snapshot
-- AppSettings still injects the full configuration schema into OpenAPI, exposing internal knobs in `/openapi.json`.
-- FastAPI health is restored after the Response annotation fix, so we can refactor configuration without blocking runtime.
-- No external users are live yet, letting us rework configuration loading without migration constraints.
+## Objective
+Load application settings once during startup, store them on `app.state`, and read them inside route handlers without exposing config in OpenAPI.
 
-## Goal for This Iteration
-Adopt an `.env`-driven configuration loader that keeps settings out of FastAPI/Pydantic schemas and retires the `AppSettings` dependency injection path.
+## Why
+- Keeps configuration out of endpoint signatures so FastAPI docs stay clean.
+- Centralizes settings loading for reuse across API routes, services, and background jobs.
+- Simplifies tests by letting them override the loader in one place.
 
 ## Scope
-1. **Establish `.env` workflow**
-   - Add `.env`, `.env.example`, and supporting docs; ensure secrets stay gitignored and tests can seed defaults.
-2. **Implement `backend/api/config.py`**
-   - Load environment variables (parse `.env` during local development), expose a typed helper, and stash the config on `app.state` during startup.
-3. **Remove `AppSettings` usage**
-   - Update modules that currently depend on `AppSettings`/`get_settings` (logging, DB factories, service context, middleware, job queue, CLI/processor entrypoints) to use the new config helper.
-4. **Validation & docs**
-   - Adjust fixtures to override env vars safely, prune obsolete tests, and document the `.env` workflow so `/openapi.json` stays free of configuration entries.
+1. **Settings Loader**
+   - Create `backend/app/config.py` with a `Settings` data model and a memoized `load_settings()` helper that reads environment variables (with `.env` support for local dev).
+2. **Startup Wiring**
+   - During app startup/lifespan, call `load_settings()` once and stash the result on `app.state.settings`.
+3. **Route & Service Access**
+   - Update routes, services, and utilities to fetch config via `request.app.state.settings` (or `app.state.settings` outside requests) instead of dependency injection parameters.
+4. **Testing & Docs**
+   - Provide a test helper to override the settings loader or mutate `app.state.settings` in fixtures.
+   - Document the pattern in `README.md` or `AGENTS.md` so future changes follow the same approach.
 
-## Definition of Done
-- `AppSettings` and related helpers are removed, and runtime components read from the new `.env`-backed config module.
-- `.env` artefacts and documentation are in place with secrets excluded from Git history.
-- `/openapi.json` no longer exposes configuration fields; FastAPI starts with settings sourced from environment values.
-- Test suite, Ruff, and MyPy succeed with the environment-based loader; CLI/Alembic/processor entry points resolve configuration via the new helper.
+## Done When
+- API routes no longer declare settings dependencies; `/openapi.json` is free of config schema.
+- `app.state.settings` is populated during startup and reused everywhere.
+- Tests and docs reflect the new access pattern.
