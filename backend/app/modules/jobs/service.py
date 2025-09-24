@@ -12,8 +12,9 @@ class JobsService(BaseService):
         super().__init__(context=context)
         raise NotImplementedError(
             "JobsService will be implemented as part of the backend rewrite. "
-            "See docs/backend_rewrite.md for the current plan."
+            "See BACKEND_REWRITE_PLAN.md for the current plan."
         )
 
 
 __all__ = ["JobsService"]
+

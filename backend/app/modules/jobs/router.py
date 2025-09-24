@@ -12,10 +12,11 @@ async def jobs_placeholder() -> None:
     raise HTTPException(
         status.HTTP_501_NOT_IMPLEMENTED,
         detail=(
-            "The jobs module is being rewritten. See docs/backend_rewrite.md for "
+            "The jobs module is being rewritten. See BACKEND_REWRITE_PLAN.md for "
             "the upcoming design."
         ),
     )
 
 
 __all__ = ["router"]
+
