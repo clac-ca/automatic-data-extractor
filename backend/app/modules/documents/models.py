@@ -1,4 +1,4 @@
-"""ORM models for document metadata."""
+"""Lightweight ORM models kept during the documents module rewrite."""
 
 from __future__ import annotations
 
@@ -36,6 +36,12 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         Index("documents_produced_by_job_id_idx", "produced_by_job_id"),
     )
+
+    @property
+    def document_id(self) -> str:
+        """Expose a stable attribute for integrations expecting ``document_id``."""
+
+        return self.id
 
 
 __all__ = ["Document"]
