@@ -1,95 +1,127 @@
 # ADE Backend Rewrite – Architecture Notes
 
 ## Why this rewrite?
-The previous FastAPI backend attempted to replicate the legacy system with a
-message hub, timeline events, and a background worker abstraction. That design
-was difficult to reason about and obscured the core product goal: upload a file,
-run a deterministic extractor, and share the resulting tables. The rewrite
-focuses on clarity, small internal-facing APIs, and deliberate expansion only
-when the foundations are stable.
+The prior FastAPI backend recreated legacy message-passing concepts (timeline
+events, background hubs, opaque status transitions) that made debugging and
+iteration painful. The rewrite intentionally collapses that complexity: every
+workflow should be deterministic, auditable, and understandable by a small
+internal team. Upload a file, run the extractor, review tables—that’s the entire
+mission.
 
 Key guardrails:
 
 - Keep the codebase approachable for a small internal team.
 - Prefer explicit services over implicit cross-module side effects.
 - Preserve deterministic behaviour so extraction results are auditable.
+- Expand scope only when the synchronous path is exercised by the UI and CLI.
 
-## Core capabilities
-The rebuilt backend will offer three core workflows:
+## Capabilities delivered so far
 
-1. **Document intake** – receive uploads, capture metadata, and store the file
-   safely on disk.
-2. **Job execution** – validate requested configuration, invoke the extractor
-   synchronously (single worker process for now), and persist status updates.
-3. **Result review** – expose stored tables and job logs so analysts can confirm
-   the extraction output.
+The rebuilt backend currently supports the three workflows needed by the new
+frontend and CLI:
+
+1. **Document intake** – Receive uploads, capture metadata, store the file on
+   disk, and manage soft deletion + download streams.
+2. **Job execution** – Validate the requested document/configuration, run the
+   extractor synchronously inside the request, persist metrics/logs, and track
+   status transitions.
+3. **Result review** – Read stored tables and logs so analysts can verify the
+   output or export it for downstream usage.
+
+All routes are scoped beneath `/workspaces/{workspace_id}` via the
+`workspace_scoped_router` helper. Authorization relies on the `workspace:*`
+permission set stored on the workspace context.
 
 ## Module boundaries
-The FastAPI application under `backend/api/` exposes two primary domain modules
-backed by shared infrastructure components:
+
+The FastAPI application under `backend/api/` exposes domain modules backed by
+shared infrastructure components:
 
 | Module | Responsibility |
 | ------ | -------------- |
 | `documents` | Manage metadata, storage lifecycle, and download helpers. |
 | `jobs` | Submit extraction runs, track status, and link inputs/outputs. |
 | `results` | Surface extracted tables and related artefacts for review. |
+| `configurations` | CRUD + activation for extractor definitions. |
+| `workspaces` | Membership management and workspace metadata. |
 
-Cross-cutting helpers will live outside the modules:
+Cross-cutting helpers live outside the modules:
 
-- `services.storage.DocumentStorage` – safe filesystem access rooted in
+- `services.storage.DocumentStorage` – Safe filesystem access rooted in
   `data/documents/` with streaming helpers using `run_in_threadpool`.
-- `processor.run(job_request)` – deterministic extraction entry point returning
+- `processor.run(job_request)` – Deterministic extraction entry point returning
   structured tables and job metrics.
-- `repositories.*` – thin SQLAlchemy wrappers used by services.
+- `repositories.*` – Thin SQLAlchemy wrappers used by services.
 
-### Documents module sketch
-- POST `/documents/` accepts uploads, validates size/type, writes to
-  `DocumentStorage`, and persists metadata.
-- GET `/documents/` lists the workspace catalogue.
-- GET `/documents/{document_id}` returns metadata.
-- DELETE `/documents/{document_id}` performs soft delete and schedules file
-  cleanup (still synchronous in the first iteration).
+### Documents module
 
-_Status:_ Implemented in the current iteration with storage safeguards, audit events, and integration tests.
+- **Endpoints** – `POST /documents`, `GET /documents`, `GET /documents/{id}`,
+  `GET /documents/{id}/download`, `DELETE /documents/{id}`.
+- **Service** – `DocumentsService` handles file validation, persistence through
+  `DocumentStorage`, metadata writes, soft deletion (with optional reason), and
+  audit trail emission.
+- **Storage** – Files live under `data/documents/` with streaming downloads via
+  `StreamingResponse`. Missing files raise `DocumentFileMissingError` so the UI
+  can surface a precise error.
 
-### Jobs module sketch
-- POST `/jobs/` validates that the input document exists and the configuration
-  is available, then dispatches the synchronous extractor.
-- GET `/jobs/` lists recent jobs with status fields (`pending`, `running`,
-  `succeeded`, `failed`).
-- GET `/jobs/{job_id}` returns detailed metrics and any log entries.
+_Status:_ Implemented with integration tests covering upload, download, and
+soft-delete cases.
 
-_Status:_ Implemented with a synchronous `JobsService` that writes `jobs`
-records, manages status transitions, and executes the stub extractor via
-`backend/processor`. The service persists metrics/logs, replaces extracted
-tables through the results repository, and emits status events captured by the
-message hub and timeline storage.
+### Jobs module
 
-### Results module sketch
-- GET `/jobs/{job_id}/tables` returns extracted tables for succeeded jobs,
-  rejecting requests for pending or failed runs.
-- GET `/jobs/{job_id}/tables/{table_id}` retrieves a single table associated
-  with the job when available.
-- GET `/documents/{document_id}/tables` lists tables produced from the
-  specified document while respecting soft deletion flags.
+- **Endpoints** – `POST /jobs`, `GET /jobs`, `GET /jobs/{id}` with filters for
+  status and input document.
+- **Service** – `JobsService` validates the requested configuration, seeds the
+  job record (`pending → running → succeeded/failed`), invokes
+  `backend.processor.run`, captures metrics/logs, and persists the resulting
+  tables via the results repository.
+- **Error handling** – Propagates structured errors for missing documents,
+  configuration mismatches, and extractor failures. Job execution errors return
+  a `{ "error": "job_failed", ... }` payload.
 
-_Status:_ Implemented with an `ExtractionResultsService` that verifies job
-status, emits "viewed" events, and reads persisted tables from the shared
-repository. The router exposes job- and document-centric endpoints guarded by
-workspace permissions.
+_Status:_ Implemented synchronously with unit and service-level tests. The
+message hub remains for audit purposes but no longer controls execution.
+
+### Results module
+
+- **Endpoints** – `GET /jobs/{id}/tables`, `GET /jobs/{id}/tables/{table_id}`,
+  `GET /documents/{id}/tables`.
+- **Service** – `ExtractionResultsService` verifies job status before serving
+  tables, preventing premature access. It can emit "viewed" events for audit and
+  reuses shared repositories for persistence.
+- **Error handling** – Returns HTTP 409 when a job is not yet complete so the
+  frontend can display “processing” states, and 404 for missing tables/documents.
+
+_Status:_ Implemented and covered by backend tests; ready for frontend
+integration.
+
+### Configurations & workspaces
+
+Although the initial rewrite focused on documents/jobs/results, the supporting
+modules are also online:
+
+- **Configurations** – Full CRUD (`GET`, `POST`, `PUT`, `DELETE`) plus activation
+  endpoint and active-list filter. Services enforce document-type and versioning
+  rules.
+- **Workspaces** – Membership CRUD, workspace metadata management, and default
+  workspace selection. Dependencies populate `request.state.current_workspace`
+  for downstream services.
+
+These routes unblock the frontend configuration library and workspace switcher.
 
 ## Data model checkpoints
-- Reuse the existing `documents` and `jobs` tables for now so we can layer the
-  new services without performing a migration mid-rewrite.
-- Move timeline/event columns into simple status fields on the `jobs` table.
-  Rich audit trails can be reintroduced after the core flow is stable.
-- Continue to store extracted tables in `extracted_tables`, keeping the schema
-  consistent with the current migrations.
-- Maintain a single `users` table with an `is_service_account` flag so
-  automation identities share the same role/permission pipeline as humans, and
-  ensure API keys always reference `users.user_id`.
+
+- Continue using the existing `documents`, `jobs`, `extracted_tables`, and
+  `configurations` tables to avoid mid-rewrite migrations.
+- Timeline/event columns have been collapsed into explicit job status fields;
+  richer timelines can return later using the new event system.
+- Files are still stored on disk; future retention work will reclaim storage
+  based on document expiry or workspace quotas.
+- A single `users` table with `is_service_account` covers both human and machine
+  access. API keys always reference `users.user_id` for auditing.
 
 ## Processing lifecycle
+
 1. Upload document (metadata stored, file persisted on disk).
 2. Submit job referencing document + configuration version.
 3. Job service writes a `jobs` row with status `pending`, then runs the extractor
@@ -99,14 +131,25 @@ workspace permissions.
 5. On failure the service captures the error, updates status to `failed`, and
    retains partial logs for debugging.
 
-Background queue infrastructure will remain dormant until we have a strong case
-for asynchronous execution. The single-process synchronous worker keeps the
-implementation easy to understand during the rewrite.
+Background queue infrastructure stays dormant until we have a proven need for
+async execution. The single-process worker keeps observability straightforward
+while we validate flows with the UI.
 
-## Upcoming milestones
-1. Introduce retention/cleanup policies for job metadata, logs, and extracted
-   tables now that the synchronous path is stable.
-2. Expand permissions seeding so workspace owners receive job/results access by
-   default instead of relying on per-test grants.
-3. Revisit timeline/event projections once the new workflows are exercised by
-   the UI and automation clients.
+## Immediate roadmap
+
+1. **Retention policies** – Implement scheduled cleanup for expired documents,
+   job logs, and extracted tables. Expose retention metadata so the frontend can
+   message upcoming deletions.
+2. **Permission defaults** – Seed sensible workspace permissions on creation so
+   owners automatically gain access to documents, jobs, results, and
+   configurations without manual grants.
+3. **Audit surfacing** – Decide how timeline/events should re-emerge. Likely a
+   read-only `/events` endpoint consumed by the frontend’s activity views.
+4. **Extractor integration** – Replace the stub processor with the real ADE
+   extraction pipeline, ensuring interfaces stay deterministic.
+5. **Operational tooling** – Build CLI/admin endpoints for resubmitting failed
+   jobs, rotating service-account keys, and monitoring storage utilisation.
+
+Revisit this plan whenever we change models or introduce async execution; the
+frontend design in `FRONTEND_DESIGN.md` depends on the contracts outlined here.
+
