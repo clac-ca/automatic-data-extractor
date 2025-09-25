@@ -9,8 +9,8 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
 
+from backend.api import reload_settings
 from backend.api.db.engine import get_engine, render_sync_url, reset_database_state
-from backend.app import reload_settings
 
 
 @pytest.mark.asyncio

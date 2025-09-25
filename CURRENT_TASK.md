@@ -7,7 +7,7 @@ by teaching `Settings` to only enable docs for explicitly allowed environments
 
 ## Steps
 1. **Settings behaviour**
-   - In `backend/app/config.py`, change `enable_docs` to default to `False` and
+   - In `backend/api/settings.py`, change `enable_docs` to default to `False` and
      add a computed property or helper that turns it on when
      `environment in {"local", "staging"}` unless an explicit override is
      provided.
@@ -28,5 +28,5 @@ by teaching `Settings` to only enable docs for explicitly allowed environments
 
 ## Verification
 - `pytest backend/tests/core/test_settings.py`
-- `ruff check backend/app backend/tests/core`
-- `mypy backend/app backend/tests/core --follow-imports=skip`
+- `ruff check backend/api backend/tests/core`
+- `mypy backend/api backend/tests/core --follow-imports=skip`

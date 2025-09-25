@@ -1,4 +1,4 @@
-"""Filesystem storage helpers used across ADE services."""
+"""Filesystem storage helpers for document uploads."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import BinaryIO
 
 from fastapi.concurrency import run_in_threadpool
 
-from ..modules.documents.exceptions import DocumentTooLargeError
+from .exceptions import DocumentTooLargeError
 
 _CHUNK_SIZE = 1024 * 1024  # 1 MiB default chunk size for streaming
 
