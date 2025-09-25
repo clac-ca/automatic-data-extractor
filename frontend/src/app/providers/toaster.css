@@ -1,0 +1,28 @@
+.ade-toast-viewport {
+  position: fixed;
+  bottom: var(--space-lg);
+  right: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 320px;
+  max-width: calc(100vw - var(--space-lg) * 2);
+}
+
+.ade-toast {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+}
+
+.ade-toast__title {
+  margin: 0 0 var(--space-xs);
+  font-weight: 600;
+}
+
+.ade-toast__description {
+  margin: 0;
+  color: var(--color-text-subtle);
+}
