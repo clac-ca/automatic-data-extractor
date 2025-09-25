@@ -13,13 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.service import BaseService, ServiceContext
 from ...db.mixins import generate_ulid
-from ...services.storage import DocumentStorage
 from ..configurations.exceptions import (
     ConfigurationNotFoundError,
     ConfigurationVersionMismatchError,
 )
 from ..configurations.repository import ConfigurationsRepository
 from ..documents.models import Document
+from ..documents.storage import DocumentStorage
 from ..events.recorder import persist_event
 from ..results.repository import ExtractedTablesRepository
 from .exceptions import (

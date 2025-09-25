@@ -6,13 +6,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from backend.app import Settings, get_settings
-
 from .api import register_routers
 from .core.logging import setup_logging
 from .core.message_hub import MessageHub
 from .core.task_queue import TaskQueue
 from .extensions.middleware import register_middleware
+from .settings import Settings, get_settings
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

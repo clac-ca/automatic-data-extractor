@@ -4,8 +4,8 @@ import io
 
 import pytest
 
+from backend.api.modules.documents import DocumentStorage
 from backend.api.modules.documents.exceptions import DocumentTooLargeError
-from backend.api.services import DocumentStorage
 
 
 @pytest.mark.asyncio

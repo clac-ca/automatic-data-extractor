@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.app import Settings, get_settings, reload_settings
+from backend.api import Settings, get_settings, reload_settings
 
 
 @pytest.fixture(autouse=True)

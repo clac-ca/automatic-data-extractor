@@ -9,7 +9,7 @@ from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool, StaticPool
 
-from backend.app import Settings, get_settings
+from ..settings import Settings, get_settings
 
 _ENGINE: AsyncEngine | None = None
 _ENGINE_KEY: tuple[Any, ...] | None = None

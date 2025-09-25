@@ -8,7 +8,7 @@ from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.app import Settings
+from ..settings import Settings
 
 _CORRELATION_ID: ContextVar[str | None] = ContextVar("ade_correlation_id", default=None)
 _STANDARD_ATTRS = {
