@@ -1,9 +1,5 @@
 """Routes for workspace membership and context resolution."""
 
-from __future__ import annotations
-
-from typing import Annotated
-
 from fastapi import APIRouter, Body, Depends, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,11 +20,7 @@ from .service import WorkspacesService
 
 router = APIRouter(tags=["workspaces"])
 
-
-def _get_workspace_member_payload(
-    payload: Annotated[WorkspaceMemberCreate, Body(...)],
-) -> WorkspaceMemberCreate:
-    return payload
+WORKSPACE_MEMBER_BODY = Body(...)
 
 
 @cbv(router)
@@ -84,7 +76,7 @@ class WorkspaceRoutes:
     async def add_member(
         self,
         workspace_id: str,
-        payload: WorkspaceMemberCreate = Depends(_get_workspace_member_payload),  # noqa: B008
+        payload: WorkspaceMemberCreate = WORKSPACE_MEMBER_BODY,
         _: WorkspaceContext = Depends(bind_workspace_context),  # noqa: B008
     ) -> WorkspaceMember:
         membership = await self.service.add_member(

@@ -1,8 +1,6 @@
 """Routes for authentication flows."""
 
-from typing import Annotated
-
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,14 +22,6 @@ from .security import access_control
 from .service import SSO_STATE_COOKIE, AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-
-def _get_api_key_issue_request(
-    payload: Annotated[APIKeyIssueRequest, Body(...)],
-) -> APIKeyIssueRequest:
-    return payload
-
-
 @cbv(router)
 class AuthRoutes:
     session: AsyncSession = Depends(get_session)  # noqa: B008
@@ -83,7 +73,7 @@ class AuthRoutes:
     @access_control(require_admin=True)
     async def create_api_key(
         self,
-        payload: APIKeyIssueRequest = Depends(_get_api_key_issue_request),  # noqa: B008
+        payload: APIKeyIssueRequest,
         _current_user: User = Depends(bind_current_user),  # noqa: B008
     ) -> APIKeyIssueResponse:
         if payload.user_id is not None:

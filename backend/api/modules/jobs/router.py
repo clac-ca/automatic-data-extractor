@@ -1,9 +1,5 @@
 """FastAPI routes for job submission and tracking."""
 
-from __future__ import annotations
-
-from typing import Annotated
-
 from fastapi import Body, Depends, HTTPException, Query, Request, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,11 +22,7 @@ from .exceptions import (
 from .schemas import JobRecord, JobSubmissionRequest
 from .service import JobsService
 
-
-def _get_job_submission(
-    payload: Annotated[JobSubmissionRequest, Body(...)],
-) -> JobSubmissionRequest:
-    return payload
+JOB_SUBMISSION_BODY = Body(...)
 
 router = workspace_scoped_router(tags=["jobs"])
 
@@ -90,7 +82,8 @@ class JobsRoutes:
     )
     @access_control(permissions={"workspace:jobs:write"}, require_workspace=True)
     async def submit_job(
-        self, payload: JobSubmissionRequest = Depends(_get_job_submission),  # noqa: B008
+        self,
+        payload: JobSubmissionRequest = JOB_SUBMISSION_BODY,
     ) -> JobRecord:
         try:
             return await self.service.submit_job(

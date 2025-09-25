@@ -34,10 +34,10 @@ try:  # pragma: no cover - optional import guard
     from backend.processor import JobRequest, JobResult, ProcessorError
     from backend.processor import run as run_processor
 except Exception:  # pragma: no cover - fallback during static analysis
-    JobRequest = Any  # type: ignore[misc, assignment]
-    JobResult = Any  # type: ignore[misc, assignment]
-    ProcessorError = Exception  # type: ignore[misc, assignment]
-    run_processor = None  # type: ignore[assignment]
+    JobRequest = Any
+    JobResult = Any
+    ProcessorError = Exception
+    run_processor = None
 
 _VALID_STATUSES = frozenset({"pending", "running", "succeeded", "failed"})
 

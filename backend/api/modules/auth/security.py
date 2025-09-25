@@ -165,7 +165,7 @@ def access_control(
 
     def decorator(func: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
         @wraps(func)
-        async def wrapper(self, *args: Any, **kwargs: Any) -> Any:
+        async def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
             service = getattr(self, "service", None)
             if service is None:
                 raise RuntimeError("access_control expects the view to expose 'service'")
@@ -192,7 +192,8 @@ def access_control(
                 )
 
             if required:
-                granted = getattr(service, "permissions", frozenset())
+                granted_raw: Iterable[str] = getattr(service, "permissions", frozenset())
+                granted = frozenset(granted_raw)
                 if not required.issubset(granted):
                     raise HTTPException(
                         status.HTTP_403_FORBIDDEN,
