@@ -10,7 +10,8 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 ## Configuration snapshot
 - Settings are loaded once at startup through `get_settings()` and cached on `app.state.settings`. Routes and background workers read from this state rather than reloading environment variables on every request.
 - Environment variables use the `ADE_` prefix (for example `ADE_DATABASE_URL`, `ADE_MAX_UPLOAD_BYTES`). A local `.env` file is respected during development.
-- Documentation endpoints (`/docs`, `/redoc`, `/openapi.json`) are toggled by the `enable_docs` flag to keep production surfaces minimal.
+- Documentation endpoints (`/docs`, `/redoc`, `/openapi.json`) default on for the `local` and `staging` environments and can be
+  toggled explicitly through the `ADE_ENABLE_DOCS` flag to keep production surfaces minimal.
 
 ## Operational building blocks
 - Database connections are created via the async SQLAlchemy engine in [`backend/api/db/engine.py`](../../backend/api/db/engine.py) and scoped sessions from [`backend/api/db/session.py`](../../backend/api/db/session.py).
@@ -18,3 +19,5 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 - Structured logging and correlation IDs are configured through [`backend/api/core/logging.py`](../../backend/api/core/logging.py) and middleware in [`backend/api/extensions/middleware.py`](../../backend/api/extensions/middleware.py).
 
 Future sections will expand on installation commands, security hardening, and deployment runbooks (including Docker quickstarts and Azure Container Apps walkthroughs via CLI and portal). The components listed above are already in place and unlikely to change dramatically.
+
+- [Operational Tasks with the ADE CLI](operations.md) – account bootstrapping, password resets, and API key rotation.

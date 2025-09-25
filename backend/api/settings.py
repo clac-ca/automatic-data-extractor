@@ -26,10 +26,11 @@ class Settings(BaseSettings):
     debug: bool = False
     app_name: str = "Automatic Data Extractor API"
     app_version: str = "0.1.0"
-    enable_docs: bool = True
+    enable_docs: bool = False
     docs_url: str = "/docs"
     redoc_url: str = "/redoc"
     openapi_url: str = "/openapi.json"
+    docs_environment_allowlist: tuple[str, ...] = ("local", "staging")
     log_level: str = "INFO"
 
     data_dir: Path = PROJECT_ROOT / "data"
@@ -58,12 +59,29 @@ class Settings(BaseSettings):
     default_document_retention_days: int = 30
 
     @property
-    def docs_urls(self) -> tuple[str | None, str | None]:
-        """Return documentation endpoints honouring the feature flag."""
+    def docs_enabled(self) -> bool:
+        """Return whether interactive documentation should be exposed."""
 
-        if not self.enable_docs:
+        if "enable_docs" in self.model_fields_set:
+            return self.enable_docs
+
+        environment = self.environment.strip().lower()
+        allowed_environments = tuple(env.lower() for env in self.docs_environment_allowlist)
+        return environment in allowed_environments
+
+    @property
+    def docs_urls(self) -> tuple[str | None, str | None]:
+        """Return documentation endpoints honouring the docs visibility rules."""
+
+        if not self.docs_enabled:
             return (None, None)
         return self.docs_url, self.redoc_url
+
+    @property
+    def openapi_docs_url(self) -> str | None:
+        """Return the OpenAPI endpoint when documentation is enabled."""
+
+        return self.openapi_url if self.docs_enabled else None
 
     @property
     def sso_enabled(self) -> bool:

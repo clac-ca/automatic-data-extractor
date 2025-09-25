@@ -12,6 +12,9 @@ authors = [{ name = "ADE Team" }]
 license = { text = "Proprietary" }
 urls = { "Repository" = "https://github.com/your-org/automatic-data-extractor" }
 
+[project.scripts]
+ade = "backend.cli.main:main"
+
 # Runtime deps — pinned for reproducible builds
 dependencies = [
   "fastapi==0.117.0",

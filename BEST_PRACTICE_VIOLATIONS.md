@@ -26,22 +26,10 @@ The following findings were documented after reviewing the repository against th
 - ✅ **Status**: `/health` now returns the `HealthCheckResponse` instance directly so FastAPI performs validation and serialisation without the custom `JSONResponse` wrapper.【F:backend/api/modules/health/router.py†L1-L28】【F:backend/api/modules/health/service.py†L12-L30】
 - **Notes**: Follow the same pattern for future endpoints—if a service already yields a schema, return it from the route and let FastAPI handle the response.
 
-## 3. Expose documentation endpoints only in safe environments
+## 3. Expose documentation endpoints only in safe environments *(Resolved)*
 - **Best practice**: Hide the OpenAPI/Swagger docs by default unless the API is public or the environment is explicitly allowed.【F:fastapi-best-practices.md†L609-L625】
-- **Issue**: `Settings.enable_docs` defaults to `True`, which keeps `/docs`, `/redoc`, and `/openapi.json` available in every deployment.【F:backend/api/settings.py†L14-L109】【F:backend/api/main.py†L1-L62】
-- **Why it matters**: Always-on docs increase attack surface in production environments. Consider defaulting `enable_docs` to `False` and enabling docs only for local/staging (e.g., via an env var allow-list) so operators must opt in explicitly.
-- ✅ **Suggested fix** – gate docs by environment:
-  ```python
-  class Settings(BaseSettings):
-      enable_docs: bool = Field(
-          default_factory=lambda: os.getenv("ADE_ENV") in {"local", "staging"}
-      )
-
-      @property
-      def docs_urls(self) -> tuple[str | None, str | None]:
-          return (self.docs_url, self.redoc_url) if self.enable_docs else (None, None)
-  ```
-  Production instances now hide interactive docs unless the environment explicitly opts in.
+- ✅ **Status**: `Settings.docs_enabled` now auto-enables documentation only for the `local`/`staging` environments and requires explicit overrides elsewhere, keeping the OpenAPI/Swagger routes hidden by default in production.【F:backend/api/settings.py†L29-L118】【F:backend/api/main.py†L15-L55】
+- **Notes**: Operators can still force-enable (or disable) docs via `ADE_ENABLE_DOCS`, and the app factory respects the resolved URLs through `Settings.docs_urls` and `Settings.openapi_docs_url`.
 
 ## 4. Split settings by domain instead of one monolithic `BaseSettings`
 - **Best practice**: Break large configuration surfaces into focused `BaseSettings` classes per module or domain to keep concerns isolated and maintainable.【F:fastapi-best-practices.md†L259-L306】
