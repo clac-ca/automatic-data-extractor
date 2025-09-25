@@ -606,6 +606,7 @@ router = APIRouter()
 async def get_creator_posts(profile_data: ProfileCreate):
    pass
 ```
+> **ADE note:** The `/auth/token` route converts the raw `OAuth2PasswordRequestForm` into a lightweight `TokenRequest` schema via the `parse_token_request` dependency so malformed credentials trigger FastAPI's 422 responses before reaching business logic.【F:backend/api/modules/auth/dependencies.py†L1-L53】【F:backend/api/modules/auth/schemas.py†L1-L55】【F:backend/api/modules/auth/router.py†L33-L62】
 **Response Example:**
 
 <img backend="images/value_error_response.png" width="400" height="auto">
