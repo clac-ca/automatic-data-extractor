@@ -23,4 +23,28 @@ class ConfigurationRecord(BaseSchema):
     updated_at: str
 
 
-__all__ = ["ConfigurationRecord"]
+class ConfigurationCreate(BaseSchema):
+    """Payload for creating a configuration version."""
+
+    document_type: str = Field(..., max_length=100)
+    title: str = Field(..., max_length=255)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class ConfigurationUpdate(BaseSchema):
+    """Payload for replacing mutable configuration fields."""
+
+    title: str = Field(..., max_length=255)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+ConfigurationRecord.model_rebuild()
+ConfigurationCreate.model_rebuild()
+ConfigurationUpdate.model_rebuild()
+
+
+__all__ = [
+    "ConfigurationCreate",
+    "ConfigurationRecord",
+    "ConfigurationUpdate",
+]
