@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException, Query, Request, status
+from typing import Annotated
+
+from fastapi import Body, Depends, HTTPException, Query, Request, status
 from fastapi_utils.cbv import cbv
-from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...db.session import get_session
@@ -24,6 +25,12 @@ from .exceptions import (
 )
 from .schemas import JobRecord, JobSubmissionRequest
 from .service import JobsService
+
+
+def _get_job_submission(
+    payload: Annotated[JobSubmissionRequest, Body(...)],
+) -> JobSubmissionRequest:
+    return payload
 
 router = workspace_scoped_router(tags=["jobs"])
 
@@ -82,14 +89,9 @@ class JobsRoutes:
         response_model_exclude_none=True,
     )
     @access_control(permissions={"workspace:jobs:write"}, require_workspace=True)
-    async def submit_job(self) -> JobRecord:
-        try:
-            payload = JobSubmissionRequest.model_validate(await self.request.json())
-        except ValidationError as exc:  # pragma: no cover - FastAPI will handle normally
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.errors()
-            ) from exc
-
+    async def submit_job(
+        self, payload: JobSubmissionRequest = Depends(_get_job_submission),  # noqa: B008
+    ) -> JobRecord:
         try:
             return await self.service.submit_job(
                 input_document_id=payload.input_document_id,
