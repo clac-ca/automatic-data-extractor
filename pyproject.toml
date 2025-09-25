@@ -44,13 +44,18 @@ dev = [
 [project.scripts]
 ade = "backend.cli.main:main"
 
+# ---- Packaging (auto-discover all backend* packages) ----
 [tool.setuptools]
-packages = ["backend"]
 include-package-data = true
 
-[tool.setuptools.package-data]
-backend = ["alembic/**/*", "templates/**/*", "static/**/*", "py.typed"]
+[tool.setuptools.packages.find]
+include = ["backend*"]
 
+# Keep type marker; add other assets here only if needed at runtime
+[tool.setuptools.package-data]
+backend = ["py.typed"]
+
+# ---- Tooling configs ----
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["backend/tests"]
