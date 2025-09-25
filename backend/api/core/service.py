@@ -8,9 +8,10 @@ from typing import Annotated, Any, TypeVar
 
 from fastapi import Depends, Request
 
+from backend.app import Settings, get_app_settings
+
 from ..db.session import get_session
 from .message_hub import MessageHub
-from .settings import AppSettings, get_settings
 from .task_queue import TaskQueue
 
 try:  # pragma: no cover - optional during type checking
@@ -23,7 +24,7 @@ except Exception:  # pragma: no cover - optional import
 class ServiceContext:
     """Shared context injected into every service instance."""
 
-    settings: AppSettings
+    settings: Settings
     request: Request | None = None
     session: AsyncSession | None = None
     user: Any | None = None
@@ -46,7 +47,7 @@ class BaseService:
         self._context = context
 
     @property
-    def settings(self) -> AppSettings:
+    def settings(self) -> Settings:
         return self._context.settings
 
     @property
@@ -170,16 +171,15 @@ class BaseService:
 ServiceT = TypeVar("ServiceT", bound="BaseService")
 
 
-SettingsDependency = Annotated[AppSettings, Depends(get_settings)]
 SessionDependency = Annotated[AsyncSession, Depends(get_session)]
 
 
 def get_service_context(
     request: Request,
-    settings: SettingsDependency,
 ) -> ServiceContext:
     """Aggregate settings and request data for service instantiation."""
 
+    settings = get_app_settings(request.app)
     session: AsyncSession | None = getattr(request.state, "db_session", None)
     user = getattr(request.state, "current_user", None)
     workspace = getattr(request.state, "current_workspace", None)

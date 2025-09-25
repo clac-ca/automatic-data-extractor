@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 from httpx import AsyncClient
 
-from backend.api.core.settings import get_settings
 from backend.api.db.session import get_sessionmaker
 from backend.api.modules.documents.models import Document
+from backend.app import get_settings
 
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
@@ -67,6 +67,7 @@ async def test_upload_list_download_document(
 async def test_upload_document_exceeds_limit_returns_413(
     async_client: AsyncClient,
     seed_identity: dict[str, object],
+    override_app_settings,
 ) -> None:
     """Uploading a file larger than the configured limit should fail."""
 
@@ -77,17 +78,13 @@ async def test_upload_document_exceeds_limit_returns_413(
         "X-Workspace-ID": seed_identity["workspace_id"],
     }
 
-    settings = get_settings()
-    original_limit = settings.max_upload_bytes
-    settings.max_upload_bytes = 8
-    try:
-        response = await async_client.post(
-            "/documents",
-            headers=headers,
-            files={"file": ("large.bin", b"abcdefghijk", "application/octet-stream")},
-        )
-    finally:
-        settings.max_upload_bytes = original_limit
+    override_app_settings(max_upload_bytes=8)
+
+    response = await async_client.post(
+        "/documents",
+        headers=headers,
+        files={"file": ("large.bin", b"abcdefghijk", "application/octet-stream")},
+    )
 
     assert response.status_code == 413
     assert "exceeds the allowed maximum" in response.text
