@@ -1,25 +1,24 @@
 """FastAPI routes for configuration metadata."""
 
-from __future__ import annotations
-
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Body, Depends, HTTPException, Query, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...core.responses import DefaultResponse
 from ...db.session import get_session
 from ..auth.security import access_control
-from ..events.dependencies import get_events_service
-from ..events.schemas import EventRecord
-from ..events.service import EventsService
 from ..workspaces.dependencies import bind_workspace_context
 from ..workspaces.routing import workspace_scoped_router
 from ..workspaces.schemas import WorkspaceContext
 from .dependencies import get_configurations_service
 from .exceptions import ConfigurationNotFoundError
-from .schemas import ConfigurationRecord
+from .schemas import ConfigurationCreate, ConfigurationRecord, ConfigurationUpdate
 from .service import ConfigurationsService
 
 router = workspace_scoped_router(tags=["configurations"])
+
+CONFIGURATION_CREATE_BODY = Body(...)
+CONFIGURATION_UPDATE_BODY = Body(...)
 
 
 @cbv(router)
@@ -27,7 +26,6 @@ class ConfigurationsRoutes:
     session: AsyncSession = Depends(get_session)
     selection: WorkspaceContext = Depends(bind_workspace_context)
     service: ConfigurationsService = Depends(get_configurations_service)
-    events_service: EventsService = Depends(get_events_service)
 
     @router.get(
         "/configurations",
@@ -42,14 +40,50 @@ class ConfigurationsRoutes:
     )
     async def list_configurations(
         self,
-        limit: int = Query(50, ge=1, le=200),
-        offset: int = Query(0, ge=0),
         document_type: str | None = Query(None),
+        is_active: bool | None = Query(None),
     ) -> list[ConfigurationRecord]:
         return await self.service.list_configurations(
-            limit=limit,
-            offset=offset,
             document_type=document_type,
+            is_active=is_active,
+        )
+
+    @router.post(
+        "/configurations",
+        response_model=ConfigurationRecord,
+        status_code=status.HTTP_201_CREATED,
+        summary="Create a configuration",
+        response_model_exclude_none=True,
+    )
+    @access_control(
+        permissions={"workspace:configurations:write"},
+        require_workspace=True,
+    )
+    async def create_configuration(
+        self, payload: ConfigurationCreate = CONFIGURATION_CREATE_BODY
+    ) -> ConfigurationRecord:
+        return await self.service.create_configuration(
+            document_type=payload.document_type,
+            title=payload.title,
+            payload=payload.payload,
+        )
+
+    @router.get(
+        "/configurations/active",
+        response_model=list[ConfigurationRecord],
+        status_code=status.HTTP_200_OK,
+        summary="List active configurations",
+        response_model_exclude_none=True,
+    )
+    @access_control(
+        permissions={"workspace:configurations:read"},
+        require_workspace=True,
+    )
+    async def list_active_configurations(
+        self, document_type: str | None = Query(None)
+    ) -> list[ConfigurationRecord]:
+        return await self.service.list_active_configurations(
+            document_type=document_type
         )
 
     @router.get(
@@ -69,36 +103,70 @@ class ConfigurationsRoutes:
         except ConfigurationNotFoundError as exc:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    @router.get(
-        "/configurations/{configuration_id}/events",
-        response_model=list[EventRecord],
+    @router.put(
+        "/configurations/{configuration_id}",
+        response_model=ConfigurationRecord,
         status_code=status.HTTP_200_OK,
-        summary="List events recorded for a configuration",
+        summary="Replace a configuration",
         response_model_exclude_none=True,
     )
     @access_control(
-        permissions={"workspace:configurations:read"},
+        permissions={"workspace:configurations:write"},
         require_workspace=True,
     )
-    async def list_configuration_events(
+    async def replace_configuration(
         self,
         configuration_id: str,
-        limit: int = Query(50, ge=1, le=200),
-        offset: int = Query(0, ge=0),
-    ) -> list[EventRecord]:
+        payload: ConfigurationUpdate = CONFIGURATION_UPDATE_BODY,
+    ) -> ConfigurationRecord:
         try:
-            await self.service.get_configuration(
+            return await self.service.update_configuration(
                 configuration_id=configuration_id,
-                emit_event=False,
+                title=payload.title,
+                payload=payload.payload,
             )
         except ConfigurationNotFoundError as exc:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-        return await self.events_service.list_configuration_events(
-            configuration_id=configuration_id,
-            limit=limit,
-            offset=offset,
-        )
+    @router.delete(
+        "/configurations/{configuration_id}",
+        response_model=DefaultResponse,
+        status_code=status.HTTP_200_OK,
+        summary="Delete a configuration",
+    )
+    @access_control(
+        permissions={"workspace:configurations:write"},
+        require_workspace=True,
+    )
+    async def delete_configuration(
+        self, configuration_id: str
+    ) -> DefaultResponse:
+        try:
+            await self.service.delete_configuration(configuration_id=configuration_id)
+        except ConfigurationNotFoundError as exc:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        return DefaultResponse.success("Configuration deleted")
+
+    @router.post(
+        "/configurations/{configuration_id}/activate",
+        response_model=ConfigurationRecord,
+        status_code=status.HTTP_200_OK,
+        summary="Activate a configuration",
+        response_model_exclude_none=True,
+    )
+    @access_control(
+        permissions={"workspace:configurations:write"},
+        require_workspace=True,
+    )
+    async def activate_configuration(
+        self, configuration_id: str
+    ) -> ConfigurationRecord:
+        try:
+            return await self.service.activate_configuration(
+                configuration_id=configuration_id
+            )
+        except ConfigurationNotFoundError as exc:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 __all__ = ["router"]
