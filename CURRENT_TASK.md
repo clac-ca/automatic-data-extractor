@@ -1,25 +1,35 @@
-# ADE Config Simplicity – Next Task
+# FastAPI Request Body Parsing Alignment – Implementation Plan
 
 ## Objective
-Load application settings once during startup, store them on `app.state`, and read them inside route handlers without exposing config in OpenAPI.
+Replace manual `request.json()` parsing in FastAPI routes with typed Pydantic payloads so handlers rely on FastAPI's body parsing and validation pipeline.
 
-## Why
-- Keeps configuration out of endpoint signatures so FastAPI docs stay clean.
-- Centralizes settings loading for reuse across API routes, services, and background jobs.
-- Simplifies tests by letting them override the loader in one place.
+## Rationale
+- Restores automatic 422 validation responses and dependency caching.
+- Eliminates duplicated JSON handling logic across modules.
+- Aligns with the repository's FastAPI best-practice guidance for clarity and maintainability.
 
 ## Scope
-1. **Settings Loader**
-   - Create `backend/app/config.py` with a `Settings` data model and a memoized `get_settings()` helper that reads environment variables (with `.env` support for local dev).
-2. **Startup Wiring**
-   - During app startup/lifespan, call `get_settings()` once and stash the result on `app.state.settings`.
-3. **Route & Service Access**
-   - Update routes, services, and utilities to fetch config via `request.app.state.settings` (or `app.state.settings` outside requests) instead of dependency injection parameters.
-4. **Testing & Docs**
-   - Provide a test helper to override the settings loader or mutate `app.state.settings` in fixtures.
-   - Document the pattern in `README.md` or `AGENTS.md` so future changes follow the same approach.
+1. **Identify impacted routes**  
+   Audit `backend/api/modules/**/router.py` for handlers that read the request body from `Request` rather than accepting a payload parameter.
+2. **Define request schemas**  
+   For each route, either reuse existing Pydantic models or introduce new ones in the appropriate module package (e.g., `schemas.py`) so the payload structure is explicit.
+3. **Update route signatures**  
+   Modify handlers to accept the schema instance directly, remove manual JSON parsing, and pass typed fields to services.
+4. **Adjust services/tests**  
+   Update service methods, fixtures, and tests to consume the new typed inputs. Ensure no callers rely on the old raw-dict shape.
+5. **Documentation**  
+   Capture the new pattern in `fastapi-best-practices.md` or module docs if adjustments are noteworthy for future contributors.
 
-## Done When
-- API routes no longer declare settings dependencies; `/openapi.json` is free of config schema.
-- `app.state.settings` is populated during startup and reused everywhere.
-- Tests and docs reflect the new access pattern.
+## Deliverables
+- Cleaned route handlers using FastAPI's body parsing.
+- Corresponding schema definitions and updated service signatures.
+- Updated unit/integration tests covering the revised handler behaviour.
+- Documentation notes highlighting the standard approach for payload parsing.
+
+## Testing & Verification
+- Run `pytest`, `ruff`, and `mypy` for backend modules.
+- Hit representative endpoints (via existing tests or manual smoke checks) to confirm 422 errors surface correctly for invalid payloads.
+
+## Out of Scope
+- Broader refactors unrelated to request parsing (e.g., auth workflow changes, response model adjustments) unless required by the new payload schemas.
+- Converting query/path parameter handling unless they also misuse manual parsing.
