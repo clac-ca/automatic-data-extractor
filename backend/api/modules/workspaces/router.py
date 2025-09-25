@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Annotated
+
+from fastapi import APIRouter, Body, Depends, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +23,12 @@ from .schemas import (
 from .service import WorkspacesService
 
 router = APIRouter(tags=["workspaces"])
+
+
+def _get_workspace_member_payload(
+    payload: Annotated[WorkspaceMemberCreate, Body(...)],
+) -> WorkspaceMemberCreate:
+    return payload
 
 
 @cbv(router)
@@ -76,15 +84,9 @@ class WorkspaceRoutes:
     async def add_member(
         self,
         workspace_id: str,
+        payload: WorkspaceMemberCreate = Depends(_get_workspace_member_payload),  # noqa: B008
         _: WorkspaceContext = Depends(bind_workspace_context),  # noqa: B008
     ) -> WorkspaceMember:
-        request = self.service.request
-        if request is None:  # pragma: no cover - defensive guard
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Request unavailable")
-
-        data = await request.json()
-        payload = WorkspaceMemberCreate.model_validate(data)
-
         membership = await self.service.add_member(
             workspace_id=workspace_id,
             user_id=payload.user_id,

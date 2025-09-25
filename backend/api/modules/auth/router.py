@@ -1,6 +1,8 @@
 """Routes for authentication flows."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from typing import Annotated
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_utils.cbv import cbv
@@ -21,13 +23,13 @@ from .schemas import (
 from .security import access_control
 from .service import SSO_STATE_COOKIE, AuthService
 
-
-async def _parse_api_key_issue_request(request: Request) -> APIKeyIssueRequest:
-    payload = await request.json()
-    return APIKeyIssueRequest.model_validate(payload)
-
-
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _get_api_key_issue_request(
+    payload: Annotated[APIKeyIssueRequest, Body(...)],
+) -> APIKeyIssueRequest:
+    return payload
 
 
 @cbv(router)
@@ -78,7 +80,7 @@ class AuthRoutes:
     @access_control(require_admin=True)
     async def create_api_key(
         self,
-        payload: APIKeyIssueRequest = Depends(_parse_api_key_issue_request),  # noqa: B008
+        payload: APIKeyIssueRequest = Depends(_get_api_key_issue_request),  # noqa: B008
         _current_user: User = Depends(bind_current_user),  # noqa: B008
     ) -> APIKeyIssueResponse:
         if payload.user_id is not None:
