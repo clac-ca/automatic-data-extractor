@@ -1,19 +1,22 @@
 ## Context
-Renamed the FastAPI package from `backend/app` to `backend/api` to make the HTTP
-surface explicit before layering on CLI and Dynaconf work.
+`/auth/token` was leaking uncaught `ValueError`s from `AuthService.authenticate`
+when form submissions arrived with blank or malformed credentials. The plan in
+`CURRENT_TASK.md` called for a Pydantic schema and dependency to surface those
+issues as FastAPI 422 responses.
 
 ## Outcome
-- Moved the package with `git mv` and confirmed every module (core, db, modules,
-  services, migrations) survived the transition.
-- Updated imports, Alembic configuration, and test fixtures to reference
-  `backend.api`; refreshed README and planning docs to point at the new path.
-- Verified startup (`uvicorn backend.api.main:app`), `ruff`, `pytest`, and a
-  targeted `mypy` run to ensure no import regressions.
+- Added `TokenRequest` to validate and normalise credentials coming from the
+  OAuth2 form, trimming whitespace and tolerating `.local`-style domains used
+  by service accounts.
+- Introduced `parse_token_request` dependency and updated the `/auth/token`
+  route to consume the new schema so `AuthService` always receives cleaned
+  inputs.
+- Extended auth endpoint tests to assert 422 responses for blank, whitespace
+  only, and malformed credentials and refreshed best-practice documentation.
 
 ## Next steps
-- Announce the rename to consumers maintaining private scripts or deployment
-  manifests so they swap to `backend.api` imports.
-- Follow the rewrite roadmap: enforce job/results retention policies and seed
-  default workspace permissions.
-- Proceed with the CLI and Dynaconf milestones now that the package layout is
-  settled.
+- Roll this schema-first pattern out to other manual parsing hotspots (e.g.
+  API key issuance, job submission, workspace membership) so every endpoint
+  benefits from consistent 422 responses.
+- Keep verifying auth flows with `pytest backend/tests/modules/auth/test_auth.py`
+  after related changes to guard against regressions.

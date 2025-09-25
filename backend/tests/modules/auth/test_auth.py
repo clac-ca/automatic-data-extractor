@@ -50,6 +50,37 @@ async def test_invalid_credentials_rejected(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("username", "password", "expected_messages"),
+    [
+        ("", "secret", {"Email must not be empty"}),
+        ("   ", "secret", {"Email must not be empty"}),
+        ("user@example.com", "   ", {"Password must not be empty"}),
+        ("not-an-email", "secret", {"The email address is not valid"}),
+    ],
+)
+async def test_issue_token_validation_errors(
+    async_client: AsyncClient,
+    username: str,
+    password: str,
+    expected_messages: set[str],
+) -> None:
+    """Invalid credentials should surface as 422 validation errors."""
+
+    response = await async_client.post(
+        "/auth/token",
+        data={"username": username, "password": password},
+    )
+    assert response.status_code == 422, response.text
+
+    payload = response.json()
+    assert isinstance(payload.get("detail"), list)
+    messages = {error.get("msg", "") for error in payload["detail"]}
+    for expected in expected_messages:
+        assert any(expected in message for message in messages)
+
+
+@pytest.mark.asyncio
 async def test_profile_requires_authentication(async_client: AsyncClient) -> None:
     """GET /auth/me should require a valid token."""
 
