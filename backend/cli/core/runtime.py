@@ -8,7 +8,6 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.db.bootstrap import ensure_database_ready
 from backend.api.db.session import get_sessionmaker
 from backend.api.settings import Settings, get_settings
 
@@ -32,9 +31,7 @@ async def open_session(
 ) -> AsyncIterator[AsyncSession]:
     """Yield an ``AsyncSession`` with commit/rollback semantics."""
 
-    resolved = settings or get_settings()
-    await ensure_database_ready(resolved)
-    session_factory = get_sessionmaker(settings=resolved)
+    session_factory = get_sessionmaker(settings=settings)
     session = session_factory()
     try:
         yield session
