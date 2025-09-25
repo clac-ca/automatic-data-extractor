@@ -10,6 +10,7 @@ from .api import register_routers
 from .core.logging import setup_logging
 from .core.message_hub import MessageHub
 from .core.task_queue import TaskQueue
+from .db.bootstrap import ensure_database_ready
 from .extensions.middleware import register_middleware
 from .settings import Settings, get_settings
 
@@ -31,6 +32,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings = settings
         app.state.message_hub = message_hub
         app.state.task_queue = task_queue
+        await ensure_database_ready(settings)
         try:
             yield
         finally:
