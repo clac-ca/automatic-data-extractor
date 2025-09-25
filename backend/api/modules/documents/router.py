@@ -4,7 +4,6 @@ import json
 from typing import Any
 
 from fastapi import (
-    APIRouter,
     Body,
     Depends,
     File,
@@ -21,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...db.session import get_session
 from ..auth.security import access_control
 from ..workspaces.dependencies import bind_workspace_context
+from ..workspaces.routing import workspace_scoped_router
 from ..workspaces.schemas import WorkspaceContext
 from .dependencies import get_documents_service
 from .exceptions import (
@@ -32,7 +32,7 @@ from .exceptions import (
 from .schemas import DocumentDeleteRequest, DocumentRecord
 from .service import DocumentsService
 
-router = APIRouter(tags=["documents"])
+router = workspace_scoped_router(tags=["documents"])
 
 
 def _parse_metadata(metadata: str | None) -> dict[str, Any]:

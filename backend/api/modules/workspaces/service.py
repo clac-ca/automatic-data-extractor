@@ -57,9 +57,9 @@ class WorkspacesService(BaseService):
         self,
         *,
         user: User,
-        workspace_id: str | None,
+        workspace_id: str,
     ) -> WorkspaceContext:
-        """Return the workspace context for ``user`` using ``workspace_id`` when provided."""
+        """Return the workspace context for ``user`` using the supplied ``workspace_id``."""
 
         membership = await self.resolve_membership(user=user, workspace_id=workspace_id)
         return self.build_selection(membership)
@@ -104,26 +104,20 @@ class WorkspacesService(BaseService):
         return self.build_member(membership)
 
     async def resolve_membership(
-        self, *, user: User, workspace_id: str | None
+        self, *, user: User, workspace_id: str
     ) -> WorkspaceMembership:
         """Return the ``WorkspaceMembership`` link for ``user`` and ``workspace_id``."""
 
         return await self._resolve_membership(user_id=user.id, workspace_id=workspace_id)
 
     async def _resolve_membership(
-        self, *, user_id: str, workspace_id: str | None
+        self, *, user_id: str, workspace_id: str
     ) -> WorkspaceMembership:
-        if workspace_id:
-            membership = await self._repo.get_membership(
-                user_id=user_id, workspace_id=workspace_id
-            )
-            if membership is None:
-                raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Workspace access denied")
-            return membership
-
-        membership = await self._repo.get_default_membership(user_id=user_id)
+        membership = await self._repo.get_membership(
+            user_id=user_id, workspace_id=workspace_id
+        )
         if membership is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="No workspace assigned")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Workspace access denied")
         return membership
 
     def build_selection(self, membership: WorkspaceMembership) -> WorkspaceContext:

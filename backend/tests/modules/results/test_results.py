@@ -110,13 +110,13 @@ async def test_results_end_to_end(
     )
 
     token = await _login(async_client, actor["email"], actor["password"])
+    workspace_base = f"/workspaces/{workspace_id}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-Workspace-ID": workspace_id,
     }
 
     upload = await async_client.post(
-        "/documents",
+        f"{workspace_base}/documents",
         headers=headers,
         files={"file": ("input.txt", b"payload", "text/plain")},
     )
@@ -124,7 +124,7 @@ async def test_results_end_to_end(
     document_id = upload.json()["document_id"]
 
     job_response = await async_client.post(
-        "/jobs",
+        f"{workspace_base}/jobs",
         headers=headers,
         json={
             "input_document_id": document_id,
@@ -136,7 +136,7 @@ async def test_results_end_to_end(
     job_id = job_payload["job_id"]
 
     tables_response = await async_client.get(
-        f"/jobs/{job_id}/tables",
+        f"{workspace_base}/jobs/{job_id}/tables",
         headers=headers,
     )
     assert tables_response.status_code == 200, tables_response.text
@@ -146,14 +146,14 @@ async def test_results_end_to_end(
 
     table_id = tables[0]["table_id"]
     table_detail = await async_client.get(
-        f"/jobs/{job_id}/tables/{table_id}",
+        f"{workspace_base}/jobs/{job_id}/tables/{table_id}",
         headers=headers,
     )
     assert table_detail.status_code == 200, table_detail.text
     assert table_detail.json()["table_id"] == table_id
 
     document_tables = await async_client.get(
-        f"/documents/{document_id}/tables",
+        f"{workspace_base}/documents/{document_id}/tables",
         headers=headers,
     )
     assert document_tables.status_code == 200, document_tables.text
@@ -174,13 +174,13 @@ async def test_job_tables_missing_job_returns_404(
     )
 
     token = await _login(async_client, actor["email"], actor["password"])
+    workspace_base = f"/workspaces/{workspace_id}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-Workspace-ID": workspace_id,
     }
 
     response = await async_client.get(
-        "/jobs/missing/tables",
+        f"{workspace_base}/jobs/missing/tables",
         headers=headers,
     )
     assert response.status_code == 404
@@ -207,13 +207,13 @@ async def test_job_tables_failed_job_returns_409(
     )
 
     token = await _login(async_client, actor["email"], actor["password"])
+    workspace_base = f"/workspaces/{workspace_id}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-Workspace-ID": workspace_id,
     }
 
     upload = await async_client.post(
-        "/documents",
+        f"{workspace_base}/documents",
         headers=headers,
         files={"file": ("input.txt", b"payload", "text/plain")},
     )
@@ -221,7 +221,7 @@ async def test_job_tables_failed_job_returns_409(
     document_id = upload.json()["document_id"]
 
     job_response = await async_client.post(
-        "/jobs",
+        f"{workspace_base}/jobs",
         headers=headers,
         json={
             "input_document_id": document_id,
@@ -233,7 +233,7 @@ async def test_job_tables_failed_job_returns_409(
     job_id = detail["job_id"]
 
     tables_response = await async_client.get(
-        f"/jobs/{job_id}/tables",
+        f"{workspace_base}/jobs/{job_id}/tables",
         headers=headers,
     )
     assert tables_response.status_code == 409
@@ -263,13 +263,13 @@ async def test_document_tables_deleted_document_returns_404(
     )
 
     token = await _login(async_client, actor["email"], actor["password"])
+    workspace_base = f"/workspaces/{workspace_id}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-Workspace-ID": workspace_id,
     }
 
     upload = await async_client.post(
-        "/documents",
+        f"{workspace_base}/documents",
         headers=headers,
         files={"file": ("input.txt", b"payload", "text/plain")},
     )
@@ -277,7 +277,7 @@ async def test_document_tables_deleted_document_returns_404(
     document_id = upload.json()["document_id"]
 
     job_response = await async_client.post(
-        "/jobs",
+        f"{workspace_base}/jobs",
         headers=headers,
         json={
             "input_document_id": document_id,
@@ -288,14 +288,14 @@ async def test_document_tables_deleted_document_returns_404(
 
     delete_response = await async_client.request(
         "DELETE",
-        f"/documents/{document_id}",
+        f"{workspace_base}/documents/{document_id}",
         headers=headers,
         json={"reason": "cleanup"},
     )
     assert delete_response.status_code == 204
 
     document_tables = await async_client.get(
-        f"/documents/{document_id}/tables",
+        f"{workspace_base}/documents/{document_id}/tables",
         headers=headers,
     )
     assert document_tables.status_code == 404
