@@ -62,6 +62,18 @@ def run_migrations_online() -> None:
     """Run migrations using a synchronous SQLAlchemy engine."""
 
     url = _database_url()
+    existing_connection = config.attributes.get("connection")
+    if existing_connection is not None:
+        context.configure(
+            connection=existing_connection,
+            target_metadata=target_metadata,
+            render_as_batch=_should_render_as_batch(url),
+        )
+
+        with context.begin_transaction():
+            context.run_migrations()
+        return
+
     configuration = config.get_section(config.config_ini_section) or {}
     configuration["sqlalchemy.url"] = url
 

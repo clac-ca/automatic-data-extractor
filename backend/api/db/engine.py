@@ -25,7 +25,7 @@ def _cache_key(settings: Settings) -> tuple[Any, ...]:
     )
 
 
-def _is_sqlite_memory(url: URL) -> bool:
+def is_sqlite_memory_url(url: URL) -> bool:
     database = (url.database or "").strip()
     if not database or database == ":memory:":
         return True
@@ -36,7 +36,9 @@ def _is_sqlite_memory(url: URL) -> bool:
     return False
 
 
-def _ensure_sqlite_directory(url: URL) -> None:
+def ensure_sqlite_database_directory(url: URL) -> None:
+    """Ensure a filesystem-backed SQLite database can be created."""
+
     database = (url.database or "").strip()
     if not database or database == ":memory:" or database.startswith("file:"):
         return
@@ -56,11 +58,11 @@ def _create_engine(settings: Settings) -> AsyncEngine:
 
     if url.get_backend_name() == "sqlite":
         connect_args["check_same_thread"] = False
-        if _is_sqlite_memory(url):
+        if is_sqlite_memory_url(url):
             engine_kwargs["poolclass"] = StaticPool
         else:
             engine_kwargs["poolclass"] = NullPool
-            _ensure_sqlite_directory(url)
+            ensure_sqlite_database_directory(url)
     else:
         engine_kwargs["pool_size"] = settings.database_pool_size
         engine_kwargs["max_overflow"] = settings.database_max_overflow
@@ -105,6 +107,13 @@ def reset_database_state() -> None:
 
     session_module.reset_session_state()
 
+    try:
+        from . import bootstrap as bootstrap_module
+    except Exception:
+        return
+
+    bootstrap_module.reset_bootstrap_state()
+
 
 def engine_cache_key(settings: Settings) -> tuple[Any, ...]:
     """Expose the cache key used for engine/session reuse."""
@@ -123,6 +132,8 @@ def render_sync_url(database_url: str) -> str:
 
 __all__ = [
     "engine_cache_key",
+    "ensure_sqlite_database_directory",
+    "is_sqlite_memory_url",
     "get_engine",
     "render_sync_url",
     "reset_database_state",
