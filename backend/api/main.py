@@ -21,7 +21,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     setup_logging(settings)
 
     docs_url, redoc_url = settings.docs_urls
-    openapi_url = settings.openapi_url if settings.enable_docs else None
+    openapi_url = settings.openapi_docs_url
 
     message_hub = MessageHub()
     task_queue = TaskQueue()
