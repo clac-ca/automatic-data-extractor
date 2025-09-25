@@ -5,8 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from sqlalchemy import text
 
-from backend.cli.core.runtime import normalise_email, read_secret
+from backend.api.db.engine import reset_database_state
+from backend.api.settings import Settings
+from backend.cli.core.runtime import normalise_email, open_session, read_secret
 
 
 def test_normalise_email_lowercases_and_strips() -> None:
@@ -30,3 +33,51 @@ def test_read_secret_errors_on_empty_file(tmp_path: Path) -> None:
     secret_file.write_text("", encoding="utf-8")
     with pytest.raises(ValueError):
         read_secret(secret_file)
+
+
+@pytest.mark.asyncio()
+async def test_open_session_bootstraps_database(tmp_path: Path) -> None:
+    database_path = tmp_path / "data" / "db" / "cli.sqlite"
+    data_dir = tmp_path / "data"
+    documents_dir = tmp_path / "documents"
+
+    settings = Settings.model_validate(
+        {
+            "database_url": f"sqlite+aiosqlite:///{database_path}",
+            "data_dir": str(data_dir),
+            "documents_dir": str(documents_dir),
+        }
+    )
+
+    reset_database_state()
+    try:
+        async with open_session(settings=settings) as session:
+            result = await session.execute(
+                text(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
+                )
+            )
+            assert result.scalar_one() == "users"
+    finally:
+        reset_database_state()
+
+
+@pytest.mark.asyncio()
+async def test_open_session_bootstraps_in_memory_database() -> None:
+    settings = Settings.model_validate(
+        {
+            "database_url": "sqlite+aiosqlite:///:memory:",
+        }
+    )
+
+    reset_database_state()
+    try:
+        async with open_session(settings=settings) as session:
+            result = await session.execute(
+                text(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
+                )
+            )
+            assert result.scalar_one() == "users"
+    finally:
+        reset_database_state()
