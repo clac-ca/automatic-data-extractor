@@ -1,0 +1,42 @@
+.ade-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: calc(var(--space-sm) + 2px) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.ade-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.ade-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ade-button--primary {
+  background-color: var(--color-primary);
+  color: var(--color-primary-contrast);
+  box-shadow: 0 10px 30px rgba(47, 111, 237, 0.35);
+}
+
+.ade-button--primary:hover:not(:disabled) {
+  background-color: #255fd1;
+}
+
+.ade-button--secondary {
+  background-color: transparent;
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.ade-button--secondary:hover:not(:disabled) {
+  background-color: rgba(31, 31, 36, 0.04);
+}
