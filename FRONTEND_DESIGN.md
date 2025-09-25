@@ -1,321 +1,359 @@
-# ADE frontend design guide
+# ADE frontend architecture blueprint
 
-This guide defines how the ADE web client should be organized while the backend
-rewrite lands. Treat it as the contract for front-end work: when backend
-capabilities or UX priorities shift, update this guide before writing code so
-the app stays coherent.
-
----
-
-## 1. Product intent & UX guardrails
-
-- **Primary outcome** – Analysts upload semi-structured documents, run
-  deterministic extraction jobs, and review tables inside their workspace.
-- **Audience** – Internal desktop users. Tablet/mobile refinements can wait
-  until core workflows stabilize.
-- **Voice** – Predictable and auditable. Favor explicit state transitions over
-  clever abstractions so QA can follow the trail.
-- **Accessibility** – Respect focus rings, keyboard navigation, and high
-  contrast defaults from day one. Screen-reader polish should not require
-  structural rewrites later.
+ADE's frontend turns the backend rewrite into analyst-friendly workflows. This
+blueprint captures the smallest dependable surface area we need for v1 and how
+the UI collaborates with the FastAPI services that already exist. Treat it as
+the contract for structure, state management, and integration points—update it
+whenever those decisions shift.
 
 ---
 
-## 2. Technical baseline
+## 1. Objectives & guardrails
 
-### 2.1 Framework & tooling
+- **Source of truth** – Describe the application skeleton, feature boundaries,
+and backend contracts for ADE's web client.
+- **Scope** – Desktop-first React + TypeScript app delivered by Vite. Touch and
+mobile optimisations, theming, and advanced personalization remain out of scope
+until the core workflows are stable.
+- **Design ethos** – Prefer predictable layout primitives, typed APIs, and
+explicit state transitions. Avoid speculative abstractions; optimise when usage
+data proves the need.
+- **Change hygiene** – When the backend introduces or removes endpoints, or we
+change how routes behave, update this blueprint and cross-link to the backend
+plan so future contributors have the full context.
 
-- **Build system** – Vite + React 18 + TypeScript in strict mode.
-- **Routing** – React Router v6 data APIs for nested layouts and loaders.
-- **Server state** – TanStack Query (React Query) with workspace-aware keys.
-- **Tables** – TanStack Table for data grids with virtualization hooks.
-- **Forms** – React Hook Form + Zod schemas mirroring backend Pydantic models.
-- **Styling** – CSS Modules + design tokens exposed as CSS variables. Radix UI
-  primitives back interactive widgets (dialog, toast, dropdown).
-- **Testing** – Vitest for unit tests, React Testing Library + MSW for
-  components, Playwright for end-to-end smoke tests.
+---
 
-### 2.2 Backend alignment
+## 2. Domain alignment with the backend
 
-All requests flow through workspace-scoped FastAPI routers under
-`backend/app/api/modules`. Workspace context is always encoded in the URL prefix
-`/workspaces/{workspace_id}` and validated by backend middleware.
+The backend rewrite currently exposes synchronous workflows centred on
+documents, configurations, jobs, and extracted results. The frontend mirrors
+those modules; every page should rely on the existing endpoints before inventing
+new state.
 
-| Domain | Endpoints (prefix omitted) | UI considerations |
+| Backend module | Primary endpoints | Key fields surfaced to the UI |
 | --- | --- | --- |
-| Documents | `POST /documents`, `GET /documents`, `GET /documents/{id}`, `GET /documents/{id}/download`, `DELETE /documents/{id}` | Uploads use multipart form data. Deleting supports optional reason payload and soft delete. |
-| Jobs | `POST /jobs`, `GET /jobs`, `GET /jobs/{id}` | Submission requires `input_document_id`, `configuration_id`, `configuration_version`. List filters by status and document. |
-| Results | `GET /jobs/{id}/tables`, `GET /jobs/{id}/tables/{table_id}`, `GET /documents/{id}/tables` | Returns 409 while processing; only render tables after terminal job status. |
-| Configurations | `GET /configurations`, `GET /configurations/active`, CRUD endpoints | Optimistic edits must surface backend validation errors inline. |
-| Workspaces | `GET /workspaces`, `GET /workspaces/{id}`, membership CRUD | Needed for workspace switcher and admin flows. |
-| Auth | `/auth` module endpoints | HTTP client attaches tokens and relays 401/403 back to auth layer. |
+| **Documents** (`/documents`) | `POST /documents`, `GET /documents`, `GET /documents/{id}`, `GET /documents/{id}/download`, `DELETE /documents/{id}` | `id`, `original_filename`, `content_type`, `document_type`, `created_at`, `expires_at`, soft-delete metadata |
+| **Configurations** (`/configurations`) | `GET /configurations`, `GET /configurations/{id}`, `GET /configurations/{id}/events` | `configuration_id`, `document_type`, `title`, `version`, `is_active`, `payload` (JSON), timestamps |
+| **Jobs** (`/jobs`) | `POST /jobs`, `GET /jobs`, `GET /jobs/{id}` | `job_id`, `document_type`, `configuration_id`, `configuration_version`, `status`, `metrics`, `logs`, timestamps |
+| **Results** (`/jobs/{id}/tables`) | `GET /jobs/{id}/tables`, `GET /jobs/{id}/tables/{table_id}`, `GET /documents/{id}/tables` | `table_id`, `sequence_index`, `title`, `row_count`, `columns`, `sample_rows`, `metadata` |
+| **Events** | `GET /configurations/{id}/events` | Audit timeline entries surfaced in detail drawers |
+| **Workspaces & auth** | Workspace-scoped routers enforce permissions. Every request requires `workspace_id` in headers/query (handled by API client). |
 
-Backend properties to surface in the UI:
+Backend assumptions to bake into the UI:
 
-1. **Synchronous execution** – Jobs run inline; polling intervals of 3–5 s are
-   safe.
-2. **Deterministic results** – Cache busting is safe; re-fetching tables should
-   reproduce the same payload.
-3. **Permission-aware responses** – 403 errors are expected and should disable
-   UI affordances instead of generic toasts.
-4. **Structured error envelopes** – Many responses return `{ "detail": { ... } }`.
-   Normalize this shape so forms can map field errors directly.
+1. **Workspace context** – All routers are workspace-scoped. The frontend must
+select a workspace before showing data and include the context in API calls.
+2. **Deterministic processing** – Jobs execute synchronously. Polling for job
+status is safe, but websockets/background queues do not exist yet.
+3. **No document-type catalog API** – `document_type` is a string on
+configurations/documents. Aggregate lists derive from existing payloads rather
+than separate endpoints.
+4. **Read-only configurations** – The backend currently exposes read routes and
+events. Authoring/publishing flows are future work; the UI should only display
+metadata and event logs for now.
+5. **Result availability** – `/jobs/{id}/tables` returns 409 if the job is not
+`Succeeded`. Surfaces must handle this conflict explicitly.
+
+Consult `BACKEND_REWRITE_PLAN.md` when extending the UI to confirm upcoming
+capabilities (e.g., retention policies) and to avoid diverging terminology.
 
 ---
 
 ## 3. Application architecture
 
-### 3.1 Routing shell
+### 3.1 Entry point & routing
 
-All authenticated routes live beneath `/workspaces/:workspaceId`. The navigation
-surface mirrors backend modules:
+- `frontend/src/app/App.tsx` creates the React Router data router, wraps it in
+providers (React Query, theming, toast notifications), and exports `createApp()`
+for tests and Storybook.
+- Routes live under `frontend/src/features/<domain>/pages`. Each page exports:
+  - `Component` – the React component rendered by the route.
+  - `loader` – fetches initial data, seeds React Query, and resolves redirects.
+  - `action` – optional mutation handler invoked by `<Form>` submissions.
+  - `ErrorBoundary` – localized fallback aligned to the page layout.
+- Route configuration resides in `frontend/src/app/router.tsx` and wires shared
+layouts. Nested routes share the application shell so navigation and feedback are
+consistent.
 
-```
-/workspaces/:workspaceId
-  ├─ documents
-  │   ├─ :documentId
-  │   └─ upload (modal/drawer via route state)
-  ├─ jobs
-  │   ├─ new
-  │   └─ :jobId
-  ├─ configurations
-  │   └─ :configurationId
-  └─ admin
-      └─ members
-```
+### 3.2 Layout shell
 
-`App.tsx` hosts the router, error boundaries, and layout shell (navigation rail,
-workspace switcher, content area, optional context panel).
+- **Navigation rail** – Persistent left rail housing links for Documents,
+Configurations, Jobs, and Admin. Collapse into an overlay drawer ≤1024 px.
+- **Top bar** – Workspace selector, user menu, global notices, unsaved indicator
+hooked into a shared form state context. Also exposes a “Copy API token” entry
+point for developers.
+- **Content frame** – Page header (title, primary actions, status chip) above a
+CSS grid body. Max width 1440 px, 32 px gutters, 8 px baseline for spacing.
+- **Feedback** – Toast stack anchored top-right. Long-running actions show inline
+progress rows pinned near their trigger.
 
-### 3.2 Data and state management
+### 3.3 Styling & primitives
 
-- React Query keys follow `[workspaceId, domain, params]` so switching
-  workspaces invalidates caches automatically.
-- Loaders prefetch canonical queries and dehydrate results into `Hydrate`
-  boundaries. Unauthorized loads redirect to the workspace picker.
-- Mutations live in feature hooks (e.g., `useSubmitJob`). Success handlers
-  invalidate downstream queries and optionally navigate to success routes.
-- Large payloads (document downloads, table exports) bypass JSON utilities and
-  stream via `fetch` + `Response.blob()` while preserving auth headers.
+- Layout primitives (`Stack`, `Columns`, `Sidebar`, `Card`, `DataTableShell`)
+live in `frontend/src/components/primitives/`. They only express flex/grid
+behaviour and spacing tokens—no business logic.
+- Design tokens exported from `frontend/src/styles/tokens.ts` cover colour,
+typography, radii, elevation, and focus rings. Global styles are limited to
+`frontend/src/styles/global.css` (reset + typography scale).
+- Icons are generated with SVGR into `frontend/src/components/icons/` with a
+consistent 24 px canvas.
 
-### 3.3 Forms & validation
+### 3.4 State & data fetching
 
-- React Hook Form handles state with Zod for synchronous validation against the
-  backend contract (`JobSubmissionRequest`, `ConfigurationCreate`, etc.).
-- Mutations should map backend `detail.field` errors back into the form state.
-- Deletion, activation, and other simple mutations can use `<Form>` elements
-  from React Router where no complex state is required.
+- React Query manages server state. Query keys mirror the backend endpoints and
+include parameter objects (`['jobs', { status, offset }]`).
+- Route loaders call `prefetchQuery` + `dehydrate` so initial navigation renders
+instantly without waterfalls.
+- UI state (filters, drawers, selected rows) remains local to a feature via
+context or component state. Introduce a dedicated store (e.g., Zustand) only if
+React context becomes insufficient.
+- API client (`frontend/src/api/client.ts`) wraps `fetch` with JSON parsing,
+error normalization, request cancellation, and workspace header injection.
+Endpoint helpers pair each call with a Zod schema so TypeScript types are inferred
+from runtime validation.
 
-### 3.4 Error handling & resilience
+### 3.5 Forms & validation
 
-- HTTP client normalizes errors to `{ type, message, fieldErrors? }`.
-- Route-level `ErrorBoundary` components display contextual messaging and retry
-  actions. Global `SessionExpired` boundary clears auth state and redirects to
-  login on 401.
-- Toasts announce background successes/failures; inline alerts surface
-  validation problems.
+- React Hook Form + Zod power form state. Inputs live under
+`frontend/src/components/form/` and forward refs + aria props.
+- Submit buttons disable while pending. Errors render inline and map to backend
+field names when available.
+- Multi-step flows share a single `<form>` element; step navigation simply swaps
+visible sections.
+- Persist defaults via loader data or React Query caches instead of refetching on
+repeat visits.
 
-### 3.5 Shared UI system
+### 3.6 Testing & tooling
 
-- Design tokens define color, spacing, typography, and focus states under
-  `styles/tokens.ts`.
-- Layout primitives (Stack, Columns, PageHeader, Card) live in shared components
-  and never access API state.
-- Feedback widgets (Toast, Callout, EmptyState) live beside primitives and are
-  reused across features.
-
----
-
-## 4. Project structure
-
-### 4.1 High-level layout
-
-```
-frontend/
-├─ package.json
-├─ tsconfig.json
-├─ vite.config.ts
-├─ public/              # static assets served as-is
-├─ src/
-│  ├─ app/              # bootstrap, providers, router, layout shell
-│  │   ├─ App.tsx
-│  │   ├─ main.tsx
-│  │   ├─ providers/
-│  │   └─ router/
-│  ├─ api/              # HTTP client, query hooks, generated types
-│  │   ├─ client.ts
-│  │   ├─ schemas/
-│  │   └─ workspace.ts
-│  ├─ pages/            # Route entry points that compose features
-│  │   ├─ documents/
-│  │   ├─ jobs/
-│  │   ├─ configurations/
-│  │   ├─ results/
-│  │   └─ admin/
-│  ├─ features/         # Reusable feature slices (forms, tables, drawers)
-│  │   ├─ documents/
-│  │   │   ├─ components/
-│  │   │   ├─ hooks/
-│  │   │   └─ index.ts
-│  │   ├─ jobs/
-│  │   ├─ configurations/
-│  │   ├─ results/
-│  │   └─ workspaces/
-│  ├─ components/       # Shared UI primitives (buttons, layout, feedback)
-│  ├─ hooks/            # Cross-cutting hooks (useWorkspace, usePolling)
-│  ├─ lib/              # Utilities (formatting, date helpers, query helpers)
-│  ├─ styles/           # Global CSS, tokens, resets
-│  ├─ mocks/            # MSW handlers and fixtures for tests/storybook
-│  ├─ types/            # Global TypeScript types not generated elsewhere
-│  └─ tests/            # Integration-level utilities (test renderers)
-└─ tests/               # Playwright specs and fixtures
-```
-
-### 4.2 Folder responsibilities
-
-- **`app/`** – Entry point (`main.tsx`), application shell, router configuration,
-  global providers (QueryClientProvider, AuthProvider, PermissionProvider), and
-  error boundaries.
-- **`api/`** – HTTP client, API modules grouped by backend domain, and Zod
-  schemas that mirror backend responses/requests. Provide thin query hooks
-  (`useDocumentsQuery`) that pages/features consume.
-- **`pages/`** – Route-level components that orchestrate feature pieces. A page
-  composes layout primitives, triggers data fetching via hooks, and wires up
-  feature components.
-- **`features/`** – Self-contained UI building blocks centered on business
-  actions (upload document, submit job, manage members). Each feature exposes its
-  public API through `index.ts` and hides internal components/hooks.
-- **`components/`** – Design-system primitives (buttons, inputs, layout, table
-  shell) that are presentation-only.
-- **`hooks/`** – Cross-cutting hooks not specific to any feature (polling,
-  keyboard shortcuts, environment configuration).
-- **`lib/`** – Pure utility functions (date formatting, table helpers, query key
-  builders). No React imports.
-- **`styles/`** – Global CSS reset, theme tokens, and utility classes.
-- **`mocks/`** – MSW handlers, mock payloads, and Storybook fixtures aligned with
-  backend test data.
-- **`tests/`** – Shared test helpers for Vitest/RTL, plus Playwright configuration
-  at the root-level `tests/` directory.
-
-### 4.3 Feature module shape
-
-Each folder in `features/` follows a predictable structure:
-
-```
-features/documents/
-├─ components/
-│   ├─ DocumentTable.tsx
-│   ├─ DocumentUploadDrawer.tsx
-│   └─ DocumentMetadataPanel.tsx
-├─ hooks/
-│   ├─ useDocumentList.ts
-│   ├─ useUploadDocument.ts
-│   └─ useDeleteDocument.ts
-├─ constants.ts
-├─ index.ts             # re-export public components/hooks
-└─ types.ts             # feature-specific shared types
-```
-
-Pages import from `features/documents` rather than digging into internals. Tests
-for feature slices live alongside the implementation (`__tests__/` folders) to
-keep scope contained.
+- Vitest + React Testing Library for unit/interaction tests colocated with their
+components (`*.test.ts(x)`).
+- Mock Service Worker (MSW) supplies deterministic API fixtures shared by tests
+and Storybook.
+- Playwright covers golden paths once routes stabilise (upload document, submit
+job, review results).
+- CI runs `npm run lint`, `npm run typecheck`, `npm run test`, and Playwright
+smoke specs.
 
 ---
 
-## 5. Workflow outlines
+## 4. Primary routes & workflows
 
-### 5.1 Workspace landing & switching
+The frontend leans on five high-value routes. Each section outlines layout,
+data requirements, and implementation notes tied to backend reality.
 
-- Boot loads memberships via `GET /workspaces`; store the default workspace in
-  profile or `localStorage` fallback.
-- Switching workspaces updates the router path and calls `queryClient.clear()`
-  before hydrating new data.
-- Admin users surface shortcuts to member management and workspace settings.
+### 4.1 Workspace gate (`/`)
 
-### 5.2 Document catalogue
+- **Purpose** – Ensure a workspace is selected before showing domain data.
+- **Layout** – Centered card listing permitted workspaces. Selecting one stores
+the identifier in `localStorage` and redirects to Documents.
+- **Implementation notes** – All API helpers read the stored workspace id and
+attach it via header/query per backend requirements. If the token lacks
+permissions, surface the `403` response in a callout with retry guidance.
 
-- Paginated table driven by `GET /documents?limit=&offset=` with columns:
-  filename, document type (from metadata), uploaded by, created_at, expires_at,
-  status (active/deleted).
-- Upload drawer provides drag-and-drop, metadata JSON editor, and expires_at
-  picker. Submit via `POST /documents` and refresh list.
-- Row actions cover download (`GET /documents/{id}/download`) and delete
-  (`DELETE /documents/{id}` with optional reason). Soft deletes flag the row as
-  deleted without removing it from history.
-- Document detail route combines metadata, recent jobs filtered by
-  `input_document_id`, and aggregated tables from `GET /documents/{id}/tables`.
+### 4.2 Document catalogue (`/documents`)
 
-### 5.3 Job management
+**Layout**
+- Page header with “Upload document” primary action and filters for status
+(active vs soft-deleted) and document type (derived from query results).
+- Body renders a table: filename, document type, uploaded by, created date,
+expiration, last job status. Row actions: download, view tables, submit job.
+- Empty state shows guidance and upload CTA.
 
-- Job creation form (`/jobs/new`) lists active configurations via
-  `GET /configurations/active?document_type=`. Submit to `POST /jobs` and route
-  to job detail.
-- Job list polls `GET /jobs` every ~15 s while the page is focused. Filters cover
-  status, document, configuration.
-- Job detail merges `GET /jobs/{id}` and `GET /jobs/{id}/tables`. If tables
-  return 409, show a processing state and poll job status until terminal before
-  re-requesting tables.
+**Backend integration**
+- List view calls `GET /documents?limit=&offset=` and `GET /jobs?input_document_id`
+for recent job context (prefetched per row).
+- Upload drawer posts `FormData` to `POST /documents` (metadata serialized JSON).
+- Download button hits `GET /documents/{id}/download` streaming endpoint.
+- Delete action sends `DELETE /documents/{id}` with optional reason body.
 
-### 5.4 Configuration library
+**Implementation notes**
+- File intake uses `react-dropzone`; a `useFileQueue` hook handles validation and
+progress for sequential uploads. Persist queue state in `sessionStorage` to
+survive accidental refreshes.
+- Table built on the shared `DataTable` primitive (TanStack Table). Filters map
+onto URL search params for shareable views.
+- Prefetch extracted tables via `queryClient.prefetchQuery(['documents', id, 'tables'])`
+when hovering “View tables”. Handle 404/409 gracefully (document deleted or no
+results yet).
 
-- List view groups configurations by document type using `GET /configurations`.
-- Detail drawer exposes metadata, payload JSON, and activation action hitting
-  `POST /configurations/{id}/activate`.
-- Create/edit forms validate JSON with Zod, surfacing backend validation errors
-  inline. Refresh both list and active configuration queries after mutations.
+### 4.3 Configuration directory (`/configurations` and `/configurations/:id`)
 
-### 5.5 Results exploration
+**Layout**
+- `/configurations` displays a grouped list by `document_type` with active
+versions highlighted. Search filters by title/document type.
+- `/configurations/:id` shows metadata summary, version details, payload preview
+(JSON viewer), and the audit event timeline.
 
-- Table viewers consume `GET /jobs/{id}/tables` and `GET /jobs/{id}/tables/{table_id}`.
-  Use TanStack Table with virtualization above ~200 rows.
-- Provide CSV download, JSON view, and schema copy. Empty states distinguish
-  between pending (409) and absent results.
-- Document detail route reuses the same viewer but grouped by job.
+**Backend integration**
+- List view calls `GET /configurations?limit=&offset=&document_type=`; since the
+API is read-only, editing actions are hidden until backend support arrives.
+- Detail page fetches `GET /configurations/{id}` plus
+`GET /configurations/{id}/events` for timeline rows.
 
-### 5.6 Workspace administration
+**Implementation notes**
+- Because `payload` is opaque JSON, render a read-only inspector with collapsed
+sections (split between core keys vs advanced metadata).
+- Event timeline entries reuse shared `ActivityFeed` components for consistency
+with other audit surfaces.
+- When configuration data is missing (404), redirect to the list with an inline
+toast.
 
-- Member table reads `GET /workspaces/{id}/members` and shows role badges.
-- Add/remove actions call POST/PATCH/DELETE endpoints with confirmation dialogs
-  and inline permission errors.
-- Workspace metadata editor sends `PATCH /workspaces/{id}` with optimistic UI.
+### 4.4 Job submission console (`/jobs/new`)
+
+**Layout**
+- Dual-panel page: left column lists uploaded documents (search + pagination);
+right column hosts the job submission form with document selector, configuration
+selector, and optional configuration version override.
+- Inline status panel shows the most recent submission result.
+
+**Backend integration**
+- Documents dropdown consumes `GET /documents` data (reuse cache from catalogue).
+- Configurations dropdown uses `GET /configurations` results filtered by
+`document_type` when a document is chosen.
+- Submitting the form posts `JobSubmissionRequest` to `POST /jobs` and navigates
+to `/jobs/{job_id}` on success.
+
+**Implementation notes**
+- Validate the configuration/document pairing on the client before submission.
+- While the backend executes jobs synchronously, keep the submit button disabled
+until the promise resolves and display any `JobExecutionError` payload returned
+from the API.
+- Persist last-selected document/configuration combination in `localStorage`
+(scoped per workspace) for faster repeat submissions.
+
+### 4.5 Job detail & monitoring (`/jobs` and `/jobs/:id`)
+
+**Layout**
+- `/jobs` lists recent jobs with filters for status and document type. Columns:
+job id, document, configuration version, status badge, created date, duration.
+- `/jobs/:id` shows status summary, metrics, logs, and extracted tables.
+  - Summary header: status, created at, created by, configuration version.
+  - Tabs: **Overview** (metrics, log entries), **Tables** (list from results
+module).
+
+**Backend integration**
+- List view queries `GET /jobs?limit=&offset=&status=&input_document_id=`.
+- Detail view loads `GET /jobs/{id}` plus `GET /jobs/{id}/tables`. If the tables
+endpoint returns 409 (job incomplete), poll `GET /jobs/{id}` until status is a
+terminal state before retrying the tables call.
+
+**Implementation notes**
+- Encapsulate polling in `useJobPolling(jobId)`; pause when the tab is hidden via
+Page Visibility API.
+- Logs arrive as `list[dict[str, Any]]`; present them via structured accordions,
+falling back to JSON viewer for unknown shapes.
+- `Mark as reviewed` is deferred until the backend introduces the endpoint; keep
+space in the layout but hide the action for now.
+
+### 4.6 Document results (`/documents/:id`)
+
+**Layout**
+- Header summarises document metadata. Tabs: **Activity** (recent jobs) and
+**Tables** (aggregated extracted tables across jobs).
+
+**Backend integration**
+- Metadata from `GET /documents/{id}`. Activity tab reuses `GET /jobs` filtered
+by `input_document_id`. Tables tab calls `GET /documents/{id}/tables` and links to
+individual job table views.
+
+**Implementation notes**
+- When `/documents/{id}/tables` returns empty, show an informative empty state
+with CTA to run a job.
+- Keep interactions read-only until backend supports editing metadata post-upload.
+
+### 4.7 Deferred for post-v1
+
+- Configuration authoring, publishing, and script editing flows.
+- Real-time job progress via websockets.
+- Resumable uploads for large documents.
+- Personalised dashboards or alerting rules.
 
 ---
 
-## 6. Delivery roadmap
+## 5. Component systems & shared patterns
 
-1. **Bootstrap shell (first milestone)** – Initialize Vite project with strict
-   TypeScript, set up router under `/workspaces/:workspaceId`, configure global
-   providers (React Query, Auth, Permissions), and implement navigation shell
-   with placeholder pages.
-2. **HTTP client & mocks** – Build `api/client.ts`, domain modules, React Query
-   hooks, and MSW mocks mirroring backend schemas.
-3. **Documents slice** – Document list, upload flow, detail view, download, and
-   delete actions.
-4. **Configurations slice** – List, detail, create/edit, activate.
-5. **Job submission & detail** – New job form, list with polling, detail view,
-   and tables integration.
-6. **Document-centric results** – Aggregate tables per document.
-7. **Workspace admin** – Member management and workspace settings.
-8. **Hardening** – Accessibility sweep, Playwright smoke path, bundle monitoring,
-   and CI hooks.
+### 5.1 Tables & lists
 
-Each milestone ships Storybook coverage, Vitest specs, and MSW fixtures so
-backend/front-end parity is preserved.
+- TanStack Table underpins all grid views. The shared `DataTable` component owns
+header layout, skeleton states, pagination controls, and empty/error visuals.
+- Server pagination is the default. Consider `@tanstack/react-virtual` only when
+we observe sustained datasets beyond a few hundred rows.
+- Column definitions live beside the page component. Compose filters from URL
+search params via `useSearchParams()` helpers for shareable links.
+
+### 5.2 Feedback & accessibility
+
+- Toast provider handles success/error messages with sensible auto-dismiss
+timeouts. Inline `Callout` components communicate warnings or blockers.
+- Destructive flows rely on Radix `AlertDialog` with explicit button labelling.
+- Maintain logical heading structure and skip links anchored to the content
+frame. All focus states derive from tokens to ensure consistent contrast.
+- Long-running operations (uploads, job execution polling) use `aria-live`
+regions to announce updates.
+
+### 5.3 API client patterns
+
+- `api/client.ts` exposes `get`, `post`, `patch`, `del`, each returning a typed
+result validated through Zod schemas.
+- Inject workspace context header (e.g., `X-ADE-Workspace-ID`) and auth token via
+a shared interceptor.
+- Normalize error responses into `{ code, message, fieldErrors? }` so components
+can render consistent messaging.
+- Keep retries conservative—React Query defaults (retry 3 times for network
+failures) are acceptable. For 4xx errors, surface immediately without retry.
+
+### 5.4 Scripting + JSON viewers
+
+- Until the backend exposes editable scripts, reuse a lightweight `JsonViewer`
+component (virtualised tree) to render configuration payloads and result sample
+rows. Monaco is unnecessary until editing arrives, reducing bundle size.
+
+### 5.5 Testing strategy
+
+- Every feature slice ships with:
+  - Unit tests for hooks/utilities.
+  - Component tests covering empty, loading, error, and populated states.
+  - Storybook stories using MSW fixtures (default, error, empty).
+- Playwright smoke tests cover upload → job submission → table review once the
+primary routes are implemented.
 
 ---
 
-## 7. Collaboration checkpoints
+## 6. Build sequencing
 
-- **Schema parity** – Mirror Pydantic models into Zod types. Add CI that fails
-  when contracts drift.
-- **Error documentation** – Capture exact error envelopes for Storybook and
-  regression tests (upload limits, job failure scenarios, permission denials).
-- **Sample data** – Maintain anonymized fixtures in `frontend/src/mocks/` that
-  align with backend tests under `backend/tests/`. Update both when payloads
-  change.
-- **Configuration** – Read API base URL, auth client ID, and feature flags from
-  `import.meta.env` to support staging/production consistency.
+1. **Foundations** – Establish Vite project, TypeScript config, tokens, layout
+primitives, API client scaffold, and routing shell with workspace guard.
+2. **Documents workflow** – Implement catalogue table, upload drawer, download
+stream, and soft delete. Validate against existing documents endpoints.
+3. **Configurations browse** – Ship list + detail routes (read-only). Integrate
+event timeline and JSON payload viewer.
+4. **Job submission** – Build `/jobs/new` form, ensure validation against the
+backend contract, and navigate to job detail upon success.
+5. **Job detail & results** – Implement list + detail pages with polling, metrics
+view, and tables tab wired to results endpoints.
+6. **Document detail** – Aggregate runs and extracted tables per document.
+7. **Testing & hardening** – Add Playwright smoke path, Storybook coverage, and
+monitor bundle size (particularly JSON viewers and table libraries).
 
-Keep this guide synchronized with `BACKEND_REWRITE_PLAN.md`. If the backend
-introduces background processing, streaming logs, or new permissions, update the
-relevant sections before coding so engineering efforts stay aligned.
+This sequencing lines up with the backend rewrite priorities (document intake →
+job execution → result review). Additional backend milestones (cleanup policies,
+expanded permissions) should trigger updates here when they land.
+
+---
+
+## 7. Integration checkpoints
+
+- **Authentication & workspace header** – Confirm the exact header/query naming
+for workspace context and ensure token refresh flows are centralised.
+- **Error contracts** – Capture the JSON error envelope (code, message,
+field-level details) so form handlers can display precise feedback.
+- **Sample data** – Curate anonymised API fixtures (documents, jobs, tables) to
+power Storybook stories and Playwright tests.
+- **Permissions** – Align UI affordances with backend permission checks. Hide or
+disable actions when `403` responses are expected.
+- **Telemetry** – Once routes stabilize, emit page view and API failure metrics
+via a lightweight analytics hook (deferred until after v1 launch).
+
+Keep this document and `BACKEND_REWRITE_PLAN.md` in sync—backend changes to
+workflow states or payloads should immediately reflect here.
