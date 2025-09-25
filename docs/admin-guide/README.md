@@ -18,6 +18,6 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 - Background work is handled by the in-process task queue defined in [`backend/api/core/task_queue.py`](../../backend/api/core/task_queue.py) and message hub in [`backend/api/core/message_hub.py`](../../backend/api/core/message_hub.py).
 - Structured logging and correlation IDs are configured through [`backend/api/core/logging.py`](../../backend/api/core/logging.py) and middleware in [`backend/api/extensions/middleware.py`](../../backend/api/extensions/middleware.py).
 
-Future sections will expand on installation commands, security hardening, and deployment runbooks (including Docker quickstarts and Azure Container Apps walkthroughs via CLI and portal). The components listed above are already in place and unlikely to change dramatically.
+Future sections will expand on security hardening, backup procedures, and frontend onboarding once those pieces land. The components listed above are already in place and unlikely to change dramatically.
 
-- [Operational Tasks with the ADE CLI](operations.md) – account bootstrapping, password resets, and API key rotation.
+- [ADE Admin Getting Started Guide](getting_started.md) – local/python vs. Docker workflows, `.env` usage, CLI management, and interim provisioning steps.

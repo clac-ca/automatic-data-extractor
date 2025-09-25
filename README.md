@@ -43,7 +43,7 @@ ade api-keys issue --email admin@example.com --json
 ade users set-password --email admin@example.com --password "N3wPass!"
 ```
 
-The CLI prints human-readable tables by default and can emit JSON with `--json` for scripting. See the [operations guide](docs/admin-guide/operations.md) for a deeper walkthrough of typical tasks.
+The CLI prints human-readable tables by default and can emit JSON with `--json` for scripting. See the [admin getting started guide](docs/admin-guide/getting_started.md) for a deeper walkthrough of typical tasks.
 
 ## Architecture snapshot
 
@@ -60,8 +60,8 @@ Supporting infrastructure lives in `backend/api/core/` and `backend/api/db/`, in
 
 Uploaded files and the SQLite database are stored beneath the `backend/data/` directory by default. Override locations with the `ADE_DATA_DIR`, `ADE_DATABASE_URL`, or `ADE_DOCUMENTS_DIR` environment variables when deploying to production systems.
 
-> **Coming soon**
-> Containerised deployment notes (including local Docker usage and Azure Container Apps guidance with environment variable examples) will live alongside the admin guide once the workflows stabilise.
+> **TODO**
+> Publish the official Docker image to GitHub Container Registry and update the admin guide once the frontend onboarding flow ships.
 
 ## Status
 

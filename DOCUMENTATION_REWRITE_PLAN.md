@@ -32,7 +32,7 @@
   - `docs/admin-guide/configuration.md` – settings, env vars, docs toggle, file storage.
   - `docs/admin-guide/security.md` – auth modes, API keys, SSO, docs exposure.
   - `docs/admin-guide/database.md` – migrations, URLs, pooling, backups.
-  - `docs/admin-guide/operations.md` – logs, correlation IDs, in-process job queue, message hub/events fan-out, retention knobs, health endpoints.
+  - `docs/admin-guide/getting_started.md` – logs, correlation IDs, in-process job queue, message hub/events fan-out, retention knobs, health endpoints.
   - `docs/admin-guide/troubleshooting.md` – common errors with actionable fixes.
 - `docs/reference/glossary.md` – concise terminology replacing the legacy `ADE_GLOSSARY.md`.
 - Optional later: `docs/api/README.md` – link to `/openapi.json`, SDK notes, schema change policy.
@@ -100,7 +100,7 @@
     - API keys issuance/revocation (admin‑only), SSO envs and cookie behaviour, disable `/docs` in non‑local.
   - database.md
     - URLs, pooling options, SQLite vs. Postgres notes, migration commands.
-  - operations.md
+  - getting_started.md
     - Logs (JSON), request correlation IDs, in‑process job queue (no separate worker needed), message hub/events fan-out, retention knobs, health endpoints.
   - troubleshooting.md
     - 413 upload too large, 401/403 workspace permission errors, 404 document/job/config not found, SSO callback issues.
