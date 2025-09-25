@@ -30,13 +30,13 @@ async def test_upload_list_download_document(
 
     member = seed_identity["member"]
     token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-Workspace-ID": seed_identity["workspace_id"],
     }
 
     upload = await async_client.post(
-        "/documents",
+        f"{workspace_base}/documents",
         headers=headers,
         files={"file": ("example.txt", b"hello world", "text/plain")},
         data={"metadata": json.dumps({"source": "tests"})},
@@ -47,16 +47,20 @@ async def test_upload_list_download_document(
     assert payload["byte_size"] == len(b"hello world")
     assert payload["metadata"] == {"source": "tests"}
 
-    listing = await async_client.get("/documents", headers=headers)
+    listing = await async_client.get(f"{workspace_base}/documents", headers=headers)
     assert listing.status_code == 200
     records = listing.json()
     assert any(item["document_id"] == document_id for item in records)
 
-    detail = await async_client.get(f"/documents/{document_id}", headers=headers)
+    detail = await async_client.get(
+        f"{workspace_base}/documents/{document_id}", headers=headers
+    )
     assert detail.status_code == 200
     assert detail.json()["document_id"] == document_id
 
-    download = await async_client.get(f"/documents/{document_id}/download", headers=headers)
+    download = await async_client.get(
+        f"{workspace_base}/documents/{document_id}/download", headers=headers
+    )
     assert download.status_code == 200
     assert download.content == b"hello world"
     assert download.headers["content-type"].startswith("text/plain")
@@ -73,15 +77,15 @@ async def test_upload_document_exceeds_limit_returns_413(
 
     member = seed_identity["member"]
     token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-Workspace-ID": seed_identity["workspace_id"],
     }
 
     override_app_settings(max_upload_bytes=8)
 
     response = await async_client.post(
-        "/documents",
+        f"{workspace_base}/documents",
         headers=headers,
         files={"file": ("large.bin", b"abcdefghijk", "application/octet-stream")},
     )
@@ -99,13 +103,13 @@ async def test_delete_document_marks_deleted(
 
     member = seed_identity["member"]
     token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-Workspace-ID": seed_identity["workspace_id"],
     }
 
     upload = await async_client.post(
-        "/documents",
+        f"{workspace_base}/documents",
         headers=headers,
         files={"file": ("delete.txt", b"temporary", "text/plain")},
     )
@@ -113,13 +117,15 @@ async def test_delete_document_marks_deleted(
 
     delete_response = await async_client.request(
         "DELETE",
-        f"/documents/{document_id}",
+        f"{workspace_base}/documents/{document_id}",
         headers=headers,
         json={"reason": "cleanup"},
     )
     assert delete_response.status_code == 204, delete_response.text
 
-    detail = await async_client.get(f"/documents/{document_id}", headers=headers)
+    detail = await async_client.get(
+        f"{workspace_base}/documents/{document_id}", headers=headers
+    )
     assert detail.status_code == 404
 
     session_factory = get_sessionmaker()
@@ -143,13 +149,13 @@ async def test_download_missing_file_returns_404(
 
     member = seed_identity["member"]
     token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-Workspace-ID": seed_identity["workspace_id"],
     }
 
     upload = await async_client.post(
-        "/documents",
+        f"{workspace_base}/documents",
         headers=headers,
         files={"file": ("missing.txt", b"payload", "text/plain")},
     )
@@ -162,6 +168,9 @@ async def test_download_missing_file_returns_404(
     assert stored_path.exists()
     stored_path.unlink()
 
-    download = await async_client.get(f"/documents/{document_id}/download", headers=headers)
+    download = await async_client.get(
+        f"{workspace_base}/documents/{document_id}/download",
+        headers=headers,
+    )
     assert download.status_code == 404
     assert "was not found" in download.text

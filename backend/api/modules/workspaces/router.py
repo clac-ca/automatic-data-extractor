@@ -40,13 +40,13 @@ class WorkspaceRoutes:
         return memberships
 
     @router.get(
-        "/workspaces/current",
+        "/workspaces/{workspace_id}",
         response_model=WorkspaceContext,
         status_code=status.HTTP_200_OK,
-        summary="Resolve the active workspace context",
+        summary="Retrieve workspace context by identifier",
         response_model_exclude_none=True,
     )
-    async def current(
+    async def read_workspace(
         self,
         selection: WorkspaceContext = Depends(bind_workspace_context),  # noqa: B008
     ) -> WorkspaceContext:
@@ -61,11 +61,8 @@ class WorkspaceRoutes:
     @access_control(permissions={"workspace:members:read"}, require_workspace=True)
     async def list_members(
         self,
-        workspace_id: str,
-        selection: WorkspaceContext = Depends(bind_workspace_context),  # noqa: B008
+        _: WorkspaceContext = Depends(bind_workspace_context),  # noqa: B008
     ) -> DefaultResponse:
-        if selection.workspace.workspace_id != workspace_id:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Workspace header mismatch")
         return DefaultResponse.success("Access granted")
 
     @router.post(
@@ -79,11 +76,8 @@ class WorkspaceRoutes:
     async def add_member(
         self,
         workspace_id: str,
-        selection: WorkspaceContext = Depends(bind_workspace_context),  # noqa: B008
+        _: WorkspaceContext = Depends(bind_workspace_context),  # noqa: B008
     ) -> WorkspaceMember:
-        if selection.workspace.workspace_id != workspace_id:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Workspace header mismatch")
-
         request = self.service.request
         if request is None:  # pragma: no cover - defensive guard
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Request unavailable")
