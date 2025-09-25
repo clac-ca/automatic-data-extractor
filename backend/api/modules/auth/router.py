@@ -4,7 +4,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
-from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,11 +12,12 @@ from ..users.dependencies import get_users_service
 from ..users.models import User
 from ..users.schemas import UserProfile
 from ..users.service import UsersService
-from .dependencies import bind_current_user, get_auth_service
+from .dependencies import bind_current_user, get_auth_service, parse_token_request
 from .schemas import (
     APIKeyIssueRequest,
     APIKeyIssueResponse,
     APIKeySummary,
+    TokenRequest,
     TokenResponse,
 )
 from .security import access_control
@@ -46,11 +46,14 @@ class AuthRoutes:
     )
     async def issue_token(
         self,
-        form: OAuth2PasswordRequestForm = Depends(),  # noqa: B008
+        credentials: TokenRequest = Depends(parse_token_request),  # noqa: B008
     ) -> TokenResponse:
         """Return a JWT for the supplied email/password combination."""
 
-        user = await self.service.authenticate(email=form.username, password=form.password)
+        user = await self.service.authenticate(
+            email=credentials.username,
+            password=credentials.password.get_secret_value(),
+        )
         token = await self.service.issue_token(user)
         return TokenResponse(access_token=token)
 

@@ -4,9 +4,50 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import EmailStr, Field, model_validator
+from email_validator import EmailNotValidError, validate_email
+from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
 
 from ...core.schema import BaseSchema
+from .service import normalise_email
+
+
+class TokenRequest(BaseSchema):
+    """Credentials submitted to the token endpoint."""
+
+    username: EmailStr
+    password: SecretStr
+
+    @field_validator("username", mode="plain")
+    @classmethod
+    def _normalise_username(cls, value: EmailStr | str) -> str:
+        """Lowercase, trim, and lightly validate the submitted email."""
+
+        candidate = normalise_email(str(value))
+        try:
+            validated = validate_email(candidate)
+        except EmailNotValidError as exc:
+            message = str(exc)
+            if candidate.endswith((".local", ".localhost", ".test")) and (
+                "special-use or reserved" in message
+            ):
+                return candidate
+            raise ValueError(message) from exc
+        return validated.normalized
+
+    @field_validator("password", mode="before")
+    @classmethod
+    def _validate_password(cls, value: SecretStr | str) -> str:
+        """Ensure passwords are present after trimming whitespace."""
+
+        if isinstance(value, SecretStr):
+            raw = value.get_secret_value()
+        else:
+            raw = str(value)
+        candidate = raw.strip()
+        if not candidate:
+            msg = "Password must not be empty"
+            raise ValueError(msg)
+        return candidate
 
 
 class TokenResponse(BaseSchema):
@@ -58,6 +99,7 @@ class APIKeySummary(BaseSchema):
 
 
 __all__ = [
+    "TokenRequest",
     "APIKeyIssueRequest",
     "APIKeyIssueResponse",
     "APIKeySummary",
