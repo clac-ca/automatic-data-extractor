@@ -98,13 +98,13 @@ async def test_submit_job_runs_extractor(
     actor = seed_identity["workspace_owner"]
     await _grant_job_permission(actor["id"], seed_identity["workspace_id"])  # type: ignore[index]
     token = await _login(async_client, actor["email"], actor["password"])
+    workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-Workspace-ID": seed_identity["workspace_id"],
     }
 
     upload = await async_client.post(
-        "/documents",
+        f"{workspace_base}/documents",
         headers=headers,
         files={"file": ("input.txt", b"payload", "text/plain")},
     )
@@ -112,7 +112,7 @@ async def test_submit_job_runs_extractor(
     document_id = upload.json()["document_id"]
 
     response = await async_client.post(
-        "/jobs",
+        f"{workspace_base}/jobs",
         headers=headers,
         json={
             "input_document_id": document_id,
@@ -128,12 +128,14 @@ async def test_submit_job_runs_extractor(
     assert job_payload["metrics"]["tables_produced"] == 1
     assert len(job_payload["logs"]) >= 2
 
-    listing = await async_client.get("/jobs", headers=headers)
+    listing = await async_client.get(f"{workspace_base}/jobs", headers=headers)
     assert listing.status_code == 200
     jobs = listing.json()
     assert any(item["job_id"] == job_id for item in jobs)
 
-    detail = await async_client.get(f"/jobs/{job_id}", headers=headers)
+    detail = await async_client.get(
+        f"{workspace_base}/jobs/{job_id}", headers=headers
+    )
     assert detail.status_code == 200
     assert detail.json()["metrics"]["duration_ms"] >= 0
 
@@ -158,13 +160,13 @@ async def test_submit_job_missing_document_returns_404(
     actor = seed_identity["workspace_owner"]
     await _grant_job_permission(actor["id"], seed_identity["workspace_id"])  # type: ignore[index]
     token = await _login(async_client, actor["email"], actor["password"])
+    workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-Workspace-ID": seed_identity["workspace_id"],
     }
 
     response = await async_client.post(
-        "/jobs",
+        f"{workspace_base}/jobs",
         headers=headers,
         json={
             "input_document_id": "does-not-exist",
@@ -184,20 +186,20 @@ async def test_submit_job_missing_configuration_returns_404(
     actor = seed_identity["workspace_owner"]
     await _grant_job_permission(actor["id"], seed_identity["workspace_id"])  # type: ignore[index]
     token = await _login(async_client, actor["email"], actor["password"])
+    workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-Workspace-ID": seed_identity["workspace_id"],
     }
 
     upload = await async_client.post(
-        "/documents",
+        f"{workspace_base}/documents",
         headers=headers,
         files={"file": ("input.txt", b"payload", "text/plain")},
     )
     document_id = upload.json()["document_id"]
 
     response = await async_client.post(
-        "/jobs",
+        f"{workspace_base}/jobs",
         headers=headers,
         json={
             "input_document_id": document_id,
@@ -224,20 +226,20 @@ async def test_submit_job_processor_failure_returns_500(
     actor = seed_identity["workspace_owner"]
     await _grant_job_permission(actor["id"], seed_identity["workspace_id"])  # type: ignore[index]
     token = await _login(async_client, actor["email"], actor["password"])
+    workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-Workspace-ID": seed_identity["workspace_id"],
     }
 
     upload = await async_client.post(
-        "/documents",
+        f"{workspace_base}/documents",
         headers=headers,
         files={"file": ("input.txt", b"payload", "text/plain")},
     )
     document_id = upload.json()["document_id"]
 
     response = await async_client.post(
-        "/jobs",
+        f"{workspace_base}/jobs",
         headers=headers,
         json={
             "input_document_id": document_id,
@@ -250,7 +252,9 @@ async def test_submit_job_processor_failure_returns_500(
     assert payload["error"] == "job_failed"
     assert payload["message"] == "Stub failure"
 
-    detail = await async_client.get(f"/jobs/{job_id}", headers=headers)
+    detail = await async_client.get(
+        f"{workspace_base}/jobs/{job_id}", headers=headers
+    )
     assert detail.status_code == 200
     record = detail.json()
     assert record["status"] == "failed"

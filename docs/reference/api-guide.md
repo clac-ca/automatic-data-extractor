@@ -18,7 +18,7 @@ ADE uses bearer tokens issued by the administrator of your workspace.
 
 1. Request a token via the admin console or service account provisioning flow.
 2. Send the token in the `Authorization` header: `Authorization: Bearer <token>`.
-3. Tokens are scoped to a single workspace. Include the workspace ULID in endpoints that require it (see below).
+3. Tokens are scoped to a single workspace. Include the workspace ULID in the URL path for scoped routes, e.g. `/workspaces/{workspace_id}/...`.
 
 Requests without valid tokens receive HTTP `401 Unauthorized` responses. If the token is valid but lacks permissions for a resource you will receive `403 Forbidden`.
 
@@ -26,34 +26,34 @@ Requests without valid tokens receive HTTP `401 Unauthorized` responses. If the 
 
 ### Documents
 
-Upload source files for extraction.
+Upload source files for extraction. All document routes are nested under the workspace path segment.
 
-- `POST /documents/` – multipart upload endpoint. Include `workspace_id`, `filename`, and the file payload.
-- `GET /documents/{document_id}` – fetch metadata, including upload timestamps and submitter.
-- `DELETE /documents/{document_id}` – remove a document and any derived results, if permitted.
+- `POST /workspaces/{workspace_id}/documents` – multipart upload endpoint.
+- `GET /workspaces/{workspace_id}/documents/{document_id}` – fetch metadata, including upload timestamps and submitter.
+- `DELETE /workspaces/{workspace_id}/documents/{document_id}` – remove a document and any derived results, if permitted.
 
 ### Jobs
 
 Trigger and monitor extraction runs.
 
-- `POST /jobs/` – start an extraction by referencing an existing `document_id` or by including a file upload in the request.
-- `GET /jobs/{job_id}` – retrieve status (`queued`, `processing`, `completed`, `needs_attention`) and progress metrics.
-- `GET /jobs/?workspace_id=...` – list recent jobs, filterable by status, document, or submitter.
+- `POST /workspaces/{workspace_id}/jobs` – start an extraction by referencing an existing `document_id` or by including a file upload in the request.
+- `GET /workspaces/{workspace_id}/jobs/{job_id}` – retrieve status (`queued`, `processing`, `succeeded`, `failed`) and progress metrics.
+- `GET /workspaces/{workspace_id}/jobs` – list recent jobs, filterable by status, document, or submitter using query parameters.
 
 ### Results
 
 Retrieve structured tables produced by completed jobs.
 
-- `GET /results/{result_id}` – return table metadata, column definitions, and checksums.
-- `GET /results/{result_id}/download` – download the extracted table as CSV or Excel by setting the `format` query parameter.
-- `GET /documents/{document_id}/results` – list results linked to a document.
+- `GET /workspaces/{workspace_id}/jobs/{job_id}/tables` – list extracted tables linked to a job.
+- `GET /workspaces/{workspace_id}/jobs/{job_id}/tables/{table_id}` – retrieve a single extracted table record.
+- `GET /workspaces/{workspace_id}/documents/{document_id}/tables` – list tables derived from a document.
 
 ### Events
 
 Track the immutable audit trail for compliance and debugging.
 
-- `GET /events/` – stream ordered events within a workspace.
-- `GET /events/{event_id}` – inspect a single event, including actor, timestamp, and payload snapshot.
+- `GET /workspaces/{workspace_id}/events` – stream ordered events within a workspace.
+- `GET /workspaces/{workspace_id}/events/{event_id}` – inspect a single event, including actor, timestamp, and payload snapshot.
 
 ## Error handling
 

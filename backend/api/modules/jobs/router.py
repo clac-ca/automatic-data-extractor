@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi_utils.cbv import cbv
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +14,7 @@ from ..configurations.exceptions import (
     ConfigurationVersionMismatchError,
 )
 from ..workspaces.dependencies import bind_workspace_context
+from ..workspaces.routing import workspace_scoped_router
 from ..workspaces.schemas import WorkspaceContext
 from .dependencies import get_jobs_service
 from .exceptions import (
@@ -24,7 +25,7 @@ from .exceptions import (
 from .schemas import JobRecord, JobSubmissionRequest
 from .service import JobsService
 
-router = APIRouter(tags=["jobs"])
+router = workspace_scoped_router(tags=["jobs"])
 
 
 @cbv(router)

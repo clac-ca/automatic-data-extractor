@@ -21,17 +21,17 @@ async def _login(client: AsyncClient, email: str, password: str) -> str:
 
 
 @pytest.mark.asyncio
-async def test_current_workspace_defaults(
+async def test_workspace_context_returns_membership(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
 ) -> None:
-    """Members with a default workspace should resolve their context without headers."""
+    """Members should resolve context when calling the workspace-specific route."""
 
     member = seed_identity["member"]
     token = await _login(async_client, member["email"], member["password"])
 
     response = await async_client.get(
-        "/workspaces/current",
+        f"/workspaces/{seed_identity['workspace_id']}",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
@@ -57,8 +57,9 @@ async def test_workspace_owner_receives_membership_permissions(
         workspace_owner["password"],
     )
 
+    workspace_id = seed_identity["workspace_id"]
     response = await async_client.get(
-        "/workspaces/current",
+        f"/workspaces/{workspace_id}",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
@@ -75,16 +76,17 @@ async def test_missing_workspace_membership_returns_error(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
 ) -> None:
-    """Users without a membership should receive a 400 when resolving workspace context."""
+    """Users without a membership should receive a 403 when resolving workspace context."""
 
     orphan = seed_identity["orphan"]
     token = await _login(async_client, orphan["email"], orphan["password"])
 
+    workspace_id = seed_identity["workspace_id"]
     response = await async_client.get(
-        "/workspaces/current",
+        f"/workspaces/{workspace_id}",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -97,11 +99,12 @@ async def test_admin_without_membership_receives_error(
     admin = seed_identity["admin"]
     token = await _login(async_client, admin["email"], admin["password"])
 
+    workspace_id = seed_identity["workspace_id"]
     response = await async_client.get(
-        "/workspaces/current",
+        f"/workspaces/{workspace_id}",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -118,7 +121,6 @@ async def test_permission_required_for_members_route(
         f"/workspaces/{seed_identity['workspace_id']}/members",
         headers={
             "Authorization": f"Bearer {token}",
-            "X-Workspace-ID": seed_identity["workspace_id"],
         },
     )
     assert response.status_code == 403
@@ -142,7 +144,6 @@ async def test_members_route_allows_workspace_owner(
         f"/workspaces/{seed_identity['workspace_id']}/members",
         headers={
             "Authorization": f"Bearer {token}",
-            "X-Workspace-ID": seed_identity["workspace_id"],
         },
     )
     assert response.status_code == 200
@@ -169,7 +170,6 @@ async def test_members_route_allows_member_with_manage_permission(
         f"/workspaces/{seed_identity['workspace_id']}/members",
         headers={
             "Authorization": f"Bearer {token}",
-            "X-Workspace-ID": seed_identity["workspace_id"],
         },
     )
     assert response.status_code == 200
@@ -223,7 +223,6 @@ async def test_workspace_owner_can_add_member_with_role(
         f"/workspaces/{workspace_id}/members",
         headers={
             "Authorization": f"Bearer {token}",
-            "X-Workspace-ID": workspace_id,
         },
         json={"user_id": invitee["id"], "role": WorkspaceRole.OWNER.value},
     )
@@ -262,7 +261,6 @@ async def test_manage_permission_required_for_member_addition(
         f"/workspaces/{workspace_id}/members",
         headers={
             "Authorization": f"Bearer {token}",
-            "X-Workspace-ID": workspace_id,
         },
         json={"user_id": invitee["id"], "role": WorkspaceRole.MEMBER.value},
     )
@@ -289,7 +287,6 @@ async def test_duplicate_member_returns_conflict(
         f"/workspaces/{workspace_id}/members",
         headers={
             "Authorization": f"Bearer {token}",
-            "X-Workspace-ID": workspace_id,
         },
         json={"user_id": invitee["id"], "role": WorkspaceRole.MEMBER.value},
     )
@@ -299,7 +296,6 @@ async def test_duplicate_member_returns_conflict(
         f"/workspaces/{workspace_id}/members",
         headers={
             "Authorization": f"Bearer {token}",
-            "X-Workspace-ID": workspace_id,
         },
         json={"user_id": invitee["id"], "role": WorkspaceRole.OWNER.value},
     )

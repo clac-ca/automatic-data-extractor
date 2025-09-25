@@ -72,12 +72,12 @@ async def test_list_configurations_emits_event(
     try:
         member = seed_identity["member"]
         token = await _login(async_client, member["email"], member["password"])
+        workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
 
         response = await async_client.get(
-            "/configurations",
+            f"{workspace_base}/configurations",
             headers={
                 "Authorization": f"Bearer {token}",
-                "X-Workspace-ID": seed_identity["workspace_id"],
             },
         )
     finally:
@@ -116,12 +116,12 @@ async def test_read_configuration_emits_view_event(
     try:
         member = seed_identity["member"]
         token = await _login(async_client, member["email"], member["password"])
+        workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
 
         response = await async_client.get(
-            f"/configurations/{configuration_id}",
+            f"{workspace_base}/configurations/{configuration_id}",
             headers={
                 "Authorization": f"Bearer {token}",
-                "X-Workspace-ID": seed_identity["workspace_id"],
             },
         )
     finally:
@@ -146,12 +146,12 @@ async def test_read_configuration_not_found_returns_404(
 
     member = seed_identity["member"]
     token = await _login(async_client, member["email"], member["password"])
+    workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.get(
-        "/configurations/does-not-exist",
+        f"{workspace_base}/configurations/does-not-exist",
         headers={
             "Authorization": f"Bearer {token}",
-            "X-Workspace-ID": seed_identity["workspace_id"],
         },
     )
 
@@ -168,19 +168,19 @@ async def test_configuration_events_timeline_returns_persisted_events(
     configuration_id = await _create_configuration()
     member = seed_identity["member"]
     token = await _login(async_client, member["email"], member["password"])
+    workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-Workspace-ID": seed_identity["workspace_id"],
     }
 
     response = await async_client.get(
-        f"/configurations/{configuration_id}",
+        f"{workspace_base}/configurations/{configuration_id}",
         headers=headers,
     )
     assert response.status_code == 200
 
     timeline = await async_client.get(
-        f"/configurations/{configuration_id}/events",
+        f"{workspace_base}/configurations/{configuration_id}/events",
         headers=headers,
     )
 
@@ -205,12 +205,12 @@ async def test_configuration_events_timeline_missing_configuration_returns_404(
 
     member = seed_identity["member"]
     token = await _login(async_client, member["email"], member["password"])
+    workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.get(
-        "/configurations/does-not-exist/events",
+        f"{workspace_base}/configurations/does-not-exist/events",
         headers={
             "Authorization": f"Bearer {token}",
-            "X-Workspace-ID": seed_identity["workspace_id"],
         },
     )
 
