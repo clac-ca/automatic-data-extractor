@@ -35,7 +35,7 @@ Resides in `backend/api/` (Python 3.11, FastAPI, SQLAlchemy, Pydantic v2). It ow
 persistence helpers. Domain logic that manipulates data stays out of request handlers and in focused service modules. The
 initial foundation created here wires together:
 
-- `config.py` – centralised settings (`ADE_` environment variables, SQLite + documents defaults, upload size cap).
+- `app/config.py` – centralised settings (`ADE_` environment variables, SQLite + documents defaults, upload size cap).
 - `db.py` – SQLAlchemy engine/session helpers shared across routes and services.
 - `models.py` – domain models covering configurations, jobs, documents, users, sessions, and audit events. All tables share ULID identifiers and deterministic timestamps.
 - `routes/health.py` – health check hitting the database and returning `{ "status": "ok" }`.
@@ -81,6 +81,14 @@ python -m backend.api auth create-api-key admin@example.com --expires-in-days 90
 
 ADE caches the provider discovery document and JWKS payloads for active SSO integrations so repeated logins avoid network
 round-trips while still rejecting expired or unrecognised keys.
+
+### Configuration
+
+The backend reads configuration from environment variables (prefixed with `ADE_`) and optional values stored in a local `.env`
+file. Settings are defined in `backend/app/config.py` and retrieved via `backend.app.get_settings()`. During startup the
+`Settings` instance is written to `app.state.settings` and reused by routes, services, and background workers. Tests can refresh
+configuration via the `override_app_settings` fixture, which reloads environment variables and swaps the FastAPI state for the
+duration of the test.
 
 ### Identifier strategy
 Documents, configurations, and events share the same ULID format for their primary keys and, in the case of documents, their stored filenames. UUIDv4 identifiers are widely standardised and perfectly random, which makes them a safe universal default, but that randomness also scatters writes across a database index and increases fragmentation. ULIDs remain 128-bit identifiers while adding a 48-bit timestamp prefix, so new values stay lexicographically sorted, keep SQLite indexes append-friendly, and preserve chronological ordering even if multiple workers generate IDs. We will stick with ULIDs for ADE’s ingestion-heavy workflows, while reserving UUIDv4s for situations where external interoperability or strict standards compliance outweigh those locality benefits.

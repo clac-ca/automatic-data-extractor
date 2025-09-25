@@ -9,8 +9,8 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
 
-from backend.api.core.settings import reset_settings_cache
 from backend.api.db.engine import get_engine, render_sync_url, reset_database_state
+from backend.app import reload_settings
 
 
 @pytest.mark.asyncio
@@ -21,7 +21,7 @@ async def test_alembic_upgrade_head(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     database_url = f"sqlite+aiosqlite:///{db_path}"
 
     monkeypatch.setenv("ADE_DATABASE_URL", database_url)
-    reset_settings_cache()
+    reload_settings()
     reset_database_state()
 
     config = Config(str(Path("alembic.ini")))
@@ -41,4 +41,4 @@ async def test_alembic_upgrade_head(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     finally:
         command.downgrade(config, "base")
         reset_database_state()
-        reset_settings_cache()
+        reload_settings()

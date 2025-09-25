@@ -7,8 +7,8 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-from backend.api.core.settings import reset_settings_cache
 from backend.api.modules.auth.service import SSO_STATE_COOKIE, AuthService, OIDCProviderMetadata
+from backend.app import reload_settings
 
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
@@ -184,7 +184,9 @@ async def test_service_account_password_login_blocked(
 
 @pytest.mark.asyncio
 async def test_sso_callback_rejects_state_mismatch(
-    monkeypatch: pytest.MonkeyPatch, async_client: AsyncClient
+    monkeypatch: pytest.MonkeyPatch,
+    async_client: AsyncClient,
+    override_app_settings,
 ) -> None:
     """The SSO callback should reject mismatched state tokens."""
 
@@ -193,7 +195,8 @@ async def test_sso_callback_rejects_state_mismatch(
     monkeypatch.setenv("ADE_SSO_ISSUER", "https://issuer.example.com")
     monkeypatch.setenv("ADE_SSO_REDIRECT_URL", "https://ade.example.com/auth/sso/callback")
     monkeypatch.setenv("ADE_SSO_SCOPE", "openid email profile")
-    reset_settings_cache()
+    reload_settings()
+    override_app_settings()
 
     metadata = OIDCProviderMetadata(
         authorization_endpoint="https://issuer.example.com/authorize",
@@ -206,17 +209,14 @@ async def test_sso_callback_rejects_state_mismatch(
 
     monkeypatch.setattr(AuthService, "_get_oidc_metadata", fake_metadata)
 
-    try:
-        login = await async_client.get("/auth/sso/login", follow_redirects=False)
-        assert login.status_code in (302, 307)
-        assert SSO_STATE_COOKIE in login.cookies
-        state_cookie = login.cookies[SSO_STATE_COOKIE]
+    login = await async_client.get("/auth/sso/login", follow_redirects=False)
+    assert login.status_code in (302, 307)
+    assert SSO_STATE_COOKIE in login.cookies
+    state_cookie = login.cookies[SSO_STATE_COOKIE]
 
-        callback = await async_client.get(
-            "/auth/sso/callback",
-            params={"code": "auth-code", "state": "wrong-state"},
-            cookies={SSO_STATE_COOKIE: state_cookie},
-        )
-        assert callback.status_code == 400
-    finally:
-        reset_settings_cache()
+    callback = await async_client.get(
+        "/auth/sso/callback",
+        params={"code": "auth-code", "state": "wrong-state"},
+        cookies={SSO_STATE_COOKIE: state_cookie},
+    )
+    assert callback.status_code == 400

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -15,13 +15,13 @@ from alembic.config import Config
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from backend.api.core.settings import reset_settings_cache
 from backend.api.db.engine import render_sync_url, reset_database_state
 from backend.api.db.session import get_sessionmaker
 from backend.api.main import create_app
 from backend.api.modules.auth.service import hash_password
 from backend.api.modules.users.models import User, UserRole
 from backend.api.modules.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
+from backend.app import Settings, get_settings, reload_settings
 
 
 @pytest.fixture(scope="session")
@@ -45,7 +45,8 @@ def _configure_database(
     os.environ["ADE_DATABASE_URL"] = _database_url
     os.environ["ADE_DATA_DIR"] = str(data_dir)
     os.environ["ADE_DOCUMENTS_DIR"] = str(documents_dir)
-    reset_settings_cache()
+    settings = reload_settings()
+    assert settings.database_url == _database_url
     reset_database_state()
 
     config = Config(str(Path("alembic.ini")))
@@ -56,7 +57,7 @@ def _configure_database(
 
     command.downgrade(config, "base")
     reset_database_state()
-    reset_settings_cache()
+    reload_settings()
     for env_var in ("ADE_DATABASE_URL", "ADE_DATA_DIR", "ADE_DOCUMENTS_DIR"):
         os.environ.pop(env_var, None)
 
@@ -66,6 +67,24 @@ def app(_configure_database: None) -> FastAPI:
     """Return an application instance for integration-style tests."""
 
     return create_app()
+
+
+@pytest.fixture()
+def override_app_settings(app: FastAPI) -> Callable[..., Settings]:
+    """Refresh application settings for a test case."""
+
+    original = app.state.settings
+
+    def _apply(**updates: Any) -> Settings:
+        base = reload_settings()
+        updated = base.model_copy(update=updates)
+        app.state.settings = updated
+        return updated
+
+    yield _apply
+
+    app.state.settings = original
+    reload_settings()
 
 
 @pytest_asyncio.fixture()
@@ -90,10 +109,11 @@ async def _reset_task_queue(app: FastAPI) -> AsyncIterator[None]:
 
 
 @pytest_asyncio.fixture()
-async def seed_identity() -> dict[str, Any]:
+async def seed_identity(app: FastAPI) -> dict[str, Any]:
     """Create baseline users and workspace records for identity tests."""
 
-    session_factory = get_sessionmaker()
+    settings = get_settings()
+    session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:
         workspace_slug = f"acme-{uuid4().hex[:8]}"
         workspace = Workspace(name="Acme Corp", slug=workspace_slug)

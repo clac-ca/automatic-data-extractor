@@ -8,7 +8,7 @@ from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 
-from .settings import AppSettings
+from backend.app import Settings
 
 _CORRELATION_ID: ContextVar[str | None] = ContextVar("ade_correlation_id", default=None)
 _STANDARD_ATTRS = {
@@ -65,7 +65,7 @@ class JSONLogFormatter(logging.Formatter):
         return json.dumps(payload, default=_coerce_value, separators=(",", ":"))
 
 
-def setup_logging(settings: AppSettings) -> None:
+def setup_logging(settings: Settings) -> None:
     """Configure the root logger with JSON output."""
 
     root_logger = logging.getLogger()
