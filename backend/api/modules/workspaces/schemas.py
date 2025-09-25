@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import Field
 
 from ...core.schema import BaseSchema
@@ -26,11 +28,34 @@ class WorkspaceContext(BaseSchema):
     workspace: WorkspaceProfile
 
 
+class WorkspaceCreate(BaseSchema):
+    """Payload for creating a workspace."""
+
+    name: str = Field(min_length=1, max_length=255)
+    slug: str | None = Field(default=None, min_length=1, max_length=100)
+    owner_user_id: str | None = Field(default=None, alias="owner_user_id")
+    settings: dict[str, Any] | None = None
+
+
+class WorkspaceUpdate(BaseSchema):
+    """Payload for updating workspace metadata."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    slug: str | None = Field(default=None, min_length=1, max_length=100)
+    settings: dict[str, Any] | None = None
+
+
 class WorkspaceMemberCreate(BaseSchema):
     """Payload for adding a member to a workspace."""
 
     user_id: str
     role: WorkspaceRole = WorkspaceRole.MEMBER
+
+
+class WorkspaceMemberUpdate(BaseSchema):
+    """Payload for updating a workspace member."""
+
+    role: WorkspaceRole
 
 
 class WorkspaceMember(BaseSchema):
@@ -47,9 +72,20 @@ class WorkspaceMember(BaseSchema):
     user: UserProfile
 
 
+class WorkspaceDefaultSelection(BaseSchema):
+    """Response indicating the caller's default workspace selection."""
+
+    workspace_id: str
+    is_default: bool
+
+
 __all__ = [
     "WorkspaceContext",
+    "WorkspaceCreate",
+    "WorkspaceDefaultSelection",
     "WorkspaceMember",
     "WorkspaceMemberCreate",
+    "WorkspaceMemberUpdate",
     "WorkspaceProfile",
+    "WorkspaceUpdate",
 ]
