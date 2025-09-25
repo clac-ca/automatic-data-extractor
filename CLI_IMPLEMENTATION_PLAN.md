@@ -67,7 +67,7 @@ ade api-keys revoke API_KEY_ID
    - Unit: parser wiring (ensure each subcommand resolves to expected handler), helper functions (email normalisation, secret file reading).
    - Integration: execute `python -m backend.cli ...` inside pytest using the existing SQLite fixtures (`backend/tests/conftest.py`) to verify DB side effects and stdout/stderr.
 8. **Documentation**
-   - Document CLI usage in `docs/admin-guide/operations.md` (create admin, reset password, rotate API key).
+   - Document CLI usage in `docs/admin-guide/getting_started.md` (create admin, reset password, rotate API key).
    - Add quickstart snippet to README.
 
 ## Future Enhancements
