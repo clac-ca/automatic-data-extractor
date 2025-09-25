@@ -8,7 +8,8 @@ from typing import Annotated, Any
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ..core.settings import AppSettings, get_settings
+from backend.app import Settings, get_app_settings, get_settings
+
 from .engine import engine_cache_key, get_engine
 
 _SESSION_FACTORY: async_sessionmaker[AsyncSession] | None = None
@@ -23,7 +24,7 @@ def reset_session_state() -> None:
     _SESSION_KEY = None
 
 
-def get_sessionmaker(settings: AppSettings | None = None) -> async_sessionmaker[AsyncSession]:
+def get_sessionmaker(settings: Settings | None = None) -> async_sessionmaker[AsyncSession]:
     """Return a cached ``async_sessionmaker`` bound to the ADE engine."""
 
     global _SESSION_FACTORY, _SESSION_KEY
@@ -40,8 +41,15 @@ def get_sessionmaker(settings: AppSettings | None = None) -> async_sessionmaker[
     return _SESSION_FACTORY
 
 
+def _get_sessionmaker_from_request(
+    request: Request,
+) -> async_sessionmaker[AsyncSession]:
+    settings = get_app_settings(request.app)
+    return get_sessionmaker(settings=settings)
+
+
 SessionFactoryDependency = Annotated[
-    async_sessionmaker[AsyncSession], Depends(get_sessionmaker)
+    async_sessionmaker[AsyncSession], Depends(_get_sessionmaker_from_request)
 ]
 
 

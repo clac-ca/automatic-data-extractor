@@ -9,13 +9,13 @@ from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool, StaticPool
 
-from ..core.settings import AppSettings, get_settings
+from backend.app import Settings, get_settings
 
 _ENGINE: AsyncEngine | None = None
 _ENGINE_KEY: tuple[Any, ...] | None = None
 
 
-def _cache_key(settings: AppSettings) -> tuple[Any, ...]:
+def _cache_key(settings: Settings) -> tuple[Any, ...]:
     return (
         settings.database_url,
         settings.database_echo,
@@ -46,7 +46,7 @@ def _ensure_sqlite_directory(url: URL) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
-def _create_engine(settings: AppSettings) -> AsyncEngine:
+def _create_engine(settings: Settings) -> AsyncEngine:
     url = make_url(settings.database_url)
     connect_args: dict[str, Any] = {}
     engine_kwargs: dict[str, Any] = {
@@ -75,7 +75,7 @@ def _create_engine(settings: AppSettings) -> AsyncEngine:
     )
 
 
-def get_engine(settings: AppSettings | None = None) -> AsyncEngine:
+def get_engine(settings: Settings | None = None) -> AsyncEngine:
     """Return a cached async engine matching the active settings."""
 
     global _ENGINE, _ENGINE_KEY
@@ -106,7 +106,7 @@ def reset_database_state() -> None:
     session_module.reset_session_state()
 
 
-def engine_cache_key(settings: AppSettings) -> tuple[Any, ...]:
+def engine_cache_key(settings: Settings) -> tuple[Any, ...]:
     """Expose the cache key used for engine/session reuse."""
 
     return _cache_key(settings)

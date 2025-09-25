@@ -10,7 +10,6 @@ from starlette.datastructures import Headers
 
 from backend.api.core.message_hub import Message, MessageHub
 from backend.api.core.service import ServiceContext
-from backend.api.core.settings import get_settings
 from backend.api.db.session import get_sessionmaker
 from backend.api.modules.configurations.models import Configuration
 from backend.api.modules.documents.service import DocumentsService
@@ -18,6 +17,7 @@ from backend.api.modules.jobs.exceptions import JobExecutionError
 from backend.api.modules.jobs.models import Job
 from backend.api.modules.jobs.service import JobsService
 from backend.api.modules.results.models import ExtractedTable
+from backend.app import get_settings
 
 
 @pytest.mark.asyncio
