@@ -15,7 +15,7 @@ Structured tables produced by a completed job. Fetch them through [`backend/api/
 Versioned extraction logic referenced by jobs. Configuration CRUD endpoints sit in [`backend/api/modules/configurations`](../../backend/api/modules/configurations), while the active revision is resolved during job submission.
 
 ## Workspace
-A logical tenant boundary enforced by [`backend/api/modules/workspaces`](../../backend/api/modules/workspaces). Every request must include a valid `X-Workspace-ID` header so dependencies can scope database queries appropriately.
+A logical tenant boundary enforced by [`backend/api/modules/workspaces`](../../backend/api/modules/workspaces). Workspace identifiers are part of the URL path (for example `/workspaces/{workspace_id}/documents`) so dependencies can scope database queries appropriately.
 
 ## Event
 Immutable audit records persisted by [`backend/api/modules/events`](../../backend/api/modules/events) and the recorder service in [`backend/api/modules/events/recorder.py`](../../backend/api/modules/events/recorder.py). Events track actions across documents, jobs, configurations, and security operations.

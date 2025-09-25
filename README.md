@@ -3,7 +3,7 @@
 Automatic Data Extractor (ADE) ingests semi-structured documents and turns them into tabular datasets. The project ships as a FastAPI backend with an in-process worker and optional React frontend. Operators interact with ADE exclusively through the HTTP API, which keeps automation, UI, and integrations aligned.
 
 - **Deterministic jobs** – Extraction logic is revision-controlled so reruns produce identical outputs.
-- **Workspace aware** – Every request is scoped to a workspace via the `X-Workspace-ID` header for simple multi-tenancy.
+- **Workspace aware** – Every request is scoped to a workspace through URL paths like `/workspaces/{workspace_id}` for simple multi-tenancy.
 - **Single API surface** – Upload documents, run jobs, inspect events, and fetch results through the same FastAPI application.
 
 ## Documentation
@@ -36,7 +36,7 @@ ADE follows a modular layout under `backend/api/modules/`:
 - [`results`](backend/api/modules/results) – table retrieval by job or document.
 - [`events`](backend/api/modules/events) – immutable audit trail with workspace scoping.
 - [`auth`](backend/api/modules/auth) – password, SSO, and API key flows plus access-control decorators.
-- [`workspaces`](backend/api/modules/workspaces) – dependency helpers enforcing the `X-Workspace-ID` contract.
+- [`workspaces`](backend/api/modules/workspaces) – routing helpers and dependencies that enforce workspace-scoped URLs.
 
 Supporting infrastructure lives in `backend/api/core/` and `backend/api/db/`, including structured logging, message hubs, and async SQLAlchemy sessions.
 

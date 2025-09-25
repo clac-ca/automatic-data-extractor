@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,13 +12,14 @@ from ..events.dependencies import get_events_service
 from ..events.schemas import EventRecord
 from ..events.service import EventsService
 from ..workspaces.dependencies import bind_workspace_context
+from ..workspaces.routing import workspace_scoped_router
 from ..workspaces.schemas import WorkspaceContext
 from .dependencies import get_configurations_service
 from .exceptions import ConfigurationNotFoundError
 from .schemas import ConfigurationRecord
 from .service import ConfigurationsService
 
-router = APIRouter(tags=["configurations"])
+router = workspace_scoped_router(tags=["configurations"])
 
 
 @cbv(router)

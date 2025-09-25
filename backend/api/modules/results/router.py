@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,13 +9,14 @@ from ..auth.security import access_control
 from ..documents.exceptions import DocumentNotFoundError
 from ..jobs.exceptions import JobNotFoundError
 from ..workspaces.dependencies import bind_workspace_context
+from ..workspaces.routing import workspace_scoped_router
 from ..workspaces.schemas import WorkspaceContext
 from .dependencies import get_results_service
 from .exceptions import ExtractedTableNotFoundError, JobResultsUnavailableError
 from .schemas import ExtractedTableRecord
 from .service import ExtractionResultsService
 
-router = APIRouter(tags=["results"])
+router = workspace_scoped_router(tags=["results"])
 
 
 @cbv(router)
