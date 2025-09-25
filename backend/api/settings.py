@@ -1,4 +1,4 @@
-"""Application settings for the ADE backend."""
+"""Application settings for the ADE FastAPI backend."""
 
 from __future__ import annotations
 

@@ -7,8 +7,8 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
+from backend.api import reload_settings
 from backend.api.modules.auth.service import SSO_STATE_COOKIE, AuthService, OIDCProviderMetadata
-from backend.app import reload_settings
 
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
