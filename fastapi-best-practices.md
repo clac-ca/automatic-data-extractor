@@ -198,6 +198,10 @@ In short, GIL allows only one thread to work at a time, which makes it useless f
 3. https://stackoverflow.com/questions/71516140/fastapi-runs-api-calls-in-serial-instead-of-parallel-fashion
 
 ## Pydantic
+
+### Use request body models instead of `request.json()`
+
+Let FastAPI handle payload parsing by accepting a Pydantic model parameter in the route signature instead of reading from `Request` manually. Typed bodies automatically trigger 422 responses when the payload is invalid, participate in dependency caching, and keep handler logic focused on business rules rather than JSON plumbing.
 ### Excessively use Pydantic
 Pydantic has a rich set of features to validate and transform data. 
 
