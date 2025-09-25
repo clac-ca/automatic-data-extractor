@@ -33,11 +33,11 @@ class Settings(BaseSettings):
     docs_environment_allowlist: tuple[str, ...] = ("local", "staging")
     log_level: str = "INFO"
 
-    data_dir: Path = PROJECT_ROOT / "data"
+    data_dir: Path = PROJECT_ROOT / "backend" / "data"
     documents_dir: Path | None = None
     cors_allow_origins: list[str] = Field(default_factory=list)
 
-    database_url: str = "sqlite+aiosqlite:///./data/db/ade.sqlite"
+    database_url: str = "sqlite+aiosqlite:///./backend/data/db/ade.sqlite"
     database_echo: bool = False
     database_pool_size: int = 5
     database_max_overflow: int = 10
