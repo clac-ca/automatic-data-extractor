@@ -28,7 +28,7 @@ class ULIDPrimaryKeyMixin:
     __ulid_field__: ClassVar[str] = "id"
 
     @declared_attr.directive
-    def id(cls) -> Mapped[str]:  # type: ignore[override]
+    def id(cls) -> Mapped[str]:
         column_name = getattr(cls, "__ulid_field__", "id")
         return mapped_column(
             column_name,
