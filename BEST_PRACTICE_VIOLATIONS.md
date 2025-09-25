@@ -28,7 +28,7 @@ The following findings were documented after reviewing the repository against th
 
 ## 3. Expose documentation endpoints only in safe environments
 - **Best practice**: Hide the OpenAPI/Swagger docs by default unless the API is public or the environment is explicitly allowed.【F:fastapi-best-practices.md†L609-L625】
-- **Issue**: `Settings.enable_docs` defaults to `True`, which keeps `/docs`, `/redoc`, and `/openapi.json` available in every deployment.【F:backend/app/config.py†L14-L109】【F:backend/api/main.py†L1-L62】
+- **Issue**: `Settings.enable_docs` defaults to `True`, which keeps `/docs`, `/redoc`, and `/openapi.json` available in every deployment.【F:backend/api/settings.py†L14-L109】【F:backend/api/main.py†L1-L62】
 - **Why it matters**: Always-on docs increase attack surface in production environments. Consider defaulting `enable_docs` to `False` and enabling docs only for local/staging (e.g., via an env var allow-list) so operators must opt in explicitly.
 - ✅ **Suggested fix** – gate docs by environment:
   ```python
@@ -45,7 +45,7 @@ The following findings were documented after reviewing the repository against th
 
 ## 4. Split settings by domain instead of one monolithic `BaseSettings`
 - **Best practice**: Break large configuration surfaces into focused `BaseSettings` classes per module or domain to keep concerns isolated and maintainable.【F:fastapi-best-practices.md†L259-L306】
-- **Issue**: `backend/app/config.py` defines a single `Settings` class that mixes environment flags, database tuning, authentication secrets, SSO settings, retention policies, and documentation toggles in one object.【F:backend/app/config.py†L14-L109】
+- **Issue**: `backend/api/settings.py` defines a single `Settings` class that mixes environment flags, database tuning, authentication secrets, SSO settings, retention policies, and documentation toggles in one object.【F:backend/api/settings.py†L14-L109】
 - **Why it matters**: The growing settings surface becomes harder to reason about, test, and override. Following the guide’s approach (e.g., `AuthConfig`, `DatabaseConfig`) would let each module own its configuration, simplify dependency overrides in tests, and prevent unrelated changes from rippling across the entire app configuration.
 - ✅ **Suggested fix** – compose settings from smaller domains:
   ```python

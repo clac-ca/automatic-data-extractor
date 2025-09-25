@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.service import BaseService, ServiceContext
 from ...db.mixins import generate_ulid
-from ...services import DocumentStorage
 from ..events.recorder import persist_event
 from .exceptions import (
     DocumentFileMissingError,
@@ -22,6 +21,7 @@ from .exceptions import (
 )
 from .models import Document
 from .schemas import DocumentRecord
+from .storage import DocumentStorage
 
 
 class DocumentsService(BaseService):

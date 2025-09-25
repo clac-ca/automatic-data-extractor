@@ -15,13 +15,13 @@ from alembic.config import Config
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from backend.api import Settings, get_settings, reload_settings
 from backend.api.db.engine import render_sync_url, reset_database_state
 from backend.api.db.session import get_sessionmaker
 from backend.api.main import create_app
 from backend.api.modules.auth.service import hash_password
 from backend.api.modules.users.models import User, UserRole
 from backend.api.modules.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
-from backend.app import Settings, get_settings, reload_settings
 
 
 @pytest.fixture(scope="session")
