@@ -1,32 +1,17 @@
-# Documentation Exposure Hardening Plan
+# Current Task – Document database bootstrap behaviour
+
+## Problem
+- We now bootstrap the SQLite database automatically, but the docs still focus on manual setup.
+- Developers need clear guidance on what happens on startup and how to run Alembic migrations explicitly when required.
 
 ## Goal
-Default FastAPI's interactive documentation endpoints to disabled in production
-by teaching `Settings` to only enable docs for explicitly allowed environments
-(e.g., `local`, `staging`).
+Update the developer documentation so the automatic bootstrap flow and manual migration commands are easy to understand.
 
-## Steps
-1. **Settings behaviour**
-   - In `backend/api/settings.py`, change `enable_docs` to default to `False` and
-     add a computed property or helper that turns it on when
-     `environment in {"local", "staging"}` unless an explicit override is
-     provided.
-   - Update `docs_urls` and related helpers to respect the new default and keep
-     `openapi_url` aligned.
-2. **App factory**
-   - Adjust `backend/api/main.py` to lean on the updated settings helper so the
-     FastAPI app hides `/docs`, `/redoc`, and `/openapi.json` unless docs are
-     enabled.
-3. **Tests**
-   - Extend `backend/tests/core/test_settings.py` with coverage for the new
-     default and environment-specific toggling.
-   - Add or update API factory tests (if present) to confirm docs URLs are
-     `None` when disabled.
-4. **Docs & tracking**
-   - Update `BEST_PRACTICE_VIOLATIONS.md` to mark the always-on docs issue as
-     resolved and note the new behaviour in any relevant README sections.
+## Plan
+1. Review backend setup docs (README, docs/) for database and migration instructions that need updating.
+2. Document the new bootstrap helper, clarifying that FastAPI startup and CLI commands run Alembic migrations automatically.
+3. Add a short section outlining how to run `alembic upgrade head` manually for troubleshooting or CI workflows.
+4. Note any environment variables or prerequisites developers should set before running migrations.
 
-## Verification
-- `pytest backend/tests/core/test_settings.py`
-- `ruff check backend/api backend/tests/core`
-- `mypy backend/api backend/tests/core --follow-imports=skip`
+## Checks
+- `ruff check docs backend`
