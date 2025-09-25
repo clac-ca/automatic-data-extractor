@@ -6,18 +6,39 @@ from typing import Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.exceptions import RequestValidationError
+from fastapi.security import (
+    APIKeyHeader,
+    HTTPAuthorizationCredentials,
+    HTTPBearer,
+    OAuth2PasswordRequestForm,
+)
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.service import service_dependency
 from ...db.session import get_session
 from ..users.models import User, UserRole
+from .schemas import TokenRequest
 from .service import AuthenticatedIdentity, AuthService
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 _api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 get_auth_service = service_dependency(AuthService)
+
+
+def parse_token_request(
+    form: Annotated[OAuth2PasswordRequestForm, Depends()]
+) -> TokenRequest:
+    """Normalise the OAuth2 form payload into a validated schema."""
+
+    try:
+        return TokenRequest.model_validate(
+            {"username": form.username, "password": form.password}
+        )
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
 
 
 async def bind_current_principal(
@@ -84,6 +105,7 @@ async def require_admin_user(
 
 
 __all__ = [
+    "parse_token_request",
     "bind_current_principal",
     "bind_current_user",
     "get_auth_service",

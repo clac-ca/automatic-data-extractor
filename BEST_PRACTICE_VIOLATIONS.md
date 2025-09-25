@@ -126,33 +126,10 @@ The following findings were documented after reviewing the repository against th
   ```
   Every route that needs the guard can now depend on `validate_workspace_access`, guaranteeing consistent behaviour.
 
-## 7. Convert user-facing `ValueError`s into validation or HTTP errors
+## 7. Convert user-facing `ValueError`s into validation or HTTP errors *(Resolved)*
 - **Best practice**: Raise `ValueError` inside request models (so FastAPI returns a 422) or translate them into `HTTPException`s; uncaught `ValueError`s bubble up as 500 responses.【F:fastapi-best-practices.md†L571-L605】
-- **Issue**: `AuthService.authenticate` normalises the submitted email with `normalise_email`, which raises `ValueError` for blank credentials. The `/auth/token` route calls this service directly without trapping that exception, so malformed form data yields a 500 instead of a 4xx the client can recover from.【F:backend/api/modules/auth/service.py†L101-L142】【F:backend/api/modules/auth/router.py†L38-L53】
-- **Why it matters**: Login flows are a prime target for brute force and automation; leaking 500s for invalid payloads makes incident triage harder and hides actionable feedback from legitimate users. Wrapping the normalisation in a schema validator (or catching the `ValueError` and raising `HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, ...)`) keeps responses predictable.
-- ✅ **Suggested fix** – push normalisation into a Pydantic form model so FastAPI issues a structured 422:
-  ```python
-  class TokenRequest(BaseModel):
-      username: EmailStr
-      password: SecretStr
-
-      @field_validator("username")
-      @classmethod
-      def _ensure_email(cls, value: EmailStr) -> EmailStr:
-          if not value.strip():
-              raise ValueError("Email must not be empty")
-          return value
-
-
-  @router.post("/token", response_model=TokenResponse)
-  async def issue_token(payload: TokenRequest) -> TokenResponse:
-      user = await service.authenticate(
-          email=payload.username,
-          password=payload.password.get_secret_value(),
-      )
-      ...
-  ```
-  Moving the guardrail into the model (or catching the exception and mapping it to 4xx) keeps error semantics aligned with the OpenAPI schema.
+- ✅ **Status**: `/auth/token` now routes the OAuth2 form through the `TokenRequest` schema and a `parse_token_request` dependency so bad credentials surface as FastAPI 422 responses instead of leaking uncaught `ValueError`s.【F:backend/api/modules/auth/schemas.py†L1-L55】【F:backend/api/modules/auth/dependencies.py†L1-L53】【F:backend/api/modules/auth/router.py†L33-L62】
+- **Notes**: Future form-based routes should follow the same pattern—convert the raw form payload into a Pydantic schema before invoking service logic so validation stays at the boundary.
 
 ---
 
