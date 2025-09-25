@@ -96,7 +96,7 @@ async def test_submit_job_runs_extractor(
     )
 
     actor = seed_identity["workspace_owner"]
-    await _grant_job_permission(actor["id"], seed_identity["workspace_id"])  # type: ignore[index]
+    await _grant_job_permission(actor["id"], seed_identity["workspace_id"])
     token = await _login(async_client, actor["email"], actor["password"])
     workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
     headers = {
@@ -158,7 +158,7 @@ async def test_submit_job_missing_document_returns_404(
 
     configuration_id = await _create_configuration()
     actor = seed_identity["workspace_owner"]
-    await _grant_job_permission(actor["id"], seed_identity["workspace_id"])  # type: ignore[index]
+    await _grant_job_permission(actor["id"], seed_identity["workspace_id"])
     token = await _login(async_client, actor["email"], actor["password"])
     workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
     headers = {
@@ -177,6 +177,34 @@ async def test_submit_job_missing_document_returns_404(
 
 
 @pytest.mark.asyncio
+async def test_submit_job_missing_body_fields_returns_422(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """FastAPI should reject incomplete job submissions with a 422 error."""
+
+    actor = seed_identity["workspace_owner"]
+    await _grant_job_permission(actor["id"], seed_identity["workspace_id"])
+    token = await _login(async_client, actor["email"], actor["password"])
+    workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+    }
+
+    response = await async_client.post(
+        f"{workspace_base}/jobs",
+        headers=headers,
+        json={},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    missing_fields = {entry["loc"][-1] for entry in detail}
+    assert "input_document_id" in missing_fields
+    assert "configuration_id" in missing_fields
+
+
+@pytest.mark.asyncio
 async def test_submit_job_missing_configuration_returns_404(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
@@ -184,7 +212,7 @@ async def test_submit_job_missing_configuration_returns_404(
     """Unknown configuration identifiers should yield 404."""
 
     actor = seed_identity["workspace_owner"]
-    await _grant_job_permission(actor["id"], seed_identity["workspace_id"])  # type: ignore[index]
+    await _grant_job_permission(actor["id"], seed_identity["workspace_id"])
     token = await _login(async_client, actor["email"], actor["password"])
     workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
     headers = {
@@ -224,7 +252,7 @@ async def test_submit_job_processor_failure_returns_500(
     )
 
     actor = seed_identity["workspace_owner"]
-    await _grant_job_permission(actor["id"], seed_identity["workspace_id"])  # type: ignore[index]
+    await _grant_job_permission(actor["id"], seed_identity["workspace_id"])
     token = await _login(async_client, actor["email"], actor["password"])
     workspace_base = f"/workspaces/{seed_identity['workspace_id']}"
     headers = {
