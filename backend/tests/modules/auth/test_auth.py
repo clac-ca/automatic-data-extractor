@@ -151,6 +151,28 @@ async def test_api_key_rotation_and_revocation(
 
 
 @pytest.mark.asyncio
+async def test_api_key_payload_requires_target(
+    async_client: AsyncClient, seed_identity: dict[str, Any]
+) -> None:
+    """FastAPI should surface validation errors when the payload is empty."""
+
+    admin = seed_identity["admin"]
+    token = await _login(async_client, admin["email"], admin["password"])
+
+    response = await async_client.post(
+        "/auth/api-keys",
+        json={},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 422, response.text
+    body = response.json()
+    assert isinstance(body.get("detail"), list)
+    messages = {error.get("msg", "") for error in body["detail"]}
+    assert any("user_id or email is required" in message for message in messages)
+
+
+@pytest.mark.asyncio
 async def test_service_account_api_keys(
     async_client: AsyncClient, seed_identity: dict[str, Any]
 ) -> None:

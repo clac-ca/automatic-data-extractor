@@ -5,10 +5,10 @@ The following findings were documented after reviewing the repository against th
 ## 1. Let FastAPI parse request bodies with Pydantic
 - **Best practice**: “Excessively use Pydantic” to validate and transform request data directly in route signatures.【F:fastapi-best-practices.md†L200-L224】
 - **Issue**: Multiple routes pull `request.json()` manually and then call `model_validate`, bypassing FastAPI’s automatic body parsing and native 422 error responses.
-  - `AuthRoutes.create_api_key` uses the `_parse_api_key_issue_request` dependency to read JSON directly.【F:backend/api/modules/auth/router.py†L25-L107】
-  - `JobsRoutes.submit_job` reads the raw request body and then validates it.【F:backend/api/modules/jobs/router.py†L30-L112】
-  - `WorkspaceRoutes.add_member` fetches JSON from the request instead of letting FastAPI inject a `WorkspaceMemberCreate` instance.【F:backend/api/modules/workspaces/router.py†L26-L99】
 - **Why it matters**: Manual parsing side-steps FastAPI’s validation pipeline, making error handling inconsistent and increasing boilerplate. Moving these payloads into the function signature (e.g., `payload: JobSubmissionRequest`) restores automatic 422 responses, ensures dependency caching, and simplifies unit testing.
+- ✅ **Progress**: `JobsRoutes.submit_job` now accepts `JobSubmissionRequest` directly on the handler signature, letting FastAPI perform validation and emit native 422 errors.【F:backend/api/modules/jobs/router.py†L74-L116】
+- ✅ **Progress**: `AuthRoutes.create_api_key` now relies on FastAPI to instantiate `APIKeyIssueRequest`, removing the manual dependency wrapper and restoring native validation errors.【F:backend/api/modules/auth/router.py†L1-L120】
+- ✅ **Progress**: `WorkspaceRoutes.add_member` now accepts `WorkspaceMemberCreate` directly so FastAPI validates the request body and returns native 422 responses without the helper dependency.【F:backend/api/modules/workspaces/router.py†L1-L99】
 - ✅ **Suggested fix** – rely on FastAPI’s signature parsing:
   ```python
   @router.post("/jobs", response_model=JobRecord, status_code=201)
@@ -21,17 +21,10 @@ The following findings were documented after reviewing the repository against th
   ```
   FastAPI will now build `payload` (with consistent 422 errors) before the handler runs.
 
-## 2. Rely on response models instead of custom JSON serialization
+## 2. Rely on response models instead of custom JSON serialization *(Resolved)*
 - **Best practice**: Avoid instantiating/serialising Pydantic responses manually—FastAPI already validates and renders objects declared via `response_model`.【F:fastapi-best-practices.md†L514-L548】
-- **Issue**: The health check endpoint wraps the `HealthCheckResponse` in a custom `JSONResponse`, defeating response-model validation and duplicating serialization logic.【F:backend/api/modules/health/router.py†L1-L30】【F:backend/api/modules/health/service.py†L12-L30】
-- **Why it matters**: Returning `JSONResponse(content=result)` bypasses the declared `response_model`, so schema regressions won’t be caught. It also performs redundant JSON encoding even though `HealthService.status()` already returns a `HealthCheckResponse`. The route should simply `return result` and let FastAPI handle serialization.
-- ✅ **Suggested fix** – return the schema instance directly:
-  ```python
-  @router.get("", response_model=HealthCheckResponse)
-  async def read_health(service: HealthService = Depends(...)) -> HealthCheckResponse:
-      return await service.status()
-  ```
-  FastAPI will encode the object once and validate it against the documented schema.
+- ✅ **Status**: `/health` now returns the `HealthCheckResponse` instance directly so FastAPI performs validation and serialisation without the custom `JSONResponse` wrapper.【F:backend/api/modules/health/router.py†L1-L28】【F:backend/api/modules/health/service.py†L12-L30】
+- **Notes**: Follow the same pattern for future endpoints—if a service already yields a schema, return it from the route and let FastAPI handle the response.
 
 ## 3. Expose documentation endpoints only in safe environments
 - **Best practice**: Hide the OpenAPI/Swagger docs by default unless the API is public or the environment is explicitly allowed.【F:fastapi-best-practices.md†L609-L625】

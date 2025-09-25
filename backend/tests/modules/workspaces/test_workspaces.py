@@ -246,6 +246,35 @@ async def test_workspace_owner_can_add_member_with_role(
 
 
 @pytest.mark.asyncio
+async def test_workspace_member_payload_requires_user_id(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """FastAPI should surface validation errors when required fields are missing."""
+
+    workspace_owner = seed_identity["workspace_owner"]
+    workspace_id = seed_identity["workspace_id"]
+    token = await _login(
+        async_client,
+        workspace_owner["email"],
+        workspace_owner["password"],
+    )
+
+    response = await async_client.post(
+        f"/workspaces/{workspace_id}/members",
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+        json={},
+    )
+
+    assert response.status_code == 422, response.text
+    detail = response.json()["detail"]
+    missing_fields = {entry["loc"][-1] for entry in detail}
+    assert "user_id" in missing_fields
+
+
+@pytest.mark.asyncio
 async def test_manage_permission_required_for_member_addition(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],

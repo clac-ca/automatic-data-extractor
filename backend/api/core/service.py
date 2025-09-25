@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable, Mapping
+from collections.abc import AsyncIterator, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Annotated, Any, TypeVar
 
@@ -83,6 +83,7 @@ class BaseService:
         if self._context.permissions:
             return self._context.permissions
         if self.request is not None:
+            permissions: frozenset[str] | Iterable[str]
             permissions = getattr(self.request.state, "current_permissions", frozenset())
             if not isinstance(permissions, frozenset):
                 permissions = frozenset(permissions)
@@ -183,6 +184,7 @@ def get_service_context(
     session: AsyncSession | None = getattr(request.state, "db_session", None)
     user = getattr(request.state, "current_user", None)
     workspace = getattr(request.state, "current_workspace", None)
+    permissions: frozenset[str] | Iterable[str]
     permissions = getattr(request.state, "current_permissions", frozenset())
     message_hub: MessageHub | None = getattr(request.app.state, "message_hub", None)
     task_queue: TaskQueue | None = getattr(request.app.state, "task_queue", None)
@@ -207,7 +209,7 @@ ContextDependency = Annotated[ServiceContext, Depends(get_service_context)]
 
 def service_dependency(
     service_cls: type[ServiceT],
-) -> Callable[[ServiceContext], AsyncIterator[ServiceT]]:
+) -> Callable[[SessionDependency, ContextDependency], AsyncIterator[ServiceT]]:
     """Return a dependency that yields the requested service class."""
 
     async def _dependency(
