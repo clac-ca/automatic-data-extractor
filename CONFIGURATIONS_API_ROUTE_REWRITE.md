@@ -1,49 +1,22 @@
-# Configurations API – Route Additions
+# Configurations API – clean-slate routes
 
-Design the configuration module as if we were shipping it for the first time. No compatibility constraints apply; only add the routes we actually need for a clean CRUD + activation flow.
+We are starting fresh: document only the routes the service must expose. Implementation details, payload structure, and storage decisions are left to the agents.
 
-## Resource Model
-Each configuration is scoped to a workspace and document type.
+## Routes to add
 
-Common fields:
-- `id` (UUID)
-- `workspace_id` (UUID)
-- `document_type` (string)
-- `version` (integer, monotonically increasing per document type)
-- `title` (string)
-- `payload` (JSON object)
-- `is_active` (boolean)
-- `activated_at` (datetime or null)
-- `created_at` / `updated_at` (datetimes)
-
-## Endpoint Matrix
-| Method | Path | Purpose | Notes |
-|--------|------|---------|-------|
-| `GET` | `/workspaces/{workspace_id}/configurations` | List configurations in the workspace (filterable by `document_type`, `is_active`). | Serves as the canonical browse endpoint. |
-| `POST` | `/workspaces/{workspace_id}/configurations` | Create a configuration for a document type. | Payload supplies `document_type`, `title`, `payload`, optional `set_active`. Auto-assign version. |
-| `GET` | `/workspaces/{workspace_id}/configurations/{configuration_id}` | Retrieve a single configuration. | Primary read endpoint. |
-| `PUT` | `/workspaces/{workspace_id}/configurations/{configuration_id}` | Replace a configuration’s metadata and payload. | Reject `document_type` or `version` changes; clients create a new configuration instead. |
-| `PATCH` | `/workspaces/{workspace_id}/configurations/{configuration_id}` | Partial update for title/payload flags. | Same validation rules as `PUT`. |
-| `DELETE` | `/workspaces/{workspace_id}/configurations/{configuration_id}` | Remove a configuration. | Hard delete; allowed because there are no legacy consumers. |
-| `POST` | `/workspaces/{workspace_id}/configurations/{configuration_id}/activate` | Set the configuration active for its document type. | Deactivate any previously active configuration of the same document type. |
-| `GET` | `/workspaces/{workspace_id}/configurations/active` | Fetch the currently active configuration for each document type. | Optional `document_type` query parameter to narrow to one type. |
-| `GET` | `/workspaces/{workspace_id}/configurations/{configuration_id}/events` | View lifecycle events for a configuration. | Mirrors the existing event feed pattern across modules. |
-
-## Request/Response Shapes (high-level)
-- **Create / Replace (`POST`, `PUT`)**
-  ```json
-  {
-    "document_type": "invoice",
-    "title": "Invoice v3",
-    "payload": { "steps": [...] },
-    "set_active": true
-  }
-  ```
-- **Partial Update (`PATCH`)** – send only the fields to modify (`title`, `payload`, `set_active`).
-- **Activate (`POST .../activate`)** – empty body; activation driven by URL.
+| Method | Path | Description | Notes |
+|--------|------|-------------|-------|
+| `GET` | `/workspaces/{workspace_id}/configurations` | Browse configurations for the workspace. | Support optional filters via query params: `document_type`, `is_active`. |
+| `POST` | `/workspaces/{workspace_id}/configurations` | Create a configuration record. | Server is responsible for versioning and default flags. |
+| `GET` | `/workspaces/{workspace_id}/configurations/{configuration_id}` | Fetch a specific configuration. | Straightforward read; no expansion or embedding required. |
+| `PUT` | `/workspaces/{workspace_id}/configurations/{configuration_id}` | Replace a configuration’s mutable fields. | Use for full updates; reject attempts to move across document types. |
+| `DELETE` | `/workspaces/{workspace_id}/configurations/{configuration_id}` | Delete a configuration. | Hard delete is acceptable because there are no legacy consumers. |
+| `POST` | `/workspaces/{workspace_id}/configurations/{configuration_id}/activate` | Mark the configuration as active for its document type. | Activation should automatically deactivate any previously active configuration for the same document type. |
+| `GET` | `/workspaces/{workspace_id}/configurations/active` | Return the current active configuration per document type. | Accept an optional `document_type` filter to focus on a single type. |
 
 ## Permissions
-- `workspace:configurations:read` → all `GET` routes.
-- `workspace:configurations:write` → `POST`, `PUT`, `PATCH`, `DELETE`, activation route.
 
-These endpoints provide everything required for the agents to implement a clean configuration lifecycle without legacy baggage.
+- `workspace:configurations:read` → required for any `GET` route.
+- `workspace:configurations:write` → required for the `POST`, `PUT`, `DELETE`, and activation routes.
+
+That’s the entire surface area we need for launch; everything else can evolve once we have real usage data.
