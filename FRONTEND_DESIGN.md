@@ -153,8 +153,8 @@ structure. Update it whenever the backend contracts or roadmap shift.
   state.
 - **API layer** – `src/api/` exposes a thin `ApiClient` wrapper around `fetch`
   plus typed helper modules per backend domain (documents, jobs, etc.). Error
-  mapping converts backend error shapes into friendly messages.
-- **Storage** – Local storage persists user preferences (selected workspace,
+  mapping converts backend error shapes into friendly messages. If `VITE_API_BASE_URL` is not set,
+  the client defaults to `http://127.0.0.1:8000` during local development.
   document-type filter). Changes trigger React Query invalidation to reflect new
   context.
 - **Error handling** – 401/403 responses clear auth state, show toast, and
@@ -236,3 +236,8 @@ client module and documented here.
   expectations before coding to avoid drift.
 - Prefer incremental changes that ship with tests, accessible UI, and descriptive
   commit history.
+
+
+
+
+

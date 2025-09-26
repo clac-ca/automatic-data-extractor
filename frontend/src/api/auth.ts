@@ -4,7 +4,7 @@ import { ApiClient } from "@api/client";
 
 interface TokenResponse {
   readonly access_token: string;
-  readonly token_type?: string;
+  readonly token_type: string;
 }
 
 interface UserProfileResponse {
@@ -23,10 +23,14 @@ export async function signIn(
   client: ApiClient,
   credentials: SignInCredentials
 ): Promise<Session> {
+  const payload = new URLSearchParams();
+  payload.set("username", credentials.email);
+  payload.set("password", credentials.password);
+
   const token = await client.post<TokenResponse>("/auth/token", {
-    json: {
-      username: credentials.email,
-      password: credentials.password
+    body: payload,
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
     }
   });
 
