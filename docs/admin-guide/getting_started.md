@@ -18,7 +18,7 @@ anywhere without provisioning external infrastructure.
 
 > **Quickstart checklist**
 > 1. Install Python 3.11, Node.js 20, and Git.
-> 2. `git clone`, create a virtual environment, run `pip install -e .[dev]`, then `npm install`.
+> 2. `git clone`, create a virtual environment, run `pip install -e .[dev]`.
 > 3. Run `ade start` and browse <http://localhost:5173>.
 
 ## 2. Prerequisites
@@ -67,9 +67,6 @@ If you delete `.env`, ADE falls back to its defaults (SQLite in
 
    python -m pip install --upgrade pip
    pip install -e .[dev]
-   cd frontend
-   npm install
-   cd ..
    ```
 
 2. Launch both servers:
@@ -78,7 +75,7 @@ If you delete `.env`, ADE falls back to its defaults (SQLite in
    ade start
    ```
 
-   The CLI prints a banner with service URLs, then streams colour-coded logs from FastAPI and Vite. Stop with `Ctrl+C`. Flags such as `--skip-frontend`, `--skip-backend`, `--vite-api-url`, and `--no-color` help in custom setups. Open <http://localhost:5173> for the frontend and <http://localhost:8000/docs> for the interactive API docs.
+   The CLI prints a banner with service URLs, then streams colour-coded logs from FastAPI and Vite. Stop with `Ctrl+C`. Flags such as `--skip-frontend`, `--skip-backend`, `--vite-api-url`, and `--no-color` help in custom setups. The first run automatically executes `npm install`, so dependencies are ready before Vite starts. Open <http://localhost:5173> for the frontend and <http://localhost:8000/docs> for the interactive API docs.
 
 3. Confirm the API is healthy:
 
@@ -89,6 +86,7 @@ If you delete `.env`, ADE falls back to its defaults (SQLite in
 All runtime state stays under `backend/data/`. Remove that directory to reset ADE to a clean slate (for example, between demos).
 
 ### Run backend and frontend manually (optional)
+Run `npm install` inside `frontend/` before starting the Vite dev server manually (repeat only after dependency updates).
 
 ```bash
 # Terminal 1
@@ -96,6 +94,7 @@ uvicorn backend.api.main:app --reload
 
 # Terminal 2
 cd frontend
+npm install  # first run only
 npm run dev -- --host
 ```
 
@@ -217,4 +216,9 @@ administrators confidently using the CLI.
 - **Port conflicts (8000/5173):** pass `--backend-port` / `--frontend-port` to `ade start`, or stop whatever process currently occupies those ports.
 - **Coloured logs appear garbled on Windows:** rerun with `ade start --no-color`.
 - **Frontend cannot reach the API:** set `--vite-api-url http://127.0.0.1:8000` when the backend runs on a different host or port.
+
+
+
+
+
 

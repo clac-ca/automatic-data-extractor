@@ -80,7 +80,7 @@ def register_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _build_specs(args: argparse.Namespace) -> list[ProcessSpec]:
+def _build_specs(args: argparse.Namespace, *, npm_command: str) -> list[ProcessSpec]:
     specs: list[ProcessSpec] = []
 
     if not args.skip_backend:
@@ -98,7 +98,6 @@ def _build_specs(args: argparse.Namespace) -> list[ProcessSpec]:
         specs.append(ProcessSpec("backend", backend_cmd, ROOT_DIR))
 
     if not args.skip_frontend:
-        npm_command = "npm.cmd" if os.name == "nt" else "npm"
         frontend_cmd = [
             npm_command,
             "run",
@@ -115,6 +114,26 @@ def _build_specs(args: argparse.Namespace) -> list[ProcessSpec]:
         specs.append(ProcessSpec("frontend", frontend_cmd, FRONTEND_DIR, env=env))
 
     return specs
+
+
+def _ensure_frontend_dependencies(frontend_dir: Path, npm_command: str) -> None:
+    node_modules = frontend_dir / "node_modules"
+    if node_modules.exists():
+        return
+
+    print("Installing frontend dependencies (npm install)...")
+    try:
+        subprocess.run(
+            [npm_command, "install"],
+            cwd=str(frontend_dir),
+            check=True,
+        )
+    except FileNotFoundError as exc:  # pragma: no cover - depends on local env
+        raise ValueError(
+            "npm is not available on PATH. Install Node.js 20 LTS before running `ade start`."
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        raise ValueError("`npm install` failed. Review the output above for details.") from exc
 
 
 def _enable_windows_ansi() -> None:
@@ -213,7 +232,11 @@ def _stop_process(proc: subprocess.Popen[str]) -> None:
 def start(args: argparse.Namespace) -> None:
     """Launch the backend and frontend development servers."""
 
-    specs = _build_specs(args)
+    npm_command = "npm.cmd" if os.name == "nt" else "npm"
+    if not args.skip_frontend:
+        _ensure_frontend_dependencies(FRONTEND_DIR, npm_command)
+
+    specs = _build_specs(args, npm_command=npm_command)
     if not specs:
         raise ValueError("Nothing to start. Remove --skip options to launch a server.")
 
