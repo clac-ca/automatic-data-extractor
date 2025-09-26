@@ -1,11 +1,22 @@
 The automatic-data-extractor (ADE) aims to transform semi-structured spreadsheets and PDFs into clean, structured tables using deterministic, revision-controlled logic.  This is the only AGENTS.md file in this repo.  Pay close attention to it.
 
+All agent-facing playbooks now live under `agents/` so the repository root can stay focused on human-facing docs and source.
+
 ## Repository layout (planned)
 ```
 .
 ├─ README.md
-├─ ADE_GLOSSARY.md
 ├─ AGENTS.md
+├─ agents/
+│  ├─ ADE_GLOSSARY.md
+│  ├─ BACKEND_REWRITE_PLAN.md
+│  ├─ BEST_PRACTICE_VIOLATIONS.md
+│  ├─ CURRENT_TASK.md
+│  ├─ DOCUMENTATION_REWRITE_PLAN.md
+│  ├─ FRONTEND_DESIGN.md
+│  ├─ PREVIOUS_TASK.md
+│  ├─ code_review_instructions.md
+│  └─ fastapi-best-practices.md
 ├─ backend/
 │  ├─ app/            # FastAPI entrypoint, routes, schemas, services
 │  ├─ data/           # Gitignored runtime artefacts (database, documents, caches)
@@ -37,21 +48,21 @@ The automatic-data-extractor (ADE) aims to transform semi-structured spreadsheet
 ### 1. Task Implementation
 
 **When**: default mode.
-**Goal**: execute the active plan detailed in `CURRENT_TASK.md`, and update the `CURRENT_TASK.md` for the next run. No scope creep.
+**Goal**: execute the active plan detailed in `agents/CURRENT_TASK.md`, and update `agents/CURRENT_TASK.md` for the next run. No scope creep.
 **Steps**:
 
-1. Read `CURRENT_TASK.md` (source of truth).
+1. Read `agents/CURRENT_TASK.md` (source of truth).
 2. Implement only the defined scope with production-ready code.
 3. Add/update tests and deterministic fixtures in `examples/`.
 4. Run quality gates (pytest, ruff, mypy, npm test/lint/typecheck).
 5. Update docs if architecture or terminology changes.
 6. Open a focused PR with summary, assumptions, follow-ups.
-7. Rotate: `CURRENT_TASK.md → PREVIOUS_TASK.md` and draft next plan.
+7. Rotate: `agents/CURRENT_TASK.md → agents/PREVIOUS_TASK.md` and draft the next plan.
 
 **Acceptance criteria**:
 
 * CI checks pass.
-* Matches `CURRENT_TASK.md` scope exactly.
+* Matches `agents/CURRENT_TASK.md` scope exactly.
 * Deterministic behavior (no I/O or randomness in extraction).
 
 ---
