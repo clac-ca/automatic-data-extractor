@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 from backend.api.db.engine import reset_database_state
 from backend.api.settings import Settings
-from backend.cli.core.runtime import normalise_email, open_session, read_secret
+from cli.core.runtime import normalise_email, open_session, read_secret
 
 
 def test_normalise_email_lowercases_and_strips() -> None:

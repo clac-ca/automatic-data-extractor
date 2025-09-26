@@ -5,7 +5,7 @@ Provide a lightweight `ade` command that mirrors the familiar structure of `back
 
 ## Package Layout
 ```
-backend/cli/
+cli/
 ├── __init__.py
 ├── main.py              # entry point; analogous to backend/api/main.py
 ├── app.py               # build_cli_app() wires parser + command registry
@@ -21,7 +21,7 @@ backend/cli/
 - Console script (`pyproject.toml`):
   ```toml
   [project.scripts]
-  ade = "backend.cli.main:main"
+  ade = "cli.main:main"
   ```
 - All code uses stdlib (`argparse`, `asyncio`, `json`, `pathlib`, `textwrap`).
 
@@ -65,7 +65,7 @@ ade api-keys revoke API_KEY_ID
    - Prefer `--user-id`; if `--email` provided, normalise and call `UsersRepository.get_by_email` to locate the account.
 7. **Testing**
    - Unit: parser wiring (ensure each subcommand resolves to expected handler), helper functions (email normalisation, secret file reading).
-   - Integration: execute `python -m backend.cli ...` inside pytest using the existing SQLite fixtures (`backend/tests/conftest.py`) to verify DB side effects and stdout/stderr.
+- Integration: execute `python -m cli ...` inside pytest using the existing SQLite fixtures (`backend/tests/conftest.py`) to verify DB side effects and stdout/stderr.
 8. **Documentation**
    - Document CLI usage in `docs/admin-guide/getting_started.md` (create admin, reset password, rotate API key).
    - Add quickstart snippet to README.

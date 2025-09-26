@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from backend.cli.app import build_cli_app
-from backend.cli.commands import api_keys, users
+from cli.app import build_cli_app
+from cli.commands import api_keys, users
 
 
 def test_users_create_handler_resolution() -> None:
