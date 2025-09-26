@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 import httpx
 import jwt
-from fastapi import HTTPException, Request, status
+from fastapi import HTTPException, Request, Response, status
 from jwt import PyJWKClient
 
 from ...core.service import BaseService, ServiceContext
@@ -21,10 +21,11 @@ from .models import APIKey
 from .repository import APIKeysRepository
 from .security import (
     TokenPayload,
-    create_access_token,
-    decode_access_token,
+    create_signed_token,
+    decode_signed_token,
     generate_api_key_components,
     hash_api_key,
+    hash_csrf_token,
     hash_password,
     verify_password,
 )
@@ -52,7 +53,7 @@ class AuthenticatedIdentity:
     """Identity resolved during authentication."""
 
     user: User
-    credentials: Literal["access_token", "api_key"]
+    credentials: Literal["session_cookie", "bearer_token", "api_key"]
     api_key: APIKey | None = None
 
     @property
@@ -63,6 +64,19 @@ class AuthenticatedIdentity:
     def is_service_account(self) -> bool:
         return bool(self.user.is_service_account)
 
+
+@dataclass(slots=True)
+class SessionTokens:
+    """Bundle of cookies issued when establishing a session."""
+
+    session_id: str
+    access_token: str
+    refresh_token: str
+    csrf_token: str
+    access_expires_at: datetime
+    refresh_expires_at: datetime
+    access_max_age: int
+    refresh_max_age: int
 
 @dataclass(slots=True)
 class OIDCProviderMetadata:
@@ -141,27 +155,193 @@ class AuthService(BaseService):
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="User inactive")
         return user
 
-    async def issue_token(self, user: User) -> str:
-        """Return a signed token for ``user``."""
+    def is_secure_request(self, request: Request) -> bool:
+        """Return ``True`` when the request originated over HTTPS."""
 
-        expires = timedelta(minutes=self.settings.auth_token_exp_minutes)
-        return create_access_token(
+        forwarded_proto = request.headers.get("x-forwarded-proto")
+        if forwarded_proto:
+            candidate = forwarded_proto.split(",", 1)[0].strip().lower()
+            if candidate:
+                return candidate == "https"
+        return request.url.scheme == "https"
+
+    def _issue_session_tokens(
+        self, *, user: User, session_id: str | None = None
+    ) -> SessionTokens:
+        """Create access/refresh/CSRF tokens for ``user``."""
+
+        settings = self.settings
+        session_identifier = session_id or secrets.token_urlsafe(16)
+        access_delta = timedelta(minutes=settings.auth_token_exp_minutes)
+        refresh_delta = timedelta(days=settings.auth_refresh_token_exp_days)
+        csrf_token = secrets.token_urlsafe(32)
+        csrf_hash = hash_csrf_token(csrf_token)
+
+        now = datetime.now(UTC)
+        access_expires_at = now + access_delta
+        refresh_expires_at = now + refresh_delta
+
+        access_token = create_signed_token(
             user_id=user.id,
             email=user.email,
             role=user.role,
-            secret=self.settings.auth_token_secret,
-            algorithm=self.settings.auth_token_algorithm,
-            expires_delta=expires,
+            session_id=session_identifier,
+            token_type="access",
+            secret=settings.auth_token_secret,
+            algorithm=settings.auth_token_algorithm,
+            expires_delta=access_delta,
+            csrf_hash=csrf_hash,
+        )
+        refresh_token = create_signed_token(
+            user_id=user.id,
+            email=user.email,
+            role=user.role,
+            session_id=session_identifier,
+            token_type="refresh",
+            secret=settings.auth_token_secret,
+            algorithm=settings.auth_token_algorithm,
+            expires_delta=refresh_delta,
+            csrf_hash=csrf_hash,
         )
 
-    def decode_token(self, token: str) -> TokenPayload:
-        """Decode ``token`` and return its payload."""
+        return SessionTokens(
+            session_id=session_identifier,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            csrf_token=csrf_token,
+            access_expires_at=access_expires_at,
+            refresh_expires_at=refresh_expires_at,
+            access_max_age=int(access_delta.total_seconds()),
+            refresh_max_age=int(refresh_delta.total_seconds()),
+        )
 
-        return decode_access_token(
+    async def start_session(self, *, user: User) -> SessionTokens:
+        """Return freshly minted session cookies for ``user``."""
+
+        return self._issue_session_tokens(user=user)
+
+    async def refresh_session(
+        self, *, payload: TokenPayload, user: User
+    ) -> SessionTokens:
+        """Rotate the session using the existing ``payload``."""
+
+        if payload.token_type != "refresh":
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Refresh token required")
+        return self._issue_session_tokens(user=user, session_id=payload.session_id)
+
+    def decode_token(
+        self, token: str, *, expected_type: Literal["access", "refresh", "any"] = "any"
+    ) -> TokenPayload:
+        """Decode ``token`` and ensure the expected token type."""
+
+        payload = decode_signed_token(
             token=token,
             secret=self.settings.auth_token_secret,
             algorithms=[self.settings.auth_token_algorithm],
         )
+        if expected_type != "any" and payload.token_type != expected_type:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Unexpected token type")
+        return payload
+
+    def apply_session_cookies(
+        self, response: Response, tokens: SessionTokens, *, secure: bool
+    ) -> None:
+        """Attach cookies for ``tokens`` to ``response``."""
+
+        settings = self.settings
+        session_path = self._normalise_cookie_path(settings.auth_cookie_path)
+        refresh_path = self._refresh_cookie_path(session_path)
+        cookie_kwargs = {
+            "domain": settings.auth_cookie_domain,
+            "path": session_path,
+            "secure": secure,
+            "httponly": True,
+            "samesite": "lax",
+        }
+        response.set_cookie(
+            key=settings.auth_session_cookie,
+            value=tokens.access_token,
+            max_age=tokens.access_max_age,
+            **cookie_kwargs,
+        )
+        response.set_cookie(
+            key=settings.auth_refresh_cookie,
+            value=tokens.refresh_token,
+            max_age=tokens.refresh_max_age,
+            domain=settings.auth_cookie_domain,
+            path=refresh_path,
+            secure=secure,
+            httponly=True,
+            samesite="lax",
+        )
+        response.set_cookie(
+            key=settings.auth_csrf_cookie,
+            value=tokens.csrf_token,
+            max_age=tokens.access_max_age,
+            domain=settings.auth_cookie_domain,
+            path=session_path,
+            secure=secure,
+            httponly=False,
+            samesite="lax",
+        )
+        response.headers["X-CSRF-Token"] = tokens.csrf_token
+
+    def clear_session_cookies(self, response: Response) -> None:
+        """Remove session cookies from the client response."""
+
+        settings = self.settings
+        session_path = self._normalise_cookie_path(settings.auth_cookie_path)
+        refresh_path = self._refresh_cookie_path(session_path)
+        response.delete_cookie(
+            key=settings.auth_session_cookie,
+            domain=settings.auth_cookie_domain,
+            path=session_path,
+        )
+        response.delete_cookie(
+            key=settings.auth_refresh_cookie,
+            domain=settings.auth_cookie_domain,
+            path=refresh_path,
+        )
+        response.delete_cookie(
+            key=settings.auth_csrf_cookie,
+            domain=settings.auth_cookie_domain,
+            path=session_path,
+        )
+
+    def enforce_csrf(self, request: Request, payload: TokenPayload) -> None:
+        """Verify the CSRF token for mutating requests."""
+
+        safe_methods = {"GET", "HEAD", "OPTIONS"}
+        if request.method.upper() in safe_methods:
+            return
+
+        csrf_cookie = request.cookies.get(self.settings.auth_csrf_cookie)
+        header_token = request.headers.get("X-CSRF-Token")
+        if not csrf_cookie or not header_token:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="CSRF token missing")
+        if csrf_cookie != header_token:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="CSRF token mismatch")
+
+        expected_hash = payload.csrf_hash
+        if not expected_hash:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="CSRF token mismatch")
+        if hash_csrf_token(header_token) != expected_hash:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="CSRF token mismatch")
+
+    def _normalise_cookie_path(self, raw_path: str | None) -> str:
+        path = (raw_path or "/").strip()
+        if not path:
+            return "/"
+        if not path.startswith("/"):
+            path = f"/{path}"
+        return path
+
+    def _refresh_cookie_path(self, session_path: str) -> str:
+        base = session_path.rstrip("/")
+        suffix = "/auth/refresh"
+        if not base:
+            return suffix
+        return f"{base}{suffix}"
 
     async def resolve_user(self, payload: TokenPayload) -> User:
         """Return the user represented by ``payload`` if active."""

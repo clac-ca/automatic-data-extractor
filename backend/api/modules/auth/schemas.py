@@ -4,22 +4,25 @@ from __future__ import annotations
 
 from typing import Literal
 
+from datetime import datetime
+
 from email_validator import EmailNotValidError, validate_email
 from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
 
 from ...core.schema import BaseSchema
+from ..users.schemas import UserProfile
 from .service import normalise_email
 
 
-class TokenRequest(BaseSchema):
-    """Credentials submitted to the token endpoint."""
+class LoginRequest(BaseSchema):
+    """Credentials submitted when performing a password login."""
 
-    username: EmailStr
+    email: EmailStr
     password: SecretStr
 
-    @field_validator("username", mode="plain")
+    @field_validator("email", mode="plain")
     @classmethod
-    def _normalise_username(cls, value: EmailStr | str) -> str:
+    def _normalise_email(cls, value: EmailStr | str) -> str:
         """Lowercase, trim, and lightly validate the submitted email."""
 
         candidate = normalise_email(str(value))
@@ -50,11 +53,12 @@ class TokenRequest(BaseSchema):
         return candidate
 
 
-class TokenResponse(BaseSchema):
-    """Issued bearer token."""
+class SessionEnvelope(BaseSchema):
+    """Envelope returned when a session is established or refreshed."""
 
-    access_token: str
-    token_type: str = "bearer"
+    user: UserProfile
+    expires_at: datetime
+    refresh_expires_at: datetime
 
 
 class APIKeyIssueRequest(BaseSchema):
@@ -99,9 +103,9 @@ class APIKeySummary(BaseSchema):
 
 
 __all__ = [
-    "TokenRequest",
+    "LoginRequest",
+    "SessionEnvelope",
     "APIKeyIssueRequest",
     "APIKeyIssueResponse",
     "APIKeySummary",
-    "TokenResponse",
 ]

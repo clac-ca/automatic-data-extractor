@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import wraps
-from typing import Any
+from typing import Any, Literal
 
 import jwt
 from fastapi import HTTPException, status
@@ -19,13 +19,16 @@ from ..users.models import UserRole
 
 @dataclass(slots=True)
 class TokenPayload:
-    """Decoded contents of an access token."""
+    """Decoded contents of an issued authentication token."""
 
     user_id: str
     email: str
     role: UserRole
     issued_at: datetime
     expires_at: datetime
+    token_type: Literal["access", "refresh"]
+    session_id: str
+    csrf_hash: str | None = None
 
 
 _SALT_BYTES = 16
@@ -98,29 +101,36 @@ def verify_password(password: str, hashed: str) -> bool:
     return secrets.compare_digest(candidate, expected)
 
 
-def create_access_token(
+def create_signed_token(
     *,
     user_id: str,
     email: str,
     role: UserRole,
+    session_id: str,
+    token_type: Literal["access", "refresh"],
     secret: str,
     algorithm: str,
     expires_delta: timedelta,
+    csrf_hash: str | None = None,
 ) -> str:
-    """Return a signed JWT for the supplied identity."""
+    """Return a signed JWT for the supplied identity and session."""
 
     now = datetime.now(UTC)
-    payload = {
+    payload: dict[str, Any] = {
         "sub": user_id,
         "email": email,
         "role": role.value,
         "iat": int(now.timestamp()),
         "exp": int((now + expires_delta).timestamp()),
+        "sid": session_id,
+        "typ": token_type,
     }
+    if csrf_hash:
+        payload["csrf"] = csrf_hash
     return jwt.encode(payload, secret, algorithm=algorithm)
 
 
-def decode_access_token(*, token: str, secret: str, algorithms: Sequence[str]) -> TokenPayload:
+def decode_signed_token(*, token: str, secret: str, algorithms: Sequence[str]) -> TokenPayload:
     """Decode ``token`` and return the parsed payload."""
 
     data = jwt.decode(token, secret, algorithms=list(algorithms))
@@ -128,12 +138,23 @@ def decode_access_token(*, token: str, secret: str, algorithms: Sequence[str]) -
     issued_at = datetime.fromtimestamp(int(data["iat"]), tz=UTC)
     expires_at = datetime.fromtimestamp(int(data["exp"]), tz=UTC)
     role = UserRole(data["role"])
+    token_type = str(data.get("typ", "")).lower()
+    if token_type not in {"access", "refresh"}:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Unsupported token type")
+    session_id = str(data.get("sid", "")).strip()
+    if not session_id:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    csrf_raw = data.get("csrf")
+    csrf_hash = str(csrf_raw) if csrf_raw is not None else None
     return TokenPayload(
         user_id=str(data["sub"]),
         email=str(data.get("email", "")),
         role=role,
         issued_at=issued_at,
         expires_at=expires_at,
+        token_type=token_type,  # type: ignore[arg-type]
+        session_id=session_id,
+        csrf_hash=csrf_hash,
     )
 
 
@@ -150,6 +171,12 @@ def hash_api_key(secret: str) -> str:
 
     digest = hashlib.sha256(secret.encode("utf-8")).digest()
     return _encode(digest)
+
+
+def hash_csrf_token(token: str) -> str:
+    """Return a hex digest for CSRF token comparisons."""
+
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def access_control(
@@ -211,9 +238,10 @@ __all__ = [
     "TokenPayload",
     "hash_password",
     "hash_api_key",
+    "hash_csrf_token",
     "verify_password",
-    "create_access_token",
-    "decode_access_token",
+    "create_signed_token",
+    "decode_signed_token",
     "access_control",
     "generate_api_key_components",
 ]

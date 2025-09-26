@@ -1,5 +1,6 @@
 """Routes for authentication flows."""
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi_utils.cbv import cbv
@@ -10,13 +11,13 @@ from ..users.dependencies import get_users_service
 from ..users.models import User
 from ..users.schemas import UserProfile
 from ..users.service import UsersService
-from .dependencies import bind_current_user, get_auth_service, parse_token_request
+from .dependencies import bind_current_user, get_auth_service
 from .schemas import (
     APIKeyIssueRequest,
     APIKeyIssueResponse,
     APIKeySummary,
-    TokenRequest,
-    TokenResponse,
+    LoginRequest,
+    SessionEnvelope,
 )
 from .security import access_control
 from .service import SSO_STATE_COOKIE, AuthService
@@ -28,24 +29,87 @@ class AuthRoutes:
     service: AuthService = Depends(get_auth_service)  # noqa: B008
 
     @router.post(
-        "/token",
-        response_model=TokenResponse,
+        "/login",
+        response_model=SessionEnvelope,
         status_code=status.HTTP_200_OK,
-        summary="Exchange credentials for an access token",
+        summary="Authenticate with email and password",
         openapi_extra={"security": []},
     )
-    async def issue_token(
+    async def login(
         self,
-        credentials: TokenRequest = Depends(parse_token_request),  # noqa: B008
-    ) -> TokenResponse:
-        """Return a JWT for the supplied email/password combination."""
+        request: Request,
+        response: Response,
+        payload: LoginRequest,
+    ) -> SessionEnvelope:
+        """Authenticate with credentials and establish the session cookies."""
 
         user = await self.service.authenticate(
-            email=credentials.username,
-            password=credentials.password.get_secret_value(),
+            email=payload.email,
+            password=payload.password.get_secret_value(),
         )
-        token = await self.service.issue_token(user)
-        return TokenResponse(access_token=token)
+        tokens = await self.service.start_session(user=user)
+        secure_cookie = self.service.is_secure_request(request)
+        self.service.apply_session_cookies(response, tokens, secure=secure_cookie)
+        profile = UserProfile.model_validate(user)
+        return SessionEnvelope(
+            user=profile,
+            expires_at=tokens.access_expires_at,
+            refresh_expires_at=tokens.refresh_expires_at,
+        )
+
+    @router.post(
+        "/refresh",
+        response_model=SessionEnvelope,
+        status_code=status.HTTP_200_OK,
+        summary="Refresh the active browser session",
+        openapi_extra={"security": []},
+    )
+    async def refresh_session(
+        self,
+        request: Request,
+        response: Response,
+    ) -> SessionEnvelope:
+        """Rotate the session using the refresh cookie and re-issue cookies."""
+
+        refresh_cookie = request.cookies.get(self.service.settings.auth_refresh_cookie)
+        if not refresh_cookie:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Refresh token missing")
+        try:
+            payload = self.service.decode_token(refresh_cookie, expected_type="refresh")
+        except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token") from exc
+
+        self.service.enforce_csrf(request, payload)
+        user = await self.service.resolve_user(payload)
+        tokens = await self.service.refresh_session(payload=payload, user=user)
+        secure_cookie = self.service.is_secure_request(request)
+        self.service.apply_session_cookies(response, tokens, secure=secure_cookie)
+        profile = UserProfile.model_validate(user)
+        return SessionEnvelope(
+            user=profile,
+            expires_at=tokens.access_expires_at,
+            refresh_expires_at=tokens.refresh_expires_at,
+        )
+
+    @router.post(
+        "/logout",
+        status_code=status.HTTP_204_NO_CONTENT,
+        summary="Terminate the active session",
+        openapi_extra={"security": []},
+    )
+    async def logout(self, request: Request, response: Response) -> Response:
+        """Remove authentication cookies and end the session."""
+
+        session_cookie = request.cookies.get(self.service.settings.auth_session_cookie)
+        if session_cookie:
+            try:
+                payload = self.service.decode_token(session_cookie, expected_type="access")
+            except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid session token") from exc
+            self.service.enforce_csrf(request, payload)
+        self.service.clear_session_cookies(response)
+        response.status_code = status.HTTP_204_NO_CONTENT
+        return response
 
     @router.get(
         "/me",
@@ -159,7 +223,7 @@ class AuthRoutes:
     async def start_sso_login(self, request: Request) -> RedirectResponse:
         challenge = await self.service.prepare_sso_login()
         redirect = RedirectResponse(challenge.redirect_url, status_code=status.HTTP_302_FOUND)
-        secure_cookie = request.url.scheme == "https"
+        secure_cookie = self.service.is_secure_request(request)
         redirect.set_cookie(
             key=SSO_STATE_COOKIE,
             value=challenge.state_token,
@@ -173,9 +237,9 @@ class AuthRoutes:
 
     @router.get(
         "/sso/callback",
-        response_model=TokenResponse,
+        response_model=SessionEnvelope,
         status_code=status.HTTP_200_OK,
-        summary="Handle the SSO callback and issue a token",
+        summary="Handle the SSO callback and establish a session",
         openapi_extra={"security": []},
     )
     async def finish_sso_login(
@@ -184,7 +248,7 @@ class AuthRoutes:
         response: Response,
         code: str | None = None,
         state: str | None = None,
-    ) -> TokenResponse:
+    ) -> SessionEnvelope:
         if not code or not state:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -207,8 +271,15 @@ class AuthRoutes:
         finally:
             response.delete_cookie(SSO_STATE_COOKIE, path="/auth/sso")
 
-        token = await self.service.issue_token(user)
-        return TokenResponse(access_token=token)
+        tokens = await self.service.start_session(user=user)
+        secure_cookie = self.service.is_secure_request(request)
+        self.service.apply_session_cookies(response, tokens, secure=secure_cookie)
+        profile = UserProfile.model_validate(user)
+        return SessionEnvelope(
+            user=profile,
+            expires_at=tokens.access_expires_at,
+            refresh_expires_at=tokens.refresh_expires_at,
+        )
 
 
 __all__ = ["router"]

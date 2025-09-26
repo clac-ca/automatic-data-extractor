@@ -2,9 +2,10 @@ import type { Session, SessionUser } from "@app/providers/SessionProvider";
 
 import { ApiClient } from "@api/client";
 
-interface TokenResponse {
-  readonly access_token: string;
-  readonly token_type: string;
+interface SessionEnvelopeResponse {
+  readonly user: UserProfileResponse;
+  readonly expires_at: string;
+  readonly refresh_expires_at: string;
 }
 
 interface UserProfileResponse {
@@ -23,33 +24,29 @@ export async function signIn(
   client: ApiClient,
   credentials: SignInCredentials
 ): Promise<Session> {
-  const payload = new URLSearchParams();
-  payload.set("username", credentials.email);
-  payload.set("password", credentials.password);
-
-  const token = await client.post<TokenResponse>("/auth/token", {
-    body: payload,
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
-    }
+  const session = await client.post<SessionEnvelopeResponse>("/auth/login", {
+    json: credentials
   });
 
-  const profile = await client.get<UserProfileResponse>("/auth/me", {
-    headers: {
-      Authorization: `Bearer ${token.access_token}`
-    }
-  });
+  const user = mapProfile(session.user);
 
-  const user: SessionUser = {
+  return {
+    user,
+    expiresAt: session.expires_at,
+    refreshExpiresAt: session.refresh_expires_at
+  };
+}
+
+export async function signOut(client: ApiClient): Promise<void> {
+  await client.post("/auth/logout");
+}
+
+function mapProfile(profile: UserProfileResponse): SessionUser {
+  return {
     id: profile.user_id,
     email: profile.email,
     role: profile.role,
     isActive: profile.is_active,
     displayName: profile.email.split("@")[0] ?? profile.email
-  };
-
-  return {
-    accessToken: token.access_token,
-    user
   };
 }
