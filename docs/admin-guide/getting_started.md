@@ -71,7 +71,7 @@ If you delete `.env`, ADE falls back to its defaults (SQLite in
    ade start
    ```
 
-   The CLI prints a banner with service URLs, then streams colour-coded logs from FastAPI and Vite. Stop with `Ctrl+C`. Flags such as `--skip-frontend`, `--skip-backend`, `--vite-api-url`, and `--no-color` help in custom setups. The first run automatically executes `npm install`, so dependencies are ready before Vite starts. Open <http://localhost:5173> for the frontend and <http://localhost:8000/docs> for the interactive API docs.
+   The CLI prints a banner with service URLs, then streams colour-coded logs from FastAPI and Vite. Stop with `Ctrl+C`. Flags such as `--skip-frontend`, `--skip-backend`, `--vite-api-base-url`, and `--no-color` help in custom setups. The first run automatically executes `npm install`, so dependencies are ready before Vite starts. Open <http://localhost:5173> for the frontend and <http://localhost:8000/docs> for the interactive API docs.
 
 3. Confirm the API is healthy:
 
@@ -131,7 +131,7 @@ curl http://127.0.0.1:8000/health
 
 When you deploy the frontend in production, compile it once (`npm run build`)
 and serve the resulting `frontend/dist/` assets from your reverse proxy or
-static site host. Point the frontend at the backend URL with the `VITE_API_URL`
+static site host. Point the frontend at the backend URL with the `VITE_API_BASE_URL`
 environment variable before building.
 
 To stop and remove the container:
@@ -211,7 +211,7 @@ administrators confidently using the CLI.
 - **`ade start` exits immediately:** ensure you ran `npm install` inside `frontend/` and that `uvicorn` is available (re-run `pip install -e .[dev]`).
 - **Port conflicts (8000/5173):** pass `--backend-port` / `--frontend-port` to `ade start`, or stop whatever process currently occupies those ports.
 - **Coloured logs appear garbled on Windows:** rerun with `ade start --no-color`.
-- **Frontend cannot reach the API:** set `--vite-api-url http://127.0.0.1:8000` when the backend runs on a different host or port.
+- **Frontend cannot reach the API:** set `--vite-api-base-url http://127.0.0.1:8000` (or update `VITE_API_BASE_URL` in your `.env`) when the backend runs on a different host or port.
 
 
 

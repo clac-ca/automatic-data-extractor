@@ -7,12 +7,20 @@ import time
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 
 from ..core.logging import bind_request_context, clear_request_context
+from ..settings import Settings, get_settings
 
 _REQUEST_LOGGER = logging.getLogger("ade.request")
+
+def _resolve_settings(app: FastAPI) -> Settings:
+    settings = getattr(app.state, "settings", None)
+    if isinstance(settings, Settings):
+        return settings
+    return get_settings()
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
@@ -62,6 +70,17 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
 def register_middleware(app: FastAPI) -> None:
     """Register ADE default middleware on the FastAPI application."""
+
+    settings = _resolve_settings(app)
+
+    if settings.cors_allow_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_allow_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     app.add_middleware(RequestContextMiddleware)
 

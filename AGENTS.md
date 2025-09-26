@@ -1,5 +1,7 @@
 The automatic-data-extractor (ADE) aims to transform semi-structured spreadsheets and PDFs into clean, structured tables using deterministic, revision-controlled logic.  This is the only AGENTS.md file in this repo.  Pay close attention to it.
 
+AGENTS.md is provided to every Codex AI agent run; it explains how agents should interpret user instructions and interact with the repository.
+
 All agent-facing playbooks now live under `agents/` so the repository root can stay focused on human-facing docs and source.
 
 ## Repository layout (planned)
@@ -11,7 +13,6 @@ All agent-facing playbooks now live under `agents/` so the repository root can s
 │  ├─ ADE_GLOSSARY.md
 │  ├─ BACKEND_REWRITE_PLAN.md
 │  ├─ BEST_PRACTICE_VIOLATIONS.md
-│  ├─ CURRENT_TASK.md
 │  ├─ DOCUMENTATION_REWRITE_PLAN.md
 │  ├─ FRONTEND_DESIGN.md
 │  ├─ PREVIOUS_TASK.md
@@ -45,25 +46,25 @@ All agent-facing playbooks now live under `agents/` so the repository root can s
 
 ## Modes of Operation
 
-### 1. Task Implementation
+### Default Mode — Direct User Instructions
 
-**When**: default mode.
-**Goal**: execute the active plan detailed in `agents/CURRENT_TASK.md`, and update `agents/CURRENT_TASK.md` for the next run. No scope creep.
-**Steps**:
+**Trigger:** The user provides instructions without referencing a file under `agents/`.
 
-1. Read `agents/CURRENT_TASK.md` (source of truth).
-2. Implement only the defined scope with production-ready code.
-3. Add/update tests and deterministic fixtures in `examples/`.
-4. Run quality gates (pytest, ruff, mypy, npm test/lint/typecheck).
-5. Update docs if architecture or terminology changes.
-6. Open a focused PR with summary, assumptions, follow-ups.
-7. Rotate: `agents/CURRENT_TASK.md → agents/PREVIOUS_TASK.md` and draft the next plan.
+**How to proceed:**
+1. Follow the user's latest instructions exactly.
+2. Use the priorities and baseline assumptions above to guide decisions.
+3. Ask for clarification only when the instructions conflict or are ambiguous.
 
-**Acceptance criteria**:
+### Work Package Mode — agents/* Playbooks
 
-* CI checks pass.
-* Matches `agents/CURRENT_TASK.md` scope exactly.
-* Deterministic behavior (no I/O or randomness in extraction).
+**Trigger:** The user mentions one or more work packages in `agents/` (for example `agents/CURRENT_TASK.md` or `agents/DOCUMENTATION_REWRITE_PLAN.md`).
+
+**How to proceed:**
+1. Read every referenced work package in `agents/` before making changes.
+2. Execute only the scope defined in each work package with production-ready code (no scope creep).
+3. Add or update deterministic tests and fixtures in `examples/` when relevant.
+4. Run the appropriate quality gates (pytest, ruff, mypy, npm test/lint/typecheck).
+5. Update each referenced work package with the current status and any next steps that remain. When working from `agents/CURRENT_TASK.md`, rotate it to `agents/PREVIOUS_TASK.md` and draft the next plan.
 
 ---
 
