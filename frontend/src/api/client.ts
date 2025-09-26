@@ -131,8 +131,20 @@ export class ApiClient {
 }
 
 function getDefaultBaseUrl(): string {
-  const fromEnv = typeof import.meta !== "undefined" ? import.meta.env?.VITE_API_BASE_URL : undefined;
-  return fromEnv || "/api";
+  const envBase = typeof import.meta !== "undefined" ? import.meta.env?.VITE_API_BASE_URL : undefined;
+  if (envBase) {
+    return envBase;
+  }
+
+  if (typeof import.meta !== "undefined" && import.meta.env?.DEV) {
+    return "http://127.0.0.1:8000";
+  }
+
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+
+  return "http://127.0.0.1:8000";
 }
 
 function trimTrailingSlash(value: string): string {

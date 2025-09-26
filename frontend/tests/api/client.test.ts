@@ -14,7 +14,7 @@ describe("ApiClient", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    fetchMock = vi.fn().mockResolvedValue(createOkResponse({ success: true }));
+    fetchMock = vi.fn().mockImplementation(() => Promise.resolve(createOkResponse({ success: true })));
   });
 
   it("adds authorization header when access token is available", async () => {
@@ -51,18 +51,25 @@ describe("ApiClient", () => {
   });
 
   it("throws ApiError when response is not ok", async () => {
-    const errorResponse = new Response(JSON.stringify({ message: "Failure" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" }
-    });
-    fetchMock.mockResolvedValue(errorResponse);
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ message: "Failure" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" }
+        })
+      )
+    );
     const client = new ApiClient({ fetchImplementation: fetchMock });
 
-    await expect(client.get("/broken")).rejects.toThrow(ApiError);
+    let error: ApiError | null = null;
+    try {
+      await client.get("/broken");
+    } catch (err) {
+      error = err as ApiError;
+    }
 
-    const error = await client.get("/broken").catch((err) => err as ApiError);
     expect(error).toBeInstanceOf(ApiError);
-    expect(error.status).toBe(400);
-    expect(error.detail).toEqual({ message: "Failure" });
+    expect(error?.status).toBe(400);
+    expect(error?.detail).toEqual({ message: "Failure" });
   });
 });

@@ -14,5 +14,7 @@ export function formatBytes(byteSize: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   const exponent = Math.min(Math.floor(Math.log(byteSize) / Math.log(1024)), units.length - 1);
   const value = byteSize / 1024 ** exponent;
-  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+  const raw = value.toFixed(value >= 10 || exponent === 0 ? 0 : 1);
+  const formatted = raw.endsWith(".0") ? raw.slice(0, -2) : raw;
+  return `${formatted} ${units[exponent]}`;
 }
