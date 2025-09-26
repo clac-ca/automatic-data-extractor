@@ -7,6 +7,19 @@
   color: #475569;
 }
 
+.app-error {
+  margin: 4rem auto;
+  max-width: 480px;
+  padding: 1.25rem 1.5rem;
+  border-radius: 12px;
+  background-color: rgba(254, 226, 226, 0.85);
+  border: 1px solid rgba(185, 28, 28, 0.25);
+  color: #7f1d1d;
+  text-align: center;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
 .auth-screen,
 .dashboard {
   min-height: 100vh;

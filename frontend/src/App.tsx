@@ -23,12 +23,20 @@ function PublicRoute({ children }: { children: ReactElement }): ReactElement {
 }
 
 function AppRoutes(): ReactElement {
-  const { loading } = useAuth()
+  const { loading, error } = useAuth()
 
   if (loading) {
     return (
       <div className="app-loading" role="status" aria-live="polite">
         Checking session...
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="app-error" role="alert" aria-live="assertive">
+        {error}
       </div>
     )
   }
