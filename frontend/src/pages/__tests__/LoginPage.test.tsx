@@ -7,10 +7,17 @@ import LoginPage from '../LoginPage'
 
 const mockLogin = vi.fn<Promise<UserProfile>, [string, string]>()
 const mockNavigate = vi.fn()
+const mockLogout = vi.fn<Promise<void>, []>()
+const mockRefresh = vi.fn<Promise<void>, []>()
 
 vi.mock('../../context/AuthContext', () => ({
   useAuth: () => ({
+    user: null,
+    loading: false,
+    error: null,
     login: mockLogin,
+    logout: mockLogout,
+    refreshSession: mockRefresh,
   }),
 }))
 

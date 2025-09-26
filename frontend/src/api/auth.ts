@@ -1,16 +1,18 @@
 import type { LoginPayload, SessionEnvelope, UserProfile } from './types'
 import { getCookie } from '../utils/cookies'
 
-const rawBaseUrl = import.meta.env.VITE_API_BASE_URL
-if (!rawBaseUrl) {
-  throw new Error('VITE_API_BASE_URL is not defined. Set it in your environment before starting the frontend.')
-}
-
-const API_BASE_URL = rawBaseUrl.replace(/\/$/, '')
 const CSRF_COOKIE_NAME = 'ade_csrf'
 
+function resolveBaseUrl(): string {
+  const rawBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() ?? ''
+  if (!rawBaseUrl) {
+    throw new Error('VITE_API_BASE_URL is not defined. Configure it before using the authentication client.')
+  }
+  return rawBaseUrl.endsWith('/') ? rawBaseUrl.slice(0, -1) : rawBaseUrl
+}
+
 function buildUrl(path: string): string {
-  return API_BASE_URL + path
+  return resolveBaseUrl() + path
 }
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -36,7 +38,7 @@ export async function login(credentials: LoginPayload): Promise<LoginSuccess> {
   if (!response.ok) {
     const payload = await readJson<{ detail?: string }>(response)
     const detail = payload.detail || 'Unable to sign in with the provided credentials.'
-    throw new Error(detail)
+    throw Object.assign(new Error(detail), { status: response.status })
   }
 
   const session = await readJson<SessionEnvelope>(response)
@@ -56,7 +58,7 @@ export async function fetchProfile(): Promise<UserProfile> {
   if (!response.ok) {
     const payload = await readJson<{ detail?: string }>(response)
     const detail = payload.detail || 'Unable to load the active session.'
-    throw new Error(detail)
+    throw Object.assign(new Error(detail), { status: response.status })
   }
 
   return readJson<UserProfile>(response)
@@ -78,7 +80,7 @@ export async function logout(csrfToken: string | null): Promise<void> {
   if (!response.ok && response.status !== 204) {
     const payload = await readJson<{ detail?: string }>(response)
     const detail = payload.detail || 'Unable to terminate the current session.'
-    throw new Error(detail)
+    throw Object.assign(new Error(detail), { status: response.status })
   }
 }
 
