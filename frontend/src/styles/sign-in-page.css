@@ -1,0 +1,69 @@
+.sign-in-page {
+  display: grid;
+  min-height: 100vh;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  background: #f7f7f8;
+}
+
+.sign-in-page__panel {
+  padding: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  justify-content: center;
+}
+
+.sign-in-page__title {
+  margin: 0;
+  font-size: 36px;
+}
+
+.sign-in-page__subtitle {
+  margin: 0;
+  max-width: 480px;
+  color: #475569;
+}
+
+.sign-in-page__aside {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  padding: 48px;
+  color: #f8fafc;
+}
+
+.sign-in-page__gradient {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top left, rgba(99, 102, 241, 0.95), rgba(37, 99, 235, 0.95));
+}
+
+.sign-in-page__aside-content {
+  position: relative;
+  max-width: 420px;
+}
+
+.sign-in-page__aside-content h2 {
+  margin-top: 0;
+  font-size: 28px;
+}
+
+.sign-in-page__aside-content p {
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+@media (max-width: 960px) {
+  .sign-in-page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sign-in-page__aside {
+    display: none;
+  }
+
+  .sign-in-page__panel {
+    padding: 48px 24px;
+  }
+}
