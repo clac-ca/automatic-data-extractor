@@ -16,10 +16,6 @@ anywhere without provisioning external infrastructure.
 - **(TODO)** The forthcoming frontend will guide first-time administrators
   through setup. Until it lands, use the CLI steps below.
 
-> **Quickstart checklist**
-> 1. Install Python 3.11, Node.js 20, and Git.
-> 2. `git clone`, create a virtual environment, run `pip install -e .[dev]`.
-> 3. Run `ade start` and browse <http://localhost:5173>.
 
 ## 2. Prerequisites
 - **Python 3.11** with `pip` available on your `PATH`. Windows installers live at
