@@ -45,9 +45,6 @@ Guides now live under the [`docs/`](docs/README.md) directory:
 
    python -m pip install --upgrade pip
    pip install -e .[dev]
-   cd frontend
-   npm install
-   cd ..
    ```
 
 3. Start both servers with the CLI:
@@ -56,13 +53,13 @@ Guides now live under the [`docs/`](docs/README.md) directory:
    ade start
    ```
 
-   You’ll see a short banner with the backend and frontend URLs, followed by colour-coded logs from each process. Stop everything with `Ctrl+C`. Use `--skip-backend`, `--skip-frontend`, `--vite-api-url`, or `--no-color` to tweak the run.
+   You’ll see a short banner with the backend and frontend URLs, followed by colour-coded logs from each process. Stop everything with `Ctrl+C`. Use `--skip-backend`, `--skip-frontend`, `--vite-api-url`, or `--no-color` to tweak the run. The command automatically runs `npm install` before the first launch when required.
 
 > Prefer installing from PyPI? Run `python -m pip install automatic-data-extractor`, but still clone the repository before you call `ade start` so the frontend sources are available.
 
 ### Start each service manually (optional)
 
-Some workflows keep the servers in separate terminals:
+Some workflows keep the servers in separate terminals. Run `npm install` inside `frontend/` before starting the Vite dev server (repeat only after dependency changes):
 
 ```bash
 # Terminal 1 – backend (from repo root)
@@ -70,6 +67,7 @@ uvicorn backend.api.main:app --reload
 
 # Terminal 2 – frontend
 cd frontend
+npm install  # first run only
 npm run dev -- --host
 ```
 
@@ -115,3 +113,4 @@ Uploaded files and the SQLite database are stored beneath the `backend/data/` di
 ## Status
 
 The backend is under active development. The high-level concepts above are stable; deeper guide content is being authored iteratively so it can track ongoing feature work without churn.
+
