@@ -109,7 +109,7 @@ The following findings were documented after reviewing the repository against th
 
 ## 7. Convert user-facing `ValueError`s into validation or HTTP errors *(Resolved)*
 - **Best practice**: Raise `ValueError` inside request models (so FastAPI returns a 422) or translate them into `HTTPException`s; uncaught `ValueError`s bubble up as 500 responses.【F:fastapi-best-practices.md†L571-L605】
-- ✅ **Status**: `/auth/token` now routes the OAuth2 form through the `TokenRequest` schema and a `parse_token_request` dependency so bad credentials surface as FastAPI 422 responses instead of leaking uncaught `ValueError`s.【F:backend/api/modules/auth/schemas.py†L1-L55】【F:backend/api/modules/auth/dependencies.py†L1-L53】【F:backend/api/modules/auth/router.py†L33-L62】
+- ✅ **Status**: `/auth/login` now validates credentials via `LoginRequest`, so malformed emails/passwords still surface as 422 responses while the service layer works with normalised data.【F:backend/api/modules/auth/schemas.py†L1-L54】【F:backend/api/modules/auth/router.py†L28-L104】
 - **Notes**: Future form-based routes should follow the same pattern—convert the raw form payload into a Pydantic schema before invoking service logic so validation stays at the boundary.
 
 ---

@@ -62,7 +62,7 @@ structure. Update it whenever the backend contracts or roadmap shift.
 
 | Route | Purpose | Key data sources |
 | ----- | ------- | ---------------- |
-| `/sign-in` | Credential form, posts to token endpoint. | `POST /auth/token` |
+| `/sign-in` | Credential form, establishes browser session. | `POST /auth/login` |
 | `/workspaces` | Workspace directory and recent activity. | `GET /workspaces` |
 | `/workspaces/:workspaceId/overview` | Summary cards: workspace metadata, recent documents, active jobs. | `GET /workspaces/{id}`, `GET /documents`, `GET /jobs` |
 | `/workspaces/:workspaceId/documents` | Document library, upload drawer, metadata detail. | `GET/POST/DELETE /documents`, `GET /documents/{id}/tables` |
@@ -203,7 +203,7 @@ Guidelines:
 | Jobs | `backend/api/modules/jobs` | `POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, `GET /jobs/{id}/tables` |
 | Results | `backend/api/modules/results` | `GET /jobs/{id}/tables`, `GET /jobs/{id}/tables/{table_id}`, `GET /documents/{id}/tables` |
 | Configurations | `backend/api/modules/configurations` | `GET /configurations`, `POST /configurations`, `PUT /configurations/{id}`, `DELETE /configurations/{id}`, `POST /configurations/{id}/activate` |
-| Authentication | `backend/api/modules/auth` | `POST /auth/token` |
+| Authentication | `backend/api/modules/auth` | `POST /auth/login`, `POST /auth/logout`, `POST /auth/refresh` |
 
 Any change to backend response shapes must be reflected in the corresponding
 client module and documented here.

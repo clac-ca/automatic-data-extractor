@@ -19,8 +19,9 @@ export interface SessionUser {
 }
 
 export interface Session {
-  readonly accessToken: string;
   readonly user: SessionUser;
+  readonly expiresAt: string;
+  readonly refreshExpiresAt: string;
 }
 
 interface SessionContextValue {

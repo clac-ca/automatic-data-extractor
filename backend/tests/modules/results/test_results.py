@@ -14,11 +14,13 @@ from backend.api.modules.workspaces.models import WorkspaceMembership
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
     response = await client.post(
-        "/auth/token",
-        data={"username": email, "password": password},
+        "/auth/login",
+        json={"email": email, "password": password},
     )
     assert response.status_code == 200, response.text
-    return response.json()["access_token"]
+    token = client.cookies.get("ade_session")
+    assert token, "Session cookie missing"
+    return token
 
 
 async def _create_configuration(

@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     auth_token_secret: str = "development-secret"
     auth_token_algorithm: str = "HS256"
     auth_token_exp_minutes: int = 60
+    auth_refresh_token_exp_days: int = 14
+    auth_session_cookie: str = "ade_session"
+    auth_refresh_cookie: str = "ade_refresh"
+    auth_csrf_cookie: str = "ade_csrf"
+    auth_cookie_domain: str | None = None
+    auth_cookie_path: str = "/"
 
     sso_client_id: str | None = None
     sso_client_secret: str | None = None
@@ -102,6 +108,7 @@ class Settings(BaseSettings):
         "sso_issuer",
         "sso_redirect_url",
         "sso_resource_audience",
+        "auth_cookie_domain",
         mode="before",
     )
     @classmethod

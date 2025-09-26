@@ -8,30 +8,41 @@ import pytest
 from httpx import AsyncClient
 
 from backend.api import reload_settings
-from backend.api.modules.auth.service import SSO_STATE_COOKIE, AuthService, OIDCProviderMetadata
+from backend.api.modules.auth.service import (
+    SSO_STATE_COOKIE,
+    AuthService,
+    OIDCProviderMetadata,
+)
+
+CSRF_COOKIE = "ade_csrf"
 
 
-async def _login(client: AsyncClient, email: str, password: str) -> str:
+def _csrf_headers(client: AsyncClient) -> dict[str, str]:
+    token = client.cookies.get(CSRF_COOKIE)
+    assert token, "CSRF cookie not set"
+    return {"X-CSRF-Token": token}
+
+
+async def _login(client: AsyncClient, email: str, password: str) -> dict[str, Any]:
     response = await client.post(
-        "/auth/token",
-        data={"username": email, "password": password},
+        "/auth/login",
+        json={"email": email, "password": password},
     )
     assert response.status_code == 200, response.text
-    payload = response.json()
-    return payload["access_token"]
+    return response.json()
 
 
 @pytest.mark.asyncio
-async def test_issue_token_and_me(async_client: AsyncClient, seed_identity: dict[str, Any]) -> None:
-    """Users should obtain tokens and fetch their profile."""
+async def test_create_session_and_me(
+    async_client: AsyncClient, seed_identity: dict[str, Any]
+) -> None:
+    """Users should create sessions and fetch their profile."""
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    payload = await _login(async_client, admin["email"], admin["password"])
+    assert payload["user"]["email"] == admin["email"]
 
-    response = await async_client.get(
-        "/auth/me",
-        headers={"Authorization": f"Bearer {token}"},
-    )
+    response = await async_client.get("/auth/me")
     assert response.status_code == 200
     data = response.json()
     assert data["email"] == admin["email"]
@@ -39,12 +50,28 @@ async def test_issue_token_and_me(async_client: AsyncClient, seed_identity: dict
 
 
 @pytest.mark.asyncio
+async def test_login_sets_csrf_cookie_and_header(
+    async_client: AsyncClient, seed_identity: dict[str, Any]
+) -> None:
+    """Login responses should surface CSRF metadata for the frontend."""
+
+    admin = seed_identity["admin"]
+    response = await async_client.post(
+        "/auth/login",
+        json={"email": admin["email"], "password": admin["password"]},
+    )
+    assert response.status_code == 200, response.text
+    assert response.headers.get("X-CSRF-Token")
+    assert async_client.cookies.get(CSRF_COOKIE)
+
+
+@pytest.mark.asyncio
 async def test_invalid_credentials_rejected(async_client: AsyncClient) -> None:
     """Submitting an unknown user should produce 401."""
 
     response = await async_client.post(
-        "/auth/token",
-        data={"username": "missing@example.com", "password": "nope"},
+        "/auth/login",
+        json={"email": "missing@example.com", "password": "nope"},
     )
     assert response.status_code == 401
 
@@ -59,7 +86,7 @@ async def test_invalid_credentials_rejected(async_client: AsyncClient) -> None:
         ("not-an-email", "secret", {"The email address is not valid"}),
     ],
 )
-async def test_issue_token_validation_errors(
+async def test_create_session_validation_errors(
     async_client: AsyncClient,
     username: str,
     password: str,
@@ -68,8 +95,8 @@ async def test_issue_token_validation_errors(
     """Invalid credentials should surface as 422 validation errors."""
 
     response = await async_client.post(
-        "/auth/token",
-        data={"username": username, "password": password},
+        "/auth/login",
+        json={"email": username, "password": password},
     )
     assert response.status_code == 422, response.text
 
@@ -82,10 +109,31 @@ async def test_issue_token_validation_errors(
 
 @pytest.mark.asyncio
 async def test_profile_requires_authentication(async_client: AsyncClient) -> None:
-    """GET /auth/me should require a valid token."""
+    """GET /auth/me should require a valid session."""
 
     response = await async_client.get("/auth/me")
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_refresh_requires_csrf_header(
+    async_client: AsyncClient, seed_identity: dict[str, Any]
+) -> None:
+    """POST /auth/refresh should enforce the double submit cookie check."""
+
+    admin = seed_identity["admin"]
+    await _login(async_client, admin["email"], admin["password"])
+
+    missing = await async_client.post("/auth/refresh")
+    assert missing.status_code == 403
+
+    rotated = await async_client.post(
+        "/auth/refresh",
+        headers=_csrf_headers(async_client),
+    )
+    assert rotated.status_code == 200, rotated.text
+    payload = rotated.json()
+    assert payload["user"]["email"] == admin["email"]
 
 
 @pytest.mark.asyncio
@@ -95,13 +143,12 @@ async def test_api_key_rotation_and_revocation(
     """Issued API keys should support rotation and revocation."""
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    await _login(async_client, admin["email"], admin["password"])
 
-    headers = {"Authorization": f"Bearer {token}"}
     first = await async_client.post(
         "/auth/api-keys",
         json={"email": admin["email"]},
-        headers=headers,
+        headers=_csrf_headers(async_client),
     )
     assert first.status_code == 201, first.text
     first_key = first.json()["api_key"]
@@ -110,13 +157,13 @@ async def test_api_key_rotation_and_revocation(
     second = await async_client.post(
         "/auth/api-keys",
         json={"email": admin["email"]},
-        headers=headers,
+        headers=_csrf_headers(async_client),
     )
     assert second.status_code == 201, second.text
     second_key = second.json()["api_key"]
     second_prefix, _ = second_key.split(".", 1)
 
-    listing = await async_client.get("/auth/api-keys", headers=headers)
+    listing = await async_client.get("/auth/api-keys")
     assert listing.status_code == 200
     records = listing.json()
     assert len(records) == 2
@@ -128,22 +175,27 @@ async def test_api_key_rotation_and_revocation(
     assert second_record["principal_type"] == "user"
     assert second_record["principal_label"] == admin["email"]
 
+    async_client.cookies.clear()
     response = await async_client.get("/auth/me", headers={"X-API-Key": first_key})
     assert response.status_code == 200
     response = await async_client.get("/auth/me", headers={"X-API-Key": second_key})
     assert response.status_code == 200
 
+    await _login(async_client, admin["email"], admin["password"])
     revoke = await async_client.delete(
-        f"/auth/api-keys/{first_record['api_key_id']}", headers=headers
+        f"/auth/api-keys/{first_record['api_key_id']}",
+        headers=_csrf_headers(async_client),
     )
     assert revoke.status_code == 204
 
+    async_client.cookies.clear()
     denied = await async_client.get("/auth/me", headers={"X-API-Key": first_key})
     assert denied.status_code == 401
     allowed = await async_client.get("/auth/me", headers={"X-API-Key": second_key})
     assert allowed.status_code == 200
 
-    remaining = await async_client.get("/auth/api-keys", headers=headers)
+    await _login(async_client, admin["email"], admin["password"])
+    remaining = await async_client.get("/auth/api-keys")
     payload = remaining.json()
     assert [record["token_prefix"] for record in payload] == [second_prefix]
     assert payload[0]["principal_type"] == "user"
@@ -157,12 +209,12 @@ async def test_api_key_payload_requires_target(
     """FastAPI should surface validation errors when the payload is empty."""
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    await _login(async_client, admin["email"], admin["password"])
 
     response = await async_client.post(
         "/auth/api-keys",
         json={},
-        headers={"Authorization": f"Bearer {token}"},
+        headers=_csrf_headers(async_client),
     )
 
     assert response.status_code == 422, response.text
@@ -181,15 +233,12 @@ async def test_service_account_api_keys(
     admin = seed_identity["admin"]
     service_account = seed_identity["service_account"]
     inactive_service_account = seed_identity["inactive_service_account"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    await _login(async_client, admin["email"], admin["password"])
 
-    headers = {"Authorization": f"Bearer {token}"}
     issued = await async_client.post(
         "/auth/api-keys",
-        json={
-            "user_id": service_account["id"],
-        },
-        headers=headers,
+        json={"user_id": service_account["id"]},
+        headers=_csrf_headers(async_client),
     )
     assert issued.status_code == 201, issued.text
     data = issued.json()
@@ -198,7 +247,7 @@ async def test_service_account_api_keys(
     assert data["principal_label"] == service_account["display_name"]
     api_key = data["api_key"]
 
-    listing = await async_client.get("/auth/api-keys", headers=headers)
+    listing = await async_client.get("/auth/api-keys")
     assert listing.status_code == 200
     records = listing.json()
     lookup = {record["token_prefix"]: record for record in records}
@@ -208,15 +257,15 @@ async def test_service_account_api_keys(
     assert record["principal_id"] == service_account["id"]
     assert record["principal_label"] == service_account["display_name"]
 
+    async_client.cookies.clear()
     denied = await async_client.get("/auth/me", headers={"X-API-Key": api_key})
     assert denied.status_code == 403
 
+    await _login(async_client, admin["email"], admin["password"])
     inactive = await async_client.post(
         "/auth/api-keys",
-        json={
-            "user_id": inactive_service_account["id"],
-        },
-        headers=headers,
+        json={"user_id": inactive_service_account["id"]},
+        headers=_csrf_headers(async_client),
     )
     assert inactive.status_code == 400
 
@@ -229,10 +278,31 @@ async def test_service_account_password_login_blocked(
 
     service_account = seed_identity["service_account"]
     response = await async_client.post(
-        "/auth/token",
-        data={"username": service_account["email"], "password": "irrelevant"},
+        "/auth/login",
+        json={"email": service_account["email"], "password": "irrelevant"},
     )
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_logout_clears_cookies(
+    async_client: AsyncClient, seed_identity: dict[str, Any]
+) -> None:
+    """POST /auth/logout should remove authentication cookies."""
+
+    admin = seed_identity["admin"]
+    await _login(async_client, admin["email"], admin["password"])
+
+    forbidden = await async_client.post("/auth/logout")
+    assert forbidden.status_code == 403
+
+    response = await async_client.post(
+        "/auth/logout",
+        headers=_csrf_headers(async_client),
+    )
+    assert response.status_code == 204
+    assert async_client.cookies.get("ade_session") is None
+    assert async_client.cookies.get("ade_refresh") is None
 
 
 @pytest.mark.asyncio
@@ -273,3 +343,4 @@ async def test_sso_callback_rejects_state_mismatch(
         cookies={SSO_STATE_COOKIE: state_cookie},
     )
     assert callback.status_code == 400
+
