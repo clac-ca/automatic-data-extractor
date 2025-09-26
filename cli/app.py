@@ -7,8 +7,9 @@ from pathlib import Path
 
 from backend.api.modules.users.models import UserRole
 
-from .commands import api_keys as api_keys_commands
-from .commands import users as user_commands
+from cli.commands import api_keys as api_keys_commands
+from cli.commands import start as start_command
+from cli.commands import users as user_commands
 
 __all__ = ["build_cli_app"]
 
@@ -31,9 +32,17 @@ def build_cli_app() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         prog="ade",
-        description="Administrative tooling for the Automatic Data Extractor backend.",
+        description="Administrative tooling for the Automatic Data Extractor platform.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # Development workflow -------------------------------------------------
+    start_parser = subparsers.add_parser(
+        "start",
+        help="Run the backend and frontend development servers.",
+    )
+    start_command.register_arguments(start_parser)
+    start_parser.set_defaults(handler=start_command.start)
 
     # User management -----------------------------------------------------
     users_parser = subparsers.add_parser("users", help="Manage ADE user accounts.")

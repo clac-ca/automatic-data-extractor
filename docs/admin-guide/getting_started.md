@@ -16,7 +16,29 @@ anywhere without provisioning external infrastructure.
 - **(TODO)** The forthcoming frontend will guide first-time administrators
   through setup. Until it lands, use the CLI steps below.
 
-## 2. About `.env` Files
+> **Quickstart checklist**
+> 1. Install Python 3.11, Node.js 20, and Git.
+> 2. `git clone`, create a virtual environment, run `pip install -e .[dev]`, then `npm install`.
+> 3. Run `ade start` and browse <http://localhost:5173>.
+
+## 2. Prerequisites
+- **Python 3.11** with `pip` available on your `PATH`. Windows installers live at
+  <https://www.python.org/downloads/>.
+- **Node.js 20 LTS** (includes `npm`). Download from
+  <https://nodejs.org/en/download/>.
+- **Git** for cloning and version control – available at
+  <https://git-scm.com/downloads>.
+
+Confirm everything is discoverable before continuing:
+
+```bash
+python --version
+node --version
+npm --version
+git --version
+```
+
+## 3. About `.env` Files
 ADE reads configuration from environment variables. During local development we
 keep them in a `.env` file in the project root so FastAPI, the CLI, and Docker
 all load the same values.
@@ -31,30 +53,55 @@ cp .env.example .env
 If you delete `.env`, ADE falls back to its defaults (SQLite in
 `backend/data/db`, docs disabled outside `local`, etc.).
 
-## 3. Option A – Run ADE Directly with Python
-Requirements: Python 3.11, `git`, and build essentials for your OS.
+## 4. Option A – Develop with the source tree (recommended)
+
+1. Clone the repo and install dependencies:
+
+   ```bash
+   git clone https://github.com/your-org/automatic-data-extractor.git
+   cd automatic-data-extractor
+   cp .env.example .env
+
+   python3.11 -m venv .venv
+   source .venv/bin/activate  # Windows PowerShell: .\.venv\Scripts\Activate.ps1
+
+   python -m pip install --upgrade pip
+   pip install -e .[dev]
+   cd frontend
+   npm install
+   cd ..
+   ```
+
+2. Launch both servers:
+
+   ```bash
+   ade start
+   ```
+
+   The CLI prints a banner with service URLs, then streams colour-coded logs from FastAPI and Vite. Stop with `Ctrl+C`. Flags such as `--skip-frontend`, `--skip-backend`, `--vite-api-url`, and `--no-color` help in custom setups. Open <http://localhost:5173> for the frontend and <http://localhost:8000/docs> for the interactive API docs.
+
+3. Confirm the API is healthy:
+
+   ```bash
+   curl http://127.0.0.1:8000/health
+   ```
+
+All runtime state stays under `backend/data/`. Remove that directory to reset ADE to a clean slate (for example, between demos).
+
+### Run backend and frontend manually (optional)
 
 ```bash
-git clone https://github.com/your-org/automatic-data-extractor.git
-cd automatic-data-extractor
-cp .env.example .env
-python3.11 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -e .[dev]
+# Terminal 1
 uvicorn backend.api.main:app --reload
+
+# Terminal 2
+cd frontend
+npm run dev -- --host
 ```
 
-Verify the API is up and serving requests:
+Tip: If you frequently switch branches, run `pip install -e .[dev]` again after pulling changes so your environment stays in sync with the code.
 
-```bash
-curl http://127.0.0.1:8000/health
-```
-
-All runtime state stays under `backend/data/`. Remove that directory to reset
-ADE to a clean slate (for example, between demos).
-
-## 4. Option B – Run ADE with Docker
+## 5. Option B – Run ADE with Docker
 Docker is useful when you want ADE isolated from the host Python install or to
 run it on a server. An official image will be published to GitHub Container
 Registry soon.
@@ -62,7 +109,7 @@ Registry soon.
 > **TODO:** Replace the build step below with a `docker pull` command once the
 > image is published.
 
-### 4.1 Build a local image
+### 5.1 Build a local image
 ```bash
 git clone https://github.com/your-org/automatic-data-extractor.git
 cd automatic-data-extractor
@@ -70,7 +117,7 @@ cp .env.example .env
 docker build -t ade-backend:local -f docker/backend/Dockerfile .
 ```
 
-### 4.2 Run the container
+### 5.2 Run the container
 ```bash
 docker run -d --name ade-backend \
   --env-file .env \
@@ -87,6 +134,11 @@ survive container restarts. Check health the same way:
 curl http://127.0.0.1:8000/health
 ```
 
+When you deploy the frontend in production, compile it once (`npm run build`)
+and serve the resulting `frontend/dist/` assets from your reverse proxy or
+static site host. Point the frontend at the backend URL with the `VITE_API_URL`
+environment variable before building.
+
 To stop and remove the container:
 
 ```bash
@@ -94,7 +146,21 @@ docker stop ade-backend
 docker rm ade-backend
 ```
 
-## 5. Managing ADE with the CLI
+## 6. Option C – Install a published wheel (evaluation only)
+If you only need the administrative CLI and API without editing source, install
+ADE from the package index. This flow assumes a wheel has been published.
+
+```bash
+python -m pip install automatic-data-extractor
+ade --help
+```
+
+The wheel ships the CLI and backend code. To run `ade start`, clone the
+repository (or download the matching release tarball) so the frontend assets and
+example configuration are available locally, then execute `ade start` from that
+directory.
+
+## 7. Managing ADE with the CLI
 The CLI uses the same settings as the API. It works even when the API is not
 running, as long as the `.env` file (or equivalent environment variables) is
 accessible.
@@ -127,7 +193,7 @@ docker exec -it ade-backend ade users create --email admin@example.com --passwor
 > long CLI operations while ADE is actively processing heavy requests to keep
 > contention low.
 
-## 6. Where ADE Stores Data
+## 8. Where ADE Stores Data
 - `backend/data/db/ade.sqlite` – primary metadata database (SQLite).
 - `backend/data/documents/` – uploaded source files.
 - `backend/data/logs/` *(if enabled)* – structured JSON logs.
@@ -135,7 +201,7 @@ docker exec -it ade-backend ade users create --email admin@example.com --passwor
 Back up the `backend/data/` directory to retain everything you need for a full
 restore.
 
-## 7. Roadmap + TODOs
+## 9. Roadmap + TODOs
 - **TODO:** Publish an official Docker image to GitHub Container Registry and
   reference it in this guide.
 - **TODO:** Update the onboarding section once the frontend ships the admin
@@ -145,3 +211,10 @@ restore.
 
 With these basics you can run ADE on a laptop, VM, or container host and manage
 administrators confidently using the CLI.
+
+## 10. Troubleshooting
+- **`ade start` exits immediately:** ensure you ran `npm install` inside `frontend/` and that `uvicorn` is available (re-run `pip install -e .[dev]`).
+- **Port conflicts (8000/5173):** pass `--backend-port` / `--frontend-port` to `ade start`, or stop whatever process currently occupies those ports.
+- **Coloured logs appear garbled on Windows:** rerun with `ade start --no-color`.
+- **Frontend cannot reach the API:** set `--vite-api-url http://127.0.0.1:8000` when the backend runs on a different host or port.
+

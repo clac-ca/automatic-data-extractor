@@ -4,7 +4,8 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 
 ## Deployment at a glance
 - ADE is a FastAPI application created in [`backend/api/main.py`](../../backend/api/main.py) with its settings defined in [`backend/api/settings.py`](../../backend/api/settings.py).
-- The service boots with `uvicorn backend.api.main:app --reload` for local development. Production deployments typically run under a process manager such as systemd or inside a container.
+- Development favours two hot-reload loops: run `ade start` to launch FastAPI and the Vite dev server together, or start `uvicorn` and `npm run dev -- --host` in separate terminals.
+- Production deployments build the frontend once (`npm run build`) and serve the static bundle behind the same reverse proxy that forwards API traffic to a managed ASGI process (Uvicorn, Uvicorn+Gunicorn, systemd, or a container orchestrator).
 - Persistent state lives under the `backend/data/` directory by default. SQLite databases and uploaded documents sit beneath `backend/data/db/` and `backend/data/documents/`; both paths can be overridden through environment variables.
 
 ## Configuration snapshot

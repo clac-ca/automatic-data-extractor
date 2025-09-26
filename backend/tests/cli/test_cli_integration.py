@@ -13,7 +13,7 @@ import pytest
 
 def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603,S607 - executed against local module
-        [sys.executable, "-m", "backend.cli", *args],
+        [sys.executable, "-m", "cli", *args],
         capture_output=True,
         text=True,
         check=False,
