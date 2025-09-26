@@ -11,6 +11,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+
 try:
     import ctypes
 except ImportError:  # pragma: no cover - fallback for restricted envs
@@ -34,8 +35,31 @@ class ProcessSpec:
     env: dict[str, str] | None = None
 
 
+DEFAULT_BACKEND_HOST = "127.0.0.1"
+DEFAULT_BACKEND_PORT = 8000
+DEFAULT_FRONTEND_HOST = "127.0.0.1"
+DEFAULT_FRONTEND_PORT = 5173
+
+
+def _resolve_vite_api_base_url(args: argparse.Namespace) -> str:
+    explicit = (args.vite_api_base_url or os.getenv("VITE_API_BASE_URL") or "").strip()
+    if explicit:
+        return explicit
+    return f"http://{args.backend_host}:{args.backend_port}"
+
+
+def _compose_frontend_env(args: argparse.Namespace) -> dict[str, str]:
+    return {"VITE_API_BASE_URL": _resolve_vite_api_base_url(args)}
+
+
+
 def register_arguments(parser: argparse.ArgumentParser) -> None:
     """Attach command-line options for the `ade start` workflow."""
+
+    backend_host_default = DEFAULT_BACKEND_HOST
+    backend_port_default = DEFAULT_BACKEND_PORT
+    frontend_host_default = DEFAULT_FRONTEND_HOST
+    frontend_port_default = DEFAULT_FRONTEND_PORT
 
     parser.add_argument(
         "--skip-backend",
@@ -49,36 +73,42 @@ def register_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--backend-host",
-        default="127.0.0.1",
-        help="Host interface for uvicorn (default: 127.0.0.1).",
+        default=backend_host_default,
+        help=f"Host interface for uvicorn (default: {backend_host_default}).",
     )
     parser.add_argument(
         "--backend-port",
-        default=8000,
+        default=backend_port_default,
         type=int,
-        help="Port for uvicorn to bind (default: 8000).",
+        help=f"Port for uvicorn to bind (default: {backend_port_default}).",
     )
     parser.add_argument(
         "--frontend-host",
-        default="127.0.0.1",
-        help="Host interface for the Vite dev server (default: 127.0.0.1).",
+        default=frontend_host_default,
+        help=f"Host interface for the Vite dev server (default: {frontend_host_default}).",
     )
     parser.add_argument(
         "--frontend-port",
-        default=5173,
+        default=frontend_port_default,
         type=int,
-        help="Port for the Vite dev server (default: 5173).",
+        help=f"Port for the Vite dev server (default: {frontend_port_default}).",
+    )
+    parser.add_argument(
+        "--vite-api-base-url",
+        dest="vite_api_base_url",
+        default=None,
+        help="Override the Vite dev server VITE_API_BASE_URL environment variable.",
     )
     parser.add_argument(
         "--vite-api-url",
-        help="Override the Vite dev server `VITE_API_URL` environment variable.",
+        dest="vite_api_base_url",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--no-color",
         action="store_true",
         help="Disable ANSI color codes in aggregated output.",
     )
-
 
 def _build_specs(args: argparse.Namespace, *, npm_command: str) -> list[ProcessSpec]:
     specs: list[ProcessSpec] = []
@@ -108,13 +138,10 @@ def _build_specs(args: argparse.Namespace, *, npm_command: str) -> list[ProcessS
             "--port",
             str(args.frontend_port),
         ]
-        env: dict[str, str] | None = None
-        if args.vite_api_url:
-            env = {"VITE_API_URL": args.vite_api_url}
+        env = _compose_frontend_env(args)
         specs.append(ProcessSpec("frontend", frontend_cmd, FRONTEND_DIR, env=env))
 
     return specs
-
 
 def _ensure_frontend_dependencies(frontend_dir: Path, npm_command: str) -> None:
     node_modules = frontend_dir / "node_modules"
@@ -171,7 +198,7 @@ def _print_banner(
     backend_port: int,
     frontend_host: str,
     frontend_port: int,
-    vite_api_url: str | None,
+    vite_api_base_url: str,
     color: bool,
 ) -> None:
     headline = "ADE development servers"
@@ -186,10 +213,9 @@ def _print_banner(
     print(separator)
     print(f"{backend_label}: {backend_url}  (uvicorn --reload)")
     print(f"{frontend_label}: {frontend_url}  (Vite hot module reload)")
-    if vite_api_url:
-        print(f"Vite API target: {vite_api_url}")
+    if vite_api_base_url:
+        print(f"Vite API base: {vite_api_base_url}")
     print("Stop with Ctrl+C. Use --help for more flags.\n")
-
 
 def _launch_process(spec: ProcessSpec, *, color_enabled: bool) -> tuple[str, subprocess.Popen[str]]:
     env = os.environ.copy()
@@ -204,7 +230,7 @@ def _launch_process(spec: ProcessSpec, *, color_enabled: bool) -> tuple[str, sub
         text=True,
         env=env,
     )
-    setattr(proc, "_ade_color", color_enabled)
+    proc._ade_color = color_enabled  # type: ignore[attr-defined]
     return spec.label, proc
 
 
@@ -244,12 +270,14 @@ def start(args: argparse.Namespace) -> None:
     if use_color and os.name == "nt":
         _enable_windows_ansi()
 
+    api_base_url = _resolve_vite_api_base_url(args)
+
     _print_banner(
         backend_host=args.backend_host,
         backend_port=args.backend_port,
         frontend_host=args.frontend_host,
         frontend_port=args.frontend_port,
-        vite_api_url=args.vite_api_url,
+        vite_api_base_url=api_base_url,
         color=use_color,
     )
 
