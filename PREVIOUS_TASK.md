@@ -1,20 +1,11 @@
-## Context
-`CURRENT_TASK.md` asked us to ensure both the FastAPI app and CLI bootstrap the
-SQLite database before serving traffic, fixing the missing `users` table error
-encountered by `ade users create`.
+# Completed task – Workspace documents ingestion UI
 
 ## Outcome
-- Added a reusable `bootstrap_database` helper that guarantees the SQLite
-  directory exists and runs `alembic upgrade head` exactly once per settings
-  configuration.
-- Integrated the helper into the FastAPI lifespan and CLI session manager so
-  web requests and CLI commands both migrate the schema before opening a
-  session.
-- Introduced regression tests that prove API startup and CLI session helpers
-  materialise the `users` table automatically.
+- Added typed API clients and React Query hooks for workspace documents and active configurations with shared normalisers, upload, and delete helpers.
+- Replaced the documents placeholder with a full workflow: document-type selector with localStorage persistence, drag-and-drop uploads, advanced metadata/configuration overrides, and a responsive documents table with download/metadata/delete actions.
+- Introduced formatting utilities, modal and table styling, and Vitest coverage for document hooks plus dropzone behaviour to keep the workflow reliable.
 
 ## Next steps
-- Update the developer documentation to describe the new automatic bootstrap
-  behaviour and clarify how to run migrations manually when needed.
-- Consider establishing a clean `mypy` baseline so future backend changes can
-  rely on type-checking without surfacing dozens of legacy errors.
+- Surface the selected document-type filter in the global top bar so the list, jobs, and results remain in sync.
+- Build the workspace jobs slice (submission, list, detail) using the new configuration and document helpers.
+- Add smoke tests around the sign-in flow now that authenticated interactions hit live endpoints.
