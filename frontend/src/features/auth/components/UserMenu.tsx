@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { signOut as requestSignOut } from "@api/auth";
+import { useApiClient } from "@hooks/useApiClient";
 import { useSession } from "@hooks/useSession";
 
 import "@styles/user-menu.css";
 
 export function UserMenu(): JSX.Element {
+  const apiClient = useApiClient();
   const { session, signOut } = useSession();
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
@@ -41,7 +44,8 @@ export function UserMenu(): JSX.Element {
     setIsOpen((current) => !current);
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    await requestSignOut(apiClient);
     signOut();
     setIsOpen(false);
     navigate("/sign-in", { replace: true });

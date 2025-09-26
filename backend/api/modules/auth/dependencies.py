@@ -6,20 +6,16 @@ from typing import Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.exceptions import RequestValidationError
 from fastapi.security import (
     APIKeyHeader,
     HTTPAuthorizationCredentials,
     HTTPBearer,
-    OAuth2PasswordRequestForm,
 )
-from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.service import service_dependency
 from ...db.session import get_session
 from ..users.models import User, UserRole
-from .schemas import TokenRequest
 from .service import AuthenticatedIdentity, AuthService
 
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -28,22 +24,9 @@ _api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 get_auth_service = service_dependency(AuthService)
 
 
-def parse_token_request(
-    form: Annotated[OAuth2PasswordRequestForm, Depends()]
-) -> TokenRequest:
-    """Normalise the OAuth2 form payload into a validated schema."""
-
-    try:
-        return TokenRequest.model_validate(
-            {"username": form.username, "password": form.password}
-        )
-    except ValidationError as exc:
-        raise RequestValidationError(exc.errors()) from exc
-
-
 async def bind_current_principal(
     request: Request,
-    session: Annotated[AsyncSession, Depends(get_session)],
+    _session: Annotated[AsyncSession, Depends(get_session)],
     credentials: Annotated[
         HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)
     ],
@@ -54,12 +37,23 @@ async def bind_current_principal(
 
     if credentials is not None:
         try:
-            payload = service.decode_token(credentials.credentials)
+            payload = service.decode_token(credentials.credentials, expected_type="access")
         except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
         user = await service.resolve_user(payload)
         request.state.current_user = user
-        return AuthenticatedIdentity(user=user, credentials="access_token")
+        return AuthenticatedIdentity(user=user, credentials="bearer_token")
+
+    session_cookie = request.cookies.get(service.settings.auth_session_cookie)
+    if session_cookie:
+        try:
+            payload = service.decode_token(session_cookie, expected_type="access")
+        except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid session") from exc
+        service.enforce_csrf(request, payload)
+        user = await service.resolve_user(payload)
+        request.state.current_user = user
+        return AuthenticatedIdentity(user=user, credentials="session_cookie")
 
     if api_key:
         identity = await service.authenticate_api_key(api_key)
@@ -105,7 +99,6 @@ async def require_admin_user(
 
 
 __all__ = [
-    "parse_token_request",
     "bind_current_principal",
     "bind_current_user",
     "get_auth_service",

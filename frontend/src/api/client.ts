@@ -1,6 +1,5 @@
 export interface ApiClientOptions {
   readonly baseUrl?: string;
-  readonly getAccessToken?: () => string | null;
   readonly fetchImplementation?: typeof fetch;
 }
 
@@ -24,12 +23,10 @@ export class ApiError extends Error {
 
 export class ApiClient {
   private readonly baseUrl: string;
-  private readonly getAccessToken?: () => string | null;
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: ApiClientOptions = {}) {
     this.baseUrl = options.baseUrl ?? getDefaultBaseUrl();
-    this.getAccessToken = options.getAccessToken;
     this.fetchImpl = options.fetchImplementation ?? fetch.bind(globalThis);
   }
 
@@ -61,14 +58,12 @@ export class ApiClient {
       headers.set("Content-Type", "application/json");
     }
 
-    const accessToken = this.getAccessToken?.();
-    if (accessToken && !headers.has("Authorization")) {
-      headers.set("Authorization", `Bearer ${accessToken}`);
-    }
+    this.applyCsrfHeader(headers, method);
 
     const response = await this.fetchImpl(url, {
       ...options,
       method,
+      credentials: options.credentials ?? "include",
       headers,
       body: options.json !== undefined ? JSON.stringify(options.json) : options.body
     });
@@ -128,6 +123,27 @@ export class ApiClient {
 
     return new ApiError(message, response.status, detail);
   }
+
+  private applyCsrfHeader(headers: Headers, method: string): void {
+    const upperMethod = method.toUpperCase();
+    const safeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
+    if (safeMethods.has(upperMethod)) {
+      return;
+    }
+
+    if (headers.has("X-CSRF-Token")) {
+      return;
+    }
+
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const token = readCookie("ade_csrf");
+    if (token) {
+      headers.set("X-CSRF-Token", token);
+    }
+  }
 }
 
 function getDefaultBaseUrl(): string {
@@ -155,3 +171,23 @@ function trimTrailingSlash(value: string): string {
 }
 
 export const apiClient = new ApiClient();
+
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const cookieString = document.cookie ?? "";
+  if (!cookieString) {
+    return null;
+  }
+
+  const prefix = `${name}=`;
+  const parts = cookieString.split(/;\s*/);
+  for (const part of parts) {
+    if (part.startsWith(prefix)) {
+      return decodeURIComponent(part.slice(prefix.length));
+    }
+  }
+  return null;
+}
