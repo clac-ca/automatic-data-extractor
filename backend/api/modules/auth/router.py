@@ -71,7 +71,7 @@ class AuthRoutes:
     ) -> SessionEnvelope:
         """Rotate the session using the refresh cookie and re-issue cookies."""
 
-        refresh_cookie = request.cookies.get(self.service.settings.auth_refresh_cookie)
+        refresh_cookie = request.cookies.get(self.service.settings.refresh_cookie_name)
         if not refresh_cookie:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Refresh token missing")
         try:
@@ -100,7 +100,7 @@ class AuthRoutes:
     async def logout(self, request: Request, response: Response) -> Response:
         """Remove authentication cookies and end the session."""
 
-        session_cookie = request.cookies.get(self.service.settings.auth_session_cookie)
+        session_cookie = request.cookies.get(self.service.settings.session_cookie_name)
         if session_cookie:
             try:
                 payload = self.service.decode_token(session_cookie, expected_type="access")

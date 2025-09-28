@@ -83,7 +83,7 @@ async def test_upload_document_exceeds_limit_returns_413(
         "Authorization": f"Bearer {token}",
     }
 
-    override_app_settings(max_upload_bytes=8)
+    override_app_settings(max_upload_size_bytes=8)
 
     response = await async_client.post(
         f"{workspace_base}/documents",

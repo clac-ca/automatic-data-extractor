@@ -58,7 +58,7 @@ class DocumentsService(BaseService):
         stored = await self._storage.write(
             stored_uri,
             upload.file,
-            max_bytes=self.settings.max_upload_bytes,
+            max_bytes=self.settings.max_upload_size_bytes,
         )
 
         document = Document(

@@ -76,7 +76,7 @@ If you delete `.env`, ADE falls back to its defaults (SQLite in
 3. Confirm the API is healthy:
 
    ```bash
-   curl http://127.0.0.1:8000/health
+   curl http://localhost:8000/health
    ```
 
 All runtime state stays under `backend/data/`. Remove that directory to reset ADE to a clean slate (for example, between demos).
@@ -126,7 +126,7 @@ The bind mount keeps the SQLite database and documents on the host so they
 survive container restarts. Check health the same way:
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://localhost:8000/health
 ```
 
 When you deploy the frontend in production, compile it once (`npm run build`)
@@ -211,7 +211,7 @@ administrators confidently using the CLI.
 - **`ade start` exits immediately:** ensure you ran `npm install` inside `frontend/` and that `uvicorn` is available (re-run `pip install -e .[dev]`).
 - **Port conflicts (8000/5173):** pass `--backend-port` / `--frontend-port` to `ade start`, or stop whatever process currently occupies those ports.
 - **Coloured logs appear garbled on Windows:** rerun with `ade start --no-color`.
-- **Frontend cannot reach the API:** set `--vite-api-base-url http://127.0.0.1:8000` (or update `VITE_API_BASE_URL` in your `.env`) when the backend runs on a different host or port.
+- **Frontend cannot reach the API:** set `--vite-api-base-url http://localhost:8000` (or update `VITE_API_BASE_URL` in your `.env`) when the backend runs on a different host or port.
 
 
 

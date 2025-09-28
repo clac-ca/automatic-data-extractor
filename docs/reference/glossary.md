@@ -21,4 +21,4 @@ A logical tenant boundary enforced by [`backend/api/modules/workspaces`](../../b
 Immutable audit records persisted by [`backend/api/modules/events`](../../backend/api/modules/events) and the recorder service in [`backend/api/modules/events/recorder.py`](../../backend/api/modules/events/recorder.py). Events track actions across documents, jobs, configurations, and security operations.
 
 ## API Key
-A long-lived credential provisioned for automation clients via routes in [`backend/api/modules/auth`](../../backend/api/modules/auth). Hashes are stored in the database, and usage is throttled via the `api_key_touch_interval_seconds` setting.
+A long-lived credential provisioned for automation clients via routes in [`backend/api/modules/auth`](../../backend/api/modules/auth). Hashes are stored in the database, and usage is throttled via the `api_key_last_seen_interval_seconds` setting.

@@ -44,7 +44,7 @@ async def bind_current_principal(
         request.state.current_user = user
         return AuthenticatedIdentity(user=user, credentials="bearer_token")
 
-    session_cookie = request.cookies.get(service.settings.auth_session_cookie)
+    session_cookie = request.cookies.get(service.settings.session_cookie_name)
     if session_cookie:
         try:
             payload = service.decode_token(session_cookie, expected_type="access")

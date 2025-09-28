@@ -35,9 +35,9 @@ class ProcessSpec:
     env: dict[str, str] | None = None
 
 
-DEFAULT_BACKEND_HOST = "127.0.0.1"
+DEFAULT_BACKEND_HOST = "localhost"
 DEFAULT_BACKEND_PORT = 8000
-DEFAULT_FRONTEND_HOST = "127.0.0.1"
+DEFAULT_FRONTEND_HOST = "localhost"
 DEFAULT_FRONTEND_PORT = 5173
 
 
@@ -291,6 +291,9 @@ def start(args: argparse.Namespace) -> None:
 
     npm_command = "npm.cmd" if os.name == "nt" else "npm"
     env_overrides = _parse_env_pairs(getattr(args, "env", []))
+    env_overrides.setdefault("ADE_SERVER_HOST", args.backend_host)
+    env_overrides.setdefault("ADE_BACKEND_PORT", str(args.backend_port))
+    env_overrides.setdefault("ADE_FRONTEND_PORT", str(args.frontend_port))
     if not args.skip_frontend:
         _ensure_frontend_dependencies(FRONTEND_DIR, npm_command)
 
