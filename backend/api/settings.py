@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -13,6 +15,34 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 class Settings(BaseSettings):
     """FastAPI configuration loaded from environment variables."""
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: Any,
+        env_settings: Any,
+        dotenv_settings: Any,
+        file_secret_settings: Any,
+    ) -> tuple[Any, ...]:
+        """Patch env sources so non-JSON lists can be parsed downstream."""
+
+        def install_fallback(source: Any) -> None:
+            original = source.decode_complex_value
+
+            def decode(self, field_name: str, field: Any, value: Any, *, _original=original):
+                try:
+                    return _original(field_name, field, value)
+                except json.JSONDecodeError:
+                    if isinstance(value, str):
+                        return value
+                    raise
+
+            source.decode_complex_value = decode.__get__(source, source.__class__)
+
+        install_fallback(env_settings)
+        install_fallback(dotenv_settings)
+        return init_settings, env_settings, dotenv_settings, file_secret_settings
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -36,6 +66,15 @@ class Settings(BaseSettings):
     data_dir: Path = PROJECT_ROOT / "backend" / "data"
     documents_dir: Path | None = None
     cors_allow_origins: list[str] = Field(default_factory=list)
+
+    @field_validator("cors_allow_origins", mode="before")
+    @classmethod
+    def _split_cors_origins(cls, value: Any) -> list[str]:
+        if isinstance(value, str):
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        if value is None:
+            return []
+        return value
 
     database_url: str = "sqlite+aiosqlite:///./backend/data/db/ade.sqlite"
     database_echo: bool = False
