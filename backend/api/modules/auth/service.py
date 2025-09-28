@@ -172,8 +172,8 @@ class AuthService(BaseService):
 
         settings = self.settings
         session_identifier = session_id or secrets.token_urlsafe(16)
-        access_delta = timedelta(minutes=settings.auth_access_token_ttl_minutes)
-        refresh_delta = timedelta(days=settings.auth_refresh_token_ttl_days)
+        access_delta = settings.jwt_access_ttl
+        refresh_delta = settings.jwt_refresh_ttl
         csrf_token = secrets.token_urlsafe(32)
         csrf_hash = hash_csrf_token(csrf_token)
 
@@ -187,8 +187,8 @@ class AuthService(BaseService):
             role=user.role,
             session_id=session_identifier,
             token_type="access",
-            secret=settings.auth_token_secret,
-            algorithm=settings.auth_token_algorithm,
+            secret=settings.jwt_secret_value,
+            algorithm=settings.jwt_algorithm,
             expires_delta=access_delta,
             csrf_hash=csrf_hash,
         )
@@ -198,8 +198,8 @@ class AuthService(BaseService):
             role=user.role,
             session_id=session_identifier,
             token_type="refresh",
-            secret=settings.auth_token_secret,
-            algorithm=settings.auth_token_algorithm,
+            secret=settings.jwt_secret_value,
+            algorithm=settings.jwt_algorithm,
             expires_delta=refresh_delta,
             csrf_hash=csrf_hash,
         )
@@ -236,8 +236,8 @@ class AuthService(BaseService):
 
         payload = decode_signed_token(
             token=token,
-            secret=self.settings.auth_token_secret,
-            algorithms=[self.settings.auth_token_algorithm],
+            secret=self.settings.jwt_secret_value,
+            algorithms=[self.settings.jwt_algorithm],
         )
         if expected_type != "any" and payload.token_type != expected_type:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Unexpected token type")
@@ -249,10 +249,10 @@ class AuthService(BaseService):
         """Attach cookies for ``tokens`` to ``response``."""
 
         settings = self.settings
-        session_path = self._normalise_cookie_path(settings.auth_cookie_path)
+        session_path = self._normalise_cookie_path(settings.session_cookie_path)
         refresh_path = self._refresh_cookie_path(session_path)
         cookie_kwargs = {
-            "domain": settings.auth_cookie_domain,
+            "domain": settings.session_cookie_domain,
             "path": session_path,
             "secure": secure,
             "httponly": True,
@@ -265,20 +265,20 @@ class AuthService(BaseService):
             **cookie_kwargs,
         )
         response.set_cookie(
-            key=settings.refresh_cookie_name,
+            key=settings.session_refresh_cookie_name,
             value=tokens.refresh_token,
             max_age=tokens.refresh_max_age,
-            domain=settings.auth_cookie_domain,
+            domain=settings.session_cookie_domain,
             path=refresh_path,
             secure=secure,
             httponly=True,
             samesite="lax",
         )
         response.set_cookie(
-            key=settings.csrf_cookie_name,
+            key=settings.session_csrf_cookie_name,
             value=tokens.csrf_token,
             max_age=tokens.access_max_age,
-            domain=settings.auth_cookie_domain,
+            domain=settings.session_cookie_domain,
             path=session_path,
             secure=secure,
             httponly=False,
@@ -290,21 +290,21 @@ class AuthService(BaseService):
         """Remove session cookies from the client response."""
 
         settings = self.settings
-        session_path = self._normalise_cookie_path(settings.auth_cookie_path)
+        session_path = self._normalise_cookie_path(settings.session_cookie_path)
         refresh_path = self._refresh_cookie_path(session_path)
         response.delete_cookie(
             key=settings.session_cookie_name,
-            domain=settings.auth_cookie_domain,
+            domain=settings.session_cookie_domain,
             path=session_path,
         )
         response.delete_cookie(
-            key=settings.refresh_cookie_name,
-            domain=settings.auth_cookie_domain,
+            key=settings.session_refresh_cookie_name,
+            domain=settings.session_cookie_domain,
             path=refresh_path,
         )
         response.delete_cookie(
-            key=settings.csrf_cookie_name,
-            domain=settings.auth_cookie_domain,
+            key=settings.session_csrf_cookie_name,
+            domain=settings.session_cookie_domain,
             path=session_path,
         )
 
@@ -315,7 +315,7 @@ class AuthService(BaseService):
         if request.method.upper() in safe_methods:
             return
 
-        csrf_cookie = request.cookies.get(self.settings.csrf_cookie_name)
+        csrf_cookie = request.cookies.get(self.settings.session_csrf_cookie_name)
         header_token = request.headers.get("X-CSRF-Token")
         if not csrf_cookie or not header_token:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="CSRF token missing")
@@ -473,11 +473,11 @@ class AuthService(BaseService):
         return principal
 
     async def _touch_api_key(self, record: APIKey, *, request: Request) -> None:
-        interval = self.settings.api_key_last_seen_interval_seconds
+        interval = self.settings.session_last_seen_interval
         now = self._now()
         last_seen = self._parse_timestamp(record.last_seen_at)
-        if interval > 0 and last_seen is not None:
-            if (now - last_seen).total_seconds() < interval:
+        if last_seen is not None and interval.total_seconds() > 0:
+            if (now - last_seen) < interval:
                 return
 
         record.last_seen_at = now.isoformat()
@@ -495,7 +495,7 @@ class AuthService(BaseService):
     async def prepare_sso_login(self) -> SSOLoginChallenge:
         """Return redirect metadata and a signed state token."""
 
-        if not self.settings.sso_enabled:
+        if not self.settings.oidc_enabled:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="SSO not configured")
 
         metadata = await self._get_oidc_metadata()
@@ -513,9 +513,9 @@ class AuthService(BaseService):
 
         params = {
             "response_type": "code",
-            "client_id": self.settings.sso_client_id,
-            "redirect_uri": self.settings.sso_redirect_url,
-            "scope": self.settings.sso_scopes,
+            "client_id": self.settings.oidc_client_id,
+            "redirect_uri": str(self.settings.oidc_redirect_url),
+            "scope": " ".join(self.settings.oidc_scopes),
             "state": state,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
@@ -530,17 +530,17 @@ class AuthService(BaseService):
     def decode_sso_state(self, token: str) -> SSOState:
         """Return the stored SSO state details."""
 
-        secret = self.settings.auth_token_secret
+        secret = self.settings.jwt_secret_value
         if not secret:
             raise RuntimeError(
-                "auth_token_secret must be configured when authentication is enabled",
+                "jwt_secret must be configured when authentication is enabled",
             )
 
         try:
             payload = jwt.decode(
                 token,
                 secret,
-                algorithms=[self.settings.auth_token_algorithm],
+                algorithms=[self.settings.jwt_algorithm],
                 options={"require": ["exp", "iat", "state", "code_verifier", "nonce"]},
             )
         except jwt.ExpiredSignatureError as exc:
@@ -582,21 +582,23 @@ class AuthService(BaseService):
                 detail="Invalid token response from identity provider",
             )
 
+        issuer_value = str(self.settings.oidc_issuer) if self.settings.oidc_issuer else ""
+
         id_claims = self._verify_jwt_via_jwks(
             token=id_token,
             jwks_uri=metadata.jwks_uri,
-            audience=self.settings.sso_client_id,
-            issuer=self.settings.sso_issuer or "",
+            audience=self.settings.oidc_client_id,
+            issuer=issuer_value,
             nonce=stored_state.nonce,
         )
 
-        resource_audience = self.settings.sso_resource_audience
+        resource_audience = self.settings.oidc_resource_audience
         if resource_audience:
             self._verify_jwt_via_jwks(
                 token=access_token,
                 jwks_uri=metadata.jwks_uri,
                 audience=resource_audience,
-                issuer=self.settings.sso_issuer or "",
+                issuer=issuer_value,
             )
 
         email = str(id_claims.get("email") or "")
@@ -609,7 +611,7 @@ class AuthService(BaseService):
             )
 
         user = await self._resolve_sso_user(
-            provider=self.settings.sso_issuer or "",
+            provider=issuer_value,
             subject=subject,
             email=email,
             email_verified=email_verified,
@@ -654,10 +656,10 @@ class AuthService(BaseService):
         nonce: str,
         issued_at: datetime,
     ) -> str:
-        secret = self.settings.auth_token_secret
+        secret = self.settings.jwt_secret_value
         if not secret:
             raise RuntimeError(
-                "auth_token_secret must be configured when authentication is enabled",
+                "jwt_secret must be configured when authentication is enabled",
             )
 
         payload = {
@@ -667,10 +669,10 @@ class AuthService(BaseService):
             "iat": int(issued_at.timestamp()),
             "exp": int((issued_at + timedelta(seconds=_SSO_STATE_TTL_SECONDS)).timestamp()),
         }
-        return jwt.encode(payload, secret, algorithm=self.settings.auth_token_algorithm)
+        return jwt.encode(payload, secret, algorithm=self.settings.jwt_algorithm)
 
     async def _get_oidc_metadata(self) -> OIDCProviderMetadata:
-        issuer = self.settings.sso_issuer or ""
+        issuer = str(self.settings.oidc_issuer) if self.settings.oidc_issuer else ""
         cached = _METADATA_CACHE.get(issuer)
         if cached is not None:
             return cached
@@ -717,15 +719,17 @@ class AuthService(BaseService):
         payload = {
             "grant_type": "authorization_code",
             "code": code,
-            "redirect_uri": self.settings.sso_redirect_url,
+            "redirect_uri": str(self.settings.oidc_redirect_url),
             "code_verifier": code_verifier,
-            "client_id": self.settings.sso_client_id,
+            "client_id": self.settings.oidc_client_id,
         }
 
         auth: tuple[str, str] | None = None
-        if self.settings.sso_client_secret:
-            auth = (self.settings.sso_client_id or "", self.settings.sso_client_secret)
-            payload["client_secret"] = self.settings.sso_client_secret
+        client_secret = self.settings.oidc_client_secret
+        if client_secret:
+            secret_value = client_secret.get_secret_value()
+            auth = (self.settings.oidc_client_id or "", secret_value)
+            payload["client_secret"] = secret_value
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:

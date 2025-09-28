@@ -17,7 +17,7 @@ _ENGINE_KEY: tuple[Any, ...] | None = None
 
 def _cache_key(settings: Settings) -> tuple[Any, ...]:
     return (
-        settings.database_url,
+        settings.database_dsn,
         settings.database_echo,
         settings.database_pool_size,
         settings.database_max_overflow,
@@ -49,7 +49,7 @@ def ensure_sqlite_database_directory(url: URL) -> None:
 
 
 def _create_engine(settings: Settings) -> AsyncEngine:
-    url = make_url(settings.database_url)
+    url = make_url(settings.database_dsn)
     connect_args: dict[str, Any] = {}
     engine_kwargs: dict[str, Any] = {
         "echo": settings.database_echo,

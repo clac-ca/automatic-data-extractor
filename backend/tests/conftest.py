@@ -42,11 +42,11 @@ def _configure_database(
     data_dir = tmp_path_factory.mktemp("ade-data")
     documents_dir = data_dir / "documents"
 
-    os.environ["ADE_DATABASE_URL"] = _database_url
-    os.environ["ADE_DATA_DIR"] = str(data_dir)
-    os.environ["ADE_DOCUMENTS_DIR"] = str(documents_dir)
+    os.environ["ADE_DATABASE_DSN"] = _database_url
+    os.environ["ADE_STORAGE_DATA_DIR"] = str(data_dir)
+    os.environ["ADE_STORAGE_DOCUMENTS_DIR"] = str(documents_dir)
     settings = reload_settings()
-    assert settings.database_url == _database_url
+    assert settings.database_dsn == _database_url
     reset_database_state()
 
     config = Config(str(Path("alembic.ini")))
@@ -58,7 +58,11 @@ def _configure_database(
     command.downgrade(config, "base")
     reset_database_state()
     reload_settings()
-    for env_var in ("ADE_DATABASE_URL", "ADE_DATA_DIR", "ADE_DOCUMENTS_DIR"):
+    for env_var in (
+        "ADE_DATABASE_DSN",
+        "ADE_STORAGE_DATA_DIR",
+        "ADE_STORAGE_DOCUMENTS_DIR",
+    ):
         os.environ.pop(env_var, None)
 
 

@@ -95,7 +95,7 @@
   - install.md
     - Python 3.11, virtualenv, `uvicorn backend.api.main:app --reload`, Alembic upgrade, and quick health check (`GET /health`).
   - configuration.md
-    - Current settings (Pydantic) and near‑term Dynaconf plan; how to toggle docs, adjust upload limits, paths (`data_dir`, `documents_dir`).
+    - Current settings (Pydantic) and near‑term Dynaconf plan; how to toggle docs, adjust upload limits, paths (`storage_data_dir`, `storage_documents_dir`).
   - security.md
     - API keys issuance/revocation (admin‑only), SSO envs and cookie behaviour, disable `/docs` in non‑local.
   - database.md

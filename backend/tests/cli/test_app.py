@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from cli.app import build_cli_app
-from cli.commands import api_keys, users
+from cli.commands import api_keys, settings as settings_command, users
 
 
 def test_users_create_handler_resolution() -> None:
@@ -55,10 +55,17 @@ def test_start_command_collects_env_overrides() -> None:
         [
             "start",
             "--env",
-            "ADE_LOG_LEVEL=DEBUG",
+            "ADE_LOGGING_LEVEL=DEBUG",
             "--env",
             "ADE_API_DOCS_ENABLED=true",
         ]
     )
 
-    assert args.env == ["ADE_LOG_LEVEL=DEBUG", "ADE_API_DOCS_ENABLED=true"]
+    assert args.env == ["ADE_LOGGING_LEVEL=DEBUG", "ADE_API_DOCS_ENABLED=true"]
+
+
+def test_settings_command_handler_resolution() -> None:
+    parser = build_cli_app()
+    args = parser.parse_args(["settings"])
+
+    assert args.handler is settings_command.dump

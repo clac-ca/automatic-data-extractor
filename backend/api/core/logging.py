@@ -73,7 +73,7 @@ def setup_logging(settings: Settings) -> None:
     handler.setFormatter(JSONLogFormatter())
 
     root_logger.handlers = [handler]
-    root_logger.setLevel(settings.log_level.upper())
+    root_logger.setLevel(settings.logging_level.upper())
 
     for noisy in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         logging.getLogger(noisy).handlers = []

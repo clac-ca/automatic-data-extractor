@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
@@ -83,7 +82,7 @@ async def test_upload_document_exceeds_limit_returns_413(
         "Authorization": f"Bearer {token}",
     }
 
-    override_app_settings(max_upload_size_bytes=8)
+    override_app_settings(storage_upload_max_bytes=8)
 
     response = await async_client.post(
         f"{workspace_base}/documents",
@@ -137,7 +136,7 @@ async def test_delete_document_marks_deleted(
         stored_uri = row.stored_uri
 
     settings = get_settings()
-    stored_path = Path(settings.documents_dir) / stored_uri
+    stored_path = settings.storage_documents_dir / stored_uri
     assert not stored_path.exists()
 
 
@@ -165,7 +164,7 @@ async def test_download_missing_file_returns_404(
     stored_uri = payload["stored_uri"]
 
     settings = get_settings()
-    stored_path = Path(settings.documents_dir) / stored_uri
+    stored_path = settings.storage_documents_dir / stored_uri
     assert stored_path.exists()
     stored_path.unlink()
 

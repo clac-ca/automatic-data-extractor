@@ -31,7 +31,7 @@ def _database_url() -> str:
         return override
 
     settings = get_settings()
-    return render_sync_url(settings.database_url)
+    return render_sync_url(settings.database_dsn)
 
 
 def _should_render_as_batch(url: str) -> bool:
