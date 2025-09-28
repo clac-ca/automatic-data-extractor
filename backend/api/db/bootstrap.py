@@ -30,14 +30,14 @@ def _load_alembic_config() -> Config:
 
 def _upgrade_database(settings: Settings, connection: Connection | None = None) -> None:
     config = _load_alembic_config()
-    config.set_main_option("sqlalchemy.url", render_sync_url(settings.database_url))
+    config.set_main_option("sqlalchemy.url", render_sync_url(settings.database_dsn))
     if connection is not None:
         config.attributes["connection"] = connection
     command.upgrade(config, "head")
 
 
 def _apply_migrations(settings: Settings) -> None:
-    url = make_url(settings.database_url)
+    url = make_url(settings.database_dsn)
     if url.get_backend_name() == "sqlite":
         ensure_sqlite_database_directory(url)
 
@@ -48,7 +48,7 @@ async def ensure_database_ready(settings: Settings | None = None) -> None:
     """Create the database and apply migrations if needed."""
 
     resolved = settings or get_settings()
-    database_url = resolved.database_url
+    database_url = resolved.database_dsn
 
     async with _BOOTSTRAP_LOCK:
         if database_url in _BOOTSTRAPPED_URLS:

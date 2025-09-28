@@ -10,8 +10,8 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 
 ## Configuration snapshot
 - Settings are loaded once at startup through `get_settings()` and cached on `app.state.settings`. Routes and background workers read from this state rather than reloading environment variables on every request.
-- Environment variables use the `ADE_` prefix (for example `ADE_DATABASE_URL`, `ADE_MAX_UPLOAD_SIZE_BYTES`). A local `.env` file is respected during development.
-- Host and port configuration splits into `ADE_BACKEND_BIND_HOST` / `ADE_BACKEND_BIND_PORT` for the uvicorn listener and `ADE_BACKEND_PUBLIC_URL` for the externally reachable origin. When ADE sits behind HTTPS on a domain such as `https://ade.example.com`, set the public URL and frontend `VITE_API_BASE_URL` to that origin and list it in `ADE_CORS_ALLOW_ORIGINS` so browsers can connect.
+- Environment variables use the `ADE_` prefix (for example `ADE_DATABASE_DSN`, `ADE_STORAGE_UPLOAD_MAX_BYTES`). A local `.env` file is respected during development.
+- Host and port configuration splits into `ADE_SERVER_HOST` / `ADE_SERVER_PORT` for the uvicorn listener and `ADE_SERVER_PUBLIC_URL` for the externally reachable origin. When ADE sits behind HTTPS on a domain such as `https://ade.example.com`, set the public URL and frontend `VITE_API_BASE_URL` to that origin and list it in `ADE_SERVER_CORS_ORIGINS` (comma or whitespace separated) so browsers can connect.
 - Documentation endpoints (`/docs`, `/redoc`, `/openapi.json`) default on for the `local` and `staging` environments and can be
   toggled explicitly through the `ADE_API_DOCS_ENABLED` flag to keep production surfaces minimal.
 

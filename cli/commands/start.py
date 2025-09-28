@@ -43,8 +43,8 @@ DEFAULT_FRONTEND_PORT = 5173
 
 def _resolve_backend_public_url(args: argparse.Namespace, overrides: dict[str, str]) -> str:
     candidate = (
-        overrides.get("ADE_BACKEND_PUBLIC_URL")
-        or os.getenv("ADE_BACKEND_PUBLIC_URL")
+        overrides.get("ADE_SERVER_PUBLIC_URL")
+        or os.getenv("ADE_SERVER_PUBLIC_URL")
         or ""
     ).strip()
     if candidate:
@@ -82,9 +82,9 @@ def _parse_env_pairs(pairs: list[str]) -> dict[str, str]:
 def register_arguments(parser: argparse.ArgumentParser) -> None:
     """Attach command-line options for the `ade start` workflow."""
 
-    backend_host_default = os.getenv("ADE_BACKEND_BIND_HOST", DEFAULT_BACKEND_HOST)
+    backend_host_default = os.getenv("ADE_SERVER_HOST", DEFAULT_BACKEND_HOST)
     try:
-        backend_port_default = int(os.getenv("ADE_BACKEND_BIND_PORT", DEFAULT_BACKEND_PORT))
+        backend_port_default = int(os.getenv("ADE_SERVER_PORT", DEFAULT_BACKEND_PORT))
     except ValueError:
         backend_port_default = DEFAULT_BACKEND_PORT
     frontend_host_default = DEFAULT_FRONTEND_HOST
@@ -140,7 +140,7 @@ def register_arguments(parser: argparse.ArgumentParser) -> None:
         metavar="KEY=VALUE",
         help=(
             "Set environment variables for the spawned servers. Repeat the flag "
-            "to pass multiple entries (e.g. --env ADE_LOG_LEVEL=INFO)."
+            "to pass multiple entries (e.g. --env ADE_LOGGING_LEVEL=INFO)."
         ),
     )
     parser.add_argument(
@@ -308,20 +308,20 @@ def start(args: argparse.Namespace) -> None:
     npm_command = "npm.cmd" if os.name == "nt" else "npm"
     env_overrides = _parse_env_pairs(getattr(args, "env", []))
     if (
-        "ADE_BACKEND_BIND_HOST" not in env_overrides
-        and "ADE_BACKEND_BIND_HOST" not in os.environ
+        "ADE_SERVER_HOST" not in env_overrides
+        and "ADE_SERVER_HOST" not in os.environ
     ):
-        env_overrides["ADE_BACKEND_BIND_HOST"] = args.backend_host
+        env_overrides["ADE_SERVER_HOST"] = args.backend_host
     if (
-        "ADE_BACKEND_BIND_PORT" not in env_overrides
-        and "ADE_BACKEND_BIND_PORT" not in os.environ
+        "ADE_SERVER_PORT" not in env_overrides
+        and "ADE_SERVER_PORT" not in os.environ
     ):
-        env_overrides["ADE_BACKEND_BIND_PORT"] = str(args.backend_port)
+        env_overrides["ADE_SERVER_PORT"] = str(args.backend_port)
     if (
-        "ADE_BACKEND_PUBLIC_URL" not in env_overrides
-        and "ADE_BACKEND_PUBLIC_URL" not in os.environ
+        "ADE_SERVER_PUBLIC_URL" not in env_overrides
+        and "ADE_SERVER_PUBLIC_URL" not in os.environ
     ):
-        env_overrides["ADE_BACKEND_PUBLIC_URL"] = (
+        env_overrides["ADE_SERVER_PUBLIC_URL"] = (
             f"http://{args.backend_host}:{args.backend_port}"
         )
     if not args.skip_frontend:
