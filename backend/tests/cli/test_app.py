@@ -47,3 +47,18 @@ def test_api_keys_issue_handler_resolution() -> None:
         ]
     )
     assert args.handler is api_keys.issue
+
+
+def test_start_command_collects_env_overrides() -> None:
+    parser = build_cli_app()
+    args = parser.parse_args(
+        [
+            "start",
+            "--env",
+            "ADE_LOG_LEVEL=DEBUG",
+            "--env",
+            "ADE_ENABLE_DOCS=true",
+        ]
+    )
+
+    assert args.env == ["ADE_LOG_LEVEL=DEBUG", "ADE_ENABLE_DOCS=true"]

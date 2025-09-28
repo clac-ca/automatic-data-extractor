@@ -26,10 +26,10 @@ The following findings were documented after reviewing the repository against th
 - ✅ **Status**: `/health` now returns the `HealthCheckResponse` instance directly so FastAPI performs validation and serialisation without the custom `JSONResponse` wrapper.【F:backend/api/modules/health/router.py†L1-L28】【F:backend/api/modules/health/service.py†L12-L30】
 - **Notes**: Follow the same pattern for future endpoints—if a service already yields a schema, return it from the route and let FastAPI handle the response.
 
-## 3. Expose documentation endpoints only in safe environments *(Resolved)*
-- **Best practice**: Hide the OpenAPI/Swagger docs by default unless the API is public or the environment is explicitly allowed.【F:fastapi-best-practices.md†L609-L625】
-- ✅ **Status**: `Settings.docs_enabled` now auto-enables documentation only for the `local`/`staging` environments and requires explicit overrides elsewhere, keeping the OpenAPI/Swagger routes hidden by default in production.【F:backend/api/settings.py†L29-L118】【F:backend/api/main.py†L15-L55】
-- **Notes**: Operators can still force-enable (or disable) docs via `ADE_ENABLE_DOCS`, and the app factory respects the resolved URLs through `Settings.docs_urls` and `Settings.openapi_docs_url`.
+## 3. Expose documentation endpoints only when explicitly enabled *(Resolved)*
+- **Best practice**: Hide the OpenAPI/Swagger docs by default unless the API is public or explicitly toggled on.【F:fastapi-best-practices.md†L609-L625】
+- ✅ **Status**: `Settings.enable_docs` now defaults to `False`, and `create_app` wires documentation URLs only when the flag is set, keeping OpenAPI routes hidden by default.【F:backend/api/settings.py†L24-L108】【F:backend/api/main.py†L17-L63】
+- **Notes**: Operators can still force-enable (or disable) docs via `ADE_ENABLE_DOCS`; no environment allowlist is involved any more.
 
 ## 4. Split settings by domain instead of one monolithic `BaseSettings`
 - **Best practice**: Break large configuration surfaces into focused `BaseSettings` classes per module or domain to keep concerns isolated and maintainable.【F:fastapi-best-practices.md†L259-L306】
@@ -115,3 +115,4 @@ The following findings were documented after reviewing the repository against th
 ---
 
 _Update this file as issues are resolved so future FastAPI audits can focus on new gaps instead of rediscovering the same problems._
+

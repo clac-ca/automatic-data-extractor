@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from backend.api.db.engine import reset_database_state
 from backend.api.settings import Settings
+from cli.commands import start as start_cmd
 from cli.core.runtime import normalise_email, open_session, read_secret
 
 
@@ -81,3 +82,19 @@ async def test_open_session_bootstraps_in_memory_database() -> None:
             assert result.scalar_one() == "users"
     finally:
         reset_database_state()
+
+
+def test_parse_env_pairs_accepts_multiple_values() -> None:
+    result = start_cmd._parse_env_pairs(
+        ["ADE_LOG_LEVEL=INFO", "VITE_API_BASE_URL=http://127.0.0.1:8000"]
+    )
+
+    assert result == {
+        "ADE_LOG_LEVEL": "INFO",
+        "VITE_API_BASE_URL": "http://127.0.0.1:8000",
+    }
+
+
+def test_parse_env_pairs_rejects_missing_separator() -> None:
+    with pytest.raises(ValueError):
+        start_cmd._parse_env_pairs(["ADE_LOG_LEVEL"])

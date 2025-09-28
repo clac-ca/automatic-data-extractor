@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -16,131 +15,83 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 class Settings(BaseSettings):
     """FastAPI configuration loaded from environment variables."""
 
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: Any,
-        env_settings: Any,
-        dotenv_settings: Any,
-        file_secret_settings: Any,
-    ) -> tuple[Any, ...]:
-        """Patch env sources so non-JSON lists can be parsed downstream."""
-
-        def install_fallback(source: Any) -> None:
-            original = source.decode_complex_value
-
-            def decode(self, field_name: str, field: Any, value: Any, *, _original=original):
-                try:
-                    return _original(field_name, field, value)
-                except json.JSONDecodeError:
-                    if isinstance(value, str):
-                        return value
-                    raise
-
-            source.decode_complex_value = decode.__get__(source, source.__class__)
-
-        install_fallback(env_settings)
-        install_fallback(dotenv_settings)
-        return init_settings, env_settings, dotenv_settings, file_secret_settings
-
     model_config = SettingsConfigDict(
         env_file=".env",
         env_prefix="ADE_",
         env_nested_delimiter="__",
         case_sensitive=False,
         extra="ignore",
+        populate_by_name=True,
     )
 
-    environment: str = "local"
-    debug: bool = False
-    app_name: str = "Automatic Data Extractor API"
-    app_version: str = "0.1.0"
-    enable_docs: bool = False
-    docs_url: str = "/docs"
-    redoc_url: str = "/redoc"
-    openapi_url: str = "/openapi.json"
-    docs_environment_allowlist: tuple[str, ...] = ("local", "staging")
-    log_level: str = "INFO"
+    debug: bool = Field(default=False, description="Enable FastAPI debug mode.")
+    app_name: str = Field(default="Automatic Data Extractor API", description="Human readable API name.")
+    app_version: str = Field(default="0.1.0", description="API version string.")
+    enable_docs: bool = Field(default=False, description="Expose interactive API documentation endpoints.")
+    docs_url: str = Field(default="/docs", description="Swagger UI mount point.")
+    redoc_url: str = Field(default="/redoc", description="ReDoc mount point.")
+    openapi_url: str = Field(default="/openapi.json", description="OpenAPI schema endpoint.")
+    log_level: str = Field(default="INFO", description="Root log level for the backend.")
 
-    data_dir: Path = PROJECT_ROOT / "backend" / "data"
-    documents_dir: Path | None = None
-    cors_allow_origins: list[str] = Field(default_factory=list)
+    data_dir: Path = Field(default=PROJECT_ROOT / "backend" / "data", description="Directory for writable backend data.")
+    documents_dir: Path | None = Field(default=None, description="Optional override for document storage.")
+    cors_allow_origins: str = Field(
+        default="",
+        description="Allowed CORS origins as comma separated URLs or JSON array.",
+    )
 
-    @field_validator("cors_allow_origins", mode="before")
-    @classmethod
-    def _split_cors_origins(cls, value: Any) -> list[str]:
-        if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-        if value is None:
-            return []
-        return value
+    database_url: str = Field(
+        default="sqlite+aiosqlite:///./backend/data/db/ade.sqlite",
+        description="SQLAlchemy database URL.",
+    )
+    database_echo: bool = Field(default=False, description="Enable SQLAlchemy engine echo logging.")
+    database_pool_size: int = Field(default=5, description="SQLAlchemy connection pool size.")
+    database_max_overflow: int = Field(default=10, description="SQLAlchemy connection pool overflow.")
+    database_pool_timeout: int = Field(default=30, description="SQLAlchemy pool timeout in seconds.")
 
-    database_url: str = "sqlite+aiosqlite:///./backend/data/db/ade.sqlite"
-    database_echo: bool = False
-    database_pool_size: int = 5
-    database_max_overflow: int = 10
-    database_pool_timeout: int = 30
+    auth_token_secret: str = Field(default="development-secret", description="HMAC secret for auth tokens.")
+    auth_token_algorithm: str = Field(default="HS256", description="Algorithm used for JWT signing.")
+    auth_token_exp_minutes: int = Field(default=60, description="Access token lifetime in minutes.")
+    auth_refresh_token_exp_days: int = Field(default=14, description="Refresh token lifetime in days.")
+    auth_session_cookie: str = Field(default="ade_session", description="Name of the session cookie.")
+    auth_refresh_cookie: str = Field(default="ade_refresh", description="Name of the refresh cookie.")
+    auth_csrf_cookie: str = Field(default="ade_csrf", description="Name of the CSRF cookie.")
+    auth_cookie_domain: str | None = Field(default=None, description="Optional cookie domain override.")
+    auth_cookie_path: str = Field(default="/", description="Cookie path scope.")
 
-    auth_token_secret: str = "development-secret"
-    auth_token_algorithm: str = "HS256"
-    auth_token_exp_minutes: int = 60
-    auth_refresh_token_exp_days: int = 14
-    auth_session_cookie: str = "ade_session"
-    auth_refresh_cookie: str = "ade_refresh"
-    auth_csrf_cookie: str = "ade_csrf"
-    auth_cookie_domain: str | None = None
-    auth_cookie_path: str = "/"
+    sso_client_id: str | None = Field(default=None, description="OIDC client identifier.")
+    sso_client_secret: str | None = Field(default=None, description="OIDC client secret.")
+    sso_issuer: str | None = Field(default=None, description="OIDC issuer URL.")
+    sso_redirect_url: str | None = Field(default=None, description="OIDC redirect URL.")
+    sso_scope: str = Field(default="openid email profile", description="OIDC scopes requested.")
+    sso_resource_audience: str | None = Field(default=None, description="OIDC resource audience.")
 
-    sso_client_id: str | None = None
-    sso_client_secret: str | None = None
-    sso_issuer: str | None = None
-    sso_redirect_url: str | None = None
-    sso_scope: str = "openid email profile"
-    sso_resource_audience: str | None = None
-
-    api_key_touch_interval_seconds: int = 300
-    max_upload_bytes: int = 25 * 1024 * 1024
-    default_document_retention_days: int = 30
+    api_key_touch_interval_seconds: int = Field(default=300, description="API key touch interval in seconds.")
+    max_upload_bytes: int = Field(default=25 * 1024 * 1024, description="Maximum upload size in bytes.")
+    default_document_retention_days: int = Field(default=30, description="Default document retention period in days.")
 
     @property
     def docs_enabled(self) -> bool:
         """Return whether interactive documentation should be exposed."""
 
-        if "enable_docs" in self.model_fields_set:
-            return self.enable_docs
-
-        environment = self.environment.strip().lower()
-        allowed_environments = tuple(env.lower() for env in self.docs_environment_allowlist)
-        return environment in allowed_environments
+        return self.enable_docs
 
     @property
-    def docs_urls(self) -> tuple[str | None, str | None]:
-        """Return documentation endpoints honouring the docs visibility rules."""
+    def cors_allow_origins_list(self) -> list[str]:
+        """Return a normalised list of allowed CORS origins."""
 
-        if not self.docs_enabled:
-            return (None, None)
-        return self.docs_url, self.redoc_url
-
-    @property
-    def openapi_docs_url(self) -> str | None:
-        """Return the OpenAPI endpoint when documentation is enabled."""
-
-        return self.openapi_url if self.docs_enabled else None
-
-    @property
-    def sso_enabled(self) -> bool:
-        """Return ``True`` when all mandatory SSO settings are present."""
-
-        return all(
-            (
-                self.sso_client_id,
-                self.sso_client_secret,
-                self.sso_issuer,
-                self.sso_redirect_url,
-            )
-        )
-
+        raw = self.cors_allow_origins.strip()
+        if not raw:
+            return []
+        if raw.startswith("["):
+            try:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError:
+                parsed = []
+            else:
+                if isinstance(parsed, list):
+                    return [str(item).strip() for item in parsed if str(item).strip()]
+        return [item.strip() for item in raw.split(",") if item.strip()]
     @field_validator(
         "sso_client_id",
         "sso_client_secret",
@@ -171,6 +122,12 @@ class Settings(BaseSettings):
         documents_dir = self.documents_dir or self.data_dir / "documents"
         self.documents_dir = Path(documents_dir).resolve()
         return self
+
+    @property
+    def sso_enabled(self) -> bool:
+        """Return True when all mandatory SSO settings are present."""
+
+        return all((self.sso_client_id, self.sso_client_secret, self.sso_issuer, self.sso_redirect_url))
 
 
 def get_settings() -> Settings:
@@ -205,3 +162,5 @@ def get_app_settings(container: SupportsState) -> Settings:
 
 
 __all__ = ["Settings", "get_settings", "reload_settings", "get_app_settings"]
+
+
