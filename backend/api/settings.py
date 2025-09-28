@@ -27,17 +27,21 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, description="Enable FastAPI debug mode.")
     app_name: str = Field(default="Automatic Data Extractor API", description="Human readable API name.")
     app_version: str = Field(default="0.1.0", description="API version string.")
-    enable_docs: bool = Field(default=False, description="Expose interactive API documentation endpoints.")
+    api_docs_enabled: bool = Field(default=False, description="Expose interactive API documentation endpoints.")
     docs_url: str = Field(default="/docs", description="Swagger UI mount point.")
     redoc_url: str = Field(default="/redoc", description="ReDoc mount point.")
     openapi_url: str = Field(default="/openapi.json", description="OpenAPI schema endpoint.")
     log_level: str = Field(default="INFO", description="Root log level for the backend.")
 
+    server_host: str = Field(default="localhost", description="Hostname shared by the backend and frontend services.")
+    backend_port: int = Field(default=8000, description="Port that the FastAPI backend listens on.")
+    frontend_port: int = Field(default=5173, description="Port that the frontend development server listens on.")
+
     data_dir: Path = Field(default=PROJECT_ROOT / "backend" / "data", description="Directory for writable backend data.")
     documents_dir: Path | None = Field(default=None, description="Optional override for document storage.")
     cors_allow_origins: str = Field(
         default="",
-        description="Allowed CORS origins as comma separated URLs or JSON array.",
+        description="Additional CORS origins as comma separated URLs or JSON array.",
     )
 
     database_url: str = Field(
@@ -51,11 +55,11 @@ class Settings(BaseSettings):
 
     auth_token_secret: str = Field(default="development-secret", description="HMAC secret for auth tokens.")
     auth_token_algorithm: str = Field(default="HS256", description="Algorithm used for JWT signing.")
-    auth_token_exp_minutes: int = Field(default=60, description="Access token lifetime in minutes.")
-    auth_refresh_token_exp_days: int = Field(default=14, description="Refresh token lifetime in days.")
-    auth_session_cookie: str = Field(default="ade_session", description="Name of the session cookie.")
-    auth_refresh_cookie: str = Field(default="ade_refresh", description="Name of the refresh cookie.")
-    auth_csrf_cookie: str = Field(default="ade_csrf", description="Name of the CSRF cookie.")
+    auth_access_token_ttl_minutes: int = Field(default=60, description="Access token lifetime in minutes.")
+    auth_refresh_token_ttl_days: int = Field(default=14, description="Refresh token lifetime in days.")
+    session_cookie_name: str = Field(default="ade_session", description="Name of the session cookie.")
+    refresh_cookie_name: str = Field(default="ade_refresh", description="Name of the refresh cookie.")
+    csrf_cookie_name: str = Field(default="ade_csrf", description="Name of the CSRF cookie.")
     auth_cookie_domain: str | None = Field(default=None, description="Optional cookie domain override.")
     auth_cookie_path: str = Field(default="/", description="Cookie path scope.")
 
@@ -63,35 +67,58 @@ class Settings(BaseSettings):
     sso_client_secret: str | None = Field(default=None, description="OIDC client secret.")
     sso_issuer: str | None = Field(default=None, description="OIDC issuer URL.")
     sso_redirect_url: str | None = Field(default=None, description="OIDC redirect URL.")
-    sso_scope: str = Field(default="openid email profile", description="OIDC scopes requested.")
+    sso_scopes: str = Field(default="openid email profile", description="OIDC scopes requested.")
     sso_resource_audience: str | None = Field(default=None, description="OIDC resource audience.")
 
-    api_key_touch_interval_seconds: int = Field(default=300, description="API key touch interval in seconds.")
-    max_upload_bytes: int = Field(default=25 * 1024 * 1024, description="Maximum upload size in bytes.")
+    api_key_last_seen_interval_seconds: int = Field(
+        default=300,
+        description="Minimum seconds between API key last-seen updates.",
+    )
+    max_upload_size_bytes: int = Field(
+        default=25 * 1024 * 1024,
+        description="Maximum upload size in bytes.",
+    )
     default_document_retention_days: int = Field(default=30, description="Default document retention period in days.")
 
     @property
-    def docs_enabled(self) -> bool:
-        """Return whether interactive documentation should be exposed."""
+    def backend_origin(self) -> str:
+        """Return the base HTTP origin for the FastAPI backend."""
 
-        return self.enable_docs
+        return f"http://{self.server_host}:{self.backend_port}"
+
+    @property
+    def frontend_origin(self) -> str:
+        """Return the base HTTP origin for the frontend development server."""
+
+        return f"http://{self.server_host}:{self.frontend_port}"
 
     @property
     def cors_allow_origins_list(self) -> list[str]:
         """Return a normalised list of allowed CORS origins."""
 
+        origins = {self.backend_origin, self.frontend_origin}
+
         raw = self.cors_allow_origins.strip()
-        if not raw:
-            return []
-        if raw.startswith("["):
-            try:
-                parsed = json.loads(raw)
-            except json.JSONDecodeError:
-                parsed = []
+        if raw:
+            if raw.startswith("["):
+                try:
+                    parsed = json.loads(raw)
+                except json.JSONDecodeError:
+                    parsed = []
+                else:
+                    if isinstance(parsed, list):
+                        for item in parsed:
+                            candidate = str(item).strip()
+                            if candidate:
+                                origins.add(candidate)
             else:
-                if isinstance(parsed, list):
-                    return [str(item).strip() for item in parsed if str(item).strip()]
-        return [item.strip() for item in raw.split(",") if item.strip()]
+                for item in raw.split(","):
+                    candidate = item.strip()
+                    if candidate:
+                        origins.add(candidate)
+
+        return sorted(origins)
+
     @field_validator(
         "sso_client_id",
         "sso_client_secret",
@@ -108,12 +135,20 @@ class Settings(BaseSettings):
         candidate = value.strip()
         return candidate or None
 
-    @field_validator("sso_scope", mode="before")
+    @field_validator("server_host", mode="before")
+    @classmethod
+    def _normalise_host(cls, value: str) -> str:
+        host = value.strip()
+        if not host:
+            raise ValueError("server_host must not be empty")
+        return host
+
+    @field_validator("sso_scopes", mode="before")
     @classmethod
     def _normalise_scope(cls, value: str) -> str:
         scopes = " ".join(part for part in value.split() if part)
         if not scopes:
-            raise ValueError("sso_scope must not be empty")
+            raise ValueError("sso_scopes must not be empty")
         return scopes
 
     @model_validator(mode="after")

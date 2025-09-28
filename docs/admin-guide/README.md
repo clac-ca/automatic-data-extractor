@@ -10,9 +10,10 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 
 ## Configuration snapshot
 - Settings are loaded once at startup through `get_settings()` and cached on `app.state.settings`. Routes and background workers read from this state rather than reloading environment variables on every request.
-- Environment variables use the `ADE_` prefix (for example `ADE_DATABASE_URL`, `ADE_MAX_UPLOAD_BYTES`). A local `.env` file is respected during development.
+- Environment variables use the `ADE_` prefix (for example `ADE_DATABASE_URL`, `ADE_MAX_UPLOAD_SIZE_BYTES`). A local `.env` file is respected during development.
+- Host and port configuration flows through `ADE_SERVER_HOST`, `ADE_BACKEND_PORT`, and `ADE_FRONTEND_PORT`. ADE automatically adds `http://{host}:{backend_port}` and `http://{host}:{frontend_port}` to the CORS allowlist.
 - Documentation endpoints (`/docs`, `/redoc`, `/openapi.json`) default on for the `local` and `staging` environments and can be
-  toggled explicitly through the `ADE_ENABLE_DOCS` flag to keep production surfaces minimal.
+  toggled explicitly through the `ADE_API_DOCS_ENABLED` flag to keep production surfaces minimal.
 
 ## Operational building blocks
 - Database connections are created via the async SQLAlchemy engine in [`backend/api/db/engine.py`](../../backend/api/db/engine.py) and scoped sessions from [`backend/api/db/session.py`](../../backend/api/db/session.py).

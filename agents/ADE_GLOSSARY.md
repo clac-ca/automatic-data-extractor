@@ -74,7 +74,7 @@ ADE stores everything in SQLite (`data/db/ade.sqlite`). Tables expected on day o
 - `maintenance_status` – Keyed JSON payloads for background maintenance loops (e.g. `automatic_document_purge` stores the last
   automatic purge summary returned by `/health`).
 - **Max upload bytes** – Configurable request ceiling (default 25 MiB) enforced by `POST /documents`. Controlled via the
-  `ADE_MAX_UPLOAD_BYTES` environment variable; exceeding the limit returns HTTP 413 with `error=document_too_large` plus the
+  `ADE_MAX_UPLOAD_SIZE_BYTES` environment variable; exceeding the limit returns HTTP 413 with `error=document_too_large` plus the
   configured threshold in the response body.
 - **Document retention defaults** – Uploads expire after the configured window (`ADE_DEFAULT_DOCUMENT_RETENTION_DAYS`,
   30 days by default). Callers may override a document's expiry during upload by setting the `expires_at` form field.

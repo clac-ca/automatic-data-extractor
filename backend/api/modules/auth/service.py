@@ -172,8 +172,8 @@ class AuthService(BaseService):
 
         settings = self.settings
         session_identifier = session_id or secrets.token_urlsafe(16)
-        access_delta = timedelta(minutes=settings.auth_token_exp_minutes)
-        refresh_delta = timedelta(days=settings.auth_refresh_token_exp_days)
+        access_delta = timedelta(minutes=settings.auth_access_token_ttl_minutes)
+        refresh_delta = timedelta(days=settings.auth_refresh_token_ttl_days)
         csrf_token = secrets.token_urlsafe(32)
         csrf_hash = hash_csrf_token(csrf_token)
 
@@ -259,13 +259,13 @@ class AuthService(BaseService):
             "samesite": "lax",
         }
         response.set_cookie(
-            key=settings.auth_session_cookie,
+            key=settings.session_cookie_name,
             value=tokens.access_token,
             max_age=tokens.access_max_age,
             **cookie_kwargs,
         )
         response.set_cookie(
-            key=settings.auth_refresh_cookie,
+            key=settings.refresh_cookie_name,
             value=tokens.refresh_token,
             max_age=tokens.refresh_max_age,
             domain=settings.auth_cookie_domain,
@@ -275,7 +275,7 @@ class AuthService(BaseService):
             samesite="lax",
         )
         response.set_cookie(
-            key=settings.auth_csrf_cookie,
+            key=settings.csrf_cookie_name,
             value=tokens.csrf_token,
             max_age=tokens.access_max_age,
             domain=settings.auth_cookie_domain,
@@ -293,17 +293,17 @@ class AuthService(BaseService):
         session_path = self._normalise_cookie_path(settings.auth_cookie_path)
         refresh_path = self._refresh_cookie_path(session_path)
         response.delete_cookie(
-            key=settings.auth_session_cookie,
+            key=settings.session_cookie_name,
             domain=settings.auth_cookie_domain,
             path=session_path,
         )
         response.delete_cookie(
-            key=settings.auth_refresh_cookie,
+            key=settings.refresh_cookie_name,
             domain=settings.auth_cookie_domain,
             path=refresh_path,
         )
         response.delete_cookie(
-            key=settings.auth_csrf_cookie,
+            key=settings.csrf_cookie_name,
             domain=settings.auth_cookie_domain,
             path=session_path,
         )
@@ -315,7 +315,7 @@ class AuthService(BaseService):
         if request.method.upper() in safe_methods:
             return
 
-        csrf_cookie = request.cookies.get(self.settings.auth_csrf_cookie)
+        csrf_cookie = request.cookies.get(self.settings.csrf_cookie_name)
         header_token = request.headers.get("X-CSRF-Token")
         if not csrf_cookie or not header_token:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="CSRF token missing")
@@ -473,7 +473,7 @@ class AuthService(BaseService):
         return principal
 
     async def _touch_api_key(self, record: APIKey, *, request: Request) -> None:
-        interval = self.settings.api_key_touch_interval_seconds
+        interval = self.settings.api_key_last_seen_interval_seconds
         now = self._now()
         last_seen = self._parse_timestamp(record.last_seen_at)
         if interval > 0 and last_seen is not None:
@@ -515,7 +515,7 @@ class AuthService(BaseService):
             "response_type": "code",
             "client_id": self.settings.sso_client_id,
             "redirect_uri": self.settings.sso_redirect_url,
-            "scope": self.settings.sso_scope,
+            "scope": self.settings.sso_scopes,
             "state": state,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",

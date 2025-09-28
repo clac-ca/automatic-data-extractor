@@ -57,8 +57,8 @@ def test_start_command_collects_env_overrides() -> None:
             "--env",
             "ADE_LOG_LEVEL=DEBUG",
             "--env",
-            "ADE_ENABLE_DOCS=true",
+            "ADE_API_DOCS_ENABLED=true",
         ]
     )
 
-    assert args.env == ["ADE_LOG_LEVEL=DEBUG", "ADE_ENABLE_DOCS=true"]
+    assert args.env == ["ADE_LOG_LEVEL=DEBUG", "ADE_API_DOCS_ENABLED=true"]

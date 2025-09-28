@@ -21,7 +21,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     setup_logging(settings)
 
-    if settings.docs_enabled:
+    if settings.api_docs_enabled:
         docs_url = settings.docs_url
         redoc_url = settings.redoc_url
         openapi_url = settings.openapi_url

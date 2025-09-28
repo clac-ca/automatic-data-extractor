@@ -28,8 +28,8 @@ The following findings were documented after reviewing the repository against th
 
 ## 3. Expose documentation endpoints only when explicitly enabled *(Resolved)*
 - **Best practice**: Hide the OpenAPI/Swagger docs by default unless the API is public or explicitly toggled on.【F:fastapi-best-practices.md†L609-L625】
-- ✅ **Status**: `Settings.enable_docs` now defaults to `False`, and `create_app` wires documentation URLs only when the flag is set, keeping OpenAPI routes hidden by default.【F:backend/api/settings.py†L24-L108】【F:backend/api/main.py†L17-L63】
-- **Notes**: Operators can still force-enable (or disable) docs via `ADE_ENABLE_DOCS`; no environment allowlist is involved any more.
+- ✅ **Status**: `Settings.api_docs_enabled` now defaults to `False`, and `create_app` wires documentation URLs only when the flag is set, keeping OpenAPI routes hidden by default.【F:backend/api/settings.py†L24-L115】【F:backend/api/main.py†L17-L63】
+- **Notes**: Operators can still force-enable (or disable) docs via `ADE_API_DOCS_ENABLED`; no environment allowlist is involved any more.
 
 ## 4. Split settings by domain instead of one monolithic `BaseSettings`
 - **Best practice**: Break large configuration surfaces into focused `BaseSettings` classes per module or domain to keep concerns isolated and maintainable.【F:fastapi-best-practices.md†L259-L306】
