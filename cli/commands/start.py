@@ -41,16 +41,27 @@ DEFAULT_FRONTEND_HOST = "localhost"
 DEFAULT_FRONTEND_PORT = 5173
 
 
-def _resolve_vite_api_base_url(args: argparse.Namespace) -> str:
+def _resolve_backend_public_url(args: argparse.Namespace, overrides: dict[str, str]) -> str:
+    candidate = (
+        overrides.get("ADE_BACKEND_PUBLIC_URL")
+        or os.getenv("ADE_BACKEND_PUBLIC_URL")
+        or ""
+    ).strip()
+    if candidate:
+        return candidate
+    return f"http://{args.backend_host}:{args.backend_port}"
+
+
+def _resolve_vite_api_base_url(args: argparse.Namespace, overrides: dict[str, str]) -> str:
     explicit = (args.vite_api_base_url or os.getenv("VITE_API_BASE_URL") or "").strip()
     if explicit:
         return explicit
-    return f"http://{args.backend_host}:{args.backend_port}"
+    return _resolve_backend_public_url(args, overrides)
 
 
 def _compose_frontend_env(args: argparse.Namespace, overrides: dict[str, str]) -> dict[str, str]:
     env = overrides.copy()
-    env.setdefault("VITE_API_BASE_URL", _resolve_vite_api_base_url(args))
+    env.setdefault("VITE_API_BASE_URL", _resolve_vite_api_base_url(args, overrides))
     return env
 
 
@@ -71,8 +82,11 @@ def _parse_env_pairs(pairs: list[str]) -> dict[str, str]:
 def register_arguments(parser: argparse.ArgumentParser) -> None:
     """Attach command-line options for the `ade start` workflow."""
 
-    backend_host_default = DEFAULT_BACKEND_HOST
-    backend_port_default = DEFAULT_BACKEND_PORT
+    backend_host_default = os.getenv("ADE_BACKEND_BIND_HOST", DEFAULT_BACKEND_HOST)
+    try:
+        backend_port_default = int(os.getenv("ADE_BACKEND_BIND_PORT", DEFAULT_BACKEND_PORT))
+    except ValueError:
+        backend_port_default = DEFAULT_BACKEND_PORT
     frontend_host_default = DEFAULT_FRONTEND_HOST
     frontend_port_default = DEFAULT_FRONTEND_PORT
 
@@ -227,6 +241,7 @@ def _print_banner(
     *,
     backend_host: str,
     backend_port: int,
+    backend_public_url: str,
     frontend_host: str,
     frontend_port: int,
     vite_api_base_url: str,
@@ -234,7 +249,7 @@ def _print_banner(
 ) -> None:
     headline = "ADE development servers"
     separator = "-" * len(headline)
-    backend_url = f"http://{backend_host}:{backend_port}"
+    backend_bind = f"{backend_host}:{backend_port}"
     frontend_url = f"http://{frontend_host}:{frontend_port}"
 
     backend_label = _colorize("backend", "Backend", enabled=color)
@@ -242,7 +257,8 @@ def _print_banner(
 
     print(headline)
     print(separator)
-    print(f"{backend_label}: {backend_url}  (uvicorn --reload)")
+    print(f"{backend_label}: bind {backend_bind}  (uvicorn --reload)")
+    print(f"           public {backend_public_url}")
     print(f"{frontend_label}: {frontend_url}  (Vite hot module reload)")
     if vite_api_base_url:
         print(f"Vite API base: {vite_api_base_url}")
@@ -291,9 +307,23 @@ def start(args: argparse.Namespace) -> None:
 
     npm_command = "npm.cmd" if os.name == "nt" else "npm"
     env_overrides = _parse_env_pairs(getattr(args, "env", []))
-    env_overrides.setdefault("ADE_SERVER_HOST", args.backend_host)
-    env_overrides.setdefault("ADE_BACKEND_PORT", str(args.backend_port))
-    env_overrides.setdefault("ADE_FRONTEND_PORT", str(args.frontend_port))
+    if (
+        "ADE_BACKEND_BIND_HOST" not in env_overrides
+        and "ADE_BACKEND_BIND_HOST" not in os.environ
+    ):
+        env_overrides["ADE_BACKEND_BIND_HOST"] = args.backend_host
+    if (
+        "ADE_BACKEND_BIND_PORT" not in env_overrides
+        and "ADE_BACKEND_BIND_PORT" not in os.environ
+    ):
+        env_overrides["ADE_BACKEND_BIND_PORT"] = str(args.backend_port)
+    if (
+        "ADE_BACKEND_PUBLIC_URL" not in env_overrides
+        and "ADE_BACKEND_PUBLIC_URL" not in os.environ
+    ):
+        env_overrides["ADE_BACKEND_PUBLIC_URL"] = (
+            f"http://{args.backend_host}:{args.backend_port}"
+        )
     if not args.skip_frontend:
         _ensure_frontend_dependencies(FRONTEND_DIR, npm_command)
 
@@ -305,11 +335,15 @@ def start(args: argparse.Namespace) -> None:
     if use_color and os.name == "nt":
         _enable_windows_ansi()
 
-    api_base_url = env_overrides.get("VITE_API_BASE_URL", _resolve_vite_api_base_url(args))
+    backend_public_url = _resolve_backend_public_url(args, env_overrides)
+    api_base_url = env_overrides.get("VITE_API_BASE_URL") or _resolve_vite_api_base_url(
+        args, env_overrides
+    )
 
     _print_banner(
         backend_host=args.backend_host,
         backend_port=args.backend_port,
+        backend_public_url=backend_public_url,
         frontend_host=args.frontend_host,
         frontend_port=args.frontend_port,
         vite_api_base_url=api_base_url,
