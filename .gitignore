@@ -26,3 +26,12 @@ frontend/dist/
 frontend/coverage/
 frontend/.vite/
 
+
+# Static analysis and tooling
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+# Backend runtime artefacts
+backend/data/
