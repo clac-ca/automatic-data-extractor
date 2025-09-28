@@ -73,10 +73,11 @@ def register_middleware(app: FastAPI) -> None:
 
     settings = _resolve_settings(app)
 
-    if settings.cors_allow_origins:
+    origins = settings.cors_allow_origins_list
+    if origins:
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=settings.cors_allow_origins,
+            allow_origins=origins,
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
@@ -86,3 +87,10 @@ def register_middleware(app: FastAPI) -> None:
 
 
 __all__ = ["RequestContextMiddleware", "register_middleware"]
+
+
+
+
+
+
+

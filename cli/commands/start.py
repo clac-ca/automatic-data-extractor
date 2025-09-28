@@ -48,8 +48,23 @@ def _resolve_vite_api_base_url(args: argparse.Namespace) -> str:
     return f"http://{args.backend_host}:{args.backend_port}"
 
 
-def _compose_frontend_env(args: argparse.Namespace) -> dict[str, str]:
-    return {"VITE_API_BASE_URL": _resolve_vite_api_base_url(args)}
+def _compose_frontend_env(args: argparse.Namespace, overrides: dict[str, str]) -> dict[str, str]:
+    env = overrides.copy()
+    env.setdefault("VITE_API_BASE_URL", _resolve_vite_api_base_url(args))
+    return env
+
+
+def _parse_env_pairs(pairs: list[str]) -> dict[str, str]:
+    env: dict[str, str] = {}
+    for entry in pairs:
+        if "=" not in entry:
+            raise ValueError(f"Invalid --env value '{entry}'. Use KEY=VALUE format.")
+        key, value = entry.split("=", 1)
+        key = key.strip()
+        if not key:
+            raise ValueError("Environment variable name cannot be empty.")
+        env[key] = value
+    return env
 
 
 
@@ -105,12 +120,27 @@ def register_arguments(parser: argparse.ArgumentParser) -> None:
         help=argparse.SUPPRESS,
     )
     parser.add_argument(
+        "--env",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help=(
+            "Set environment variables for the spawned servers. Repeat the flag "
+            "to pass multiple entries (e.g. --env ADE_LOG_LEVEL=INFO)."
+        ),
+    )
+    parser.add_argument(
         "--no-color",
         action="store_true",
         help="Disable ANSI color codes in aggregated output.",
     )
 
-def _build_specs(args: argparse.Namespace, *, npm_command: str) -> list[ProcessSpec]:
+def _build_specs(
+    args: argparse.Namespace,
+    *,
+    npm_command: str,
+    env_overrides: dict[str, str],
+) -> list[ProcessSpec]:
     specs: list[ProcessSpec] = []
 
     if not args.skip_backend:
@@ -125,7 +155,8 @@ def _build_specs(args: argparse.Namespace, *, npm_command: str) -> list[ProcessS
             "--port",
             str(args.backend_port),
         ]
-        specs.append(ProcessSpec("backend", backend_cmd, ROOT_DIR))
+        backend_env = env_overrides.copy() if env_overrides else None
+        specs.append(ProcessSpec("backend", backend_cmd, ROOT_DIR, env=backend_env))
 
     if not args.skip_frontend:
         frontend_cmd = [
@@ -138,7 +169,7 @@ def _build_specs(args: argparse.Namespace, *, npm_command: str) -> list[ProcessS
             "--port",
             str(args.frontend_port),
         ]
-        env = _compose_frontend_env(args)
+        env = _compose_frontend_env(args, env_overrides)
         specs.append(ProcessSpec("frontend", frontend_cmd, FRONTEND_DIR, env=env))
 
     return specs
@@ -259,10 +290,11 @@ def start(args: argparse.Namespace) -> None:
     """Launch the backend and frontend development servers."""
 
     npm_command = "npm.cmd" if os.name == "nt" else "npm"
+    env_overrides = _parse_env_pairs(getattr(args, "env", []))
     if not args.skip_frontend:
         _ensure_frontend_dependencies(FRONTEND_DIR, npm_command)
 
-    specs = _build_specs(args, npm_command=npm_command)
+    specs = _build_specs(args, npm_command=npm_command, env_overrides=env_overrides)
     if not specs:
         raise ValueError("Nothing to start. Remove --skip options to launch a server.")
 
@@ -270,7 +302,7 @@ def start(args: argparse.Namespace) -> None:
     if use_color and os.name == "nt":
         _enable_windows_ansi()
 
-    api_base_url = _resolve_vite_api_base_url(args)
+    api_base_url = env_overrides.get("VITE_API_BASE_URL", _resolve_vite_api_base_url(args))
 
     _print_banner(
         backend_host=args.backend_host,
