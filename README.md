@@ -56,7 +56,7 @@ Guides now live under the [`docs/`](docs/README.md) directory:
    You’ll see a short banner with the backend and frontend URLs, followed by colour-coded logs from each process. Stop everything with `Ctrl+C`. Use `--skip-backend`, `--skip-frontend`, `--vite-api-base-url`, `--env KEY=VALUE`, or `--no-color` to tweak the run. The command automatically runs `npm install` before the first launch when required.
 
    Example: `ade start --env ADE_LOG_LEVEL=DEBUG --env ADE_API_DOCS_ENABLED=true`
-   The backend and frontend share the same host. Adjust `ADE_SERVER_HOST`, `ADE_BACKEND_PORT`, and `ADE_FRONTEND_PORT` (via `.env` or repeated `--env` flags) to customise bind addresses—ADE will include the resulting origins in CORS automatically.
+   Adjust the backend bind address with `ADE_BACKEND_BIND_HOST` / `ADE_BACKEND_BIND_PORT` (for example `0.0.0.0:8000` inside a container). Use `ADE_BACKEND_PUBLIC_URL` for the public origin that browsers or webhooks should hit. When you publish ADE behind TLS on a DNS name such as `https://ade.example.com`, set both `ADE_BACKEND_PUBLIC_URL=https://ade.example.com` and `VITE_API_BASE_URL=https://ade.example.com`, then list the same domain in `ADE_CORS_ALLOW_ORIGINS` so the browser is allowed through.
 
 > Prefer installing from PyPI? Run `python -m pip install automatic-data-extractor`, but still clone the repository before you call `ade start` so the frontend sources are available.
 

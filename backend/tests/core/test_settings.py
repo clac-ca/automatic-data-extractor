@@ -15,9 +15,9 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     for var in (
         "ADE_APP_NAME",
         "ADE_API_DOCS_ENABLED",
-        "ADE_SERVER_HOST",
-        "ADE_BACKEND_PORT",
-        "ADE_FRONTEND_PORT",
+        "ADE_BACKEND_BIND_HOST",
+        "ADE_BACKEND_BIND_PORT",
+        "ADE_BACKEND_PUBLIC_URL",
         "ADE_DATA_DIR",
         "ADE_DOCUMENTS_DIR",
         "ADE_DATABASE_URL",
@@ -41,13 +41,10 @@ def test_settings_defaults() -> None:
     assert isinstance(settings, Settings)
     assert settings.app_name == "Automatic Data Extractor API"
     assert settings.api_docs_enabled is False
-    assert settings.server_host == "localhost"
-    assert settings.backend_port == 8000
-    assert settings.frontend_port == 5173
-    assert settings.cors_allow_origins_list == [
-        "http://localhost:5173",
-        "http://localhost:8000",
-    ]
+    assert settings.backend_bind_host == "localhost"
+    assert settings.backend_bind_port == 8000
+    assert str(settings.backend_public_url) == "http://localhost:8000/"
+    assert settings.cors_allow_origins_list == ["http://localhost:8000/"]
     assert settings.database_url.endswith("data/db/ade.sqlite")
 
 
@@ -59,9 +56,9 @@ def test_settings_reads_from_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         """
 ADE_APP_NAME=ADE Test
 ADE_API_DOCS_ENABLED=true
-ADE_SERVER_HOST=dev.local
-ADE_BACKEND_PORT=9000
-ADE_FRONTEND_PORT=4300
+ADE_BACKEND_BIND_HOST=0.0.0.0
+ADE_BACKEND_BIND_PORT=9000
+ADE_BACKEND_PUBLIC_URL=https://api.dev.local
 ADE_CORS_ALLOW_ORIGINS=http://localhost:3000,http://example.dev:4000
 """
     )
@@ -73,12 +70,11 @@ ADE_CORS_ALLOW_ORIGINS=http://localhost:3000,http://example.dev:4000
 
     assert settings.app_name == "ADE Test"
     assert settings.api_docs_enabled is True
-    assert settings.server_host == "dev.local"
-    assert settings.backend_port == 9000
-    assert settings.frontend_port == 4300
+    assert settings.backend_bind_host == "0.0.0.0"
+    assert settings.backend_bind_port == 9000
+    assert str(settings.backend_public_url) == "https://api.dev.local/"
     assert set(settings.cors_allow_origins_list) == {
-        "http://dev.local:9000",
-        "http://dev.local:4300",
+        "https://api.dev.local/",
         "http://localhost:3000",
         "http://example.dev:4000",
     }
@@ -89,9 +85,9 @@ def test_settings_env_var_override(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setenv("ADE_APP_NAME", "Env Override")
     monkeypatch.setenv("ADE_API_DOCS_ENABLED", "true")
-    monkeypatch.setenv("ADE_SERVER_HOST", "api.local")
-    monkeypatch.setenv("ADE_BACKEND_PORT", "8100")
-    monkeypatch.setenv("ADE_FRONTEND_PORT", "4300")
+    monkeypatch.setenv("ADE_BACKEND_BIND_HOST", "dev.internal")
+    monkeypatch.setenv("ADE_BACKEND_BIND_PORT", "8100")
+    monkeypatch.setenv("ADE_BACKEND_PUBLIC_URL", "https://api.local")
     monkeypatch.setenv("ADE_CORS_ALLOW_ORIGINS", "http://example.com")
     reload_settings()
 
@@ -99,12 +95,11 @@ def test_settings_env_var_override(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert settings.app_name == "Env Override"
     assert settings.api_docs_enabled is True
-    assert settings.server_host == "api.local"
-    assert settings.backend_port == 8100
-    assert settings.frontend_port == 4300
+    assert settings.backend_bind_host == "dev.internal"
+    assert settings.backend_bind_port == 8100
+    assert str(settings.backend_public_url) == "https://api.local/"
     assert set(settings.cors_allow_origins_list) == {
-        "http://api.local:8100",
-        "http://api.local:4300",
+        "https://api.local/",
         "http://example.com",
     }
 
@@ -130,8 +125,19 @@ def test_json_cors_value(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = get_settings()
 
     assert set(settings.cors_allow_origins_list) == {
-        "http://localhost:5173",
-        "http://localhost:8000",
+        "http://localhost:8000/",
         "http://one.test",
         "http://two.test",
     }
+
+
+def test_backend_public_url_accepts_https(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HTTPS URLs should be accepted for the public origin."""
+
+    monkeypatch.setenv("ADE_BACKEND_PUBLIC_URL", "https://secure.example.com")
+    reload_settings()
+
+    settings = get_settings()
+
+    assert str(settings.backend_public_url) == "https://secure.example.com/"
+    assert settings.cors_allow_origins_list == ["https://secure.example.com/"]
