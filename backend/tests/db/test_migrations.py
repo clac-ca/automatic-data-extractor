@@ -20,7 +20,7 @@ async def test_alembic_upgrade_head(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     db_path = tmp_path / "migration.sqlite"
     database_url = f"sqlite+aiosqlite:///{db_path}"
 
-    monkeypatch.setenv("ADE_DATABASE_URL", database_url)
+    monkeypatch.setenv("ADE_DATABASE_DSN", database_url)
     reload_settings()
     reset_database_state()
 

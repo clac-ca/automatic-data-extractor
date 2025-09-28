@@ -19,36 +19,36 @@ Reorganise ADE's environment configuration so backend and frontend code use clea
 ## Proposed Restructure
 ### 1. Backend Settings Model
 - Replace `server_host`, `backend_port`, and derived `backend_origin` with:
-  - `ADE_BACKEND_BIND_HOST` / `ADE_BACKEND_BIND_PORT` (for uvicorn bind interface only — typically `0.0.0.0:8000` in containers).
-  - `ADE_BACKEND_PUBLIC_URL` (default `http://localhost:8000`) used for CORS, cookies, and third-party callbacks.
+  - `ADE_SERVER_HOST` / `ADE_SERVER_PORT` (for uvicorn bind interface only — typically `0.0.0.0:8000` in containers).
+  - `ADE_SERVER_PUBLIC_URL` (default `http://localhost:8000`) used for CORS, cookies, and third-party callbacks.
 - Document why the bind values and the public URL can differ (e.g., container listens on `0.0.0.0:8000` but users reach it via `https://api.example.com`).
 - Remove `frontend_port` and any frontend-specific helpers from backend settings.
-- Update validators so `ADE_BACKEND_PUBLIC_URL` accepts HTTP or HTTPS URLs (use `AnyHttpUrl` or manual parsing) and defaults to localhost.
-- Ensure CORS configuration consumes `ADE_CORS_ALLOW_ORIGINS` plus `ADE_BACKEND_PUBLIC_URL` when appropriate.
+- Update validators so `ADE_SERVER_PUBLIC_URL` accepts HTTP or HTTPS URLs (use `AnyHttpUrl` or manual parsing) and defaults to localhost.
+- Ensure CORS configuration consumes `ADE_SERVER_CORS_ORIGINS` plus `ADE_SERVER_PUBLIC_URL` when appropriate.
 
 > **Standard pattern:** Frameworks such as FastAPI, Django, and Rails all separate the bind address from the public origin in production deployments. Containers or PaaS platforms often expose services on `0.0.0.0` internally while routing public traffic through a load balancer on a DNS name with TLS. Mirroring that split keeps ADE compatible with reverse proxies and cloud ingress controllers without special-case logic.
 
 - Record the mapping from backend variables to their usages in the developer docs so people know which component reads each variable.
 
 ### 2. Frontend Environment Handling
-- Standardise on `VITE_API_BASE_URL` (already in use). Provide dev defaults via `frontend/.env.example`, mirroring `ADE_BACKEND_PUBLIC_URL`.
+- Standardise on `VITE_API_BASE_URL` (already in use). Provide dev defaults via `frontend/.env.example`, mirroring `ADE_SERVER_PUBLIC_URL`.
 - Remove assumptions that the CLI or backend will inject frontend ports; instead, the CLI should read backend bind host/port flags and set `VITE_API_BASE_URL` only for the dev server convenience case.
 
 ### 3. CLI Alignment (`ade start`)
 - Source backend bind host/port from CLI flags (default localhost). Keep convenience logic to populate `VITE_API_BASE_URL` **only** when the user has not set it.
-- Honour `.env` overrides so running `ADE_BACKEND_PUBLIC_URL=https://api.example.com ade start` works without extra flags.
+- Honour `.env` overrides so running `ADE_SERVER_PUBLIC_URL=https://api.example.com ade start` works without extra flags.
 
 - Clarify in docs that the bind host/port addresses listen-only concerns (e.g., Docker, Kubernetes Service) while the public URL aligns with DNS/certificates. Include common production setups where they differ.
 
 ### 4. Documentation & Templates
 - Update `.env.example`, `frontend/.env.example`, and relevant docs to explain the three key variables:
-  - `ADE_BACKEND_BIND_HOST` / `ADE_BACKEND_BIND_PORT` – local bind interface for uvicorn.
-  - `ADE_BACKEND_PUBLIC_URL` – public URL that clients should use (can differ from bind host).
-  - `VITE_API_BASE_URL` – frontend API endpoint (should match `ADE_BACKEND_PUBLIC_URL`).
-- Provide guidance for HTTPS / reverse proxy deployments (e.g., set `ADE_BACKEND_PUBLIC_URL=https://api.example.com`).
+  - `ADE_SERVER_HOST` / `ADE_SERVER_PORT` – local bind interface for uvicorn.
+  - `ADE_SERVER_PUBLIC_URL` – public URL that clients should use (can differ from bind host).
+  - `VITE_API_BASE_URL` – frontend API endpoint (should match `ADE_SERVER_PUBLIC_URL`).
+- Provide guidance for HTTPS / reverse proxy deployments (e.g., set `ADE_SERVER_PUBLIC_URL=https://api.example.com`).
 
 ### 5. Testing & Validation
-- Extend backend settings tests to cover `ADE_BACKEND_PUBLIC_URL` validation and ensure HTTPS origins work.
+- Extend backend settings tests to cover `ADE_SERVER_PUBLIC_URL` validation and ensure HTTPS origins work.
 - Add CLI tests (or integration docs) ensuring `--env VITE_API_BASE_URL=...` overrides the auto-generated value.
 
 ## Execution Steps

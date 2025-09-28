@@ -3,7 +3,7 @@
 Shared terminology used across the Automatic Data Extractor API, database, and UI.
 
 ## Document
-A file uploaded through the documents API. Metadata and lifecycle operations are handled by [`backend/api/modules/documents`](../../backend/api/modules/documents). Stored bytes live under the configured `documents_dir`.
+A file uploaded through the documents API. Metadata and lifecycle operations are handled by [`backend/api/modules/documents`](../../backend/api/modules/documents). Stored bytes live under the configured `storage_documents_dir`.
 
 ## Job
 An extraction request that consumes an input document and configuration revision. Job submission and monitoring routes are defined in [`backend/api/modules/jobs`](../../backend/api/modules/jobs). Background execution relies on the task queue in [`backend/api/core/task_queue.py`](../../backend/api/core/task_queue.py).
@@ -21,4 +21,4 @@ A logical tenant boundary enforced by [`backend/api/modules/workspaces`](../../b
 Immutable audit records persisted by [`backend/api/modules/events`](../../backend/api/modules/events) and the recorder service in [`backend/api/modules/events/recorder.py`](../../backend/api/modules/events/recorder.py). Events track actions across documents, jobs, configurations, and security operations.
 
 ## API Key
-A long-lived credential provisioned for automation clients via routes in [`backend/api/modules/auth`](../../backend/api/modules/auth). Hashes are stored in the database, and usage is throttled via the `api_key_last_seen_interval_seconds` setting.
+A long-lived credential provisioned for automation clients via routes in [`backend/api/modules/auth`](../../backend/api/modules/auth). Hashes are stored in the database, and usage is throttled via the `session_last_seen_interval` setting.

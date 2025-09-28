@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Mapping
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import UploadFile
@@ -33,7 +33,7 @@ class DocumentsService(BaseService):
             raise RuntimeError("DocumentsService requires a database session")
 
         self._session: AsyncSession = self.session
-        self._storage = DocumentStorage(self.settings.documents_dir)
+        self._storage = DocumentStorage(self.settings.storage_documents_dir)
 
     async def create_document(
         self,
@@ -58,7 +58,7 @@ class DocumentsService(BaseService):
         stored = await self._storage.write(
             stored_uri,
             upload.file,
-            max_bytes=self.settings.max_upload_size_bytes,
+            max_bytes=self.settings.storage_upload_max_bytes,
         )
 
         document = Document(
@@ -195,7 +195,7 @@ class DocumentsService(BaseService):
 
     def _resolve_expiration(self, override: str | None, now: datetime) -> str:
         if override is None:
-            expires = now + timedelta(days=self.settings.default_document_retention_days)
+            expires = now + self.settings.storage_document_retention_period
             return expires.isoformat(timespec="seconds")
 
         candidate = override.strip()

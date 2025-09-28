@@ -313,11 +313,14 @@ async def test_sso_callback_rejects_state_mismatch(
 ) -> None:
     """The SSO callback should reject mismatched state tokens."""
 
-    monkeypatch.setenv("ADE_SSO_CLIENT_ID", "demo-client")
-    monkeypatch.setenv("ADE_SSO_CLIENT_SECRET", "demo-secret")
-    monkeypatch.setenv("ADE_SSO_ISSUER", "https://issuer.example.com")
-    monkeypatch.setenv("ADE_SSO_REDIRECT_URL", "https://ade.example.com/auth/sso/callback")
-    monkeypatch.setenv("ADE_SSO_SCOPE", "openid email profile")
+    monkeypatch.setenv("ADE_OIDC_ENABLED", "true")
+    monkeypatch.setenv("ADE_OIDC_CLIENT_ID", "demo-client")
+    monkeypatch.setenv("ADE_OIDC_CLIENT_SECRET", "demo-secret")
+    monkeypatch.setenv("ADE_OIDC_ISSUER", "https://issuer.example.com")
+    monkeypatch.setenv(
+        "ADE_OIDC_REDIRECT_URL", "https://ade.example.com/auth/sso/callback"
+    )
+    monkeypatch.setenv("ADE_OIDC_SCOPES", "openid email profile")
     reload_settings()
     override_app_settings()
 

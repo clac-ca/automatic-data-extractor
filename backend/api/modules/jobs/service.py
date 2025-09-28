@@ -50,12 +50,8 @@ class JobsService(BaseService):
         if self.session is None:
             raise RuntimeError("JobsService requires a database session")
 
-        documents_dir = self.settings.documents_dir
-        if documents_dir is None:
-            raise RuntimeError("Documents directory is not configured")
-
         self._session: AsyncSession = self.session
-        self._storage = DocumentStorage(documents_dir)
+        self._storage = DocumentStorage(self.settings.storage_documents_dir)
         self._configurations = ConfigurationsRepository(self._session)
         self._tables = ExtractedTablesRepository(self._session)
 
