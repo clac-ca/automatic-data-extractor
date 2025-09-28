@@ -55,10 +55,18 @@ Guides now live under the [`docs/`](docs/README.md) directory:
 
    You’ll see a short banner with the backend and frontend URLs, followed by colour-coded logs from each process. Stop everything with `Ctrl+C`. Use `--skip-backend`, `--skip-frontend`, `--vite-api-base-url`, `--env KEY=VALUE`, or `--no-color` to tweak the run. The command automatically runs `npm install` before the first launch when required.
 
-   Example: `ade start --env ADE_LOG_LEVEL=DEBUG --env ADE_API_DOCS_ENABLED=true`
-   Adjust the backend bind address with `ADE_BACKEND_BIND_HOST` / `ADE_BACKEND_BIND_PORT` (for example `0.0.0.0:8000` inside a container). Use `ADE_BACKEND_PUBLIC_URL` for the public origin that browsers or webhooks should hit. When you publish ADE behind TLS on a DNS name such as `https://ade.example.com`, set both `ADE_BACKEND_PUBLIC_URL=https://ade.example.com` and `VITE_API_BASE_URL=https://ade.example.com`, then list the same domain in `ADE_CORS_ALLOW_ORIGINS` so the browser is allowed through.
+   Example: `ade start --env ADE_LOGGING_LEVEL=DEBUG --env ADE_API_DOCS_ENABLED=true --env ADE_JWT_ACCESS_TTL=15m`
+   Adjust the backend bind address with `ADE_SERVER_HOST` / `ADE_SERVER_PORT` (for example `0.0.0.0:8000` inside a container). Use `ADE_SERVER_PUBLIC_URL` for the public origin that browsers or webhooks should hit. Time-based settings such as `ADE_JWT_ACCESS_TTL` accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or `30d`. When you publish ADE behind TLS on a DNS name such as `https://ade.example.com`, set both `ADE_SERVER_PUBLIC_URL=https://ade.example.com` and `VITE_API_BASE_URL=https://ade.example.com`, then list the same domain in `ADE_SERVER_CORS_ORIGINS` (comma or whitespace separated) so the browser is allowed through.
 
 > Prefer installing from PyPI? Run `python -m pip install automatic-data-extractor`, but still clone the repository before you call `ade start` so the frontend sources are available.
+
+4. Inspect the active configuration:
+
+   ```bash
+   ade settings
+   ```
+
+   The command prints the resolved settings (post `.env` and environment overrides) with secrets masked. Pipe the JSON output into other tools when debugging deployments.
 
 ### Start each service manually (optional)
 
@@ -108,7 +116,7 @@ ADE follows a modular layout under `backend/api/modules/`:
 
 Supporting infrastructure lives in `backend/api/core/` and `backend/api/db/`, including structured logging, message hubs, and async SQLAlchemy sessions.
 
-Uploaded files and the SQLite database are stored beneath the `backend/data/` directory by default. Override locations with the `ADE_DATA_DIR`, `ADE_DATABASE_URL`, or `ADE_DOCUMENTS_DIR` environment variables when deploying to production systems.
+Uploaded files and the SQLite database are stored beneath the `backend/data/` directory by default. Override locations with the `ADE_STORAGE_DATA_DIR`, `ADE_DATABASE_DSN`, or `ADE_STORAGE_DOCUMENTS_DIR` environment variables when deploying to production systems.
 
 > **TODO**
 > Publish the official Docker image to GitHub Container Registry and update the admin guide once the frontend onboarding flow ships.

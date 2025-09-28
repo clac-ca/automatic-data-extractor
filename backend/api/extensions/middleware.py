@@ -73,7 +73,7 @@ def register_middleware(app: FastAPI) -> None:
 
     settings = _resolve_settings(app)
 
-    origins = settings.cors_allow_origins_list
+    origins = [str(origin) for origin in settings.server_cors_origins]
     if origins:
         app.add_middleware(
             CORSMiddleware,

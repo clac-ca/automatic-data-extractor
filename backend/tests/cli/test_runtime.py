@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import argparse
+import json
 from pathlib import Path
 
 import pytest
 from sqlalchemy import text
 
 from backend.api.db.engine import reset_database_state
-from backend.api.settings import Settings
-from cli.commands import start as start_cmd
+from backend.api.settings import Settings, reload_settings
+from cli.commands import settings as settings_command, start as start_cmd
 from cli.core.runtime import normalise_email, open_session, read_secret
 
 
@@ -44,9 +46,9 @@ async def test_open_session_bootstraps_database(tmp_path: Path) -> None:
 
     settings = Settings.model_validate(
         {
-            "database_url": f"sqlite+aiosqlite:///{database_path}",
-            "data_dir": str(data_dir),
-            "documents_dir": str(documents_dir),
+            "database_dsn": f"sqlite+aiosqlite:///{database_path}",
+            "storage_data_dir": str(data_dir),
+            "storage_documents_dir": str(documents_dir),
         }
     )
 
@@ -67,7 +69,7 @@ async def test_open_session_bootstraps_database(tmp_path: Path) -> None:
 async def test_open_session_bootstraps_in_memory_database() -> None:
     settings = Settings.model_validate(
         {
-            "database_url": "sqlite+aiosqlite:///:memory:",
+            "database_dsn": "sqlite+aiosqlite:///:memory:",
         }
     )
 
@@ -86,15 +88,27 @@ async def test_open_session_bootstraps_in_memory_database() -> None:
 
 def test_parse_env_pairs_accepts_multiple_values() -> None:
     result = start_cmd._parse_env_pairs(
-        ["ADE_LOG_LEVEL=INFO", "VITE_API_BASE_URL=http://localhost:8000"]
+        ["ADE_LOGGING_LEVEL=INFO", "VITE_API_BASE_URL=http://localhost:8000"]
     )
 
     assert result == {
-        "ADE_LOG_LEVEL": "INFO",
+        "ADE_LOGGING_LEVEL": "INFO",
         "VITE_API_BASE_URL": "http://localhost:8000",
     }
 
 
 def test_parse_env_pairs_rejects_missing_separator() -> None:
     with pytest.raises(ValueError):
-        start_cmd._parse_env_pairs(["ADE_LOG_LEVEL"])
+        start_cmd._parse_env_pairs(["ADE_LOGGING_LEVEL"])
+
+
+def test_settings_dump_masks_secrets(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setenv("ADE_JWT_SECRET", "super-secret")
+    reload_settings()
+
+    settings_command.dump(argparse.Namespace())
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["jwt_secret"] == "********"
+    reload_settings()

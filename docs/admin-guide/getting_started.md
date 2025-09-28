@@ -47,7 +47,10 @@ cp .env.example .env
 ```
 
 If you delete `.env`, ADE falls back to its defaults (SQLite in
-`backend/data/db`, docs disabled outside `local`, etc.).
+`backend/data/db`, docs disabled outside `local`, etc.). Time-based settings
+accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
+`30d`, so you can stay consistent whether you configure them via `.env` or the
+`ade start --env KEY=VALUE` flags.
 
 ## 4. Option A – Develop with the source tree (recommended)
 
@@ -201,7 +204,7 @@ restore.
   reference it in this guide.
 - **TODO:** Update the onboarding section once the frontend ships the admin
   walkthrough.
-- Consider setting `ADE_AUTH_TOKEN_SECRET` to a long random value before going
+- Consider setting `ADE_JWT_SECRET` to a long random value before going
   beyond local testing.
 
 With these basics you can run ADE on a laptop, VM, or container host and manage

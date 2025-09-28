@@ -71,7 +71,9 @@ class AuthRoutes:
     ) -> SessionEnvelope:
         """Rotate the session using the refresh cookie and re-issue cookies."""
 
-        refresh_cookie = request.cookies.get(self.service.settings.refresh_cookie_name)
+        refresh_cookie = request.cookies.get(
+            self.service.settings.session_refresh_cookie_name
+        )
         if not refresh_cookie:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Refresh token missing")
         try:
