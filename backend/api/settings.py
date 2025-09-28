@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AnyHttpUrl, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -33,9 +33,18 @@ class Settings(BaseSettings):
     openapi_url: str = Field(default="/openapi.json", description="OpenAPI schema endpoint.")
     log_level: str = Field(default="INFO", description="Root log level for the backend.")
 
-    server_host: str = Field(default="localhost", description="Hostname shared by the backend and frontend services.")
-    backend_port: int = Field(default=8000, description="Port that the FastAPI backend listens on.")
-    frontend_port: int = Field(default=5173, description="Port that the frontend development server listens on.")
+    backend_bind_host: str = Field(
+        default="localhost",
+        description="Network interface for the uvicorn server to bind.",
+    )
+    backend_bind_port: int = Field(
+        default=8000,
+        description="Port that the uvicorn server listens on.",
+    )
+    backend_public_url: AnyHttpUrl = Field(
+        default="http://localhost:8000",
+        description="Public origin clients use to reach the backend (scheme + host + optional port).",
+    )
 
     data_dir: Path = Field(default=PROJECT_ROOT / "backend" / "data", description="Directory for writable backend data.")
     documents_dir: Path | None = Field(default=None, description="Optional override for document storage.")
@@ -81,22 +90,10 @@ class Settings(BaseSettings):
     default_document_retention_days: int = Field(default=30, description="Default document retention period in days.")
 
     @property
-    def backend_origin(self) -> str:
-        """Return the base HTTP origin for the FastAPI backend."""
-
-        return f"http://{self.server_host}:{self.backend_port}"
-
-    @property
-    def frontend_origin(self) -> str:
-        """Return the base HTTP origin for the frontend development server."""
-
-        return f"http://{self.server_host}:{self.frontend_port}"
-
-    @property
     def cors_allow_origins_list(self) -> list[str]:
         """Return a normalised list of allowed CORS origins."""
 
-        origins = {self.backend_origin, self.frontend_origin}
+        origins = {str(self.backend_public_url)}
 
         raw = self.cors_allow_origins.strip()
         if raw:
@@ -135,13 +132,24 @@ class Settings(BaseSettings):
         candidate = value.strip()
         return candidate or None
 
-    @field_validator("server_host", mode="before")
+    @field_validator("backend_bind_host", mode="before")
     @classmethod
     def _normalise_host(cls, value: str) -> str:
         host = value.strip()
         if not host:
-            raise ValueError("server_host must not be empty")
+            raise ValueError("backend_bind_host must not be empty")
         return host
+
+    @field_validator("backend_bind_port", mode="before")
+    @classmethod
+    def _validate_port(cls, value: int) -> int:
+        try:
+            port = int(value)
+        except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
+            raise ValueError("backend_bind_port must be an integer") from exc
+        if not (0 < port < 65536):
+            raise ValueError("backend_bind_port must be between 1 and 65535")
+        return port
 
     @field_validator("sso_scopes", mode="before")
     @classmethod
