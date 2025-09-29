@@ -15,3 +15,13 @@ export interface LoginPayload {
   email: string
   password: string
 }
+
+export interface InitialSetupStatus {
+  initialSetupRequired: boolean
+}
+
+export interface InitialSetupPayload {
+  email: string
+  password: string
+  displayName?: string | null
+}

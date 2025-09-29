@@ -16,6 +16,8 @@ from .schemas import (
     APIKeyIssueRequest,
     APIKeyIssueResponse,
     APIKeySummary,
+    InitialSetupRequest,
+    InitialSetupStatus,
     LoginRequest,
     SessionEnvelope,
 )
@@ -27,6 +29,45 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class AuthRoutes:
     session: AsyncSession = Depends(get_session)  # noqa: B008
     service: AuthService = Depends(get_auth_service)  # noqa: B008
+
+    @router.get(
+        "/initial-setup",
+        response_model=InitialSetupStatus,
+        status_code=status.HTTP_200_OK,
+        summary="Return whether initial admin setup is required",
+        openapi_extra={"security": []},
+    )
+    async def read_initial_setup_status(self) -> InitialSetupStatus:
+        required = await self.service.initial_setup_required()
+        return InitialSetupStatus(initial_setup_required=required)
+
+    @router.post(
+        "/initial-setup",
+        response_model=SessionEnvelope,
+        status_code=status.HTTP_200_OK,
+        summary="Create the first administrator account",
+        openapi_extra={"security": []},
+    )
+    async def perform_initial_setup(
+        self,
+        request: Request,
+        response: Response,
+        payload: InitialSetupRequest,
+    ) -> SessionEnvelope:
+        user = await self.service.complete_initial_setup(
+            email=payload.email,
+            password=payload.password.get_secret_value(),
+            display_name=payload.display_name,
+        )
+        tokens = await self.service.start_session(user=user)
+        secure_cookie = self.service.is_secure_request(request)
+        self.service.apply_session_cookies(response, tokens, secure=secure_cookie)
+        profile = UserProfile.model_validate(user)
+        return SessionEnvelope(
+            user=profile,
+            expires_at=tokens.access_expires_at,
+            refresh_expires_at=tokens.refresh_expires_at,
+        )
 
     @router.post(
         "/login",
