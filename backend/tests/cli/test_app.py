@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from cli.app import build_cli_app
-from cli.commands import api_keys, settings as settings_command, users
+from cli.commands import api_keys, reset as reset_command, settings as settings_command, users
 
 
 def test_users_create_handler_resolution() -> None:
@@ -69,3 +69,11 @@ def test_settings_command_handler_resolution() -> None:
     args = parser.parse_args(["settings"])
 
     assert args.handler is settings_command.dump
+
+
+def test_reset_command_handler_resolution() -> None:
+    parser = build_cli_app()
+    args = parser.parse_args(["reset", "--yes"])
+
+    assert args.handler is reset_command.reset
+    assert args.yes is True
