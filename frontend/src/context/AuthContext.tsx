@@ -1,8 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 
-import type { UserProfile } from '../api/types'
-import { fetchProfile, login as performLogin, logout as performLogout, resolveCsrfToken } from '../api/auth'
+import type { LoginSuccess } from '../api/auth'
+import type { InitialSetupPayload, UserProfile } from '../api/types'
+import {
+  completeInitialSetup as performInitialSetup,
+  fetchInitialSetupStatus,
+  fetchProfile,
+  login as performLogin,
+  logout as performLogout,
+  resolveCsrfToken,
+} from '../api/auth'
 
 type ApiError = Error & { status?: number }
 
@@ -13,6 +21,8 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<UserProfile>
   logout: () => Promise<void>
   refreshSession: () => Promise<void>
+  completeInitialSetup: (payload: InitialSetupPayload) => Promise<UserProfile>
+  checkInitialSetupStatus: () => Promise<boolean>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -53,14 +63,32 @@ export function AuthProvider({ children }: AuthProviderProps): ReactElement {
     void bootstrap()
   }, [bootstrap])
 
+  const applySession = useCallback(
+    (result: LoginSuccess) => {
+      setUser(result.session.user)
+      setCsrfToken(result.csrfToken ?? resolveCsrfToken())
+      setLoading(false)
+      setError(null)
+    },
+    [resolveCsrfToken],
+  )
+
   const login = useCallback(async (email: string, password: string) => {
     setError(null)
     const result = await performLogin({ email, password })
-    setUser(result.session.user)
-    setCsrfToken(result.csrfToken ?? resolveCsrfToken())
-    setLoading(false)
+    applySession(result)
     return result.session.user
-  }, [])
+  }, [applySession])
+
+  const completeInitialSetup = useCallback(
+    async (payload: InitialSetupPayload) => {
+      setError(null)
+      const result = await performInitialSetup(payload)
+      applySession(result)
+      return result.session.user
+    },
+    [applySession],
+  )
 
   const logout = useCallback(async () => {
     const token = csrfToken ?? resolveCsrfToken()
@@ -74,9 +102,32 @@ export function AuthProvider({ children }: AuthProviderProps): ReactElement {
     await bootstrap()
   }, [bootstrap])
 
+  const checkInitialSetupStatus = useCallback(async () => {
+    const status = await fetchInitialSetupStatus()
+    return Boolean(status.initialSetupRequired)
+  }, [])
+
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, error, login, logout, refreshSession }),
-    [user, loading, error, login, logout, refreshSession],
+    () => ({
+      user,
+      loading,
+      error,
+      login,
+      logout,
+      refreshSession,
+      completeInitialSetup,
+      checkInitialSetupStatus,
+    }),
+    [
+      user,
+      loading,
+      error,
+      login,
+      logout,
+      refreshSession,
+      completeInitialSetup,
+      checkInitialSetupStatus,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

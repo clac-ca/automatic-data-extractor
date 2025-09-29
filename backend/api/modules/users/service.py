@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
+
 from ...core.service import BaseService, ServiceContext
+from ..auth.security import hash_password
+from .models import User, UserRole
 from .repository import UsersRepository
 from .schemas import UserProfile, UserSummary
 
@@ -29,6 +34,41 @@ class UsersService(BaseService):
 
         users = await self._repo.list_users()
         return [UserSummary.model_validate(user) for user in users]
+
+    async def create_admin(
+        self,
+        *,
+        email: str,
+        password: str,
+        display_name: str | None = None,
+    ) -> User:
+        """Create an administrator account with the supplied credentials."""
+
+        canonical_email = email.strip().lower()
+        existing = await self._repo.get_by_email(canonical_email)
+        if existing is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="Email already in use",
+            )
+
+        password_hash = hash_password(password)
+        cleaned_display_name = display_name.strip() if display_name else None
+
+        try:
+            user = await self._repo.create(
+                email=canonical_email,
+                password_hash=password_hash,
+                display_name=cleaned_display_name,
+                role=UserRole.ADMIN,
+                is_active=True,
+            )
+        except IntegrityError as exc:  # pragma: no cover - defensive double check
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="Email already in use",
+            ) from exc
+        return user
 
 
 __all__ = ["UsersService"]

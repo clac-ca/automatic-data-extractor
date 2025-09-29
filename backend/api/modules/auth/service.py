@@ -15,8 +15,10 @@ from fastapi import HTTPException, Request, Response, status
 from jwt import PyJWKClient
 
 from ...core.service import BaseService, ServiceContext
+from ..system.repository import SystemSettingsRepository
 from ..users.models import User, UserRole
 from ..users.repository import UsersRepository
+from ..users.service import UsersService
 from .models import APIKey
 from .repository import APIKeysRepository
 from .security import (
@@ -122,6 +124,9 @@ def normalise_email(value: str) -> str:
     return candidate.lower()
 
 
+_INITIAL_SETUP_SETTING_KEY = "initial_setup"
+
+
 class AuthService(BaseService):
     """Encapsulate login, token verification, and SSO logic."""
 
@@ -131,9 +136,72 @@ class AuthService(BaseService):
             raise RuntimeError("AuthService requires a database session")
         self._users = UsersRepository(self.session)
         self._api_keys = APIKeysRepository(self.session)
+        self._system_settings = SystemSettingsRepository(self.session)
 
     # ------------------------------------------------------------------
     # Password-based authentication
+
+    async def initial_setup_required(self) -> bool:
+        """Return ``True`` when the first admin account still needs creation."""
+
+        setting = await self._system_settings.get(_INITIAL_SETUP_SETTING_KEY)
+        if setting is not None:
+            completed_at = (setting.value or {}).get("completed_at")
+            if completed_at:
+                return False
+
+        admin_count = await self._users.count_admins()
+        return admin_count == 0
+
+    async def complete_initial_setup(
+        self,
+        *,
+        email: str,
+        password: str,
+        display_name: str | None = None,
+    ) -> User:
+        """Create the first administrator and mark setup as complete."""
+
+        if self.session is None:
+            raise RuntimeError("Database session unavailable")
+
+        async with self.session.begin():
+            setting = await self._system_settings.get_for_update(
+                _INITIAL_SETUP_SETTING_KEY
+            )
+            if setting is None:
+                setting = await self._system_settings.create(
+                    key=_INITIAL_SETUP_SETTING_KEY,
+                    value={"completed_at": None},
+                )
+
+            raw_value = setting.value or {}
+            completed_at = raw_value.get("completed_at")
+            admin_count = await self._users.count_admins()
+            if completed_at or admin_count > 0:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    detail="Initial setup already completed",
+                )
+
+            users_service = UsersService(context=self._context)
+            try:
+                user = await users_service.create_admin(
+                    email=email,
+                    password=password,
+                    display_name=display_name,
+                )
+            finally:
+                await users_service.aclose()
+
+            setting_value = dict(raw_value)
+            setting_value["completed_at"] = datetime.now(UTC).isoformat(
+                timespec="seconds"
+            )
+            setting.value = setting_value
+            await self.session.flush()
+
+            return user
 
     async def authenticate(self, *, email: str, password: str) -> User:
         """Return the active user matching ``email``/``password``."""

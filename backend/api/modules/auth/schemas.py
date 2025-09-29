@@ -14,6 +14,59 @@ from ..users.schemas import UserProfile
 from .service import normalise_email
 
 
+class InitialSetupStatus(BaseSchema):
+    """Response payload indicating whether setup is required."""
+
+    initial_setup_required: bool = Field(
+        alias="initialSetupRequired",
+        serialization_alias="initialSetupRequired",
+    )
+
+
+class InitialSetupRequest(BaseSchema):
+    """Payload submitted when creating the first administrator."""
+
+    email: EmailStr
+    password: SecretStr
+    display_name: str | None = Field(
+        default=None,
+        alias="displayName",
+        serialization_alias="displayName",
+        max_length=255,
+    )
+
+    @field_validator("email", mode="plain")
+    @classmethod
+    def _normalise_email(cls, value: EmailStr | str) -> str:
+        candidate = normalise_email(str(value))
+        try:
+            validated = validate_email(candidate)
+        except EmailNotValidError as exc:
+            raise ValueError(str(exc)) from exc
+        return validated.normalized
+
+    @field_validator("password", mode="before")
+    @classmethod
+    def _validate_password(cls, value: SecretStr | str) -> str:
+        if isinstance(value, SecretStr):
+            raw = value.get_secret_value()
+        else:
+            raw = str(value)
+        candidate = raw.strip()
+        if not candidate:
+            msg = "Password must not be empty"
+            raise ValueError(msg)
+        return candidate
+
+    @field_validator("display_name", mode="before")
+    @classmethod
+    def _clean_display_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+
 class LoginRequest(BaseSchema):
     """Credentials submitted when performing a password login."""
 
@@ -103,6 +156,8 @@ class APIKeySummary(BaseSchema):
 
 
 __all__ = [
+    "InitialSetupStatus",
+    "InitialSetupRequest",
     "LoginRequest",
     "SessionEnvelope",
     "APIKeyIssueRequest",
