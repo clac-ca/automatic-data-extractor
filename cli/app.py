@@ -8,6 +8,7 @@ from pathlib import Path
 from backend.api.modules.users.models import UserRole
 
 from cli.commands import api_keys as api_keys_commands
+from cli.commands import reset as reset_command
 from cli.commands import settings as settings_command
 from cli.commands import start as start_command
 from cli.commands import users as user_commands
@@ -50,6 +51,13 @@ def build_cli_app() -> argparse.ArgumentParser:
         help="Inspect ADE configuration.",
     )
     settings_parser.set_defaults(handler=settings_command.dump)
+
+    reset_parser = subparsers.add_parser(
+        "reset",
+        help="Delete the ADE database and cached documents.",
+    )
+    reset_command.register_arguments(reset_parser)
+    reset_parser.set_defaults(handler=reset_command.reset)
 
     # User management -----------------------------------------------------
     users_parser = subparsers.add_parser("users", help="Manage ADE user accounts.")
