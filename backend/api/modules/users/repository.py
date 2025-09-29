@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import User, UserRole
@@ -52,6 +52,12 @@ class UsersRepository:
         )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def count_admins(self) -> int:
+        stmt = select(func.count()).where(User.role == UserRole.ADMIN)
+        result = await self._session.execute(stmt)
+        count = result.scalar_one()
+        return int(count or 0)
 
     async def create(
         self,

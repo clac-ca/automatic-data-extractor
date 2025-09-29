@@ -1,4 +1,10 @@
-import type { LoginPayload, SessionEnvelope, UserProfile } from './types'
+import type {
+  InitialSetupPayload,
+  InitialSetupStatus,
+  LoginPayload,
+  SessionEnvelope,
+  UserProfile,
+} from './types'
 import { getCookie } from '../utils/cookies'
 
 const CSRF_COOKIE_NAME = 'ade_csrf'
@@ -25,28 +31,88 @@ export interface LoginSuccess {
   csrfToken: string | null
 }
 
-export async function login(credentials: LoginPayload): Promise<LoginSuccess> {
-  const response = await fetch(buildUrl('/auth/login'), {
+function isSessionEnvelope(value: unknown): value is SessionEnvelope {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const candidate = value as Record<string, unknown>
+  return (
+    'user' in candidate &&
+    typeof candidate.user === 'object' &&
+    'expires_at' in candidate &&
+    typeof candidate.expires_at === 'string' &&
+    'refresh_expires_at' in candidate &&
+    typeof candidate.refresh_expires_at === 'string'
+  )
+}
+
+async function submitSessionRequest(
+  path: string,
+  payload: unknown,
+  fallbackError: string,
+): Promise<LoginSuccess> {
+  const response = await fetch(buildUrl(path), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     credentials: 'include',
-    body: JSON.stringify(credentials),
+    body: JSON.stringify(payload),
+  })
+
+  const data = await readJson<SessionEnvelope | { detail?: string }>(response)
+
+  if (!response.ok) {
+    let detail: string | undefined
+    if (data && typeof data === 'object' && 'detail' in data) {
+      detail = (data as { detail?: string }).detail
+    }
+    const message = detail?.trim() || fallbackError
+    throw Object.assign(new Error(message), { status: response.status })
+  }
+
+  if (!isSessionEnvelope(data)) {
+    throw new Error('Invalid session response received from the server.')
+  }
+
+  const headerToken = response.headers.get('X-CSRF-Token')
+  return {
+    session: data,
+    csrfToken: headerToken ?? resolveCsrfToken(),
+  }
+}
+
+export async function fetchInitialSetupStatus(): Promise<InitialSetupStatus> {
+  const response = await fetch(buildUrl('/auth/initial-setup'), {
+    method: 'GET',
+    credentials: 'include',
   })
 
   if (!response.ok) {
     const payload = await readJson<{ detail?: string }>(response)
-    const detail = payload.detail || 'Unable to sign in with the provided credentials.'
+    const detail = payload.detail || 'Unable to determine the setup status.'
     throw Object.assign(new Error(detail), { status: response.status })
   }
 
-  const session = await readJson<SessionEnvelope>(response)
-  const headerToken = response.headers.get('X-CSRF-Token')
-  return {
-    session,
-    csrfToken: headerToken ?? resolveCsrfToken(),
-  }
+  return readJson<InitialSetupStatus>(response)
+}
+
+export async function login(credentials: LoginPayload): Promise<LoginSuccess> {
+  return submitSessionRequest(
+    '/auth/login',
+    credentials,
+    'Unable to sign in with the provided credentials.',
+  )
+}
+
+export async function completeInitialSetup(
+  payload: InitialSetupPayload,
+): Promise<LoginSuccess> {
+  return submitSessionRequest(
+    '/auth/initial-setup',
+    payload,
+    'Unable to complete the initial setup.',
+  )
 }
 
 export async function fetchProfile(): Promise<UserProfile> {
