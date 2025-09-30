@@ -68,13 +68,13 @@ accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
    pip install -e .[dev]
    ```
 
-2. Launch both servers:
+2. Start the application server:
 
    ```bash
    ade start
    ```
 
-   The CLI prints a banner with service URLs, then streams colour-coded logs from FastAPI and Vite. Stop with `Ctrl+C`. Flags such as `--skip-frontend`, `--skip-backend`, `--vite-api-base-url`, and `--no-color` help in custom setups. The first run automatically executes `npm install`, so dependencies are ready before Vite starts. Open <http://localhost:5173> for the frontend and <http://localhost:8000/docs> for the interactive API docs.
+   The CLI prints a short banner and runs `uvicorn` with reload enabled. It serves the compiled SPA from `app/static/`, so <http://localhost:8000/> delivers both the UI and API. Use `--rebuild-frontend` to run the Vite production build and copy fresh assets before launch. Other helpful flags: `--no-reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm`.
 
 3. Confirm the API is healthy:
 
@@ -85,7 +85,7 @@ accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
 All runtime state stays under `var/`. Remove that directory to reset ADE to a clean slate (for example, between demos).
 
 ### Run backend and frontend manually (optional)
-Run `npm install` inside `frontend/` before starting the Vite dev server manually (repeat only after dependency updates).
+`ade start` serves the prebuilt SPA. For frontend development with hot module reload, run the backend and the Vite dev server in separate terminals. Install dependencies in `frontend/` first (repeat only after dependency updates).
 
 ```bash
 # Terminal 1
@@ -132,11 +132,8 @@ survive container restarts. Check health the same way:
 curl http://localhost:8000/health
 ```
 
-When you deploy the frontend in production, compile it once (`npm run build`)
-and run `python scripts/build_frontend.py` to copy the bundled assets into
-`app/static/`. FastAPI serves those files directly, so your reverse proxy only
-needs to forward requests to the backend. Set `VITE_API_BASE_URL` to the public
-backend origin before building.
+When you deploy the frontend in production, compile it once (`ade start --rebuild-frontend` or `npm run build` followed by copying `frontend/dist/` into `app/static/`). FastAPI serves those files directly, so your reverse proxy only
+needs to forward requests to the backend.
 
 To stop and remove the container:
 
@@ -212,13 +209,7 @@ With these basics you can run ADE on a laptop, VM, or container host and manage
 administrators confidently using the CLI.
 
 ## 10. Troubleshooting
-- **`ade start` exits immediately:** ensure you ran `npm install` inside `frontend/` and that `uvicorn` is available (re-run `pip install -e .[dev]`).
-- **Port conflicts (8000/5173):** pass `--backend-port` / `--frontend-port` to `ade start`, or stop whatever process currently occupies those ports.
-- **Coloured logs appear garbled on Windows:** rerun with `ade start --no-color`.
-- **Frontend cannot reach the API:** set `--vite-api-base-url http://localhost:8000` (or update `VITE_API_BASE_URL` in your `.env`) when the backend runs on a different host or port.
-
-
-
-
-
-
+- **`ade start` exits immediately:** ensure the Python dependencies are installed (`pip install -e .[dev]`) and that the configured port is free. Run with `--no-reload` if you suspect the reload watcher cannot spawn a subprocess.
+- **Port conflicts on 8000:** choose another port with `ade start --port 9000` or stop the conflicting process.
+- **Frontend shows a blank page:** rebuild assets with `ade start --rebuild-frontend` (or run `npm run build` and copy `frontend/dist/` into `app/static/`).
+- **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api` prefix.

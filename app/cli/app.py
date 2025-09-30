@@ -41,7 +41,7 @@ def build_cli_app() -> argparse.ArgumentParser:
     # Development workflow -------------------------------------------------
     start_parser = subparsers.add_parser(
         "start",
-        help="Run the backend and frontend development servers.",
+        help="Run the ADE FastAPI server (serves API and static frontend).",
     )
     start_command.register_arguments(start_parser)
     start_parser.set_defaults(handler=start_command.start)

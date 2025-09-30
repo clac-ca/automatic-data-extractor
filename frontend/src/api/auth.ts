@@ -8,17 +8,10 @@ import type {
 import { getCookie } from '../utils/cookies'
 
 const CSRF_COOKIE_NAME = 'ade_csrf'
-
-function resolveBaseUrl(): string {
-  const rawBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() ?? ''
-  if (!rawBaseUrl) {
-    throw new Error('VITE_API_BASE_URL is not defined. Configure it before using the authentication client.')
-  }
-  return rawBaseUrl.endsWith('/') ? rawBaseUrl.slice(0, -1) : rawBaseUrl
-}
+const API_BASE = '/api'
 
 function buildUrl(path: string): string {
-  return resolveBaseUrl() + path
+  return `${API_BASE}${path}`
 }
 
 async function readJson<T>(response: Response): Promise<T> {

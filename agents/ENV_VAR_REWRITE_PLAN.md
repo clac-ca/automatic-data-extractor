@@ -13,7 +13,6 @@ Reorganise ADE's environment configuration so backend and frontend code use clea
 ## Current Pain Points
 - `app/core/settings.py` defines `server_host`, `backend_port`, and `frontend_port`, so backend configuration leaks frontend assumptions.
 - Backend helpers (`backend_origin` / `frontend_origin`) hard-code `http://` and use the same host for both services, making HTTPS or split hosts awkward.
-- `cli/commands/start.py` has to infer `VITE_API_BASE_URL` from backend host/port, coupling dev ergonomics to backend internals.
 - `.env` / docs do not document a single source of truth for the public API origin, so CORS, cookies, and frontend config have to guess.
 
 ## Proposed Restructure
@@ -31,25 +30,22 @@ Reorganise ADE's environment configuration so backend and frontend code use clea
 - Record the mapping from backend variables to their usages in the developer docs so people know which component reads each variable.
 
 ### 2. Frontend Environment Handling
-- Standardise on `VITE_API_BASE_URL` (already in use). Provide dev defaults via `frontend/.env.example`, mirroring `ADE_SERVER_PUBLIC_URL`.
-- Remove assumptions that the CLI or backend will inject frontend ports; instead, the CLI should read backend bind host/port flags and set `VITE_API_BASE_URL` only for the dev server convenience case.
+- Default the SPA to call `/api` on the current origin so it follows the backend's routing convention without extra configuration. Document how to override the API origin only when the frontend is hosted elsewhere (e.g., via a separate deployment).
 
 ### 3. CLI Alignment (`ade start`)
-- Source backend bind host/port from CLI flags (default localhost). Keep convenience logic to populate `VITE_API_BASE_URL` **only** when the user has not set it.
-- Honour `.env` overrides so running `ADE_SERVER_PUBLIC_URL=https://api.example.com ade start` works without extra flags.
+- Source backend bind host/port from CLI flags (default localhost). Honour `.env` overrides so running `ADE_SERVER_PUBLIC_URL=https://api.example.com ade start` works without extra flags.
 
 - Clarify in docs that the bind host/port addresses listen-only concerns (e.g., Docker, Kubernetes Service) while the public URL aligns with DNS/certificates. Include common production setups where they differ.
 
 ### 4. Documentation & Templates
-- Update `.env.example`, `frontend/.env.example`, and relevant docs to explain the three key variables:
+- Update `.env.example`, `frontend/.env.example`, and relevant docs to explain the key variables:
   - `ADE_SERVER_HOST` / `ADE_SERVER_PORT` – local bind interface for uvicorn.
   - `ADE_SERVER_PUBLIC_URL` – public URL that clients should use (can differ from bind host).
-  - `VITE_API_BASE_URL` – frontend API endpoint (should match `ADE_SERVER_PUBLIC_URL`).
 - Provide guidance for HTTPS / reverse proxy deployments (e.g., set `ADE_SERVER_PUBLIC_URL=https://api.example.com`).
 
 ### 5. Testing & Validation
 - Extend backend settings tests to cover `ADE_SERVER_PUBLIC_URL` validation and ensure HTTPS origins work.
-- Add CLI tests (or integration docs) ensuring `--env VITE_API_BASE_URL=...` overrides the auto-generated value.
+- Add CLI tests (or integration docs) covering environment override precedence for ADE settings.
 
 ## Execution Steps
 1. Refactor `app/core/settings.py` and associated tests/middleware to the new variable names and behaviours.
