@@ -40,35 +40,35 @@
 
 ## Content Map → Code (coverage checklist)
 - Authentication
-  - Password grant and SSO flows: `backend/api/modules/auth/router.py:AuthRoutes`.
+  - Password grant and SSO flows: `app/auth/router.py:AuthRoutes`.
   - API keys admin endpoints: same file; header `X-API-Key` convention in security utils.
-  - Output models: `backend/api/modules/auth/schemas.py:TokenResponse`.
+  - Output models: `app/auth/schemas.py:TokenResponse`.
 - Workspaces & permissions
-  - Context binding and header: `backend/api/modules/workspaces/dependencies.py:bind_workspace_context`.
-  - Example permission checks: `backend/api/modules/workspaces/router.py:WorkspaceRoutes`.
+  - Context binding and header: `app/workspaces/dependencies.py:bind_workspace_context`.
+  - Example permission checks: `app/workspaces/router.py:WorkspaceRoutes`.
 - Documents
-  - CRUD & download flows: `backend/api/modules/documents/router.py`.
-  - Payload models and error enums: `backend/api/modules/documents/schemas.py` and `.../exceptions.py`.
+  - CRUD & download flows: `app/documents/router.py`.
+  - Payload models and error enums: `app/documents/schemas.py` and `.../exceptions.py`.
 - Jobs
-  - Submit/list/get & events: `backend/api/modules/jobs/router.py`.
-  - Processing worker: `backend/api/modules/jobs/worker.py`.
+  - Submit/list/get & events: `app/jobs/router.py`.
+  - Processing worker: `app/jobs/worker.py`.
 - Results
-  - Tables by job/document: `backend/api/modules/results/router.py`.
+  - Tables by job/document: `app/results/router.py`.
 - Events
-  - Recording and dispatch: `backend/api/modules/events/recorder.py`, `.../service.py`.
+  - Recording and dispatch: `app/events/recorder.py`, `.../service.py`.
 - Configuration (current → near‑term)
-  - Current settings model: `backend/api/core/settings.py:get_settings`.
+  - Current settings model: `app/core/settings.py:get_settings`.
   - Planned Dynaconf: `DYNACONF_MIGRATION_PLAN.md` (link from Admin Guide until migration lands).
 - App wiring and docs toggle
-  - App factory & docs URLs: `backend/api/main.py: create_app`.
-  - Logging level setup: `backend/api/core/logging.py:setup_logging`.
+  - App factory & docs URLs: `app/main.py: create_app`.
+  - Logging level setup: `app/core/logging.py:setup_logging`.
 - Database
-  - Engine/session and pooling: `backend/api/db/engine.py`, `backend/api/db/session.py`.
-  - Migrations runner: `backend/api/migrations/env.py` and `alembic.ini`.
+  - Engine/session and pooling: `app/core/db/engine.py`, `app/core/db/session.py`.
+  - Migrations runner: `app/migrations/env.py` and `alembic.ini`.
 - Middleware & request context
-  - Correlation IDs, structured request logs: `backend/api/extensions/middleware.py` and `backend/api/core/logging.py`.
+  - Correlation IDs, structured request logs: `app/core/middleware.py` and `app/core/logging.py`.
 - Task queue & jobs
-  - In‑process queue semantics and subscribers: `backend/api/core/task_queue.py`, `backend/api/modules/jobs/worker.py`.
+  - In‑process queue semantics and subscribers: `app/core/task_queue.py`, `app/jobs/worker.py`.
 - Glossary & naming conventions
   - Distilled terminology derived from the existing `ADE_GLOSSARY.md` (to be migrated into `docs/reference/glossary.md`).
 
@@ -93,7 +93,7 @@
 
 - docs/admin-guide
   - install.md
-    - Python 3.11, virtualenv, `uvicorn backend.api.main:app --reload`, Alembic upgrade, and quick health check (`GET /health`).
+    - Python 3.11, virtualenv, `uvicorn app.main:app --reload`, Alembic upgrade, and quick health check (`GET /health`).
   - configuration.md
     - Current settings (Pydantic) and near‑term Dynaconf plan; how to toggle docs, adjust upload limits, paths (`storage_data_dir`, `storage_documents_dir`).
   - security.md
@@ -113,7 +113,7 @@
 - Use folder `README.md` as index; keep pages short with task‑based headings.
 - Prefer cURL snippets with environment variables (`$ADE_TOKEN`, `$WORKSPACE_ID`).
 - Add “At a glance” tables only where they improve scanability; otherwise bullets.
-- Link to code with GitHub‑friendly paths (e.g., `backend/api/modules/documents/router.py:1`).
+- Link to code with GitHub‑friendly paths (e.g., `app/documents/router.py:1`).
 - Use blockquotes for callouts (tips, warnings) to keep Markdown portable.
 - Keep examples copy‑pastable; avoid placeholders that don’t run.
 

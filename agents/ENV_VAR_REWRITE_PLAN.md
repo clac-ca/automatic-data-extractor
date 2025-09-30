@@ -11,7 +11,7 @@ Reorganise ADE's environment configuration so backend and frontend code use clea
 5. **Explain the "why"** – When variables differ from each other, document the scenarios that make the distinction necessary so future contributors understand the standard pattern.
 
 ## Current Pain Points
-- `backend/api/settings.py` defines `server_host`, `backend_port`, and `frontend_port`, so backend configuration leaks frontend assumptions.
+- `app/core/settings.py` defines `server_host`, `backend_port`, and `frontend_port`, so backend configuration leaks frontend assumptions.
 - Backend helpers (`backend_origin` / `frontend_origin`) hard-code `http://` and use the same host for both services, making HTTPS or split hosts awkward.
 - `cli/commands/start.py` has to infer `VITE_API_BASE_URL` from backend host/port, coupling dev ergonomics to backend internals.
 - `.env` / docs do not document a single source of truth for the public API origin, so CORS, cookies, and frontend config have to guess.
@@ -52,7 +52,7 @@ Reorganise ADE's environment configuration so backend and frontend code use clea
 - Add CLI tests (or integration docs) ensuring `--env VITE_API_BASE_URL=...` overrides the auto-generated value.
 
 ## Execution Steps
-1. Refactor `backend/api/settings.py` and associated tests/middleware to the new variable names and behaviours.
+1. Refactor `app/core/settings.py` and associated tests/middleware to the new variable names and behaviours.
 2. Adjust `cli/commands/start.py` to read the renamed bind variables and stop depending on frontend settings.
 3. Add/update `.env.example` files and documentation to describe the new configuration workflow.
 4. Verify local dev flow (`ade start`) still works with defaults and with custom overrides.

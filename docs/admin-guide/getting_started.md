@@ -7,10 +7,10 @@ anywhere without provisioning external infrastructure.
 
 ## 1. What ADE Ships With
 - **Self-contained storage** – ADE persists all metadata in
-  `backend/data/db/ade.sqlite`. Documents and other artefacts live alongside it
-  under `backend/data/`. No external database service is required.
+  `var/db/ade.sqlite`. Documents and other artefacts live alongside it
+  under `var/`. No external database service is required.
 - **Deterministic FastAPI backend** – requests are handled by the app in
-  `backend/api/main.py`. Background work stays inside the same process.
+  `app/main.py`. Background work stays inside the same process.
 - **Admin CLI** – the `ade` command lets you manage users and API keys from any
   terminal that can read the project’s environment.
 - **(TODO)** The forthcoming frontend will guide first-time administrators
@@ -47,7 +47,7 @@ cp .env.example .env
 ```
 
 If you delete `.env`, ADE falls back to its defaults (SQLite in
-`backend/data/db`, docs disabled outside `local`, etc.). Time-based settings
+`var/db`, docs disabled outside `local`, etc.). Time-based settings
 accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
 `30d`, so you can stay consistent whether you configure them via `.env` or the
 `ade start --env KEY=VALUE` flags.
@@ -82,14 +82,14 @@ accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
    curl http://localhost:8000/health
    ```
 
-All runtime state stays under `backend/data/`. Remove that directory to reset ADE to a clean slate (for example, between demos).
+All runtime state stays under `var/`. Remove that directory to reset ADE to a clean slate (for example, between demos).
 
 ### Run backend and frontend manually (optional)
 Run `npm install` inside `frontend/` before starting the Vite dev server manually (repeat only after dependency updates).
 
 ```bash
 # Terminal 1
-uvicorn backend.api.main:app --reload
+uvicorn app.main:app --reload
 
 # Terminal 2
 cd frontend
@@ -120,9 +120,9 @@ docker build -t ade-backend:local -f docker/backend/Dockerfile .
 docker run -d --name ade-backend \
   --env-file .env \
   -p 8000:8000 \
-  -v "$(pwd)/backend/data:/app/backend/data" \
+  -v "$(pwd)/var:/app/var" \
   ade-backend:local \
-  uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
+  uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 The bind mount keeps the SQLite database and documents on the host so they
@@ -133,9 +133,10 @@ curl http://localhost:8000/health
 ```
 
 When you deploy the frontend in production, compile it once (`npm run build`)
-and serve the resulting `frontend/dist/` assets from your reverse proxy or
-static site host. Point the frontend at the backend URL with the `VITE_API_BASE_URL`
-environment variable before building.
+and run `python scripts/build_frontend.py` to copy the bundled assets into
+`app/static/`. FastAPI serves those files directly, so your reverse proxy only
+needs to forward requests to the backend. Set `VITE_API_BASE_URL` to the public
+backend origin before building.
 
 To stop and remove the container:
 
@@ -192,11 +193,11 @@ docker exec -it ade-backend ade users create --email admin@example.com --passwor
 > contention low.
 
 ## 8. Where ADE Stores Data
-- `backend/data/db/ade.sqlite` – primary metadata database (SQLite).
-- `backend/data/documents/` – uploaded source files.
-- `backend/data/logs/` *(if enabled)* – structured JSON logs.
+- `var/db/ade.sqlite` – primary metadata database (SQLite).
+- `var/documents/` – uploaded source files.
+- `var/logs/` *(if enabled)* – structured JSON logs.
 
-Back up the `backend/data/` directory to retain everything you need for a full
+Back up the `var/` directory to retain everything you need for a full
 restore.
 
 ## 9. Roadmap + TODOs
