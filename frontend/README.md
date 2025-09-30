@@ -11,7 +11,7 @@ This package hosts the rebuilt ADE web client. It focuses on the core authentica
 
 ## Authentication flow
 
-The login form posts credentials to POST /auth/login, expects cookies to be set by the backend, and then renders the authenticated dashboard. The dashboard fetches the current user via GET /auth/me on initial load and calls POST /auth/logout with the CSRF token when signing out. All requests are sent to VITE_API_BASE_URL (configured in the repository .env).
+The login form posts credentials to POST /api/auth/login, expects cookies to be set by the backend, and then renders the authenticated dashboard. The dashboard fetches the current user via GET /api/auth/me on initial load and calls POST /api/auth/logout with the CSRF token when signing out.
 
 ## Project structure
 

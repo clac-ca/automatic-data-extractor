@@ -88,12 +88,12 @@ async def test_open_session_bootstraps_in_memory_database() -> None:
 
 def test_parse_env_pairs_accepts_multiple_values() -> None:
     result = start_cmd._parse_env_pairs(
-        ["ADE_LOGGING_LEVEL=INFO", "VITE_API_BASE_URL=http://localhost:8000"]
+        ["ADE_LOGGING_LEVEL=INFO", "ADE_DEV_MODE=true"]
     )
 
     assert result == {
         "ADE_LOGGING_LEVEL": "INFO",
-        "VITE_API_BASE_URL": "http://localhost:8000",
+        "ADE_DEV_MODE": "true",
     }
 
 

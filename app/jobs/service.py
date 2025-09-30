@@ -30,14 +30,12 @@ from .exceptions import (
 from .models import Job
 from .schemas import JobRecord
 
-try:  # pragma: no cover - optional import guard
-    from backend.processor import JobRequest, JobResult, ProcessorError
-    from backend.processor import run as run_processor
-except Exception:  # pragma: no cover - fallback during static analysis
-    JobRequest = Any
-    JobResult = Any
-    ProcessorError = Exception
-    run_processor = None
+# The legacy `backend.processor` module has been removed. Keep the type
+# annotations permissive until a replacement processor is wired in.
+JobRequest = Any
+JobResult = Any
+ProcessorError = Exception
+run_processor = None
 
 _VALID_STATUSES = frozenset({"pending", "running", "succeeded", "failed"})
 
@@ -232,8 +230,10 @@ class JobsService(BaseService):
         document: Document,
         configuration: Any,
     ) -> JobResult:
-        if run_processor is None:  # pragma: no cover - sanity guard
-            raise RuntimeError("Processor entry point is unavailable")
+        if run_processor is None:  # pragma: no cover - temporary safeguard
+            raise RuntimeError(
+                "Job processor entry point is unavailable; configure an extractor backend."
+            )
 
         document_path = self._storage.path_for(document.stored_uri)
         config_identifier = str(configuration.id)

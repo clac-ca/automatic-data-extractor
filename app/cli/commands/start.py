@@ -1,68 +1,77 @@
-"""Development server orchestration command."""
+"""Launch the ADE FastAPI server with optional frontend build."""
 
 from __future__ import annotations
 
 import argparse
 import os
-import signal
+import shutil
 import subprocess
-import sys
-import threading
-import time
-from dataclasses import dataclass
 from pathlib import Path
 
-try:
-    import ctypes
-except ImportError:  # pragma: no cover - fallback for restricted envs
-    ctypes = None  # type: ignore[assignment]
+import uvicorn
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
-FRONTEND_DIR = ROOT_DIR / "frontend"
-
-RESET = "\033[0m"
-COLORS = {
-    "backend": "\033[36m",  # cyan
-    "frontend": "\033[35m",  # magenta
-}
+DEFAULT_FRONTEND_DIR = ROOT_DIR / "frontend"
+STATIC_DIR = ROOT_DIR / "app" / "static"
+DIST_DIR_NAME = "dist"
+DEFAULT_HOST = "localhost"
+DEFAULT_PORT = 8000
 
 
-@dataclass
-class ProcessSpec:
-    label: str
-    command: list[str]
-    cwd: Path
-    env: dict[str, str] | None = None
+def register_arguments(parser: argparse.ArgumentParser) -> None:
+    """Attach command-line options for the `ade start` command."""
 
+    host_default = os.getenv("ADE_SERVER_HOST", DEFAULT_HOST)
+    try:
+        port_default = int(os.getenv("ADE_SERVER_PORT", DEFAULT_PORT))
+    except ValueError:
+        port_default = DEFAULT_PORT
 
-DEFAULT_BACKEND_HOST = "localhost"
-DEFAULT_BACKEND_PORT = 8000
-DEFAULT_FRONTEND_HOST = "localhost"
-DEFAULT_FRONTEND_PORT = 5173
-
-
-def _resolve_backend_public_url(args: argparse.Namespace, overrides: dict[str, str]) -> str:
-    candidate = (
-        overrides.get("ADE_SERVER_PUBLIC_URL")
-        or os.getenv("ADE_SERVER_PUBLIC_URL")
-        or ""
-    ).strip()
-    if candidate:
-        return candidate
-    return f"http://{args.backend_host}:{args.backend_port}"
-
-
-def _resolve_vite_api_base_url(args: argparse.Namespace, overrides: dict[str, str]) -> str:
-    explicit = (args.vite_api_base_url or os.getenv("VITE_API_BASE_URL") or "").strip()
-    if explicit:
-        return explicit
-    return _resolve_backend_public_url(args, overrides)
-
-
-def _compose_frontend_env(args: argparse.Namespace, overrides: dict[str, str]) -> dict[str, str]:
-    env = overrides.copy()
-    env.setdefault("VITE_API_BASE_URL", _resolve_vite_api_base_url(args, overrides))
-    return env
+    parser.add_argument(
+        "--host",
+        default=host_default,
+        help=f"Host interface for uvicorn (default: {host_default}).",
+    )
+    parser.add_argument(
+        "--port",
+        default=port_default,
+        type=int,
+        help=f"Port for uvicorn to bind (default: {port_default}).",
+    )
+    parser.add_argument(
+        "--no-reload",
+        dest="reload",
+        action="store_false",
+        help="Disable auto-reload. Reload is enabled by default for development.",
+    )
+    parser.add_argument(
+        "--rebuild-frontend",
+        action="store_true",
+        help="Run the Vite production build and copy assets into app/static before starting.",
+    )
+    parser.add_argument(
+        "--frontend-dir",
+        type=Path,
+        default=DEFAULT_FRONTEND_DIR,
+        help="Path to the frontend project (default: <repo>/frontend).",
+    )
+    parser.add_argument(
+        "--npm",
+        dest="npm_command",
+        default=None,
+        help="Override the npm executable used for frontend builds (default: auto-detected).",
+    )
+    parser.add_argument(
+        "--env",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help=(
+            "Set environment variables for the server process. Repeat the flag to provide multiple entries"
+            " (e.g. --env ADE_LOGGING_LEVEL=DEBUG)."
+        ),
+    )
+    parser.set_defaults(reload=True)
 
 
 def _parse_env_pairs(pairs: list[str]) -> dict[str, str]:
@@ -78,318 +87,136 @@ def _parse_env_pairs(pairs: list[str]) -> dict[str, str]:
     return env
 
 
+def _resolve_npm_command(override: str | None) -> str:
+    if override:
+        return override
+    return "npm.cmd" if os.name == "nt" else "npm"
 
-def register_arguments(parser: argparse.ArgumentParser) -> None:
-    """Attach command-line options for the `ade start` workflow."""
 
-    backend_host_default = os.getenv("ADE_SERVER_HOST", DEFAULT_BACKEND_HOST)
-    try:
-        backend_port_default = int(os.getenv("ADE_SERVER_PORT", DEFAULT_BACKEND_PORT))
-    except ValueError:
-        backend_port_default = DEFAULT_BACKEND_PORT
-    frontend_host_default = DEFAULT_FRONTEND_HOST
-    frontend_port_default = DEFAULT_FRONTEND_PORT
-
-    parser.add_argument(
-        "--skip-backend",
-        action="store_true",
-        help="Do not launch the FastAPI development server.",
-    )
-    parser.add_argument(
-        "--skip-frontend",
-        action="store_true",
-        help="Do not launch the Vite development server.",
-    )
-    parser.add_argument(
-        "--backend-host",
-        default=backend_host_default,
-        help=f"Host interface for uvicorn (default: {backend_host_default}).",
-    )
-    parser.add_argument(
-        "--backend-port",
-        default=backend_port_default,
-        type=int,
-        help=f"Port for uvicorn to bind (default: {backend_port_default}).",
-    )
-    parser.add_argument(
-        "--frontend-host",
-        default=frontend_host_default,
-        help=f"Host interface for the Vite dev server (default: {frontend_host_default}).",
-    )
-    parser.add_argument(
-        "--frontend-port",
-        default=frontend_port_default,
-        type=int,
-        help=f"Port for the Vite dev server (default: {frontend_port_default}).",
-    )
-    parser.add_argument(
-        "--vite-api-base-url",
-        dest="vite_api_base_url",
-        default=None,
-        help="Override the Vite dev server VITE_API_BASE_URL environment variable.",
-    )
-    parser.add_argument(
-        "--vite-api-url",
-        dest="vite_api_base_url",
-        help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
-        "--env",
-        action="append",
-        default=[],
-        metavar="KEY=VALUE",
-        help=(
-            "Set environment variables for the spawned servers. Repeat the flag "
-            "to pass multiple entries (e.g. --env ADE_LOGGING_LEVEL=INFO)."
-        ),
-    )
-    parser.add_argument(
-        "--no-color",
-        action="store_true",
-        help="Disable ANSI color codes in aggregated output.",
-    )
-
-def _build_specs(
-    args: argparse.Namespace,
+def _run_command(
+    command: list[str],
     *,
-    npm_command: str,
-    env_overrides: dict[str, str],
-) -> list[ProcessSpec]:
-    specs: list[ProcessSpec] = []
-
-    if not args.skip_backend:
-        backend_cmd = [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "app.main:app",
-            "--reload",
-            "--host",
-            args.backend_host,
-            "--port",
-            str(args.backend_port),
-        ]
-        backend_env = env_overrides.copy() if env_overrides else None
-        specs.append(ProcessSpec("backend", backend_cmd, ROOT_DIR, env=backend_env))
-
-    if not args.skip_frontend:
-        frontend_cmd = [
-            npm_command,
-            "run",
-            "dev",
-            "--",
-            "--host",
-            args.frontend_host,
-            "--port",
-            str(args.frontend_port),
-        ]
-        env = _compose_frontend_env(args, env_overrides)
-        specs.append(ProcessSpec("frontend", frontend_cmd, FRONTEND_DIR, env=env))
-
-    return specs
-
-def _ensure_frontend_dependencies(frontend_dir: Path, npm_command: str) -> None:
-    node_modules = frontend_dir / "node_modules"
-    if node_modules.exists():
-        return
-
-    print("Installing frontend dependencies (npm install)...")
-    try:
-        subprocess.run(
-            [npm_command, "install"],
-            cwd=str(frontend_dir),
-            check=True,
-        )
-    except FileNotFoundError as exc:  # pragma: no cover - depends on local env
-        raise ValueError(
-            "npm is not available on PATH. Install Node.js 20 LTS before running `ade start`."
-        ) from exc
-    except subprocess.CalledProcessError as exc:
-        raise ValueError("`npm install` failed. Review the output above for details.") from exc
-
-
-def _enable_windows_ansi() -> None:
-    if os.name != "nt" or ctypes is None:  # pragma: no cover - Windows only
-        return
-    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
-    handle = kernel32.GetStdHandle(-11)
-    mode = ctypes.c_ulong()  # type: ignore[attr-defined]
-    if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
-        kernel32.SetConsoleMode(handle, mode.value | 0x0004)
-
-
-def _should_use_color(disable_color: bool) -> bool:
-    if disable_color:
-        return False
-    if not sys.stdout.isatty():
-        return False
-    if os.name == "nt" and ctypes is None:
-        return False
-    return True
-
-
-def _colorize(label: str, text: str, *, enabled: bool) -> str:
-    if not enabled:
-        return text
-    color = COLORS.get(label)
-    if not color:
-        return text
-    return f"{color}{text}{RESET}"
-
-
-def _print_banner(
-    *,
-    backend_host: str,
-    backend_port: int,
-    backend_public_url: str,
-    frontend_host: str,
-    frontend_port: int,
-    vite_api_base_url: str,
-    color: bool,
+    cwd: Path,
+    env: dict[str, str],
+    description: str,
 ) -> None:
-    headline = "ADE development servers"
+    try:
+        subprocess.run(command, cwd=str(cwd), env=env, check=True)
+    except FileNotFoundError as exc:  # pragma: no cover - depends on local tooling
+        raise ValueError(f"{command[0]!r} is not available on PATH. Install the required tooling.") from exc
+    except subprocess.CalledProcessError as exc:
+        raise ValueError(f"{description} failed with exit code {exc.returncode}.") from exc
+
+
+def _ensure_frontend_dependencies(
+    *,
+    frontend_dir: Path,
+    npm_command: str,
+    env: dict[str, str],
+) -> None:
+    if (frontend_dir / "node_modules").exists():
+        return
+    print("Installing frontend dependencies (npm install)...")
+    _run_command(
+        [npm_command, "install"],
+        cwd=frontend_dir,
+        env=env,
+        description="npm install",
+    )
+
+
+def _clean_directory(path: Path) -> None:
+    if not path.exists():
+        path.mkdir(parents=True, exist_ok=True)
+        return
+    for entry in path.iterdir():
+        if entry.is_dir():
+            shutil.rmtree(entry)
+        else:
+            entry.unlink()
+
+
+def _copy_frontend_build(frontend_dir: Path) -> None:
+    dist_dir = frontend_dir / DIST_DIR_NAME
+    if not dist_dir.exists() or not dist_dir.is_dir():
+        raise ValueError(f"Frontend build output not found at {dist_dir}")
+
+    _clean_directory(STATIC_DIR)
+    shutil.copytree(dist_dir, STATIC_DIR, dirs_exist_ok=True)
+
+
+def _build_frontend_assets(
+    *,
+    frontend_dir: Path,
+    npm_command: str,
+    env: dict[str, str],
+) -> None:
+    print("Building frontend bundle...")
+    _ensure_frontend_dependencies(frontend_dir=frontend_dir, npm_command=npm_command, env=env)
+
+    build_command = [npm_command, "run", "build"]
+    _run_command(
+        build_command,
+        cwd=frontend_dir,
+        env=env,
+        description="npm run build",
+    )
+
+    print("Copying frontend assets into app/static...")
+    _copy_frontend_build(frontend_dir)
+
+
+def _print_banner(*, host: str, port: int, reload: bool, built: bool) -> None:
+    headline = "ADE application server"
     separator = "-" * len(headline)
-    backend_bind = f"{backend_host}:{backend_port}"
-    frontend_url = f"http://{frontend_host}:{frontend_port}"
-
-    backend_label = _colorize("backend", "Backend", enabled=color)
-    frontend_label = _colorize("frontend", "Frontend", enabled=color)
-
+    url = f"http://{host}:{port}"
     print(headline)
     print(separator)
-    print(f"{backend_label}: bind {backend_bind}  (uvicorn --reload)")
-    print(f"           public {backend_public_url}")
-    print(f"{frontend_label}: {frontend_url}  (Vite hot module reload)")
-    if vite_api_base_url:
-        print(f"Vite API base: {vite_api_base_url}")
-    print("Stop with Ctrl+C. Use --help for more flags.\n")
-
-def _launch_process(spec: ProcessSpec, *, color_enabled: bool) -> tuple[str, subprocess.Popen[str]]:
-    env = os.environ.copy()
-    if spec.env:
-        env.update(spec.env)
-
-    proc = subprocess.Popen(
-        spec.command,
-        cwd=str(spec.cwd),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        env=env,
-    )
-    proc._ade_color = color_enabled  # type: ignore[attr-defined]
-    return spec.label, proc
-
-
-def _stream_output(label: str, proc: subprocess.Popen[str]) -> None:
-    color_enabled = getattr(proc, "_ade_color", False)
-    prefix = _colorize(label, f"[{label}] ", enabled=color_enabled)
-    assert proc.stdout is not None
-    for line in proc.stdout:
-        text = line if line.endswith("\n") else f"{line}\n"
-        sys.stdout.write(prefix + text)
-        sys.stdout.flush()
-    proc.stdout.close()
-
-
-def _stop_process(proc: subprocess.Popen[str]) -> None:
-    if proc.poll() is not None:
-        return
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    print(f"Listening on {url}")
+    print(f"Reload: {'enabled' if reload else 'disabled'}")
+    if built:
+        print("Frontend: rebuilt and synced to app/static")
+    else:
+        print("Frontend: serving existing assets from app/static")
+    print("Press Ctrl+C to stop.\n")
 
 
 def start(args: argparse.Namespace) -> None:
-    """Launch the backend and frontend development servers."""
+    """Run the ADE FastAPI application."""
 
-    npm_command = "npm.cmd" if os.name == "nt" else "npm"
     env_overrides = _parse_env_pairs(getattr(args, "env", []))
-    if (
-        "ADE_SERVER_HOST" not in env_overrides
-        and "ADE_SERVER_HOST" not in os.environ
-    ):
-        env_overrides["ADE_SERVER_HOST"] = args.backend_host
-    if (
-        "ADE_SERVER_PORT" not in env_overrides
-        and "ADE_SERVER_PORT" not in os.environ
-    ):
-        env_overrides["ADE_SERVER_PORT"] = str(args.backend_port)
-    if (
-        "ADE_SERVER_PUBLIC_URL" not in env_overrides
-        and "ADE_SERVER_PUBLIC_URL" not in os.environ
-    ):
-        env_overrides["ADE_SERVER_PUBLIC_URL"] = (
-            f"http://{args.backend_host}:{args.backend_port}"
-        )
-    if not args.skip_frontend:
-        _ensure_frontend_dependencies(FRONTEND_DIR, npm_command)
+    for key, value in env_overrides.items():
+        os.environ[key] = value
 
-    specs = _build_specs(args, npm_command=npm_command, env_overrides=env_overrides)
-    if not specs:
-        raise ValueError("Nothing to start. Remove --skip options to launch a server.")
+    os.environ.setdefault("ADE_SERVER_HOST", args.host)
+    os.environ.setdefault("ADE_SERVER_PORT", str(args.port))
+    os.environ.setdefault("ADE_SERVER_PUBLIC_URL", f"http://{args.host}:{args.port}")
 
-    use_color = _should_use_color(args.no_color)
-    if use_color and os.name == "nt":
-        _enable_windows_ansi()
+    frontend_built = False
+    if getattr(args, "rebuild_frontend", False):
+        npm_command = _resolve_npm_command(getattr(args, "npm_command", None))
+        frontend_dir: Path = getattr(args, "frontend_dir")
+        frontend_dir = frontend_dir.expanduser().resolve()
+        if not frontend_dir.exists() or not frontend_dir.is_dir():
+            raise ValueError(f"Frontend directory not found at {frontend_dir}")
 
-    backend_public_url = _resolve_backend_public_url(args, env_overrides)
-    api_base_url = env_overrides.get("VITE_API_BASE_URL") or _resolve_vite_api_base_url(
-        args, env_overrides
+        env = os.environ.copy()
+        _build_frontend_assets(frontend_dir=frontend_dir, npm_command=npm_command, env=env)
+        frontend_built = True
+
+    reload_enabled = getattr(args, "reload", True)
+    _print_banner(host=args.host, port=args.port, reload=reload_enabled, built=frontend_built)
+
+    uvicorn.run(
+        "app.main:app",
+        host=args.host,
+        port=args.port,
+        reload=reload_enabled,
+        factory=False,
     )
 
-    _print_banner(
-        backend_host=args.backend_host,
-        backend_port=args.backend_port,
-        backend_public_url=backend_public_url,
-        frontend_host=args.frontend_host,
-        frontend_port=args.frontend_port,
-        vite_api_base_url=api_base_url,
-        color=use_color,
-    )
 
-    processes: list[tuple[str, subprocess.Popen[str]]] = []
-    for spec in specs:
-        processes.append(_launch_process(spec, color_enabled=use_color))
-
-    stop_event = threading.Event()
-    threads: list[threading.Thread] = []
-
-    for label, proc in processes:
-        thread = threading.Thread(target=_stream_output, args=(label, proc), daemon=True)
-        thread.start()
-        threads.append(thread)
-
-    original_sigint = signal.getsignal(signal.SIGINT)
-    original_sigterm = signal.getsignal(signal.SIGTERM)
-
-    def _handle_signal(signum: int, _frame: object) -> None:
-        stop_event.set()
-
-    signal.signal(signal.SIGINT, _handle_signal)
-    signal.signal(signal.SIGTERM, _handle_signal)
-
-    exit_code = 0
-    try:
-        while not stop_event.is_set():
-            for label, proc in processes:
-                code = proc.poll()
-                if code is not None:
-                    if code != 0:
-                        print(f"{label} exited with status {code}")
-                        exit_code = code
-                    stop_event.set()
-                    break
-            time.sleep(0.2)
-    finally:
-        signal.signal(signal.SIGINT, original_sigint)
-        signal.signal(signal.SIGTERM, original_sigterm)
-        for _, proc in processes:
-            _stop_process(proc)
-        for thread in threads:
-            thread.join(timeout=1)
-
-    if exit_code != 0:
-        raise SystemExit(exit_code)
+__all__ = [
+    "register_arguments",
+    "start",
+]
