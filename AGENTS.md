@@ -88,7 +88,7 @@ This ensures dependency decisions are explicit, auditable, and reversible.
 ## Testing
 
 ADE uses **pytest** as the primary test runner, with **pytest-asyncio** for async tests.  
-Tests live under `backend/tests/` and follow the `test_*.py` / `test_*` convention.  
+Tests live under `tests/` and follow the `test_*.py` / `test_*` convention.
 
 Key tools:
 - **pytest** → run all unit and integration tests.

@@ -14,7 +14,7 @@ build/
 .pytest_cache/
 
 # SQLite and documents
-data/
+var/
 
 # IDE
 .vscode/
@@ -34,4 +34,4 @@ frontend/.vite/
 coverage.xml
 htmlcov/
 # Backend runtime artefacts
-backend/data/
+# (covered by var/ entry above)

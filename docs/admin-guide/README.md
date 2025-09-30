@@ -3,10 +3,10 @@
 Administrators install, configure, and operate the Automatic Data Extractor. This guide captures the durable pieces of that workflow while deeper runbooks are drafted.
 
 ## Deployment at a glance
-- ADE is a FastAPI application created in [`backend/api/main.py`](../../backend/api/main.py) with its settings defined in [`backend/api/settings.py`](../../backend/api/settings.py).
+- ADE is a FastAPI application created in [`app/main.py`](../../app/main.py) with its settings defined in [`app/core/settings.py`](../../app/core/settings.py).
 - Development favours two hot-reload loops: run `ade start` to launch FastAPI and the Vite dev server together, or start `uvicorn` and `npm run dev -- --host` in separate terminals.
 - Production deployments build the frontend once (`npm run build`) and serve the static bundle behind the same reverse proxy that forwards API traffic to a managed ASGI process (Uvicorn, Uvicorn+Gunicorn, systemd, or a container orchestrator).
-- Persistent state lives under the `backend/data/` directory by default. SQLite databases and uploaded documents sit beneath `backend/data/db/` and `backend/data/documents/`; both paths can be overridden through environment variables.
+- Persistent state lives under the `var/` directory by default. SQLite databases and uploaded documents sit beneath `var/db/` and `var/documents/`; both paths can be overridden through environment variables.
 
 ## Configuration snapshot
 - Settings are loaded once at startup through `get_settings()` and cached on `app.state.settings`. Routes and background workers read from this state rather than reloading environment variables on every request.
@@ -16,9 +16,9 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
   toggled explicitly through the `ADE_API_DOCS_ENABLED` flag to keep production surfaces minimal.
 
 ## Operational building blocks
-- Database connections are created via the async SQLAlchemy engine in [`backend/api/db/engine.py`](../../backend/api/db/engine.py) and scoped sessions from [`backend/api/db/session.py`](../../backend/api/db/session.py).
-- Background work is handled by the in-process task queue defined in [`backend/api/core/task_queue.py`](../../backend/api/core/task_queue.py) and message hub in [`backend/api/core/message_hub.py`](../../backend/api/core/message_hub.py).
-- Structured logging and correlation IDs are configured through [`backend/api/core/logging.py`](../../backend/api/core/logging.py) and middleware in [`backend/api/extensions/middleware.py`](../../backend/api/extensions/middleware.py).
+- Database connections are created via the async SQLAlchemy engine in [`app/core/db/engine.py`](../../app/core/db/engine.py) and scoped sessions from [`app/core/db/session.py`](../../app/core/db/session.py).
+- Background work is handled by the in-process task queue defined in [`app/core/task_queue.py`](../../app/core/task_queue.py) and message hub in [`app/core/message_hub.py`](../../app/core/message_hub.py).
+- Structured logging and correlation IDs are configured through [`app/core/logging.py`](../../app/core/logging.py) and middleware in [`app/core/middleware.py`](../../app/core/middleware.py).
 
 Future sections will expand on security hardening, backup procedures, and frontend onboarding once those pieces land. The components listed above are already in place and unlikely to change dramatically.
 
