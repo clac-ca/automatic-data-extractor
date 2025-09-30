@@ -606,7 +606,7 @@ router = APIRouter()
 async def get_creator_posts(profile_data: ProfileCreate):
    pass
 ```
-> **ADE note:** The `/auth/login` route validates credentials with `LoginRequest`, keeping malformed emails/passwords at the 422 boundary while the service layer works with normalised data.【F:backend/api/modules/auth/schemas.py†L1-L54】【F:backend/api/modules/auth/router.py†L28-L104】
+> **ADE note:** The `/auth/login` route validates credentials with `LoginRequest`, keeping malformed emails/passwords at the 422 boundary while the service layer works with normalised data.【F:app/auth/schemas.py†L1-L54】【F:app/auth/router.py†L28-L104】
 **Response Example:**
 
 <img backend="images/value_error_response.png" width="400" height="auto">
