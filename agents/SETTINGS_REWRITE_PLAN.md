@@ -1,17 +1,17 @@
 # Settings Rewrite Plan
 
 ## Current Strengths
-- Configuration is still concentrated in one `Settings` class with deterministic `.env` loading, so the runtime surface is simple to understand.【F:app/core/settings.py†L14-L125】
-- Validators normalise hostnames, ports, OIDC scope strings, and filesystem paths which keeps call sites predictable even when inputs vary.【F:app/core/settings.py†L82-L125】
+- Configuration is still concentrated in one `Settings` class with deterministic `.env` loading, so the runtime surface is simple to understand.【F:app/settings.py†L14-L125】
+- Validators normalise hostnames, ports, OIDC scope strings, and filesystem paths which keeps call sites predictable even when inputs vary.【F:app/settings.py†L82-L125】
 - A regression test suite already exercises defaults and overrides (`tests/core/test_settings.py`), so we can refactor aggressively without fear of regressions.
 
 ## Gaps from a "standard" FastAPI configuration
 Despite the strong baseline, a second pass highlighted naming and typing inconsistencies that diverge from common FastAPI/Pydantic conventions:
 
-- Field names mix `backend_*`, `auth_*`, and `sso_*` prefixes even when they represent the same conceptual grouping (server, security, persistence).【F:app/core/settings.py†L26-L109】
-- Duration/configuration units are split across minutes, days, and seconds without type-level guarantees, leaving consumers to convert by hand.【F:app/core/settings.py†L56-L115】
-- List and filesystem fields rely on custom parsing/`Path` coercion instead of first-class Pydantic types, which hides validation and makes the code harder to skim.【F:app/core/settings.py†L34-L125】
-- Secrets remain plain strings, so logging or repr output can leak values during debugging.【F:app/core/settings.py†L66-L98】
+- Field names mix `backend_*`, `auth_*`, and `sso_*` prefixes even when they represent the same conceptual grouping (server, security, persistence).【F:app/settings.py†L26-L109】
+- Duration/configuration units are split across minutes, days, and seconds without type-level guarantees, leaving consumers to convert by hand.【F:app/settings.py†L56-L115】
+- List and filesystem fields rely on custom parsing/`Path` coercion instead of first-class Pydantic types, which hides validation and makes the code harder to skim.【F:app/settings.py†L34-L125】
+- Secrets remain plain strings, so logging or repr output can leak values during debugging.【F:app/settings.py†L66-L98】
 
 We also do not need to maintain backwards compatibility, so we can take the opportunity to adopt cleaner names and break out of the historical `ADE_*` env variable structure where it no longer serves clarity.
 
@@ -24,14 +24,14 @@ Keep a single `Settings` object, but make it read like a FastAPI tutorial exampl
 - Expose flat env vars that align with FastAPI defaults (for example `ADE_SERVER_HOST`, `ADE_JWT_ACCESS_TTL`) so developers can rely on the built-in naming convention without nested delimiters. Document the mapping inline so future fields follow the same pattern.
 
 ### 2. Tighten typing with first-class Pydantic primitives
-- Replace the free-form strings with rich types: `SecretStr` for secrets, `HttpUrl/AnyHttpUrl` for URLs, `DirectoryPath` for directories, and `Literal`/Enums for log levels.【F:app/core/settings.py†L26-L109】
+- Replace the free-form strings with rich types: `SecretStr` for secrets, `HttpUrl/AnyHttpUrl` for URLs, `DirectoryPath` for directories, and `Literal`/Enums for log levels.【F:app/settings.py†L26-L109】
 - Model durations as `timedelta` values (seconds internally, but parsed via `PositiveInt` + `Field(validation_alias=...)` or `Json[dict]` support) so call sites receive consistent objects instead of mixed-minute/day integers.
-- Swap the `cors_allow_origins` string + property for `server_cors_origins: list[AnyHttpUrl] = Field(default_factory=list)` with a validator that always includes `server_public_url`. This removes the extra computed property and matches Starlette's `CORSMiddleware` expectations.【F:app/core/settings.py†L34-L73】
+- Swap the `cors_allow_origins` string + property for `server_cors_origins: list[AnyHttpUrl] = Field(default_factory=list)` with a validator that always includes `server_public_url`. This removes the extra computed property and matches Starlette's `CORSMiddleware` expectations.【F:app/settings.py†L34-L73】
 - Parse `oidc_scopes` into a `list[str]` (deduplicated + sorted) instead of a space-delimited string so downstream OpenID clients can reuse the list directly.
 
 ### 3. Let Settings create and validate filesystem paths
 - Switch to `DirectoryPath` with `Field(validate_default=True)` for `storage_data_dir` and `storage_documents_dir`.
-- Add a post-init validator that ensures directories exist (create with `exist_ok=True`) and resolves them to absolute paths. With no backwards compatibility to maintain, we can fail fast if creation is impossible.【F:app/core/settings.py†L102-L125】
+- Add a post-init validator that ensures directories exist (create with `exist_ok=True`) and resolves them to absolute paths. With no backwards compatibility to maintain, we can fail fast if creation is impossible.【F:app/settings.py†L102-L125】
 
 ### 4. Encode feature toggles as computed properties with validation
 - Promote `oidc_enabled` to a validator-backed field that errors when partially configured instead of a property that silently returns `False`.
@@ -43,8 +43,9 @@ Keep a single `Settings` object, but make it read like a FastAPI tutorial exampl
 - Add a `settings dump` CLI helper (or extend existing CLI) to print the effective configuration with secrets masked, demonstrating the new structure in a developer-friendly way.
 
 ## Execution roadmap
-1. **Model rewrite:** Rename fields and apply the new types/validators in `app/core/settings.py`, deleting the bespoke `cors_allow_origins_list` helper once list parsing is native.
+1. **Model rewrite:** Rename fields and apply the new types/validators in `app/settings.py`, deleting the bespoke `cors_allow_origins_list` helper once list parsing is native.
 2. **Call-site update:** Touch routers/services/middleware to consume the renamed attributes (`settings.server_public_url`, `settings.jwt.access_ttl`) and adjust dependency wiring as needed.
 3. **Test + doc sweep:** Update unit tests, `.env.example`, and onboarding docs to reference the new names and highlight the flat `ADE_*` environment variables.
 4. **Developer tooling:** Add the optional CLI/settings dump if we find gaps after the rename; otherwise verify `uvicorn` boot scripts and deployment manifests pick up the new env vars.
 5. **Monitor + iterate:** After the rewrite, treat the consolidated `Settings` class as the single entry point—new config should follow the established naming/typing conventions by default.
+

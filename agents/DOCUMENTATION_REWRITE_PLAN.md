@@ -57,7 +57,7 @@
 - Events
   - Recording and dispatch: `app/events/recorder.py`, `.../service.py`.
 - Configuration (current → near‑term)
-  - Current settings model: `app/core/settings.py:get_settings`.
+  - Current settings model: `app/settings.py:get_settings`.
   - Planned Dynaconf: `DYNACONF_MIGRATION_PLAN.md` (link from Admin Guide until migration lands).
 - App wiring and docs toggle
   - App factory & docs URLs: `app/main.py: create_app`.
@@ -132,3 +132,4 @@
 - Minimal surface (few pages, short files) improves maintenance and reduces drift.
 - GitHub rendering + directory READMEs gives intuitive navigation without extra tooling.
 - Linking to source lines and keeping examples short reduces drift between code and docs.
+

@@ -19,7 +19,7 @@ from .core.db.bootstrap import ensure_database_ready
 from .core.logging import setup_logging
 from .core.message_hub import MessageHub
 from .core.middleware import register_middleware
-from .core.settings import Settings, get_settings
+from .settings import Settings, get_settings
 from .core.task_queue import TaskQueue
 from .documents.router import router as documents_router
 from .health.router import router as health_router

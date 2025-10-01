@@ -20,7 +20,7 @@ from pydantic import (
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import DotEnvSettingsSource, EnvSettingsSource
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 class LenientEnvSettingsSource(EnvSettingsSource):
@@ -545,3 +545,4 @@ def get_app_settings(container: SupportsState) -> Settings:
 
 
 __all__ = ["Settings", "get_settings", "reload_settings", "get_app_settings"]
+

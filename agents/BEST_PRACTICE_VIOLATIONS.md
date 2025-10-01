@@ -28,12 +28,12 @@ The following findings were documented after reviewing the repository against th
 
 ## 3. Expose documentation endpoints only when explicitly enabled *(Resolved)*
 - **Best practice**: Hide the OpenAPI/Swagger docs by default unless the API is public or explicitly toggled on.【F:fastapi-best-practices.md†L609-L625】
-- ✅ **Status**: `Settings.api_docs_enabled` now defaults to `False`, and `create_app` wires documentation URLs only when the flag is set, keeping OpenAPI routes hidden by default.【F:app/core/settings.py†L24-L115】【F:app/main.py†L17-L63】
+- ✅ **Status**: `Settings.api_docs_enabled` now defaults to `False`, and `create_app` wires documentation URLs only when the flag is set, keeping OpenAPI routes hidden by default.【F:app/settings.py†L24-L115】【F:app/main.py†L17-L63】
 - **Notes**: Operators can still force-enable (or disable) docs via `ADE_API_DOCS_ENABLED`; no environment allowlist is involved any more.
 
 ## 4. Split settings by domain instead of one monolithic `BaseSettings`
 - **Best practice**: Break large configuration surfaces into focused `BaseSettings` classes per module or domain to keep concerns isolated and maintainable.【F:fastapi-best-practices.md†L259-L306】
-- **Issue**: `app/core/settings.py` defines a single `Settings` class that mixes environment flags, database tuning, authentication secrets, SSO settings, retention policies, and documentation toggles in one object.【F:app/core/settings.py†L14-L109】
+- **Issue**: `app/settings.py` defines a single `Settings` class that mixes environment flags, database tuning, authentication secrets, SSO settings, retention policies, and documentation toggles in one object.【F:app/settings.py†L14-L109】
 - **Why it matters**: The growing settings surface becomes harder to reason about, test, and override. Following the guide’s approach (e.g., `AuthConfig`, `DatabaseConfig`) would let each module own its configuration, simplify dependency overrides in tests, and prevent unrelated changes from rippling across the entire app configuration.
 - ✅ **Suggested fix** – compose settings from smaller domains:
   ```python
@@ -115,4 +115,5 @@ The following findings were documented after reviewing the repository against th
 ---
 
 _Update this file as issues are resolved so future FastAPI audits can focus on new gaps instead of rediscovering the same problems._
+
 

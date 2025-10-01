@@ -3,7 +3,7 @@
 Administrators install, configure, and operate the Automatic Data Extractor. This guide captures the durable pieces of that workflow while deeper runbooks are drafted.
 
 ## Deployment at a glance
-- ADE is a FastAPI application created in [`app/main.py`](../../app/main.py) with its settings defined in [`app/core/settings.py`](../../app/core/settings.py).
+- ADE is a FastAPI application created in [`app/main.py`](../../app/main.py) with its settings defined in [`app/settings.py`](../../app/settings.py).
 - Development defaults to a single process: `ade start` runs FastAPI with reload enabled and serves the compiled SPA. Use `--rebuild-frontend` when you need to refresh the production bundle before testing, and `--frontend-dir` if the SPA lives outside the default `frontend/` directory. For Vite hot module reload, start `uvicorn` and `npm run dev -- --host` in separate terminals instead.
 - Production deployments build the frontend once (`npm run build`) and serve the static bundle behind the same reverse proxy that forwards API traffic to a managed ASGI process (Uvicorn, Uvicorn+Gunicorn, systemd, or a container orchestrator).
 - Persistent state lives under the `var/` directory by default. SQLite databases and uploaded documents sit beneath `var/db/` and `var/documents/`; both paths can be overridden through environment variables.
@@ -23,3 +23,4 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 Future sections will expand on security hardening, backup procedures, and frontend onboarding once those pieces land. The components listed above are already in place and unlikely to change dramatically.
 
 - [ADE Admin Getting Started Guide](getting_started.md) – local/python vs. Docker workflows, `.env` usage, CLI management, and interim provisioning steps.
+
