@@ -19,7 +19,7 @@
 
 ## Capabilities currently unique to the custom stack
 - Double-submit CSRF baked into every mutating request, bound to ADE's cookie names, allows the frontend to stay stateless and secure without extra middleware (`app/auth/service.py:314`, `app/auth/service.py:379`, `frontend/src/api/auth.ts:10`).
-- Session-aware permission checks can read the enriched `ServiceContext` and custom decorator to combine user, workspace, and permission data—fastapi-users would only recover the user (`app/core/service.py:42`, `app/auth/security.py:182`).
+- Session-aware permission checks can read the enriched `ServiceContext` and custom decorator to combine user, workspace, and permission data; `fastapi-users` would only recover the user (`app/core/service.py:42`, `app/auth/security.py:182`).
 - Detailed API-key telemetry (last seen IP/user agent) feeds auditing and throttling decisions that generic libraries rarely expose (`app/auth/service.py:543`, `app/auth/repository.py:32`).
 - Initial setup flow coordinates database state and admin creation atomically, ensuring ADE can ship without pre-provisioned users (`app/auth/service.py:156`, `app/system/repository.py:13`).
 
@@ -93,6 +93,10 @@ The combined custom surface across `app/auth` and `app/users` is roughly 1,849 L
 - Proceed only if we value standardized user management and future features (email verification, password reset) enough to justify the migration cost.
 - If we continue, start with a proof-of-concept branch that wires fastapi-users for password login while leaving SSO/API keys untouched, measuring the real code delta and behaviour.
 - Alternatively, invest incremental effort in the existing stack (e.g., extracting smaller modules, improving tests) to gain clarity without a heavy migration.
+
+
+
+
 
 
 
