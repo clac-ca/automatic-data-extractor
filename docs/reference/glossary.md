@@ -18,7 +18,7 @@ Versioned extraction logic referenced by jobs. Configuration CRUD endpoints sit 
 A logical tenant boundary enforced by [`app/workspaces`](../../app/workspaces). Workspace identifiers are part of the URL path (for example `/workspaces/{workspace_id}/documents`) so dependencies can scope database queries appropriately.
 
 ## Event
-Immutable audit records persisted by [`app/events`](../../app/events) and the recorder service in [`app/events/recorder.py`](../../app/events/recorder.py). Events track actions across documents, jobs, configurations, and security operations.
+Immutable audit records persisted by [`app/events/recorder.py`](../../app/events/recorder.py) using the repository helpers in [`app/events/repository.py`](../../app/events/repository.py). Events track actions across documents, jobs, configurations, and security operations.
 
 ## API Key
 A long-lived credential provisioned for automation clients via routes in [`app/auth`](../../app/auth). Hashes are stored in the database, and usage is throttled via the `session_last_seen_interval` setting.

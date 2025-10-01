@@ -146,7 +146,7 @@ monorepo/
    - Database helpers (`engine.py`, `session.py`, `bootstrap.py`, `mixins.py`) sit in `app/core/db/` alongside SQLAlchemy base definitions.
 3. **Modules to migrate in this pass**
    - Router-backed features (`auth`, `users`, `workspaces`, `configurations`, `documents`, `jobs`, `results`, `health`) now sit under `app/<feature>` and are imported directly by `app/main.py`.【F:app/auth/router.py†L1-L37】【F:app/users/router.py†L1-L40】【F:app/workspaces/router.py†L1-L49】【F:app/configurations/router.py†L1-L40】【F:app/documents/router.py†L1-L40】【F:app/jobs/router.py†L1-L52】【F:app/results/router.py†L1-L47】【F:app/health/router.py†L1-L27】
-   - Supporting packages without routers (`events`, `system`) supply persistence and services that other modules import and therefore moved alongside the feature-first layout.【F:app/events/service.py†L1-L48】【F:app/system/repository.py†L1-L42】
+   - Supporting packages without routers (`events`, `system`) supply persistence and services that other modules import and therefore moved alongside the feature-first layout.【F:app/events/recorder.py†L1-L64】【F:app/system/repository.py†L1-L42】
 4. **Alembic & migrations**
    - Migration environment relocated to `app/alembic/`; repository-level `alembic.ini` points there.【F:app/alembic/env.py†L1-L48】
 5. **CLI**
