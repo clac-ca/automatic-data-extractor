@@ -8,7 +8,7 @@ from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 
-from .settings import Settings
+from app.settings import Settings
 
 _CORRELATION_ID: ContextVar[str | None] = ContextVar("ade_correlation_id", default=None)
 _STANDARD_ATTRS = {
@@ -113,3 +113,4 @@ __all__ = [
     "clear_request_context",
     "setup_logging",
 ]
+

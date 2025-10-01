@@ -8,7 +8,7 @@ from typing import Annotated, Any
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ..settings import Settings, get_app_settings, get_settings
+from app.settings import Settings, get_app_settings, get_settings
 from .engine import engine_cache_key, get_engine
 
 _SESSION_FACTORY: async_sessionmaker[AsyncSession] | None = None

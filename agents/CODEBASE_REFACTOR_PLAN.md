@@ -142,7 +142,7 @@ monorepo/
    - FastAPI now lives entirely in `app/main.py`, which mounts feature routers directly without the old `app/api.py` aggregator.【F:app/main.py†L1-L95】
    - Lifespan, middleware, and dependency injection are provided by modules in `app/core/` and each feature package's `dependencies.py`.
 2. **Core services & configuration**
-   - Settings live in `app/core/settings.py` using `pydantic-settings` and `.env` support.【F:app/core/settings.py†L49-L200】
+   - Settings live in `app/settings.py` using `pydantic-settings` and `.env` support.【F:app/settings.py†L49-L200】
    - Database helpers (`engine.py`, `session.py`, `bootstrap.py`, `mixins.py`) sit in `app/core/db/` alongside SQLAlchemy base definitions.
 3. **Modules to migrate in this pass**
    - Router-backed features (`auth`, `users`, `workspaces`, `configurations`, `documents`, `jobs`, `results`, `health`) now sit under `app/<feature>` and are imported directly by `app/main.py`.【F:app/auth/router.py†L1-L37】【F:app/users/router.py†L1-L40】【F:app/workspaces/router.py†L1-L49】【F:app/configurations/router.py†L1-L40】【F:app/documents/router.py†L1-L40】【F:app/jobs/router.py†L1-L52】【F:app/results/router.py†L1-L47】【F:app/health/router.py†L1-L27】
@@ -271,7 +271,7 @@ Use a single scripted pass so that local dev and CI share the exact steps.
 ## 7. Testing & verification plan
 1. Update imports throughout `tests/**` to reference `app.*`.
 2. Adjust `pyproject.toml` `tool.pytest.ini_options` to set `testpaths = ["tests"]` and coverage targets to `app`.
-3. Validate fixtures that previously targeted the legacy settings module now use `app.core.settings`.
+3. Validate fixtures that previously targeted the legacy settings module now use `app.settings`.
 4. Smoke tests post-migration:
    - `GET /` returns 200 with SPA markup
    - `GET /static/<asset>` serves built JS/CSS
@@ -307,4 +307,7 @@ Use a single scripted pass so that local dev and CI share the exact steps.
    - **Migration day (1 day)**: run script to move packages, adjust imports, update configs/tests, run build script
    - **Verification (0.5 day)**: run full lint/type/test suite, build wheel, smoke-test CLI + SPA serving
    - **Stabilisation (0.5 day)**: polish docs, ensure dormant modules documented, prepare release notes
+
+
+
 

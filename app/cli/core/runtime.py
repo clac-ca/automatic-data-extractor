@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db.bootstrap import ensure_database_ready
 from app.core.db.session import get_sessionmaker
-from app.core.settings import Settings, get_settings
+from app.settings import Settings, get_settings
 
 __all__ = [
     "load_settings",

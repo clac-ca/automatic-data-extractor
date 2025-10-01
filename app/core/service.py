@@ -9,7 +9,7 @@ from typing import Annotated, Any, TypeVar
 from fastapi import Depends, Request
 
 from .db.session import get_session
-from .settings import Settings, get_app_settings
+from app.settings import Settings, get_app_settings
 from .message_hub import MessageHub
 from .task_queue import TaskQueue
 
@@ -231,3 +231,4 @@ __all__ = [
     "get_service_context",
     "service_dependency",
 ]
+
