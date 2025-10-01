@@ -20,6 +20,15 @@
   line-height: 1.5;
 }
 
+.auth-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 6rem;
+  font-size: 1rem;
+  color: #475569;
+}
+
 .auth-screen,
 .dashboard {
   min-height: 100vh;
