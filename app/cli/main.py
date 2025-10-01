@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import sys
 from collections.abc import Sequence
+from typing import Callable
 
 from fastapi import HTTPException
 
 from .app import build_cli_app
+
+EXIT_SUCCESS = 0
+EXIT_FAILURE = 1
+
+Handler = Callable[[argparse.Namespace], object | None]
 
 __all__ = ["main"]
 
@@ -22,35 +29,49 @@ def _format_http_detail(exc: HTTPException) -> str:
     return str(detail)
 
 
+def _emit_error(message: str) -> None:
+    """Write ``message`` to stderr with a consistent prefix."""
+
+    print(f"Error: {message}", file=sys.stderr)
+
+
+def _run_handler(handler: Handler, args: argparse.Namespace) -> None:
+    """Execute ``handler`` and await it when it returns a coroutine."""
+
+    result = handler(args)
+    if asyncio.iscoroutine(result):
+        asyncio.run(result)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Execute the CLI and return an exit code."""
 
+    # Build the parser and process CLI input.
     parser = build_cli_app()
     args = parser.parse_args(argv)
+
+    # Each subcommand attaches a handler; fall back to help when missing.
     handler = getattr(args, "handler", None)
     if handler is None:
         parser.print_help()
-        return 1
+        return EXIT_FAILURE
 
     try:
-        result = handler(args)
-        if asyncio.iscoroutine(result):
-            asyncio.run(result)
+        _run_handler(handler, args)
     except HTTPException as exc:
-        message = _format_http_detail(exc)
-        print(f"Error: {message}", file=sys.stderr)
-        return 1
+        _emit_error(_format_http_detail(exc))
+        return EXIT_FAILURE
     except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
+        _emit_error(str(exc))
+        return EXIT_FAILURE
     except KeyboardInterrupt:
-        print("Aborted", file=sys.stderr)
-        return 1
+        _emit_error("Aborted")
+        return EXIT_FAILURE
     except Exception as exc:  # pragma: no cover - defensive catch-all
-        print(f"Unexpected error: {exc}", file=sys.stderr)
-        return 1
+        _emit_error(f"Unexpected error: {exc}")
+        return EXIT_FAILURE
 
-    return 0
+    return EXIT_SUCCESS
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution path
