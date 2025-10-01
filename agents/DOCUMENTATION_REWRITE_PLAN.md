@@ -55,7 +55,7 @@
 - Results
   - Tables by job/document: `app/results/router.py`.
 - Events
-  - Recording and dispatch: `app/events/recorder.py`, `.../service.py`.
+  - Recording helpers: `app/events/recorder.py`.
 - Configuration (current → near‑term)
   - Current settings model: `app/settings.py:get_settings`.
   - Planned Dynaconf: `DYNACONF_MIGRATION_PLAN.md` (link from Admin Guide until migration lands).

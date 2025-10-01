@@ -1,11 +1,6 @@
-"""Events module providing persistence and query helpers."""
+"""Public import surface for event persistence helpers."""
 
-from .dependencies import get_events_service
-from .schemas import EventRecord
-from .service import EventsService
+from .recorder import persist_event
 
-__all__ = [
-    "EventsService",
-    "EventRecord",
-    "get_events_service",
-]
+__all__ = ["persist_event"]
+

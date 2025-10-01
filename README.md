@@ -112,7 +112,7 @@ ADE follows a feature-first layout inside the `app/` package:
 - [`app/jobs`](app/jobs) – submission, status tracking, and background execution via the in-process task queue.
 - [`app/results`](app/results) – table retrieval by job or document identifier.
 - [`app/workspaces`](app/workspaces) – routing helpers and dependencies that enforce workspace-scoped URLs.
-- [`app/events`](app/events) – immutable audit trail with workspace scoping.
+- [`app/events`](app/events) – persistence helpers (recorder and repository) for immutable audit logs.
 - [`app/configurations`](app/configurations) – feature flags and per-workspace configuration records.
 - [`app/users`](app/users) – identity management, roles, and repositories shared across features.
 
