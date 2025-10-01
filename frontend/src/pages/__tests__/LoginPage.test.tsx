@@ -8,8 +8,6 @@ import LoginPage from '../LoginPage'
 const mockLogin = vi.fn<Promise<UserProfile>, [string, string]>()
 const mockCompleteInitialSetup = vi.fn<Promise<UserProfile>, [InitialSetupPayload]>()
 const mockNavigate = vi.fn()
-const mockLogout = vi.fn<Promise<void>, []>()
-const mockRefresh = vi.fn<Promise<void>, []>()
 const mockCheckInitialSetupStatus = vi.fn<Promise<boolean>, []>()
 
 vi.mock('../../context/AuthContext', () => ({
@@ -18,8 +16,7 @@ vi.mock('../../context/AuthContext', () => ({
     loading: false,
     error: null,
     login: mockLogin,
-    logout: mockLogout,
-    refreshSession: mockRefresh,
+    logout: vi.fn(),
     completeInitialSetup: mockCompleteInitialSetup,
     checkInitialSetupStatus: mockCheckInitialSetupStatus,
   }),

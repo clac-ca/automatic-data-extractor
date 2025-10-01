@@ -5,7 +5,6 @@ import userEvent from '@testing-library/user-event'
 import DashboardPage from '../DashboardPage'
 
 const mockLogout = vi.fn<Promise<void>, []>()
-const mockRefresh = vi.fn<Promise<void>, []>()
 
 vi.mock('../../context/AuthContext', () => ({
   useAuth: () => ({
@@ -19,7 +18,6 @@ vi.mock('../../context/AuthContext', () => ({
     error: null,
     logout: mockLogout,
     login: vi.fn(),
-    refreshSession: mockRefresh,
   }),
 }))
 
