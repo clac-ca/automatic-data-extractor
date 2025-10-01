@@ -3,32 +3,23 @@
 from __future__ import annotations
 
 import argparse
-import shutil
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DIST = PROJECT_ROOT / "frontend" / "dist"
-DEFAULT_STATIC = PROJECT_ROOT / "app" / "static"
+from app.main import (
+    DEFAULT_FRONTEND_DIR,
+    FRONTEND_BUILD_DIRNAME,
+    STATIC_DIR,
+    sync_frontend_assets,
+)
 
-
-def _clean_directory(path: Path) -> None:
-    if not path.exists():
-        path.mkdir(parents=True, exist_ok=True)
-        return
-    for entry in path.iterdir():
-        if entry.is_dir():
-            shutil.rmtree(entry)
-        else:
-            entry.unlink()
+DEFAULT_DIST = DEFAULT_FRONTEND_DIR / FRONTEND_BUILD_DIRNAME
+DEFAULT_STATIC = STATIC_DIR
 
 
 def copy_frontend_build(src: Path, dest: Path) -> None:
-    if not src.exists():
-        raise FileNotFoundError(f"Frontend build directory not found at {src}")
-    if not src.is_dir():
-        raise NotADirectoryError(f"Frontend build path {src} is not a directory")
-    _clean_directory(dest)
-    shutil.copytree(src, dest, dirs_exist_ok=True)
+    """Mirror ``src`` contents into ``dest`` using the application helper."""
+
+    sync_frontend_assets(src, dest)
 
 
 def main() -> None:
