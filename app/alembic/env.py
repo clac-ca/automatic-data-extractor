@@ -10,7 +10,7 @@ from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine import make_url
 
 from app.core.db.engine import render_sync_url
-from app.settings import get_settings
+from app.core.config import get_settings
 from app.models import metadata
 
 config = context.config

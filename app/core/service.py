@@ -9,7 +9,7 @@ from typing import Annotated, Any, TypeVar
 from fastapi import Depends, Request
 
 from .db.session import get_session
-from app.settings import Settings, get_app_settings
+from app.core.config import Settings, get_settings
 from .message_hub import MessageHub
 from .task_queue import TaskQueue
 
@@ -179,7 +179,7 @@ def get_service_context(
 ) -> ServiceContext:
     """Aggregate settings and request data for service instantiation."""
 
-    settings = get_app_settings(request.app)
+    settings = get_settings()
     session: AsyncSession | None = getattr(request.state, "db_session", None)
     user = getattr(request.state, "current_user", None)
     workspace = getattr(request.state, "current_workspace", None)

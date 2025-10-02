@@ -9,7 +9,7 @@ obscured defaults and required call sites to reach for custom properties.
 ## Outcome
 - Rewrote `Settings` with grouped field names, first-class Pydantic types, and
   defaults that create runtime directories automatically while keeping access to
-  the unwrapped JWT secret for token signing.【F:app/settings.py†L28-L460】
+  the unwrapped JWT secret for token signing.【F:app/core/config.py†L28-L460】
 - Updated services and CLI helpers to consume `storage_documents_dir`
   directly, reflecting the concrete directory returned by the new settings
   contract.【F:app/documents/service.py†L1-L83】【F:app/jobs/service.py†L1-L118】【F:app/cli/commands/reset.py†L1-L87】

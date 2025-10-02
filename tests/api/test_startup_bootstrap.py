@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from app.settings import Settings
+from app.core.config import Settings
 from app.main import create_app
 
 
