@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Callable, ClassVar, Literal, Protocol, runtime_checkable
+from typing import Any, ClassVar, Literal, Protocol, cast, runtime_checkable
 
 from pydantic import (
     AnyHttpUrl,
@@ -14,40 +15,35 @@ from pydantic import (
     Field,
     SecretStr,
     TypeAdapter,
+    ValidationInfo,
     field_validator,
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic_settings.sources import DotEnvSettingsSource, EnvSettingsSource
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
-
-class LenientEnvSettingsSource(EnvSettingsSource):
-    """Environment source that tolerates non-JSON list values."""
-
-    def decode_complex_value(self, field_name: str, field: Any, value: str) -> Any:
-        try:
-            return super().decode_complex_value(field_name, field, value)
-        except json.JSONDecodeError:
-            return value
-
-
-class LenientDotEnvSettingsSource(DotEnvSettingsSource):
-    """Dotenv source that tolerates non-JSON list values."""
-
-    def decode_complex_value(self, field_name: str, field: Any, value: str) -> Any:
-        try:
-            return super().decode_complex_value(field_name, field, value)
-        except json.JSONDecodeError:
-            return value
-
+DEFAULT_DATA_DIR = PROJECT_ROOT / "var"
+DEFAULT_DOCUMENTS_DIR = DEFAULT_DATA_DIR / "documents"
+DEFAULT_PUBLIC_URL: AnyHttpUrl = TypeAdapter(AnyHttpUrl).validate_python(
+    "http://localhost:8000"
+)
 
 LogLevel = Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"]
 
 
 class Settings(BaseSettings):
     """FastAPI configuration loaded from environment variables."""
+
+    model_config: ClassVar[SettingsConfigDict] = cast(
+        SettingsConfigDict,
+        {
+            "env_file": ".env",
+            "env_prefix": "ADE_",
+            "case_sensitive": False,
+            "extra": "ignore",
+            "parse_env_var": "_parse_env_var",
+        },
+    )
 
     _DURATION_UNITS: ClassVar[dict[str, int]] = {
         "s": 1,
@@ -74,20 +70,20 @@ class Settings(BaseSettings):
         re.IGNORECASE,
     )
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_prefix="ADE_",
-        case_sensitive=False,
-        extra="ignore",
-        populate_by_name=True,
-        parse_env_var="_parse_env_var",
-    )
-
     debug: bool = Field(default=False, description="Enable FastAPI debug mode.")
-    dev_mode: bool = Field(default=False, description="Enable developer-focused behaviours (hot reloading, verbose errors).")
-    app_name: str = Field(default="Automatic Data Extractor API", description="Human readable API name.")
+    dev_mode: bool = Field(
+        default=False,
+        description="Enable developer-focused behaviours (hot reloading, verbose errors).",
+    )
+    app_name: str = Field(
+        default="Automatic Data Extractor API",
+        description="Human readable API name.",
+    )
     app_version: str = Field(default="0.1.0", description="API version string.")
-    api_docs_enabled: bool = Field(default=False, description="Expose interactive API documentation endpoints.")
+    api_docs_enabled: bool = Field(
+        default=False,
+        description="Expose interactive API documentation endpoints.",
+    )
     docs_url: str = Field(default="/docs", description="Swagger UI mount point.")
     redoc_url: str = Field(default="/redoc", description="ReDoc mount point.")
     openapi_url: str = Field(default="/openapi.json", description="OpenAPI schema endpoint.")
@@ -107,22 +103,23 @@ class Settings(BaseSettings):
         description="Port that the uvicorn server listens on.",
     )
     server_public_url: AnyHttpUrl = Field(
-        default="http://localhost:8000",
+        default=DEFAULT_PUBLIC_URL,
         description="Public origin clients use to reach the backend (scheme + host + optional port).",
-    )
-
-    storage_data_dir: DirectoryPath = Field(
-        default=PROJECT_ROOT / "var",
-        validate_default=True,
-        description="Directory for writable backend data (database, caches, generated artefacts).",
-    )
-    storage_documents_dir: DirectoryPath | None = Field(
-        default=None,
-        description="Directory for uploaded documents and derived files.",
     )
     server_cors_origins: list[AnyHttpUrl] = Field(
         default_factory=list,
         description="Additional allowed CORS origins (comma/whitespace list or JSON array).",
+    )
+
+    storage_data_dir: DirectoryPath = Field(
+        default=DEFAULT_DATA_DIR,
+        validate_default=True,
+        description="Directory for writable backend data (database, caches, generated artefacts).",
+    )
+    storage_documents_dir: DirectoryPath = Field(
+        default=DEFAULT_DOCUMENTS_DIR,
+        validate_default=True,
+        description="Directory for uploaded documents and derived files.",
     )
 
     database_dsn: str = Field(
@@ -232,64 +229,9 @@ class Settings(BaseSettings):
 
     @classmethod
     def _parse_env_var(cls, field_name: str, raw_value: str) -> Any:
-        """Return raw environment values so validators can normalise formats."""
+        """Return raw environment values so field validators can normalise them."""
 
         return raw_value
-
-    @classmethod
-    def _prepare_env_data(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Normalise complex environment values before validation."""
-
-        if "server_cors_origins" in values:
-            values["server_cors_origins"] = cls._parse_cors(values["server_cors_origins"])
-        if "oidc_scopes" in values:
-            values["oidc_scopes"] = cls._parse_scopes(values["oidc_scopes"])
-        return values
-
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: Callable[..., dict[str, Any]],
-        env_settings: Callable[..., dict[str, Any]],
-        dotenv_settings: Callable[..., dict[str, Any]],
-        file_secret_settings: Callable[..., dict[str, Any]],
-    ) -> tuple[Callable[..., dict[str, Any]], ...]:
-        """Ensure complex env vars stay compatible with flat ADE_* names."""
-
-        env_source = LenientEnvSettingsSource(
-            settings_cls,
-            case_sensitive=cls.model_config.get("case_sensitive"),
-            env_prefix=cls.model_config.get("env_prefix"),
-            env_nested_delimiter=cls.model_config.get("env_nested_delimiter"),
-            env_ignore_empty=cls.model_config.get("env_ignore_empty"),
-            env_parse_none_str=cls.model_config.get("env_parse_none_str"),
-            env_parse_enums=cls.model_config.get("env_parse_enums"),
-        )
-        dotenv_source = LenientDotEnvSettingsSource(
-            settings_cls,
-            env_file=cls.model_config.get("env_file"),
-            env_file_encoding=cls.model_config.get("env_file_encoding"),
-            case_sensitive=cls.model_config.get("case_sensitive"),
-            env_prefix=cls.model_config.get("env_prefix"),
-            env_nested_delimiter=cls.model_config.get("env_nested_delimiter"),
-            env_ignore_empty=cls.model_config.get("env_ignore_empty"),
-            env_parse_none_str=cls.model_config.get("env_parse_none_str"),
-            env_parse_enums=cls.model_config.get("env_parse_enums"),
-        )
-
-        def _env_settings() -> dict[str, Any]:
-            return cls._prepare_env_data(env_source())
-
-        def _dotenv_settings() -> dict[str, Any]:
-            return cls._prepare_env_data(dotenv_source())
-
-        return (
-            init_settings,
-            _env_settings,
-            _dotenv_settings,
-            file_secret_settings,
-        )
 
     @staticmethod
     def _ensure_directory(path_value: Any) -> Path:
@@ -313,7 +255,7 @@ class Settings(BaseSettings):
             match = cls._DURATION_PATTERN.match(candidate)
             if not match:
                 raise ValueError(
-                    "Duration must be numeric seconds or a value like '15m', '1h', or '30 minutes'"
+                    "Duration must be numeric seconds or a value like '15m', '1h', or '30 minutes'",
                 )
             number = float(match.group("value"))
             unit = match.group("unit")
@@ -323,7 +265,7 @@ class Settings(BaseSettings):
                 multiplier = cls._DURATION_UNITS.get(unit.lower())
                 if multiplier is None:
                     raise ValueError(
-                        "Unsupported duration unit. Use seconds (s), minutes (m), hours (h), or days (d)."
+                        "Unsupported duration unit. Use seconds (s), minutes (m), hours (h), or days (d).",
                     )
                 seconds = number * multiplier
         else:
@@ -355,7 +297,7 @@ class Settings(BaseSettings):
                     parsed = json.loads(raw)
                 except json.JSONDecodeError as exc:
                     raise ValueError(
-                        "server_cors_origins must be a JSON array or comma separated list"
+                        "server_cors_origins must be a JSON array or comma separated list",
                     ) from exc
                 if not isinstance(parsed, list):
                     raise ValueError("server_cors_origins JSON payload must be a list")
@@ -434,10 +376,10 @@ class Settings(BaseSettings):
                 raise ValueError("oidc_scopes must not be empty")
             return sorted(set(tokens))
         if isinstance(value, (list, tuple, set)):
-            tokens = {str(item).strip() for item in value if str(item).strip()}
-            if not tokens:
+            unique_tokens = {str(item).strip() for item in value if str(item).strip()}
+            if not unique_tokens:
                 raise ValueError("oidc_scopes must not be empty")
-            return sorted(tokens)
+            return sorted(unique_tokens)
         raise TypeError("oidc_scopes must be provided as a string or list of strings")
 
     @field_validator(
@@ -458,19 +400,23 @@ class Settings(BaseSettings):
 
     @field_validator("storage_documents_dir", mode="before")
     @classmethod
-    def _prepare_documents_dir(cls, value: Any) -> Path | None:
+    def _prepare_documents_dir(cls, value: Any, info: ValidationInfo) -> Path:
         if value is None or value == "":
-            return None
+            base_dir = info.data.get("storage_data_dir") or DEFAULT_DATA_DIR
+            return Settings._ensure_directory(Path(base_dir) / DEFAULT_DOCUMENTS_DIR.name)
+        if (
+            isinstance(value, Path)
+            and value == DEFAULT_DOCUMENTS_DIR
+            and os.getenv("ADE_STORAGE_DOCUMENTS_DIR") is None
+        ):
+            base_dir = info.data.get("storage_data_dir") or DEFAULT_DATA_DIR
+            return Settings._ensure_directory(Path(base_dir) / DEFAULT_DOCUMENTS_DIR.name)
         return Settings._ensure_directory(value)
 
     @model_validator(mode="after")
     def _finalise(self) -> Settings:
         directory_adapter = TypeAdapter(DirectoryPath)
-        documents_dir = self.storage_documents_dir
-        if documents_dir is None:
-            documents_dir = Settings._ensure_directory(
-                self.storage_data_dir / "documents"
-            )
+        documents_dir = Settings._ensure_directory(self.storage_documents_dir)
         self.storage_documents_dir = directory_adapter.validate_python(documents_dir)
 
         adapter = TypeAdapter(list[AnyHttpUrl])
@@ -498,10 +444,7 @@ class Settings(BaseSettings):
             raise ValueError(
                 "oidc_enabled is true but required OIDC settings are missing"
             )
-        if len(provided) == len(oidc_fields):
-            self.oidc_enabled = True
-        else:
-            self.oidc_enabled = False
+        self.oidc_enabled = len(provided) == len(oidc_fields)
 
         return self
 
@@ -510,7 +453,6 @@ class Settings(BaseSettings):
         """Return the plain JWT secret value."""
 
         return self.jwt_secret.get_secret_value()
-
 
 
 def get_settings() -> Settings:
@@ -545,4 +487,3 @@ def get_app_settings(container: SupportsState) -> Settings:
 
 
 __all__ = ["Settings", "get_settings", "reload_settings", "get_app_settings"]
-

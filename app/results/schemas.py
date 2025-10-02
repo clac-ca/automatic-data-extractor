@@ -7,6 +7,21 @@ from pydantic import Field
 from app.core.schema import BaseSchema
 
 
+class JobResultsUnavailableDetail(BaseSchema):
+    """Structured payload when job results are not yet accessible."""
+
+    error: str
+    job_id: str
+    status: str
+    message: str
+
+
+class JobResultsUnavailableMessage(BaseSchema):
+    """Error envelope for :class:`JobResultsUnavailableDetail`."""
+
+    detail: JobResultsUnavailableDetail
+
+
 class ExtractedTableRecord(BaseSchema):
     """Serialised representation of an extracted table."""
 
@@ -27,4 +42,8 @@ class ExtractedTableRecord(BaseSchema):
     updated_at: str
 
 
-__all__ = ["ExtractedTableRecord"]
+__all__ = [
+    "ExtractedTableRecord",
+    "JobResultsUnavailableDetail",
+    "JobResultsUnavailableMessage",
+]

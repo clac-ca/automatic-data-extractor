@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any
+from enum import Enum
+from typing import Any, cast
 
 from fastapi import APIRouter
 
@@ -20,7 +21,8 @@ def workspace_scoped_router(
         normalized = f"/{normalized}"
 
     prefix = f"/workspaces/{{workspace_id}}{normalized}"
-    return APIRouter(prefix=prefix, tags=tags, **router_kwargs)
+    router_tags = cast(list[str | Enum] | None, tags)
+    return APIRouter(prefix=prefix, tags=router_tags, **router_kwargs)
 
 
 __all__ = ["workspace_scoped_router"]

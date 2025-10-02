@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends, Path, Request
+from fastapi import Depends, HTTPException, Path, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.service import service_dependency
@@ -41,6 +41,21 @@ async def bind_workspace_context(
     return selection
 
 
+async def require_workspace_context(
+    workspace_id: WorkspacePath,
+    selection: WorkspaceContext = Depends(bind_workspace_context),
+) -> WorkspaceContext:
+    """Return the active workspace context and validate the path parameter."""
+
+    resolved_id = selection.workspace.workspace_id
+    if resolved_id != workspace_id:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Workspace path does not match the active selection",
+        )
+    return selection
+
+
 async def list_user_workspaces(
     current_user: UserDependency,
     session: SessionDependency,
@@ -54,5 +69,6 @@ async def list_user_workspaces(
 __all__ = [
     "bind_workspace_context",
     "get_workspaces_service",
+    "require_workspace_context",
     "list_user_workspaces",
 ]

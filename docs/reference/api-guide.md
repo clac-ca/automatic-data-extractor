@@ -57,14 +57,12 @@ Track the immutable audit trail for compliance and debugging.
 
 ## Error handling
 
-ADE follows standard HTTP semantics. When a request fails, the response includes:
+ADE follows standard HTTP semantics and FastAPI's default error envelope. Every non-2xx response returns a JSON document with a `detail` field:
 
-- `status` – HTTP status code (e.g., `400`, `404`, `500`).
-- `code` – ADE-specific error identifier for programmatic handling.
-- `message` – human-readable description of what went wrong.
-- `details` – optional field containing validation errors or contextual information.
+- For most validation, authentication, and permission failures the `detail` value is a string describing the problem (for example `"Authentication required"` or `"Workspace slug already in use"`).
+- Some operations include structured details for easier automation. Job submission failures return `{"detail": {"error": "job_failed", "job_id": "...", "message": "..."}}`, while job result lookups that are still pending return `{"detail": {"error": "job_results_unavailable", "job_id": "...", "status": "processing", "message": "..."}}`.
 
-Implement retry logic for `429 Too Many Requests` and `5xx` status codes with exponential backoff. Validation errors (`422`) should be fixed before retrying.
+Use the HTTP status code to drive retry behaviour—`5xx` and `429` responses merit exponential backoff, whereas `4xx` errors require user action before retrying. Validation errors (`422`) and conflict responses (`409`) intentionally provide enough context in the `detail` payload to help clients resolve the issue.
 
 ## Webhooks and callbacks
 

@@ -51,6 +51,25 @@ class WorkspacesRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_membership_for_workspace(
+        self, *, membership_id: str, workspace_id: str
+    ) -> WorkspaceMembership | None:
+        stmt = (
+            select(WorkspaceMembership)
+            .options(
+                selectinload(WorkspaceMembership.workspace),
+                selectinload(WorkspaceMembership.user),
+            )
+            .where(
+                and_(
+                    WorkspaceMembership.id == membership_id,
+                    WorkspaceMembership.workspace_id == workspace_id,
+                )
+            )
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def get_default_membership(self, *, user_id: str) -> WorkspaceMembership | None:
         stmt = (
             select(WorkspaceMembership)

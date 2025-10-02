@@ -16,6 +16,12 @@ from app.configurations.models import Configuration
 from app.documents.service import DocumentsService
 from app.jobs.exceptions import JobExecutionError
 from app.jobs.models import Job
+from app.jobs.processor import (
+    JobProcessorRequest,
+    JobProcessorResult,
+    get_job_processor,
+    set_job_processor,
+)
 from app.jobs.service import JobsService
 from app.results.models import ExtractedTable
 
@@ -162,3 +168,76 @@ async def test_submit_job_records_failure_and_raises() -> None:
         )
         tables = result.scalars().all()
         assert not tables
+
+
+@pytest.mark.asyncio
+async def test_custom_processor_override_returns_typed_payload() -> None:
+    """Overriding the processor hook should drive job execution with typed results."""
+
+    settings = get_settings()
+    hub = MessageHub()
+    session_factory = get_sessionmaker()
+
+    async with session_factory() as session:
+        context = ServiceContext(
+            settings=settings,
+            session=session,
+            message_hub=hub,
+            user=SimpleNamespace(id="user-3", email="user3@example.com"),
+            workspace=SimpleNamespace(workspace_id="workspace-3"),
+        )
+
+        documents_service = DocumentsService(context=context)
+        upload = UploadFile(
+            filename="input.txt",
+            file=BytesIO(b"payload"),
+            headers=Headers({"content-type": "text/plain"}),
+        )
+        document_record = await documents_service.create_document(upload=upload)
+
+        result = await session.execute(
+            select(func.max(Configuration.version)).where(
+                Configuration.document_type == "invoice"
+            )
+        )
+        next_version = (result.scalar_one_or_none() or 0) + 1
+        configuration = Configuration(
+            document_type="invoice",
+            title="Custom processor configuration",
+            version=next_version,
+            is_active=False,
+            activated_at=None,
+            payload={},
+        )
+        session.add(configuration)
+        await session.flush()
+
+        jobs_service = JobsService(context=context)
+
+        previous_processor = get_job_processor()
+
+        def _custom_processor(request: JobProcessorRequest) -> JobProcessorResult:
+            return JobProcessorResult(
+                status="succeeded",
+                tables=[{"name": "stub", "rows": []}],
+                metrics={"custom": True},
+                logs=[{"ts": "2024-01-01T00:00:00Z", "level": "info", "message": "ok"}],
+            )
+
+        set_job_processor(_custom_processor)
+        try:
+            record = await jobs_service.submit_job(
+                input_document_id=document_record.document_id,
+                configuration_id=str(configuration.id),
+            )
+        finally:
+            set_job_processor(previous_processor)
+
+        assert record.metrics["custom"] is True
+        assert record.status == "succeeded"
+
+        result = await session.execute(
+            select(ExtractedTable).where(ExtractedTable.job_id == record.job_id)
+        )
+        tables = result.scalars().all()
+        assert len(tables) == 1

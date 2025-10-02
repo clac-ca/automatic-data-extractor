@@ -15,7 +15,6 @@ urls = { "Repository" = "https://github.com/your-org/automatic-data-extractor" }
 # Runtime deps — pinned for reproducible builds
 dependencies = [
   "fastapi==0.117.0",
-  "fastapi-utils==0.8.0",
   "uvicorn[standard]==0.36.0",
   "sqlalchemy==2.0.43",
   "alembic==1.16.5",

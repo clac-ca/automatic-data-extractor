@@ -35,4 +35,10 @@ class BaseSchema(BaseModel):
         return self.model_dump_json(exclude_none=exclude_none, by_alias=by_alias).encode("utf-8")
 
 
-__all__ = ["BaseSchema"]
+class ErrorMessage(BaseSchema):
+    """Standard error envelope mirroring FastAPI's ``{"detail": ...}`` payload."""
+
+    detail: str
+
+
+__all__ = ["BaseSchema", "ErrorMessage"]
