@@ -22,7 +22,7 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
 
 @pytest.mark.usefixtures("_configure_database")
 def test_user_and_api_key_workflow(tmp_path: Path) -> None:
-    email = f"cli-{uuid4().hex}@example.com"
+    email = f"cli-{uuid4().hex}@example.test"
 
     created = _run_cli(
         "users",
@@ -110,7 +110,7 @@ def test_user_identifier_validation_errors() -> None:
         "deactivate",
         "user-123",
         "--email",
-        "user@example.com",
+        "user@example.test",
     )
     assert both_identifiers.returncode == 1
     assert "Specify either a user ID" in both_identifiers.stderr

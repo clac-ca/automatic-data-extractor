@@ -20,7 +20,7 @@ async def test_create_and_list_service_accounts() -> None:
         repo = UsersRepository(session)
 
         human = await repo.create(
-            email=f"{uuid4().hex}@example.com",
+            email=f"{uuid4().hex}@example.test",
             password_hash="secret",
         )
 

@@ -135,12 +135,12 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
         orphan_password = "orphan-password"
         invitee_password = "invitee-password"
 
-        admin_email = f"admin+{workspace_slug}@example.com"
-        workspace_owner_email = f"owner+{workspace_slug}@example.com"
-        member_email = f"member+{workspace_slug}@example.com"
-        member_manage_email = f"member-manage+{workspace_slug}@example.com"
-        orphan_email = f"orphan+{workspace_slug}@example.com"
-        invitee_email = f"invitee+{workspace_slug}@example.com"
+        admin_email = f"admin+{workspace_slug}@example.test"
+        workspace_owner_email = f"owner+{workspace_slug}@example.test"
+        member_email = f"member+{workspace_slug}@example.test"
+        member_manage_email = f"member-manage+{workspace_slug}@example.test"
+        orphan_email = f"orphan+{workspace_slug}@example.test"
+        invitee_email = f"invitee+{workspace_slug}@example.test"
 
         admin = User(
             email=admin_email,

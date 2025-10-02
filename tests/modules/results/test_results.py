@@ -24,19 +24,24 @@ async def _login(client: AsyncClient, email: str, password: str) -> str:
 
 
 async def _create_configuration(
-    *, payload: dict[str, Any] | None = None, document_type: str = "invoice"
+    *,
+    workspace_id: str,
+    payload: dict[str, Any] | None = None,
+    document_type: str = "invoice",
 ) -> str:
     session_factory = get_sessionmaker()
     async with session_factory() as session:
         result = await session.execute(
             select(func.max(Configuration.version)).where(
-                Configuration.document_type == document_type
+                Configuration.workspace_id == workspace_id,
+                Configuration.document_type == document_type,
             )
         )
         next_version = result.scalar_one_or_none() or 0
         version = next_version + 1
 
         configuration = Configuration(
+            workspace_id=workspace_id,
             document_type=document_type,
             title="Test configuration",
             version=version,
@@ -75,8 +80,10 @@ async def test_results_end_to_end(
     seed_identity: dict[str, Any],
 ) -> None:
     """Upload → job → results should expose stored tables for succeeded jobs."""
+    workspace_id = seed_identity["workspace_id"]
 
     configuration_id = await _create_configuration(
+        workspace_id=workspace_id,
         payload={
             "tables": [
                 {
@@ -193,7 +200,9 @@ async def test_job_tables_failed_job_returns_409(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
 ) -> None:
+    workspace_id = seed_identity["workspace_id"]
     configuration_id = await _create_configuration(
+        workspace_id=workspace_id,
         payload={
             "simulate_failure": True,
             "failure_message": "Stub failure",
@@ -201,7 +210,6 @@ async def test_job_tables_failed_job_returns_409(
     )
 
     actor = seed_identity["workspace_owner"]
-    workspace_id = seed_identity["workspace_id"]
     await _grant_permissions(
         actor["id"],
         workspace_id,
@@ -249,7 +257,10 @@ async def test_document_tables_deleted_document_returns_404(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
 ) -> None:
-    configuration_id = await _create_configuration()
+    workspace_id = seed_identity["workspace_id"]
+    configuration_id = await _create_configuration(
+        workspace_id=workspace_id,
+    )
 
     actor = seed_identity["workspace_owner"]
     workspace_id = seed_identity["workspace_id"]

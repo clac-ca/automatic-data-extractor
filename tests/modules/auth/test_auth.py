@@ -71,7 +71,7 @@ async def test_invalid_credentials_rejected(async_client: AsyncClient) -> None:
 
     response = await async_client.post(
         "/api/auth/login",
-        json={"email": "missing@example.com", "password": "nope"},
+        json={"email": "missing@example.test", "password": "nope"},
     )
     assert response.status_code == 401
 
@@ -82,7 +82,7 @@ async def test_invalid_credentials_rejected(async_client: AsyncClient) -> None:
     [
         ("", "secret", {"Email must not be empty"}),
         ("   ", "secret", {"Email must not be empty"}),
-        ("user@example.com", "   ", {"Password must not be empty"}),
+        ("user@example.test", "   ", {"Password must not be empty"}),
         ("not-an-email", "secret", {"The email address is not valid"}),
     ],
 )

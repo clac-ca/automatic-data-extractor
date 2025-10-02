@@ -17,7 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATA_DIR = PROJECT_ROOT / "var"
 DEFAULT_DOCUMENTS_SUBDIR = "documents"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
-DEFAULT_CORS_ORIGINS = ("http://localhost:5173",)
+DEFAULT_CORS_ORIGINS = ("http://localhost:5173", "http://localhost:8000")
 
 _DURATION_PATTERN = re.compile(
     r"^(?P<value>\d+(?:\.\d+)?)(?:\s*(?P<unit>[a-zA-Z]+))?$",

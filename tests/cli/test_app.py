@@ -13,7 +13,7 @@ def test_users_create_handler_resolution() -> None:
             "users",
             "create",
             "--email",
-            "example@example.com",
+            "example@example.test",
             "--password",
             "secret-value",
         ]
@@ -28,11 +28,11 @@ def test_users_activate_accepts_email_identifier() -> None:
             "users",
             "activate",
             "--email",
-            "example@example.com",
+            "example@example.test",
         ]
     )
     assert args.handler is users.activate
-    assert args.email == "example@example.com"
+    assert args.email == "example@example.test"
     assert args.user_id is None
 
 

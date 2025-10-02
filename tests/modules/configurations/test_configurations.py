@@ -22,7 +22,7 @@ async def _login(client: AsyncClient, email: str, password: str) -> str:
     return token
 
 
-async def _create_configuration(**overrides: Any) -> str:
+async def _create_configuration(*, workspace_id: str, **overrides: Any) -> str:
     session_factory = get_sessionmaker()
     async with session_factory() as session:
         is_active = overrides.get("is_active", False)
@@ -33,13 +33,15 @@ async def _create_configuration(**overrides: Any) -> str:
         document_type = overrides.get("document_type", "invoice")
         result = await session.execute(
             select(func.max(Configuration.version)).where(
-                Configuration.document_type == document_type
+                Configuration.workspace_id == workspace_id,
+                Configuration.document_type == document_type,
             )
         )
         latest = result.scalar_one_or_none() or 0
         version = overrides.get("version", latest + 1)
 
         configuration = Configuration(
+            workspace_id=workspace_id,
             document_type=document_type,
             title=overrides.get("title", "Baseline configuration"),
             version=version,
@@ -51,6 +53,7 @@ async def _create_configuration(**overrides: Any) -> str:
             await session.execute(
                 update(Configuration)
                 .where(
+                    Configuration.workspace_id == workspace_id,
                     Configuration.document_type == document_type,
                     Configuration.is_active.is_(True),
                 )
@@ -77,9 +80,23 @@ async def test_list_configurations_supports_filters(
 ) -> None:
     """Listing configurations should support document type and status filters."""
 
-    inactive_id = await _create_configuration(document_type="invoice", is_active=False)
-    active_id = await _create_configuration(document_type="invoice", is_active=True)
-    await _create_configuration(document_type="receipt", is_active=True)
+    workspace_id = seed_identity["workspace_id"]
+
+    inactive_id = await _create_configuration(
+        workspace_id=workspace_id,
+        document_type="invoice",
+        is_active=False,
+    )
+    active_id = await _create_configuration(
+        workspace_id=workspace_id,
+        document_type="invoice",
+        is_active=True,
+    )
+    await _create_configuration(
+        workspace_id=workspace_id,
+        document_type="receipt",
+        is_active=True,
+    )
 
     hub = app.state.message_hub
     events: list[Message] = []
@@ -126,7 +143,11 @@ async def test_create_configuration_assigns_next_version(
 ) -> None:
     """Creating a configuration should increment the version counter."""
 
-    baseline_id = await _create_configuration(document_type="invoice")
+    workspace_id = seed_identity["workspace_id"]
+    baseline_id = await _create_configuration(
+        workspace_id=workspace_id,
+        document_type="invoice",
+    )
     baseline = await _get_configuration(baseline_id)
     assert baseline is not None
     baseline_version = baseline.version
@@ -181,7 +202,8 @@ async def test_read_configuration_emits_view_event(
 ) -> None:
     """Fetching a single configuration should emit a view event."""
 
-    configuration_id = await _create_configuration()
+    workspace_id = seed_identity["workspace_id"]
+    configuration_id = await _create_configuration(workspace_id=workspace_id)
 
     hub = app.state.message_hub
     events: list[Message] = []
@@ -241,7 +263,12 @@ async def test_update_configuration_replaces_fields(
 ) -> None:
     """PUT should replace mutable fields on the configuration."""
 
-    configuration_id = await _create_configuration(title="Initial", payload={"rules": ["A"]})
+    workspace_id = seed_identity["workspace_id"]
+    configuration_id = await _create_configuration(
+        workspace_id=workspace_id,
+        title="Initial",
+        payload={"rules": ["A"]},
+    )
 
     admin = seed_identity["admin"]
     token = await _login(async_client, admin["email"], admin["password"])
@@ -277,7 +304,8 @@ async def test_delete_configuration_removes_record(
 ) -> None:
     """DELETE should remove the configuration and emit an event."""
 
-    configuration_id = await _create_configuration()
+    workspace_id = seed_identity["workspace_id"]
+    configuration_id = await _create_configuration(workspace_id=workspace_id)
 
     hub = app.state.message_hub
     events: list[Message] = []
@@ -318,8 +346,17 @@ async def test_activate_configuration_toggles_previous_active(
 ) -> None:
     """Activating a configuration should deactivate previous versions."""
 
-    previous_id = await _create_configuration(document_type="invoice", is_active=True)
-    target_id = await _create_configuration(document_type="invoice", is_active=False)
+    workspace_id = seed_identity["workspace_id"]
+    previous_id = await _create_configuration(
+        workspace_id=workspace_id,
+        document_type="invoice",
+        is_active=True,
+    )
+    target_id = await _create_configuration(
+        workspace_id=workspace_id,
+        document_type="invoice",
+        is_active=False,
+    )
 
     admin = seed_identity["admin"]
     token = await _login(async_client, admin["email"], admin["password"])
@@ -352,9 +389,22 @@ async def test_list_active_configurations_returns_current(
 ) -> None:
     """Active configurations endpoint should only return active versions."""
 
-    invoice_id = await _create_configuration(document_type="invoice", is_active=True)
-    receipt_id = await _create_configuration(document_type="receipt", is_active=True)
-    await _create_configuration(document_type="invoice", is_active=False)
+    workspace_id = seed_identity["workspace_id"]
+    invoice_id = await _create_configuration(
+        workspace_id=workspace_id,
+        document_type="invoice",
+        is_active=True,
+    )
+    receipt_id = await _create_configuration(
+        workspace_id=workspace_id,
+        document_type="receipt",
+        is_active=True,
+    )
+    await _create_configuration(
+        workspace_id=workspace_id,
+        document_type="invoice",
+        is_active=False,
+    )
 
     hub = app.state.message_hub
     events: list[Message] = []
