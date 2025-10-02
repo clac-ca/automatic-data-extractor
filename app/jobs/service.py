@@ -58,6 +58,8 @@ class JobsService(BaseService):
     ) -> list[JobRecord]:
         """Return recent jobs filtered by optional criteria."""
 
+        workspace_id = self.require_workspace_id()
+
         stmt = self._base_query().order_by(
             Job.created_at.desc(), Job.job_id.desc()
         )
@@ -88,7 +90,7 @@ class JobsService(BaseService):
             payload,
             metadata={
                 "entity_type": "job_collection",
-                "entity_id": self._collection_entity_id(),
+                "entity_id": workspace_id,
             },
         )
         return records
@@ -96,15 +98,21 @@ class JobsService(BaseService):
     async def get_job(self, job_id: str) -> JobRecord:
         """Return a single job by identifier."""
 
+        workspace_id = self.require_workspace_id()
+
         job = await self._session.get(Job, job_id)
-        if job is None:
+        if job is None or job.workspace_id != workspace_id:
             raise JobNotFoundError(job_id)
 
         record = JobRecord.model_validate(job)
         await self.publish_event(
             "job.viewed",
             {"job_id": record.job_id, "status": record.status},
-            metadata={"entity_type": "job", "entity_id": record.job_id},
+            metadata={
+                "entity_type": "job",
+                "entity_id": record.job_id,
+                "workspace_id": workspace_id,
+            },
         )
         return record
 
@@ -117,15 +125,20 @@ class JobsService(BaseService):
     ) -> JobRecord:
         """Create a job row, run the processor synchronously, and return the result."""
 
+        workspace_id = self.require_workspace_id()
+
         document = await self._get_document(input_document_id)
         configuration = await self._get_configuration(
             configuration_id, configuration_version
         )
+        if configuration.workspace_id != workspace_id:
+            raise ConfigurationNotFoundError(configuration_id)
         actor = self._resolve_actor_identifier()
         config_identifier = str(configuration.id)
 
         job = Job(
             job_id=generate_ulid(),
+            workspace_id=workspace_id,
             document_type=configuration.document_type,
             configuration_id=config_identifier,
             configuration_version=configuration.version,
@@ -138,7 +151,11 @@ class JobsService(BaseService):
         self._session.add(job)
         await self._session.flush()
 
-        metadata = {"entity_type": "job", "entity_id": job.job_id}
+        metadata = {
+            "entity_type": "job",
+            "entity_id": job.job_id,
+            "workspace_id": workspace_id,
+        }
         await self.publish_event(
             "job.submitted",
             {
@@ -249,6 +266,7 @@ class JobsService(BaseService):
 
         result = await run_in_threadpool(processor, request)
         await self._tables.replace_job_tables(
+            workspace_id=job.workspace_id,
             job_id=job.job_id,
             document_id=document.document_id,
             tables=result.tables,
@@ -256,15 +274,30 @@ class JobsService(BaseService):
         return result
 
     async def _get_document(self, document_id: str) -> Document:
-        document = await self._session.get(Document, document_id)
-        if document is None or document.deleted_at is not None:
+        workspace_id = self.require_workspace_id()
+        stmt = (
+            select(Document)
+            .where(
+                Document.id == document_id,
+                Document.workspace_id == workspace_id,
+                Document.deleted_at.is_(None),
+            )
+            .limit(1)
+        )
+        result = await self._session.execute(stmt)
+        document = result.scalar_one_or_none()
+        if document is None:
             raise InputDocumentNotFoundError(document_id)
         return document
 
     async def _get_configuration(
         self, configuration_id: str, version: int | None
     ) -> Any:
-        configuration = await self._configurations.get_configuration(configuration_id)
+        workspace_id = self.require_workspace_id()
+        configuration = await self._configurations.get_configuration(
+            configuration_id,
+            workspace_id=workspace_id,
+        )
         if configuration is None:
             raise ConfigurationNotFoundError(configuration_id)
         if version is not None and configuration.version != version:
@@ -336,7 +369,8 @@ class JobsService(BaseService):
         return str(workspace_id)
 
     def _base_query(self) -> Select[tuple[Job]]:
-        return select(Job)
+        workspace_id = self.require_workspace_id()
+        return select(Job).where(Job.workspace_id == workspace_id)
 
     async def _persist_event(
         self,

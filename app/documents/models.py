@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import cast
 
-from sqlalchemy import JSON, Index, Integer, String
+from sqlalchemy import JSON, Index, Integer, String, ForeignKey
 from sqlalchemy.ext.mutable import MutableDict
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models import Base
 from app.models.mixins import TimestampMixin, ULIDPrimaryKeyMixin
+from ..workspaces.models import Workspace
 
 
 class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -17,6 +18,13 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "documents"
     __ulid_field__ = "document_id"
+
+    workspace_id: Mapped[str] = mapped_column(
+        String(26),
+        ForeignKey("workspaces.workspace_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    workspace: Mapped[Workspace] = relationship("Workspace", lazy="joined")
 
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -36,6 +44,7 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     produced_by_job_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     __table_args__ = (
+        Index("documents_workspace_id_idx", "workspace_id"),
         Index("documents_produced_by_job_id_idx", "produced_by_job_id"),
     )
 

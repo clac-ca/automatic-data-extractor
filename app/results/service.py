@@ -26,11 +26,19 @@ class ExtractionResultsService(BaseService):
     async def list_tables_for_job(self, *, job_id: str) -> list[ExtractedTableRecord]:
         """Return extracted tables associated with ``job_id``."""
 
-        job = await self._get_job(job_id)
-        tables = await self._repository.list_for_job(job.job_id)
+        workspace_id = self.require_workspace_id()
+        job = await self._get_job(job_id, workspace_id=workspace_id)
+        tables = await self._repository.list_for_job(
+            workspace_id=workspace_id,
+            job_id=job.job_id,
+        )
         records = [ExtractedTableRecord.model_validate(table) for table in tables]
 
-        metadata = {"entity_type": "job", "entity_id": job.job_id}
+        metadata = {
+            "entity_type": "job",
+            "entity_id": job.job_id,
+            "workspace_id": workspace_id,
+        }
         payload = {
             "job_id": job.job_id,
             "document_id": job.input_document_id,
@@ -45,11 +53,19 @@ class ExtractionResultsService(BaseService):
     ) -> list[ExtractedTableRecord]:
         """Return extracted tables associated with ``document_id``."""
 
-        await self._ensure_document_exists(document_id)
-        tables = await self._repository.list_for_document(document_id)
+        workspace_id = self.require_workspace_id()
+        await self._ensure_document_exists(document_id, workspace_id=workspace_id)
+        tables = await self._repository.list_for_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
         records = [ExtractedTableRecord.model_validate(table) for table in tables]
 
-        metadata = {"entity_type": "document", "entity_id": document_id}
+        metadata = {
+            "entity_type": "document",
+            "entity_id": document_id,
+            "workspace_id": workspace_id,
+        }
         payload = {"document_id": document_id, "table_count": len(records)}
         await self.publish_event("document.outputs.viewed", payload, metadata=metadata)
         return records
@@ -59,13 +75,21 @@ class ExtractionResultsService(BaseService):
     ) -> ExtractedTableRecord:
         """Return a single table associated with ``job_id``."""
 
-        job = await self._get_job(job_id)
-        table = await self._repository.get_table(table_id)
+        workspace_id = self.require_workspace_id()
+        job = await self._get_job(job_id, workspace_id=workspace_id)
+        table = await self._repository.get_table(
+            workspace_id=workspace_id,
+            table_id=table_id,
+        )
         if table is None or table.job_id != job.job_id:
             raise ExtractedTableNotFoundError(table_id)
 
         record = ExtractedTableRecord.model_validate(table)
-        metadata = {"entity_type": "table", "entity_id": record.table_id}
+        metadata = {
+            "entity_type": "table",
+            "entity_id": record.table_id,
+            "workspace_id": workspace_id,
+        }
         payload = {
             "table_id": record.table_id,
             "job_id": record.job_id,
@@ -92,23 +116,29 @@ class ExtractionResultsService(BaseService):
             correlation_id=self.correlation_id,
         )
 
-    async def _get_job(self, job_id: str) -> Job:
+    async def _get_job(self, job_id: str, *, workspace_id: str) -> Job:
         if self.session is None:
             raise RuntimeError("ExtractionResultsService requires a database session")
 
         job = await self.session.get(Job, job_id)
-        if job is None:
+        if job is None or job.workspace_id != workspace_id:
             raise JobNotFoundError(job_id)
         if job.status != "succeeded":
             raise JobResultsUnavailableError(job.job_id, job.status)
         return job
 
-    async def _ensure_document_exists(self, document_id: str) -> None:
+    async def _ensure_document_exists(
+        self, document_id: str, *, workspace_id: str
+    ) -> None:
         if self.session is None:
             raise RuntimeError("ExtractionResultsService requires a database session")
 
         document = await self.session.get(Document, document_id)
-        if document is None or document.deleted_at is not None:
+        if (
+            document is None
+            or document.deleted_at is not None
+            or document.workspace_id != workspace_id
+        ):
             raise DocumentNotFoundError(document_id)
 
 

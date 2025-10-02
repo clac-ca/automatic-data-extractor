@@ -26,6 +26,7 @@ class ExtractedTableRecord(BaseSchema):
     """Serialised representation of an extracted table."""
 
     table_id: str = Field(alias="id", serialization_alias="table_id")
+    workspace_id: str
     job_id: str
     document_id: str
     sequence_index: int

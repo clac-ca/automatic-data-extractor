@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from sqlalchemy import JSON, Index, Integer, String
+from sqlalchemy import JSON, Index, Integer, String, ForeignKey
 from sqlalchemy.ext.mutable import MutableDict, MutableList
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models import Base
 from app.models.mixins import TimestampMixin
+from ..workspaces.models import Workspace
 
 
 class Job(TimestampMixin, Base):
@@ -16,6 +17,12 @@ class Job(TimestampMixin, Base):
     __tablename__ = "jobs"
 
     job_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(
+        String(26),
+        ForeignKey("workspaces.workspace_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    workspace: Mapped[Workspace] = relationship("Workspace", lazy="joined")
     document_type: Mapped[str] = mapped_column(String(100), nullable=False)
     configuration_id: Mapped[str] = mapped_column(String(26), nullable=False)
     configuration_version: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -29,7 +36,10 @@ class Job(TimestampMixin, Base):
         MutableList.as_mutable(JSON), default=list, nullable=False
     )
 
-    __table_args__ = (Index("jobs_input_document_id_idx", "input_document_id"),)
+    __table_args__ = (
+        Index("jobs_workspace_id_idx", "workspace_id"),
+        Index("jobs_input_document_id_idx", "input_document_id"),
+    )
 
 
 __all__ = ["Job"]

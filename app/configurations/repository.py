@@ -21,14 +21,19 @@ class ConfigurationsRepository:
     async def list_configurations(
         self,
         *,
+        workspace_id: str,
         document_type: str | None = None,
         is_active: bool | None = None,
     ) -> list[Configuration]:
         """Return configurations ordered by recency."""
 
-        stmt: Select[tuple[Configuration]] = select(Configuration).order_by(
-            Configuration.created_at.desc(),
-            Configuration.id.desc(),
+        stmt: Select[tuple[Configuration]] = (
+            select(Configuration)
+            .where(Configuration.workspace_id == workspace_id)
+            .order_by(
+                Configuration.created_at.desc(),
+                Configuration.id.desc(),
+            )
         )
         if document_type:
             stmt = stmt.where(Configuration.document_type == document_type)
@@ -38,19 +43,30 @@ class ConfigurationsRepository:
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_configuration(self, configuration_id: str) -> Configuration | None:
+    async def get_configuration(
+        self, configuration_id: str, *, workspace_id: str
+    ) -> Configuration | None:
         """Return the configuration identified by ``configuration_id`` when available."""
 
-        return await self._session.get(Configuration, configuration_id)
+        stmt: Select[tuple[Configuration]] = select(Configuration).where(
+            Configuration.id == configuration_id,
+            Configuration.workspace_id == workspace_id,
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().first()
 
     async def get_active_configuration(
-        self, document_type: str
+        self,
+        *,
+        workspace_id: str,
+        document_type: str,
     ) -> Configuration | None:
         """Return the active configuration for ``document_type`` when present."""
 
         stmt: Select[tuple[Configuration]] = (
             select(Configuration)
             .where(
+                Configuration.workspace_id == workspace_id,
                 Configuration.document_type == document_type,
                 Configuration.is_active.is_(True),
             )
@@ -60,13 +76,19 @@ class ConfigurationsRepository:
         return result.scalars().first()
 
     async def list_active_configurations(
-        self, document_type: str | None = None
+        self,
+        *,
+        workspace_id: str,
+        document_type: str | None = None,
     ) -> list[Configuration]:
         """Return active configurations scoped by optional ``document_type``."""
 
         stmt: Select[tuple[Configuration]] = (
             select(Configuration)
-            .where(Configuration.is_active.is_(True))
+            .where(
+                Configuration.workspace_id == workspace_id,
+                Configuration.is_active.is_(True),
+            )
             .order_by(Configuration.document_type.asc())
         )
         if document_type:
@@ -75,11 +97,14 @@ class ConfigurationsRepository:
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
-    async def determine_next_version(self, document_type: str) -> int:
+    async def determine_next_version(
+        self, *, workspace_id: str, document_type: str
+    ) -> int:
         """Return the next sequential version for ``document_type``."""
 
         stmt = select(Configuration.version).where(
-            Configuration.document_type == document_type
+            Configuration.workspace_id == workspace_id,
+            Configuration.document_type == document_type,
         )
         stmt = stmt.order_by(Configuration.version.desc()).limit(1)
         result = await self._session.execute(stmt)
@@ -89,6 +114,7 @@ class ConfigurationsRepository:
     async def create_configuration(
         self,
         *,
+        workspace_id: str,
         document_type: str,
         title: str,
         payload: Mapping[str, Any],
@@ -97,6 +123,7 @@ class ConfigurationsRepository:
         """Persist a configuration record."""
 
         configuration = Configuration(
+            workspace_id=workspace_id,
             document_type=document_type,
             title=title,
             version=version,
@@ -138,6 +165,7 @@ class ConfigurationsRepository:
         await self._session.execute(
             update(Configuration)
             .where(
+                Configuration.workspace_id == configuration.workspace_id,
                 Configuration.document_type == configuration.document_type,
                 Configuration.id != configuration.id,
             )
@@ -155,6 +183,7 @@ class ConfigurationsRepository:
     async def get_configuration_by_version(
         self,
         *,
+        workspace_id: str,
         document_type: str,
         version: int,
     ) -> Configuration | None:
@@ -163,6 +192,7 @@ class ConfigurationsRepository:
         stmt: Select[tuple[Configuration]] = (
             select(Configuration)
             .where(
+                Configuration.workspace_id == workspace_id,
                 Configuration.document_type == document_type,
                 Configuration.version == version,
             )
