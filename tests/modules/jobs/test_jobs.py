@@ -24,19 +24,24 @@ async def _login(client: AsyncClient, email: str, password: str) -> str:
 
 
 async def _create_configuration(
-    *, payload: dict[str, Any] | None = None, document_type: str = "invoice"
+    *,
+    workspace_id: str,
+    payload: dict[str, Any] | None = None,
+    document_type: str = "invoice",
 ) -> str:
     session_factory = get_sessionmaker()
     async with session_factory() as session:
         result = await session.execute(
             select(func.max(Configuration.version)).where(
-                Configuration.document_type == document_type
+                Configuration.workspace_id == workspace_id,
+                Configuration.document_type == document_type,
             )
         )
         next_version = result.scalar_one_or_none() or 0
         version = next_version + 1
 
         configuration = Configuration(
+            workspace_id=workspace_id,
             document_type=document_type,
             title="Test configuration",
             version=version,
@@ -74,7 +79,9 @@ async def test_submit_job_runs_extractor(
 ) -> None:
     """Submitting a job should synchronously execute the processor stub."""
 
+    workspace_id = seed_identity["workspace_id"]
     configuration_id = await _create_configuration(
+        workspace_id=workspace_id,
         payload={
             "tables": [
                 {
@@ -158,7 +165,8 @@ async def test_submit_job_missing_document_returns_404(
 ) -> None:
     """Submitting a job for a missing document should return 404."""
 
-    configuration_id = await _create_configuration()
+    workspace_id = seed_identity["workspace_id"]
+    configuration_id = await _create_configuration(workspace_id=workspace_id)
     actor = seed_identity["workspace_owner"]
     await _grant_job_permission(actor["id"], seed_identity["workspace_id"])
     token = await _login(async_client, actor["email"], actor["password"])
@@ -246,7 +254,9 @@ async def test_submit_job_processor_failure_returns_500(
 ) -> None:
     """Processor failures should mark the job failed and surface the error."""
 
+    workspace_id = seed_identity["workspace_id"]
     configuration_id = await _create_configuration(
+        workspace_id=workspace_id,
         payload={
             "simulate_failure": True,
             "failure_message": "Stub failure",

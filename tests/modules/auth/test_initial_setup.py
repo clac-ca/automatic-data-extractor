@@ -27,7 +27,7 @@ async def test_initial_setup_creates_admin_and_sets_session(
     assert status_response.json() == {"initialSetupRequired": True}
 
     payload = {
-        "email": "owner@example.com",
+        "email": "owner@example.test",
         "password": "ChangeMe123!",
         "displayName": "Owner",
     }
@@ -35,7 +35,7 @@ async def test_initial_setup_creates_admin_and_sets_session(
     response = await async_client.post("/api/auth/initial-setup", json=payload)
     assert response.status_code == 200, response.text
     data = response.json()
-    assert data["user"]["email"] == "owner@example.com"
+    assert data["user"]["email"] == "owner@example.test"
     assert data["user"]["role"] == "admin"
     assert data["expires_at"]
     assert data["refresh_expires_at"]
@@ -63,7 +63,7 @@ async def test_initial_setup_rejected_when_admin_exists(
     async with session_factory() as session:
         repo = UsersRepository(session)
         await repo.create(
-            email="existing@example.com",
+            email="existing@example.test",
             password_hash=hash_password("Password123!"),
             role=UserRole.ADMIN,
             is_active=True,
@@ -76,6 +76,6 @@ async def test_initial_setup_rejected_when_admin_exists(
 
     response = await async_client.post(
         "/api/auth/initial-setup",
-        json={"email": "new@example.com", "password": "NewPassword123!"},
+        json={"email": "new@example.test", "password": "NewPassword123!"},
     )
     assert response.status_code == 409

@@ -21,10 +21,12 @@ from app.core.db.session import get_session
 async def test_session_dependency_commits_and_populates_context(
     app,
     async_client,
+    seed_identity,
 ):
     """The session dependency should attach to the request and commit writes."""
 
     route_path = "/__tests__/configurations"
+    workspace_id = seed_identity["workspace_id"]
 
     if not any(route.path == route_path for route in app.router.routes):
 
@@ -46,6 +48,7 @@ async def test_session_dependency_commits_and_populates_context(
                 "payload": json.dumps({}),
                 "created_at": datetime.now(UTC).isoformat(),
                 "updated_at": datetime.now(UTC).isoformat(),
+                "workspace_id": workspace_id,
             }
             await context.session.execute(
                 text(
@@ -58,7 +61,8 @@ async def test_session_dependency_commits_and_populates_context(
                         is_active,
                         payload,
                         created_at,
-                        updated_at
+                        updated_at,
+                        workspace_id
                     ) VALUES (
                         :configuration_id,
                         :document_type,
@@ -67,7 +71,8 @@ async def test_session_dependency_commits_and_populates_context(
                         :is_active,
                         :payload,
                         :created_at,
-                        :updated_at
+                        :updated_at,
+                        :workspace_id
                     )
                     """
                 ),

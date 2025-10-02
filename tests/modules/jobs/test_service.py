@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from io import BytesIO
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from fastapi import UploadFile
@@ -24,6 +25,7 @@ from app.jobs.processor import (
 )
 from app.jobs.service import JobsService
 from app.results.models import ExtractedTable
+from app.workspaces.models import Workspace
 
 
 @pytest.mark.asyncio
@@ -35,12 +37,19 @@ async def test_submit_job_emits_events_and_persists_tables() -> None:
     session_factory = get_sessionmaker()
 
     async with session_factory() as session:
+        workspace = Workspace(
+            name="Test Workspace",
+            slug=f"workspace-{uuid4().hex[:8]}",
+        )
+        session.add(workspace)
+        await session.flush()
+
         context = ServiceContext(
             settings=settings,
             session=session,
             message_hub=hub,
-            user=SimpleNamespace(id="user-1", email="user@example.com"),
-            workspace=SimpleNamespace(workspace_id="workspace-1"),
+            user=SimpleNamespace(id="user-1", email="user@example.test"),
+            workspace=SimpleNamespace(workspace_id=workspace.id),
         )
 
         documents_service = DocumentsService(context=context)
@@ -53,11 +62,13 @@ async def test_submit_job_emits_events_and_persists_tables() -> None:
 
         result = await session.execute(
             select(func.max(Configuration.version)).where(
-                Configuration.document_type == "invoice"
+                Configuration.workspace_id == workspace.id,
+                Configuration.document_type == "invoice",
             )
         )
         next_version = (result.scalar_one_or_none() or 0) + 1
         configuration = Configuration(
+            workspace_id=workspace.id,
             document_type="invoice",
             title="Inline configuration",
             version=next_version,
@@ -106,12 +117,19 @@ async def test_submit_job_records_failure_and_raises() -> None:
     session_factory = get_sessionmaker()
 
     async with session_factory() as session:
+        workspace = Workspace(
+            name="Test Workspace",
+            slug=f"workspace-{uuid4().hex[:8]}",
+        )
+        session.add(workspace)
+        await session.flush()
+
         context = ServiceContext(
             settings=settings,
             session=session,
             message_hub=hub,
-            user=SimpleNamespace(id="user-2", email="user2@example.com"),
-            workspace=SimpleNamespace(workspace_id="workspace-2"),
+            user=SimpleNamespace(id="user-2", email="user2@example.test"),
+            workspace=SimpleNamespace(workspace_id=workspace.id),
         )
 
         documents_service = DocumentsService(context=context)
@@ -124,11 +142,13 @@ async def test_submit_job_records_failure_and_raises() -> None:
 
         result = await session.execute(
             select(func.max(Configuration.version)).where(
-                Configuration.document_type == "invoice"
+                Configuration.workspace_id == workspace.id,
+                Configuration.document_type == "invoice",
             )
         )
         next_version = (result.scalar_one_or_none() or 0) + 1
         configuration = Configuration(
+            workspace_id=workspace.id,
             document_type="invoice",
             title="Failing configuration",
             version=next_version,
@@ -179,12 +199,19 @@ async def test_custom_processor_override_returns_typed_payload() -> None:
     session_factory = get_sessionmaker()
 
     async with session_factory() as session:
+        workspace = Workspace(
+            name="Test Workspace",
+            slug=f"workspace-{uuid4().hex[:8]}",
+        )
+        session.add(workspace)
+        await session.flush()
+
         context = ServiceContext(
             settings=settings,
             session=session,
             message_hub=hub,
-            user=SimpleNamespace(id="user-3", email="user3@example.com"),
-            workspace=SimpleNamespace(workspace_id="workspace-3"),
+            user=SimpleNamespace(id="user-3", email="user3@example.test"),
+            workspace=SimpleNamespace(workspace_id=workspace.id),
         )
 
         documents_service = DocumentsService(context=context)
@@ -197,11 +224,13 @@ async def test_custom_processor_override_returns_typed_payload() -> None:
 
         result = await session.execute(
             select(func.max(Configuration.version)).where(
-                Configuration.document_type == "invoice"
+                Configuration.workspace_id == workspace.id,
+                Configuration.document_type == "invoice",
             )
         )
         next_version = (result.scalar_one_or_none() or 0) + 1
         configuration = Configuration(
+            workspace_id=workspace.id,
             document_type="invoice",
             title="Custom processor configuration",
             version=next_version,

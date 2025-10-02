@@ -71,7 +71,7 @@ def test_reset_command_skips_non_sqlite_database(tmp_path: Path, monkeypatch, ca
 
     monkeypatch.setenv(
         "ADE_DATABASE_DSN",
-        "postgresql+asyncpg://example:secret@example.com:5432/ade",
+        "postgresql+asyncpg://example:secret@example.test:5432/ade",
     )
     monkeypatch.setenv("ADE_STORAGE_DATA_DIR", str(data_dir))
     monkeypatch.setenv("ADE_STORAGE_DOCUMENTS_DIR", str(documents_dir))

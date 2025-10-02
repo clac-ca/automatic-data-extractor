@@ -16,7 +16,7 @@ from app.core.config import Settings, reload_settings
 
 
 def test_normalise_email_lowercases_and_strips() -> None:
-    assert normalise_email("  USER@example.com ") == "user@example.com"
+    assert normalise_email("  USER@example.test ") == "user@example.test"
 
 
 @pytest.mark.parametrize("value", ["", "   "])
