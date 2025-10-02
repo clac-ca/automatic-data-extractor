@@ -5,15 +5,15 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
-from collections.abc import Awaitable, Callable, Iterable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from functools import wraps
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import jwt
-from fastapi import HTTPException, status
+from fastapi import Depends, HTTPException, status
 
+from app.core.service import BaseService
 from ..users.models import UserRole
 
 
@@ -185,53 +185,53 @@ def access_control(
     require_workspace: bool = False,
     require_admin: bool = False,
     allow_admin_override: bool = True,
-) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
-    """Decorator enforcing authorisation rules on class-based endpoints."""
+    service_dependency: Callable[..., AsyncIterator[BaseService]] | None = None,
+) -> Callable[..., Awaitable[BaseService]]:
+    """Return a dependency that enforces authorisation rules for a service."""
 
+    dependency: Callable[..., AsyncIterator[BaseService]]
+    if service_dependency is None:
+        from .dependencies import get_auth_service  # local import to avoid circular dependency
+
+        dependency = cast(Callable[..., AsyncIterator[BaseService]], get_auth_service)
+    else:
+        dependency = service_dependency
     required = frozenset(permissions or [])
 
-    def decorator(func: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
-        @wraps(func)
-        async def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
-            service = getattr(self, "service", None)
-            if service is None:
-                raise RuntimeError("access_control expects the view to expose 'service'")
+    async def verify(service: BaseService = Depends(dependency)) -> BaseService:
+        user = service.current_user
+        if user is None:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
 
-            user = getattr(service, "current_user", None)
-            if user is None:
-                raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+        user_role = getattr(user, "role", None)
+        if allow_admin_override and user_role == UserRole.ADMIN:
+            return service
 
-            user_role = getattr(user, "role", None)
-            if allow_admin_override and user_role == UserRole.ADMIN:
-                return await func(self, *args, **kwargs)
+        if require_admin and user_role != UserRole.ADMIN:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail="Administrator role required",
+            )
 
-            if require_admin and user_role != UserRole.ADMIN:
+        workspace = service.current_workspace
+        if require_workspace and workspace is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Workspace context required",
+            )
+
+        if required:
+            granted_raw: Iterable[str] = service.permissions
+            granted = frozenset(granted_raw)
+            if not required.issubset(granted):
                 raise HTTPException(
                     status.HTTP_403_FORBIDDEN,
-                    detail="Administrator role required",
+                    detail="Insufficient permissions",
                 )
 
-            workspace = getattr(service, "current_workspace", None)
-            if require_workspace and workspace is None:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    detail="Workspace context required",
-                )
+        return service
 
-            if required:
-                granted_raw: Iterable[str] = getattr(service, "permissions", frozenset())
-                granted = frozenset(granted_raw)
-                if not required.issubset(granted):
-                    raise HTTPException(
-                        status.HTTP_403_FORBIDDEN,
-                        detail="Insufficient permissions",
-                    )
-
-            return await func(self, *args, **kwargs)
-
-        return wrapper
-
-    return decorator
+    return verify
 
 
 __all__ = [

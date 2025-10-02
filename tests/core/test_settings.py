@@ -65,9 +65,10 @@ def test_settings_defaults() -> None:
     assert settings.server_host == "localhost"
     assert settings.server_port == 8000
     assert str(settings.server_public_url) == "http://localhost:8000/"
-    assert [str(origin) for origin in settings.server_cors_origins] == [
-        "http://localhost:8000/"
-    ]
+    assert set(str(origin) for origin in settings.server_cors_origins) == {
+        "http://localhost:5173/",
+        "http://localhost:8000/",
+    }
     assert settings.database_dsn.endswith("var/db/ade.sqlite")
     assert settings.jwt_access_ttl == timedelta(minutes=60)
     assert settings.jwt_refresh_ttl == timedelta(days=14)
@@ -85,7 +86,7 @@ ADE_API_DOCS_ENABLED=true
 ADE_SERVER_HOST=0.0.0.0
 ADE_SERVER_PORT=9000
 ADE_SERVER_PUBLIC_URL=https://api.dev.local
-ADE_SERVER_CORS_ORIGINS=http://localhost:3000,http://example.dev:4000
+ADE_SERVER_CORS_ORIGINS=["http://localhost:3000","http://example.dev:4000"]
 ADE_JWT_ACCESS_TTL=5m
 ADE_JWT_REFRESH_TTL=7d
 """
@@ -118,7 +119,7 @@ def test_settings_env_var_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ADE_SERVER_HOST", "dev.internal")
     monkeypatch.setenv("ADE_SERVER_PORT", "8100")
     monkeypatch.setenv("ADE_SERVER_PUBLIC_URL", "https://api.local")
-    monkeypatch.setenv("ADE_SERVER_CORS_ORIGINS", "http://example.com")
+    monkeypatch.setenv("ADE_SERVER_CORS_ORIGINS", '["http://example.com"]')
     reload_settings()
 
     settings = get_settings()
@@ -152,12 +153,12 @@ def test_json_cors_value(monkeypatch: pytest.MonkeyPatch) -> None:
     }
 
 
-def test_cors_accepts_whitespace_delimiters(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Comma, space, or newline separated CORS origins should all parse."""
+def test_cors_deduplicates_origins(monkeypatch: pytest.MonkeyPatch) -> None:
+    """JSON CORS entries should be normalised and deduplicated."""
 
     monkeypatch.setenv(
         "ADE_SERVER_CORS_ORIGINS",
-        "http://one.test\nhttp://two.test   http://three.test",
+        '["http://one.test","http://two.test","http://one.test"]',
     )
     reload_settings()
 
@@ -167,7 +168,6 @@ def test_cors_accepts_whitespace_delimiters(monkeypatch: pytest.MonkeyPatch) -> 
         "http://localhost:8000/",
         "http://one.test/",
         "http://two.test/",
-        "http://three.test/",
     }
 
 
@@ -180,9 +180,10 @@ def test_server_public_url_accepts_https(monkeypatch: pytest.MonkeyPatch) -> Non
     settings = get_settings()
 
     assert str(settings.server_public_url) == "https://secure.example.com/"
-    assert [str(origin) for origin in settings.server_cors_origins] == [
-        "https://secure.example.com/"
-    ]
+    assert set(str(origin) for origin in settings.server_cors_origins) == {
+        "http://localhost:5173/",
+        "https://secure.example.com/",
+    }
 
 
 def test_storage_directories_follow_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -217,7 +218,10 @@ def test_oidc_complete_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ADE_OIDC_CLIENT_SECRET", "super-secret")
     monkeypatch.setenv("ADE_OIDC_ISSUER", "https://issuer.example.com")
     monkeypatch.setenv("ADE_OIDC_REDIRECT_URL", "https://app.example.com/callback")
-    monkeypatch.setenv("ADE_OIDC_SCOPES", "openid, email profile,custom")
+    monkeypatch.setenv(
+        "ADE_OIDC_SCOPES",
+        '["openid","email","profile","custom"]',
+    )
     reload_settings()
 
     settings = get_settings()

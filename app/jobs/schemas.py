@@ -9,6 +9,20 @@ from pydantic import Field
 from app.core.schema import BaseSchema
 
 
+class JobFailureDetail(BaseSchema):
+    """Structured payload returned when a job execution fails."""
+
+    error: str
+    job_id: str
+    message: str
+
+
+class JobFailureMessage(BaseSchema):
+    """Error envelope that wraps :class:`JobFailureDetail`."""
+
+    detail: JobFailureDetail
+
+
 class JobSubmissionRequest(BaseSchema):
     """Payload accepted when clients submit a new job."""
 
@@ -33,4 +47,9 @@ class JobRecord(BaseSchema):
     logs: list[dict[str, Any]] = Field(default_factory=list)
 
 
-__all__ = ["JobRecord", "JobSubmissionRequest"]
+__all__ = [
+    "JobFailureDetail",
+    "JobFailureMessage",
+    "JobRecord",
+    "JobSubmissionRequest",
+]
