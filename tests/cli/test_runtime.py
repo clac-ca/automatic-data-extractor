@@ -12,7 +12,7 @@ from sqlalchemy import text
 from app.cli.commands import settings as settings_command, start as start_cmd
 from app.cli.core.runtime import normalise_email, open_session, read_secret
 from app.core.db.engine import reset_database_state
-from app.settings import Settings, reload_settings
+from app.core.config import Settings, reload_settings
 
 
 def test_normalise_email_lowercases_and_strips() -> None:

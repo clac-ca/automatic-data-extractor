@@ -17,6 +17,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app import Settings, get_settings, reload_settings
 from app.core.db.engine import render_sync_url, reset_database_state
+from app.core.startup import ensure_runtime_dirs
 from app.core.db.session import get_sessionmaker
 from app.main import create_app
 from app.auth.security import hash_password
@@ -47,6 +48,7 @@ def _configure_database(
     os.environ["ADE_STORAGE_DOCUMENTS_DIR"] = str(documents_dir)
     settings = reload_settings()
     assert settings.database_dsn == _database_url
+    ensure_runtime_dirs(settings)
     reset_database_state()
 
     config = Config(str(Path("alembic.ini")))
@@ -83,11 +85,13 @@ def override_app_settings(app: FastAPI) -> Callable[..., Settings]:
         base = reload_settings()
         updated = base.model_copy(update=updates)
         app.state.settings = updated
+        ensure_runtime_dirs(updated)
         return updated
 
     yield _apply
 
     app.state.settings = original
+    ensure_runtime_dirs(original)
     reload_settings()
 
 

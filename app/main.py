@@ -20,7 +20,8 @@ from .core.db.bootstrap import ensure_database_ready
 from .core.logging import setup_logging
 from .core.message_hub import MessageHub
 from .core.middleware import register_middleware
-from .settings import Settings, get_settings
+from .core.startup import ensure_runtime_dirs
+from .core.config import Settings, get_settings
 from .core.task_queue import TaskQueue
 from .documents.router import router as documents_router
 from .health.router import router as health_router
@@ -51,6 +52,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        ensure_runtime_dirs(settings)
         app.state.settings = settings
         app.state.message_hub = message_hub
         app.state.task_queue = task_queue

@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db.bootstrap import ensure_database_ready
 from app.core.db.session import get_sessionmaker
-from app.settings import Settings, get_settings
+from app.core.startup import ensure_runtime_dirs
+from app.core.config import Settings, get_settings, reload_settings
 
 __all__ = [
     "load_settings",
@@ -23,7 +24,7 @@ __all__ = [
 def load_settings() -> Settings:
     """Return ADE settings using the same loader as the API."""
 
-    return get_settings()
+    return reload_settings()
 
 
 @asynccontextmanager
@@ -33,6 +34,7 @@ async def open_session(
     """Yield an ``AsyncSession`` with commit/rollback semantics."""
 
     resolved = settings or get_settings()
+    ensure_runtime_dirs(resolved)
     await ensure_database_ready(resolved)
     session_factory = get_sessionmaker(settings=resolved)
     session = session_factory()

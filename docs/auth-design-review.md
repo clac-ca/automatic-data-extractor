@@ -30,7 +30,7 @@ For automation or CLI clients we retain support for `Authorization: Bearer <jwt>
 
 ## Supporting infrastructure
 
-* **Settings** – Session configuration now includes cookie names, refresh lifetimes, and common cookie attributes so deployments can tailor domains and paths if required. 【F:app/settings.py†L41-L66】
+* **Settings** – Session configuration now includes cookie names, refresh lifetimes, and common cookie attributes so deployments can tailor domains and paths if required. 【F:app/core/config.py†L41-L83】
 * **Schemas** – The old OAuth2 form schema has been replaced with `LoginRequest`/`SessionEnvelope`, reflecting the cookie-first contract. 【F:app/auth/schemas.py†L1-L61】
 * **Frontend state** – The session provider stores only user metadata and expiry timestamps; tokens never touch application state. Logout calls the new backend endpoint to clear cookies. 【F:frontend/src/app/providers/SessionProvider.tsx†L1-L66】【F:frontend/src/api/auth.ts†L1-L72】
 

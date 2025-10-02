@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from app import Settings, get_settings, reload_settings
+from app.core.startup import ensure_runtime_dirs
 
 
 @pytest.fixture(autouse=True)
@@ -64,10 +65,10 @@ def test_settings_defaults() -> None:
     assert settings.api_docs_enabled is False
     assert settings.server_host == "localhost"
     assert settings.server_port == 8000
-    assert str(settings.server_public_url) == "http://localhost:8000/"
-    assert set(str(origin) for origin in settings.server_cors_origins) == {
-        "http://localhost:5173/",
-        "http://localhost:8000/",
+    assert settings.server_public_url == "http://localhost:8000"
+    assert set(settings.server_cors_origins) == {
+        "http://localhost:5173",
+        "http://localhost:8000",
     }
     assert settings.database_dsn.endswith("var/db/ade.sqlite")
     assert settings.jwt_access_ttl == timedelta(minutes=60)
@@ -86,7 +87,7 @@ ADE_API_DOCS_ENABLED=true
 ADE_SERVER_HOST=0.0.0.0
 ADE_SERVER_PORT=9000
 ADE_SERVER_PUBLIC_URL=https://api.dev.local
-ADE_SERVER_CORS_ORIGINS=["http://localhost:3000","http://example.dev:4000"]
+ADE_SERVER_CORS_ORIGINS=http://localhost:3000,http://example.dev:4000
 ADE_JWT_ACCESS_TTL=5m
 ADE_JWT_REFRESH_TTL=7d
 """
@@ -101,11 +102,11 @@ ADE_JWT_REFRESH_TTL=7d
     assert settings.api_docs_enabled is True
     assert settings.server_host == "0.0.0.0"
     assert settings.server_port == 9000
-    assert str(settings.server_public_url) == "https://api.dev.local/"
-    assert set(str(origin) for origin in settings.server_cors_origins) == {
-        "https://api.dev.local/",
-        "http://localhost:3000/",
-        "http://example.dev:4000/",
+    assert settings.server_public_url == "https://api.dev.local"
+    assert set(settings.server_cors_origins) == {
+        "https://api.dev.local",
+        "http://localhost:3000",
+        "http://example.dev:4000",
     }
     assert settings.jwt_access_ttl == timedelta(minutes=5)
     assert settings.jwt_refresh_ttl == timedelta(days=7)
@@ -119,7 +120,7 @@ def test_settings_env_var_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ADE_SERVER_HOST", "dev.internal")
     monkeypatch.setenv("ADE_SERVER_PORT", "8100")
     monkeypatch.setenv("ADE_SERVER_PUBLIC_URL", "https://api.local")
-    monkeypatch.setenv("ADE_SERVER_CORS_ORIGINS", '["http://example.com"]')
+    monkeypatch.setenv("ADE_SERVER_CORS_ORIGINS", "http://example.com")
     reload_settings()
 
     settings = get_settings()
@@ -128,46 +129,46 @@ def test_settings_env_var_override(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.api_docs_enabled is True
     assert settings.server_host == "dev.internal"
     assert settings.server_port == 8100
-    assert str(settings.server_public_url) == "https://api.local/"
-    assert set(str(origin) for origin in settings.server_cors_origins) == {
-        "https://api.local/",
-        "http://example.com/",
+    assert settings.server_public_url == "https://api.local"
+    assert set(settings.server_cors_origins) == {
+        "https://api.local",
+        "http://example.com",
     }
 
 
-def test_json_cors_value(monkeypatch: pytest.MonkeyPatch) -> None:
-    """JSON encoded origin lists should still be accepted."""
+def test_cors_accepts_comma_separated_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Comma separated origin lists should be accepted."""
 
     monkeypatch.setenv(
         "ADE_SERVER_CORS_ORIGINS",
-        '["http://one.test","http://two.test"]',
+        "http://one.test,http://two.test",
     )
     reload_settings()
 
     settings = get_settings()
 
-    assert set(str(origin) for origin in settings.server_cors_origins) == {
-        "http://localhost:8000/",
-        "http://one.test/",
-        "http://two.test/",
+    assert set(settings.server_cors_origins) == {
+        "http://localhost:8000",
+        "http://one.test",
+        "http://two.test",
     }
 
 
 def test_cors_deduplicates_origins(monkeypatch: pytest.MonkeyPatch) -> None:
-    """JSON CORS entries should be normalised and deduplicated."""
+    """Comma separated CORS entries should be normalised and deduplicated."""
 
     monkeypatch.setenv(
         "ADE_SERVER_CORS_ORIGINS",
-        '["http://one.test","http://two.test","http://one.test"]',
+        "http://one.test,http://two.test,http://one.test",
     )
     reload_settings()
 
     settings = get_settings()
 
-    assert set(str(origin) for origin in settings.server_cors_origins) == {
-        "http://localhost:8000/",
-        "http://one.test/",
-        "http://two.test/",
+    assert set(settings.server_cors_origins) == {
+        "http://localhost:8000",
+        "http://one.test",
+        "http://two.test",
     }
 
 
@@ -179,10 +180,10 @@ def test_server_public_url_accepts_https(monkeypatch: pytest.MonkeyPatch) -> Non
 
     settings = get_settings()
 
-    assert str(settings.server_public_url) == "https://secure.example.com/"
-    assert set(str(origin) for origin in settings.server_cors_origins) == {
-        "http://localhost:5173/",
-        "https://secure.example.com/",
+    assert settings.server_public_url == "https://secure.example.com"
+    assert set(settings.server_cors_origins) == {
+        "http://localhost:5173",
+        "https://secure.example.com",
     }
 
 
@@ -197,7 +198,39 @@ def test_storage_directories_follow_data_dir(tmp_path: Path, monkeypatch: pytest
 
     assert settings.storage_data_dir == data_dir.resolve()
     assert settings.storage_documents_dir == data_dir.resolve() / "documents"
-    assert settings.storage_documents_dir.is_dir()
+    assert not data_dir.exists()
+    assert not (data_dir / "documents").exists()
+
+
+def test_settings_is_pure(tmp_path: Path) -> None:
+    """Instantiating settings should not create directories."""
+
+    data_dir = tmp_path / "ade-data"
+    docs_dir = tmp_path / "docs"
+
+    settings = Settings(storage_data_dir=data_dir, storage_documents_dir=docs_dir)
+
+    assert settings.storage_data_dir == data_dir.resolve()
+    assert settings.storage_documents_dir == docs_dir.resolve()
+    assert not data_dir.exists()
+    assert not docs_dir.exists()
+
+
+def test_ensure_runtime_dirs_creates_paths(tmp_path: Path) -> None:
+    """Startup helper should create runtime directories."""
+
+    data_dir = tmp_path / "ade-data"
+    docs_dir = tmp_path / "ade-data" / "documents"
+
+    settings = Settings(storage_data_dir=data_dir, storage_documents_dir=docs_dir)
+
+    assert not data_dir.exists()
+    assert not docs_dir.exists()
+
+    ensure_runtime_dirs(settings=settings)
+
+    assert data_dir.is_dir()
+    assert docs_dir.is_dir()
 
 
 def test_oidc_requires_complete_configuration(monkeypatch: pytest.MonkeyPatch) -> None:

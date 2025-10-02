@@ -8,7 +8,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy.engine import Connection, make_url
 
-from app.settings import PROJECT_ROOT, Settings, get_settings
+from app.core.config import PROJECT_ROOT, Settings, get_settings
 from .engine import (
     ensure_sqlite_database_directory,
     get_engine,
