@@ -320,7 +320,9 @@ async def test_sso_callback_rejects_state_mismatch(
     monkeypatch.setenv(
         "ADE_OIDC_REDIRECT_URL", "https://ade.example.com/auth/sso/callback"
     )
-    monkeypatch.setenv("ADE_OIDC_SCOPES", "openid email profile")
+    monkeypatch.setenv(
+        "ADE_OIDC_SCOPES", '["openid","email","profile"]'
+    )
     reload_settings()
     override_app_settings()
 

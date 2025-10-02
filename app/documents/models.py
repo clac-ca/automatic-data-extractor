@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from sqlalchemy import JSON, Index, Integer, String
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column
@@ -41,7 +43,7 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     def document_id(self) -> str:
         """Expose a stable attribute for integrations expecting ``document_id``."""
 
-        return self.id
+        return cast(str, self.id)
 
 
 __all__ = ["Document"]

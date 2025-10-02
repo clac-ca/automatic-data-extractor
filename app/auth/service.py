@@ -6,13 +6,14 @@ import secrets
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from urllib.parse import urlencode
 
 import httpx
 import jwt
 from fastapi import HTTPException, Request, Response, status
 from jwt import PyJWKClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.service import BaseService, ServiceContext
 from ..system.repository import SystemSettingsRepository
@@ -134,9 +135,10 @@ class AuthService(BaseService):
         super().__init__(context=context)
         if self.session is None:
             raise RuntimeError("AuthService requires a database session")
-        self._users = UsersRepository(self.session)
-        self._api_keys = APIKeysRepository(self.session)
-        self._system_settings = SystemSettingsRepository(self.session)
+        self._session: AsyncSession = self.session
+        self._users = UsersRepository(self._session)
+        self._api_keys = APIKeysRepository(self._session)
+        self._system_settings = SystemSettingsRepository(self._session)
 
     # ------------------------------------------------------------------
     # Password-based authentication
@@ -162,10 +164,9 @@ class AuthService(BaseService):
     ) -> User:
         """Create the first administrator and mark setup as complete."""
 
-        if self.session is None:
-            raise RuntimeError("Database session unavailable")
+        session = self._session
 
-        async with self.session.begin():
+        async with session.begin():
             setting = await self._system_settings.get_for_update(
                 _INITIAL_SETUP_SETTING_KEY
             )
@@ -199,7 +200,7 @@ class AuthService(BaseService):
                 timespec="seconds"
             )
             setting.value = setting_value
-            await self.session.flush()
+            await session.flush()
 
             return user
 
@@ -250,7 +251,7 @@ class AuthService(BaseService):
         refresh_expires_at = now + refresh_delta
 
         access_token = create_signed_token(
-            user_id=user.id,
+            user_id=cast(str, user.id),
             email=user.email,
             role=user.role,
             session_id=session_identifier,
@@ -261,7 +262,7 @@ class AuthService(BaseService):
             csrf_hash=csrf_hash,
         )
         refresh_token = create_signed_token(
-            user_id=user.id,
+            user_id=cast(str, user.id),
             email=user.email,
             role=user.role,
             session_id=session_identifier,
@@ -319,18 +320,15 @@ class AuthService(BaseService):
         settings = self.settings
         session_path = self._normalise_cookie_path(settings.session_cookie_path)
         refresh_path = self._refresh_cookie_path(session_path)
-        cookie_kwargs = {
-            "domain": settings.session_cookie_domain,
-            "path": session_path,
-            "secure": secure,
-            "httponly": True,
-            "samesite": "lax",
-        }
         response.set_cookie(
             key=settings.session_cookie_name,
             value=tokens.access_token,
             max_age=tokens.access_max_age,
-            **cookie_kwargs,
+            domain=settings.session_cookie_domain,
+            path=session_path,
+            secure=secure,
+            httponly=True,
+            samesite="lax",
         )
         response.set_cookie(
             key=settings.session_refresh_cookie_name,
@@ -456,7 +454,7 @@ class AuthService(BaseService):
         prefix, secret = generate_api_key_components()
         token_hash = hash_api_key(secret)
         record = await self._api_keys.create(
-            user_id=user.id,
+            user_id=cast(str, user.id),
             token_prefix=prefix,
             token_hash=token_hash,
             expires_at=expires_at.isoformat(timespec="seconds") if expires_at else None,
@@ -555,7 +553,7 @@ class AuthService(BaseService):
         user_agent = request.headers.get("user-agent")
         if user_agent:
             record.last_seen_user_agent = user_agent[:255]
-        await self.session.flush()
+        await self._session.flush()
 
     # ------------------------------------------------------------------
     # SSO helpers
@@ -685,7 +683,7 @@ class AuthService(BaseService):
             email_verified=email_verified,
         )
         user.last_login_at = self._now().isoformat()
-        await self.session.flush()
+        await self._session.flush()
         return user
 
     # ------------------------------------------------------------------
@@ -801,12 +799,20 @@ class AuthService(BaseService):
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    metadata.token_endpoint,
-                    data=payload,
-                    headers={"Accept": "application/json"},
-                    auth=auth,
-                )
+                if auth is not None:
+                    auth_param = cast(tuple[str | bytes, str | bytes], auth)
+                    response = await client.post(
+                        metadata.token_endpoint,
+                        data=payload,
+                        headers={"Accept": "application/json"},
+                        auth=auth_param,
+                    )
+                else:
+                    response = await client.post(
+                        metadata.token_endpoint,
+                        data=payload,
+                        headers={"Accept": "application/json"},
+                    )
                 response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             raise HTTPException(
@@ -892,9 +898,9 @@ class AuthService(BaseService):
                     sso_provider=provider,
                     sso_subject=subject,
                 )
-                self.session.add(user)
-                await self.session.flush()
-                await self.session.refresh(user)
+                self._session.add(user)
+                await self._session.flush()
+                await self._session.refresh(user)
             else:
                 if not user.is_active:
                     raise HTTPException(
@@ -905,13 +911,13 @@ class AuthService(BaseService):
                 user.sso_subject = subject
                 if user.email_canonical != canonical:
                     user.email = email.strip()
-                await self.session.flush()
+                await self._session.flush()
         else:
             if not user.is_active:
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail="User account is disabled")
             if user.email_canonical != canonical:
                 user.email = email.strip()
-                await self.session.flush()
+                await self._session.flush()
 
         return user
 

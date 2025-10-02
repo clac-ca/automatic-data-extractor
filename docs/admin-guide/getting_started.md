@@ -74,7 +74,13 @@ accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
    ade start
    ```
 
-   The CLI prints a short banner and runs `uvicorn` with reload enabled. It serves the compiled SPA from `app/static/`, so <http://localhost:8000/> delivers both the UI and API. Use `--rebuild-frontend` to run the Vite production build and copy fresh assets before launch. Other helpful flags: `--no-reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm`.
+   Each invocation performs an idempotent bootstrap before `uvicorn` comes online:
+
+   - create the SQLite directory (`var/db/`) and its parents if they are missing,
+   - run Alembic migrations in order, logging progress to the console, and
+   - print a summary of the resolved settings (sourced from `.env` and the environment).
+
+   Successful boot ends with the FastAPI reload server listening on the configured host and serving the compiled SPA from `app/static/`, so <http://localhost:8000/> delivers both the UI and API. Use `--rebuild-frontend` to run the Vite production build and copy fresh assets before launch. Other helpful flags: `--no-reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm`.
 
 3. Confirm the API is healthy:
 
@@ -82,7 +88,7 @@ accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
    curl http://localhost:8000/health
    ```
 
-All runtime state stays under `var/`. Remove that directory to reset ADE to a clean slate (for example, between demos).
+All runtime state stays under `var/`. Stop the FastAPI process before deleting files and remove only the pieces you need to refresh. Deleting `var/db/` after the app stops resets the SQLite database; the next bootstrap recreates the directory and reapplies migrations automatically. Leave `var/documents/` intact unless you intend to delete uploaded sources.
 
 ### Run backend and frontend manually (optional)
 `ade start` serves the prebuilt SPA. For frontend development with hot module reload, run the backend and the Vite dev server in separate terminals. Install dependencies in `frontend/` first (repeat only after dependency updates).
@@ -161,6 +167,11 @@ The CLI uses the same settings as the API. It works even when the API is not
 running, as long as the `.env` file (or equivalent environment variables) is
 accessible.
 
+Each invocation calls the same bootstrap helper as `ade start`, so SQLite
+directories are created on demand and Alembic migrations run automatically
+before any database session opens. Watch for the `Database bootstrap complete`
+message before assuming changes have been applied.
+
 From a virtual environment or any Python install where ADE is installed:
 
 ```bash
@@ -188,6 +199,29 @@ docker exec -it ade-backend ade users create --email admin@example.com --passwor
 > **Tip:** Because the CLI talks directly to the SQLite database, avoid running
 > long CLI operations while ADE is actively processing heavy requests to keep
 > contention low.
+
+### Manual migrations and recovery
+
+Automatic bootstrapping should cover both the API and CLI. If a deployment fails
+before migrations run, use the same Alembic environment that powers the
+bootstrap helper:
+
+1. Stop the API or CLI process that encountered the failure.
+2. Ensure the desired configuration is exported (source `.env` or forward the
+   relevant environment variables).
+3. From the repository root, run:
+
+   ```bash
+   alembic -c alembic.ini upgrade head
+   ```
+
+4. Restart the API or retry the CLI command.
+
+If you need a clean slate, stop all ADE processes, remove `var/db/`, and start
+the API or CLI again. The bootstrap helper recreates the directory, reapplies
+migrations, and leaves other artefacts (such as `var/documents/`) untouched.
+Capture a backup of `var/` before deleting anything if you may need to inspect
+historical documents.
 
 ## 8. Where ADE Stores Data
 - `var/db/ade.sqlite` – primary metadata database (SQLite).

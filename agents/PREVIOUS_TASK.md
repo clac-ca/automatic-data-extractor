@@ -1,20 +1,23 @@
+# Align settings with standard FastAPI conventions
+
 ## Context
-`CURRENT_TASK.md` asked us to ensure both the FastAPI app and CLI bootstrap the
-SQLite database before serving traffic, fixing the missing `users` table error
-encountered by `ade users create`.
+`CURRENT_TASK.md` called for renaming and retyping configuration so the backend
+exposes predictable, standard FastAPI/Pydantic settings ahead of frontend work.
+The previous module mixed prefixes, optional strings, and bespoke helpers that
+obscured defaults and required call sites to reach for custom properties.
 
 ## Outcome
-- Added a reusable `bootstrap_database` helper that guarantees the SQLite
-  directory exists and runs `alembic upgrade head` exactly once per settings
-  configuration.
-- Integrated the helper into the FastAPI lifespan and CLI session manager so
-  web requests and CLI commands both migrate the schema before opening a
-  session.
-- Introduced regression tests that prove API startup and CLI session helpers
-  materialise the `users` table automatically.
+- Rewrote `Settings` with grouped field names, first-class Pydantic types, and
+  defaults that create runtime directories automatically while keeping access to
+  the unwrapped JWT secret for token signing.【F:app/settings.py†L28-L460】
+- Updated services and CLI helpers to consume `storage_documents_dir`
+  directly, reflecting the concrete directory returned by the new settings
+  contract.【F:app/documents/service.py†L1-L83】【F:app/jobs/service.py†L1-L118】【F:app/cli/commands/reset.py†L1-L87】
+- Refreshed environment templates, docs, and regression tests to match the
+  renamed fields, JSON-based list inputs, and developer defaults so operators
+  have a single, standard configuration story.【F:.env†L1-L18】【F:.env.example†L1-L45】【F:README.md†L137-L162】【F:docs/admin-guide/README.md†L12-L19】【F:tests/core/test_settings.py†L1-L234】
 
 ## Next steps
-- Update the developer documentation to describe the new automatic bootstrap
-  behaviour and clarify how to run migrations manually when needed.
-- Consider establishing a clean `mypy` baseline so future backend changes can
-  rely on type-checking without surfacing dozens of legacy errors.
+- Break the monolithic `Settings` class into domain-specific configs per
+  `agents/BEST_PRACTICE_VIOLATIONS.md` item #4 so modules depend only on the
+  configuration they need.
