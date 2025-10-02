@@ -53,7 +53,13 @@ Guides now live under the [`docs/`](docs/README.md) directory:
    ade start
    ```
 
-   The command runs `uvicorn` with reload enabled and serves the compiled SPA from `app/static/`. Use `--rebuild-frontend` to run the Vite production build and sync the assets before launch. Other handy flags include `--no-reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm` to choose a specific Node executable.
+   `ade start` performs a full bootstrap before launching `uvicorn` with reload enabled and serving the prebuilt SPA from `app/static/`:
+
+   - creates the SQLite directory (`var/db/`) if it does not exist,
+   - applies any pending Alembic migrations, and
+   - emits a short summary of the effective settings so you can confirm the environment.
+
+   If you need to rebuild frontend assets, add `--rebuild-frontend`. Additional quality-of-life flags include `--no-reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm`. Should the automatic bootstrap ever fail, fall back to the [manual migration checklist](docs/admin-guide/getting_started.md#manual-migrations-and-recovery) in the admin guide before restarting the service.
 
    Example: `ade start --rebuild-frontend --env ADE_LOGGING_LEVEL=DEBUG --env ADE_JWT_ACCESS_TTL=15m`
    Adjust the backend bind address with `ADE_SERVER_HOST` / `ADE_SERVER_PORT` (for example `0.0.0.0:8000` inside a container). Use `ADE_SERVER_PUBLIC_URL` for the public origin that browsers or webhooks should hit. Time-based settings such as `ADE_JWT_ACCESS_TTL` accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or `30d`. The frontend targets the same origin at `/api`, so no additional configuration is required when you deploy both pieces together.
@@ -101,7 +107,17 @@ ade api-keys issue --email admin@example.com --json
 ade users set-password --email admin@example.com --password "N3wPass!"
 ```
 
-The CLI prints human-readable tables by default and can emit JSON with `--json` for scripting. See the [admin getting started guide](docs/admin-guide/getting_started.md) for a deeper walkthrough of typical tasks.
+The CLI prints human-readable tables by default, runs the same automatic database bootstrap before each command, and can emit JSON with `--json` for scripting. See the [admin getting started guide](docs/admin-guide/getting_started.md) for a deeper walkthrough of typical tasks, including the [manual migration fallback](docs/admin-guide/getting_started.md#manual-migrations-and-recovery) when automation cannot complete.
+
+### Type checking the backend
+
+Run MyPy before submitting backend changes to ensure the `app/` package stays on a clean baseline:
+
+```bash
+mypy app
+```
+
+The configuration in `pyproject.toml` enables the Pydantic plugin and disallows implicit `Any` usage so missing type hints surface immediately.
 
 ## Architecture snapshot
 
@@ -122,6 +138,26 @@ Uploaded files and the SQLite database are stored beneath the [`var/`](var) dire
 
 > **TODO**
 > Publish the official Docker image to GitHub Container Registry and update the admin guide once the frontend onboarding flow ships.
+
+## Frontend readiness
+
+ADE is ready for the upcoming web interface:
+
+- [`app/main.py`](app/main.py) already serves the built single-page application from `/static`, falls back to `index.html` for unknown routes, and exposes the API under `/api`, so the React app can assume a unified origin.
+- The `ade start` command and [`build_frontend_assets`](app/main.py) helper rebuild the frontend on demand, keeping `app/static/` in sync with the Vite output for local or CI usage.
+- Core routes now publish non-200 responses in the OpenAPI schema, giving the frontend typed failure contracts for authentication, documents, jobs, results, and workspace management.
+- The [API Guide](docs/reference/api-guide.md) documents the shared error envelopes so the frontend can surface precise messages without re-inspecting backend code.
+- Jobs execute through a typed processor contract (`JobProcessorRequest`/`JobProcessorResult`), so swapping in the real extractor or a mock from the frontend test suite only requires calling `set_job_processor` once.
+- Settings follow standard FastAPI/Pydantic conventions with `ADE_` environment variables, so frontend and deployment tooling can rely on a predictable configuration surface.
+
+### Frontend readiness checklist
+
+The backend is ready for the forthcoming React SPA:
+
+- **Consistent API surface.** Every router exposes documented success and error payloads, and jobs now return deterministic metrics/logs through the typed processor contract.
+- **Session-based authentication.** Cookie + CSRF flows are enabled by default so browsers stay within standard security guidelines.
+- **Static asset pipeline.** `ade start --rebuild-frontend` rebuilds the SPA and serves it from the same origin at `/api`, keeping local and production setups aligned.
+- **Swap-in processors.** Use `set_job_processor` during end-to-end tests to fake extractor results without reaching for bespoke fixtures.
 
 ## Status
 

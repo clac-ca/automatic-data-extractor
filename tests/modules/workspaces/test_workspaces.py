@@ -6,11 +6,14 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException, status
 from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.core.db.session import get_sessionmaker
+from app.workspaces.dependencies import require_workspace_context
 from app.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
+from app.workspaces.schemas import WorkspaceContext, WorkspaceProfile
 
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
@@ -655,3 +658,42 @@ async def test_member_can_set_default_workspace(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert revert.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_require_workspace_context_accepts_matching_identifier() -> None:
+    """The dependency should return the selection when the path matches."""
+
+    profile = WorkspaceProfile(
+        workspace_id="ws-123",
+        name="Primary",
+        slug="primary",
+        role=WorkspaceRole.OWNER,
+        permissions=["workspace:read"],
+        is_default=False,
+    )
+    context = WorkspaceContext(workspace=profile)
+
+    result = await require_workspace_context("ws-123", context)
+
+    assert result is context
+
+
+@pytest.mark.asyncio
+async def test_require_workspace_context_rejects_mismatched_identifier() -> None:
+    """A mismatched path should raise a 400 error so callers see the failure."""
+
+    profile = WorkspaceProfile(
+        workspace_id="ws-abc",
+        name="Primary",
+        slug="primary",
+        role=WorkspaceRole.OWNER,
+        permissions=["workspace:read"],
+        is_default=False,
+    )
+    context = WorkspaceContext(workspace=profile)
+
+    with pytest.raises(HTTPException) as exc:
+        await require_workspace_context("ws-other", context)
+
+    assert exc.value.status_code == status.HTTP_400_BAD_REQUEST

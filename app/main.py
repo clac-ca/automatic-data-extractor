@@ -8,6 +8,7 @@ import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Mapping
+from collections.abc import AsyncIterator
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -49,7 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     task_queue = TaskQueue()
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.settings = settings
         app.state.message_hub = message_hub
         app.state.task_queue = task_queue
@@ -70,6 +71,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         debug=settings.debug,
         lifespan=lifespan,
     )
+
+    app.state.settings = settings
+    app.state.message_hub = message_hub
+    app.state.task_queue = task_queue
 
     register_middleware(app)
     _mount_static(app)

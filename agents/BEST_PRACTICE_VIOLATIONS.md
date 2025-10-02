@@ -80,32 +80,10 @@ The following findings were documented after reviewing the repository against th
   ```
   Clients inspecting the OpenAPI schema now see every documented failure mode.
 
-## 6. Validate workspace path parameters via dependencies instead of inline guards
+## 6. Validate workspace path parameters via dependencies instead of inline guards *(Resolved)*
 - **Best practice**: Use dependencies to centralise resource validation and keep RESTful paths consistent so the same dependency can be reused across routes.【F:fastapi-best-practices.md†L310-L389】【F:fastapi-best-practices.md†L472-L512】
-- **Issue**: Both `list_members` and `add_member` re-check that the `workspace_id` path parameter matches the header-provided workspace and then manually parse the body from `request` via the service. This duplicates logic and mixes concerns inside the handler.【F:app/workspaces/router.py†L55-L99】
-- **Why it matters**: Inline guards are easy to forget when new endpoints are added, and reaching into `service.request` to read the body reintroduces the manual parsing issue. Moving this into a dependency both enforces the check everywhere and keeps handlers focused on business logic.
-- ✅ **Suggested fix** – promote the guard into a reusable dependency:
-  ```python
-  async def validate_workspace_access(
-      workspace_id: str,
-      context: WorkspaceContext = Depends(bind_workspace_context),
-  ) -> WorkspaceContext:
-      if context.workspace.workspace_id != workspace_id:
-          raise HTTPException(status.HTTP_400_BAD_REQUEST, "Workspace header mismatch")
-      return context
-
-
-  @router.post("/workspaces/{workspace_id}/members")
-  async def add_member(
-      workspace: WorkspaceContext = Depends(validate_workspace_access),
-      payload: WorkspaceMemberCreate,
-  ) -> WorkspaceMember:
-      return await service.add_member(
-          workspace_id=workspace.workspace.workspace_id,
-          **payload.model_dump(),
-      )
-  ```
-  Every route that needs the guard can now depend on `validate_workspace_access`, guaranteeing consistent behaviour.
+- ✅ **Status**: `require_workspace_context` now wraps `bind_workspace_context`, raising a 400 error whenever the `workspace_id` path segment and resolved workspace diverge. All workspace routers depend on it and the service reads the current workspace from request state, eliminating manual comparisons and duplicate guards.【F:app/workspaces/dependencies.py†L1-L74】【F:app/workspaces/router.py†L1-L360】【F:app/workspaces/service.py†L140-L332】
+- ✅ **Tests**: Dependency unit tests confirm matching identifiers succeed and mismatches propagate the documented 400 response.【F:tests/modules/workspaces/test_workspaces.py†L233-L268】
 
 ## 7. Convert user-facing `ValueError`s into validation or HTTP errors *(Resolved)*
 - **Best practice**: Raise `ValueError` inside request models (so FastAPI returns a 422) or translate them into `HTTPException`s; uncaught `ValueError`s bubble up as 500 responses.【F:fastapi-best-practices.md†L571-L605】

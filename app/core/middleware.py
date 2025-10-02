@@ -9,6 +9,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from .logging import bind_request_context, clear_request_context
@@ -29,7 +30,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
 
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint):
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         correlation_id = request.headers.get("X-Request-ID", str(uuid4()))
         request.state.correlation_id = correlation_id
         bind_request_context(correlation_id)

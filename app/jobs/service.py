@@ -22,20 +22,15 @@ from ..documents.models import Document
 from ..documents.storage import DocumentStorage
 from ..events.recorder import persist_event
 from ..results.repository import ExtractedTablesRepository
-from .exceptions import (
-    InputDocumentNotFoundError,
-    JobExecutionError,
-    JobNotFoundError,
-)
+from .exceptions import InputDocumentNotFoundError, JobExecutionError, JobNotFoundError
 from .models import Job
 from .schemas import JobRecord
-
-# The legacy `backend.processor` module has been removed. Keep the type
-# annotations permissive until a replacement processor is wired in.
-JobRequest = Any
-JobResult = Any
-ProcessorError = Exception
-run_processor = None
+from .processor import (
+    JobProcessorRequest,
+    JobProcessorResult,
+    ProcessorError,
+    get_job_processor,
+)
 
 _VALID_STATUSES = frozenset({"pending", "running", "succeeded", "failed"})
 
@@ -229,11 +224,8 @@ class JobsService(BaseService):
         job: Job,
         document: Document,
         configuration: Any,
-    ) -> JobResult:
-        if run_processor is None:  # pragma: no cover - temporary safeguard
-            raise RuntimeError(
-                "Job processor entry point is unavailable; configure an extractor backend."
-            )
+    ) -> JobProcessorResult:
+        processor = get_job_processor()
 
         document_path = self._storage.path_for(document.stored_uri)
         config_identifier = str(configuration.id)
@@ -245,7 +237,7 @@ class JobsService(BaseService):
         }
         processor_configuration.update(configuration_payload)
 
-        request = JobRequest(
+        request = JobProcessorRequest(
             job_id=job.job_id,
             document_path=document_path,
             configuration=processor_configuration,
@@ -255,7 +247,7 @@ class JobsService(BaseService):
             },
         )
 
-        result: JobResult = await run_in_threadpool(run_processor, request)
+        result = await run_in_threadpool(processor, request)
         await self._tables.replace_job_tables(
             job_id=job.job_id,
             document_id=document.document_id,
@@ -303,7 +295,7 @@ class JobsService(BaseService):
     async def _finalise_success(
         self,
         job: Job,
-        result: JobResult,
+        result: JobProcessorResult,
         duration_ms: int,
     ) -> None:
         metrics = dict(result.metrics or {})
