@@ -35,6 +35,7 @@ class JobRecord(BaseSchema):
     """Serialised representation of a job row."""
 
     job_id: str
+    workspace_id: str
     document_type: str
     configuration_id: str
     configuration_version: int

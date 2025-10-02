@@ -13,6 +13,7 @@ class ConfigurationRecord(BaseSchema):
     """Serialised representation of a configuration version."""
 
     configuration_id: str = Field(alias="id", serialization_alias="configuration_id")
+    workspace_id: str
     document_type: str
     title: str
     version: int

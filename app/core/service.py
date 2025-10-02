@@ -97,6 +97,17 @@ class BaseService:
     def task_queue(self) -> TaskQueue | None:
         return self._context.task_queue
 
+    def require_workspace_id(self) -> str:
+        workspace = self.current_workspace
+        if workspace is None:
+            raise RuntimeError("Workspace context required")
+        workspace_id = getattr(workspace, "workspace_id", None) or getattr(
+            workspace, "id", None
+        )
+        if workspace_id is None:
+            raise RuntimeError("Workspace identifier missing from context")
+        return str(workspace_id)
+
     async def aclose(self) -> None:
         """Hook for cleaning up resources when the request completes."""
 

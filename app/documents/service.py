@@ -45,6 +45,7 @@ class DocumentsService(BaseService):
     ) -> DocumentRecord:
         """Persist ``upload`` to storage and return the resulting metadata record."""
 
+        workspace_id = self.require_workspace_id()
         metadata_payload = dict(metadata or {})
         now = datetime.now(tz=UTC)
         expiration = self._resolve_expiration(expires_at, now)
@@ -63,6 +64,7 @@ class DocumentsService(BaseService):
 
         document = Document(
             id=document_id,
+            workspace_id=workspace_id,
             original_filename=self._normalise_filename(upload.filename),
             content_type=self._normalise_content_type(upload.content_type),
             byte_size=stored.byte_size,
@@ -83,7 +85,11 @@ class DocumentsService(BaseService):
                 "byte_size": record.byte_size,
                 "content_type": record.content_type,
             },
-            metadata={"entity_type": "document", "entity_id": record.document_id},
+            metadata={
+                "entity_type": "document",
+                "entity_id": record.document_id,
+                "workspace_id": workspace_id,
+            },
         )
         return record
 
@@ -99,7 +105,10 @@ class DocumentsService(BaseService):
         await self.publish_event(
             "documents.listed",
             payload={"count": len(records), "limit": limit, "offset": offset},
-            metadata={"entity_type": "document_collection"},
+            metadata={
+                "entity_type": "document_collection",
+                "workspace_id": self.require_workspace_id(),
+            },
         )
         return records
 
@@ -111,7 +120,11 @@ class DocumentsService(BaseService):
         await self.publish_event(
             "document.viewed",
             payload={"document_id": record.document_id},
-            metadata={"entity_type": "document", "entity_id": record.document_id},
+            metadata={
+                "entity_type": "document",
+                "entity_id": record.document_id,
+                "workspace_id": document.workspace_id,
+            },
         )
         return record
 
@@ -139,7 +152,11 @@ class DocumentsService(BaseService):
         await self.publish_event(
             "document.downloaded",
             payload={"document_id": record.document_id, "byte_size": record.byte_size},
-            metadata={"entity_type": "document", "entity_id": record.document_id},
+            metadata={
+                "entity_type": "document",
+                "entity_id": record.document_id,
+                "workspace_id": document.workspace_id,
+            },
         )
         return record, _guarded()
 
@@ -162,7 +179,11 @@ class DocumentsService(BaseService):
                 "document_id": document.document_id,
                 "reason": reason,
             },
-            metadata={"entity_type": "document", "entity_id": document.document_id},
+            metadata={
+                "entity_type": "document",
+                "entity_id": document.document_id,
+                "workspace_id": document.workspace_id,
+            },
         )
 
     async def _persist_event(
@@ -191,7 +212,8 @@ class DocumentsService(BaseService):
         return document
 
     def _base_query(self) -> Select[tuple[Document]]:
-        return select(Document)
+        workspace_id = self.require_workspace_id()
+        return select(Document).where(Document.workspace_id == workspace_id)
 
     def _resolve_expiration(self, override: str | None, now: datetime) -> str:
         if override is None:

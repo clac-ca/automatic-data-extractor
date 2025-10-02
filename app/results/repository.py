@@ -18,6 +18,7 @@ class ExtractedTablesRepository:
     async def replace_job_tables(
         self,
         *,
+        workspace_id: str,
         job_id: str,
         document_id: str,
         tables: Sequence[Mapping[str, Any]],
@@ -40,6 +41,7 @@ class ExtractedTablesRepository:
             title_value = str(title) if title is not None else None
 
             record = ExtractedTable(
+                workspace_id=workspace_id,
                 job_id=job_id,
                 document_id=document_id,
                 sequence_index=sequence_index,
@@ -55,32 +57,47 @@ class ExtractedTablesRepository:
         await self._session.flush()
         return records
 
-    async def list_for_job(self, job_id: str) -> list[ExtractedTable]:
+    async def list_for_job(self, *, workspace_id: str, job_id: str) -> list[ExtractedTable]:
         """Return tables associated with ``job_id`` ordered by sequence."""
 
         statement = (
             select(ExtractedTable)
-            .where(ExtractedTable.job_id == job_id)
+            .where(
+                ExtractedTable.workspace_id == workspace_id,
+                ExtractedTable.job_id == job_id,
+            )
             .order_by(ExtractedTable.sequence_index, ExtractedTable.created_at)
         )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
-    async def list_for_document(self, document_id: str) -> list[ExtractedTable]:
+    async def list_for_document(
+        self, *, workspace_id: str, document_id: str
+    ) -> list[ExtractedTable]:
         """Return tables associated with ``document_id`` ordered by sequence."""
 
         statement = (
             select(ExtractedTable)
-            .where(ExtractedTable.document_id == document_id)
+            .where(
+                ExtractedTable.workspace_id == workspace_id,
+                ExtractedTable.document_id == document_id,
+            )
             .order_by(ExtractedTable.sequence_index, ExtractedTable.created_at)
         )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
-    async def get_table(self, table_id: str) -> ExtractedTable | None:
+    async def get_table(
+        self, *, workspace_id: str, table_id: str
+    ) -> ExtractedTable | None:
         """Return a single table by identifier."""
 
-        return await self._session.get(ExtractedTable, table_id)
+        stmt = select(ExtractedTable).where(
+            ExtractedTable.id == table_id,
+            ExtractedTable.workspace_id == workspace_id,
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().first()
 
 
 def _coerce_int(value: Any, default: int) -> int:

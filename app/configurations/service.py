@@ -29,7 +29,10 @@ class ConfigurationsService(BaseService):
     ) -> list[ConfigurationRecord]:
         """Return configurations ordered by recency."""
 
+        workspace_id = self.require_workspace_id()
+
         configurations = await self._repository.list_configurations(
+            workspace_id=workspace_id,
             document_type=document_type,
             is_active=is_active,
         )
@@ -43,14 +46,10 @@ class ConfigurationsService(BaseService):
         if is_active is not None:
             payload["is_active"] = is_active
 
-        metadata: dict[str, Any] = {"entity_type": "configuration_collection"}
-        workspace = self.current_workspace
-        workspace_id = None
-        if workspace is not None:
-            workspace_id = getattr(workspace, "workspace_id", None) or getattr(
-                workspace, "id", None
-            )
-        metadata["entity_id"] = str(workspace_id) if workspace_id is not None else "global"
+        metadata: dict[str, Any] = {
+            "entity_type": "configuration_collection",
+            "entity_id": workspace_id,
+        }
 
         await self.publish_event("configurations.listed", payload, metadata=metadata)
         return records
@@ -63,13 +62,22 @@ class ConfigurationsService(BaseService):
     ) -> ConfigurationRecord:
         """Return a single configuration by identifier."""
 
-        configuration = await self._repository.get_configuration(configuration_id)
+        workspace_id = self.require_workspace_id()
+
+        configuration = await self._repository.get_configuration(
+            configuration_id,
+            workspace_id=workspace_id,
+        )
         if configuration is None:
             raise ConfigurationNotFoundError(configuration_id)
 
         record = ConfigurationRecord.model_validate(configuration)
         if emit_event:
-            metadata = {"entity_type": "configuration", "entity_id": record.configuration_id}
+            metadata = {
+                "entity_type": "configuration",
+                "entity_id": record.configuration_id,
+                "workspace_id": record.workspace_id,
+            }
             payload = {
                 "configuration_id": record.configuration_id,
                 "document_type": record.document_type,
@@ -91,8 +99,14 @@ class ConfigurationsService(BaseService):
     ) -> ConfigurationRecord:
         """Create a configuration with the next sequential version."""
 
-        version = await self._repository.determine_next_version(document_type)
+        workspace_id = self.require_workspace_id()
+
+        version = await self._repository.determine_next_version(
+            workspace_id=workspace_id,
+            document_type=document_type,
+        )
         configuration = await self._repository.create_configuration(
+            workspace_id=workspace_id,
             document_type=document_type,
             title=title,
             payload=payload,
@@ -105,7 +119,11 @@ class ConfigurationsService(BaseService):
             "document_type": record.document_type,
             "version": record.version,
         }
-        metadata = {"entity_type": "configuration", "entity_id": record.configuration_id}
+        metadata = {
+            "entity_type": "configuration",
+            "entity_id": record.configuration_id,
+            "workspace_id": record.workspace_id,
+        }
         await self.publish_event("configuration.created", event_payload, metadata=metadata)
         return record
 
@@ -118,7 +136,12 @@ class ConfigurationsService(BaseService):
     ) -> ConfigurationRecord:
         """Replace mutable fields on ``configuration_id``."""
 
-        configuration = await self._repository.get_configuration(configuration_id)
+        workspace_id = self.require_workspace_id()
+
+        configuration = await self._repository.get_configuration(
+            configuration_id,
+            workspace_id=workspace_id,
+        )
         if configuration is None:
             raise ConfigurationNotFoundError(configuration_id)
 
@@ -134,14 +157,21 @@ class ConfigurationsService(BaseService):
             "document_type": record.document_type,
             "version": record.version,
         }
-        metadata = {"entity_type": "configuration", "entity_id": record.configuration_id}
+        metadata = {
+            "entity_type": "configuration",
+            "entity_id": record.configuration_id,
+            "workspace_id": record.workspace_id,
+        }
         await self.publish_event("configuration.updated", event_payload, metadata=metadata)
         return record
 
     async def delete_configuration(self, *, configuration_id: str) -> None:
         """Remove a configuration permanently."""
 
-        configuration = await self._repository.get_configuration(configuration_id)
+        configuration = await self._repository.get_configuration(
+            configuration_id,
+            workspace_id=self.require_workspace_id(),
+        )
         if configuration is None:
             raise ConfigurationNotFoundError(configuration_id)
 
@@ -151,7 +181,11 @@ class ConfigurationsService(BaseService):
             "configuration_id": configuration_id,
             "document_type": configuration.document_type,
         }
-        metadata = {"entity_type": "configuration", "entity_id": configuration_id}
+        metadata = {
+            "entity_type": "configuration",
+            "entity_id": configuration_id,
+            "workspace_id": configuration.workspace_id,
+        }
         await self.publish_event("configuration.deleted", payload, metadata=metadata)
 
     async def activate_configuration(
@@ -161,7 +195,12 @@ class ConfigurationsService(BaseService):
     ) -> ConfigurationRecord:
         """Activate ``configuration_id`` and deactivate competing versions."""
 
-        configuration = await self._repository.get_configuration(configuration_id)
+        workspace_id = self.require_workspace_id()
+
+        configuration = await self._repository.get_configuration(
+            configuration_id,
+            workspace_id=workspace_id,
+        )
         if configuration is None:
             raise ConfigurationNotFoundError(configuration_id)
 
@@ -173,7 +212,11 @@ class ConfigurationsService(BaseService):
             "document_type": record.document_type,
             "activated_at": record.activated_at,
         }
-        metadata = {"entity_type": "configuration", "entity_id": record.configuration_id}
+        metadata = {
+            "entity_type": "configuration",
+            "entity_id": record.configuration_id,
+            "workspace_id": record.workspace_id,
+        }
         await self.publish_event("configuration.activated", payload, metadata=metadata)
         return record
 
@@ -182,7 +225,12 @@ class ConfigurationsService(BaseService):
     ) -> list[ConfigurationRecord]:
         """Return currently active configurations grouped by document type."""
 
-        configurations = await self._repository.list_active_configurations(document_type)
+        workspace_id = self.require_workspace_id()
+
+        configurations = await self._repository.list_active_configurations(
+            workspace_id=workspace_id,
+            document_type=document_type,
+        )
         records = [ConfigurationRecord.model_validate(row) for row in configurations]
 
         payload: dict[str, Any] = {
@@ -191,14 +239,10 @@ class ConfigurationsService(BaseService):
         if document_type:
             payload["document_type"] = document_type
 
-        metadata: dict[str, Any] = {"entity_type": "configuration_collection"}
-        workspace = self.current_workspace
-        workspace_id = None
-        if workspace is not None:
-            workspace_id = getattr(workspace, "workspace_id", None) or getattr(
-                workspace, "id", None
-            )
-        metadata["entity_id"] = str(workspace_id) if workspace_id is not None else "global"
+        metadata: dict[str, Any] = {
+            "entity_type": "configuration_collection",
+            "entity_id": workspace_id,
+        }
 
         await self.publish_event(
             "configurations.list_active", payload, metadata=metadata

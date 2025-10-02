@@ -13,6 +13,7 @@ class DocumentRecord(BaseSchema):
     """Serialised representation of a stored document."""
 
     document_id: str = Field(alias="id", serialization_alias="document_id")
+    workspace_id: str
     original_filename: str
     content_type: str | None = None
     byte_size: int
