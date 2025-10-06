@@ -52,14 +52,22 @@ include = ["app*"]
 [tool.setuptools.package-data]
 app = [
   "py.typed",
-  "static/**/*",
+  "web/**/*",
+  "static/README.md",
   "alembic/**/*",
 ]
 
 # ---- Tooling configs ----
 [tool.pytest.ini_options]
 minversion = "8.0"
-testpaths = ["tests"]
+testpaths = [
+  "tests/api",
+  "tests/cli",
+  "tests/core",
+  "tests/db",
+  "tests/features",
+  "tests/services",
+]
 asyncio_mode = "auto"
 addopts = "-ra"
 

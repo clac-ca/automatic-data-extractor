@@ -4,8 +4,8 @@ import io
 
 import pytest
 
-from app.documents import DocumentStorage
-from app.documents.exceptions import DocumentTooLargeError
+from app.features.documents import DocumentStorage
+from app.features.documents.exceptions import DocumentTooLargeError
 
 
 @pytest.mark.asyncio

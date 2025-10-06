@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from app import Settings, get_settings, reload_settings
-from app.core.startup import ensure_runtime_dirs
+from app.lifecycles import ensure_runtime_dirs
 
 
 @pytest.fixture(autouse=True)
@@ -187,7 +187,9 @@ def test_server_public_url_accepts_https(monkeypatch: pytest.MonkeyPatch) -> Non
     }
 
 
-def test_storage_directories_follow_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_storage_directories_follow_data_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Documents directory should default inside the configured data directory."""
 
     data_dir = tmp_path / "ade-data"

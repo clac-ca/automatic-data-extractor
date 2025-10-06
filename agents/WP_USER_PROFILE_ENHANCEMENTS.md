@@ -15,7 +15,7 @@ Expose richer profile data (display name and default workspace selection) to sup
 - Avoid additional round-trips by fetching default membership within the same DB session.
 
 ## Tasks
-1. Extend `app/users/schemas.py` and related Pydantic models to include the new fields.
+1. Extend `app/features/users/schemas.py` and related Pydantic models to include the new fields.
 2. Update `UsersService` to fetch the default workspace ID (use existing repository helpers or add one if missing).
 3. Adjust auth dependencies/tests to ensure the new fields propagate through `/auth/me` and session envelopes.
 4. Update fixtures/factories to set `display_name` and `is_default` where necessary.
