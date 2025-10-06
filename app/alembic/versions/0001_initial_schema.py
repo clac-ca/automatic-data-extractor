@@ -5,7 +5,6 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-
 revision = "0001_initial_schema"
 down_revision = None
 branch_labels = None
@@ -20,15 +19,11 @@ def upgrade() -> None:
     _create_configurations()
     _create_documents()
     _create_jobs()
-    _create_extracted_tables()
-    _create_events()
     _create_system_settings()
 
 
 def downgrade() -> None:
     op.drop_table("system_settings")
-    op.drop_table("events")
-    op.drop_table("extracted_tables")
     op.drop_table("jobs")
     op.drop_table("documents")
     op.drop_table("configurations")
@@ -220,86 +215,6 @@ def _create_jobs() -> None:
     )
     op.create_index("jobs_workspace_id_idx", "jobs", ["workspace_id"], unique=False)
     op.create_index("jobs_input_document_id_idx", "jobs", ["input_document_id"], unique=False)
-
-def _create_extracted_tables() -> None:
-    op.create_table(
-        "extracted_tables",
-        sa.Column("table_id", sa.String(length=26), primary_key=True),
-        sa.Column("workspace_id", sa.String(length=26), nullable=False),
-        sa.Column("job_id", sa.String(length=40), nullable=False),
-        sa.Column("document_id", sa.String(length=26), nullable=False),
-        sa.Column("sequence_index", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("title", sa.String(length=255), nullable=True),
-        sa.Column("row_count", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("columns", sa.JSON(), nullable=False, server_default=sa.text("'[]'")),
-        sa.Column("sample_rows", sa.JSON(), nullable=False, server_default=sa.text("'[]'")),
-        sa.Column("metadata", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
-        sa.Column("created_at", sa.String(length=32), nullable=False),
-        sa.Column("updated_at", sa.String(length=32), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["workspace_id"],
-            ["workspaces.workspace_id"],
-            ondelete="CASCADE",
-        ),
-        sa.ForeignKeyConstraint(
-            ["job_id"],
-            ["jobs.job_id"],
-            ondelete="CASCADE",
-        ),
-        sa.ForeignKeyConstraint(
-            ["document_id"],
-            ["documents.document_id"],
-            ondelete="CASCADE",
-        ),
-    )
-    op.create_index(
-        "extracted_tables_workspace_id_idx",
-        "extracted_tables",
-        ["workspace_id"],
-        unique=False,
-    )
-    op.create_index(
-        "extracted_tables_job_id_idx",
-        "extracted_tables",
-        ["job_id"],
-        unique=False,
-    )
-    op.create_index(
-        "extracted_tables_document_id_idx",
-        "extracted_tables",
-        ["document_id"],
-        unique=False,
-    )
-
-
-def _create_events() -> None:
-    op.create_table(
-        "events",
-        sa.Column("event_id", sa.String(length=26), primary_key=True),
-        sa.Column("event_type", sa.String(length=100), nullable=False),
-        sa.Column("entity_type", sa.String(length=100), nullable=False),
-        sa.Column("entity_id", sa.String(length=100), nullable=False),
-        sa.Column("occurred_at", sa.String(length=32), nullable=False),
-        sa.Column("actor_type", sa.String(length=50), nullable=True),
-        sa.Column("actor_id", sa.String(length=100), nullable=True),
-        sa.Column("actor_label", sa.String(length=255), nullable=True),
-        sa.Column("source", sa.String(length=50), nullable=True),
-        sa.Column("request_id", sa.String(length=100), nullable=True),
-        sa.Column("payload", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
-    )
-    op.create_index(
-        "events_entity_type_entity_id_idx",
-        "events",
-        ["entity_type", "entity_id"],
-        unique=False,
-    )
-    op.create_index(
-        "events_event_type_idx",
-        "events",
-        ["event_type"],
-        unique=False,
-    )
-
 
 def _create_system_settings() -> None:
     op.create_table(

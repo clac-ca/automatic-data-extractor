@@ -1,4 +1,4 @@
-"""Copy the compiled React assets into ``app/static``."""
+"""Copy the compiled React assets into ``app/web``."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ from pathlib import Path
 from app.main import (
     DEFAULT_FRONTEND_DIR,
     FRONTEND_BUILD_DIRNAME,
-    STATIC_DIR,
+    WEB_DIR,
     sync_frontend_assets,
 )
 
 DEFAULT_DIST = DEFAULT_FRONTEND_DIR / FRONTEND_BUILD_DIRNAME
-DEFAULT_STATIC = STATIC_DIR
+DEFAULT_STATIC = WEB_DIR
 
 
 def copy_frontend_build(src: Path, dest: Path) -> None:
@@ -24,7 +24,7 @@ def copy_frontend_build(src: Path, dest: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Copy frontend/dist assets into app/static for packaging.",
+        description="Copy frontend/dist assets into app/web for packaging.",
     )
     parser.add_argument(
         "--dist",

@@ -16,13 +16,18 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app import Settings, get_settings, reload_settings
-from app.core.db.engine import render_sync_url, reset_database_state
-from app.core.startup import ensure_runtime_dirs
-from app.core.db.session import get_sessionmaker
+from app.db.bootstrap import ensure_database_ready
+from app.db.engine import render_sync_url, reset_database_state
+from app.db.session import get_sessionmaker
+from app.features.auth.security import hash_password
+from app.features.users.models import User, UserRole
+from app.features.workspaces.models import (
+    Workspace,
+    WorkspaceMembership,
+    WorkspaceRole,
+)
+from app.lifecycles import ensure_runtime_dirs
 from app.main import create_app
-from app.auth.security import hash_password
-from app.users.models import User, UserRole
-from app.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
 
 
 @pytest.fixture(scope="session")
@@ -121,6 +126,7 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
     """Create baseline users and workspace records for identity tests."""
 
     settings = get_settings()
+    await ensure_database_ready(settings)
     session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:
         workspace_slug = f"acme-{uuid4().hex[:8]}"

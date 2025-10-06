@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import json
 import re
-from functools import lru_cache
+from collections.abc import MutableMapping
 from datetime import timedelta
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
-from collections.abc import MutableMapping
 
 from pydantic import Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATA_DIR = PROJECT_ROOT / "var"
@@ -68,7 +68,8 @@ def _parse_duration(raw_value: Any, *, field_name: str) -> timedelta:
         match = _DURATION_PATTERN.match(text)
         if not match:
             raise ValueError(
-                f"{field_name} must be numeric seconds or a value like '15m', '1h', or '30 minutes'",
+                f"{field_name} must be numeric seconds or a value like '15m', '1h', "
+                "or '30 minutes'",
             )
         number = float(match.group("value"))
         unit = match.group("unit")
@@ -76,7 +77,8 @@ def _parse_duration(raw_value: Any, *, field_name: str) -> timedelta:
             multiplier = _DURATION_UNITS.get(unit.lower())
             if multiplier is None:
                 raise ValueError(
-                    f"Unsupported duration unit for {field_name}. Use seconds (s), minutes (m), hours (h), or days (d).",
+                    f"Unsupported duration unit for {field_name}. "
+                    "Use seconds (s), minutes (m), hours (h), or days (d).",
                 )
             seconds = number * multiplier
         else:
@@ -153,12 +155,17 @@ class Settings(BaseSettings):
     @classmethod
     def settings_customise_sources(
         cls,
-        settings_cls,
-        init_settings,
-        env_settings,
-        dotenv_settings,
-        file_secret_settings,
-    ):
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[
+        PydanticBaseSettingsSource,
+        PydanticBaseSettingsSource,
+        PydanticBaseSettingsSource,
+        PydanticBaseSettingsSource,
+    ]:
         for source in (env_settings, dotenv_settings):
             env_vars = getattr(source, "env_vars", None)
             if isinstance(env_vars, MutableMapping):
@@ -188,11 +195,17 @@ class Settings(BaseSettings):
     dev_mode: bool = Field(False, description="Enable developer conveniences like auto-reload.")
     app_name: str = Field("Automatic Data Extractor API", description="Human readable API name.")
     app_version: str = Field("0.1.0", description="API version string exposed in docs.")
-    api_docs_enabled: bool = Field(False, description="Expose interactive API documentation routes.")
+    api_docs_enabled: bool = Field(
+        False,
+        description="Expose interactive API documentation routes.",
+    )
     docs_url: str = Field("/docs", description="Swagger UI mount point.")
     redoc_url: str = Field("/redoc", description="ReDoc mount point.")
     openapi_url: str = Field("/openapi.json", description="OpenAPI schema path.")
-    logging_level: str = Field("INFO", description="Root logging level for the backend application.")
+    logging_level: str = Field(
+        "INFO",
+        description="Root logging level for the backend application.",
+    )
 
     server_host: str = Field("localhost", description="Network interface the server binds to.")
     server_port: int = Field(8000, ge=1, le=65535, description="Port that uvicorn listens on.")
@@ -220,7 +233,11 @@ class Settings(BaseSettings):
     )
     database_echo: bool = Field(False, description="Enable SQLAlchemy engine echo logging.")
     database_pool_size: int = Field(5, ge=1, description="SQLAlchemy connection pool size.")
-    database_max_overflow: int = Field(10, ge=0, description="SQLAlchemy connection pool overflow size.")
+    database_max_overflow: int = Field(
+        10,
+        ge=0,
+        description="SQLAlchemy connection pool overflow size.",
+    )
     database_pool_timeout: int = Field(30, gt=0, description="SQLAlchemy pool timeout in seconds.")
 
     jwt_secret: SecretStr = Field(
@@ -246,7 +263,10 @@ class Settings(BaseSettings):
     )
     session_cookie_path: str = Field("/", description="Cookie path scope.")
 
-    oidc_enabled: bool = Field(False, description="Enable OpenID Connect login flow when fully configured.")
+    oidc_enabled: bool = Field(
+        False,
+        description="Enable OpenID Connect login flow when fully configured.",
+    )
     oidc_client_id: str | None = Field(None, description="OIDC client identifier.")
     oidc_client_secret: SecretStr | None = Field(None, description="OIDC client secret.")
     oidc_issuer: str | None = Field(None, description="OIDC issuer URL.")
@@ -271,7 +291,10 @@ class Settings(BaseSettings):
     )
     storage_document_retention_period: timedelta = Field(
         timedelta(days=30),
-        description="Default document retention window. Accepts seconds or suffixed values like '30d'.",
+        description=(
+            "Default document retention window. Accepts seconds or suffixed "
+            "values like '30d'."
+        ),
     )
 
     @field_validator("server_host", mode="before")
@@ -304,7 +327,12 @@ class Settings(BaseSettings):
     def _prepare_data_dir(cls, value: Any) -> Path:
         return _resolve_path(value, fallback=DEFAULT_DATA_DIR)
 
-    @field_validator("session_cookie_name", "session_refresh_cookie_name", "session_csrf_cookie_name", mode="before")
+    @field_validator(
+        "session_cookie_name",
+        "session_refresh_cookie_name",
+        "session_csrf_cookie_name",
+        mode="before",
+    )
     @classmethod
     def _clean_cookie_name(cls, value: Any) -> str:
         if value is None:
@@ -316,7 +344,12 @@ class Settings(BaseSettings):
             raise ValueError("Cookie names must not contain whitespace")
         return name
 
-    @field_validator("session_cookie_domain", "oidc_resource_audience", "oidc_client_id", mode="before")
+    @field_validator(
+        "session_cookie_domain",
+        "oidc_resource_audience",
+        "oidc_client_id",
+        mode="before",
+    )
     @classmethod
     def _blank_to_none(cls, value: Any) -> str | None:
         if value is None:
@@ -365,15 +398,21 @@ class Settings(BaseSettings):
                     ) from exc
                 value = parsed
             else:
-                scopes = [segment.strip() for segment in re.split(r"[\s,]+", text) if segment.strip()]
+                scopes = [
+                    segment.strip()
+                    for segment in re.split(r"[\s,]+", text)
+                    if segment.strip()
+                ]
                 if not scopes:
                     raise ValueError("oidc_scopes must not be empty")
                 return sorted(set(scopes))
         if isinstance(value, (list, tuple, set)):
-            scopes = {str(item).strip() for item in value if str(item).strip()}
-            if not scopes:
+            cleaned_scopes = {
+                str(item).strip() for item in value if str(item).strip()
+            }
+            if not cleaned_scopes:
                 raise ValueError("oidc_scopes must not be empty")
-            return sorted(scopes)
+            return sorted(cleaned_scopes)
         raise TypeError("oidc_scopes must be provided as a string or list of strings")
 
     @field_validator(
@@ -388,7 +427,7 @@ class Settings(BaseSettings):
         return _parse_duration(value, field_name=info.field_name)
 
     @model_validator(mode="after")
-    def _finalise(self) -> "Settings":
+    def _finalise(self) -> Settings:
         data_dir = _resolve_path(self.storage_data_dir, fallback=DEFAULT_DATA_DIR)
         self.storage_data_dir = data_dir
 
@@ -404,6 +443,15 @@ class Settings(BaseSettings):
                 continue
             seen.add(cleaned)
             unique_origins.append(cleaned)
+        if (
+            "server_cors_origins" not in self.model_fields_set
+            and DEFAULT_PUBLIC_URL in seen
+            and self.server_public_url != DEFAULT_PUBLIC_URL
+        ):
+            seen.discard(DEFAULT_PUBLIC_URL)
+            unique_origins = [
+                origin for origin in unique_origins if origin != DEFAULT_PUBLIC_URL
+            ]
         self.server_cors_origins = unique_origins
 
         required = {

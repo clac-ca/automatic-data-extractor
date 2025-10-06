@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from app.users.models import UserRole
+from app.features.users.models import UserRole
 
 from .commands import api_keys as api_keys_commands
 from .commands import reset as reset_command

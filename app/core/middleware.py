@@ -12,8 +12,9 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
-from .logging import bind_request_context, clear_request_context
 from app.core.config import get_settings
+
+from .logging import bind_request_context, clear_request_context
 
 _REQUEST_LOGGER = logging.getLogger("ade.request")
 

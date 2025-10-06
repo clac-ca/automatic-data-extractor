@@ -4,13 +4,13 @@ Automatic Data Extractor (ADE) ingests semi-structured documents and turns them 
 
 - **Deterministic jobs** – Extraction logic is revision-controlled so reruns produce identical outputs.
 - **Workspace aware** – Every request is scoped to a workspace through URL paths like `/workspaces/{workspace_id}` for simple multi-tenancy.
-- **Single API surface** – Upload documents, run jobs, inspect events, and fetch results through the same FastAPI application.
+- **Single API surface** – Upload documents, run jobs, and manage workspaces through the same FastAPI application.
 
 ## Documentation
 
 Guides now live under the [`docs/`](docs/README.md) directory:
 
-- [User Guide](docs/user-guide/README.md) – core workflows for documents, jobs, results, and events.
+- [User Guide](docs/user-guide/README.md) – core workflows for documents, jobs, and workspace operations.
 - [Admin Guide](docs/admin-guide/README.md) – deployment, configuration, and operational building blocks.
 - [Reference glossary](docs/reference/glossary.md) – shared terminology across API payloads and database entities.
 
@@ -53,7 +53,7 @@ Guides now live under the [`docs/`](docs/README.md) directory:
    ade start
    ```
 
-   `ade start` performs a full bootstrap before launching `uvicorn` with reload enabled and serving the prebuilt SPA from `app/static/`:
+   `ade start` performs a full bootstrap before launching `uvicorn` with reload enabled and serving the prebuilt SPA from `app/web/`:
 
    - creates the SQLite directory (`var/db/`) if it does not exist,
    - applies any pending Alembic migrations, and
@@ -76,7 +76,7 @@ Guides now live under the [`docs/`](docs/README.md) directory:
 
 ### Start each service manually (optional)
 
-`ade start` serves the prebuilt SPA from `app/static/`. If you prefer Vite hot module reload while developing the frontend, run the backend and Vite dev server in separate terminals:
+`ade start` serves the prebuilt SPA from `app/web/`. If you prefer Vite hot module reload while developing the frontend, run the backend and Vite dev server in separate terminals:
 
 ```bash
 # Terminal 1 – backend (from repo root)
@@ -123,16 +123,16 @@ The configuration in `pyproject.toml` enables the Pydantic plugin and disallows 
 
 ADE follows a feature-first layout inside the `app/` package:
 
-- [`app/auth`](app/auth) – password, SSO, and API key flows plus access-control helpers.
-- [`app/documents`](app/documents) – multipart uploads, metadata, downloads, and deletions.
-- [`app/jobs`](app/jobs) – submission, status tracking, and background execution via the in-process task queue.
-- [`app/results`](app/results) – table retrieval by job or document identifier.
-- [`app/workspaces`](app/workspaces) – routing helpers and dependencies that enforce workspace-scoped URLs.
-- [`app/events`](app/events) – persistence helpers (recorder and repository) for immutable audit logs.
-- [`app/configurations`](app/configurations) – feature flags and per-workspace configuration records.
-- [`app/users`](app/users) – identity management, roles, and repositories shared across features.
+- [`app/api`](app/api) – the versioned router shell and shared dependency aliases consumed by FastAPI routes.
+- [`app/features/auth`](app/features/auth) – password, SSO, and API key flows plus access-control helpers.
+- [`app/features/documents`](app/features/documents) – multipart uploads, metadata, downloads, and deletions.
+- [`app/features/jobs`](app/features/jobs) – submission, status tracking, and background execution via the in-process task queue.
+- [`app/features/workspaces`](app/features/workspaces) – routing helpers and dependencies that enforce workspace-scoped URLs.
+- [`app/features/configurations`](app/features/configurations) – feature flags and per-workspace configuration records.
+- [`app/features/users`](app/features/users) – identity management, roles, and repositories shared across features.
+- [`app/features/system_settings`](app/features/system_settings) – repository and models for instance-wide configuration toggles.
 
-Shared infrastructure lives under [`app/core`](app/core) (logging, middleware, settings, database helpers) and [`app/models`](app/models) (SQLAlchemy metadata, mixins, and entity models). React build artefacts are served from [`app/static`](app/static) by FastAPI.
+Shared infrastructure lives under [`app/core`](app/core) (logging, middleware, settings, and cross-cutting helpers) and [`app/db`](app/db) (SQLAlchemy metadata, mixins, and persistence utilities). Background worker entry points now reside in [`app/workers`](app/workers), and React build artefacts are served from [`app/web`](app/web) by FastAPI.
 
 Uploaded files and the SQLite database are stored beneath the [`var/`](var) directory by default. Override locations with the `ADE_STORAGE_DATA_DIR`, `ADE_DATABASE_DSN`, or `ADE_STORAGE_DOCUMENTS_DIR` environment variables when deploying to production systems.
 
@@ -144,8 +144,8 @@ Uploaded files and the SQLite database are stored beneath the [`var/`](var) dire
 ADE is ready for the upcoming web interface:
 
 - [`app/main.py`](app/main.py) already serves the built single-page application from `/static`, falls back to `index.html` for unknown routes, and exposes the API under `/api`, so the React app can assume a unified origin.
-- The `ade start` command and [`build_frontend_assets`](app/main.py) helper rebuild the frontend on demand, keeping `app/static/` in sync with the Vite output for local or CI usage.
-- Core routes now publish non-200 responses in the OpenAPI schema, giving the frontend typed failure contracts for authentication, documents, jobs, results, and workspace management.
+- The `ade start` command and [`build_frontend_assets`](app/main.py) helper rebuild the frontend on demand, keeping `app/web/` in sync with the Vite output for local or CI usage.
+- Core routes now publish non-200 responses in the OpenAPI schema, giving the frontend typed failure contracts for authentication, documents, jobs, and workspace management.
 - The [API Guide](docs/reference/api-guide.md) documents the shared error envelopes so the frontend can surface precise messages without re-inspecting backend code.
 - Jobs execute through a typed processor contract (`JobProcessorRequest`/`JobProcessorResult`), so swapping in the real extractor or a mock from the frontend test suite only requires calling `set_job_processor` once.
 - Settings follow standard FastAPI/Pydantic conventions with `ADE_` environment variables, so frontend and deployment tooling can rely on a predictable configuration surface.
@@ -157,7 +157,7 @@ The backend is ready for the forthcoming React SPA:
 - **Consistent API surface.** Every router exposes documented success and error payloads, and jobs now return deterministic metrics/logs through the typed processor contract.
 - **Session-based authentication.** Cookie + CSRF flows are enabled by default so browsers stay within standard security guidelines.
 - **Static asset pipeline.** `ade start --rebuild-frontend` rebuilds the SPA and serves it from the same origin at `/api`, keeping local and production setups aligned.
-- **Swap-in processors.** Use `set_job_processor` during end-to-end tests to fake extractor results without reaching for bespoke fixtures.
+- **Swap-in processors.** Use `set_job_processor` during end-to-end tests to fake extractor outputs without reaching for bespoke fixtures.
 
 ## Status
 
