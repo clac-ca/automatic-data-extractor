@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from app.cli.app import build_cli_app
-from app.cli.commands import api_keys, reset as reset_command, settings as settings_command, users
+from app.cli.commands import api_keys, users
+from app.cli.commands import reset as reset_command
+from app.cli.commands import settings as settings_command
 
 
 def test_users_create_handler_resolution() -> None:

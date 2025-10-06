@@ -6,7 +6,8 @@ import argparse
 import os
 from pathlib import Path
 
-from app.main import DEFAULT_FRONTEND_DIR, start as start_application
+from app.main import DEFAULT_FRONTEND_DIR
+from app.main import start as start_application
 
 CLIArgs = argparse.Namespace
 
@@ -43,7 +44,7 @@ def register_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--rebuild-frontend",
         action="store_true",
-        help="Run the Vite production build and copy assets into app/static before starting.",
+        help="Run the Vite production build and copy assets into app/web before starting.",
     )
     parser.add_argument(
         "--frontend-dir",
@@ -63,8 +64,8 @@ def register_arguments(parser: argparse.ArgumentParser) -> None:
         default=[],
         metavar="KEY=VALUE",
         help=(
-            "Set environment variables for the server process. Repeat the flag to provide multiple entries"
-            " (e.g. --env ADE_LOGGING_LEVEL=DEBUG)."
+            "Set environment variables for the server process. Repeat the flag for "
+            "multiple entries (e.g. --env ADE_LOGGING_LEVEL=DEBUG)."
         ),
     )
     parser.set_defaults(reload=True)
@@ -73,15 +74,15 @@ def register_arguments(parser: argparse.ArgumentParser) -> None:
 def start(args: CLIArgs) -> None:
     """Run the ADE FastAPI application."""
 
-    env_overrides = _parse_env_pairs(getattr(args, "env", []))
+    env_overrides = _parse_env_pairs(args.env or [])
 
     start_application(
-        host=str(getattr(args, "host")),
-        port=int(getattr(args, "port")),
-        reload=bool(getattr(args, "reload", True)),
-        rebuild_frontend=bool(getattr(args, "rebuild_frontend", False)),
-        frontend_dir=getattr(args, "frontend_dir", None),
-        npm_command=getattr(args, "npm_command", None),
+        host=str(args.host),
+        port=int(args.port),
+        reload=bool(args.reload),
+        rebuild_frontend=bool(args.rebuild_frontend),
+        frontend_dir=args.frontend_dir,
+        npm_command=args.npm_command,
         env_overrides=env_overrides,
     )
 

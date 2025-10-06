@@ -9,9 +9,9 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine import make_url
 
-from app.core.db.engine import render_sync_url
 from app.core.config import get_settings
-from app.models import metadata
+from app.db import metadata
+from app.db.engine import render_sync_url
 
 config = context.config
 

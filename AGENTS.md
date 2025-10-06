@@ -93,13 +93,6 @@ The tree below describes the desired state of the repo once the restructure is c
 │  │  │  ├─ service.py        # Processing orchestration logic
 │  │  │  ├─ workers.py        # Worker entry points
 │  │  │  └─ tests/
-│  │  ├─ events/
-│  │  │  ├─ router.py         # Audit/event ingestion endpoints
-│  │  │  ├─ schemas.py
-│  │  │  ├─ models.py
-│  │  │  ├─ repository.py
-│  │  │  ├─ service.py        # Event recording helpers
-│  │  │  └─ tests/
 │  │  └─ system_settings/
 │  │     ├─ router.py         # System settings CRUD, feature toggles
 │  │     ├─ schemas.py

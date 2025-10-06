@@ -7,9 +7,9 @@ from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 
-from app.auth.security import hash_password
-from app.users.models import User, UserRole
-from app.users.repository import UsersRepository
+from app.features.auth.security import hash_password
+from app.features.users.models import User, UserRole
+from app.features.users.repository import UsersRepository
 
 from ..core.output import ColumnSpec, print_json, print_rows
 from ..core.runtime import load_settings, normalise_email, open_session, read_secret

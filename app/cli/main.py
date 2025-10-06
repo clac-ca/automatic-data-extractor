@@ -5,8 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
-from collections.abc import Sequence
-from typing import Callable
+from collections.abc import Callable, Sequence
 
 from fastapi import HTTPException
 

@@ -21,7 +21,7 @@ listed beside each term.
 - **Active configuration** – The single configuration with `is_active = true` for a document type. API consumers use it by default when they do not supply an explicit `configuration_id`.
 - **Profile** – Optional overrides for a source, customer, or locale stored in the configuration payload (`payload.profiles`).
 - **Job** – One execution of the processing engine against an input document using a specific configuration version (`jobs.job_id`, `jobs.configuration_version`, `jobs.status`, `jobs.created_by`, `jobs.metrics`, `jobs.logs`). Jobs stay mutable while `status` is `pending` or `running` and become immutable once marked `completed` or `failed`.
-- **Event** – Immutable record that captures what happened to an entity, who triggered it, and any structured context (`events.event_id`, `events.event_type`, `events.entity_type`, `events.entity_id`, `events.occurred_at`, `events.actor_type`, `events.actor_id`, `events.actor_label`, `events.source`, `events.request_id`, `events.payload`). Document deletions emit `document.deleted`, metadata edits emit `document.metadata.updated` by default (callers may supply a more specific type), configuration lifecycle changes emit `configuration.created` / `configuration.updated` / `configuration.activated`, and jobs report `job.created`, `job.status.*`, and `job.metrics.updated` entries. Timelines are available at `GET /documents/{document_id}/events`, `GET /configurations/{configuration_id}/events`, and `GET /jobs/{job_id}/events`; document, configuration, and job responses embed an `entity` summary with the identifiers, filenames, and statuses needed for UI headers, and the shared `/events` feed reuses the same summary when filters scope to a single entity.
+
 
 ---
 
@@ -36,8 +36,8 @@ listed beside each term.
 - **Column** – Observed column with header text, samples, and metadata (`columns[].index`).
 - **Document expiration** – Timestamp describing when operators may purge the stored bytes (`documents.expires_at`). Defaults to 30 days after ingest and may be overridden per upload. Future retention metadata (legal hold flags, override provenance) will extend this section.
 - **Legal hold** – Boolean flag that blocks deletion until cleared (`documents.legal_hold`).
-- **Manual deletion markers** – Soft-delete columns plus the events feed capturing intentional removal of stored bytes (`documents.deleted_at`,
-  `documents.deleted_by`, `documents.delete_reason`, corresponding `events` rows with `event_type="document.deleted"`).
+- **Manual deletion markers** – Soft-delete columns capturing intentional removal of stored bytes (`documents.deleted_at`,
+  `documents.deleted_by`, `documents.delete_reason`).
 - **Purge markers** – (Planned) lifecycle timestamps for automated deletions (`documents.purge_requested_at`,
   `documents.purged_at`, `documents.purged_by`).
 
@@ -70,7 +70,6 @@ ADE stores everything in SQLite (`data/db/ade.sqlite`). Tables expected on day o
 - `jobs` – Configuration linkage, `input_document_id`, metrics, logs, and status for each processing run.
 - `users` – Accounts with roles and optional SSO subjects.
 - `api_keys` – Issued API keys linked to users.
-- `events` – Immutable history of ADE actions keyed by ULID with optional actor/source metadata and structured payloads.
 - `maintenance_status` – Keyed JSON payloads for background maintenance loops (e.g. `automatic_document_purge` stores the last
   automatic purge summary returned by `/health`).
 - **Max upload bytes** – Configurable request ceiling (default 25 MiB) enforced by `POST /documents`. Controlled via the

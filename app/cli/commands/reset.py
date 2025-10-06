@@ -9,7 +9,7 @@ from pathlib import Path
 from sqlalchemy.engine import URL, make_url
 
 from app.cli.core.runtime import load_settings
-from app.core.db.engine import is_sqlite_memory_url, reset_database_state
+from app.db.engine import is_sqlite_memory_url, reset_database_state
 
 __all__ = ["register_arguments", "reset"]
 
@@ -30,7 +30,11 @@ def reset(args: argparse.Namespace) -> None:
 
     settings = load_settings()
     database_path, database_warning = _resolve_database_path(settings.database_dsn)
-    documents_path = _absolute_path(settings.storage_documents_dir)
+
+    documents_dir = settings.storage_documents_dir
+    if documents_dir is None:
+        raise RuntimeError("Document storage directory is not configured")
+    documents_path = _absolute_path(documents_dir)
 
     _print_reset_plan(database_path, database_warning, documents_path)
 

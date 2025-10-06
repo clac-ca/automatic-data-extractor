@@ -9,10 +9,11 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
-from app.cli.commands import settings as settings_command, start as start_cmd
+from app.cli.commands import settings as settings_command
+from app.cli.commands import start as start_cmd
 from app.cli.core.runtime import normalise_email, open_session, read_secret
-from app.core.db.engine import reset_database_state
 from app.core.config import Settings, reload_settings
+from app.db.engine import reset_database_state
 
 
 def test_normalise_email_lowercases_and_strips() -> None:
@@ -102,7 +103,10 @@ def test_parse_env_pairs_rejects_missing_separator() -> None:
         start_cmd._parse_env_pairs(["ADE_LOGGING_LEVEL"])
 
 
-def test_settings_dump_masks_secrets(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_settings_dump_masks_secrets(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     monkeypatch.setenv("ADE_JWT_SECRET", "super-secret")
     reload_settings()
 

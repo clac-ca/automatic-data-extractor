@@ -1,6 +1,6 @@
 # Agent Spec: ADE Minimal Schema Refactor — Upload & Processing Core
 
-**Goal:** Implement a clean, tenancy‑aware persistence + service layer with FastAPI endpoints for auth, workspaces, documents (single‑request upload via `UploadFile`), configurations, jobs, events, and minimal system settings. SQLite first, with a clearly documented path to PostgreSQL.
+**Goal:** Implement a clean, tenancy‑aware persistence + service layer with FastAPI endpoints for auth, workspaces, documents (single‑request upload via `UploadFile`), configurations, jobs, and minimal system settings. SQLite first, with a clearly documented path to PostgreSQL.
 
 ---
 
@@ -9,10 +9,10 @@
 1. **Foundation:** Introduce domain primitives (shared enums, ULID helpers, aware timestamp mixins, JSON/DateTime type decorators), wire the session `before_flush` hook, and replace the Alembic base migration plus supporting schema docs.
 2. **Identity & Auth:** Rebuild users, identity providers, user identities, and API keys with canonicalised email handling, update services/routers (`/auth/providers`, `/auth/me`), and extend `system_settings` helpers for `auth.force_sso`.
 3. **Workspaces:** Implement workspace and membership constraints (slug lower-case check, partial unique defaults, “last owner” guard), refresh services/routes, and back the behaviours with tests.
-4. **Documents:** Add the document model with `(workspace_id, sha256)` dedupe, streaming filesystem storage rooted in settings, upload/list/download/soft-delete endpoints, and audit event emission.
+4. **Documents:** Add the document model with `(workspace_id, sha256)` dedupe, streaming filesystem storage rooted in settings, upload/list/download/soft-delete endpoints, and placeholders for future audit logging.
 5. **Configurations:** Model `DocumentType`, `Configuration`, and `ConfigurationSet`, enforce version sequencing and atomic activation, and align routes/tests around state transitions and workspace isolation.
 6. **Jobs:** Redesign the job table with composite foreign keys and lifecycle fields, enforce workspace idempotency, and update submission/status APIs with membership validation and timestamp handling.
-7. **Events & Settings:** Finalise the event store and system settings routes, ensuring UTC timestamps and JSON round-trips are thoroughly covered by tests.
+7. **Settings:** Finalise the system settings routes, ensuring UTC timestamps and JSON round-trips are thoroughly covered by tests.
 8. **QA & Tooling:** Add deterministic fixtures/seeds, refresh documentation/glossary, and run `pytest`, `mypy`, and `ruff` to confirm the refactor meets the acceptance criteria.
 
 ---
@@ -34,10 +34,9 @@
 **In scope**
 
 * ORM models, mixins, enums, Alembic **base migration** (fresh baseline).
-* FastAPI routes/services: `auth`, `workspaces`, `documents`, `configurations`, `jobs`, `events`, `system_settings` (minimal).
+* FastAPI routes/services: `auth`, `workspaces`, `documents`, `configurations`, `jobs`, `system_settings` (minimal).
 * Pydantic schemas, seeds, fixtures, tests.
 * Session‑level timestamp stamping (replaces DB triggers in SQLite).
-* Audit event logging.
 
 **Out of scope**
 
@@ -221,20 +220,6 @@ tables:
     indexes:
       - [workspace_id, status, queued_at]
       - [workspace_id, finished_at]
-
-  events:
-    pk: event_id (CHAR(26))
-    checks: [length(event_id)=26]
-    fks: workspace_id -> workspaces.workspace_id ON DELETE SET NULL
-    cols:
-      event_type, entity_type, entity_id
-      occurred_at (default now)
-      actor_type, actor_id, actor_label
-      source, request_id
-      payload (TEXT JSON '{}')
-    indexes:
-      - [workspace_id, occurred_at]
-      - [entity_type, entity_id]
 ```
 
 **SQLite specifics**
@@ -284,10 +269,6 @@ tables:
 * `GET /jobs` / `GET /jobs/{id}`
 * `PATCH /jobs/{id}` (internal) body: lifecycle updates (`status`, `started_at/finished_at`, `metrics`, `logs`, `error_*`)
 
-**Events**
-
-* `GET /events` query: `workspace_id?`, `entity_type?`, `entity_id?`, time window
-
 **System Settings**
 
 * `GET /system-settings/{key}` / `PUT /system-settings/{key}` (admin)
@@ -333,7 +314,6 @@ tables:
 * [ ] Model: `Document` (composite unique `[document_id, workspace_id]`, partial unique `(workspace_id, sha256) WHERE deleted_at IS NULL`).
 * [ ] Storage: `storage/filesystem_store.py` that streams `UploadFile` to disk while computing `sha256` and `byte_size`; returns `stored_uri` (e.g., `file://.../ws/<workspace_id>/<ulid>`).
 * [ ] Router/service: upload, list, download (`FileResponse`), metadata update, soft delete (set `deleted_at`, `deleted_by_user_id`, `delete_reason`).
-* [ ] Emit `events` on upload/delete with workspace context.
 * [ ] Tests: upload→download→delete, dedupe enforcement, workspace isolation.
 
 ### Phase E — Configurations
@@ -353,7 +333,6 @@ tables:
 ### Phase G — Events & System Settings
 
 * [ ] Model: `Event`; repository helpers to filter by `workspace_id`, `entity_type`, `entity_id`.
-* [ ] Routes: `GET /events` and `GET/PUT /system-settings/{key}` (admin).
 * [ ] Tests: event persistence with UTC timestamps; filtering; JSON value round‑trip.
 
 ### Phase H — Tests, Seeds, Docs
@@ -408,7 +387,6 @@ tables:
 
 **Events & Settings**
 
-* [ ] **AC-E1**: Upload/Delete emit `events` rows carrying `workspace_id`, entity info, and UTC `occurred_at`.
 * [ ] **AC-E2**: `system_settings` JSON values persist and parse; `auth.force_sso` boolean round‑trips.
 
 **Quality Gates**
