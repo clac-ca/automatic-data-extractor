@@ -73,7 +73,7 @@ main branch deployable.
 
 ### Phase 3 – Feature Vertical Moves
 - For each feature (`auth`, `users`, `workspaces`, `documents`,
-  `configurations`, `jobs`, `events`, `system_settings`):
+  `configurations`, `jobs`, `system_settings`):
   - Relocate router, schemas, models, repositories, services, workers, and tests.
   - Provide re-export shims only when consumers cannot be updated in the same PR.
   - Ensure feature-level tests still import relative modules inside the slice.
@@ -81,7 +81,8 @@ main branch deployable.
 
 ### Phase 4 – API Shell Assembly
 - Build `app/api/v1/router.py` to aggregate feature routers.
-- Consolidate shared dependencies in `app/api/deps.py` and exception handlers in
+- Keep shared dependencies inside their owning feature modules so the API shell
+  only re-exports versioned routers and exception helpers from
   `app/api/errors.py`.
 - Update `app/main.py` to include the versioned router and dependencies.
 

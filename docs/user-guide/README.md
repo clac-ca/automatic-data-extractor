@@ -8,15 +8,14 @@ ADE turns messy spreadsheets and PDFs into clean tables that you can trust. Ever
 
 1. **Documents** – the files you upload for extraction.
 2. **Jobs** – the processing runs that transform a document into structured data.
-3. **Results** – the extracted tables that you can validate, download, or send to downstream tools.
 
-The frontend groups features around this lifecycle so that you can easily follow a document from upload to export.
+The frontend groups features around this lifecycle so that you can easily follow a document from upload to completion.
 
 ## Getting ready
 
 Before you sign in for the first time, make sure you have:
 
-- **Workspace access** – your administrator will invite you to the workspace that contains your documents and results.
+- **Workspace access** – your administrator will invite you to the workspace that contains your documents.
 - **Source files** – the spreadsheets or PDFs you plan to process. ADE works best with tabular layouts that follow a consistent template from file to file.
 - **Destination plan** – decide how you want to consume the extracted tables (e.g., CSV download, business intelligence tools, or API hand-off).
 
@@ -39,30 +38,19 @@ Every upload creates a job card that shows live status updates:
 
 - **Queued** – ADE is preparing the extraction run.
 - **Processing** – the parsing logic is running. You can open the card to view progress checkpoints.
-- **Completed** – results are ready to review.
+- **Completed** – processing finished successfully and metrics are available.
 - **Needs attention** – ADE detected an issue (for example, an unreadable table) and needs your input.
 
 Notification settings let you choose whether to receive email alerts when jobs finish or require attention.
 
-## Reviewing results
-
-When a job completes, open the results viewer to explore the extracted tables:
-
-1. Preview tables inline with pagination and column summaries.
-2. Flag rows or cells that require follow-up so that teammates can review them later.
-3. Export validated tables as CSV, Excel, or push directly to approved downstream systems.
-4. Leave comments or attach supporting documents to preserve context.
-
-ADE keeps the original document and its extraction results linked together, making audits and compliance reviews straightforward.
-
 ## Managing history and collaboration
 
-The activity timeline shows who uploaded each document, when extractions ran, and which results were exported. Use filters to isolate a particular client, reporting period, or document type.
+The activity timeline shows who uploaded each document, when extractions ran, and who viewed the outputs. Use filters to isolate a particular client, reporting period, or document type.
 
 Team collaboration features include:
 
 - Shared workspaces so colleagues can pick up where you left off.
-- Permissions that limit who can delete documents or publish results.
+- Permissions that limit who can delete documents or rerun jobs.
 - Audit logs for every action to satisfy regulatory requirements.
 
 ## What’s next

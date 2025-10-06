@@ -8,10 +8,10 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.db.bootstrap import ensure_database_ready
-from app.core.db.session import get_sessionmaker
-from app.core.startup import ensure_runtime_dirs
 from app.core.config import Settings, get_settings, reload_settings
+from app.db.bootstrap import ensure_database_ready
+from app.db.session import get_sessionmaker
+from app.lifecycles import ensure_runtime_dirs
 
 __all__ = [
     "load_settings",
@@ -24,7 +24,11 @@ __all__ = [
 def load_settings() -> Settings:
     """Return ADE settings using the same loader as the API."""
 
-    return reload_settings()
+    settings = reload_settings()
+    # Allow subsequent calls to `get_settings()` to reflect environment changes made
+    # outside the CLI command invocation.
+    get_settings.cache_clear()
+    return settings
 
 
 @asynccontextmanager

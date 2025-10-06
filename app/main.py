@@ -5,33 +5,22 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from contextlib import asynccontextmanager
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping
-from collections.abc import AsyncIterator
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .auth.router import router as auth_router
-from .configurations.router import router as configurations_router
-from .core.db.bootstrap import ensure_database_ready
-from .core.logging import setup_logging
-from .core.message_hub import MessageHub
-from .core.middleware import register_middleware
-from .core.startup import ensure_runtime_dirs
+from .api.v1.router import router as api_router
 from .core.config import Settings, get_settings
-from .core.task_queue import TaskQueue
-from .documents.router import router as documents_router
-from .health.router import router as health_router
-from .jobs.router import router as jobs_router
-from .results.router import router as results_router
-from .users.router import router as users_router
-from .workspaces.router import router as workspaces_router
+from .core.logging import setup_logging
+from .core.middleware import register_middleware
+from .lifecycles import create_application_lifespan
+from .services.task_queue import TaskQueue
 
-STATIC_DIR = Path(__file__).resolve().parent / "static"
-SPA_INDEX = STATIC_DIR / "index.html"
+WEB_DIR = Path(__file__).resolve().parent / "web"
+SPA_INDEX = WEB_DIR / "index.html"
 API_PREFIX = "/api"
 DEFAULT_FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
 FRONTEND_BUILD_DIRNAME = "dist"
@@ -47,22 +36,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     redoc_url = settings.redoc_url if settings.api_docs_enabled else None
     openapi_url = settings.openapi_url if settings.api_docs_enabled else None
 
-    message_hub = MessageHub()
     task_queue = TaskQueue()
-
-    @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        ensure_runtime_dirs(settings)
-        app.state.settings = settings
-        app.state.message_hub = message_hub
-        app.state.task_queue = task_queue
-        await ensure_database_ready(settings)
-        try:
-            yield
-        finally:
-            message_hub.clear()
-            await task_queue.clear()
-            task_queue.clear_subscribers()
+    lifespan = create_application_lifespan(
+        settings=settings,
+        task_queue=task_queue,
+    )
 
     app = FastAPI(
         title=settings.app_name,
@@ -75,7 +53,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     app.state.settings = settings
-    app.state.message_hub = message_hub
     app.state.task_queue = task_queue
 
     register_middleware(app)
@@ -113,9 +90,9 @@ def start(
             npm_command=npm_command,
             env=os.environ,
         )
-        print("Frontend: rebuilt and synced to app/static")
+        print("Frontend: rebuilt and synced to app/web")
     else:
-        print("Frontend: serving existing assets from app/static")
+        print("Frontend: serving existing assets from app/web")
 
     print("ADE application server")
     print("---------------------")
@@ -125,11 +102,11 @@ def start(
     import uvicorn
 
     uvicorn.run(
-        "app.main:app",
+        "app.main:create_app",
         host=bind_host,
         port=bind_port,
         reload=reload,
-        factory=False,
+        factory=True,
     )
 
 
@@ -165,7 +142,7 @@ def sync_frontend_assets(
     if not build_dir.exists() or not build_dir.is_dir():
         raise ValueError(f"Frontend build output not found at {build_dir}")
 
-    target = Path(static_dir).expanduser().resolve() if static_dir else STATIC_DIR
+    target = Path(static_dir).expanduser().resolve() if static_dir else WEB_DIR
     target.mkdir(parents=True, exist_ok=True)
 
     for entry in target.iterdir():
@@ -178,8 +155,8 @@ def sync_frontend_assets(
 
 
 def _mount_static(app: FastAPI) -> None:
-    STATIC_DIR.mkdir(parents=True, exist_ok=True)
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    WEB_DIR.mkdir(parents=True, exist_ok=True)
+    app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
     @app.get("/", include_in_schema=False)
     async def read_spa_root() -> FileResponse:
@@ -189,14 +166,7 @@ def _mount_static(app: FastAPI) -> None:
 
 
 def _register_routes(app: FastAPI) -> None:
-    app.include_router(health_router, prefix=f"{API_PREFIX}/health", tags=["health"])
-    app.include_router(auth_router, prefix=API_PREFIX)
-    app.include_router(users_router, prefix=API_PREFIX)
-    app.include_router(workspaces_router, prefix=API_PREFIX)
-    app.include_router(configurations_router, prefix=API_PREFIX)
-    app.include_router(documents_router, prefix=API_PREFIX)
-    app.include_router(jobs_router, prefix=API_PREFIX)
-    app.include_router(results_router, prefix=API_PREFIX)
+    app.include_router(api_router, prefix=API_PREFIX)
 
 
 app = create_app()
@@ -205,7 +175,7 @@ __all__ = [
     "API_PREFIX",
     "DEFAULT_FRONTEND_DIR",
     "FRONTEND_BUILD_DIRNAME",
-    "STATIC_DIR",
+    "WEB_DIR",
     "app",
     "build_frontend_assets",
     "create_app",

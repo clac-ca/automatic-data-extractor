@@ -80,7 +80,7 @@ accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
    - run Alembic migrations in order, logging progress to the console, and
    - print a summary of the resolved settings (sourced from `.env` and the environment).
 
-   Successful boot ends with the FastAPI reload server listening on the configured host and serving the compiled SPA from `app/static/`, so <http://localhost:8000/> delivers both the UI and API. Use `--rebuild-frontend` to run the Vite production build and copy fresh assets before launch. Other helpful flags: `--no-reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm`.
+   Successful boot ends with the FastAPI reload server listening on the configured host and serving the compiled SPA from `app/web/`, so <http://localhost:8000/> delivers both the UI and API. Use `--rebuild-frontend` to run the Vite production build and copy fresh assets before launch. Other helpful flags: `--no-reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm`.
 
 3. Confirm the API is healthy:
 
@@ -138,7 +138,7 @@ survive container restarts. Check health the same way:
 curl http://localhost:8000/health
 ```
 
-When you deploy the frontend in production, compile it once (`ade start --rebuild-frontend` or `npm run build` followed by copying `frontend/dist/` into `app/static/`). FastAPI serves those files directly, so your reverse proxy only
+When you deploy the frontend in production, compile it once (`ade start --rebuild-frontend` or `npm run build` followed by copying `frontend/dist/` into `app/web/`). FastAPI serves those files directly, so your reverse proxy only
 needs to forward requests to the backend.
 
 To stop and remove the container:
@@ -245,5 +245,5 @@ administrators confidently using the CLI.
 ## 10. Troubleshooting
 - **`ade start` exits immediately:** ensure the Python dependencies are installed (`pip install -e .[dev]`) and that the configured port is free. Run with `--no-reload` if you suspect the reload watcher cannot spawn a subprocess.
 - **Port conflicts on 8000:** choose another port with `ade start --port 9000` or stop the conflicting process.
-- **Frontend shows a blank page:** rebuild assets with `ade start --rebuild-frontend` (or run `npm run build` and copy `frontend/dist/` into `app/static/`).
+- **Frontend shows a blank page:** rebuild assets with `ade start --rebuild-frontend` (or run `npm run build` and copy `frontend/dist/` into `app/web/`).
 - **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api` prefix.

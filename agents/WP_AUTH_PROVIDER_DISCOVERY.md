@@ -16,9 +16,9 @@ Expose an `/auth/providers` endpoint that returns configured SSO providers plus 
 
 ## Tasks
 1. Extend `app/core/config.py` to surface provider definitions and a `force_sso` flag.
-2. Add serialization schemas for provider responses under `app/auth/schemas.py`.
+2. Add serialization schemas for provider responses under `app/features/auth/schemas.py`.
 3. Implement service method that assembles provider metadata and the flag, validating configuration.
-4. Register `/auth/providers` route in `app/auth/router.py`, mark it public (`security: []`).
+4. Register `/auth/providers` route in `app/features/auth/router.py`, mark it public (`security: []`).
 5. Document behaviour in `agents/FRONTEND_DESIGN.md` if needed and add unit tests (service + router).
 
 ## Testing

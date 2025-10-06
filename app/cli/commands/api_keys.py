@@ -5,9 +5,9 @@ from __future__ import annotations
 from argparse import Namespace
 from typing import Any
 
-from app.auth.models import APIKey
-from app.auth.service import APIKeyIssueResult, AuthService
 from app.core.service import ServiceContext
+from app.features.auth.models import APIKey
+from app.features.auth.service import APIKeyIssueResult, AuthService
 
 from ..core.output import ColumnSpec, print_json, print_rows
 from ..core.runtime import load_settings, normalise_email, open_session

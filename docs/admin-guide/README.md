@@ -17,8 +17,8 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
   toggled explicitly through the `ADE_API_DOCS_ENABLED` flag to keep production surfaces minimal.
 
 ## Operational building blocks
-- Database connections are created via the async SQLAlchemy engine in [`app/core/db/engine.py`](../../app/core/db/engine.py) and scoped sessions from [`app/core/db/session.py`](../../app/core/db/session.py).
-- Background work is handled by the in-process task queue defined in [`app/core/task_queue.py`](../../app/core/task_queue.py) and message hub in [`app/core/message_hub.py`](../../app/core/message_hub.py).
+- Database connections are created via the async SQLAlchemy engine in [`app/db/engine.py`](../../app/db/engine.py) and scoped sessions from [`app/db/session.py`](../../app/db/session.py).
+- Background work is handled by the in-process task queue defined in [`app/services/task_queue.py`](../../app/services/task_queue.py).
 - Structured logging and correlation IDs are configured through [`app/core/logging.py`](../../app/core/logging.py) and middleware in [`app/core/middleware.py`](../../app/core/middleware.py).
 
 Future sections will expand on security hardening, backup procedures, and frontend onboarding once those pieces land. The components listed above are already in place and unlikely to change dramatically.

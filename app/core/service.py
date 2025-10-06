@@ -2,21 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable, Iterable, Mapping
+from collections.abc import AsyncIterator, Callable, Iterable
 from dataclasses import dataclass
 from typing import Annotated, Any, TypeVar
 
 from fastapi import Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from .db.session import get_session
 from app.core.config import Settings, get_settings
-from .message_hub import MessageHub
-from .task_queue import TaskQueue
-
-try:  # pragma: no cover - optional during type checking
-    from sqlalchemy.ext.asyncio import AsyncSession
-except Exception:  # pragma: no cover - optional import
-    AsyncSession = Any  # type: ignore[misc, assignment]
+from app.db.session import get_session
+from app.services.task_queue import TaskQueue
 
 
 @dataclass(slots=True)
@@ -24,12 +19,11 @@ class ServiceContext:
     """Shared context injected into every service instance."""
 
     settings: Settings
+    session: AsyncSession
     request: Request | None = None
-    session: AsyncSession | None = None
     user: Any | None = None
     workspace: Any | None = None
     permissions: frozenset[str] = frozenset()
-    message_hub: MessageHub | None = None
     task_queue: TaskQueue | None = None
 
     @property
@@ -54,7 +48,7 @@ class BaseService:
         return self._context.request
 
     @property
-    def session(self) -> AsyncSession | None:
+    def session(self) -> AsyncSession:
         return self._context.session
 
     @property
@@ -90,10 +84,6 @@ class BaseService:
         return frozenset()
 
     @property
-    def message_hub(self) -> MessageHub | None:
-        return self._context.message_hub
-
-    @property
     def task_queue(self) -> TaskQueue | None:
         return self._context.task_queue
 
@@ -113,71 +103,6 @@ class BaseService:
 
         return None
 
-    async def publish_event(
-        self,
-        name: str,
-        payload: Mapping[str, Any] | None = None,
-        *,
-        metadata: Mapping[str, Any] | None = None,
-    ) -> None:
-        """Helper that emits ``name`` with context-aware metadata."""
-
-        combined_metadata = self._build_event_metadata(metadata)
-        payload_data = dict(payload or {})
-
-        await self._persist_event(name, payload_data, combined_metadata)
-
-        hub = self._context.message_hub
-        if hub is None:
-            return
-
-        await hub.publish(
-            name,
-            payload=payload_data,
-            correlation_id=self.correlation_id,
-            metadata=combined_metadata,
-        )
-
-    def _build_event_metadata(
-        self, metadata: Mapping[str, Any] | None
-    ) -> dict[str, Any]:
-        base: dict[str, Any] = {}
-        if metadata:
-            base.update(metadata)
-
-        correlation = self.correlation_id
-        if correlation and "correlation_id" not in base:
-            base["correlation_id"] = correlation
-
-        workspace = self.current_workspace
-        if workspace is not None:
-            workspace_id = getattr(workspace, "workspace_id", None) or getattr(
-                workspace, "id", None
-            )
-            if workspace_id and "workspace_id" not in base:
-                base["workspace_id"] = workspace_id
-
-        user = self.current_user
-        if user is not None:
-            actor_label = getattr(user, "label", None) or getattr(user, "email", None)
-            actor_type = "service_account" if getattr(user, "is_service_account", False) else "user"
-            base.setdefault("actor_type", actor_type)
-            base.setdefault("actor_id", getattr(user, "id", None))
-            if actor_label:
-                base.setdefault("actor_label", actor_label)
-
-        return {key: value for key, value in base.items() if value is not None}
-
-    async def _persist_event(
-        self,
-        name: str,
-        payload: Mapping[str, Any],
-        metadata: Mapping[str, Any],
-    ) -> None:
-        """Allow subclasses to persist emitted events."""
-
-        return None
-
 
 ServiceT = TypeVar("ServiceT", bound="BaseService")
 
@@ -187,30 +112,31 @@ SessionDependency = Annotated[AsyncSession, Depends(get_session)]
 
 def get_service_context(
     request: Request,
+    session: SessionDependency,
 ) -> ServiceContext:
     """Aggregate settings and request data for service instantiation."""
 
-    settings = get_settings()
-    session: AsyncSession | None = getattr(request.state, "db_session", None)
+    app_settings = getattr(request.app.state, "settings", None)
+    settings = app_settings if isinstance(app_settings, Settings) else get_settings()
     user = getattr(request.state, "current_user", None)
     workspace = getattr(request.state, "current_workspace", None)
-    permissions: frozenset[str] | Iterable[str]
-    permissions = getattr(request.state, "current_permissions", frozenset())
-    message_hub: MessageHub | None = getattr(request.app.state, "message_hub", None)
-    task_queue: TaskQueue | None = getattr(request.app.state, "task_queue", None)
-
-    if not isinstance(permissions, frozenset):
-        permissions = frozenset(permissions)
+    permissions_raw: frozenset[str] | Iterable[str]
+    permissions_raw = getattr(request.state, "current_permissions", frozenset())
+    if isinstance(permissions_raw, frozenset):
+        permissions = permissions_raw
+    else:
+        permissions = frozenset(permissions_raw)
+    task_queue = getattr(request.app.state, "task_queue", None)
+    queue = task_queue if isinstance(task_queue, TaskQueue) else None
 
     return ServiceContext(
         settings=settings,
-        request=request,
         session=session,
+        request=request,
         user=user,
         workspace=workspace,
         permissions=permissions,
-        message_hub=message_hub,
-        task_queue=task_queue,
+        task_queue=queue,
     )
 
 
@@ -219,14 +145,12 @@ ContextDependency = Annotated[ServiceContext, Depends(get_service_context)]
 
 def service_dependency(
     service_cls: type[ServiceT],
-) -> Callable[[SessionDependency, ContextDependency], AsyncIterator[ServiceT]]:
+) -> Callable[[ContextDependency], AsyncIterator[ServiceT]]:
     """Return a dependency that yields the requested service class."""
 
     async def _dependency(
-        session: SessionDependency,
         context: ContextDependency,
     ) -> AsyncIterator[ServiceT]:
-        context.session = session
         service = service_cls(context=context)
         try:
             yield service

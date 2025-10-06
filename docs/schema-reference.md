@@ -65,16 +65,6 @@ Processing runs that turn documents into tables.
 - `job_id` (PK), `workspace_id` (FK), `configuration_id` (FK), `input_document_id` (FK), `status` (enum), `created_by_user_id` (FK), lifecycle timestamps (`queued_at`, `started_at`, `finished_at`), `attempt`, `parent_job_id` (self-FK), `priority`, `metrics` (JSONB), `logs` (JSONB), `error_code`, `error_message`, timestamps.
 - Composite unique `(job_id, workspace_id)` plus composite FKs from dependent tables to enforce tenant safety.
 
-### extracted_tables
-Structured output tables.
-- `table_id` (PK), `workspace_id` (FK), `job_id` (composite FK to `jobs`), `document_id` (composite FK to `documents`), `sequence_index`, `title`, `row_count`, `columns` (JSONB), `sample_rows` (JSONB), `metadata` (JSONB), timestamps.
-- Unique `(job_id, sequence_index)` preserves ordering per job.
-
-### events
-Audit log capturing notable actions.
-- `event_id` (PK), `workspace_id` (nullable FK), `event_type`, `entity_type`, `entity_id`, `occurred_at`, `actor_type`, `actor_id`, `actor_label`, `source`, `request_id`, `payload` (JSONB).
-- Indexes on `(workspace_id, occurred_at)`, `(entity_type, entity_id)`, `event_type`, `occurred_at`.
-
 ### system_settings
 Key/value store for global toggles.
 - `key` (PK, e.g. `auth.force_sso`), `value` (JSONB), timestamps.
@@ -91,8 +81,6 @@ Provides workspace-aware document type state:
 - Jobs reference a single configuration version via `configuration_id`; `document_type` and `configuration_version` are not stored redundantly.
 - Service code must set exactly one default membership per user; the database constraint ensures drift cannot occur.
 - Only one active configuration per `(workspace, document_type)` enforced via filtered unique index.
-- Events should populate `workspace_id` whenever the actor or entity is workspace-scoped to support audit filtering.
-
 ## Operational Notes
 - Use deterministic ULIDs for IDs during seeding/tests to simplify fixtures.
 - When adding new tenant-scoped tables, include both the FK to `workspaces` and supporting indexes on `(workspace_id, created_at)` for pagination.
