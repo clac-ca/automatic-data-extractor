@@ -1,105 +1,216 @@
-The automatic-data-extractor (ADE) aims to transform semi-structured spreadsheets and PDFs into clean, structured tables using deterministic, revision-controlled logic.  This is the only AGENTS.md file in this repo.  Pay close attention to it.
+The automatic-data-extractor (ADE) turns semi-structured spreadsheets and PDFs into clean, structured tables using deterministic, revision-controlled logic. This is the **only** `AGENTS.md` in the repository—treat it as the source of truth for every automation run.
 
-AGENTS.md is provided to every Codex AI agent run; it explains how agents should interpret user instructions and interact with the repository.
+This playbook explains how agents should interpret human instructions, how to interact with supporting material under `agents/`, and the target backend layout we are migrating toward.
 
-All agent-facing playbooks now live under `agents/` so the repository root can stay focused on human-facing docs and source.
+---
 
-## Repository layout (planned)
+## TL;DR for Agents
+
+- **Read this file first.** If a user references any document in `agents/`, open it before touching code.
+- **Honor the planned layout.** Every backend task assumes the feature-first structure documented below.
+- **Keep changes boring.** Prioritise clarity, deterministic behaviour, and simple abstractions.
+
+---
+
+## Target Backend & Docs Layout
+
+The tree below describes the desired state of the repo once the restructure is complete. Use it as a north star when creating or moving files.
+
 ```
 .
-├─ README.md
-├─ AGENTS.md
-├─ agents/
+├─ AGENTS.md                  # You are here: authoritative agent playbook
+├─ agents/                    # AI-facing work packages, glossaries, process docs
 │  ├─ ADE_GLOSSARY.md
-│  ├─ BACKEND_REWRITE_PLAN.md
-│  ├─ BEST_PRACTICE_VIOLATIONS.md
-│  ├─ DOCUMENTATION_REWRITE_PLAN.md
-│  ├─ FRONTEND_DESIGN.md
-│  ├─ PREVIOUS_TASK.md
+│  ├─ CURRENT_TASK.md         # Current work package in flight (rotate after completion)
+│  ├─ PREVIOUS_TASK.md        # Archive of the most recently completed task
+│  ├─ fastapi-best-practices.md
 │  ├─ code_review_instructions.md
-│  └─ fastapi-best-practices.md
-├─ backend/
-│  ├─ app/            # FastAPI entrypoint, routes, schemas, services
-│  ├─ data/           # Gitignored runtime artefacts (database, documents, caches)
-│  └─ tests/
-├─ frontend/
-│  ├─ src/            # Pages, components, API client wrappers
-│  └─ tests/
-├─ examples/          # Sample documents used in testing
+│  └─ WP_*.md                 # Long-form work packages coordinating refactors
+├─ app/                       # Deployable FastAPI package (API + CLI + workers + static web)
+│  ├─ __init__.py
+│  ├─ main.py                 # App factory; mounts v1 router; serves SPA/static files
+│  ├─ lifecycles.py           # Startup/shutdown hooks (SQLite PRAGMAs, health checks, JWKS warmup)
+│  ├─ api/
+│  │  ├─ __init__.py
+│  │  ├─ deps.py              # Shared dependencies (db session, current user/workspace)
+│  │  ├─ errors.py            # Problem+JSON exception handlers
+│  │  └─ v1/router.py         # API version router; includes feature routers
+│  ├─ core/
+│  │  ├─ __init__.py
+│  │  ├─ auth_backends.py     # Entra ID helpers, JWKS cache, token verification
+│  │  ├─ config.py            # Pydantic settings split into focused config objects
+│  │  ├─ logging.py           # Structured logging configuration
+│  │  ├─ security.py          # OAuth/OpenID utilities, password hashing helpers
+│  │  ├─ time.py              # Timezone and UTC helpers
+│  │  └─ utils.py             # Small, pure helpers shared across features
+│  ├─ db/
+│  │  ├─ __init__.py
+│  │  ├─ base.py              # Declarative Base, ID/timestamp/workspace mixins
+│  │  ├─ session.py           # Engine/session factories (SQLite dev, Postgres prod)
+│  │  └─ migrations/          # Alembic environment and versioned migrations
+│  ├─ features/
+│  │  ├─ auth/
+│  │  │  ├─ router.py         # /auth endpoints (login redirect, callback, whoami)
+│  │  │  ├─ schemas.py        # Request/response models for auth flows
+│  │  │  ├─ models.py         # Auth persistence (if needed)
+│  │  │  ├─ repository.py     # DB queries for identities and tokens
+│  │  │  ├─ service.py        # Auth orchestration, provisioning, token validation
+│  │  │  └─ tests/            # Feature-scoped tests (API + service)
+│  │  ├─ users/
+│  │  │  ├─ router.py         # /users CRUD and profile management
+│  │  │  ├─ schemas.py
+│  │  │  ├─ models.py
+│  │  │  ├─ repository.py
+│  │  │  ├─ service.py
+│  │  │  └─ tests/
+│  │  ├─ workspaces/
+│  │  │  ├─ router.py         # Workspace CRUD, membership operations
+│  │  │  ├─ schemas.py
+│  │  │  ├─ models.py
+│  │  │  ├─ repository.py
+│  │  │  ├─ service.py
+│  │  │  └─ tests/
+│  │  ├─ documents/
+│  │  │  ├─ router.py         # Upload/download, metadata endpoints
+│  │  │  ├─ schemas.py
+│  │  │  ├─ models.py
+│  │  │  ├─ repository.py
+│  │  │  ├─ service.py        # Storage orchestration, virus scans, job enqueue
+│  │  │  ├─ workers.py        # Background helpers for extraction jobs
+│  │  │  └─ tests/
+│  │  ├─ configurations/
+│  │  │  ├─ router.py         # Configuration CRUD, validation
+│  │  │  ├─ schemas.py
+│  │  │  ├─ models.py
+│  │  │  ├─ repository.py
+│  │  │  ├─ service.py
+│  │  │  └─ tests/
+│  │  ├─ jobs/
+│  │  │  ├─ router.py         # Job lifecycle endpoints (status, retry, list)
+│  │  │  ├─ schemas.py
+│  │  │  ├─ models.py
+│  │  │  ├─ repository.py
+│  │  │  ├─ service.py        # Processing orchestration logic
+│  │  │  ├─ workers.py        # Worker entry points
+│  │  │  └─ tests/
+│  │  ├─ events/
+│  │  │  ├─ router.py         # Audit/event ingestion endpoints
+│  │  │  ├─ schemas.py
+│  │  │  ├─ models.py
+│  │  │  ├─ repository.py
+│  │  │  ├─ service.py        # Event recording helpers
+│  │  │  └─ tests/
+│  │  └─ system_settings/
+│  │     ├─ router.py         # System settings CRUD, feature toggles
+│  │     ├─ schemas.py
+│  │     ├─ models.py
+│  │     ├─ repository.py
+│  │     ├─ service.py
+│  │     └─ tests/
+│  ├─ services/
+│  │  ├─ __init__.py
+│  │  ├─ storage.py           # Shared storage adapters (only if truly shared)
+│  │  ├─ mailer.py            # Transactional email integrations (optional)
+│  │  └─ cache.py             # Cache adapter abstraction
+│  ├─ workers/
+│  │  ├─ __init__.py
+│  │  └─ run_jobs.py          # Process-level worker entry point
+│  ├─ cli/
+│  │  ├─ __init__.py
+│  │  ├─ main.py              # `ade` CLI entry point (Typer/Click)
+│  │  ├─ dev.py               # Developer utilities (seed, wipe, fixtures)
+│  │  └─ admin.py             # Operational/administrative commands
+│  └─ web/
+│     ├─ index.html
+│     └─ assets/              # Compiled SPA artefacts served by FastAPI
+├─ tests/
+│  ├─ conftest.py             # Shared fixtures (app, db, auth helpers)
+│  ├─ test_api_health.py
+│  └─ test_security.py
+├─ docs/                      # Human-facing documentation
+├─ frontend/                  # SPA source (React/Vite) prior to build
+├─ scripts/                   # Helper scripts, packaging, build tooling
+├─ alembic.ini
+├─ pyproject.toml
+├─ .env.example
+└─ README.md
 ```
 
----
+### Module Responsibilities (Cheat Sheet)
 
-**Priorities (in strict order)**
-
-1. **Clarity** – Favor solutions that are simple, readable, and easy to debug. Clear code prevents silent errors and makes future changes safe.
-2. **Pragmatic Optimization** – Improve performance where it delivers real value, but only if the solution remains maintainable. Skip complex edge-case handling that is unlikely to occur in practice.
-3. **Throughput** – Make the system fast and efficient once clarity and pragmatic optimization are satisfied. Speed is valuable, but never at the expense of reliability or simplicity.
-
-**Baseline Assumptions**
-
-* **Scale** – Built for modest, internal line-of-business usage (not internet-scale with millions of users).
-* **Style** – Use clear names, minimal abstractions, and deterministic functions. Code should be straightforward to read and audit.
-* **Trade-offs** – Prefer simple, reliable solutions over clever but fragile ones. Choose slower but clearer implementations if performance gains would add disproportionate complexity.
+- **Features own their HTTP contract.** Keep routers, schemas, models, repositories, services, workers, and feature tests together.
+- **`app/api/` is a thin shell.** Limit it to version routing, shared dependencies, and exception mapping. Never move business logic here.
+- **`app/core/` hosts cross-cutting concerns.** Settings, auth backends, logging, security helpers, and pure utilities belong here.
+- **`app/db/` centralises persistence glue.** Declarative base, session management, and migrations stay together for easy engine swaps.
+- **`app/web/` contains built assets only.** Source files for the SPA remain under `frontend/`.
+- **Shared integrations live in `app/services/` only when two or more features need them.** Otherwise, keep code inside the owning feature to avoid premature abstraction.
 
 ---
 
-## Modes of Operation
+## Decision Heuristics
 
-### Default Mode — Direct User Instructions
+1. **Clarity first.** Prefer straightforward, discoverable solutions. Optimise readability and deterministic behaviour before performance.
+2. **Pragmatic optimisation.** Improve throughput only when it delivers tangible value and the resulting code stays maintainable.
+3. **Simplicity over cleverness.** Choose slower but safer implementations when high-complexity alternatives would create maintenance risk.
 
-**Trigger:** The user provides instructions without referencing a file under `agents/`.
+### Baseline Assumptions
 
-**How to proceed:**
-1. Follow the user's latest instructions exactly.
-2. Use the priorities and baseline assumptions above to guide decisions.
-3. Ask for clarification only when the instructions conflict or are ambiguous.
+- **Scale:** Internal line-of-business usage (not internet-scale).
+- **Style:** Clear names, minimal abstractions, deterministic functions.
+- **Trade-offs:** Reliability beats clever tricks. When in doubt, favour boring code that is easy to audit.
 
-### Work Package Mode — agents/* Playbooks
+---
 
-**Trigger:** The user mentions one or more work packages in `agents/` (for example `agents/CURRENT_TASK.md` or `agents/DOCUMENTATION_REWRITE_PLAN.md`).
+## Operating Modes
 
-**How to proceed:**
-1. Read every referenced work package in `agents/` before making changes.
-2. Execute only the scope defined in each work package with production-ready code (no scope creep).
-3. Add or update deterministic tests and fixtures in `examples/` when relevant.
-4. Run the appropriate quality gates (pytest, ruff, mypy, npm test/lint/typecheck).
-5. Update each referenced work package with the current status and any next steps that remain. When working from `agents/CURRENT_TASK.md`, rotate it to `agents/PREVIOUS_TASK.md` and draft the next plan.
+### Default Mode – Direct User Instructions
+
+- Trigger: The user gives instructions without pointing to a specific work package.
+- Playbook:
+  1. Follow the latest user instructions verbatim.
+  2. Apply the decision heuristics above.
+  3. Ask for clarification only when instructions conflict or are ambiguous.
+
+### Work Package Mode – `agents/*`
+
+- Trigger: The user references one or more work packages under `agents/`.
+- Playbook:
+  1. Read every referenced document before writing code.
+  2. Execute the scoped tasks exactly—no scope creep or speculative changes.
+  3. Add or update deterministic tests/fixtures when relevant.
+  4. Run all required quality gates (pytest, ruff, mypy, npm test/lint/typecheck, etc.).
+  5. Update the referenced work package(s) with status notes. If you complete the active task in `agents/CURRENT_TASK.md`, move it to `agents/PREVIOUS_TASK.md` and draft the next actionable plan.
 
 ---
 
 ## Dependencies
 
-Keep the dependency footprint small. ADE should only add a library when it is a **well-maintained, widely used dependency** that makes the code significantly clearer, safer, or simpler. If the same result can be achieved with a few lines of straightforward native code (`pathlib`, `uuid`, `json`, etc.), prefer the standard library.
+- **Default stance:** Stay in the standard library when a clear native solution exists.
+- **Adopt a dependency only if it is** widely used, actively maintained, and materially improves clarity or safety.
 
-**Rule of thumb**  
-- *Native if simple* → a few clear lines.  
-- *Library if complex* → edge-case heavy tasks (e.g., date parsing, schema validation, async HTTP).  
+### Dependency Protocol
 
-**Process**  
-If the current task can only be completed after a new dependency is added:  
-1. Add it to `pyproject.toml` with pinned version(s).  
-2. End the current task with a PR updating only that file.  
-3. Note in the PR that the dependency was required for the task.  
-4. Resume development in the next PR once merged.
+1. Add the requirement to `pyproject.toml` with explicit version pins.
+2. Open a PR that introduces only the dependency change and explains why it is required.
+3. Resume feature development once that PR lands.
 
-This ensures dependency decisions are explicit, auditable, and reversible.
+This keeps dependency drift intentional and auditable.
 
-## Testing
+---
 
-ADE uses **pytest** as the primary test runner, with **pytest-asyncio** for async tests.  
-Tests live under `tests/` and follow the `test_*.py` / `test_*` convention.
+## Testing Expectations
 
-Key tools:
-- **pytest** → run all unit and integration tests.
-- **pytest-asyncio** → allows `async def` tests (`asyncio_mode="auto"` enabled).
-- **pytest-cov** → optional coverage reports.
-- **Ruff** → enforces code style and catches common errors.
-- **MyPy** → type checking with Pydantic plugin.
+- Primary test runner: `pytest` (with `pytest-asyncio` for async tests).
+- Async tests rely on `asyncio_mode="auto"`.
+- Additional tools in use: Ruff (lint), MyPy (type checking with Pydantic plugin), optional `pytest-cov` for coverage.
+- Tests live under `tests/` and follow the `test_*.py` / `test_*` naming convention.
+
+Run the quality gates appropriate for the scope of your change set.
 
 ---
 
 ## Guiding Principle
 
-**Consistency, clarity, and pragmatism beat cleverness.**
-Structure your code so every developer knows where things live, write routes and dependencies in the simplest correct form, and lean on Pydantic and FastAPI’s patterns rather than inventing your own abstractions. Prefer async where it matters, validate at the edges, and use tools (Ruff, Alembic, type checking) to enforce consistency so the team can focus on business logic instead of style debates.
+> **Consistency, clarity, and pragmatism beat cleverness.**
+
+Structure code so every developer can quickly find what they need. Keep routes and dependencies simple, lean on FastAPI and Pydantic idioms, validate at the boundaries, and rely on tooling (Ruff, Alembic, MyPy) to enforce consistency. Spend your energy on business logic rather than reinvention.
