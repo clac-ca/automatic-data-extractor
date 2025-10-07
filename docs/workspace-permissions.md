@@ -40,5 +40,5 @@ they naturally satisfy every declared scope without a separate bypass.【F:app/f
 
 Fixtures and feature tests import the same enum to grant permissions or assert
 on returned payloads. This keeps the test data aligned with the application
-logic and guards against typos in raw scope strings.【F:tests/features/jobs/test_jobs.py†L1-L72】【F:tests/features/workspaces/test_workspaces.py†L1-L313】【F:tests/conftest.py†L1-L256】
+logic and guards against typos in raw scope strings.【F:app/features/jobs/tests/test_router.py†L64-L148】【F:app/features/workspaces/tests/test_router.py†L81-L316】【F:conftest.py†L29-L241】
 
