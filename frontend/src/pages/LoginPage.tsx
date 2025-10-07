@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import type { FormEvent, ReactElement } from 'react'
 
 import type { InitialSetupPayload } from '../api/types'
+import type { ApiError } from '../api/errors'
 import { useAuth } from '../context/AuthContext'
 
 type AuthView = 'loading' | 'setup' | 'login'
@@ -15,8 +16,6 @@ type LoginFieldErrors = {
 type SetupFieldErrors = LoginFieldErrors & {
   confirmPassword?: string
 }
-
-type ApiError = Error & { status?: number }
 
 function validateEmail(value: string): string | undefined {
   const trimmed = value.trim()
@@ -45,6 +44,39 @@ function validatePasswordConfirmation(password: string, confirmation: string): s
     return 'Passwords must match.'
   }
   return undefined
+}
+
+interface LockoutDetails {
+  lockedUntil: string
+  failedAttempts: number
+  retryAfterSeconds?: number
+}
+
+function formatLockoutTimestamp(value: string): string {
+  const timestamp = new Date(value)
+  if (Number.isNaN(timestamp.getTime())) {
+    return value
+  }
+  return timestamp.toLocaleString()
+}
+
+function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return 'a few moments'
+  }
+  if (seconds < 60) {
+    return `${seconds} second${seconds === 1 ? '' : 's'}`
+  }
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) {
+    return `${minutes} minute${minutes === 1 ? '' : 's'}`
+  }
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) {
+    return `${hours} hour${hours === 1 ? '' : 's'}`
+  }
+  const days = Math.floor(hours / 24)
+  return `${days} day${days === 1 ? '' : 's'}`
 }
 
 interface InitialSetupFormProps {
@@ -203,6 +235,7 @@ export default function LoginPage(): ReactElement {
   const [loginPassword, setLoginPassword] = useState('')
   const [loginFieldErrors, setLoginFieldErrors] = useState<LoginFieldErrors>({})
   const [loginFormError, setLoginFormError] = useState<string | null>(null)
+  const [lockoutDetails, setLockoutDetails] = useState<LockoutDetails | null>(null)
   const [loginSubmitting, setLoginSubmitting] = useState(false)
 
   const isMountedRef = useRef(true)
@@ -253,12 +286,29 @@ export default function LoginPage(): ReactElement {
 
     setLoginSubmitting(true)
     setLoginFormError(null)
+    setLockoutDetails(null)
     try {
       await login(loginEmail.trim(), loginPassword)
       navigate('/', { replace: true })
     } catch (error) {
       const problem = error as ApiError
       setLoginFormError(problem.message || 'Unexpected error while signing in.')
+      if (
+        problem.status === 403 &&
+        typeof problem.lockedUntil === 'string' &&
+        typeof problem.failedAttempts === 'number'
+      ) {
+        setLockoutDetails({
+          lockedUntil: problem.lockedUntil,
+          failedAttempts: problem.failedAttempts,
+          retryAfterSeconds:
+            typeof problem.retryAfterSeconds === 'number'
+              ? Math.max(Math.trunc(problem.retryAfterSeconds), 0)
+              : undefined,
+        })
+      } else {
+        setLockoutDetails(null)
+      }
     } finally {
       setLoginSubmitting(false)
     }
@@ -349,6 +399,21 @@ export default function LoginPage(): ReactElement {
                 {loginFormError ? (
                   <div className="form-error" role="alert" aria-live="assertive">
                     {loginFormError}
+                  </div>
+                ) : null}
+
+                {lockoutDetails ? (
+                  <div className="form-hint" role="note" aria-live="polite">
+                    <p>
+                      Account unlocks at{' '}
+                      <strong>{formatLockoutTimestamp(lockoutDetails.lockedUntil)}</strong>.
+                    </p>
+                    <p>Failed attempts recorded: {lockoutDetails.failedAttempts}.</p>
+                    {typeof lockoutDetails.retryAfterSeconds === 'number' ? (
+                      <p>
+                        Please wait about {formatDuration(lockoutDetails.retryAfterSeconds)} before trying again.
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
 

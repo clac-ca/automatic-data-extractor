@@ -5,6 +5,7 @@ import type {
   SessionEnvelope,
   UserProfile,
 } from './types'
+import type { ApiError } from './errors'
 import { getCookie } from '../utils/cookies'
 
 const CSRF_COOKIE_NAME = 'ade_csrf'
@@ -39,6 +40,77 @@ function isSessionEnvelope(value: unknown): value is SessionEnvelope {
   )
 }
 
+interface ProblemDetail {
+  message?: string
+  lockedUntil?: string
+  failedAttempts?: number
+  retryAfterSeconds?: number
+}
+
+function parseInteger(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.trunc(value)
+  }
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value, 10)
+    if (!Number.isNaN(parsed)) {
+      return parsed
+    }
+  }
+  return undefined
+}
+
+function parseRetryAfter(value: string | null): number | undefined {
+  if (!value) {
+    return undefined
+  }
+  const asSeconds = Number.parseInt(value, 10)
+  if (!Number.isNaN(asSeconds)) {
+    return Math.max(asSeconds, 0)
+  }
+  const asDate = Date.parse(value)
+  if (!Number.isNaN(asDate)) {
+    const delta = Math.ceil((asDate - Date.now()) / 1000)
+    return Math.max(delta, 0)
+  }
+  return undefined
+}
+
+function extractProblemDetail(value: unknown): ProblemDetail {
+  if (!value || typeof value !== 'object') {
+    return {}
+  }
+
+  const candidate = value as Record<string, unknown>
+  if (!('detail' in candidate)) {
+    return {}
+  }
+
+  const detail = candidate.detail
+  if (typeof detail === 'string') {
+    const message = detail.trim()
+    return message ? { message } : {}
+  }
+
+  if (!detail || typeof detail !== 'object') {
+    return {}
+  }
+
+  const payload = detail as Record<string, unknown>
+  const message = typeof payload.message === 'string' ? payload.message.trim() : undefined
+  const lockedUntil =
+    typeof payload.lockedUntil === 'string' ? payload.lockedUntil : undefined
+  const failedAttempts = parseInteger(payload.failedAttempts)
+  const retryAfterSeconds = parseInteger(payload.retryAfterSeconds)
+
+  return {
+    message,
+    lockedUntil,
+    failedAttempts,
+    retryAfterSeconds,
+  }
+}
+
 async function submitSessionRequest(
   path: string,
   payload: unknown,
@@ -53,15 +125,25 @@ async function submitSessionRequest(
     body: JSON.stringify(payload),
   })
 
-  const data = await readJson<SessionEnvelope | { detail?: string }>(response)
+  const data = await readJson<SessionEnvelope | { detail?: unknown }>(response)
 
   if (!response.ok) {
-    let detail: string | undefined
-    if (data && typeof data === 'object' && 'detail' in data) {
-      detail = (data as { detail?: string }).detail
+    const detail = extractProblemDetail(data)
+    const retryAfter = detail.retryAfterSeconds ?? parseRetryAfter(response.headers.get('Retry-After'))
+    const message = detail.message?.trim() || fallbackError
+    const error = Object.assign(new Error(message), {
+      status: response.status,
+    }) as ApiError
+    if (typeof retryAfter === 'number') {
+      error.retryAfterSeconds = retryAfter
     }
-    const message = detail?.trim() || fallbackError
-    throw Object.assign(new Error(message), { status: response.status })
+    if (detail.lockedUntil) {
+      error.lockedUntil = detail.lockedUntil
+    }
+    if (typeof detail.failedAttempts === 'number') {
+      error.failedAttempts = detail.failedAttempts
+    }
+    throw error
   }
 
   if (!isSessionEnvelope(data)) {
@@ -82,9 +164,22 @@ export async function fetchInitialSetupStatus(): Promise<InitialSetupStatus> {
   })
 
   if (!response.ok) {
-    const payload = await readJson<{ detail?: string }>(response)
-    const detail = payload.detail || 'Unable to determine the setup status.'
-    throw Object.assign(new Error(detail), { status: response.status })
+    const payload = await readJson<{ detail?: unknown }>(response)
+    const detail = extractProblemDetail(payload)
+    const message = detail.message?.trim() || 'Unable to determine the setup status.'
+    const error = Object.assign(new Error(message), {
+      status: response.status,
+    }) as ApiError
+    if (typeof detail.retryAfterSeconds === 'number') {
+      error.retryAfterSeconds = detail.retryAfterSeconds
+    }
+    if (detail.lockedUntil) {
+      error.lockedUntil = detail.lockedUntil
+    }
+    if (typeof detail.failedAttempts === 'number') {
+      error.failedAttempts = detail.failedAttempts
+    }
+    throw error
   }
 
   return readJson<InitialSetupStatus>(response)
@@ -115,9 +210,22 @@ export async function fetchProfile(): Promise<UserProfile> {
   })
 
   if (!response.ok) {
-    const payload = await readJson<{ detail?: string }>(response)
-    const detail = payload.detail || 'Unable to load the active session.'
-    throw Object.assign(new Error(detail), { status: response.status })
+    const payload = await readJson<{ detail?: unknown }>(response)
+    const detail = extractProblemDetail(payload)
+    const message = detail.message?.trim() || 'Unable to load the active session.'
+    const error = Object.assign(new Error(message), {
+      status: response.status,
+    }) as ApiError
+    if (typeof detail.retryAfterSeconds === 'number') {
+      error.retryAfterSeconds = detail.retryAfterSeconds
+    }
+    if (detail.lockedUntil) {
+      error.lockedUntil = detail.lockedUntil
+    }
+    if (typeof detail.failedAttempts === 'number') {
+      error.failedAttempts = detail.failedAttempts
+    }
+    throw error
   }
 
   return readJson<UserProfile>(response)
@@ -137,9 +245,22 @@ export async function logout(csrfToken: string | null): Promise<void> {
   })
 
   if (!response.ok && response.status !== 204) {
-    const payload = await readJson<{ detail?: string }>(response)
-    const detail = payload.detail || 'Unable to terminate the current session.'
-    throw Object.assign(new Error(detail), { status: response.status })
+    const payload = await readJson<{ detail?: unknown }>(response)
+    const detail = extractProblemDetail(payload)
+    const message = detail.message?.trim() || 'Unable to terminate the current session.'
+    const error = Object.assign(new Error(message), {
+      status: response.status,
+    }) as ApiError
+    if (typeof detail.retryAfterSeconds === 'number') {
+      error.retryAfterSeconds = detail.retryAfterSeconds
+    }
+    if (detail.lockedUntil) {
+      error.lockedUntil = detail.lockedUntil
+    }
+    if (typeof detail.failedAttempts === 'number') {
+      error.failedAttempts = detail.failedAttempts
+    }
+    throw error
   }
 }
 

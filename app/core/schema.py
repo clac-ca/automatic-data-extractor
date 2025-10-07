@@ -38,7 +38,7 @@ class BaseSchema(BaseModel):
 class ErrorMessage(BaseSchema):
     """Standard error envelope mirroring FastAPI's ``{"detail": ...}`` payload."""
 
-    detail: str
+    detail: str | dict[str, Any]
 
 
 __all__ = ["BaseSchema", "ErrorMessage"]
