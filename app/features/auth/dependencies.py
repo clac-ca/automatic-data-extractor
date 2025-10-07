@@ -63,14 +63,9 @@ async def bind_current_principal(
 async def bind_current_user(
     principal: Annotated[AuthenticatedIdentity, Depends(bind_current_principal)],
 ) -> User:
-    """Resolve the authenticated user principal or reject service account credentials."""
+    """Resolve the authenticated user principal."""
 
     user = principal.user
-    if user.is_service_account:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            detail="User credentials required",
-        )
     return user
 
 

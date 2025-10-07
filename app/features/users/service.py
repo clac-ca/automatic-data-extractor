@@ -57,6 +57,7 @@ class UsersService:
                 display_name=cleaned_display_name,
                 role=UserRole.ADMIN,
                 is_active=True,
+                is_service_account=False,
             )
         except IntegrityError as exc:  # pragma: no cover - defensive double check
             raise HTTPException(

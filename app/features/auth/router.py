@@ -97,7 +97,7 @@ async def perform_initial_setup(
             "model": ErrorMessage,
         },
         status.HTTP_403_FORBIDDEN: {
-            "description": "User account is inactive or service account credentials were supplied.",
+            "description": "User account is inactive or locked.",
             "model": ErrorMessage,
         },
     },
@@ -277,6 +277,7 @@ async def create_api_key(
         result = await service.issue_api_key_for_user_id(
             user_id=payload.user_id,
             expires_in_days=payload.expires_in_days,
+            label=payload.label,
         )
     else:
         email = payload.email
@@ -288,6 +289,7 @@ async def create_api_key(
         result = await service.issue_api_key_for_email(
             email=email,
             expires_in_days=payload.expires_in_days,
+            label=payload.label,
         )
 
     return APIKeyIssueResponse(
@@ -296,6 +298,7 @@ async def create_api_key(
         principal_id=result.user.id,
         principal_label=result.principal_label,
         expires_at=result.api_key.expires_at,
+        label=result.api_key.label,
     )
 
 
@@ -334,14 +337,17 @@ async def list_api_keys(
             principal_label=(
                 record.user.label
                 if record.user is not None
-                else ""
+                else record.label
+                or ""
             ),
             token_prefix=record.token_prefix,
+            label=record.label,
             created_at=record.created_at,
             expires_at=record.expires_at,
             last_seen_at=record.last_seen_at,
             last_seen_ip=record.last_seen_ip,
             last_seen_user_agent=record.last_seen_user_agent,
+            revoked_at=record.revoked_at,
         )
         for record in records
     ]

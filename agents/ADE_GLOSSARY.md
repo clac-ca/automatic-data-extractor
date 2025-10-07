@@ -8,19 +8,22 @@ listed beside each term.
 ## Access
 - **User** – Account that can sign in. Stores an email, role, and either a password hash or an SSO subject (`users.user_id`,
   `users.email`, `users.role`).
-- **Role** – Permission tier. Default roles: `viewer`, `editor`, `admin`.
+- **Service account** – Non-human principal flagged via `users.is_service_account`; usually authenticates with API keys rather
+  than passwords.
+- **Role** – Permission tier. Default roles: `user`, `admin`.
 - **Session** – Short-lived token created during UI sign-in (`user_sessions.token_hash`, `user_sessions.expires_at`).
-- **API key** – Token issued by an admin; inherits the linked user’s role (`api_keys.api_key_id`, `api_keys.user_id`, `api_keys.token_hash`).
+- **API key** – Token issued by an admin; inherits the linked principal’s role and status. Stored as a hash with lookup prefix
+  plus optional label and revocation timestamp (`api_keys.token_prefix`, `api_keys.token_hash`, `api_keys.label`, `api_keys.revoked_at`).
 
 ---
 
 ## Core domain
 - **Document type** – Family of documents that share a configuration (`configurations.document_type`, `jobs.document_type`).
-- **Document record** – Canonical metadata for an uploaded file (`documents.document_id`, `documents.original_filename`, `documents.content_type`, `documents.byte_size`, `documents.sha256`, `documents.stored_uri`, `documents.metadata`, `documents.expires_at`, `documents.deleted_at`, `documents.deleted_by`, `documents.delete_reason`). Document identifiers are ULIDs reused as filenames under `data/documents/uploads/`.
+- **Document record** – Canonical metadata for an uploaded file (`documents.document_id`, `documents.original_filename`, `documents.content_type`, `documents.byte_size`, `documents.sha256`, `documents.stored_uri`, `documents.metadata`, `documents.expires_at`, `documents.deleted_at`, `documents.deleted_by`). Document identifiers are ULIDs reused as filenames under `data/documents/uploads/`.
 - **Configuration** – Executable detection, transformation, and metadata logic that defines how ADE processes a document type. Each configuration row is immutable and stored as JSON (`configurations.configuration_id`, `configurations.version`, `configurations.is_active`, `configurations.activated_at`, `configurations.payload`).
 - **Active configuration** – The single configuration with `is_active = true` for a document type. API consumers use it by default when they do not supply an explicit `configuration_id`.
 - **Profile** – Optional overrides for a source, customer, or locale stored in the configuration payload (`payload.profiles`).
-- **Job** – One execution of the processing engine against an input document using a specific configuration version (`jobs.job_id`, `jobs.configuration_version`, `jobs.status`, `jobs.created_by`, `jobs.metrics`, `jobs.logs`). Jobs stay mutable while `status` is `pending` or `running` and become immutable once marked `completed` or `failed`.
+- **Job** – One execution of the processing engine against an input document using a specific configuration (`jobs.job_id`, `jobs.configuration_id`, `jobs.status`, `jobs.created_by`, `jobs.metrics`, `jobs.logs`). Jobs stay mutable while `status` is `pending` or `running` and become immutable once marked `completed` or `failed`.
 
 
 ---
@@ -37,7 +40,7 @@ listed beside each term.
 - **Document expiration** – Timestamp describing when operators may purge the stored bytes (`documents.expires_at`). Defaults to 30 days after ingest and may be overridden per upload. Future retention metadata (legal hold flags, override provenance) will extend this section.
 - **Legal hold** – Boolean flag that blocks deletion until cleared (`documents.legal_hold`).
 - **Manual deletion markers** – Soft-delete columns capturing intentional removal of stored bytes (`documents.deleted_at`,
-  `documents.deleted_by`, `documents.delete_reason`).
+  `documents.deleted_by`).
 - **Purge markers** – (Planned) lifecycle timestamps for automated deletions (`documents.purge_requested_at`,
   `documents.purged_at`, `documents.purged_by`).
 
@@ -137,7 +140,6 @@ Back up the entire `data/` directory (database plus documents).
   "job_id": "job_2025_09_17_0001",
   "document_type": "Remittance PDF",
   "configuration_id": "cfg_01J8PQ3RDX8K6PX0ZA5G2T3N4V",
-  "configuration_version": 3,
   "status": "completed",
   "created_at": "2025-09-17T18:42:00Z",
   "updated_at": "2025-09-17T18:45:11Z",
@@ -221,7 +223,6 @@ Back up the entire `data/` directory (database plus documents).
   "source": "api",
   "payload": {
     "deleted_by": "ops@ade.local",
-    "delete_reason": "cleanup",
     "byte_size": 542118,
     "stored_uri": "uploads/01J8Z0Z4YV6N9Q8XCN5P7Q2RSD",
     "sha256": "sha256:bd5c3d9a...",
@@ -258,7 +259,6 @@ Back up the entire `data/` directory (database plus documents).
   "payload": {
     "document_type": "remittance",
     "configuration_id": "01JCFG7890ABCDEFFEDCBA3210",
-    "configuration_version": 4,
     "status": "completed",
     "metrics": {
       "rows_extracted": 125,

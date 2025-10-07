@@ -5,7 +5,6 @@ from typing import Annotated, Any
 
 from fastapi import (
     APIRouter,
-    Body,
     Depends,
     File,
     Form,
@@ -35,7 +34,7 @@ from .exceptions import (
     DocumentTooLargeError,
     InvalidDocumentExpirationError,
 )
-from .schemas import DocumentDeleteRequest, DocumentRecord
+from .schemas import DocumentRecord
 from .service import DocumentsService
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["documents"])
@@ -279,8 +278,6 @@ async def delete_document(
     current_user: Annotated[User, Depends(bind_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_app_settings)],
-    *,
-    payload: Annotated[DocumentDeleteRequest | None, Body()] = None,
 ) -> None:
     service = DocumentsService(session=session, settings=settings)
     try:
@@ -288,7 +285,6 @@ async def delete_document(
             workspace_id=workspace.workspace_id,
             document_id=document_id,
             actor=current_user,
-            reason=payload.reason if payload else None,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

@@ -262,6 +262,17 @@ class Settings(BaseSettings):
         description="Optional domain attribute applied to authentication cookies.",
     )
     session_cookie_path: str = Field("/", description="Cookie path scope.")
+    failed_login_lock_threshold: int = Field(
+        5,
+        ge=1,
+        description=(
+            "Number of consecutive failed logins before temporarily locking the account."
+        ),
+    )
+    failed_login_lock_duration: timedelta = Field(
+        timedelta(minutes=5),
+        description="Duration of the temporary lock applied after too many failed logins.",
+    )
 
     oidc_enabled: bool = Field(
         False,
@@ -420,6 +431,7 @@ class Settings(BaseSettings):
         "jwt_refresh_ttl",
         "session_last_seen_interval",
         "storage_document_retention_period",
+        "failed_login_lock_duration",
         mode="before",
     )
     @classmethod

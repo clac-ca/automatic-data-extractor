@@ -71,13 +71,18 @@ def build_cli_app() -> argparse.ArgumentParser:
     create_parser.add_argument(
         "--role",
         choices=[role.value for role in UserRole],
-        default=UserRole.MEMBER.value,
-        help="Role assigned to the user (default: member).",
+        default=UserRole.USER.value,
+        help="Role assigned to the user (default: user).",
     )
     create_parser.add_argument(
         "--inactive",
         action="store_true",
         help="Create the user in an inactive state.",
+    )
+    create_parser.add_argument(
+        "--service-account",
+        action="store_true",
+        help="Mark the user as a service account.",
     )
     create_parser.add_argument(
         "--json",
@@ -184,6 +189,10 @@ def build_cli_app() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Number of days before the key expires.",
+    )
+    issue_parser.add_argument(
+        "--label",
+        help="Optional label to describe the API key.",
     )
     issue_parser.add_argument(
         "--json",

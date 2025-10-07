@@ -184,10 +184,13 @@ ade users list --json
 # Reset a password without touching the database manually
 ade users set-password --email admin@example.com --password-file ~/.secrets/new-password.txt
 
-# Issue and revoke API keys for service automation
-ade api-keys issue --email service@example.com --expires-in 30 --json
+# Create a service account and issue a labelled API key
+ade users create --email service@example.com --password "TempPass123!" --service-account --inactive --json
+ade api-keys issue --email service@example.com --label "CI deployer" --expires-in 30 --json
 ade api-keys revoke 01KZYXWVUTSRQPONML
 ```
+
+Service accounts typically remain inactive so they cannot use password flows. Use descriptive labels when issuing keys to simplify audits.
 
 When ADE runs in Docker, execute the same commands inside the container so they
 share configuration:
