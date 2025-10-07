@@ -11,8 +11,9 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.service import BaseService, ServiceContext
+from app.core.config import Settings
 from app.db import generate_ulid
+from app.features.users.models import User
 
 from .exceptions import (
     DocumentFileMissingError,
@@ -24,14 +25,14 @@ from .schemas import DocumentRecord
 from .storage import DocumentStorage
 
 
-class DocumentsService(BaseService):
+class DocumentsService:
     """Manage document metadata and backing file storage."""
 
-    def __init__(self, *, context: ServiceContext) -> None:
-        super().__init__(context=context)
-        self._session: AsyncSession = self.session
+    def __init__(self, *, session: AsyncSession, settings: Settings) -> None:
+        self._session = session
+        self._settings = settings
 
-        documents_dir = self.settings.storage_documents_dir
+        documents_dir = settings.storage_documents_dir
         if documents_dir is None:
             raise RuntimeError("Document storage directory is not configured")
         self._storage = DocumentStorage(documents_dir)
@@ -39,6 +40,7 @@ class DocumentsService(BaseService):
     async def create_document(
         self,
         *,
+        workspace_id: str,
         upload: UploadFile,
         metadata: Mapping[str, Any] | None = None,
         expires_at: str | None = None,
@@ -46,7 +48,6 @@ class DocumentsService(BaseService):
     ) -> DocumentRecord:
         """Persist ``upload`` to storage and return the resulting metadata record."""
 
-        workspace_id = self.require_workspace_id()
         metadata_payload = dict(metadata or {})
         now = datetime.now(tz=UTC)
         expiration = self._resolve_expiration(expires_at, now)
@@ -60,7 +61,7 @@ class DocumentsService(BaseService):
         stored = await self._storage.write(
             stored_uri,
             upload.file,
-            max_bytes=self.settings.storage_upload_max_bytes,
+            max_bytes=self._settings.storage_upload_max_bytes,
         )
 
         document = Document(
@@ -80,10 +81,12 @@ class DocumentsService(BaseService):
 
         return DocumentRecord.model_validate(document)
 
-    async def list_documents(self, *, limit: int, offset: int) -> list[DocumentRecord]:
+    async def list_documents(
+        self, *, workspace_id: str, limit: int, offset: int
+    ) -> list[DocumentRecord]:
         """Return non-deleted documents ordered by recency."""
 
-        stmt = self._base_query().where(Document.deleted_at.is_(None))
+        stmt = self._base_query(workspace_id).where(Document.deleted_at.is_(None))
         stmt = stmt.order_by(Document.created_at.desc()).offset(offset).limit(limit)
         result = await self._session.execute(stmt)
         documents = result.scalars().all()
@@ -91,18 +94,18 @@ class DocumentsService(BaseService):
 
         return records
 
-    async def get_document(self, document_id: str) -> DocumentRecord:
+    async def get_document(self, *, workspace_id: str, document_id: str) -> DocumentRecord:
         """Return document metadata for ``document_id``."""
 
-        document = await self._get_document(document_id)
+        document = await self._get_document(workspace_id, document_id)
         return DocumentRecord.model_validate(document)
 
     async def stream_document(
-        self, document_id: str
+        self, *, workspace_id: str, document_id: str
     ) -> tuple[DocumentRecord, AsyncIterator[bytes]]:
         """Return a document record and async iterator for its bytes."""
 
-        document = await self._get_document(document_id)
+        document = await self._get_document(workspace_id, document_id)
         path = self._storage.path_for(document.stored_uri)
         exists = await run_in_threadpool(path.exists)
         if not exists:
@@ -119,21 +122,28 @@ class DocumentsService(BaseService):
 
         return DocumentRecord.model_validate(document), _guarded()
 
-    async def delete_document(self, *, document_id: str, reason: str | None = None) -> None:
+    async def delete_document(
+        self,
+        *,
+        workspace_id: str,
+        document_id: str,
+        reason: str | None = None,
+        actor: User | None = None,
+    ) -> None:
         """Soft delete ``document_id`` and remove the stored file."""
 
-        document = await self._get_document(document_id)
+        document = await self._get_document(workspace_id, document_id)
         now = datetime.now(tz=UTC).isoformat(timespec="seconds")
         document.deleted_at = now
-        actor = self.current_user
-        document.deleted_by = getattr(actor, "id", None)
+        if actor is not None:
+            document.deleted_by = getattr(actor, "id", None)
         document.delete_reason = reason
         await self._session.flush()
 
         await self._storage.delete(document.stored_uri)
 
-    async def _get_document(self, document_id: str) -> Document:
-        stmt = self._base_query().where(
+    async def _get_document(self, workspace_id: str, document_id: str) -> Document:
+        stmt = self._base_query(workspace_id).where(
             Document.id == document_id,
             Document.deleted_at.is_(None),
         )
@@ -143,13 +153,12 @@ class DocumentsService(BaseService):
             raise DocumentNotFoundError(document_id)
         return document
 
-    def _base_query(self) -> Select[tuple[Document]]:
-        workspace_id = self.require_workspace_id()
+    def _base_query(self, workspace_id: str) -> Select[tuple[Document]]:
         return select(Document).where(Document.workspace_id == workspace_id)
 
     def _resolve_expiration(self, override: str | None, now: datetime) -> str:
         if override is None:
-            expires = now + self.settings.storage_document_retention_period
+            expires = now + self._settings.storage_document_retention_period
             return expires.isoformat(timespec="seconds")
 
         candidate = override.strip()

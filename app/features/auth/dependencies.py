@@ -13,7 +13,8 @@ from fastapi.security import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.service import service_dependency
+from app.api.settings import get_app_settings
+from app.core.config import Settings
 from app.db.session import get_session
 
 from ..users.models import User, UserRole
@@ -22,27 +23,24 @@ from .service import AuthenticatedIdentity, AuthService
 _bearer_scheme = HTTPBearer(auto_error=False)
 _api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-get_auth_service = service_dependency(AuthService)
-
-
 async def bind_current_principal(
     request: Request,
-    _session: Annotated[AsyncSession, Depends(get_session)],
     credentials: Annotated[
         HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)
     ],
     api_key: Annotated[str | None, Depends(_api_key_scheme)],
-    service: Annotated[AuthService, Depends(get_auth_service)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> AuthenticatedIdentity:
-    """Resolve the authenticated identity and attach it to the request state."""
+    """Resolve the authenticated identity for the request."""
 
+    service = AuthService(session=session, settings=settings)
     if credentials is not None:
         try:
             payload = service.decode_token(credentials.credentials, expected_type="access")
         except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
         user = await service.resolve_user(payload)
-        request.state.current_user = user
         return AuthenticatedIdentity(user=user, credentials="bearer_token")
 
     session_cookie = request.cookies.get(service.settings.session_cookie_name)
@@ -53,12 +51,10 @@ async def bind_current_principal(
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid session") from exc
         service.enforce_csrf(request, payload)
         user = await service.resolve_user(payload)
-        request.state.current_user = user
         return AuthenticatedIdentity(user=user, credentials="session_cookie")
 
     if api_key:
-        identity = await service.authenticate_api_key(api_key)
-        request.state.current_user = identity.user
+        identity = await service.authenticate_api_key(api_key, request=request)
         return identity
 
     raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
@@ -102,7 +98,6 @@ async def require_admin_user(
 __all__ = [
     "bind_current_principal",
     "bind_current_user",
-    "get_auth_service",
     "require_authenticated_user",
     "require_admin_user",
 ]
