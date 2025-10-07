@@ -61,12 +61,7 @@ app = [
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = [
-  "tests/api",
-  "tests/cli",
-  "tests/core",
-  "tests/db",
-  "tests/features",
-  "tests/services",
+  "app",
 ]
 asyncio_mode = "auto"
 addopts = "-ra"
@@ -90,7 +85,7 @@ no_implicit_optional = true
 pretty = true
 
 [[tool.mypy.overrides]]
-module = "tests.*"
+module = "app.*.tests.*"
 disallow_untyped_defs = false
 
 [tool.coverage.run]
