@@ -5,22 +5,16 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth.dependencies import bind_current_user
-from ..auth.security import access_control
-from .dependencies import get_users_service
+from app.db.session import get_session
+
+from ..auth.dependencies import bind_current_user, require_admin_user
 from .models import User
 from .schemas import UserProfile, UserSummary
 from .service import UsersService
 
 router = APIRouter(tags=["users"])
-
-UserDep = Annotated[User, Depends(bind_current_user)]
-UsersServiceDep = Annotated[UsersService, Depends(get_users_service)]
-AdminUsersServiceDep = Annotated[
-    UsersService,
-    Depends(access_control(require_admin=True, service_dependency=get_users_service)),
-]
 
 
 @router.get(
@@ -31,10 +25,11 @@ AdminUsersServiceDep = Annotated[
     summary="Return the authenticated user profile",
 )
 async def read_me(
-    _: UserDep,
-    service: UsersServiceDep,
+    user: Annotated[User, Depends(bind_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> UserProfile:
-    profile = await service.get_profile()
+    service = UsersService(session=session)
+    profile = await service.get_profile(user=user)
     return profile
 
 
@@ -45,9 +40,10 @@ async def read_me(
     summary="List all users (administrator only)",
 )
 async def list_users(
-    _: UserDep,
-    service: AdminUsersServiceDep,
+    _: Annotated[User, Depends(require_admin_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[UserSummary]:
+    service = UsersService(session=session)
     users = await service.list_users()
     return users
 

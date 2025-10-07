@@ -23,12 +23,6 @@ class WorkspaceProfile(BaseSchema):
     is_default: bool
 
 
-class WorkspaceContext(BaseSchema):
-    """Resolved workspace context for the current request."""
-
-    workspace: WorkspaceProfile
-
-
 class WorkspaceCreate(BaseSchema):
     """Payload for creating a workspace."""
 
@@ -81,7 +75,6 @@ class WorkspaceDefaultSelection(BaseSchema):
 
 
 __all__ = [
-    "WorkspaceContext",
     "WorkspaceCreate",
     "WorkspaceDefaultSelection",
     "WorkspaceMember",

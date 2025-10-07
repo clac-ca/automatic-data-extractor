@@ -5,29 +5,28 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from app.core.service import BaseService, ServiceContext
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .exceptions import ConfigurationNotFoundError
 from .repository import ConfigurationsRepository
 from .schemas import ConfigurationRecord
 
 
-class ConfigurationsService(BaseService):
+class ConfigurationsService:
     """Expose read-only helpers for configuration metadata."""
 
-    def __init__(self, *, context: ServiceContext) -> None:
-        super().__init__(context=context)
-        self._repository = ConfigurationsRepository(self.session)
+    def __init__(self, *, session: AsyncSession) -> None:
+        self._session = session
+        self._repository = ConfigurationsRepository(session)
 
     async def list_configurations(
         self,
         *,
+        workspace_id: str,
         document_type: str | None = None,
         is_active: bool | None = None,
     ) -> list[ConfigurationRecord]:
         """Return configurations ordered by recency."""
-
-        workspace_id = self.require_workspace_id()
 
         configurations = await self._repository.list_configurations(
             workspace_id=workspace_id,
@@ -41,11 +40,10 @@ class ConfigurationsService(BaseService):
     async def get_configuration(
         self,
         *,
+        workspace_id: str,
         configuration_id: str,
     ) -> ConfigurationRecord:
         """Return a single configuration by identifier."""
-
-        workspace_id = self.require_workspace_id()
 
         configuration = await self._repository.get_configuration(
             configuration_id,
@@ -59,13 +57,12 @@ class ConfigurationsService(BaseService):
     async def create_configuration(
         self,
         *,
+        workspace_id: str,
         document_type: str,
         title: str,
         payload: Mapping[str, Any],
     ) -> ConfigurationRecord:
         """Create a configuration with the next sequential version."""
-
-        workspace_id = self.require_workspace_id()
 
         version = await self._repository.determine_next_version(
             workspace_id=workspace_id,
@@ -83,13 +80,12 @@ class ConfigurationsService(BaseService):
     async def update_configuration(
         self,
         *,
+        workspace_id: str,
         configuration_id: str,
         title: str,
         payload: Mapping[str, Any],
     ) -> ConfigurationRecord:
         """Replace mutable fields on ``configuration_id``."""
-
-        workspace_id = self.require_workspace_id()
 
         configuration = await self._repository.get_configuration(
             configuration_id,
@@ -105,12 +101,12 @@ class ConfigurationsService(BaseService):
         )
         return ConfigurationRecord.model_validate(updated)
 
-    async def delete_configuration(self, *, configuration_id: str) -> None:
+    async def delete_configuration(self, *, workspace_id: str, configuration_id: str) -> None:
         """Remove a configuration permanently."""
 
         configuration = await self._repository.get_configuration(
             configuration_id,
-            workspace_id=self.require_workspace_id(),
+            workspace_id=workspace_id,
         )
         if configuration is None:
             raise ConfigurationNotFoundError(configuration_id)
@@ -121,11 +117,10 @@ class ConfigurationsService(BaseService):
     async def activate_configuration(
         self,
         *,
+        workspace_id: str,
         configuration_id: str,
     ) -> ConfigurationRecord:
         """Activate ``configuration_id`` and deactivate competing versions."""
-
-        workspace_id = self.require_workspace_id()
 
         configuration = await self._repository.get_configuration(
             configuration_id,
@@ -138,11 +133,12 @@ class ConfigurationsService(BaseService):
         return ConfigurationRecord.model_validate(activated)
 
     async def list_active_configurations(
-        self, *, document_type: str | None = None
+        self,
+        *,
+        workspace_id: str,
+        document_type: str | None = None,
     ) -> list[ConfigurationRecord]:
         """Return currently active configurations grouped by document type."""
-
-        workspace_id = self.require_workspace_id()
 
         configurations = await self._repository.list_active_configurations(
             workspace_id=workspace_id,

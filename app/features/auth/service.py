@@ -15,7 +15,7 @@ from fastapi import HTTPException, Request, Response, status
 from jwt import PyJWKClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.service import BaseService, ServiceContext
+from app.core.config import Settings
 
 from ..system_settings.repository import SystemSettingsRepository
 from ..users.models import User, UserRole
@@ -129,15 +129,19 @@ def normalise_email(value: str) -> str:
 _INITIAL_SETUP_SETTING_KEY = "initial_setup"
 
 
-class AuthService(BaseService):
+class AuthService:
     """Encapsulate login, token verification, and SSO logic."""
 
-    def __init__(self, *, context: ServiceContext) -> None:
-        super().__init__(context=context)
-        self._session: AsyncSession = self.session
-        self._users = UsersRepository(self._session)
-        self._api_keys = APIKeysRepository(self._session)
-        self._system_settings = SystemSettingsRepository(self._session)
+    def __init__(self, *, session: AsyncSession, settings: Settings) -> None:
+        self._session = session
+        self._settings = settings
+        self._users = UsersRepository(session)
+        self._api_keys = APIKeysRepository(session)
+        self._system_settings = SystemSettingsRepository(session)
+
+    @property
+    def settings(self) -> Settings:
+        return self._settings
 
     # ------------------------------------------------------------------
     # Password-based authentication
@@ -184,15 +188,12 @@ class AuthService(BaseService):
                     detail="Initial setup already completed",
                 )
 
-            users_service = UsersService(context=self._context)
-            try:
-                user = await users_service.create_admin(
-                    email=email,
-                    password=password,
-                    display_name=display_name,
-                )
-            finally:
-                await users_service.aclose()
+            users_service = UsersService(session=self._session)
+            user = await users_service.create_admin(
+                email=email,
+                password=password,
+                display_name=display_name,
+            )
 
             setting_value = dict(raw_value)
             setting_value["completed_at"] = datetime.now(UTC).isoformat(
@@ -497,7 +498,9 @@ class AuthService(BaseService):
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="API key not found")
         await self._api_keys.delete(record)
 
-    async def authenticate_api_key(self, raw_key: str) -> AuthenticatedIdentity:
+    async def authenticate_api_key(
+        self, raw_key: str, *, request: Request | None = None
+    ) -> AuthenticatedIdentity:
         """Return the identity associated with ``raw_key`` if valid."""
 
         try:
@@ -532,7 +535,6 @@ class AuthService(BaseService):
             credentials="api_key",
         )
 
-        request = self.request
         if request is not None:
             await self._touch_api_key(record, request=request)
         return principal

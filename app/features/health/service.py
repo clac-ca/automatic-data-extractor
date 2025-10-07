@@ -4,14 +4,17 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.core.service import BaseService
+from app.core.config import Settings
 
 from .exceptions import HealthCheckError
 from .schemas import HealthCheckResponse, HealthComponentStatus
 
 
-class HealthService(BaseService):
+class HealthService:
     """Compute health responses for readiness/liveness checks."""
+
+    def __init__(self, *, settings: Settings) -> None:
+        self._settings = settings
 
     async def status(self) -> HealthCheckResponse:
         """Return the overall system health."""
@@ -23,7 +26,7 @@ class HealthService(BaseService):
                     HealthComponentStatus(
                         name="api",
                         status="available",
-                        detail=f"v{self.settings.app_version}",
+                        detail=f"v{self._settings.app_version}",
                     ),
                 ],
             )

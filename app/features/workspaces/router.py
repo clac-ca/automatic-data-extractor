@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, Path, status
+from fastapi import APIRouter, Body, Depends, Path, Security, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.responses import DefaultResponse
 from app.core.schema import ErrorMessage
+from app.db.session import get_session
 
-from ..auth.dependencies import bind_current_user
-from ..auth.security import access_control
+from ..auth.dependencies import bind_current_user, require_admin_user
 from ..users.models import User
-from .dependencies import get_workspaces_service, require_workspace_context
+from .dependencies import get_workspace_profile, require_workspace_access
 from .schemas import (
-    WorkspaceContext,
     WorkspaceCreate,
     WorkspaceDefaultSelection,
     WorkspaceMember,
@@ -21,7 +21,7 @@ from .schemas import (
     WorkspaceProfile,
     WorkspaceUpdate,
 )
-from .service import WorkspacesService
+from .service import WorkspaceScope, WorkspacesService
 
 router = APIRouter(tags=["workspaces"])
 
@@ -29,54 +29,6 @@ WORKSPACE_MEMBER_BODY = Body(...)
 WORKSPACE_CREATE_BODY = Body(...)
 WORKSPACE_UPDATE_BODY = Body(...)
 WORKSPACE_MEMBER_UPDATE_BODY = Body(...)
-
-UserDep = Annotated[User, Depends(bind_current_user)]
-WorkspaceContextDep = Annotated[WorkspaceContext, Depends(require_workspace_context)]
-WorkspaceServiceDep = Annotated[WorkspacesService, Depends(get_workspaces_service)]
-AdminWorkspaceServiceDep = Annotated[
-    WorkspacesService,
-    Depends(access_control(require_admin=True, service_dependency=get_workspaces_service)),
-]
-WorkspaceMembersReadServiceDep = Annotated[
-    WorkspacesService,
-    Depends(
-        access_control(
-            permissions={"workspace:members:read"},
-            require_workspace=True,
-            service_dependency=get_workspaces_service,
-        )
-    ),
-]
-WorkspaceMembersManageServiceDep = Annotated[
-    WorkspacesService,
-    Depends(
-        access_control(
-            permissions={"workspace:members:manage"},
-            require_workspace=True,
-            service_dependency=get_workspaces_service,
-        )
-    ),
-]
-WorkspaceSettingsServiceDep = Annotated[
-    WorkspacesService,
-    Depends(
-        access_control(
-            permissions={"workspace:settings:manage"},
-            require_workspace=True,
-            service_dependency=get_workspaces_service,
-        )
-    ),
-]
-WorkspaceScopedServiceDep = Annotated[
-    WorkspacesService,
-    Depends(
-        access_control(
-            require_workspace=True,
-            service_dependency=get_workspaces_service,
-        )
-    ),
-]
-
 
 @router.post(
     "/workspaces",
@@ -108,13 +60,14 @@ WorkspaceScopedServiceDep = Annotated[
     },
 )
 async def create_workspace(
-    current_user: UserDep,
-    service: AdminWorkspaceServiceDep,
+    admin_user: Annotated[User, Depends(require_admin_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
     *,
     payload: WorkspaceCreate = WORKSPACE_CREATE_BODY,
 ) -> WorkspaceProfile:
+    service = WorkspacesService(session=session)
     workspace = await service.create_workspace(
-        user=current_user,
+        user=admin_user,
         name=payload.name,
         slug=payload.slug,
         owner_user_id=payload.owner_user_id,
@@ -140,16 +93,17 @@ async def create_workspace(
     },
 )
 async def list_workspaces(
-    current_user: UserDep,
-    service: WorkspaceServiceDep,
+    current_user: Annotated[User, Depends(bind_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[WorkspaceProfile]:
+    service = WorkspacesService(session=session)
     memberships = await service.list_memberships(user=current_user)
     return memberships
 
 
 @router.get(
     "/workspaces/{workspace_id}",
-    response_model=WorkspaceContext,
+    response_model=WorkspaceProfile,
     status_code=status.HTTP_200_OK,
     summary="Retrieve workspace context by identifier",
     response_model_exclude_none=True,
@@ -168,8 +122,10 @@ async def list_workspaces(
         },
     },
 )
-async def read_workspace(selection: WorkspaceContextDep) -> WorkspaceContext:
-    return selection
+async def read_workspace(
+    workspace: Annotated[WorkspaceProfile, Depends(get_workspace_profile)],
+) -> WorkspaceProfile:
+    return workspace
 
 
 @router.get(
@@ -190,10 +146,19 @@ async def read_workspace(selection: WorkspaceContextDep) -> WorkspaceContext:
     },
 )
 async def list_members(
-    _: WorkspaceContextDep,
-    service: WorkspaceMembersReadServiceDep,
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.MEMBERS_READ],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[WorkspaceMember]:
-    memberships = await service.list_members()
+    service = WorkspacesService(session=session)
+    memberships = await service.list_members(
+        workspace_id=workspace.workspace_id
+    )
     return memberships
 
 
@@ -223,12 +188,20 @@ async def list_members(
     },
 )
 async def add_member(
-    _: WorkspaceContextDep,
-    service: WorkspaceMembersManageServiceDep,
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.MEMBERS_MANAGE],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
     *,
     payload: WorkspaceMemberCreate = WORKSPACE_MEMBER_BODY,
 ) -> WorkspaceMember:
+    service = WorkspacesService(session=session)
     membership = await service.add_member(
+        workspace_id=workspace.workspace_id,
         user_id=payload.user_id,
         role=payload.role,
     )
@@ -265,14 +238,22 @@ async def add_member(
     },
 )
 async def update_workspace(
-    current_user: UserDep,
-    _: WorkspaceContextDep,
-    service: WorkspaceSettingsServiceDep,
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.SETTINGS_MANAGE],
+        ),
+    ],
+    current_user: Annotated[User, Depends(bind_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
     *,
     payload: WorkspaceUpdate = WORKSPACE_UPDATE_BODY,
 ) -> WorkspaceProfile:
+    service = WorkspacesService(session=session)
     workspace = await service.update_workspace(
         user=current_user,
+        workspace_id=workspace.workspace_id,
         name=payload.name,
         slug=payload.slug,
         settings=payload.settings,
@@ -301,10 +282,17 @@ async def update_workspace(
     },
 )
 async def delete_workspace(
-    _: WorkspaceContextDep,
-    service: WorkspaceSettingsServiceDep,
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.SETTINGS_MANAGE],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> DefaultResponse:
-    await service.delete_workspace()
+    service = WorkspacesService(session=session)
+    await service.delete_workspace(workspace_id=workspace.workspace_id)
     return DefaultResponse.success("Workspace deleted")
 
 
@@ -334,13 +322,21 @@ async def delete_workspace(
     },
 )
 async def update_member(
-    _: WorkspaceContextDep,
-    service: WorkspaceMembersManageServiceDep,
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.MEMBERS_MANAGE],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
     membership_id: str = Path(..., min_length=1, description="Membership identifier"),
     *,
     payload: WorkspaceMemberUpdate = WORKSPACE_MEMBER_UPDATE_BODY,
 ) -> WorkspaceMember:
+    service = WorkspacesService(session=session)
     membership = await service.update_member_role(
+        workspace_id=workspace.workspace_id,
         membership_id=membership_id,
         role=payload.role,
     )
@@ -372,11 +368,20 @@ async def update_member(
     },
 )
 async def remove_member(
-    _: WorkspaceContextDep,
-    service: WorkspaceMembersManageServiceDep,
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.MEMBERS_MANAGE],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
     membership_id: str = Path(..., min_length=1, description="Membership identifier"),
 ) -> DefaultResponse:
-    await service.remove_member(membership_id=membership_id)
+    service = WorkspacesService(session=session)
+    await service.remove_member(
+        workspace_id=workspace.workspace_id, membership_id=membership_id
+    )
     return DefaultResponse.success("Workspace member removed")
 
 
@@ -397,11 +402,15 @@ async def remove_member(
     },
 )
 async def set_default_workspace(
-    current_user: UserDep,
-    _: WorkspaceContextDep,
-    service: WorkspaceScopedServiceDep,
+    workspace: Annotated[WorkspaceProfile, Depends(get_workspace_profile)],
+    current_user: Annotated[User, Depends(bind_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> WorkspaceDefaultSelection:
-    selection = await service.set_default_workspace(user=current_user)
+    service = WorkspacesService(session=session)
+    selection = await service.set_default_workspace(
+        workspace_id=workspace.workspace_id,
+        user=current_user,
+    )
     return selection
 
 

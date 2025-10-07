@@ -11,7 +11,6 @@ from fastapi import Depends, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.service import ServiceContext, get_service_context
 from app.db.engine import get_engine
 from app.db.mixins import generate_ulid
 from app.db.session import get_session
@@ -30,13 +29,13 @@ async def test_session_dependency_commits_and_populates_context(
 
     if not any(route.path == route_path for route in app.router.routes):
 
-        @app.post(route_path, dependencies=[Depends(get_session)])
+        @app.post(route_path)
         async def _create_configuration(
             request: Request,
-            context: Annotated[ServiceContext, Depends(get_service_context)],
+            session: Annotated[AsyncSession, Depends(get_session)],
         ) -> dict[str, bool | str]:
-            assert isinstance(context.session, AsyncSession)
-            assert request.state.db_session is context.session
+            assert isinstance(session, AsyncSession)
+            assert request.state.db_session is session
 
             configuration_id = generate_ulid()
             payload = {
@@ -50,7 +49,7 @@ async def test_session_dependency_commits_and_populates_context(
                 "updated_at": datetime.now(UTC).isoformat(),
                 "workspace_id": workspace_id,
             }
-            await context.session.execute(
+            await session.execute(
                 text(
                     """
                     INSERT INTO configurations (
