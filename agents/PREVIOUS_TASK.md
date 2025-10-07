@@ -15,7 +15,7 @@ obscured defaults and required call sites to reach for custom properties.
   contract.【F:app/features/documents/service.py†L1-L83】【F:app/features/jobs/service.py†L1-L118】【F:app/cli/commands/reset.py†L1-L87】
 - Refreshed environment templates, docs, and regression tests to match the
   renamed fields, JSON-based list inputs, and developer defaults so operators
-  have a single, standard configuration story.【F:.env†L1-L18】【F:.env.example†L1-L45】【F:README.md†L137-L162】【F:docs/admin-guide/README.md†L12-L19】【F:tests/core/test_settings.py†L1-L234】
+  have a single, standard configuration story.【F:.env†L1-L18】【F:.env.example†L1-L45】【F:README.md†L137-L162】【F:docs/admin-guide/README.md†L12-L19】【F:app/core/tests/test_settings.py†L1-L234】
 
 ## Next steps
 - Break the monolithic `Settings` class into domain-specific configs per

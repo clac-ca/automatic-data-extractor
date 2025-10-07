@@ -5,7 +5,7 @@
 - All active feature slices (auth, users, workspaces, configurations, documents, jobs, health, and system settings) now live under `app/features/<name>/`, keeping routers, schemas, models, repositories, and services co-located with relative imports for cross-feature collaboration. 【F:app/features/auth/router.py†L1-L195】【F:app/features/workspaces/service.py†L1-L287】
 - Database bootstrapping now lives exclusively under `app/db/`, while shared async helpers such as the task queue reside in `app/services/` and runtime directory provisioning sits in `app/lifecycles.py`, mirroring the target package split. 【F:app/db/__init__.py†L1-L34】【F:app/lifecycles.py†L1-L54】【F:app/services/task_queue.py†L1-L107】
 - Events/results surfaces have been removed—the API router only wires active feature slices and the initial schema seeds no results tables—clearing the way for the feature-first relocation. 【F:app/api/v1/router.py†L5-L22】【F:app/alembic/versions/0001_initial_schema.py†L15-L227】
-- Tests now mirror the feature layout (`tests/features/<name>/`) so service and API coverage travels with each slice while continuing to run under the shared `tests/` root. 【F:tests/features/auth/test_auth.py†L1-L212】【F:tests/features/jobs/test_service.py†L1-L210】
+- Tests now live alongside each feature under `app/features/<name>/tests`, keeping service and API coverage within the owning slice while sharing a single fixture module. 【F:app/features/auth/tests/test_router.py†L1-L210】【F:app/features/jobs/tests/test_service.py†L1-L210】【F:conftest.py†L1-L248】
 - The API shell exposes shared dependency aliases through `app/api/deps.py`, keeping router composition slim while preserving feature-owned implementations. 【F:app/api/deps.py†L1-L36】
 - A lightweight worker entry point now lives in `app/workers/run_jobs.py`, providing a structured home for task queue consumers as the job pipeline evolves. 【F:app/workers/run_jobs.py†L1-L87】
 
@@ -19,7 +19,7 @@
 - **Feature Packaging:** ✅ Completed — Routers, schemas, repositories, services, and helpers for each domain now live under `app/features/<name>/`, eliminating the cross-package imports that complicated refactors. 【F:app/features/auth/service.py†L1-L408】【F:app/features/documents/service.py†L1-L213】
 - **Infrastructure Separation:** ✅ Completed — Database helpers now live under `app/db/`, runtime directory setup sits in `app/lifecycles.py`, and shared async utilities moved to `app/services/`; the legacy compatibility shims have been removed. 【F:app/db/__init__.py†L1-L34】【F:app/lifecycles.py†L1-L54】【F:app/services/task_queue.py†L1-L107】
 - **Static Assets:** ✅ Completed — SPA bundles now live in `app/web/`, CLI messaging references the new directory, and `app/static/` contains only a README pointer for remaining callers. 【F:app/main.py†L88-L170】【F:app/static/README.md†L1-L5】【F:pyproject.toml†L45-L58】
-- **Tests & Tooling:** ✅ Completed — `pyproject.toml` now enumerates each test suite directory to mirror the feature-first layout, keeping discovery explicit as additional slices are added. 【F:pyproject.toml†L61-L69】
+- **Tests & Tooling:** ✅ Completed — `pyproject.toml` points pytest at the `app/` package and relaxes mypy's strictness for the co-located test modules. 【F:pyproject.toml†L61-L89】
 
 ## Optimised Migration Plan
 
@@ -40,7 +40,7 @@
 
 ### Phase 3 – Feature Slice Relocation Loop
 - [x] Relocate health, jobs, configurations, documents, users, workspaces, auth, and system settings into `app/features/<name>/`, updating `app/api/v1/router.py` and all call sites in the same change. 【F:app/features/auth/router.py†L1-L195】【F:app/api/v1/router.py†L1-L23】
-- [x] Mirror the move in tests by relocating corresponding suites under `tests/features/<name>/` so every slice ships with passing coverage. 【F:tests/features/auth/test_auth.py†L1-L212】【F:tests/features/workspaces/test_workspaces.py†L1-L276】
+- [x] Mirror the move in tests by relocating corresponding suites under `app/features/<name>/tests/` so every slice ships with passing coverage. 【F:app/features/auth/tests/test_router.py†L1-L210】【F:app/features/workspaces/tests/test_router.py†L1-L316】
 - [x] Inline the API dependency shim once the new imports settle so shared dependencies live inside their owning feature modules. 【F:app/features/auth/dependencies.py†L1-L120】
 
 ### Phase 4 – Tooling, Docs, and Cleanup
