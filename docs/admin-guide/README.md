@@ -15,6 +15,9 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 - Host and port configuration splits into `ADE_SERVER_HOST` / `ADE_SERVER_PORT` for the uvicorn listener and `ADE_SERVER_PUBLIC_URL` for the externally reachable origin. When ADE sits behind HTTPS on a domain such as `https://ade.example.com`, set the public URL and provide a JSON array in `ADE_SERVER_CORS_ORIGINS` so browsers can connect (for example `["https://ade.example.com"]`).
 - Documentation endpoints (`/docs`, `/redoc`, `/openapi.json`) default on for the `local` and `staging` environments and can be
   toggled explicitly through the `ADE_API_DOCS_ENABLED` flag to keep production surfaces minimal.
+- Account lockout policy is governed by `ADE_FAILED_LOGIN_LOCK_THRESHOLD` (attempts) and
+  `ADE_FAILED_LOGIN_LOCK_DURATION` (lock length, supports suffixed durations like `5m`). Defaults lock a user for
+  five minutes after five consecutive failures.
 
 ## Operational building blocks
 - Database connections are created via the async SQLAlchemy engine in [`app/db/engine.py`](../../app/db/engine.py) and scoped sessions from [`app/db/session.py`](../../app/db/session.py).

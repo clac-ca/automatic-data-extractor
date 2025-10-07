@@ -10,76 +10,61 @@ This document is the authoritative reference for ADE's relational schema. It cap
 - All tenant-scoped rows include a `workspace_id` and enforce referential integrity back to `workspaces`.
 
 ## Enums
-- `user_system_role`: `admin | user`
-- `workspace_role`: `owner | admin | member | viewer`
-- `job_status`: `pending | running | succeeded | failed | canceled`
-- `configuration_state`: `draft | active | archived`
+- `userrole`: `admin | user`
+- `workspacerole`: `owner | member`
 
 ## Core Tables
 
 ### users
-Stores people and service accounts.
-- `user_id` (PK), `email`, `email_canonical`, `password_hash` (nullable), `display_name`, `description`, `is_service_account`, `is_active`, `system_role` (enum), `last_login_at`, `created_by_user_id` (FK to `users`).
-- Relationships: `workspace_memberships`, `user_identities`, `api_keys`, `configurations.published_by_user_id`.
+Stores people and service principals allowed to sign in.
+- `user_id` (PK), `email`, `email_canonical`, `display_name`, `is_service_account`, `is_active`, `role` (enum), `last_login_at`, `failed_login_count`, `locked_until`, timestamps.
+- Relationships: `user_credentials`, `user_identities`, `workspace_memberships`, `api_keys`.
+
+### user_credentials
+Holds password hashes for local authentication.
+- `credential_id` (PK), `user_id` (FK to `users`), `password_hash`, `last_rotated_at`, timestamps.
+- Unique constraint on `user_id` enforces at most one active password secret per user.
 
 ### user_identities
 Normalized SSO identities.
-- `identity_id` (PK), `user_id` (FK to `users`), `provider` (FK to `identity_providers`), `subject`, `email_at_provider`, timestamps.
+- `identity_id` (PK), `user_id` (FK to `users`), `provider`, `subject`, `last_authenticated_at`, timestamps.
 - Unique `(provider, subject)` ensures no duplicates.
-
-### identity_providers
-Catalog of configured SSO providers.
-- `provider_id` (PK, slug), `label`, `icon_url`, `start_url`, `enabled`, `sort_order`, timestamps.
-- Drives `/auth/providers` API and admin tooling.
 
 ### workspaces
 Tenant boundary for all data.
-- `workspace_id` (PK), `name`, `slug` (unique), `settings` (JSONB), `created_by_user_id` (FK to `users`), `archived_at`, timestamps.
+- `workspace_id` (PK), `name`, `slug` (unique), `settings` (JSON), timestamps.
 
 ### workspace_memberships
 Connects users to workspaces.
-- `workspace_membership_id` (PK), `workspace_id` (FK), `user_id` (FK), `role` (enum), `is_default`, timestamps.
-- Constraints: unique `(user_id, workspace_id)` plus partial unique index on `(user_id) WHERE is_default = TRUE` enforcing a single default workspace per user.
-
-### document_types
-Global registry of supported document categories.
-- `document_type_key` (PK, e.g. `invoice`), `display_name`, `description`, `icon_url`, `is_deprecated`.
-
-### workspace_document_types
-Optional workspace-specific metadata for document types.
-- `workspace_document_type_id` (PK), `workspace_id` (FK), `document_type_key` (FK), `display_name_override`, `sort_order`, `is_visible`, timestamps.
-- Unique `(workspace_id, document_type_key)`.
+- `workspace_membership_id` (PK), `workspace_id` (FK), `user_id` (FK), `role` (enum), `is_default`, `permissions` (JSON), timestamps.
+- Constraint: unique `(user_id, workspace_id)` enforces one membership per workspace.
 
 ### configurations
 Versioned extraction instructions.
-- `configuration_id` (PK), `workspace_id` (FK), `document_type_key` (FK), `title`, `version` (integer scoped to workspace+doc type), `state` (enum), `activated_at`, `published_by_user_id` (FK to `users`), `published_at`, `revision_notes`, `payload` (JSONB), timestamps.
-- Constraints: unique `(workspace_id, document_type_key, version)` and filtered unique index enforcing at most one `state = 'active'` per `(workspace_id, document_type_key)`.
+- `configuration_id` (PK), `workspace_id` (FK), `document_type`, `title`, `version`, `is_active`, `activated_at`, `payload` (JSON), timestamps.
+- Unique `(workspace_id, document_type, version)` plus partial unique index on `(workspace_id, document_type)` where `is_active = 1`.
 
 ### documents
 Uploaded source files.
-- `document_id` (PK), `workspace_id` (FK), metadata (`original_filename`, `content_type`, `byte_size`, `sha256`, `stored_uri`, `metadata` JSONB), retention fields (`expires_at`, `deleted_at`, `deleted_by_user_id`, `delete_reason`), `produced_by_job_id` (nullable FK to `jobs`), timestamps.
-- Unique `(workspace_id, sha256)` prevents duplicates within a workspace.
+- `document_id` (PK), `workspace_id` (FK), metadata (`original_filename`, `content_type`, `byte_size`, `sha256`, `stored_uri`, `attributes` JSON), retention fields (`expires_at`, `deleted_at`, `deleted_by_user_id`), `produced_by_job_id` (nullable job identifier), timestamps.
+
+### api_keys
+Hashed API keys bound to users or service accounts.
+- `api_key_id` (PK), `user_id` (FK with cascade), `token_prefix` (unique), `token_hash` (unique), `label`, `expires_at`, `revoked_at`, `last_seen_at`, `last_seen_ip`, `last_seen_user_agent`, timestamps.
+- Index: `api_keys_user_id_idx` for owner lookups; revoke keys via `revoked_at` without deleting history.
 
 ### jobs
 Processing runs that turn documents into tables.
-- `job_id` (PK), `workspace_id` (FK), `configuration_id` (FK), `input_document_id` (FK), `status` (enum), `created_by_user_id` (FK), lifecycle timestamps (`queued_at`, `started_at`, `finished_at`), `attempt`, `parent_job_id` (self-FK), `priority`, `metrics` (JSONB), `logs` (JSONB), `error_code`, `error_message`, timestamps.
-- Composite unique `(job_id, workspace_id)` plus composite FKs from dependent tables to enforce tenant safety.
+- `job_id` (PK), `workspace_id` (FK), `document_type`, `configuration_id` (FK), `status`, `created_by_user_id` (nullable FK to `users`), `input_document_id` (FK to `documents`), `metrics` (JSON), `logs` (JSON), timestamps.
 
 ### system_settings
 Key/value store for global toggles.
 - `key` (PK, e.g. `auth.force_sso`), `value` (JSONB), timestamps.
 
-## Derived Views
-
-### v_document_type_summary
-Provides workspace-aware document type state:
-- Columns: `workspace_id`, `document_type_key`, `display_name`, `status` (`active | draft | empty`), `active_configuration_id`, `version`.
-- Definition joins `workspace_document_types` with `document_types` and summarizes `configurations` using correlated subqueries.
-
 ## Integrity Rules
 - Every tenant-scoped table includes a `workspace_id` FK to enforce isolation.
-- Jobs reference a single configuration version via `configuration_id`; `document_type` and `configuration_version` are not stored redundantly.
-- Service code must set exactly one default membership per user; the database constraint ensures drift cannot occur.
+- Jobs reference a single configuration version via `configuration_id` and cache the `document_type` for filtering convenience.
+- Service code must set exactly one default membership per user; the uniqueness constraint prevents duplicates.
 - Only one active configuration per `(workspace, document_type)` enforced via filtered unique index.
 ## Operational Notes
 - Use deterministic ULIDs for IDs during seeding/tests to simplify fixtures.

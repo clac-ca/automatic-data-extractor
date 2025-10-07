@@ -118,6 +118,7 @@ class APIKeyIssueRequest(BaseSchema):
     user_id: str | None = Field(default=None, min_length=1)
     email: str | None = None
     expires_in_days: int | None = Field(default=None, ge=1, le=3650)
+    label: str | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")
     def _validate_target(self) -> APIKeyIssueRequest:
@@ -144,7 +145,8 @@ class APIKeyIssueResponse(BaseSchema):
     principal_type: Literal["user", "service_account"]
     principal_id: str
     principal_label: str
-    expires_at: str | None = None
+    expires_at: datetime | None = None
+    label: str | None = None
 
 
 class APIKeySummary(BaseSchema):
@@ -155,11 +157,13 @@ class APIKeySummary(BaseSchema):
     principal_id: str
     principal_label: str
     token_prefix: str
-    created_at: str
-    expires_at: str | None = None
-    last_seen_at: str | None = None
+    label: str | None = None
+    created_at: datetime
+    expires_at: datetime | None = None
+    last_seen_at: datetime | None = None
     last_seen_ip: str | None = None
     last_seen_user_agent: str | None = None
+    revoked_at: datetime | None = None
 
 
 __all__ = [

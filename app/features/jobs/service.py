@@ -12,7 +12,6 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.db import generate_ulid
 from app.features.users.models import User
 
 from ..configurations.exceptions import (
@@ -59,7 +58,7 @@ class JobsService:
         """Return recent jobs filtered by optional criteria."""
 
         stmt = self._base_query(workspace_id).order_by(
-            Job.created_at.desc(), Job.job_id.desc()
+            Job.created_at.desc(), Job.id.desc()
         )
         if status:
             if status not in _VALID_STATUSES:
@@ -100,17 +99,15 @@ class JobsService:
         configuration = await self._get_configuration(
             workspace_id, configuration_id, configuration_version
         )
-        actor_identifier = self._resolve_actor_identifier(actor)
+        actor_identifier = self._resolve_actor_id(actor)
         config_identifier = str(configuration.id)
 
         job = Job(
-            job_id=generate_ulid(),
             workspace_id=workspace_id,
             document_type=configuration.document_type,
             configuration_id=config_identifier,
-            configuration_version=configuration.version,
             status="pending",
-            created_by=actor_identifier,
+            created_by_user_id=actor_identifier,
             input_document_id=document.document_id,
             metrics={},
             logs=[],
@@ -255,12 +252,11 @@ class JobsService:
     def _duration_ms(self, started: float) -> int:
         return int((perf_counter() - started) * 1000)
 
-    def _resolve_actor_identifier(self, actor: User | None) -> str:
-        if actor is not None:
-            candidate = getattr(actor, "id", None) or getattr(actor, "email", None)
-            if candidate:
-                return str(candidate)
-        return "system"
+    def _resolve_actor_id(self, actor: User | None) -> str | None:
+        if actor is None:
+            return None
+        candidate = getattr(actor, "id", None)
+        return str(candidate) if candidate else None
 
     def _base_query(self, workspace_id: str) -> Select[tuple[Job]]:
         return select(Job).where(Job.workspace_id == workspace_id)

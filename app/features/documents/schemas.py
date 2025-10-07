@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import Field
@@ -21,21 +22,18 @@ class DocumentRecord(BaseSchema):
     stored_uri: str
     metadata: dict[str, Any] = Field(
         default_factory=dict,
-        alias="metadata_",
+        alias="attributes",
         serialization_alias="metadata",
     )
-    expires_at: str
-    created_at: str
-    updated_at: str
-    deleted_at: str | None = None
-    deleted_by: str | None = None
-    delete_reason: str | None = None
+    expires_at: datetime
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None = None
+    deleted_by: str | None = Field(
+        default=None,
+        alias="deleted_by_user_id",
+        serialization_alias="deleted_by",
+    )
 
 
-class DocumentDeleteRequest(BaseSchema):
-    """Optional reason provided when soft-deleting a document."""
-
-    reason: str | None = Field(default=None, max_length=1024)
-
-
-__all__ = ["DocumentDeleteRequest", "DocumentRecord"]
+__all__ = ["DocumentRecord"]

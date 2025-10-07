@@ -20,10 +20,15 @@ def _serialise_api_key(api_key: APIKey) -> dict[str, Any]:
         "id": api_key.id,
         "user_id": api_key.user_id,
         "user_email": getattr(user, "email", None),
+        "principal_type": (
+            "service_account" if getattr(user, "is_service_account", False) else "user"
+        ),
         "token_prefix": api_key.token_prefix,
-        "created_at": api_key.created_at,
-        "expires_at": api_key.expires_at,
-        "last_seen_at": api_key.last_seen_at,
+        "label": api_key.label,
+        "created_at": api_key.created_at.isoformat() if api_key.created_at else None,
+        "expires_at": api_key.expires_at.isoformat() if api_key.expires_at else None,
+        "last_seen_at": api_key.last_seen_at.isoformat() if api_key.last_seen_at else None,
+        "revoked_at": api_key.revoked_at.isoformat() if api_key.revoked_at else None,
     }
 
 
@@ -31,8 +36,11 @@ def _api_key_columns() -> list[ColumnSpec]:
     return [
         ("ID", "id"),
         ("Prefix", "token_prefix"),
+        ("Label", lambda row: row.get("label") or "-"),
+        ("Type", "principal_type"),
         ("User", lambda row: row.get("user_email") or row["user_id"]),
         ("Expires", lambda row: row.get("expires_at") or "-"),
+        ("Revoked", lambda row: row.get("revoked_at") or "-"),
     ]
 
 
@@ -52,12 +60,14 @@ async def issue(args: Namespace) -> None:
             result = await service.issue_api_key_for_user_id(
                 user_id=args.user_id,
                 expires_in_days=expires_in,
+                label=args.label,
             )
         else:
             email = normalise_email(args.email)
             result = await service.issue_api_key_for_email(
                 email=email,
                 expires_in_days=expires_in,
+                label=args.label,
             )
 
     payload = _issue_result_payload(result)
