@@ -8,6 +8,7 @@ from pathlib import Path
 from app.features.users.models import UserRole
 
 from .commands import api_keys as api_keys_commands
+from .commands import docker as docker_command
 from .commands import reset as reset_command
 from .commands import settings as settings_command
 from .commands import start as start_command
@@ -58,6 +59,13 @@ def build_cli_app() -> argparse.ArgumentParser:
     )
     reset_command.register_arguments(reset_parser)
     reset_parser.set_defaults(handler=reset_command.reset)
+
+    # Container automation ------------------------------------------------
+    docker_parser = subparsers.add_parser(
+        "docker",
+        help="Build or run ADE Docker images.",
+    )
+    docker_command.register_arguments(docker_parser)
 
     # User management -----------------------------------------------------
     users_parser = subparsers.add_parser("users", help="Manage ADE user accounts.")
@@ -225,3 +233,13 @@ def build_cli_app() -> argparse.ArgumentParser:
     revoke_parser.set_defaults(handler=api_keys_commands.revoke)
 
     return parser
+
+
+
+
+
+
+
+
+
+
