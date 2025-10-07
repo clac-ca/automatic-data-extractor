@@ -121,7 +121,6 @@ async def test_delete_document_marks_deleted(
         "DELETE",
         f"{workspace_base}/documents/{document_id}",
         headers=headers,
-        json={"reason": "cleanup"},
     )
     assert delete_response.status_code == 204, delete_response.text
 

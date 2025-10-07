@@ -72,7 +72,7 @@ class DocumentsService:
             byte_size=stored.byte_size,
             sha256=stored.sha256,
             stored_uri=stored_uri,
-            metadata_=metadata_payload,
+            attributes=metadata_payload,
             expires_at=expiration,
             produced_by_job_id=produced_by_job_id,
         )
@@ -127,17 +127,15 @@ class DocumentsService:
         *,
         workspace_id: str,
         document_id: str,
-        reason: str | None = None,
         actor: User | None = None,
     ) -> None:
         """Soft delete ``document_id`` and remove the stored file."""
 
         document = await self._get_document(workspace_id, document_id)
-        now = datetime.now(tz=UTC).isoformat(timespec="seconds")
+        now = datetime.now(tz=UTC)
         document.deleted_at = now
         if actor is not None:
-            document.deleted_by = getattr(actor, "id", None)
-        document.delete_reason = reason
+            document.deleted_by_user_id = getattr(actor, "id", None)
         await self._session.flush()
 
         await self._storage.delete(document.stored_uri)
@@ -156,10 +154,10 @@ class DocumentsService:
     def _base_query(self, workspace_id: str) -> Select[tuple[Document]]:
         return select(Document).where(Document.workspace_id == workspace_id)
 
-    def _resolve_expiration(self, override: str | None, now: datetime) -> str:
+    def _resolve_expiration(self, override: str | None, now: datetime) -> datetime:
         if override is None:
             expires = now + self._settings.storage_document_retention_period
-            return expires.isoformat(timespec="seconds")
+            return expires
 
         candidate = override.strip()
         if not candidate:
@@ -183,7 +181,7 @@ class DocumentsService:
         if parsed <= now:
             raise InvalidDocumentExpirationError("expires_at must be in the future")
 
-        return parsed.isoformat(timespec="seconds")
+        return parsed
 
     def _normalise_filename(self, name: str | None) -> str:
         if name is None:

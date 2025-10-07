@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator, Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -20,7 +21,7 @@ from app.db.bootstrap import ensure_database_ready
 from app.db.engine import render_sync_url, reset_database_state
 from app.db.session import get_sessionmaker
 from app.features.auth.security import hash_password
-from app.features.users.models import User, UserRole
+from app.features.users.models import User, UserCredential, UserRole
 from app.features.workspaces.models import (
     Workspace,
     WorkspaceMembership,
@@ -151,38 +152,32 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
 
         admin = User(
             email=admin_email,
-            password_hash=hash_password(admin_password),
             role=UserRole.ADMIN,
             is_active=True,
         )
         workspace_owner = User(
             email=workspace_owner_email,
-            password_hash=hash_password(workspace_owner_password),
-            role=UserRole.MEMBER,
+            role=UserRole.USER,
             is_active=True,
         )
         member = User(
             email=member_email,
-            password_hash=hash_password(member_password),
-            role=UserRole.MEMBER,
+            role=UserRole.USER,
             is_active=True,
         )
         member_with_manage = User(
             email=member_manage_email,
-            password_hash=hash_password(member_manage_password),
-            role=UserRole.MEMBER,
+            role=UserRole.USER,
             is_active=True,
         )
         orphan = User(
             email=orphan_email,
-            password_hash=hash_password(orphan_password),
-            role=UserRole.MEMBER,
+            role=UserRole.USER,
             is_active=True,
         )
         invitee = User(
             email=invitee_email,
-            password_hash=hash_password(invitee_password),
-            role=UserRole.MEMBER,
+            role=UserRole.USER,
             is_active=True,
         )
 
@@ -200,24 +195,24 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
         )
         await session.flush()
 
-        automation_account = User(
-            email=f"automation-{workspace_slug}@service.local",
-            display_name="Automation Bot",
-            description="Integration user for automation tasks",
-            is_service_account=True,
-            is_active=True,
-            created_by_user_id=admin.id,
-        )
-        inactive_account = User(
-            email=f"inactive-{workspace_slug}@service.local",
-            display_name="Inactive Bot",
-            description="Disabled integration",
-            is_service_account=True,
-            is_active=False,
-            created_by_user_id=admin.id,
-        )
-        session.add_all([automation_account, inactive_account])
-        await session.flush()
+        def _add_password(user: User, password: str) -> None:
+            session.add(
+                UserCredential(
+                    user_id=user.id,
+                    password_hash=hash_password(password),
+                    last_rotated_at=datetime.now(tz=UTC),
+                )
+            )
+
+        for account, secret in (
+            (admin, admin_password),
+            (workspace_owner, workspace_owner_password),
+            (member, member_password),
+            (member_with_manage, member_manage_password),
+            (orphan, orphan_password),
+            (invitee, invitee_password),
+        ):
+            _add_password(account, secret)
 
         workspace_owner_membership = WorkspaceMembership(
             user_id=workspace_owner.id,
@@ -288,14 +283,5 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
         "member_with_manage": member_manage_info,
         "orphan": orphan_info,
         "invitee": invitee_info,
-        "service_account": {
-            "id": automation_account.id,
-            "email": automation_account.email,
-            "display_name": automation_account.display_name,
-        },
-        "inactive_service_account": {
-            "id": inactive_account.id,
-            "email": inactive_account.email,
-            "display_name": inactive_account.display_name,
-        },
+        "user": member_info,
     }

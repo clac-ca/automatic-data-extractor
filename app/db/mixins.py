@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import ClassVar
 
-from sqlalchemy import String
+from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 from ulid import ULID
 
@@ -39,19 +39,19 @@ class ULIDPrimaryKeyMixin:
 
 
 class TimestampMixin:
-    """Mixin that records created/updated timestamps as ISO-8601 strings."""
+    """Mixin that records created/updated timestamps as timezone-aware datetimes."""
 
     @staticmethod
-    def _timestamp() -> str:
-        return datetime.now(tz=UTC).isoformat(timespec="milliseconds")
+    def _timestamp() -> datetime:
+        return datetime.now(tz=UTC)
 
-    created_at: Mapped[str] = mapped_column(
-        String(32),
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         nullable=False,
         default=_timestamp,
     )
-    updated_at: Mapped[str] = mapped_column(
-        String(32),
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         nullable=False,
         default=_timestamp,
         onupdate=_timestamp,

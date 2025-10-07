@@ -76,36 +76,38 @@ tables:
       - length(user_id)=26
       - email_canonical = lower(email_canonical)
       - system_role in enums.user_system_role
-    fks:
-      created_by_user_id -> users.user_id ON DELETE SET NULL
     cols:
       email (TEXT, !null)
       email_canonical (TEXT, !null, unique, lower-cased)
-      password_hash (TEXT, null)
       display_name (TEXT, null)
-      description (TEXT, null)
-      is_service_account (INT, !null, default=0)
       is_active (INT, !null, default=1)
       system_role (TEXT, !null)
       last_login_at (TEXT, tz, null)
+      failed_login_count (INT, !null, default=0)
+      locked_until (TEXT, tz, null)
       created_at/updated_at (TEXT, tz, defaults: now)
-
-  identity_providers:
-    pk: provider_id (TEXT slug)
-    cols:
-      label (!null), icon_url, start_url, enabled (default=1), sort_order (default=0)
-      created_at/updated_at
 
   user_identities:
     pk: identity_id (CHAR(26))
     uniques:
-      - [provider_id, subject]
+      - [provider, subject]
     checks: [length(identity_id)=26]
     fks:
       user_id -> users.user_id ON DELETE CASCADE
-      provider_id -> identity_providers.provider_id ON DELETE RESTRICT
     cols:
-      subject (!null), email_at_provider (null)
+      provider (!null), subject (!null), email_at_provider (null)
+      created_at/updated_at
+
+  user_credentials:
+    pk: credential_id (CHAR(26))
+    uniques:
+      - [user_id]
+    checks: [length(credential_id)=26]
+    fks:
+      user_id -> users.user_id ON DELETE CASCADE
+    cols:
+      password_hash (!null)
+      last_rotated_at (TEXT, tz, null)
       created_at/updated_at
 
   api_keys:
@@ -190,7 +192,7 @@ tables:
     cols:
       original_filename, content_type, byte_size, sha256, stored_uri
       metadata (TEXT JSON default '{}'), expires_at
-      deleted_at, delete_reason
+      deleted_at
       created_at/updated_at
     indexes:
       - [workspace_id, created_at]
@@ -313,7 +315,7 @@ tables:
 
 * [ ] Model: `Document` (composite unique `[document_id, workspace_id]`, partial unique `(workspace_id, sha256) WHERE deleted_at IS NULL`).
 * [ ] Storage: `storage/filesystem_store.py` that streams `UploadFile` to disk while computing `sha256` and `byte_size`; returns `stored_uri` (e.g., `file://.../ws/<workspace_id>/<ulid>`).
-* [ ] Router/service: upload, list, download (`FileResponse`), metadata update, soft delete (set `deleted_at`, `deleted_by_user_id`, `delete_reason`).
+* [ ] Router/service: upload, list, download (`FileResponse`), metadata update, soft delete (set `deleted_at`, `deleted_by_user_id`).
 * [ ] Tests: upload→download→delete, dedupe enforcement, workspace isolation.
 
 ### Phase E — Configurations
