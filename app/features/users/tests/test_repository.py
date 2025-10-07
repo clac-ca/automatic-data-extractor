@@ -7,54 +7,86 @@ from uuid import uuid4
 import pytest
 
 from app.db.session import get_sessionmaker
-from app.features.users.models import User
+from app.features.users.models import UserCredential
 from app.features.users.repository import UsersRepository
 
 
 pytestmark = pytest.mark.asyncio
 
 
-async def test_create_and_list_service_accounts() -> None:
-    """Repository should persist and list service-account users."""
+async def test_create_user_persists_password_hash() -> None:
+    """Creating a user with a password should persist a credential row."""
 
     session_factory = get_sessionmaker()
     async with session_factory() as session:
         repo = UsersRepository(session)
 
-        human = await repo.create(
+        user = await repo.create(
             email=f"{uuid4().hex}@example.test",
-            password_hash="secret",
+            password_hash="argon2id$example",
+            display_name="  Example User  ",
         )
 
-        account = await repo.create(
-            email=f"automation-{uuid4().hex}@service.local",
-            display_name=" Automated Bot ",
-            description="  Handles integration tasks  ",
-            created_by_user_id=human.id,
+        assert user.credential is not None
+        assert isinstance(user.credential, UserCredential)
+        assert user.credential.password_hash == "argon2id$example"
+        assert user.failed_login_count == 0
+        assert user.locked_until is None
+        assert user.is_service_account is False
+
+
+async def test_list_users_returns_all_records() -> None:
+    """The repository should return all users ordered by email."""
+
+    session_factory = get_sessionmaker()
+    async with session_factory() as session:
+        repo = UsersRepository(session)
+
+        first = await repo.create(
+            email=f"{uuid4().hex}@example.test",
+            password_hash=None,
+        )
+        second = await repo.create(
+            email=f"{uuid4().hex}@example.test",
+            password_hash="argon2id$example",
+        )
+
+        users = await repo.list_users()
+        identifiers = {user.id for user in users}
+        assert {first.id, second.id}.issubset(identifiers)
+
+
+async def test_create_service_account_sets_flag() -> None:
+    """Creating a service account should store the flag."""
+
+    session_factory = get_sessionmaker()
+    async with session_factory() as session:
+        repo = UsersRepository(session)
+
+        user = await repo.create(
+            email=f"{uuid4().hex}@example.test",
+            password_hash=None,
             is_service_account=True,
         )
 
-        assert account.is_service_account is True
-        assert account.password_hash is None
-        assert account.display_name == "Automated Bot"
-        assert account.description == "Handles integration tasks"
-        assert account.label == "Automated Bot"
-
-        listed = await repo.list_service_accounts()
-        assert account.id in {record.id for record in listed}
-        assert all(record.is_service_account for record in listed)
-
-        fetched = await repo.get_by_email(account.email_canonical)
-        assert fetched is not None
-        assert fetched.id == account.id
+        assert user.is_service_account is True
 
 
-async def test_service_account_password_validation() -> None:
-    """Assigning a password to a service account should error."""
+async def test_set_password_creates_or_updates_credential() -> None:
+    """set_password should upsert the user's credential record."""
 
-    with pytest.raises(ValueError):
-        User(
-            email=f"automation-{uuid4().hex}@service.local",
-            is_service_account=True,
-            password_hash="not-allowed",
+    session_factory = get_sessionmaker()
+    async with session_factory() as session:
+        repo = UsersRepository(session)
+
+        user = await repo.create(
+            email=f"{uuid4().hex}@example.test",
+            password_hash=None,
         )
+
+        credential = await repo.set_password(user, "argon2id$first")
+        assert credential.password_hash == "argon2id$first"
+
+        updated = await repo.set_password(user, "argon2id$second")
+        assert updated.password_hash == "argon2id$second"
+        assert updated.id == credential.id

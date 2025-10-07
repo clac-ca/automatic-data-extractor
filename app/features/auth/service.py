@@ -64,10 +64,6 @@ class AuthenticatedIdentity:
     def label(self) -> str:
         return self.user.label
 
-    @property
-    def is_service_account(self) -> bool:
-        return bool(self.user.is_service_account)
-
 
 @dataclass(slots=True)
 class SessionTokens:
@@ -124,6 +120,19 @@ def normalise_email(value: str) -> str:
         msg = "Email must not be empty"
         raise ValueError(msg)
     return candidate.lower()
+
+
+def normalise_api_key_label(value: str | None) -> str | None:
+    """Return a trimmed API key label limited to 100 characters."""
+
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if len(cleaned) > 100:
+        return cleaned[:100]
+    return cleaned
 
 
 _INITIAL_SETUP_SETTING_KEY = "initial_setup"
@@ -211,17 +220,22 @@ class AuthService:
         user = await self._users.get_by_email(canonical)
         if user is None:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-        if user.is_service_account:
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                detail="Service accounts cannot authenticate with passwords",
-            )
-        if not user.password_hash:
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-        if not verify_password(password, user.password_hash):
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
         if not user.is_active:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="User inactive")
+        locked_until = self._ensure_aware(user.locked_until)
+        now = self._now()
+        if locked_until and locked_until > now:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Account locked")
+
+        credential = user.credential
+        if credential is None or not verify_password(password, credential.password_hash):
+            await self._record_failed_login(user)
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+        user.last_login_at = now
+        user.failed_login_count = 0
+        user.locked_until = None
+        await self._session.flush()
         return user
 
     def is_secure_request(self, request: Request) -> bool:
@@ -417,6 +431,9 @@ class AuthService:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Unknown user")
         if not user.is_active:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="User inactive")
+        locked_until = self._ensure_aware(user.locked_until)
+        if locked_until and locked_until > self._now():
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Account locked")
         return user
 
     # ------------------------------------------------------------------
@@ -427,6 +444,7 @@ class AuthService:
         *,
         email: str,
         expires_in_days: int | None = None,
+        label: str | None = None,
     ) -> APIKeyIssueResult:
         """Issue an API key for the user identified by ``email``."""
 
@@ -441,23 +459,28 @@ class AuthService:
         if expires_in_days is not None:
             expires_at = self._now() + timedelta(days=expires_in_days)
 
-        return await self.issue_api_key(user=user, expires_at=expires_at)
+        return await self.issue_api_key(
+            user=user, expires_at=expires_at, label=label
+        )
 
     async def issue_api_key(
         self,
         *,
         user: User,
         expires_at: datetime | None = None,
+        label: str | None = None,
     ) -> APIKeyIssueResult:
         """Persist an API key for ``user`` and return the raw secret."""
 
         prefix, secret = generate_api_key_components()
         token_hash = hash_api_key(secret)
+        cleaned_label = normalise_api_key_label(label)
         record = await self._api_keys.create(
             user_id=cast(str, user.id),
             token_prefix=prefix,
             token_hash=token_hash,
-            expires_at=expires_at.isoformat(timespec="seconds") if expires_at else None,
+            expires_at=expires_at,
+            label=cleaned_label,
         )
         return APIKeyIssueResult(
             raw_key=f"{prefix}.{secret}",
@@ -470,6 +493,7 @@ class AuthService:
         *,
         user_id: str,
         expires_in_days: int | None = None,
+        label: str | None = None,
     ) -> APIKeyIssueResult:
         """Issue an API key for the active user identified by ``user_id``."""
 
@@ -483,12 +507,14 @@ class AuthService:
         if expires_in_days is not None:
             expires_at = self._now() + timedelta(days=expires_in_days)
 
-        return await self.issue_api_key(user=user, expires_at=expires_at)
+        return await self.issue_api_key(
+            user=user, expires_at=expires_at, label=label
+        )
 
-    async def list_api_keys(self) -> list[APIKey]:
+    async def list_api_keys(self, *, include_revoked: bool = False) -> list[APIKey]:
         """Return all issued API keys ordered by creation time."""
 
-        return await self._api_keys.list_api_keys()
+        return await self._api_keys.list_api_keys(include_revoked=include_revoked)
 
     async def revoke_api_key(self, api_key_id: str) -> None:
         """Remove the API key identified by ``api_key_id``."""
@@ -496,7 +522,9 @@ class AuthService:
         record = await self._api_keys.get_by_id(api_key_id)
         if record is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="API key not found")
-        await self._api_keys.delete(record)
+        if record.revoked_at is not None:
+            return
+        await self._api_keys.revoke(record, revoked_at=self._now())
 
     async def authenticate_api_key(
         self, raw_key: str, *, request: Request | None = None
@@ -515,10 +543,13 @@ class AuthService:
         if record is None:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
-        if record.expires_at:
-            expires_at = self._parse_timestamp(record.expires_at)
-            if expires_at is not None and expires_at < self._now():
-                raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="API key expired")
+        now = self._now()
+        expires_at = self._ensure_aware(record.expires_at)
+        if expires_at and expires_at < now:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="API key expired")
+        revoked_at = self._ensure_aware(record.revoked_at)
+        if revoked_at and revoked_at <= now:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="API key revoked")
 
         expected = hash_api_key(secret)
         if not secrets.compare_digest(expected, record.token_hash):
@@ -542,12 +573,12 @@ class AuthService:
     async def _touch_api_key(self, record: APIKey, *, request: Request) -> None:
         interval = self.settings.session_last_seen_interval
         now = self._now()
-        last_seen = self._parse_timestamp(record.last_seen_at)
+        last_seen = self._ensure_aware(record.last_seen_at)
         if last_seen is not None and interval.total_seconds() > 0:
             if (now - last_seen) < interval:
                 return
 
-        record.last_seen_at = now.isoformat()
+        record.last_seen_at = now
         client = request.client
         if client and client.host:
             record.last_seen_ip = client.host[:45]
@@ -683,24 +714,29 @@ class AuthService:
             email=email,
             email_verified=email_verified,
         )
-        user.last_login_at = self._now().isoformat()
+        now = self._now()
+        user.last_login_at = now
+        user.failed_login_count = 0
+        user.locked_until = None
         await self._session.flush()
         return user
 
     # ------------------------------------------------------------------
     # Internal helpers
 
+    async def _record_failed_login(self, user: User) -> None:
+        user.failed_login_count += 1
+        threshold = self.settings.failed_login_lock_threshold
+        if user.failed_login_count >= threshold:
+            user.failed_login_count = 0
+            lock_duration = self.settings.failed_login_lock_duration
+            user.locked_until = self._now() + lock_duration
+        await self._session.flush()
+        await self._session.commit()
+        await self._session.refresh(user)
+
     def _now(self) -> datetime:
         return datetime.now(UTC)
-
-    @staticmethod
-    def _parse_timestamp(value: str | None) -> datetime | None:
-        if not value:
-            return None
-        try:
-            return datetime.fromisoformat(value)
-        except ValueError:
-            return None
 
     @staticmethod
     def _build_code_verifier() -> str:
@@ -710,6 +746,14 @@ class AuthService:
     def _build_code_challenge(code_verifier: str) -> str:
         digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
         return AuthService._encode_base64(digest)
+
+    @staticmethod
+    def _ensure_aware(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
 
     @staticmethod
     def _encode_base64(value: bytes) -> str:
@@ -887,39 +931,49 @@ class AuthService:
             )
 
         canonical = normalise_email(email)
-        user = await self._users.get_by_sso_identity(provider, subject)
-        if user is None:
+        identity = await self._users.get_identity(provider, subject)
+        if identity is None:
             user = await self._users.get_by_email(canonical)
             if user is None:
-                user = User(
-                    email=email.strip(),
-                    password_hash=None,
-                    role=UserRole.MEMBER,
+                user = await self._users.create(
+                    email=canonical,
+                    role=UserRole.USER,
                     is_active=True,
-                    sso_provider=provider,
-                    sso_subject=subject,
                 )
-                self._session.add(user)
-                await self._session.flush()
-                await self._session.refresh(user)
+            elif not user.is_active:
+                raise HTTPException(
+                    status.HTTP_403_FORBIDDEN,
+                    detail="User account is disabled",
+                )
             else:
-                if not user.is_active:
+                locked_until = self._ensure_aware(user.locked_until)
+                if locked_until and locked_until > self._now():
                     raise HTTPException(
                         status.HTTP_403_FORBIDDEN,
-                        detail="User account is disabled",
+                        detail="Account locked",
                     )
-                user.sso_provider = provider
-                user.sso_subject = subject
-                if user.email_canonical != canonical:
-                    user.email = email.strip()
-                await self._session.flush()
-        else:
-            if not user.is_active:
-                raise HTTPException(status.HTTP_403_FORBIDDEN, detail="User account is disabled")
             if user.email_canonical != canonical:
                 user.email = email.strip()
-                await self._session.flush()
+            identity = await self._users.create_identity(
+                user=user,
+                provider=provider,
+                subject=subject,
+            )
+        else:
+            user = identity.user or await self._users.get_by_id(identity.user_id)
+            if user is None:
+                msg = "SSO identity is orphaned"
+                raise HTTPException(status.HTTP_403_FORBIDDEN, detail=msg)
+            if not user.is_active:
+                raise HTTPException(status.HTTP_403_FORBIDDEN, detail="User account is disabled")
+            locked_until = self._ensure_aware(user.locked_until)
+            if locked_until and locked_until > self._now():
+                raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Account locked")
+            if user.email_canonical != canonical:
+                user.email = email.strip()
 
+        identity.last_authenticated_at = self._now()
+        await self._session.flush()
         return user
 
 
@@ -932,4 +986,5 @@ __all__ = [
     "SSO_STATE_COOKIE",
     "hash_password",
     "normalise_email",
+    "normalise_api_key_label",
 ]

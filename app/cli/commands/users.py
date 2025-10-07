@@ -27,11 +27,15 @@ def _serialise_user(user: User) -> dict[str, Any]:
     return {
         "id": user.id,
         "email": user.email,
+        "display_name": user.display_name,
         "role": user.role.value,
-        "is_active": bool(user.is_active),
         "is_service_account": bool(user.is_service_account),
-        "created_at": user.created_at,
-        "updated_at": user.updated_at,
+        "is_active": bool(user.is_active),
+        "failed_login_count": int(user.failed_login_count),
+        "locked_until": user.locked_until.isoformat() if user.locked_until else None,
+        "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "updated_at": user.updated_at.isoformat() if user.updated_at else None,
     }
 
 
@@ -39,8 +43,20 @@ def _user_columns() -> list[ColumnSpec]:
     return [
         ("ID", "id"),
         ("Email", "email"),
+        (
+            "Type",
+            lambda row: "service_account" if row["is_service_account"] else "user",
+        ),
         ("Role", "role"),
-        ("Status", lambda row: "active" if row["is_active"] else "inactive"),
+        (
+            "Status",
+            lambda row: (
+                "locked"
+                if row["locked_until"]
+                else ("active" if row["is_active"] else "inactive")
+            ),
+        ),
+        ("Failed Logins", "failed_login_count"),
     ]
 
 
@@ -92,6 +108,7 @@ async def create(args: Namespace) -> None:
     password_text = _resolve_password(args)
     role = UserRole(args.role)
     is_active = not args.inactive
+    is_service_account = bool(args.service_account)
 
     async with open_session(settings=settings) as session:
         repo = UsersRepository(session)
@@ -99,13 +116,13 @@ async def create(args: Namespace) -> None:
         if existing is not None:
             msg = f"User with email '{email}' already exists"
             raise ValueError(msg)
-        password_hash = hash_password(password_text)
         try:
             user = await repo.create(
                 email=email,
-                password_hash=password_hash,
+                password_hash=hash_password(password_text),
                 role=role,
                 is_active=is_active,
+                is_service_account=is_service_account,
             )
         except IntegrityError as exc:  # pragma: no cover - defensive guard
             msg = f"Failed to create user '{email}': {exc}"
@@ -169,8 +186,7 @@ async def set_password(args: Namespace) -> None:
             user_id=getattr(args, "user_id", None),
             email=getattr(args, "email", None),
         )
-        user.password_hash = hash_password(password_text)
-        await session.flush()
+        await repo.set_password(user, hash_password(password_text))
         await session.refresh(user)
 
     serialised = _serialise_user(user)
