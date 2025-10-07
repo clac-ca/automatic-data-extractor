@@ -8,7 +8,7 @@ import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -167,6 +167,27 @@ def _mount_static(app: FastAPI) -> None:
 
 def _register_routes(app: FastAPI) -> None:
     app.include_router(api_router, prefix=API_PREFIX)
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def read_spa_fallback(full_path: str, request: Request) -> FileResponse:
+        """Serve the SPA entry point for client-side routes."""
+
+        path = request.url.path
+        if path == "/" or path.startswith(f"{API_PREFIX}/") or path == API_PREFIX:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Not Found")
+
+        reserved = {app.docs_url, app.redoc_url, app.openapi_url}
+        if any(path == candidate for candidate in reserved if candidate):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Not Found")
+
+        filename = full_path.rsplit("/", 1)[-1]
+        if "." in filename:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Not Found")
+
+        if not SPA_INDEX.exists():
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="SPA build not found")
+
+        return FileResponse(SPA_INDEX)
 
 
 app = create_app()
