@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from 'react'
 
 import type { LoginSuccess } from '../api/auth'
 import type { InitialSetupPayload, UserProfile } from '../api/types'
+import type { ApiError } from '../api/errors'
 import {
   completeInitialSetup as performInitialSetup,
   fetchInitialSetupStatus,
@@ -11,8 +12,6 @@ import {
   logout as performLogout,
   resolveCsrfToken,
 } from '../api/auth'
-
-type ApiError = Error & { status?: number }
 
 interface AuthContextValue {
   user: UserProfile | null

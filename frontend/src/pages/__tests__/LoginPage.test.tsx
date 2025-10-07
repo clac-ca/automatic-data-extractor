@@ -69,6 +69,32 @@ describe('LoginPage', () => {
     expect(mockNavigate).not.toHaveBeenCalled()
   })
 
+  it('displays lockout information when the account is temporarily locked', async () => {
+    const user = userEvent.setup()
+    const lockedError = Object.assign(new Error('Account locked'), {
+      status: 403,
+      lockedUntil: '2030-01-01T12:00:00Z',
+      failedAttempts: 5,
+      retryAfterSeconds: 300,
+    })
+    mockLogin.mockRejectedValueOnce(lockedError)
+
+    render(<LoginPage />)
+
+    await screen.findByRole('button', { name: /sign in/i })
+
+    await user.type(screen.getByLabelText('Email'), 'user@example.com')
+    await user.type(screen.getByLabelText('Password'), 'Password123!')
+    await user.click(screen.getByRole('button', { name: /sign in/i }))
+
+    expect(await screen.findByText(/temporarily locked/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/account unlocks at/i),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Failed attempts recorded: 5/)).toBeInTheDocument()
+    expect(screen.getByText(/Please wait about/i)).toBeInTheDocument()
+  })
+
   it('trims email input before sending credentials and navigates on success', async () => {
     const user = userEvent.setup()
     mockLogin.mockResolvedValueOnce({

@@ -96,7 +96,14 @@ async def test_repeated_failed_logins_lock_account(
         json={"email": user["email"], "password": user["password"]},
     )
     assert locked.status_code == 403
-    assert locked.json()["detail"] == "Account locked"
+    payload = locked.json()["detail"]
+    assert isinstance(payload, dict)
+    assert payload.get("failedAttempts") == lock_threshold
+    assert isinstance(payload.get("lockedUntil"), str)
+    assert "temporarily locked" in payload.get("message", "")
+    assert isinstance(payload.get("retryAfterSeconds"), int)
+    retry_after_header = locked.headers.get("Retry-After")
+    assert retry_after_header is not None
 
 
 @pytest.mark.parametrize(

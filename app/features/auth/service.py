@@ -222,10 +222,10 @@ class AuthService:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
         if not user.is_active:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="User inactive")
-        locked_until = self._ensure_aware(user.locked_until)
         now = self._now()
-        if locked_until and locked_until > now:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Account locked")
+        lockout_error = self._lockout_error(user, reference=now)
+        if lockout_error is not None:
+            raise lockout_error
 
         credential = user.credential
         if credential is None or not verify_password(password, credential.password_hash):
@@ -431,9 +431,9 @@ class AuthService:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Unknown user")
         if not user.is_active:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="User inactive")
-        locked_until = self._ensure_aware(user.locked_until)
-        if locked_until and locked_until > self._now():
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Account locked")
+        lockout_error = self._lockout_error(user)
+        if lockout_error is not None:
+            raise lockout_error
         return user
 
     # ------------------------------------------------------------------
@@ -724,11 +724,57 @@ class AuthService:
     # ------------------------------------------------------------------
     # Internal helpers
 
+    def _lockout_error(
+        self,
+        user: User,
+        *,
+        reference: datetime | None = None,
+    ) -> HTTPException | None:
+        locked_until = self._ensure_aware(user.locked_until)
+        reference_time = reference or self._now()
+        if locked_until is None or locked_until <= reference_time:
+            return None
+
+        if locked_until < reference_time:
+            locked_until = reference_time
+
+        failed_attempts = max(int(user.failed_login_count or 0), 0)
+        retry_after_seconds = max(
+            int((locked_until - reference_time).total_seconds()),
+            0,
+        )
+        formatted_unlock = (
+            locked_until.astimezone(UTC)
+            .isoformat(timespec="seconds")
+            .replace("+00:00", "Z")
+        )
+        message = (
+            "Your account has been temporarily locked after "
+            f"{failed_attempts or 'multiple'} failed sign-in attempts. "
+            f"Try again after {formatted_unlock}."
+        )
+
+        detail: dict[str, object] = {
+            "message": message,
+            "lockedUntil": formatted_unlock,
+            "failedAttempts": failed_attempts,
+            "retryAfterSeconds": retry_after_seconds,
+        }
+        headers: dict[str, str] | None = None
+        if retry_after_seconds > 0:
+            headers = {"Retry-After": str(retry_after_seconds)}
+
+        return HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail=detail,
+            headers=headers,
+        )
+
     async def _record_failed_login(self, user: User) -> None:
         user.failed_login_count += 1
         threshold = self.settings.failed_login_lock_threshold
         if user.failed_login_count >= threshold:
-            user.failed_login_count = 0
+            user.failed_login_count = threshold
             lock_duration = self.settings.failed_login_lock_duration
             user.locked_until = self._now() + lock_duration
         await self._session.flush()
@@ -946,12 +992,9 @@ class AuthService:
                     detail="User account is disabled",
                 )
             else:
-                locked_until = self._ensure_aware(user.locked_until)
-                if locked_until and locked_until > self._now():
-                    raise HTTPException(
-                        status.HTTP_403_FORBIDDEN,
-                        detail="Account locked",
-                    )
+                lockout_error = self._lockout_error(user)
+                if lockout_error is not None:
+                    raise lockout_error
             if user.email_canonical != canonical:
                 user.email = email.strip()
             identity = await self._users.create_identity(
@@ -966,9 +1009,9 @@ class AuthService:
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail=msg)
             if not user.is_active:
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail="User account is disabled")
-            locked_until = self._ensure_aware(user.locked_until)
-            if locked_until and locked_until > self._now():
-                raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Account locked")
+            lockout_error = self._lockout_error(user)
+            if lockout_error is not None:
+                raise lockout_error
             if user.email_canonical != canonical:
                 user.email = email.strip()
 
