@@ -10,7 +10,6 @@ from sqlalchemy import func, select
 from starlette.datastructures import Headers
 
 from app import get_settings
-from app.core.service import ServiceContext
 from app.db.session import get_sessionmaker
 from app.features.configurations.models import Configuration
 from app.features.documents.service import DocumentsService
@@ -41,20 +40,18 @@ async def test_submit_job_records_metrics() -> None:
         session.add(workspace)
         await session.flush()
 
-        context = ServiceContext(
-            settings=settings,
-            session=session,
-            user=SimpleNamespace(id="user-1", email="user@example.test"),
-            workspace=SimpleNamespace(workspace_id=workspace.id),
-        )
+        actor = SimpleNamespace(id="user-1", email="user@example.test")
 
-        documents_service = DocumentsService(context=context)
+        documents_service = DocumentsService(session=session, settings=settings)
         upload = UploadFile(
             filename="input.txt",
             file=BytesIO(b"payload"),
             headers=Headers({"content-type": "text/plain"}),
         )
-        document_record = await documents_service.create_document(upload=upload)
+        document_record = await documents_service.create_document(
+            workspace_id=str(workspace.id),
+            upload=upload,
+        )
 
         result = await session.execute(
             select(func.max(Configuration.version)).where(
@@ -75,11 +72,13 @@ async def test_submit_job_records_metrics() -> None:
         session.add(configuration)
         await session.flush()
 
-        jobs_service = JobsService(context=context)
+        jobs_service = JobsService(session=session, settings=settings)
 
         record = await jobs_service.submit_job(
+            workspace_id=str(workspace.id),
             input_document_id=document_record.document_id,
             configuration_id=str(configuration.id),
+            actor=actor,
         )
 
         assert record.status == "succeeded"
@@ -107,20 +106,18 @@ async def test_submit_job_records_failure_and_raises() -> None:
         session.add(workspace)
         await session.flush()
 
-        context = ServiceContext(
-            settings=settings,
-            session=session,
-            user=SimpleNamespace(id="user-2", email="user2@example.test"),
-            workspace=SimpleNamespace(workspace_id=workspace.id),
-        )
+        actor = SimpleNamespace(id="user-2", email="user2@example.test")
 
-        documents_service = DocumentsService(context=context)
+        documents_service = DocumentsService(session=session, settings=settings)
         upload = UploadFile(
             filename="input.txt",
             file=BytesIO(b"payload"),
             headers=Headers({"content-type": "text/plain"}),
         )
-        document_record = await documents_service.create_document(upload=upload)
+        document_record = await documents_service.create_document(
+            workspace_id=str(workspace.id),
+            upload=upload,
+        )
 
         result = await session.execute(
             select(func.max(Configuration.version)).where(
@@ -141,12 +138,14 @@ async def test_submit_job_records_failure_and_raises() -> None:
         session.add(configuration)
         await session.flush()
 
-        jobs_service = JobsService(context=context)
+        jobs_service = JobsService(session=session, settings=settings)
 
         with pytest.raises(JobExecutionError) as excinfo:
             await jobs_service.submit_job(
+                workspace_id=str(workspace.id),
                 input_document_id=document_record.document_id,
                 configuration_id=str(configuration.id),
+                actor=actor,
             )
 
         job_id = excinfo.value.job_id
@@ -173,20 +172,18 @@ async def test_custom_processor_override_returns_typed_payload() -> None:
         session.add(workspace)
         await session.flush()
 
-        context = ServiceContext(
-            settings=settings,
-            session=session,
-            user=SimpleNamespace(id="user-3", email="user3@example.test"),
-            workspace=SimpleNamespace(workspace_id=workspace.id),
-        )
+        actor = SimpleNamespace(id="user-3", email="user3@example.test")
 
-        documents_service = DocumentsService(context=context)
+        documents_service = DocumentsService(session=session, settings=settings)
         upload = UploadFile(
             filename="input.txt",
             file=BytesIO(b"payload"),
             headers=Headers({"content-type": "text/plain"}),
         )
-        document_record = await documents_service.create_document(upload=upload)
+        document_record = await documents_service.create_document(
+            workspace_id=str(workspace.id),
+            upload=upload,
+        )
 
         result = await session.execute(
             select(func.max(Configuration.version)).where(
@@ -207,7 +204,7 @@ async def test_custom_processor_override_returns_typed_payload() -> None:
         session.add(configuration)
         await session.flush()
 
-        jobs_service = JobsService(context=context)
+        jobs_service = JobsService(session=session, settings=settings)
 
         previous_processor = get_job_processor()
 
@@ -222,8 +219,10 @@ async def test_custom_processor_override_returns_typed_payload() -> None:
         set_job_processor(_custom_processor)
         try:
             record = await jobs_service.submit_job(
+                workspace_id=str(workspace.id),
                 input_document_id=document_record.document_id,
                 configuration_id=str(configuration.id),
+                actor=actor,
             )
         finally:
             set_job_processor(previous_processor)

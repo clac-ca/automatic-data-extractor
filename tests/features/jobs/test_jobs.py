@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from app.db.session import get_sessionmaker
 from app.features.configurations.models import Configuration
 from app.features.workspaces.models import WorkspaceMembership
+from app.features.workspaces.service import WorkspaceScope
 
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
@@ -66,7 +67,7 @@ async def _grant_job_permission(user_id: str, workspace_id: str) -> None:
         )
         membership = result.scalar_one()
         permissions = set(membership.permissions or [])
-        permissions.add("workspace:jobs:write")
+        permissions.add(WorkspaceScope.JOBS_WRITE.value)
         membership.permissions = sorted(permissions)
         await session.commit()
 

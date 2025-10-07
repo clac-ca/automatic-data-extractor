@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
-
-from app.core.service import BaseService, ServiceContext
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.security import hash_password
 from .models import User, UserRole
@@ -13,19 +12,16 @@ from .repository import UsersRepository
 from .schemas import UserProfile, UserSummary
 
 
-class UsersService(BaseService):
+class UsersService:
     """Expose read-oriented helpers for user accounts."""
 
-    def __init__(self, *, context: ServiceContext) -> None:
-        super().__init__(context=context)
-        self._repo = UsersRepository(self.session)
+    def __init__(self, *, session: AsyncSession) -> None:
+        self._session = session
+        self._repo = UsersRepository(session)
 
-    async def get_profile(self) -> UserProfile:
+    async def get_profile(self, *, user: User) -> UserProfile:
         """Return the profile for the authenticated user."""
 
-        user = self.current_user
-        if user is None:
-            raise RuntimeError("User context missing")
         return UserProfile.model_validate(user)
 
     async def list_users(self) -> list[UserSummary]:

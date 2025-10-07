@@ -5,15 +5,13 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 import jwt
-from fastapi import Depends, HTTPException, status
-
-from app.core.service import BaseService
+from fastapi import HTTPException, status
 
 from ..users.models import UserRole
 
@@ -180,63 +178,6 @@ def hash_csrf_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def access_control(
-    *,
-    permissions: Iterable[str] | None = None,
-    require_workspace: bool = False,
-    require_admin: bool = False,
-    allow_admin_override: bool = True,
-    service_dependency: Callable[..., AsyncIterator[BaseService]] | None = None,
-) -> Callable[..., Awaitable[BaseService]]:
-    """Return a dependency that enforces authorisation rules for a service."""
-
-    dependency: Callable[..., AsyncIterator[BaseService]]
-    if service_dependency is None:
-        from .dependencies import get_auth_service  # local import to avoid circular dependency
-
-        dependency = cast(Callable[..., AsyncIterator[BaseService]], get_auth_service)
-    else:
-        dependency = service_dependency
-    required = frozenset(permissions or [])
-
-    async def verify(
-        service: BaseService = Depends(dependency),  # noqa: B008 - FastAPI pattern
-    ) -> BaseService:
-        user = service.current_user
-        if user is None:
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
-
-        user_role = getattr(user, "role", None)
-        if allow_admin_override and user_role == UserRole.ADMIN:
-            return service
-
-        if require_admin and user_role != UserRole.ADMIN:
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                detail="Administrator role required",
-            )
-
-        workspace = service.current_workspace
-        if require_workspace and workspace is None:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail="Workspace context required",
-            )
-
-        if required:
-            granted_raw: Iterable[str] = service.permissions
-            granted = frozenset(granted_raw)
-            if not required.issubset(granted):
-                raise HTTPException(
-                    status.HTTP_403_FORBIDDEN,
-                    detail="Insufficient permissions",
-                )
-
-        return service
-
-    return verify
-
-
 __all__ = [
     "TokenPayload",
     "hash_password",
@@ -245,6 +186,5 @@ __all__ = [
     "verify_password",
     "create_signed_token",
     "decode_signed_token",
-    "access_control",
     "generate_api_key_components",
 ]

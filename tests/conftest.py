@@ -26,6 +26,7 @@ from app.features.workspaces.models import (
     WorkspaceMembership,
     WorkspaceRole,
 )
+from app.features.workspaces.service import WorkspaceScope
 from app.lifecycles import ensure_runtime_dirs
 from app.main import create_app
 
@@ -237,7 +238,7 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
             workspace_id=workspace.id,
             role=WorkspaceRole.MEMBER,
             is_default=True,
-            permissions=["workspace:members:manage"],
+            permissions=[WorkspaceScope.MEMBERS_MANAGE.value],
         )
         member_manage_secondary = WorkspaceMembership(
             user_id=member_with_manage.id,

@@ -6,18 +6,17 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException, status
 from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.db.session import get_sessionmaker
-from app.features.workspaces.dependencies import require_workspace_context
 from app.features.workspaces.models import (
     Workspace,
     WorkspaceMembership,
     WorkspaceRole,
 )
-from app.features.workspaces.schemas import WorkspaceContext, WorkspaceProfile
+from app.features.workspaces.schemas import WorkspaceProfile
+from app.features.workspaces.service import WorkspaceScope
 
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
@@ -60,11 +59,11 @@ async def _create_workspace(
 
 
 @pytest.mark.asyncio
-async def test_workspace_context_returns_membership(
+async def test_workspace_route_returns_profile(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
 ) -> None:
-    """Members should resolve context when calling the workspace-specific route."""
+    """Members should receive their workspace profile from the route."""
 
     member = seed_identity["member"]
     token = await _login(async_client, member["email"], member["password"])
@@ -75,11 +74,10 @@ async def test_workspace_context_returns_membership(
     )
     assert response.status_code == 200
     payload = response.json()
-    workspace_payload = payload["workspace"]
-    assert workspace_payload["workspace_id"] == seed_identity["workspace_id"]
-    permissions = set(workspace_payload.get("permissions", []))
-    assert "workspace:documents:write" in permissions
-    assert "workspace:members:manage" not in permissions
+    assert payload["workspace_id"] == seed_identity["workspace_id"]
+    permissions = set(payload.get("permissions", []))
+    assert WorkspaceScope.DOCUMENTS_WRITE.value in permissions
+    assert WorkspaceScope.MEMBERS_MANAGE.value not in permissions
 
 
 @pytest.mark.asyncio
@@ -103,11 +101,10 @@ async def test_workspace_owner_receives_membership_permissions(
     )
     assert response.status_code == 200
     payload = response.json()
-    assert "workspace" in payload
-    permissions = set(payload["workspace"].get("permissions", []))
-    assert "workspace:members:read" in permissions
-    assert "workspace:members:manage" in permissions
-    assert "workspace:settings:manage" in permissions
+    permissions = set(payload.get("permissions", []))
+    assert WorkspaceScope.MEMBERS_READ.value in permissions
+    assert WorkspaceScope.MEMBERS_MANAGE.value in permissions
+    assert WorkspaceScope.SETTINGS_MANAGE.value in permissions
 
 
 @pytest.mark.asyncio
@@ -115,7 +112,7 @@ async def test_missing_workspace_membership_returns_error(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
 ) -> None:
-    """Users without a membership should receive a 403 when resolving workspace context."""
+    """Users without a membership should receive a 403 when resolving workspace profiles."""
 
     orphan = seed_identity["orphan"]
     token = await _login(async_client, orphan["email"], orphan["password"])
@@ -133,7 +130,7 @@ async def test_admin_without_membership_can_access_workspace(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
 ) -> None:
-    """Global administrators should be able to resolve workspace context."""
+    """Global administrators should be able to resolve workspace profiles."""
 
     admin = seed_identity["admin"]
     token = await _login(async_client, admin["email"], admin["password"])
@@ -145,11 +142,10 @@ async def test_admin_without_membership_can_access_workspace(
     )
     assert response.status_code == 200
     payload = response.json()
-    workspace_payload = payload["workspace"]
-    assert workspace_payload["workspace_id"] == workspace_id
-    assert workspace_payload["role"] == WorkspaceRole.OWNER.value
-    permissions = set(workspace_payload.get("permissions", []))
-    assert "workspace:settings:manage" in permissions
+    assert payload["workspace_id"] == workspace_id
+    assert payload["role"] == WorkspaceRole.OWNER.value
+    permissions = set(payload.get("permissions", []))
+    assert WorkspaceScope.SETTINGS_MANAGE.value in permissions
 
 
 @pytest.mark.asyncio
@@ -199,13 +195,52 @@ async def test_members_route_allows_workspace_owner(
 
 
 @pytest.mark.asyncio
-async def test_members_route_allows_member_with_manage_permission(
+async def test_members_route_requires_read_scope_for_manage_member(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
 ) -> None:
-    """Members granted manage permission should receive read access automatically."""
+    """Members need explicit read permission alongside manage to list members."""
 
     member_with_manage = seed_identity["member_with_manage"]
+    token = await _login(
+        async_client,
+        member_with_manage["email"],
+        member_with_manage["password"],
+    )
+
+    response = await async_client.get(
+        f"/api/workspaces/{seed_identity['workspace_id']}/members",
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_members_route_allows_member_with_manage_and_read_permissions(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Members can list other members once both read and manage scopes are granted."""
+
+    member_with_manage = seed_identity["member_with_manage"]
+
+    session_factory = get_sessionmaker()
+    async with session_factory() as session:
+        result = await session.execute(
+            select(WorkspaceMembership).where(
+                WorkspaceMembership.user_id == member_with_manage["id"],
+                WorkspaceMembership.workspace_id == seed_identity["workspace_id"],
+            )
+        )
+        membership = result.scalar_one()
+        membership.permissions = [
+            WorkspaceScope.MEMBERS_MANAGE.value,
+            WorkspaceScope.MEMBERS_READ.value,
+        ]
+        await session.commit()
+
     token = await _login(
         async_client,
         member_with_manage["email"],
@@ -285,7 +320,7 @@ async def test_workspace_owner_can_add_member_with_role(
     assert payload["role"] == WorkspaceRole.OWNER.value
     assert payload["user"]["user_id"] == invitee["id"]
     permissions = set(payload.get("permissions", []))
-    assert "workspace:members:manage" in permissions
+    assert WorkspaceScope.MEMBERS_MANAGE.value in permissions
 
     session_factory = get_sessionmaker()
     async with session_factory() as session:
@@ -662,42 +697,23 @@ async def test_member_can_set_default_workspace(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert revert.status_code == 200
-
-
-@pytest.mark.asyncio
-async def test_require_workspace_context_accepts_matching_identifier() -> None:
-    """The dependency should return the selection when the path matches."""
+def test_workspace_profile_fields() -> None:
+    """Workspace profiles retain identifiers and permissions."""
 
     profile = WorkspaceProfile(
         workspace_id="ws-123",
-        name="Primary",
-        slug="primary",
-        role=WorkspaceRole.OWNER,
-        permissions=["workspace:read"],
-        is_default=False,
+        name="Example",
+        slug="example",
+        role=WorkspaceRole.MEMBER,
+        permissions=[
+            WorkspaceScope.WORKSPACE_READ.value,
+            WorkspaceScope.DOCUMENTS_READ.value,
+        ],
+        is_default=True,
     )
-    context = WorkspaceContext(workspace=profile)
 
-    result = await require_workspace_context("ws-123", context)
-
-    assert result is context
-
-
-@pytest.mark.asyncio
-async def test_require_workspace_context_rejects_mismatched_identifier() -> None:
-    """A mismatched path should raise a 400 error so callers see the failure."""
-
-    profile = WorkspaceProfile(
-        workspace_id="ws-abc",
-        name="Primary",
-        slug="primary",
-        role=WorkspaceRole.OWNER,
-        permissions=["workspace:read"],
-        is_default=False,
-    )
-    context = WorkspaceContext(workspace=profile)
-
-    with pytest.raises(HTTPException) as exc:
-        await require_workspace_context("ws-other", context)
-
-    assert exc.value.status_code == status.HTTP_400_BAD_REQUEST
+    assert profile.workspace_id == "ws-123"
+    assert set(profile.permissions) == {
+        WorkspaceScope.WORKSPACE_READ.value,
+        WorkspaceScope.DOCUMENTS_READ.value,
+    }

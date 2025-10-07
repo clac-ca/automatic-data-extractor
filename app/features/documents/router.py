@@ -1,25 +1,34 @@
+from __future__ import annotations
+
 import json
 from typing import Annotated, Any
 
 from fastapi import (
+    APIRouter,
     Body,
     Depends,
     File,
     Form,
     HTTPException,
+    Path,
     Query,
+    Security,
     UploadFile,
     status,
 )
 from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.settings import get_app_settings
+from app.core.config import Settings
 from app.core.schema import ErrorMessage
+from app.db.session import get_session
 
-from ..auth.security import access_control
-from ..workspaces.dependencies import require_workspace_context
-from ..workspaces.routing import workspace_scoped_router
-from ..workspaces.schemas import WorkspaceContext
-from .dependencies import get_documents_service
+from ..auth.dependencies import bind_current_user
+from ..users.models import User
+from ..workspaces.dependencies import require_workspace_access
+from ..workspaces.schemas import WorkspaceProfile
+from ..workspaces.service import WorkspaceScope
 from .exceptions import (
     DocumentFileMissingError,
     DocumentNotFoundError,
@@ -29,29 +38,7 @@ from .exceptions import (
 from .schemas import DocumentDeleteRequest, DocumentRecord
 from .service import DocumentsService
 
-router = workspace_scoped_router(tags=["documents"])
-
-WorkspaceContextDep = Annotated[WorkspaceContext, Depends(require_workspace_context)]
-DocumentsReadServiceDep = Annotated[
-    DocumentsService,
-    Depends(
-        access_control(
-            permissions={"workspace:documents:read"},
-            require_workspace=True,
-            service_dependency=get_documents_service,
-        )
-    ),
-]
-DocumentsWriteServiceDep = Annotated[
-    DocumentsService,
-    Depends(
-        access_control(
-            permissions={"workspace:documents:write"},
-            require_workspace=True,
-            service_dependency=get_documents_service,
-        )
-    ),
-]
+router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["documents"])
 
 
 def _parse_metadata(metadata: str | None) -> dict[str, Any]:
@@ -98,16 +85,25 @@ def _parse_metadata(metadata: str | None) -> dict[str, Any]:
     },
 )
 async def upload_document(
-    _: WorkspaceContextDep,
-    service: DocumentsWriteServiceDep,
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.DOCUMENTS_WRITE],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
     *,
     file: Annotated[UploadFile, File(...)],
     metadata: Annotated[str | None, Form()] = None,
     expires_at: Annotated[str | None, Form()] = None,
 ) -> DocumentRecord:
+    service = DocumentsService(session=session, settings=settings)
     payload = _parse_metadata(metadata)
     try:
         return await service.create_document(
+            workspace_id=workspace.workspace_id,
             upload=file,
             metadata=payload,
             expires_at=expires_at,
@@ -136,13 +132,23 @@ async def upload_document(
     },
 )
 async def list_documents(
-    _: WorkspaceContextDep,
-    service: DocumentsReadServiceDep,
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.DOCUMENTS_READ],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
     *,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> list[DocumentRecord]:
-    return await service.list_documents(limit=limit, offset=offset)
+    service = DocumentsService(session=session, settings=settings)
+    return await service.list_documents(
+        workspace_id=workspace.workspace_id, limit=limit, offset=offset
+    )
 
 
 @router.get(
@@ -167,12 +173,25 @@ async def list_documents(
     },
 )
 async def read_document(
-    document_id: str,
-    _: WorkspaceContextDep,
-    service: DocumentsReadServiceDep,
+    document_id: Annotated[
+        str, Path(min_length=1, description="Document identifier")
+    ],
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.DOCUMENTS_READ],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> DocumentRecord:
+    service = DocumentsService(session=session, settings=settings)
     try:
-        return await service.get_document(document_id)
+        return await service.get_document(
+            workspace_id=workspace.workspace_id,
+            document_id=document_id,
+        )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -196,12 +215,25 @@ async def read_document(
     },
 )
 async def download_document(
-    document_id: str,
-    _: WorkspaceContextDep,
-    service: DocumentsReadServiceDep,
+    document_id: Annotated[
+        str, Path(min_length=1, description="Document identifier")
+    ],
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.DOCUMENTS_READ],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> StreamingResponse:
+    service = DocumentsService(session=session, settings=settings)
     try:
-        record, stream = await service.stream_document(document_id)
+        record, stream = await service.stream_document(
+            workspace_id=workspace.workspace_id,
+            document_id=document_id,
+        )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except DocumentFileMissingError as exc:
@@ -234,15 +266,28 @@ async def download_document(
     },
 )
 async def delete_document(
-    document_id: str,
-    _: WorkspaceContextDep,
-    service: DocumentsWriteServiceDep,
+    document_id: Annotated[
+        str, Path(min_length=1, description="Document identifier")
+    ],
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.DOCUMENTS_WRITE],
+        ),
+    ],
+    current_user: Annotated[User, Depends(bind_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
     *,
     payload: Annotated[DocumentDeleteRequest | None, Body()] = None,
 ) -> None:
+    service = DocumentsService(session=session, settings=settings)
     try:
         await service.delete_document(
+            workspace_id=workspace.workspace_id,
             document_id=document_id,
+            actor=current_user,
             reason=payload.reason if payload else None,
         )
     except DocumentNotFoundError as exc:

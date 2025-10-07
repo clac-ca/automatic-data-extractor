@@ -2,19 +2,23 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Security, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.settings import get_app_settings
+from app.core.config import Settings
 from app.core.schema import ErrorMessage
+from app.db.session import get_session
 
-from ..auth.security import access_control
+from ..auth.dependencies import bind_current_user
 from ..configurations.exceptions import (
     ConfigurationNotFoundError,
     ConfigurationVersionMismatchError,
 )
-from ..workspaces.dependencies import require_workspace_context
-from ..workspaces.routing import workspace_scoped_router
-from ..workspaces.schemas import WorkspaceContext
-from .dependencies import get_jobs_service
+from ..users.models import User
+from ..workspaces.dependencies import require_workspace_access
+from ..workspaces.schemas import WorkspaceProfile
+from ..workspaces.service import WorkspaceScope
 from .exceptions import (
     InputDocumentNotFoundError,
     JobExecutionError,
@@ -25,29 +29,7 @@ from .service import JobsService
 
 JOB_SUBMISSION_BODY = Body(...)
 
-router = workspace_scoped_router(tags=["jobs"])
-
-WorkspaceContextDep = Annotated[WorkspaceContext, Depends(require_workspace_context)]
-JobsReadServiceDep = Annotated[
-    JobsService,
-    Depends(
-        access_control(
-            permissions={"workspace:jobs:read"},
-            require_workspace=True,
-            service_dependency=get_jobs_service,
-        )
-    ),
-]
-JobsWriteServiceDep = Annotated[
-    JobsService,
-    Depends(
-        access_control(
-            permissions={"workspace:jobs:write"},
-            require_workspace=True,
-            service_dependency=get_jobs_service,
-        )
-    ),
-]
+router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["jobs"])
 
 
 @router.get(
@@ -72,16 +54,25 @@ JobsWriteServiceDep = Annotated[
     },
 )
 async def list_jobs(
-    _: WorkspaceContextDep,
-    service: JobsReadServiceDep,
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.JOBS_READ],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
     *,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     status_filter: str | None = Query(None, alias="status"),
     input_document_id: str | None = Query(None),
 ) -> list[JobRecord]:
+    service = JobsService(session=session, settings=settings)
     try:
         return await service.list_jobs(
+            workspace_id=workspace.workspace_id,
             limit=limit,
             offset=offset,
             status=status_filter,
@@ -113,12 +104,24 @@ async def list_jobs(
     },
 )
 async def read_job(
-    job_id: str,
-    _: WorkspaceContextDep,
-    service: JobsReadServiceDep,
+    job_id: Annotated[str, Path(min_length=1, description="Job identifier")],
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.JOBS_READ],
+        ),
+    ],
+    current_user: Annotated[User, Depends(bind_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> JobRecord:
+    service = JobsService(session=session, settings=settings)
     try:
-        return await service.get_job(job_id)
+        return await service.get_job(
+            workspace_id=workspace.workspace_id,
+            job_id=job_id,
+        )
     except JobNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -153,16 +156,27 @@ async def read_job(
     },
 )
 async def submit_job(
-    _: WorkspaceContextDep,
-    service: JobsWriteServiceDep,
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.JOBS_WRITE],
+        ),
+    ],
+    current_user: Annotated[User, Depends(bind_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
     *,
     payload: JobSubmissionRequest = JOB_SUBMISSION_BODY,
 ) -> JobRecord:
+    service = JobsService(session=session, settings=settings)
     try:
         return await service.submit_job(
+            workspace_id=workspace.workspace_id,
             input_document_id=payload.input_document_id,
             configuration_id=payload.configuration_id,
             configuration_version=payload.configuration_version,
+            actor=current_user,
         )
     except InputDocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

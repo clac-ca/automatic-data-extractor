@@ -7,14 +7,17 @@ from typing import Annotated
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.settings import get_app_settings
+from app.core.config import Settings
 from app.core.schema import ErrorMessage
+from app.db.session import get_session
 
-from ..users.dependencies import get_users_service
 from ..users.models import User
 from ..users.schemas import UserProfile
 from ..users.service import UsersService
-from .dependencies import bind_current_user, get_auth_service
+from .dependencies import bind_current_user, require_admin_user
 from .schemas import (
     APIKeyIssueRequest,
     APIKeyIssueResponse,
@@ -24,18 +27,9 @@ from .schemas import (
     LoginRequest,
     SessionEnvelope,
 )
-from .security import access_control
 from .service import SSO_STATE_COOKIE, AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
-AdminAuthServiceDep = Annotated[
-    AuthService,
-    Depends(access_control(require_admin=True)),
-]
-UsersServiceDep = Annotated[UsersService, Depends(get_users_service)]
-UserDep = Annotated[User, Depends(bind_current_user)]
 
 
 @router.get(
@@ -46,8 +40,10 @@ UserDep = Annotated[User, Depends(bind_current_user)]
     openapi_extra={"security": []},
 )
 async def read_initial_setup_status(
-    service: AuthServiceDep,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> InitialSetupStatus:
+    service = AuthService(session=session, settings=settings)
     required = await service.initial_setup_required()
     return InitialSetupStatus(initial_setup_required=required)
 
@@ -69,8 +65,10 @@ async def perform_initial_setup(
     request: Request,
     response: Response,
     payload: InitialSetupRequest,
-    service: AuthServiceDep,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> SessionEnvelope:
+    service = AuthService(session=session, settings=settings)
     user = await service.complete_initial_setup(
         email=payload.email,
         password=payload.password.get_secret_value(),
@@ -108,10 +106,12 @@ async def login(
     request: Request,
     response: Response,
     payload: LoginRequest,
-    service: AuthServiceDep,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> SessionEnvelope:
     """Authenticate with credentials and establish the session cookies."""
 
+    service = AuthService(session=session, settings=settings)
     user = await service.authenticate(
         email=payload.email,
         password=payload.password.get_secret_value(),
@@ -147,10 +147,12 @@ async def login(
 async def refresh_session(
     request: Request,
     response: Response,
-    service: AuthServiceDep,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> SessionEnvelope:
     """Rotate the session using the refresh cookie and re-issue cookies."""
 
+    service = AuthService(session=session, settings=settings)
     refresh_cookie = request.cookies.get(service.settings.session_refresh_cookie_name)
     if not refresh_cookie:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Refresh token missing")
@@ -191,10 +193,12 @@ async def refresh_session(
 async def logout(
     request: Request,
     response: Response,
-    service: AuthServiceDep,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> Response:
     """Remove authentication cookies and end the session."""
 
+    service = AuthService(session=session, settings=settings)
     session_cookie = request.cookies.get(service.settings.session_cookie_name)
     if session_cookie:
         try:
@@ -228,12 +232,13 @@ async def logout(
     },
 )
 async def who_am_i(
-    _: UserDep,
-    users_service: UsersServiceDep,
+    current_user: Annotated[User, Depends(bind_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> UserProfile:
     """Return profile information for the active user."""
 
-    profile = await users_service.get_profile()
+    service = UsersService(session=session)
+    profile = await service.get_profile(user=current_user)
     return profile
 
 
@@ -263,9 +268,11 @@ async def who_am_i(
 )
 async def create_api_key(
     payload: APIKeyIssueRequest,
-    _: UserDep,
-    service: AdminAuthServiceDep,
+    _admin: Annotated[User, Depends(require_admin_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> APIKeyIssueResponse:
+    service = AuthService(session=session, settings=settings)
     if payload.user_id is not None:
         result = await service.issue_api_key_for_user_id(
             user_id=payload.user_id,
@@ -309,9 +316,11 @@ async def create_api_key(
     },
 )
 async def list_api_keys(
-    _: UserDep,
-    service: AdminAuthServiceDep,
+    _admin: Annotated[User, Depends(require_admin_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> list[APIKeySummary]:
+    service = AuthService(session=session, settings=settings)
     records = await service.list_api_keys()
     return [
         APIKeySummary(
@@ -358,9 +367,11 @@ async def list_api_keys(
 )
 async def revoke_api_key(
     api_key_id: str,
-    _: UserDep,
-    service: AdminAuthServiceDep,
+    _admin: Annotated[User, Depends(require_admin_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> Response:
+    service = AuthService(session=session, settings=settings)
     await service.revoke_api_key(api_key_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -379,8 +390,10 @@ async def revoke_api_key(
 )
 async def start_sso_login(
     request: Request,
-    service: AuthServiceDep,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> RedirectResponse:
+    service = AuthService(session=session, settings=settings)
     challenge = await service.prepare_sso_login()
     redirect = RedirectResponse(challenge.redirect_url, status_code=status.HTTP_302_FOUND)
     secure_cookie = service.is_secure_request(request)
@@ -420,10 +433,12 @@ async def start_sso_login(
 async def finish_sso_login(
     request: Request,
     response: Response,
-    service: AuthServiceDep,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
     code: str | None = None,
     state: str | None = None,
 ) -> SessionEnvelope:
+    service = AuthService(session=session, settings=settings)
     if not code or not state:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
