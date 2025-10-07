@@ -1,0 +1,40 @@
+# Git metadata and CI caches
+.git
+.github
+.gitignore
+
+# Python artefacts
+__pycache__
+*.py[cod]
+*.pyo
+*.pyd
+*.pyi
+*.pyw
+*.pya
+.mypy_cache
+.pytest_cache
+.python-version
+.coverage*
+htmlcov
+
+# Virtual environments
+.venv
+venv
+ENV
+env
+
+# Build artefacts
+build
+dist
+var
+
+# Node artefacts
+frontend/node_modules
+frontend/dist
+
+# Editor and OS files
+*.log
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
