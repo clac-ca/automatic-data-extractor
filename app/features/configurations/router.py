@@ -4,45 +4,23 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Security, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.responses import DefaultResponse
+from app.db.session import get_session
 
-from ..auth.security import access_control
-from ..workspaces.dependencies import require_workspace_context
-from ..workspaces.routing import workspace_scoped_router
-from ..workspaces.schemas import WorkspaceContext
-from .dependencies import get_configurations_service
+from ..workspaces.dependencies import require_workspace_access
+from ..workspaces.schemas import WorkspaceProfile
+from ..workspaces.service import WorkspaceScope
 from .exceptions import ConfigurationNotFoundError
 from .schemas import ConfigurationCreate, ConfigurationRecord, ConfigurationUpdate
 from .service import ConfigurationsService
 
-router = workspace_scoped_router(tags=["configurations"])
+router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["configurations"])
 
 CONFIGURATION_CREATE_BODY = Body(...)
 CONFIGURATION_UPDATE_BODY = Body(...)
-
-WorkspaceContextDep = Annotated[WorkspaceContext, Depends(require_workspace_context)]
-ConfigurationsReadServiceDep = Annotated[
-    ConfigurationsService,
-    Depends(
-        access_control(
-            permissions={"workspace:configurations:read"},
-            require_workspace=True,
-            service_dependency=get_configurations_service,
-        )
-    ),
-]
-ConfigurationsWriteServiceDep = Annotated[
-    ConfigurationsService,
-    Depends(
-        access_control(
-            permissions={"workspace:configurations:write"},
-            require_workspace=True,
-            service_dependency=get_configurations_service,
-        )
-    ),
-]
 
 
 @router.get(
@@ -53,13 +31,21 @@ ConfigurationsWriteServiceDep = Annotated[
     response_model_exclude_none=True,
 )
 async def list_configurations(
-    _: WorkspaceContextDep,
-    service: ConfigurationsReadServiceDep,
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.CONFIGURATIONS_READ],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
     *,
     document_type: str | None = Query(None),
     is_active: bool | None = Query(None),
 ) -> list[ConfigurationRecord]:
+    service = ConfigurationsService(session=session)
     return await service.list_configurations(
+        workspace_id=workspace.workspace_id,
         document_type=document_type,
         is_active=is_active,
     )
@@ -73,12 +59,20 @@ async def list_configurations(
     response_model_exclude_none=True,
 )
 async def create_configuration(
-    _: WorkspaceContextDep,
-    service: ConfigurationsWriteServiceDep,
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.CONFIGURATIONS_WRITE],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
     *,
     payload: ConfigurationCreate = CONFIGURATION_CREATE_BODY,
 ) -> ConfigurationRecord:
+    service = ConfigurationsService(session=session)
     return await service.create_configuration(
+        workspace_id=workspace.workspace_id,
         document_type=payload.document_type,
         title=payload.title,
         payload=payload.payload,
@@ -93,12 +87,22 @@ async def create_configuration(
     response_model_exclude_none=True,
 )
 async def list_active_configurations(
-    _: WorkspaceContextDep,
-    service: ConfigurationsReadServiceDep,
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.CONFIGURATIONS_READ],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
     *,
     document_type: str | None = Query(None),
 ) -> list[ConfigurationRecord]:
-    return await service.list_active_configurations(document_type=document_type)
+    service = ConfigurationsService(session=session)
+    return await service.list_active_configurations(
+        workspace_id=workspace.workspace_id,
+        document_type=document_type,
+    )
 
 
 @router.get(
@@ -109,12 +113,24 @@ async def list_active_configurations(
     response_model_exclude_none=True,
 )
 async def read_configuration(
-    configuration_id: str,
-    _: WorkspaceContextDep,
-    service: ConfigurationsReadServiceDep,
+    configuration_id: Annotated[
+        str, Path(min_length=1, description="Configuration identifier")
+    ],
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.CONFIGURATIONS_READ],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ConfigurationRecord:
+    service = ConfigurationsService(session=session)
     try:
-        return await service.get_configuration(configuration_id=configuration_id)
+        return await service.get_configuration(
+            workspace_id=workspace.workspace_id,
+            configuration_id=configuration_id,
+        )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -127,14 +143,24 @@ async def read_configuration(
     response_model_exclude_none=True,
 )
 async def replace_configuration(
-    configuration_id: str,
-    _: WorkspaceContextDep,
-    service: ConfigurationsWriteServiceDep,
+    configuration_id: Annotated[
+        str, Path(min_length=1, description="Configuration identifier")
+    ],
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.CONFIGURATIONS_WRITE],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
     *,
     payload: ConfigurationUpdate = CONFIGURATION_UPDATE_BODY,
 ) -> ConfigurationRecord:
+    service = ConfigurationsService(session=session)
     try:
         return await service.update_configuration(
+            workspace_id=workspace.workspace_id,
             configuration_id=configuration_id,
             title=payload.title,
             payload=payload.payload,
@@ -150,12 +176,24 @@ async def replace_configuration(
     summary="Delete a configuration",
 )
 async def delete_configuration(
-    configuration_id: str,
-    _: WorkspaceContextDep,
-    service: ConfigurationsWriteServiceDep,
+    configuration_id: Annotated[
+        str, Path(min_length=1, description="Configuration identifier")
+    ],
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access,
+            scopes=[WorkspaceScope.CONFIGURATIONS_WRITE],
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> DefaultResponse:
+    service = ConfigurationsService(session=session)
     try:
-        await service.delete_configuration(configuration_id=configuration_id)
+        await service.delete_configuration(
+            workspace_id=workspace.workspace_id,
+            configuration_id=configuration_id,
+        )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return DefaultResponse.success("Configuration deleted")
@@ -169,12 +207,23 @@ async def delete_configuration(
     response_model_exclude_none=True,
 )
 async def activate_configuration(
-    configuration_id: str,
-    _: WorkspaceContextDep,
-    service: ConfigurationsWriteServiceDep,
+    configuration_id: Annotated[
+        str, Path(min_length=1, description="Configuration identifier")
+    ],
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(
+            require_workspace_access, scopes=["workspace:configurations:write"]
+        ),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ConfigurationRecord:
+    service = ConfigurationsService(session=session)
     try:
-        return await service.activate_configuration(configuration_id=configuration_id)
+        return await service.activate_configuration(
+            workspace_id=workspace.workspace_id,
+            configuration_id=configuration_id,
+        )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 

@@ -11,8 +11,9 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.service import BaseService, ServiceContext
+from app.core.config import Settings
 from app.db import generate_ulid
+from app.features.users.models import User
 
 from ..configurations.exceptions import (
     ConfigurationNotFoundError,
@@ -34,22 +35,22 @@ from .schemas import JobRecord
 _VALID_STATUSES = frozenset({"pending", "running", "succeeded", "failed"})
 
 
-class JobsService(BaseService):
+class JobsService:
     """Validate inputs, execute the extractor, and manage job status."""
 
-    def __init__(self, *, context: ServiceContext) -> None:
-        super().__init__(context=context)
-        self._session: AsyncSession = self.session
-
-        documents_dir = self.settings.storage_documents_dir
+    def __init__(self, *, session: AsyncSession, settings: Settings) -> None:
+        documents_dir = settings.storage_documents_dir
         if documents_dir is None:
             raise RuntimeError("Document storage directory is not configured")
+
+        self._session = session
         self._storage = DocumentStorage(documents_dir)
-        self._configurations = ConfigurationsRepository(self._session)
+        self._configurations = ConfigurationsRepository(session)
 
     async def list_jobs(
         self,
         *,
+        workspace_id: str,
         limit: int,
         offset: int,
         status: str | None = None,
@@ -57,9 +58,7 @@ class JobsService(BaseService):
     ) -> list[JobRecord]:
         """Return recent jobs filtered by optional criteria."""
 
-        _ = self.require_workspace_id()
-
-        stmt = self._base_query().order_by(
+        stmt = self._base_query(workspace_id).order_by(
             Job.created_at.desc(), Job.job_id.desc()
         )
         if status:
@@ -76,10 +75,8 @@ class JobsService(BaseService):
 
         return records
 
-    async def get_job(self, job_id: str) -> JobRecord:
+    async def get_job(self, *, workspace_id: str, job_id: str) -> JobRecord:
         """Return a single job by identifier."""
-
-        workspace_id = self.require_workspace_id()
 
         job = await self._session.get(Job, job_id)
         if job is None or job.workspace_id != workspace_id:
@@ -91,21 +88,19 @@ class JobsService(BaseService):
     async def submit_job(
         self,
         *,
+        workspace_id: str,
         input_document_id: str,
         configuration_id: str,
         configuration_version: int | None = None,
+        actor: User | None = None,
     ) -> JobRecord:
         """Create a job row, run the processor synchronously, and return the result."""
 
-        workspace_id = self.require_workspace_id()
-
-        document = await self._get_document(input_document_id)
+        document = await self._get_document(workspace_id, input_document_id)
         configuration = await self._get_configuration(
-            configuration_id, configuration_version
+            workspace_id, configuration_id, configuration_version
         )
-        if configuration.workspace_id != workspace_id:
-            raise ConfigurationNotFoundError(configuration_id)
-        actor = self._resolve_actor_identifier()
+        actor_identifier = self._resolve_actor_identifier(actor)
         config_identifier = str(configuration.id)
 
         job = Job(
@@ -115,7 +110,7 @@ class JobsService(BaseService):
             configuration_id=config_identifier,
             configuration_version=configuration.version,
             status="pending",
-            created_by=actor,
+            created_by=actor_identifier,
             input_document_id=document.document_id,
             metrics={},
             logs=[],
@@ -127,7 +122,9 @@ class JobsService(BaseService):
 
         started = perf_counter()
         try:
-            result = await self._execute_job(job, document, configuration)
+            result = await self._execute_job(
+                job, document, configuration, workspace_id=workspace_id
+            )
         except ProcessorError as exc:
             duration_ms = self._duration_ms(started)
             await self._mark_failed(job, str(exc), duration_ms=duration_ms)
@@ -153,6 +150,8 @@ class JobsService(BaseService):
         job: Job,
         document: Document,
         configuration: Any,
+        *,
+        workspace_id: str,
     ) -> JobProcessorResult:
         processor = get_job_processor()
 
@@ -172,15 +171,14 @@ class JobsService(BaseService):
             configuration=processor_configuration,
             metadata={
                 "document_id": document.document_id,
-                "workspace_id": self._collection_entity_id(),
+                "workspace_id": workspace_id,
             },
         )
 
         result = await run_in_threadpool(processor, request)
         return result
 
-    async def _get_document(self, document_id: str) -> Document:
-        workspace_id = self.require_workspace_id()
+    async def _get_document(self, workspace_id: str, document_id: str) -> Document:
         stmt = (
             select(Document)
             .where(
@@ -197,9 +195,11 @@ class JobsService(BaseService):
         return document
 
     async def _get_configuration(
-        self, configuration_id: str, version: int | None
+        self,
+        workspace_id: str,
+        configuration_id: str,
+        version: int | None,
     ) -> Any:
-        workspace_id = self.require_workspace_id()
         configuration = await self._configurations.get_configuration(
             configuration_id,
             workspace_id=workspace_id,
@@ -255,27 +255,15 @@ class JobsService(BaseService):
     def _duration_ms(self, started: float) -> int:
         return int((perf_counter() - started) * 1000)
 
-    def _resolve_actor_identifier(self) -> str:
-        user = self.current_user
-        if user is not None:
-            candidate = getattr(user, "id", None) or getattr(user, "email", None)
+    def _resolve_actor_identifier(self, actor: User | None) -> str:
+        if actor is not None:
+            candidate = getattr(actor, "id", None) or getattr(actor, "email", None)
             if candidate:
                 return str(candidate)
         return "system"
 
-    def _collection_entity_id(self) -> str:
-        workspace = self.current_workspace
-        if workspace is None:
-            return "global"
-        workspace_id = getattr(workspace, "workspace_id", None) or getattr(
-            workspace, "id", None
-        )
-        if workspace_id is None:
-            return "global"
-        return str(workspace_id)
-
-    def _base_query(self) -> Select[tuple[Job]]:
-        workspace_id = self.require_workspace_id()
+    def _base_query(self, workspace_id: str) -> Select[tuple[Job]]:
         return select(Job).where(Job.workspace_id == workspace_id)
+
 
 __all__ = ["JobsService"]

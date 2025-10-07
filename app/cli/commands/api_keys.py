@@ -5,7 +5,6 @@ from __future__ import annotations
 from argparse import Namespace
 from typing import Any
 
-from app.core.service import ServiceContext
 from app.features.auth.models import APIKey
 from app.features.auth.service import APIKeyIssueResult, AuthService
 
@@ -47,8 +46,7 @@ def _issue_result_payload(result: APIKeyIssueResult) -> dict[str, Any]:
 async def issue(args: Namespace) -> None:
     settings = load_settings()
     async with open_session(settings=settings) as session:
-        context = ServiceContext(settings=settings, session=session)
-        service = AuthService(context=context)
+        service = AuthService(session=session, settings=settings)
         expires_in = args.expires_in
         if args.user_id:
             result = await service.issue_api_key_for_user_id(
@@ -73,8 +71,7 @@ async def issue(args: Namespace) -> None:
 async def list_keys(args: Namespace) -> None:
     settings = load_settings()
     async with open_session(settings=settings) as session:
-        context = ServiceContext(settings=settings, session=session)
-        service = AuthService(context=context)
+        service = AuthService(session=session, settings=settings)
         records = await service.list_api_keys()
 
     serialised = [_serialise_api_key(record) for record in records]
@@ -87,8 +84,7 @@ async def list_keys(args: Namespace) -> None:
 async def revoke(args: Namespace) -> None:
     settings = load_settings()
     async with open_session(settings=settings) as session:
-        context = ServiceContext(settings=settings, session=session)
-        service = AuthService(context=context)
+        service = AuthService(session=session, settings=settings)
         await service.revoke_api_key(args.api_key_id)
 
     payload = {"revoked": args.api_key_id}
