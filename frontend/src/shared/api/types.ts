@@ -12,7 +12,6 @@ export interface SessionUser {
   display_name: string;
   email: string;
   preferred_workspace_id?: string | null;
-  permissions: string[];
 }
 
 export interface SessionEnvelope {
@@ -69,11 +68,6 @@ export interface DocumentTypeSummary {
 
 export interface WorkspaceListResponse {
   workspaces: WorkspaceSummary[];
-}
-
-export interface CreateWorkspacePayload {
-  name: string;
-  member_emails?: string[];
 }
 
 export interface DocumentTypeDetailResponse {
