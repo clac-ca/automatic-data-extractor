@@ -1,120 +1,87 @@
-import type { ProblemDetail } from './types'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
-
-export interface RequestOptions extends RequestInit {
-  parseJson?: boolean
-}
+import type { ProblemDetails } from "./types";
 
 export class ApiError extends Error {
-  readonly status: number
-  readonly problem?: ProblemDetail
-  readonly body: unknown
+  readonly status: number;
+  readonly problem?: ProblemDetails;
 
-  constructor(message: string, status: number, body: unknown) {
-    super(message)
-    this.status = status
-    this.body = body
-    if (typeof body === 'object' && body !== null) {
-      this.problem = body as ProblemDetail
+  constructor(message: string, status: number, problem?: ProblemDetails) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.problem = problem;
+  }
+}
+
+export interface ApiClientOptions extends RequestInit {
+  parseJson?: boolean;
+}
+
+export class ApiClient {
+  private readonly baseUrl: string;
+
+  constructor(baseUrl: string = "") {
+    this.baseUrl = baseUrl;
+  }
+
+  async request<T = unknown>(path: string, init: ApiClientOptions = {}): Promise<T> {
+    const { parseJson = true, headers, ...rest } = init;
+
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...headers,
+      },
+      ...rest,
+    });
+
+    if (!response.ok) {
+      const problem = await this.parseProblem(response);
+      const message = problem?.title || `Request failed with status ${response.status}`;
+      throw new ApiError(message, response.status, problem);
     }
-  }
-}
 
-async function request<TResponse>(
-  path: string,
-  init: RequestOptions = {},
-): Promise<TResponse> {
-  const { parseJson = true, headers, body, ...rest } = init
-  const finalHeaders = new Headers(headers)
-
-  if (!finalHeaders.has('Accept')) {
-    finalHeaders.set('Accept', 'application/json')
-  }
-
-  if (body !== undefined && !finalHeaders.has('Content-Type')) {
-    finalHeaders.set('Content-Type', 'application/json')
-  }
-
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    credentials: 'include',
-    ...rest,
-    headers: finalHeaders,
-    body,
-  })
-
-  const contentType = response.headers.get('content-type') ?? ''
-  const contentLength = response.headers.get('content-length')
-  const isJsonResponse = /application\/(?:json|problem\+json)/i.test(contentType)
-  const shouldParseJson = parseJson && isJsonResponse
-
-  let payload: unknown = null
-
-  if (response.status === 204 || contentLength === '0') {
-    payload = null
-  } else if (shouldParseJson) {
-    try {
-      payload = await response.json()
-    } catch (error) {
-      // Fall back to null so callers can handle unexpected empty bodies.
-      payload = null
+    if (!parseJson) {
+      return undefined as T;
     }
-  } else if (parseJson) {
-    const text = await response.text()
-    payload = text.length > 0 ? text : null
+
+    const text = await response.text();
+    if (!text) {
+      return undefined as T;
+    }
+
+    return JSON.parse(text) as T;
   }
 
-  if (!response.ok) {
-    const message =
-      (typeof payload === 'object' && payload && 'title' in payload
-        ? String((payload as ProblemDetail).title)
-        : response.statusText) || 'Request failed'
-    throw new ApiError(message, response.status, payload)
+  private async parseProblem(response: Response): Promise<ProblemDetails | undefined> {
+    const contentType = response.headers.get("content-type");
+    if (contentType?.includes("application/json")) {
+      try {
+        return (await response.json()) as ProblemDetails;
+      } catch (error) {
+        console.warn("Failed to parse problem details", error);
+      }
+    }
+
+    return undefined;
   }
-
-  return (payload ?? undefined) as TResponse
 }
 
-function serialiseBody(payload: unknown): string | undefined {
-  if (payload === undefined) {
-    return undefined
-  }
+export const apiClient = new ApiClient();
 
-  return JSON.stringify(payload)
+export async function get<T>(path: string, init?: ApiClientOptions) {
+  return apiClient.request<T>(path, { method: "GET", ...init });
 }
 
-export const apiClient = {
-  get<TResponse>(path: string, init?: RequestOptions) {
-    return request<TResponse>(path, { method: 'GET', ...init })
-  },
-  post<TBody, TResponse>(path: string, payload: TBody, init?: RequestOptions) {
-    return request<TResponse>(path, {
-      method: 'POST',
-      body: serialiseBody(payload),
-      ...init,
-    })
-  },
-  put<TBody, TResponse>(path: string, payload: TBody, init?: RequestOptions) {
-    return request<TResponse>(path, {
-      method: 'PUT',
-      body: serialiseBody(payload),
-      ...init,
-    })
-  },
-  patch<TBody, TResponse>(
-    path: string,
-    payload: TBody,
-    init?: RequestOptions,
-  ) {
-    return request<TResponse>(path, {
-      method: 'PATCH',
-      body: serialiseBody(payload),
-      ...init,
-    })
-  },
-  delete<TResponse>(path: string, init?: RequestOptions) {
-    return request<TResponse>(path, { method: 'DELETE', ...init })
-  },
+export async function post<T>(path: string, body?: unknown, init?: ApiClientOptions) {
+  return apiClient.request<T>(path, {
+    method: "POST",
+    body: body === undefined ? undefined : JSON.stringify(body),
+    ...init,
+  });
 }
 
-export type ApiClient = typeof apiClient
+export async function del<T>(path: string, init?: ApiClientOptions) {
+  return apiClient.request<T>(path, { method: "DELETE", ...init });
+}

@@ -1,12 +1,16 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery } from "@tanstack/react-query";
 
-import { queryKeys } from '../../../shared/api/query-keys'
-import { fetchSetupStatus } from '../api'
+import { fetchSetupStatus } from "../../auth/api";
+
+export const setupKeys = {
+  all: ["setup"] as const,
+  status: () => [...setupKeys.all, "status"] as const,
+};
 
 export function useSetupStatusQuery() {
   return useQuery({
-    queryKey: queryKeys.setupStatus,
+    queryKey: setupKeys.status(),
     queryFn: fetchSetupStatus,
     staleTime: 30_000,
-  })
+  });
 }
