@@ -40,6 +40,7 @@ describe("RequireSession", () => {
           display_name: "Ada Lovelace",
           email: "ada@example.com",
           preferred_workspace_id: "workspace-1",
+          permissions: [],
         },
         expires_at: new Date().toISOString(),
         refresh_expires_at: new Date().toISOString(),
