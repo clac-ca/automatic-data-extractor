@@ -10,7 +10,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.db.session import get_sessionmaker
-from app.features.roles.models import Role
+from app.features.roles.models import Role, RolePermission, UserGlobalRole
 from app.features.workspaces.models import WorkspaceMembership, WorkspaceMembershipRole
 
 pytestmark = pytest.mark.asyncio
@@ -47,6 +47,40 @@ async def _create_workspace(
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+async def test_global_permission_allows_workspace_creation(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    member = seed_identity["member"]
+    token = await _login(async_client, member["email"], member["password"])
+
+    session_factory = get_sessionmaker()
+    role_slug = f"workspace-creator-{uuid4().hex[:8]}"
+    async with session_factory() as session:
+        role = Role(
+            slug=role_slug,
+            name="Workspace Creator",
+            scope="global",
+            description="Allows workspace creation",
+            is_system=False,
+            editable=True,
+        )
+        session.add(role)
+        await session.flush()
+        session.add(
+            RolePermission(role_id=role.id, permission_key="Workspaces.Create")
+        )
+        session.add(UserGlobalRole(user_id=member["id"], role_id=role.id))
+        await session.commit()
+
+    response = await async_client.post(
+        "/api/workspaces",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": f"Workspace {uuid4().hex[:8]}"},
+    )
+    assert response.status_code == 201, response.text
 
 
 async def test_member_profile_includes_permissions(

@@ -119,7 +119,7 @@ async def read_configuration(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Configurations.Read"],
+            scopes=["Workspace.Configurations.Read"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -149,7 +149,7 @@ async def replace_configuration(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Configurations.ReadWrite"],
+            scopes=["Workspace.Configurations.ReadWrite"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -182,7 +182,7 @@ async def delete_configuration(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Configurations.ReadWrite"],
+            scopes=["Workspace.Configurations.ReadWrite"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -213,7 +213,7 @@ async def activate_configuration(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Configurations.ReadWrite"],
+            scopes=["Workspace.Configurations.ReadWrite"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],

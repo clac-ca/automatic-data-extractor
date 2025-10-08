@@ -144,6 +144,26 @@ class WorkspacesRepository:
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
+    async def list_members_for_update(
+        self, workspace_id: str
+    ) -> list[WorkspaceMembership]:
+        stmt = (
+            select(WorkspaceMembership)
+            .options(
+                selectinload(WorkspaceMembership.workspace),
+                selectinload(WorkspaceMembership.user),
+                selectinload(WorkspaceMembership.membership_roles),
+                selectinload(WorkspaceMembership.membership_roles)
+                .joinedload(WorkspaceMembershipRole.role)
+                .joinedload(Role.permissions),
+            )
+            .where(WorkspaceMembership.workspace_id == workspace_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
     async def get_workspace(self, workspace_id: str) -> Workspace | None:
         stmt = select(Workspace).where(Workspace.id == workspace_id)
         result = await self._session.execute(stmt)

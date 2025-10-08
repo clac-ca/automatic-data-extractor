@@ -484,7 +484,7 @@ class WorkspacesService:
         *,
         ignore_membership_id: str | None = None,
     ) -> bool:
-        memberships = await self._repo.list_members(workspace_id)
+        memberships = await self._repo.list_members_for_update(workspace_id)
         for membership in memberships:
             if ignore_membership_id is not None and membership.id == ignore_membership_id:
                 continue

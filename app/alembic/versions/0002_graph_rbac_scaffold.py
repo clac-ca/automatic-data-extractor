@@ -32,7 +32,7 @@ def upgrade() -> None:
         "roles",
         sa.Column("role_id", sa.String(length=26), primary_key=True),
         sa.Column("scope", ROLE_SCOPE, nullable=False),
-        sa.Column("slug", sa.String(length=100), nullable=False, unique=True),
+        sa.Column("slug", sa.String(length=100), nullable=False),
         sa.Column("name", sa.String(length=150), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("is_system", sa.Boolean(), nullable=False, server_default=sa.false()),
@@ -47,6 +47,7 @@ def upgrade() -> None:
         ),
         sa.Column("created_by", sa.String(length=26), nullable=True),
         sa.Column("updated_by", sa.String(length=26), nullable=True),
+        sa.UniqueConstraint("slug", name="roles_slug_uniq"),
     )
     op.create_index("roles_scope_idx", "roles", ["scope"], unique=False)
 

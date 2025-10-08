@@ -227,7 +227,14 @@ async def sync_permission_registry(*, session: AsyncSession) -> None:
 
     # Sync system roles and their permissions
     role_slugs = [definition.slug for definition in SYSTEM_ROLES]
-    result = await session.execute(select(Role).where(Role.slug.in_(role_slugs)))
+    system_scopes = {definition.scope for definition in SYSTEM_ROLES}
+    result = await session.execute(
+        select(Role).where(
+            Role.slug.in_(role_slugs),
+            Role.workspace_id.is_(None),
+            Role.scope.in_(tuple(system_scopes)),
+        )
+    )
     existing_roles = {role.slug: role for role in result.scalars()}
 
     for definition in SYSTEM_ROLES:
