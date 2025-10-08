@@ -1,56 +1,51 @@
-import type { JSX } from 'react'
-import {
-  Navigate,
-  Outlet,
-  RouterProvider,
-  createBrowserRouter,
-} from 'react-router-dom'
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 
-import { LoginPage } from '../features/auth/components/LoginPage'
-import { LogoutRoute } from '../features/auth/components/LogoutRoute'
-import { RequireSession } from '../features/auth/components/RequireSession'
-import { SetupWizard } from '../features/setup/components/SetupWizard'
-import { DocumentTypePage } from '../features/workspaces/components/DocumentTypePage'
-import { WorkspaceLayout } from '../features/workspaces/components/WorkspaceLayout'
-import { WorkspaceOverviewPage } from '../features/workspaces/components/WorkspaceOverviewPage'
-import { WorkspaceRedirect } from '../features/workspaces/components/WorkspaceRedirect'
+import { RootRoute } from "./RootRoute";
+import { NotFoundRoute } from "./NotFoundRoute";
+import { AppErrorPage } from "./AppErrorPage";
+import { SetupRoute } from "../features/setup/routes/SetupRoute";
+import { LoginRoute } from "../features/auth/routes/LoginRoute";
+import { LogoutRoute } from "../features/auth/routes/LogoutRoute";
+import { RequireSession } from "../features/auth/components/RequireSession";
+import { WorkspaceLayout } from "../features/workspaces/components/WorkspaceLayout";
+import { WorkspaceOverviewRoute } from "../features/workspaces/routes/WorkspaceOverviewRoute";
+import { DocumentTypeRoute } from "../features/workspaces/routes/DocumentTypeRoute";
 
-function RootLayout(): JSX.Element {
-  return <Outlet />
+export function createAppRouter() {
+  return createBrowserRouter([
+    { path: "/", element: <RootRoute />, errorElement: <AppErrorPage /> },
+    { path: "/setup", element: <SetupRoute />, errorElement: <AppErrorPage /> },
+    { path: "/login", element: <LoginRoute />, errorElement: <AppErrorPage /> },
+    { path: "/logout", element: <LogoutRoute />, errorElement: <AppErrorPage /> },
+    {
+      path: "/workspaces",
+      element: <RequireSession />,
+      errorElement: <AppErrorPage />,
+      children: [
+        {
+          element: <WorkspaceLayout />,
+          children: [
+            { index: true, element: <WorkspaceOverviewRoute /> },
+            {
+              path: ":workspaceId",
+              children: [
+                { index: true, element: <WorkspaceOverviewRoute /> },
+                {
+                  path: "document-types/:documentTypeId",
+                  element: <DocumentTypeRoute />,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    { path: "*", element: <NotFoundRoute /> },
+  ]);
 }
 
-const router = createBrowserRouter([
-  {
-    path: '/',
-    element: <RootLayout />,
-    children: [
-      { index: true, element: <Navigate to="/workspaces" replace /> },
-      { path: 'setup', element: <SetupWizard /> },
-      { path: 'login', element: <LoginPage /> },
-      {
-        path: 'workspaces',
-        element: <RequireSession />,
-        children: [
-          { index: true, element: <WorkspaceRedirect /> },
-          {
-            path: ':workspaceId',
-            element: <WorkspaceLayout />,
-            children: [
-              { index: true, element: <WorkspaceOverviewPage /> },
-              {
-                path: 'document-types/:documentTypeId',
-                element: <DocumentTypePage />,
-              },
-            ],
-          },
-        ],
-      },
-      { path: 'logout', element: <LogoutRoute /> },
-      { path: '*', element: <Navigate to="/workspaces" replace /> },
-    ],
-  },
-])
+const router = createAppRouter();
 
-export function AppRouter(): JSX.Element {
-  return <RouterProvider router={router} />
+export function AppRouter() {
+  return <RouterProvider router={router} />;
 }

@@ -4,16 +4,17 @@
 
 :root {
   color-scheme: light;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background-color: #f8fafc;
-  color: #0f172a;
 }
 
 body {
-  margin: 0;
-  min-height: 100vh;
+  @apply bg-slate-950 text-slate-100 min-h-screen;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 a {
-  color: inherit;
+  @apply text-sky-400 hover:text-sky-300;
+}
+
+button, input, select, textarea {
+  font: inherit;
 }
