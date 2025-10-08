@@ -7,11 +7,12 @@ the point of declaration.【F:app/features/roles/registry.py†L25-L121】【F:a
 
 ## Default grants
 
-`WorkspacesService` derives each member's permission list from
-`ROLE_PERMISSION_DEFAULTS`, which maps the built-in `WorkspaceRole` enum to the
-Graph keys exposed through API responses. Owners inherit the full workspace set
-(including `Workspace.Delete`), while members receive the day-to-day read/write
-permissions needed for document processing.【F:app/features/workspaces/service.py†L26-L153】【F:app/features/workspaces/service.py†L329-L357】
+`WorkspacesService` now unions permissions from every role assigned to a
+membership, expanding implication rules so `.ReadWrite` grants satisfy the
+paired `.Read` checks and ensuring any workspace key implies the baseline
+`Workspace.Read`. Owners receive the full system role set (including role and
+member administration), while members default to the day-to-day document and
+configuration scopes.【F:app/features/workspaces/service.py†L26-L357】
 
 ## Enforcement flow
 

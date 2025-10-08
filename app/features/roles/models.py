@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
@@ -42,21 +40,16 @@ class Role(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         Enum("global", "workspace", name="rolescope", native_enum=False, length=20),
         nullable=False,
     )
-    slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    workspace_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("workspaces.workspace_id", ondelete="CASCADE"), nullable=True
+    )
+    slug: Mapped[str] = mapped_column(String(100), nullable=False)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     editable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_by: Mapped[str | None] = mapped_column(String(26), nullable=True)
     updated_by: Mapped[str | None] = mapped_column(String(26), nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        default=TimestampMixin._timestamp,
-        onupdate=TimestampMixin._timestamp,
-        server_default=func.now(),
-        server_onupdate=func.now(),
-    )
 
     permissions: Mapped[list["RolePermission"]] = relationship(
         "RolePermission",

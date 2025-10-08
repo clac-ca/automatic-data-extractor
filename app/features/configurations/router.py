@@ -34,7 +34,7 @@ async def list_configurations(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Configurations.Read"],
+            scopes=["Workspace.Configurations.Read"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -62,7 +62,7 @@ async def create_configuration(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Configurations.ReadWrite"],
+            scopes=["Workspace.Configurations.ReadWrite"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -90,7 +90,7 @@ async def list_active_configurations(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Configurations.Read"],
+            scopes=["Workspace.Configurations.Read"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],

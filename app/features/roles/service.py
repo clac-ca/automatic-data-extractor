@@ -19,6 +19,7 @@ from .registry import PERMISSIONS, PERMISSION_REGISTRY, PermissionScope, SYSTEM_
 GLOBAL_IMPLICATIONS: Mapping[str, tuple[str, ...]] = {
     "Roles.ReadWrite.All": ("Roles.Read.All",),
     "System.Settings.ReadWrite": ("System.Settings.Read",),
+    "Workspaces.ReadWrite.All": ("Workspaces.Read.All",),
 }
 
 
@@ -165,7 +166,10 @@ async def get_global_permissions_for_user(
         select(RolePermission.permission_key)
         .join(Role, Role.id == RolePermission.role_id)
         .join(UserGlobalRole, UserGlobalRole.role_id == Role.id)
-        .where(UserGlobalRole.user_id == user.id)
+        .where(
+            UserGlobalRole.user_id == user.id,
+            Role.scope == "global",
+        )
     )
     result = await session.execute(stmt)
     return frozenset(result.scalars().all())
@@ -233,6 +237,7 @@ async def sync_permission_registry(*, session: AsyncSession) -> None:
                 slug=definition.slug,
                 name=definition.name,
                 scope=definition.scope,
+                workspace_id=None,
                 description=definition.description,
                 is_system=definition.is_system,
                 editable=definition.editable,
@@ -242,6 +247,7 @@ async def sync_permission_registry(*, session: AsyncSession) -> None:
         else:
             role.name = definition.name
             role.scope = definition.scope
+            role.workspace_id = None
             role.description = definition.description
             role.is_system = definition.is_system
             role.editable = definition.editable

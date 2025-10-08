@@ -11,6 +11,7 @@ from app.db.session import get_session
 
 from ..auth.dependencies import bind_current_user
 from ..roles.dependencies import require_global_access
+from ..roles.schemas import RoleRead
 from ..users.models import User
 from .dependencies import get_workspace_profile, require_workspace_access
 from .schemas import (
@@ -18,7 +19,7 @@ from .schemas import (
     WorkspaceDefaultSelection,
     WorkspaceMember,
     WorkspaceMemberCreate,
-    WorkspaceMemberUpdate,
+    WorkspaceMemberRolesUpdate,
     WorkspaceProfile,
     WorkspaceUpdate,
 )
@@ -152,10 +153,7 @@ async def read_workspace(
 async def list_members(
     workspace: Annotated[
         WorkspaceProfile,
-        Security(
-            require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Members.Read"],
-        ),
+        Security(require_workspace_access, scopes=["Workspace.Members.Read"]),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[WorkspaceMember]:
@@ -164,6 +162,47 @@ async def list_members(
         workspace_id=workspace.workspace_id
     )
     return memberships
+
+
+@router.get(
+    "/workspaces/{workspace_id}/roles",
+    response_model=list[RoleRead],
+    status_code=status.HTTP_200_OK,
+    summary="List roles available to the workspace",
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to list workspace roles.",
+            "model": ErrorMessage,
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow viewing role definitions.",
+            "model": ErrorMessage,
+        },
+    },
+)
+async def list_workspace_roles(
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(require_workspace_access, scopes=["Workspace.Roles.Read"]),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[RoleRead]:
+    service = WorkspacesService(session=session)
+    roles = await service.list_workspace_roles(workspace.workspace_id)
+    return [
+        RoleRead(
+            role_id=role.id,
+            slug=role.slug,
+            name=role.name,
+            description=role.description,
+            scope=role.scope,
+            workspace_id=role.workspace_id,
+            permissions=[rp.permission_key for rp in role.permissions],
+            is_system=role.is_system,
+            editable=role.editable,
+        )
+        for role in roles
+    ]
 
 
 @router.post(
@@ -194,10 +233,7 @@ async def list_members(
 async def add_member(
     workspace: Annotated[
         WorkspaceProfile,
-        Security(
-            require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Members.ReadWrite"],
-        ),
+        Security(require_workspace_access, scopes=["Workspace.Members.ReadWrite"]),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
     *,
@@ -207,7 +243,7 @@ async def add_member(
     membership = await service.add_member(
         workspace_id=workspace.workspace_id,
         user_id=payload.user_id,
-        role=payload.role,
+        role_ids=payload.role_ids or [],
     )
     return membership
 
@@ -244,10 +280,7 @@ async def add_member(
 async def update_workspace(
     workspace: Annotated[
         WorkspaceProfile,
-        Security(
-            require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Settings.ReadWrite"],
-        ),
+        Security(require_workspace_access, scopes=["Workspace.Settings.ReadWrite"]),
     ],
     current_user: Annotated[User, Depends(bind_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -288,10 +321,7 @@ async def update_workspace(
 async def delete_workspace(
     workspace: Annotated[
         WorkspaceProfile,
-        Security(
-            require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Delete"],
-        ),
+        Security(require_workspace_access, scopes=["Workspace.Delete"]),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> DefaultResponse:
@@ -300,11 +330,11 @@ async def delete_workspace(
     return DefaultResponse.success("Workspace deleted")
 
 
-@router.patch(
-    "/workspaces/{workspace_id}/members/{membership_id}",
+@router.put(
+    "/workspaces/{workspace_id}/members/{membership_id}/roles",
     response_model=WorkspaceMember,
     status_code=status.HTTP_200_OK,
-    summary="Update a workspace member",
+    summary="Replace the set of roles for a workspace member",
     response_model_exclude_none=True,
     responses={
         status.HTTP_400_BAD_REQUEST: {
@@ -328,22 +358,19 @@ async def delete_workspace(
 async def update_member(
     workspace: Annotated[
         WorkspaceProfile,
-        Security(
-            require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Members.ReadWrite"],
-        ),
+        Security(require_workspace_access, scopes=["Workspace.Members.ReadWrite"]),
     ],
     current_user: Annotated[User, Depends(bind_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
     membership_id: str = Path(..., min_length=1, description="Membership identifier"),
     *,
-    payload: WorkspaceMemberUpdate = WORKSPACE_MEMBER_UPDATE_BODY,
+    payload: WorkspaceMemberRolesUpdate = WORKSPACE_MEMBER_UPDATE_BODY,
 ) -> WorkspaceMember:
     service = WorkspacesService(session=session)
-    membership = await service.update_member_role(
+    membership = await service.assign_member_roles(
         workspace_id=workspace.workspace_id,
         membership_id=membership_id,
-        role=payload.role,
+        payload=payload,
     )
     return membership
 
@@ -375,10 +402,7 @@ async def update_member(
 async def remove_member(
     workspace: Annotated[
         WorkspaceProfile,
-        Security(
-            require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Members.ReadWrite"],
-        ),
+        Security(require_workspace_access, scopes=["Workspace.Members.ReadWrite"]),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
     membership_id: str = Path(..., min_length=1, description="Membership identifier"),

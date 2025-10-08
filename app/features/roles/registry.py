@@ -143,6 +143,18 @@ PERMISSIONS: tuple[PermissionDefinition, ...] = (
         description="Create, edit, activate, or delete configuration versions.",
     ),
     PermissionDefinition(
+        key="Workspace.Roles.Read",
+        scope="workspace",
+        label="Read workspace roles",
+        description="View role definitions and assignments within the workspace.",
+    ),
+    PermissionDefinition(
+        key="Workspace.Roles.ReadWrite",
+        scope="workspace",
+        label="Manage workspace roles",
+        description="Create, edit, delete, and assign roles within the workspace.",
+    ),
+    PermissionDefinition(
         key="Workspace.Jobs.Read",
         scope="workspace",
         label="Read jobs",
@@ -193,6 +205,8 @@ SYSTEM_ROLES: tuple[SystemRoleDefinition, ...] = (
             "Workspace.Documents.ReadWrite",
             "Workspace.Configurations.Read",
             "Workspace.Configurations.ReadWrite",
+            "Workspace.Roles.Read",
+            "Workspace.Roles.ReadWrite",
             "Workspace.Jobs.Read",
             "Workspace.Jobs.ReadWrite",
         ),

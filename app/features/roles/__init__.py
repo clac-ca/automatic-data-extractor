@@ -1,5 +1,5 @@
 """Roles and permission management feature package."""
 
-from . import registry, service
+from . import registry, schemas, service
 
-__all__ = ["registry", "service"]
+__all__ = ["registry", "schemas", "service"]
