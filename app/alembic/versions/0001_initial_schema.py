@@ -310,7 +310,7 @@ def _create_configurations() -> None:
         sa.Column("title", sa.String(length=255), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.false()),
-        sa.Column("activated_at", sa.String(length=32), nullable=True),
+        sa.Column("activated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("payload", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
