@@ -1,41 +1,38 @@
-"""Service layer for workspace resolution."""
+"""Workspace domain services with role-based permissions."""
 
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, cast
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.features.roles.models import Role
+from app.features.roles.registry import SYSTEM_ROLES
 from ..users.models import User, UserRole
 from ..users.repository import UsersRepository
 from ..users.schemas import UserProfile
-from app.features.roles.registry import SYSTEM_ROLES
-
-from .models import Workspace, WorkspaceMembership, WorkspaceRole
+from .models import Workspace, WorkspaceMembership
 from .repository import WorkspacesRepository
 from .schemas import (
     WorkspaceDefaultSelection,
     WorkspaceMember,
+    WorkspaceMemberRolesUpdate,
     WorkspaceProfile,
 )
 
 
-def _system_role_permissions(slug: str) -> tuple[str, ...]:
-    for definition in SYSTEM_ROLES:
-        if definition.slug == slug:
-            return definition.permissions
-    return ()
-
-
-ROLE_PERMISSION_DEFAULTS: dict[WorkspaceRole, tuple[str, ...]] = {
-    WorkspaceRole.MEMBER: _system_role_permissions("workspace-member"),
-    WorkspaceRole.OWNER: _system_role_permissions("workspace-owner"),
-}
-
+_GOVERNOR_PERMISSIONS = frozenset(
+    {
+        "Workspace.Roles.ReadWrite",
+        "Workspace.Members.ReadWrite",
+        "Workspace.Settings.ReadWrite",
+    }
+)
 
 _SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
 
@@ -46,6 +43,13 @@ def _slugify(value: str) -> str:
     candidate = _SLUG_PATTERN.sub("-", value.lower()).strip("-")
     candidate = re.sub(r"-{2,}", "-", candidate)
     return candidate
+
+
+def _system_role_permissions(slug: str) -> tuple[str, ...]:
+    for definition in SYSTEM_ROLES:
+        if definition.slug == slug:
+            return definition.permissions
+    return ()
 
 
 class WorkspacesService:
@@ -71,8 +75,7 @@ class WorkspacesService:
                     raise HTTPException(
                         status.HTTP_404_NOT_FOUND, detail="Workspace not found"
                     )
-                profile = self.build_global_admin_profile(workspace)
-                return profile
+                return self.build_global_admin_profile(workspace)
 
             membership = await self.resolve_membership(
                 user=user, workspace_id=workspace_id
@@ -148,8 +151,20 @@ class WorkspacesService:
         membership = await self._repo.create_membership(
             workspace_id=cast(str, workspace.id),
             user_id=cast(str, owner.id),
-            role=WorkspaceRole.OWNER,
         )
+
+        owner_role = await self._get_system_workspace_role("workspace-owner")
+        if owner_role is not None:
+            await self._repo.set_membership_roles(
+                membership_id=cast(str, membership.id),
+                role_ids=[cast(str, owner_role.id)],
+            )
+
+        membership = await self._reload_membership(
+            membership_id=cast(str, membership.id),
+            workspace_id=cast(str, workspace.id),
+        )
+
         return self.build_profile(membership)
 
     async def update_workspace(
@@ -207,12 +222,12 @@ class WorkspacesService:
         memberships = await self._repo.list_members(workspace_id)
         return [self.build_member(membership) for membership in memberships]
 
-    async def update_member_role(
+    async def assign_member_roles(
         self,
         *,
         workspace_id: str,
         membership_id: str,
-        role: WorkspaceRole,
+        payload: WorkspaceMemberRolesUpdate,
     ) -> WorkspaceMember:
         membership = await self._repo.get_membership_for_workspace(
             membership_id=membership_id,
@@ -221,21 +236,30 @@ class WorkspacesService:
         if membership is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Membership not found")
 
-        if membership.role is WorkspaceRole.OWNER and role is not WorkspaceRole.OWNER:
-            owner_count = await self._repo.count_members_with_role(
-                workspace_id=workspace_id, role=WorkspaceRole.OWNER
+        roles = await self._resolve_roles_for_assignment(
+            workspace_id=workspace_id,
+            role_ids=payload.role_ids,
+        )
+
+        if not await self._workspace_has_governor(
+            workspace_id, ignore_membership_id=cast(str, membership.id)
+        ) and not self._has_governor_permissions(
+            self._permissions_from_roles(roles)
+        ):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="Workspace requires at least one governor with elevated permissions",
             )
-            if owner_count <= 1:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    detail="Workspace requires at least one owner",
-                )
 
-        if membership.role is role:
-            return self.build_member(membership)
-
-        updated = await self._repo.update_membership_role(membership, role)
-        return self.build_member(updated)
+        await self._repo.set_membership_roles(
+            membership_id=cast(str, membership.id),
+            role_ids=[cast(str, role.id) for role in roles],
+        )
+        membership = await self._reload_membership(
+            membership_id=cast(str, membership.id),
+            workspace_id=workspace_id,
+        )
+        return self.build_member(membership)
 
     async def remove_member(
         self,
@@ -250,15 +274,13 @@ class WorkspacesService:
         if membership is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Membership not found")
 
-        if membership.role is WorkspaceRole.OWNER:
-            owner_count = await self._repo.count_members_with_role(
-                workspace_id=workspace_id, role=WorkspaceRole.OWNER
+        if not await self._workspace_has_governor(
+            workspace_id, ignore_membership_id=cast(str, membership.id)
+        ):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="Workspace requires at least one governor with elevated permissions",
             )
-            if owner_count <= 1:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    detail="Workspace requires at least one owner",
-                )
 
         await self._repo.delete_membership(membership)
 
@@ -285,10 +307,8 @@ class WorkspacesService:
         *,
         workspace_id: str,
         user_id: str,
-        role: WorkspaceRole,
+        role_ids: Sequence[str] | None,
     ) -> WorkspaceMember:
-        """Add ``user_id`` to ``workspace_id`` with the supplied ``role``."""
-
         existing = await self._repo.get_membership(
             user_id=user_id, workspace_id=workspace_id
         )
@@ -305,9 +325,29 @@ class WorkspacesService:
         membership = await self._repo.create_membership(
             workspace_id=workspace_id,
             user_id=user_id,
-            role=role,
+        )
+
+        roles = await self._resolve_roles_for_assignment(
+            workspace_id=workspace_id,
+            role_ids=list(role_ids or []),
+        )
+        if not roles:
+            member_role = await self._get_system_workspace_role("workspace-member")
+            if member_role is not None:
+                roles = [member_role]
+
+        await self._repo.set_membership_roles(
+            membership_id=cast(str, membership.id),
+            role_ids=[cast(str, role.id) for role in roles],
+        )
+        membership = await self._reload_membership(
+            membership_id=cast(str, membership.id),
+            workspace_id=workspace_id,
         )
         return self.build_member(membership)
+
+    async def list_workspace_roles(self, workspace_id: str) -> list[Role]:
+        return await self._repo.list_workspace_roles(workspace_id)
 
     async def resolve_membership(
         self, *, user: User, workspace_id: str
@@ -335,12 +375,13 @@ class WorkspacesService:
                 status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Workspace missing"
             )
 
-        permissions = self._permissions_for_role(membership.role)
+        permissions = self._permissions_for_membership(membership)
+        role_slugs = self._slugs_for_membership(membership)
         return WorkspaceProfile(
             workspace_id=workspace.id,
             name=workspace.name,
             slug=workspace.slug,
-            role=membership.role,
+            roles=role_slugs,
             permissions=permissions,
             is_default=bool(membership.is_default),
         )
@@ -348,12 +389,12 @@ class WorkspacesService:
     def build_global_admin_profile(self, workspace: Workspace) -> WorkspaceProfile:
         """Return an owner-level profile used when a global admin inspects a workspace."""
 
-        permissions = self._permissions_for_role(WorkspaceRole.OWNER)
+        permissions = sorted(dict.fromkeys(_system_role_permissions("workspace-owner")))
         return WorkspaceProfile(
             workspace_id=workspace.id,
             name=workspace.name,
             slug=workspace.slug,
-            role=WorkspaceRole.OWNER,
+            roles=["workspace-owner"],
             permissions=permissions,
             is_default=False,
         )
@@ -365,11 +406,12 @@ class WorkspacesService:
                 status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Member user missing"
             )
 
-        permissions = self._permissions_for_role(membership.role)
+        permissions = self._permissions_for_membership(membership)
+        role_slugs = self._slugs_for_membership(membership)
         return WorkspaceMember(
             workspace_membership_id=membership.id,
             workspace_id=membership.workspace_id,
-            role=membership.role,
+            roles=role_slugs,
             permissions=permissions,
             is_default=bool(membership.is_default),
             user=UserProfile.model_validate(user),
@@ -381,13 +423,107 @@ class WorkspacesService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Workspace not found")
         return workspace
 
+    async def _reload_membership(
+        self, *, membership_id: str, workspace_id: str
+    ) -> WorkspaceMembership:
+        refreshed = await self._repo.get_membership_for_workspace(
+            membership_id=membership_id,
+            workspace_id=workspace_id,
+        )
+        if refreshed is None:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Workspace membership not found after update",
+            )
+        return refreshed
+
+    async def _get_system_workspace_role(self, slug: str) -> Role | None:
+        stmt = select(Role).where(
+            Role.slug == slug,
+            Role.scope == "workspace",
+            Role.workspace_id.is_(None),
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def _resolve_roles_for_assignment(
+        self,
+        *,
+        workspace_id: str,
+        role_ids: Sequence[str],
+    ) -> list[Role]:
+        if not role_ids:
+            return []
+
+        unique_ids = list(dict.fromkeys(role_ids))
+        stmt = select(Role).where(Role.id.in_(unique_ids))
+        result = await self._session.execute(stmt)
+        roles = list(result.scalars().all())
+        found_ids = {cast(str, role.id) for role in roles}
+        missing = [role_id for role_id in unique_ids if role_id not in found_ids]
+        if missing:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Role not found")
+
+        for role in roles:
+            if role.scope != "workspace":
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail="Only workspace roles can be assigned to memberships",
+                )
+            if role.workspace_id is not None and role.workspace_id != workspace_id:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail="Role is not defined for this workspace",
+                )
+
+        return roles
+
+    async def _workspace_has_governor(
+        self,
+        workspace_id: str,
+        *,
+        ignore_membership_id: str | None = None,
+    ) -> bool:
+        memberships = await self._repo.list_members(workspace_id)
+        for membership in memberships:
+            if ignore_membership_id is not None and membership.id == ignore_membership_id:
+                continue
+            if self._has_governor_permissions(
+                self._permissions_for_membership(membership)
+            ):
+                return True
+        return False
+
     @staticmethod
-    def _permissions_for_role(role: WorkspaceRole) -> list[str]:
-        permissions = ROLE_PERMISSION_DEFAULTS.get(role, ())
-        return sorted(dict.fromkeys(permissions))
+    def _has_governor_permissions(permissions: Iterable[str]) -> bool:
+        permission_set = set(permissions)
+        return all(key in permission_set for key in _GOVERNOR_PERMISSIONS)
+
+    @staticmethod
+    def _permissions_from_roles(roles: Sequence[Role]) -> set[str]:
+        permissions: list[str] = []
+        for role in roles:
+            permissions.extend(permission.permission_key for permission in role.permissions)
+        return set(permissions)
+
+    def _permissions_for_membership(self, membership: WorkspaceMembership) -> list[str]:
+        keys: list[str] = []
+        for assignment in membership.membership_roles:
+            role = assignment.role
+            if role is None:
+                continue
+            keys.extend(permission.permission_key for permission in role.permissions)
+        if not keys:
+            return []
+        return sorted(dict.fromkeys(keys))
+
+    def _slugs_for_membership(self, membership: WorkspaceMembership) -> list[str]:
+        slugs = [
+            assignment.role.slug
+            for assignment in membership.membership_roles
+            if assignment.role is not None
+        ]
+        return sorted(dict.fromkeys(slugs))
 
 
-__all__ = [
-    "ROLE_PERMISSION_DEFAULTS",
-    "WorkspacesService",
-]
+__all__ = ["WorkspacesService"]

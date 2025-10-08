@@ -57,7 +57,7 @@ async def list_jobs(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Jobs.Read"],
+            scopes=["Workspace.Jobs.Read"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -108,7 +108,7 @@ async def read_job(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Jobs.Read"],
+            scopes=["Workspace.Jobs.Read"],
         ),
     ],
     current_user: Annotated[User, Depends(bind_current_user)],
@@ -159,7 +159,7 @@ async def submit_job(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Jobs.ReadWrite"],
+            scopes=["Workspace.Jobs.ReadWrite"],
         ),
     ],
     current_user: Annotated[User, Depends(bind_current_user)],

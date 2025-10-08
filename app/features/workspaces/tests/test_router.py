@@ -1,4 +1,4 @@
-"""Workspace router tests."""
+"""Integration tests covering workspace membership routes."""
 
 from __future__ import annotations
 
@@ -10,13 +10,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.db.session import get_sessionmaker
-from app.features.workspaces.models import (
-    Workspace,
-    WorkspaceMembership,
-    WorkspaceRole,
-)
-from app.features.workspaces.schemas import WorkspaceProfile
-
+from app.features.roles.models import Role
+from app.features.workspaces.models import WorkspaceMembership, WorkspaceMembershipRole
 
 pytestmark = pytest.mark.asyncio
 
@@ -38,18 +33,12 @@ async def _create_workspace(
     *,
     owner_user_id: str | None = None,
     name: str | None = None,
-    slug: str | None = None,
-    settings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     token = await _login(client, admin["email"], admin["password"])
     workspace_name = name or f"Workspace {uuid4().hex[:8]}"
     payload: dict[str, Any] = {"name": workspace_name}
-    if slug is not None:
-        payload["slug"] = slug
     if owner_user_id is not None:
         payload["owner_user_id"] = owner_user_id
-    if settings is not None:
-        payload["settings"] = settings
 
     response = await client.post(
         "/api/workspaces",
@@ -60,30 +49,10 @@ async def _create_workspace(
     return response.json()
 
 
-async def test_workspace_creation_requires_global_permission(
+async def test_member_profile_includes_permissions(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
 ) -> None:
-    """Non-admin users should be denied when creating workspaces."""
-
-    member = seed_identity["member"]
-    token = await _login(async_client, member["email"], member["password"])
-
-    response = await async_client.post(
-        "/api/workspaces",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"name": "Unauthorized Workspace"},
-    )
-
-    assert response.status_code == 403
-
-
-async def test_workspace_route_returns_profile(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Members should receive their workspace profile from the route."""
-
     member = seed_identity["member"]
     token = await _login(async_client, member["email"], member["password"])
 
@@ -94,602 +63,199 @@ async def test_workspace_route_returns_profile(
     assert response.status_code == 200
     payload = response.json()
     assert payload["workspace_id"] == seed_identity["workspace_id"]
+    assert payload["roles"] == ["workspace-member"]
     permissions = set(payload.get("permissions", []))
     assert "Workspace.Documents.ReadWrite" in permissions
     assert "Workspace.Members.ReadWrite" not in permissions
 
 
-async def test_workspace_owner_receives_membership_permissions(
+async def test_owner_profile_contains_governor_permissions(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
 ) -> None:
-    """Workspace owners should inherit management permissions for members and settings."""
-
-    workspace_owner = seed_identity["workspace_owner"]
-    token = await _login(
-        async_client,
-        workspace_owner["email"],
-        workspace_owner["password"],
-    )
-
-    workspace_id = seed_identity["workspace_id"]
-    response = await async_client.get(
-        f"/api/workspaces/{workspace_id}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert response.status_code == 200
-    payload = response.json()
-    permissions = set(payload.get("permissions", []))
-    assert "Workspace.Members.Read" in permissions
-    assert "Workspace.Members.ReadWrite" in permissions
-    assert "Workspace.Settings.ReadWrite" in permissions
-
-
-async def test_missing_workspace_membership_returns_error(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Users without a membership should receive a 403 when resolving workspace profiles."""
-
-    orphan = seed_identity["orphan"]
-    token = await _login(async_client, orphan["email"], orphan["password"])
-
-    workspace_id = seed_identity["workspace_id"]
-    response = await async_client.get(
-        f"/api/workspaces/{workspace_id}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert response.status_code == 403
-
-
-async def test_admin_without_membership_can_access_workspace(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Global administrators should be able to resolve workspace profiles."""
-
-    admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
-
-    workspace_id = seed_identity["workspace_id"]
-    response = await async_client.get(
-        f"/api/workspaces/{workspace_id}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["workspace_id"] == workspace_id
-    assert payload["role"] == WorkspaceRole.OWNER.value
-    permissions = set(payload.get("permissions", []))
-    assert "Workspace.Settings.ReadWrite" in permissions
-
-
-async def test_permission_required_for_members_route(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Lacking the required permission should return 403."""
-
-    member = seed_identity["member"]
-    token = await _login(async_client, member["email"], member["password"])
+    owner = seed_identity["workspace_owner"]
+    token = await _login(async_client, owner["email"], owner["password"])
 
     response = await async_client.get(
-        f"/api/workspaces/{seed_identity['workspace_id']}/members",
-        headers={
-            "Authorization": f"Bearer {token}",
-        },
-    )
-    assert response.status_code == 403
-
-
-async def test_members_route_allows_workspace_owner(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Workspace owners with the permission should succeed."""
-
-    workspace_owner = seed_identity["workspace_owner"]
-    token = await _login(
-        async_client,
-        workspace_owner["email"],
-        workspace_owner["password"],
-    )
-
-    response = await async_client.get(
-        f"/api/workspaces/{seed_identity['workspace_id']}/members",
-        headers={
-            "Authorization": f"Bearer {token}",
-        },
-    )
-    assert response.status_code == 200
-    payload = response.json()
-    assert isinstance(payload, list)
-    owner_ids = {member["user"]["user_id"] for member in payload}
-    assert workspace_owner["id"] in owner_ids
-
-
-async def test_members_route_requires_read_scope_for_manage_member(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Members need explicit read permission alongside manage to list members."""
-
-    member_with_manage = seed_identity["member_with_manage"]
-    token = await _login(
-        async_client,
-        member_with_manage["email"],
-        member_with_manage["password"],
-    )
-
-    response = await async_client.get(
-        f"/api/workspaces/{seed_identity['workspace_id']}/members",
-        headers={
-            "Authorization": f"Bearer {token}",
-        },
-    )
-    assert response.status_code == 403
-
-
-async def test_list_workspaces_orders_default_first(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Workspace listings should return the default membership first."""
-
-    member_with_manage = seed_identity["member_with_manage"]
-    token = await _login(
-        async_client,
-        member_with_manage["email"],
-        member_with_manage["password"],
-    )
-
-    response = await async_client.get(
-        "/api/workspaces",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert response.status_code == 200
-    payload = response.json()
-    assert len(payload) >= 2
-    assert payload[0]["workspace_id"] == seed_identity["workspace_id"]
-    assert payload[1]["workspace_id"] == seed_identity["secondary_workspace_id"]
-
-
-async def test_workspace_owner_can_add_member_with_role(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Workspace owners should be able to add users to their workspace with a chosen role."""
-
-    admin = seed_identity["admin"]
-    workspace_owner = seed_identity["workspace_owner"]
-    invitee = seed_identity["invitee"]
-    created = await _create_workspace(
-        async_client,
-        admin,
-        owner_user_id=workspace_owner["id"],
-    )
-    workspace_id = created["workspace_id"]
-    token = await _login(
-        async_client,
-        workspace_owner["email"],
-        workspace_owner["password"],
-    )
-
-    response = await async_client.post(
-        f"/api/workspaces/{workspace_id}/members",
-        headers={
-            "Authorization": f"Bearer {token}",
-        },
-        json={"user_id": invitee["id"], "role": WorkspaceRole.OWNER.value},
-    )
-    assert response.status_code == 201, response.text
-    payload = response.json()
-    assert payload["workspace_id"] == workspace_id
-    assert payload["role"] == WorkspaceRole.OWNER.value
-    assert payload["user"]["user_id"] == invitee["id"]
-    permissions = set(payload.get("permissions", []))
-    assert "Workspace.Members.ReadWrite" in permissions
-
-    session_factory = get_sessionmaker()
-    async with session_factory() as session:
-        membership = await session.get(
-            WorkspaceMembership, payload["workspace_membership_id"]
-        )
-        assert membership is not None
-        assert membership.workspace_id == workspace_id
-        assert membership.user_id == invitee["id"]
-        assert membership.role is WorkspaceRole.OWNER
-
-
-async def test_workspace_member_payload_requires_user_id(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """FastAPI should surface validation errors when required fields are missing."""
-
-    workspace_owner = seed_identity["workspace_owner"]
-    workspace_id = seed_identity["workspace_id"]
-    token = await _login(
-        async_client,
-        workspace_owner["email"],
-        workspace_owner["password"],
-    )
-
-    response = await async_client.post(
-        f"/api/workspaces/{workspace_id}/members",
-        headers={
-            "Authorization": f"Bearer {token}",
-        },
-        json={},
-    )
-
-    assert response.status_code == 422, response.text
-    detail = response.json()["detail"]
-    missing_fields = {entry["loc"][-1] for entry in detail}
-    assert "user_id" in missing_fields
-
-
-async def test_manage_permission_required_for_member_addition(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Members without manage permission should not be able to add other users."""
-
-    member = seed_identity["member"]
-    invitee = seed_identity["invitee"]
-    workspace_id = seed_identity["workspace_id"]
-    token = await _login(async_client, member["email"], member["password"])
-
-    response = await async_client.post(
-        f"/api/workspaces/{workspace_id}/members",
-        headers={
-            "Authorization": f"Bearer {token}",
-        },
-        json={"user_id": invitee["id"], "role": WorkspaceRole.MEMBER.value},
-    )
-    assert response.status_code == 403
-
-
-async def test_duplicate_member_returns_conflict(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Adding the same user twice should surface a conflict."""
-
-    admin = seed_identity["admin"]
-    workspace_owner = seed_identity["workspace_owner"]
-    invitee = seed_identity["invitee"]
-    created = await _create_workspace(
-        async_client,
-        admin,
-        owner_user_id=workspace_owner["id"],
-    )
-    workspace_id = created["workspace_id"]
-    token = await _login(
-        async_client,
-        workspace_owner["email"],
-        workspace_owner["password"],
-    )
-
-    first_response = await async_client.post(
-        f"/api/workspaces/{workspace_id}/members",
-        headers={
-            "Authorization": f"Bearer {token}",
-        },
-        json={"user_id": invitee["id"], "role": WorkspaceRole.MEMBER.value},
-    )
-    assert first_response.status_code == 201, first_response.text
-
-    second_response = await async_client.post(
-        f"/api/workspaces/{workspace_id}/members",
-        headers={
-            "Authorization": f"Bearer {token}",
-        },
-        json={"user_id": invitee["id"], "role": WorkspaceRole.OWNER.value},
-    )
-    assert second_response.status_code == 409
-
-
-async def test_admin_can_create_workspace_with_owner(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Global administrators should create workspaces and assign owners."""
-
-    admin = seed_identity["admin"]
-    workspace_owner = seed_identity["workspace_owner"]
-    name = "Northwind Research"
-    slug = "northwind-research"
-
-    profile = await _create_workspace(
-        async_client,
-        admin,
-        owner_user_id=workspace_owner["id"],
-        name=name,
-        slug=slug,
-        settings={"region": "us-east"},
-    )
-    assert profile["name"] == name
-    assert profile["slug"] == slug
-    assert profile["role"] == WorkspaceRole.OWNER.value
-
-    workspace_id = profile["workspace_id"]
-    session_factory = get_sessionmaker()
-    async with session_factory() as session:
-        workspace = await session.get(Workspace, workspace_id)
-        assert workspace is not None
-        assert workspace.slug == slug
-        assert workspace.settings == {"region": "us-east"}
-
-        result = await session.execute(
-            select(WorkspaceMembership).where(
-                WorkspaceMembership.workspace_id == workspace_id,
-                WorkspaceMembership.user_id == workspace_owner["id"],
-            )
-        )
-        membership = result.scalar_one()
-        assert membership.role is WorkspaceRole.OWNER
-
-
-async def test_admin_lists_all_workspaces(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Administrators should see every workspace regardless of membership."""
-
-    admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
-
-    response = await async_client.get(
-        "/api/workspaces",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert response.status_code == 200
-    payload = response.json()
-    workspace_ids = {entry["workspace_id"] for entry in payload}
-    assert seed_identity["workspace_id"] in workspace_ids
-    assert seed_identity["secondary_workspace_id"] in workspace_ids
-    assert all(entry["role"] == WorkspaceRole.OWNER.value for entry in payload)
-
-
-async def test_workspace_owner_can_update_metadata(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Workspace owners should update names, slugs, and settings."""
-
-    admin = seed_identity["admin"]
-    workspace_owner = seed_identity["workspace_owner"]
-    created = await _create_workspace(
-        async_client,
-        admin,
-        owner_user_id=workspace_owner["id"],
-        name="Original Name",
-    )
-    workspace_id = created["workspace_id"]
-
-    token = await _login(
-        async_client,
-        workspace_owner["email"],
-        workspace_owner["password"],
-    )
-
-    response = await async_client.patch(
-        f"/api/workspaces/{workspace_id}",
-        headers={"Authorization": f"Bearer {token}"},
-        json={
-            "name": "Updated Workspace",
-            "slug": "updated-workspace",
-            "settings": {"timezone": "utc"},
-        },
-    )
-    assert response.status_code == 200, response.text
-    payload = response.json()
-    assert payload["name"] == "Updated Workspace"
-    assert payload["slug"] == "updated-workspace"
-
-    session_factory = get_sessionmaker()
-    async with session_factory() as session:
-        workspace = await session.get(Workspace, workspace_id)
-        assert workspace is not None
-        assert workspace.slug == "updated-workspace"
-        assert workspace.settings == {"timezone": "utc"}
-
-
-async def test_workspace_owner_can_delete_workspace(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Owners should remove workspaces they control."""
-
-    admin = seed_identity["admin"]
-    workspace_owner = seed_identity["workspace_owner"]
-    created = await _create_workspace(
-        async_client,
-        admin,
-        owner_user_id=workspace_owner["id"],
-    )
-    workspace_id = created["workspace_id"]
-
-    token = await _login(
-        async_client,
-        workspace_owner["email"],
-        workspace_owner["password"],
-    )
-
-    response = await async_client.delete(
-        f"/api/workspaces/{workspace_id}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] is True
-
-    session_factory = get_sessionmaker()
-    async with session_factory() as session:
-        workspace = await session.get(Workspace, workspace_id)
-        assert workspace is None
-
-
-async def test_workspace_member_cannot_delete_workspace(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Members lacking the delete permission should receive a 403."""
-
-    member = seed_identity["member"]
-    token = await _login(async_client, member["email"], member["password"])
-
-    response = await async_client.delete(
         f"/api/workspaces/{seed_identity['workspace_id']}",
         headers={"Authorization": f"Bearer {token}"},
     )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["roles"] == ["workspace-owner"]
+    permissions = set(payload["permissions"])
+    assert {"Workspace.Roles.ReadWrite", "Workspace.Members.ReadWrite"}.issubset(
+        permissions
+    )
 
-    assert response.status_code == 403
 
-
-async def test_workspace_owner_can_update_member_role(
+async def test_admin_profile_shadows_owner(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
 ) -> None:
-    """Owners should promote or demote workspace members."""
-
     admin = seed_identity["admin"]
-    workspace_owner = seed_identity["workspace_owner"]
-    invitee = seed_identity["invitee"]
-    created = await _create_workspace(
-        async_client,
-        admin,
-        owner_user_id=workspace_owner["id"],
-    )
-    workspace_id = created["workspace_id"]
+    token = await _login(async_client, admin["email"], admin["password"])
 
-    token = await _login(
-        async_client,
-        workspace_owner["email"],
-        workspace_owner["password"],
-    )
-
-    create_response = await async_client.post(
-        f"/api/workspaces/{workspace_id}/members",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"user_id": invitee["id"], "role": WorkspaceRole.MEMBER.value},
-    )
-    assert create_response.status_code == 201, create_response.text
-    membership_id = create_response.json()["workspace_membership_id"]
-
-    update_response = await async_client.patch(
-        f"/api/workspaces/{workspace_id}/members/{membership_id}",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"role": WorkspaceRole.OWNER.value},
-    )
-    assert update_response.status_code == 200, update_response.text
-    payload = update_response.json()
-    assert payload["role"] == WorkspaceRole.OWNER.value
-
-    session_factory = get_sessionmaker()
-    async with session_factory() as session:
-        membership = await session.get(WorkspaceMembership, membership_id)
-        assert membership is not None
-        assert membership.role is WorkspaceRole.OWNER
-
-
-async def test_workspace_owner_can_remove_member(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Owners should remove members from their workspace."""
-
-    admin = seed_identity["admin"]
-    workspace_owner = seed_identity["workspace_owner"]
-    invitee = seed_identity["invitee"]
-    created = await _create_workspace(
-        async_client,
-        admin,
-        owner_user_id=workspace_owner["id"],
-    )
-    workspace_id = created["workspace_id"]
-
-    token = await _login(
-        async_client,
-        workspace_owner["email"],
-        workspace_owner["password"],
-    )
-
-    create_response = await async_client.post(
-        f"/api/workspaces/{workspace_id}/members",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"user_id": invitee["id"], "role": WorkspaceRole.MEMBER.value},
-    )
-    assert create_response.status_code == 201, create_response.text
-    membership_id = create_response.json()["workspace_membership_id"]
-
-    delete_response = await async_client.delete(
-        f"/api/workspaces/{workspace_id}/members/{membership_id}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert delete_response.status_code == 200
-
-    session_factory = get_sessionmaker()
-    async with session_factory() as session:
-        membership = await session.get(WorkspaceMembership, membership_id)
-        assert membership is None
-
-
-async def test_member_can_set_default_workspace(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Members should be able to change their default workspace selection."""
-
-    member = seed_identity["member_with_manage"]
-    token = await _login(async_client, member["email"], member["password"])
-
-    secondary_workspace_id = seed_identity["secondary_workspace_id"]
-    response = await async_client.post(
-        f"/api/workspaces/{secondary_workspace_id}/default",
+    response = await async_client.get(
+        f"/api/workspaces/{seed_identity['workspace_id']}",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
     payload = response.json()
-    assert payload["workspace_id"] == secondary_workspace_id
-    assert payload["is_default"] is True
+    assert payload["roles"] == ["workspace-owner"]
+    assert "Workspace.Settings.ReadWrite" in payload["permissions"]
+
+
+async def test_members_listing_requires_permission(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    member = seed_identity["member"]
+    token = await _login(async_client, member["email"], member["password"])
+
+    response = await async_client.get(
+        f"/api/workspaces/{seed_identity['workspace_id']}/members",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 403
+
+
+async def test_owner_can_list_members(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    owner = seed_identity["workspace_owner"]
+    token = await _login(async_client, owner["email"], owner["password"])
+
+    response = await async_client.get(
+        f"/api/workspaces/{seed_identity['workspace_id']}/members",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert any(entry["roles"] == ["workspace-owner"] for entry in payload)
+
+
+async def test_owner_adds_member_with_default_role(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    admin = seed_identity["admin"]
+    owner = seed_identity["workspace_owner"]
+    invitee = seed_identity["invitee"]
+    created = await _create_workspace(async_client, admin, owner_user_id=owner["id"])
+
+    token = await _login(async_client, owner["email"], owner["password"])
+    response = await async_client.post(
+        f"/api/workspaces/{created['workspace_id']}/members",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"user_id": invitee["id"]},
+    )
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["roles"] == ["workspace-member"]
+    assert payload["user"]["user_id"] == invitee["id"]
+
+
+async def test_manage_scope_required_for_member_add(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    member = seed_identity["member"]
+    invitee = seed_identity["invitee"]
+    token = await _login(async_client, member["email"], member["password"])
+
+    response = await async_client.post(
+        f"/api/workspaces/{seed_identity['workspace_id']}/members",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"user_id": invitee["id"]},
+    )
+    assert response.status_code == 403
+
+
+async def test_put_roles_replaces_assignments(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    owner = seed_identity["workspace_owner"]
+    invitee = seed_identity["invitee"]
+    workspace_id = seed_identity["workspace_id"]
+
+    token = await _login(async_client, owner["email"], owner["password"])
+    add_response = await async_client.post(
+        f"/api/workspaces/{workspace_id}/members",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"user_id": invitee["id"]},
+    )
+    assert add_response.status_code == 201, add_response.text
+    membership_id = add_response.json()["workspace_membership_id"]
 
     session_factory = get_sessionmaker()
     async with session_factory() as session:
         result = await session.execute(
-            select(WorkspaceMembership).where(
-                WorkspaceMembership.user_id == member["id"],
-                WorkspaceMembership.workspace_id == secondary_workspace_id,
+            select(Role).where(Role.slug == "workspace-owner")
+        )
+        owner_role = result.scalar_one()
+
+    update_response = await async_client.put(
+        f"/api/workspaces/{workspace_id}/members/{membership_id}/roles",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"role_ids": [owner_role.id]},
+    )
+    assert update_response.status_code == 200, update_response.text
+    payload = update_response.json()
+    assert payload["roles"] == ["workspace-owner"]
+
+    async with session_factory() as session:
+        membership = await session.get(WorkspaceMembership, membership_id)
+        assert membership is not None
+        role_links = await session.execute(
+            select(WorkspaceMembershipRole).where(
+                WorkspaceMembershipRole.workspace_membership_id == membership_id
             )
         )
-        membership = result.scalar_one()
-        assert membership.is_default is True
+        linked_roles = [link.role_id for link in role_links.scalars()]
+        assert linked_roles == [owner_role.id]
 
-    # revert default to primary workspace to avoid affecting other tests
-    revert = await async_client.post(
-        f"/api/workspaces/{seed_identity['workspace_id']}/default",
+
+async def test_put_roles_blocks_last_governor_demotion(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    owner = seed_identity["workspace_owner"]
+    workspace_id = seed_identity["workspace_id"]
+
+    token = await _login(async_client, owner["email"], owner["password"])
+    memberships_response = await async_client.get(
+        f"/api/workspaces/{workspace_id}/members",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert revert.status_code == 200
-
-async def test_workspace_profile_fields() -> None:
-    """Workspace profiles retain identifiers and permissions."""
-
-    profile = WorkspaceProfile(
-        workspace_id="ws-123",
-        name="Example",
-        slug="example",
-        role=WorkspaceRole.MEMBER,
-        permissions=[
-            "Workspace.Read",
-            "Workspace.Documents.Read",
-        ],
-        is_default=True,
+    owner_entry = next(
+        entry
+        for entry in memberships_response.json()
+        if entry["roles"] == ["workspace-owner"]
     )
 
-    assert profile.workspace_id == "ws-123"
-    assert set(profile.permissions) == {
-        "Workspace.Read",
-        "Workspace.Documents.Read",
-    }
+    update_response = await async_client.put(
+        f"/api/workspaces/{workspace_id}/members/{owner_entry['workspace_membership_id']}/roles",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"role_ids": []},
+    )
+    assert update_response.status_code == 409
+
+
+async def test_roles_listing_requires_read_scope(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    owner = seed_identity["workspace_owner"]
+    token = await _login(async_client, owner["email"], owner["password"])
+
+    response = await async_client.get(
+        f"/api/workspaces/{seed_identity['workspace_id']}/roles",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    slugs = {entry["slug"] for entry in payload}
+    assert {"workspace-owner", "workspace-member"}.issubset(slugs)

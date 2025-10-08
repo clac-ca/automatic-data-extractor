@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import select
 from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
@@ -21,11 +22,13 @@ from app.db.bootstrap import ensure_database_ready
 from app.db.engine import render_sync_url, reset_database_state
 from app.db.session import get_sessionmaker
 from app.features.auth.security import hash_password
+from app.features.roles.models import Role
+from app.features.roles.service import sync_permission_registry
 from app.features.users.models import User, UserCredential, UserRole
 from app.features.workspaces.models import (
     Workspace,
     WorkspaceMembership,
-    WorkspaceRole,
+    WorkspaceMembershipRole,
 )
 from app.lifecycles import ensure_runtime_dirs
 from app.main import create_app
@@ -130,6 +133,8 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
     await ensure_database_ready(settings)
     session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:
+        await sync_permission_registry(session=session)
+
         workspace_slug = f"acme-{uuid4().hex[:8]}"
         workspace = Workspace(name="Acme Corp", slug=workspace_slug)
         secondary_workspace = Workspace(
@@ -216,25 +221,21 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
         workspace_owner_membership = WorkspaceMembership(
             user_id=workspace_owner.id,
             workspace_id=workspace.id,
-            role=WorkspaceRole.OWNER,
             is_default=True,
         )
         member_membership = WorkspaceMembership(
             user_id=member.id,
             workspace_id=workspace.id,
-            role=WorkspaceRole.MEMBER,
             is_default=True,
         )
         member_manage_default = WorkspaceMembership(
             user_id=member_with_manage.id,
             workspace_id=workspace.id,
-            role=WorkspaceRole.MEMBER,
             is_default=True,
         )
         member_manage_secondary = WorkspaceMembership(
             user_id=member_with_manage.id,
             workspace_id=secondary_workspace.id,
-            role=WorkspaceRole.MEMBER,
             is_default=False,
         )
 
@@ -246,6 +247,34 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
                 member_manage_secondary,
             ]
         )
+        await session.flush()
+
+        result = await session.execute(
+            select(Role).where(
+                Role.scope == "workspace",
+                Role.slug.in_(["workspace-owner", "workspace-member"]),
+            )
+        )
+        roles = {role.slug: role for role in result.scalars()}
+
+        def _assign_role(
+            membership: WorkspaceMembership, slug: str
+        ) -> None:
+            role = roles.get(slug)
+            if role is None:
+                return
+            session.add(
+                WorkspaceMembershipRole(
+                    workspace_membership_id=membership.id,
+                    role_id=role.id,
+                )
+            )
+
+        _assign_role(workspace_owner_membership, "workspace-owner")
+        _assign_role(member_membership, "workspace-member")
+        _assign_role(member_manage_default, "workspace-member")
+        _assign_role(member_manage_secondary, "workspace-member")
+
         await session.commit()
 
         workspace_id = workspace.id

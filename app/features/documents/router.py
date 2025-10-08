@@ -87,7 +87,7 @@ async def upload_document(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Documents.ReadWrite"],
+            scopes=["Workspace.Documents.ReadWrite"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -134,7 +134,7 @@ async def list_documents(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Documents.Read"],
+            scopes=["Workspace.Documents.Read"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -178,7 +178,7 @@ async def read_document(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Documents.Read"],
+            scopes=["Workspace.Documents.Read"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -220,7 +220,7 @@ async def download_document(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Documents.Read"],
+            scopes=["Workspace.Documents.Read"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -271,7 +271,7 @@ async def delete_document(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=["Workspace.Read", "Workspace.Documents.ReadWrite"],
+            scopes=["Workspace.Documents.ReadWrite"],
         ),
     ],
     current_user: Annotated[User, Depends(bind_current_user)],
