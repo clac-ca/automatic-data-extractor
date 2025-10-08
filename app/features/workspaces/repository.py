@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 
-from sqlalchemy import and_, delete, func, select, update
+import sqlalchemy as sa
+from sqlalchemy import and_, delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
-from .models import Workspace, WorkspaceMembership, WorkspaceRole
+from app.features.roles.models import Role
+from .models import Workspace, WorkspaceMembership, WorkspaceMembershipRole
 
 
 class WorkspacesRepository:
@@ -26,13 +28,20 @@ class WorkspacesRepository:
     ) -> WorkspaceMembership | None:
         stmt = (
             select(WorkspaceMembership)
-            .options(selectinload(WorkspaceMembership.workspace))
+            .options(
+                selectinload(WorkspaceMembership.workspace),
+                selectinload(WorkspaceMembership.membership_roles),
+                selectinload(WorkspaceMembership.membership_roles)
+                .joinedload(WorkspaceMembershipRole.role)
+                .joinedload(Role.permissions),
+            )
             .where(
                 and_(
                     WorkspaceMembership.user_id == user_id,
                     WorkspaceMembership.workspace_id == workspace_id,
                 )
             )
+            .execution_options(populate_existing=True)
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
@@ -45,8 +54,13 @@ class WorkspacesRepository:
             .options(
                 selectinload(WorkspaceMembership.workspace),
                 selectinload(WorkspaceMembership.user),
+                selectinload(WorkspaceMembership.membership_roles),
+                selectinload(WorkspaceMembership.membership_roles)
+                .joinedload(WorkspaceMembershipRole.role)
+                .joinedload(Role.permissions),
             )
             .where(WorkspaceMembership.id == membership_id)
+            .execution_options(populate_existing=True)
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
@@ -59,6 +73,10 @@ class WorkspacesRepository:
             .options(
                 selectinload(WorkspaceMembership.workspace),
                 selectinload(WorkspaceMembership.user),
+                selectinload(WorkspaceMembership.membership_roles),
+                selectinload(WorkspaceMembership.membership_roles)
+                .joinedload(WorkspaceMembershipRole.role)
+                .joinedload(Role.permissions),
             )
             .where(
                 and_(
@@ -66,6 +84,7 @@ class WorkspacesRepository:
                     WorkspaceMembership.workspace_id == workspace_id,
                 )
             )
+            .execution_options(populate_existing=True)
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
@@ -73,7 +92,13 @@ class WorkspacesRepository:
     async def get_default_membership(self, *, user_id: str) -> WorkspaceMembership | None:
         stmt = (
             select(WorkspaceMembership)
-            .options(selectinload(WorkspaceMembership.workspace))
+            .options(
+                selectinload(WorkspaceMembership.workspace),
+                selectinload(WorkspaceMembership.membership_roles),
+                selectinload(WorkspaceMembership.membership_roles)
+                .joinedload(WorkspaceMembershipRole.role)
+                .joinedload(Role.permissions),
+            )
             .where(
                 and_(
                     WorkspaceMembership.user_id == user_id,
@@ -81,6 +106,7 @@ class WorkspacesRepository:
                 )
             )
             .limit(1)
+            .execution_options(populate_existing=True)
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
@@ -88,8 +114,15 @@ class WorkspacesRepository:
     async def list_for_user(self, user_id: str) -> list[WorkspaceMembership]:
         stmt = (
             select(WorkspaceMembership)
-            .options(selectinload(WorkspaceMembership.workspace))
+            .options(
+                selectinload(WorkspaceMembership.workspace),
+                selectinload(WorkspaceMembership.membership_roles),
+                selectinload(WorkspaceMembership.membership_roles)
+                .joinedload(WorkspaceMembershipRole.role)
+                .joinedload(Role.permissions),
+            )
             .where(WorkspaceMembership.user_id == user_id)
+            .execution_options(populate_existing=True)
         )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
@@ -100,8 +133,33 @@ class WorkspacesRepository:
             .options(
                 selectinload(WorkspaceMembership.workspace),
                 selectinload(WorkspaceMembership.user),
+                selectinload(WorkspaceMembership.membership_roles),
+                selectinload(WorkspaceMembership.membership_roles)
+                .joinedload(WorkspaceMembershipRole.role)
+                .joinedload(Role.permissions),
             )
             .where(WorkspaceMembership.workspace_id == workspace_id)
+            .execution_options(populate_existing=True)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def list_members_for_update(
+        self, workspace_id: str
+    ) -> list[WorkspaceMembership]:
+        stmt = (
+            select(WorkspaceMembership)
+            .options(
+                selectinload(WorkspaceMembership.workspace),
+                selectinload(WorkspaceMembership.user),
+                selectinload(WorkspaceMembership.membership_roles),
+                selectinload(WorkspaceMembership.membership_roles)
+                .joinedload(WorkspaceMembershipRole.role)
+                .joinedload(Role.permissions),
+            )
+            .where(WorkspaceMembership.workspace_id == workspace_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
@@ -160,6 +218,15 @@ class WorkspacesRepository:
 
     async def delete_workspace(self, workspace: Workspace) -> None:
         await self._session.execute(
+            delete(WorkspaceMembershipRole).where(
+                WorkspaceMembershipRole.workspace_membership_id.in_(
+                    select(WorkspaceMembership.id).where(
+                        WorkspaceMembership.workspace_id == workspace.id
+                    )
+                )
+            )
+        )
+        await self._session.execute(
             delete(WorkspaceMembership).where(
                 WorkspaceMembership.workspace_id == workspace.id
             )
@@ -172,49 +239,59 @@ class WorkspacesRepository:
         *,
         workspace_id: str,
         user_id: str,
-        role: WorkspaceRole,
-        permissions: Iterable[str] | None = None,
         is_default: bool = False,
     ) -> WorkspaceMembership:
         membership = WorkspaceMembership(
             workspace_id=workspace_id,
             user_id=user_id,
-            role=role,
             is_default=is_default,
-            permissions=list(permissions or ()),
         )
         self._session.add(membership)
         await self._session.flush()
-        await self._session.refresh(membership, attribute_names=["workspace", "user"])
-        return membership
-
-    async def update_membership_role(
-        self, membership: WorkspaceMembership, role: WorkspaceRole
-    ) -> WorkspaceMembership:
-        membership.role = role
-        await self._session.flush()
-        await self._session.refresh(membership, attribute_names=["workspace", "user"])
+        await self._session.refresh(
+            membership,
+            attribute_names=["workspace", "user", "membership_roles"],
+        )
         return membership
 
     async def delete_membership(self, membership: WorkspaceMembership) -> None:
         await self._session.delete(membership)
         await self._session.flush()
 
-    async def count_members_with_role(
-        self, *, workspace_id: str, role: WorkspaceRole
-    ) -> int:
-        stmt = (
-            select(func.count())
-            .select_from(WorkspaceMembership)
-            .where(
-                and_(
-                    WorkspaceMembership.workspace_id == workspace_id,
-                    WorkspaceMembership.role == role,
-                )
+    async def set_membership_roles(
+        self,
+        *,
+        membership_id: str,
+        role_ids: list[str],
+    ) -> None:
+        await self._session.execute(
+            delete(WorkspaceMembershipRole).where(
+                WorkspaceMembershipRole.workspace_membership_id == membership_id
             )
         )
+        if role_ids:
+            records = [
+                WorkspaceMembershipRole(
+                    workspace_membership_id=membership_id,
+                    role_id=role_id,
+                )
+                for role_id in dict.fromkeys(role_ids)
+            ]
+            self._session.add_all(records)
+        await self._session.flush()
+
+    async def list_workspace_roles(self, workspace_id: str) -> list[Role]:
+        stmt = (
+            select(Role)
+            .options(selectinload(Role.permissions))
+            .where(
+                Role.scope == "workspace",
+                sa.or_(Role.workspace_id.is_(None), Role.workspace_id == workspace_id),
+            )
+            .order_by(Role.slug)
+        )
         result = await self._session.execute(stmt)
-        return int(result.scalar_one() or 0)
+        return list(result.scalars().all())
 
     async def clear_default_for_user(self, *, user_id: str) -> None:
         stmt = (

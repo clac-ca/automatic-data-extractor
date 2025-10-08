@@ -27,7 +27,6 @@ from ..auth.dependencies import bind_current_user
 from ..users.models import User
 from ..workspaces.dependencies import require_workspace_access
 from ..workspaces.schemas import WorkspaceProfile
-from ..workspaces.service import WorkspaceScope
 from .exceptions import (
     DocumentFileMissingError,
     DocumentNotFoundError,
@@ -88,7 +87,7 @@ async def upload_document(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=[WorkspaceScope.DOCUMENTS_WRITE],
+            scopes=["Workspace.Documents.ReadWrite"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -135,7 +134,7 @@ async def list_documents(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=[WorkspaceScope.DOCUMENTS_READ],
+            scopes=["Workspace.Documents.Read"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -179,7 +178,7 @@ async def read_document(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=[WorkspaceScope.DOCUMENTS_READ],
+            scopes=["Workspace.Documents.Read"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -221,7 +220,7 @@ async def download_document(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=[WorkspaceScope.DOCUMENTS_READ],
+            scopes=["Workspace.Documents.Read"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -272,7 +271,7 @@ async def delete_document(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=[WorkspaceScope.DOCUMENTS_WRITE],
+            scopes=["Workspace.Documents.ReadWrite"],
         ),
     ],
     current_user: Annotated[User, Depends(bind_current_user)],

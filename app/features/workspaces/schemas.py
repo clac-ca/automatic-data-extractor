@@ -9,7 +9,6 @@ from pydantic import Field
 from app.core.schema import BaseSchema
 
 from ..users.schemas import UserProfile
-from .models import WorkspaceRole
 
 
 class WorkspaceProfile(BaseSchema):
@@ -18,7 +17,7 @@ class WorkspaceProfile(BaseSchema):
     workspace_id: str = Field(serialization_alias="workspace_id", validation_alias="id")
     name: str
     slug: str
-    role: WorkspaceRole
+    roles: list[str]
     permissions: list[str]
     is_default: bool
 
@@ -44,13 +43,13 @@ class WorkspaceMemberCreate(BaseSchema):
     """Payload for adding a member to a workspace."""
 
     user_id: str
-    role: WorkspaceRole = WorkspaceRole.MEMBER
+    role_ids: list[str] | None = Field(default=None, min_length=0)
 
 
-class WorkspaceMemberUpdate(BaseSchema):
-    """Payload for updating a workspace member."""
+class WorkspaceMemberRolesUpdate(BaseSchema):
+    """Payload used to replace the set of roles for a membership."""
 
-    role: WorkspaceRole
+    role_ids: list[str] = Field(default_factory=list)
 
 
 class WorkspaceMember(BaseSchema):
@@ -61,7 +60,7 @@ class WorkspaceMember(BaseSchema):
         validation_alias="id",
     )
     workspace_id: str
-    role: WorkspaceRole
+    roles: list[str]
     permissions: list[str]
     is_default: bool
     user: UserProfile
@@ -79,7 +78,7 @@ __all__ = [
     "WorkspaceDefaultSelection",
     "WorkspaceMember",
     "WorkspaceMemberCreate",
-    "WorkspaceMemberUpdate",
+    "WorkspaceMemberRolesUpdate",
     "WorkspaceProfile",
     "WorkspaceUpdate",
 ]
