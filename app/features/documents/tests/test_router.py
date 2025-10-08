@@ -17,7 +17,7 @@ pytestmark = pytest.mark.asyncio
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
     response = await client.post(
-        "/api/auth/login",
+        "/api/auth/session",
         json={"email": email, "password": password},
     )
     assert response.status_code == 200, response.text
