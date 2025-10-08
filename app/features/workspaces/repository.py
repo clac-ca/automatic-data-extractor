@@ -173,7 +173,6 @@ class WorkspacesRepository:
         workspace_id: str,
         user_id: str,
         role: WorkspaceRole,
-        permissions: Iterable[str] | None = None,
         is_default: bool = False,
     ) -> WorkspaceMembership:
         membership = WorkspaceMembership(
@@ -181,7 +180,6 @@ class WorkspacesRepository:
             user_id=user_id,
             role=role,
             is_default=is_default,
-            permissions=list(permissions or ()),
         )
         self._session.add(membership)
         await self._session.flush()

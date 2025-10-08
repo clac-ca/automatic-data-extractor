@@ -18,7 +18,6 @@ from ..configurations.exceptions import (
 from ..users.models import User
 from ..workspaces.dependencies import require_workspace_access
 from ..workspaces.schemas import WorkspaceProfile
-from ..workspaces.service import WorkspaceScope
 from .exceptions import (
     InputDocumentNotFoundError,
     JobExecutionError,
@@ -58,7 +57,7 @@ async def list_jobs(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=[WorkspaceScope.JOBS_READ],
+            scopes=["Workspace.Read", "Workspace.Jobs.Read"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -109,7 +108,7 @@ async def read_job(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=[WorkspaceScope.JOBS_READ],
+            scopes=["Workspace.Read", "Workspace.Jobs.Read"],
         ),
     ],
     current_user: Annotated[User, Depends(bind_current_user)],
@@ -160,7 +159,7 @@ async def submit_job(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=[WorkspaceScope.JOBS_WRITE],
+            scopes=["Workspace.Read", "Workspace.Jobs.ReadWrite"],
         ),
     ],
     current_user: Annotated[User, Depends(bind_current_user)],

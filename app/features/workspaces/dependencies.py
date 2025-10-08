@@ -9,12 +9,13 @@ from fastapi import Depends, HTTPException, Path, status
 from fastapi.security import SecurityScopes
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.features.roles.service import AuthorizationError, authorize_workspace
 from app.db.session import get_session
 
 from ..auth.dependencies import bind_current_user
 from ..users.models import User
 from .schemas import WorkspaceProfile
-from .service import WorkspaceScope, WorkspacesService, normalize_workspace_scopes
+from .service import WorkspacesService
 
 
 async def get_workspace_profile(
@@ -41,31 +42,28 @@ async def get_workspace_profile(
     return await service.resolve_selection(user=current_user, workspace_id=normalized)
 
 
-def _collect_scopes(
-    values: Iterable[str | WorkspaceScope],
-) -> frozenset[str]:
-    try:
-        return normalize_workspace_scopes(values)
-    except ValueError as exc:  # pragma: no cover - defensive guard for misconfigurations
-        raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Invalid workspace scope configuration",
-        ) from exc
-
-
 def _enforce_workspace_permissions(
     *,
     workspace: WorkspaceProfile,
-    permissions: Iterable[str | WorkspaceScope] | None = None,
+    permissions: Iterable[str] | None = None,
 ) -> None:
     """Raise an HTTP error when the workspace lacks the required permissions."""
 
-    required = _collect_scopes(permissions or [])
+    required = tuple(permissions or ())
     if not required:
         return
 
-    granted = _collect_scopes(workspace.permissions)
-    if not required.issubset(granted):
+    try:
+        decision = authorize_workspace(
+            granted=workspace.permissions, required=required
+        )
+    except AuthorizationError as exc:  # pragma: no cover - configuration guardrail
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Invalid workspace permission configuration",
+        ) from exc
+
+    if not decision.is_authorized:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions",

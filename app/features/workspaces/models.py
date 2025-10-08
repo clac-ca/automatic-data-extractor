@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, Enum, ForeignKey, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
@@ -50,14 +50,17 @@ class WorkspaceMembership(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("workspaces.workspace_id", ondelete="CASCADE"),
         nullable=False,
     )
+    role_id: Mapped[str | None] = mapped_column(
+        String(26),
+        ForeignKey("roles.role_id", ondelete="SET NULL"),
+        nullable=True,
+    )
     role: Mapped[WorkspaceRole] = mapped_column(
         Enum(WorkspaceRole, name="workspacerole", native_enum=False, length=20),
         nullable=False,
         default=WorkspaceRole.MEMBER,
     )
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    permissions: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-
     workspace: Mapped[Workspace] = relationship("Workspace", back_populates="memberships")
     user: Mapped[User] = relationship(User, lazy="joined")
 

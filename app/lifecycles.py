@@ -11,6 +11,8 @@ from fastapi.routing import Lifespan
 
 from .core.config import Settings, get_settings
 from .db.bootstrap import ensure_database_ready
+from .db.session import get_sessionmaker
+from .features.roles.service import sync_permission_registry
 from .services.task_queue import TaskQueue
 
 
@@ -43,6 +45,9 @@ def create_application_lifespan(
         app.state.settings = settings
         app.state.task_queue = task_queue
         await ensure_database_ready(settings)
+        session_factory = get_sessionmaker(settings=settings)
+        async with session_factory() as session:
+            await sync_permission_registry(session=session)
         try:
             yield
         finally:

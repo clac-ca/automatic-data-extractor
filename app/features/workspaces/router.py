@@ -9,7 +9,8 @@ from app.core.responses import DefaultResponse
 from app.core.schema import ErrorMessage
 from app.db.session import get_session
 
-from ..auth.dependencies import bind_current_user, require_admin_user
+from ..auth.dependencies import bind_current_user
+from ..roles.dependencies import require_global_access
 from ..users.models import User
 from .dependencies import get_workspace_profile, require_workspace_access
 from .schemas import (
@@ -21,7 +22,7 @@ from .schemas import (
     WorkspaceProfile,
     WorkspaceUpdate,
 )
-from .service import WorkspaceScope, WorkspacesService
+from .service import WorkspacesService
 
 router = APIRouter(tags=["workspaces"])
 
@@ -60,7 +61,10 @@ WORKSPACE_MEMBER_UPDATE_BODY = Body(...)
     },
 )
 async def create_workspace(
-    admin_user: Annotated[User, Depends(require_admin_user)],
+    admin_user: Annotated[
+        User,
+        Security(require_global_access, scopes=["Workspaces.Create"]),
+    ],
     session: Annotated[AsyncSession, Depends(get_session)],
     *,
     payload: WorkspaceCreate = WORKSPACE_CREATE_BODY,
@@ -150,7 +154,7 @@ async def list_members(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=[WorkspaceScope.MEMBERS_READ],
+            scopes=["Workspace.Read", "Workspace.Members.Read"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -192,7 +196,7 @@ async def add_member(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=[WorkspaceScope.MEMBERS_MANAGE],
+            scopes=["Workspace.Read", "Workspace.Members.ReadWrite"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -242,7 +246,7 @@ async def update_workspace(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=[WorkspaceScope.SETTINGS_MANAGE],
+            scopes=["Workspace.Read", "Workspace.Settings.ReadWrite"],
         ),
     ],
     current_user: Annotated[User, Depends(bind_current_user)],
@@ -286,7 +290,7 @@ async def delete_workspace(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=[WorkspaceScope.SETTINGS_MANAGE],
+            scopes=["Workspace.Read", "Workspace.Delete"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -326,9 +330,10 @@ async def update_member(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=[WorkspaceScope.MEMBERS_MANAGE],
+            scopes=["Workspace.Read", "Workspace.Members.ReadWrite"],
         ),
     ],
+    current_user: Annotated[User, Depends(bind_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
     membership_id: str = Path(..., min_length=1, description="Membership identifier"),
     *,
@@ -372,7 +377,7 @@ async def remove_member(
         WorkspaceProfile,
         Security(
             require_workspace_access,
-            scopes=[WorkspaceScope.MEMBERS_MANAGE],
+            scopes=["Workspace.Read", "Workspace.Members.ReadWrite"],
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
