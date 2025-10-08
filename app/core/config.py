@@ -10,7 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -18,6 +18,7 @@ DEFAULT_DATA_DIR = PROJECT_ROOT / "var"
 DEFAULT_DOCUMENTS_SUBDIR = "documents"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS = ("http://localhost:5173", "http://localhost:8000")
+_AUTH_PROVIDER_ID_PATTERN = re.compile(r"^[a-zA-Z0-9._-]+$")
 
 _DURATION_PATTERN = re.compile(
     r"^(?P<value>\d+(?:\.\d+)?)(?:\s*(?P<unit>[a-zA-Z]+))?$",
@@ -121,6 +122,63 @@ def _value_present(value: Any) -> bool:
     if isinstance(value, str):
         return bool(value.strip())
     return True
+
+
+class AuthProviderSettings(BaseModel):
+    """Configuration describing a single interactive authentication provider."""
+
+    id: str
+    label: str
+    start_url: str
+    icon_url: str | None = None
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def _clean_identifier(cls, value: Any) -> str:
+        if value is None:
+            raise ValueError("Provider id must not be empty")
+        identifier = str(value).strip()
+        if not identifier:
+            raise ValueError("Provider id must not be empty")
+        if not _AUTH_PROVIDER_ID_PATTERN.match(identifier):
+            raise ValueError(
+                "Provider id must include only letters, numbers, dots, hyphens, or underscores",
+            )
+        return identifier
+
+    @field_validator("label", mode="before")
+    @classmethod
+    def _clean_label(cls, value: Any) -> str:
+        if value is None:
+            raise ValueError("Provider label must not be empty")
+        label = str(value).strip()
+        if not label:
+            raise ValueError("Provider label must not be empty")
+        return label
+
+    @field_validator("start_url", mode="before")
+    @classmethod
+    def _clean_start_url(cls, value: Any) -> str:
+        if value is None:
+            raise ValueError("Provider start_url must not be empty")
+        url = str(value).strip()
+        if not url:
+            raise ValueError("Provider start_url must not be empty")
+        if not (url.startswith("/") or re.match(r"^https?://", url)):
+            raise ValueError("start_url must be an absolute https? URL or a path starting with '/'")
+        return url
+
+    @field_validator("icon_url", mode="before")
+    @classmethod
+    def _clean_icon_url(cls, value: Any) -> str | None:
+        if value in (None, ""):
+            return None
+        icon = str(value).strip()
+        if not icon:
+            return None
+        if not (icon.startswith("/") or re.match(r"^https?://", icon)):
+            raise ValueError("icon_url must be an absolute https? URL or a path starting with '/'")
+        return icon
 
 
 class Settings(BaseSettings):
@@ -290,6 +348,17 @@ class Settings(BaseSettings):
         None,
         description="Optional audience parameter requested from the identity provider.",
     )
+    auth_force_sso: bool = Field(
+        False,
+        description=(
+            "Force interactive logins to use SSO. Credentials remain available for "
+            "initial setup and break-glass flows."
+        ),
+    )
+    auth_providers: list[AuthProviderSettings] = Field(
+        default_factory=list,
+        description="Authentication providers exposed via /auth/providers.",
+    )
 
     session_last_seen_interval: timedelta = Field(
         timedelta(seconds=300),
@@ -337,6 +406,26 @@ class Settings(BaseSettings):
     @classmethod
     def _prepare_data_dir(cls, value: Any) -> Path:
         return _resolve_path(value, fallback=DEFAULT_DATA_DIR)
+
+    @field_validator("auth_providers", mode="before")
+    @classmethod
+    def _prepare_auth_providers(cls, value: Any) -> list[Any]:
+        if value in (None, "", []):
+            return []
+        if isinstance(value, str):
+            payload = value.strip()
+            if not payload:
+                return []
+            try:
+                parsed = json.loads(payload)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    "auth_providers must be provided as a JSON array or list of objects",
+                ) from exc
+            return parsed
+        if isinstance(value, (list, tuple)):
+            return list(value)
+        raise TypeError("auth_providers must be provided as a JSON array or list of objects")
 
     @field_validator(
         "session_cookie_name",
@@ -440,6 +529,20 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _finalise(self) -> Settings:
+        normalised_providers: list[AuthProviderSettings] = []
+        seen_provider_ids: set[str] = set()
+        for provider in self.auth_providers:
+            candidate = (
+                provider
+                if isinstance(provider, AuthProviderSettings)
+                else AuthProviderSettings.model_validate(provider)
+            )
+            if candidate.id in seen_provider_ids:
+                raise ValueError("auth_providers entries must use unique ids")
+            seen_provider_ids.add(candidate.id)
+            normalised_providers.append(candidate)
+        self.auth_providers = normalised_providers
+
         data_dir = _resolve_path(self.storage_data_dir, fallback=DEFAULT_DATA_DIR)
         self.storage_data_dir = data_dir
 

@@ -27,26 +27,19 @@ def _validate_email(value: EmailStr | str, *, allow_reserved: bool = False) -> s
     return validated.normalized
 
 
-class InitialSetupStatus(BaseSchema):
-    """Response payload indicating whether setup is required."""
+class SetupStatus(BaseSchema):
+    """Response payload describing the initial setup state."""
 
-    initial_setup_required: bool = Field(
-        alias="initialSetupRequired",
-        serialization_alias="initialSetupRequired",
-    )
+    requires_setup: bool
+    completed_at: datetime | None = None
 
 
-class InitialSetupRequest(BaseSchema):
+class SetupRequest(BaseSchema):
     """Payload submitted when creating the first administrator."""
 
     email: str
     password: SecretStr
-    display_name: str | None = Field(
-        default=None,
-        alias="displayName",
-        serialization_alias="displayName",
-        max_length=255,
-    )
+    display_name: str | None = Field(default=None, max_length=255)
 
     @field_validator("email", mode="plain")
     @classmethod
@@ -108,8 +101,24 @@ class SessionEnvelope(BaseSchema):
     """Envelope returned when a session is established or refreshed."""
 
     user: UserProfile
-    expires_at: datetime
-    refresh_expires_at: datetime
+    expires_at: datetime | None = None
+    refresh_expires_at: datetime | None = None
+
+
+class AuthProvider(BaseSchema):
+    """Representation of an interactive authentication provider."""
+
+    id: str
+    label: str
+    start_url: str
+    icon_url: str | None = None
+
+
+class ProviderDiscoveryResponse(BaseSchema):
+    """Response payload returned by `/auth/providers`."""
+
+    providers: list[AuthProvider]
+    force_sso: bool
 
 
 class APIKeyIssueRequest(BaseSchema):
@@ -167,10 +176,12 @@ class APIKeySummary(BaseSchema):
 
 
 __all__ = [
-    "InitialSetupStatus",
-    "InitialSetupRequest",
+    "SetupStatus",
+    "SetupRequest",
     "LoginRequest",
     "SessionEnvelope",
+    "AuthProvider",
+    "ProviderDiscoveryResponse",
     "APIKeyIssueRequest",
     "APIKeyIssueResponse",
     "APIKeySummary",

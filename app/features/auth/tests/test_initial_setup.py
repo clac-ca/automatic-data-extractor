@@ -25,9 +25,12 @@ async def test_initial_setup_creates_admin_and_sets_session(
         await session.execute(text("DELETE FROM users"))
         await session.commit()
 
-    status_response = await async_client.get("/api/auth/initial-setup")
+    status_response = await async_client.get("/api/setup/status")
     assert status_response.status_code == 200
-    assert status_response.json() == {"initialSetupRequired": True}
+    assert status_response.json() == {
+        "requires_setup": True,
+        "completed_at": None,
+    }
 
     payload = {
         "email": "owner@example.test",
@@ -35,7 +38,7 @@ async def test_initial_setup_creates_admin_and_sets_session(
         "displayName": "Owner",
     }
 
-    response = await async_client.post("/api/auth/initial-setup", json=payload)
+    response = await async_client.post("/api/setup", json=payload)
     assert response.status_code == 200, response.text
     data = response.json()
     assert data["user"]["email"] == "owner@example.test"
@@ -50,12 +53,14 @@ async def test_initial_setup_creates_admin_and_sets_session(
     assert refresh_cookie
     assert csrf_cookie
 
-    repeat = await async_client.post("/api/auth/initial-setup", json=payload)
+    repeat = await async_client.post("/api/setup", json=payload)
     assert repeat.status_code == 409
 
-    status_after = await async_client.get("/api/auth/initial-setup")
+    status_after = await async_client.get("/api/setup/status")
     assert status_after.status_code == 200
-    assert status_after.json() == {"initialSetupRequired": False}
+    after_payload = status_after.json()
+    assert after_payload["requires_setup"] is False
+    assert isinstance(after_payload["completed_at"], str)
 
 
 async def test_initial_setup_rejected_when_admin_exists(
@@ -72,12 +77,12 @@ async def test_initial_setup_rejected_when_admin_exists(
         )
         await session.commit()
 
-    status_response = await async_client.get("/api/auth/initial-setup")
+    status_response = await async_client.get("/api/setup/status")
     assert status_response.status_code == 200
-    assert status_response.json() == {"initialSetupRequired": False}
+    assert status_response.json()["requires_setup"] is False
 
     response = await async_client.post(
-        "/api/auth/initial-setup",
+        "/api/setup",
         json={"email": "new@example.test", "password": "NewPassword123!"},
     )
     assert response.status_code == 409

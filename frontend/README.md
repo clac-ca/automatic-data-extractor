@@ -1,24 +1,67 @@
-# ADE frontend
+# ADE Frontend
 
-This package hosts the rebuilt ADE web client. It focuses on the core authentication loop so we can validate the backend contracts end-to-end before layering additional product features.
+This package contains the operator console for ADE. The app is a Vite + React +
+TypeScript single-page application that consumes the REST contracts defined in
+`agents/FRONTEND_DESIGN.md`. TanStack Query handles data fetching and caching.
 
-## Available scripts
+## Getting started
 
-- npm run dev - start Vite locally on http://localhost:5173.
-- npm run build - type-check and produce a production build.
-- npm run lint - run ESLint with the project defaults.
-- npm run test - execute Vitest in CI mode.
+```bash
+npm install
+npm run dev
+```
 
-## Authentication flow
+The development server defaults to `http://localhost:5173` and proxies API
+requests to the FastAPI backend exposed at `VITE_API_BASE_URL` (defaults to the
+same origin).
 
-The login form posts credentials to POST /api/auth/login, expects cookies to be set by the backend, and then renders the authenticated dashboard. The dashboard fetches the current user via GET /api/auth/me on initial load and calls POST /api/auth/logout with the CSRF token when signing out.
+## Scripts
 
-## Project structure
+| Command            | Description                                              |
+| ------------------ | -------------------------------------------------------- |
+| `npm run dev`      | Start Vite in development mode with hot module reload.    |
+| `npm run build`    | Type-check and emit the production build.                 |
+| `npm run lint`     | Run ESLint across the project.                            |
+| `npm run test`     | Execute the Vitest suite in CI mode.                      |
+| `npm run preview`  | Preview the production build locally.                     |
 
-- src/pages/LoginPage.tsx - accessible login form with client-side validation and server error handling.
-- src/pages/DashboardPage.tsx - minimal authenticated landing page showing the signed-in account and a sign-out action.
-- src/context/AuthContext.tsx - shared authentication state with bootstrap logic and helpers for API access.
-- src/api/ - typed API helpers for authentication endpoints.
-- src/pages/__tests__/ - smoke-level tests covering the login and sign-out flows.
+## Project layout
 
-Future frontend work should extend these foundations without reintroducing unused scaffolding or dependencies.
+```
+src/
+├─ app/                # Application shell, providers, router
+├─ features/
+│  ├─ auth/            # Session management, login, logout, guards
+│  ├─ setup/           # First-run setup wizard and status polling
+│  └─ workspaces/      # Workspace shell, overview, document type detail
+├─ shared/
+│  ├─ api/             # API client wrapper, types, query keys
+│  ├─ components/      # Tailwind-based UI primitives
+│  └─ hooks/           # Cross-cutting React hooks
+```
+
+## Routing map
+
+- `/setup` — Initial setup wizard that provisions the inaugural administrator.
+- `/login` — Credential and SSO login surface with provider discovery.
+- `/workspaces/:workspaceId` — Authenticated workspace overview.
+- `/workspaces/:workspaceId/document-types/:documentTypeId` — Document type
+  detail with configuration drawer.
+- `/logout` — Clears the session then redirects back to `/login`.
+
+## Data dependencies
+
+The frontend relies on the following endpoints:
+
+- `GET /setup/status`, `POST /setup`
+- `GET /auth/session`, `POST /auth/session`, `DELETE /auth/session`
+- `GET /auth/providers`
+- `GET /workspaces`, `GET /workspaces/:workspaceId`
+- `GET /workspaces/:workspaceId/document-types/:documentTypeId`
+- `GET /configurations/:configurationId`
+
+## Testing
+
+Vitest and Testing Library power the component tests. Run `npm run test` to
+execute the suite. Tests render components inside a TanStack Query client using
+the helpers in `src/test/test-utils.tsx`.
