@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchSetupStatus } from "../../auth/api";
+import { fetchSetupStatus } from "../api";
 
 export const setupKeys = {
   all: ["setup"] as const,
