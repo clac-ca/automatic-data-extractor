@@ -25,10 +25,20 @@ def upgrade() -> None:
             ["workspace_id"],
             ondelete="CASCADE",
         )
-        batch_op.drop_constraint("roles_slug_key", type_="unique")
+        batch_op.drop_constraint("roles_slug_uniq", type_="unique")
         batch_op.create_unique_constraint(
             "roles_scope_workspace_slug_uniq",
             ["scope", "workspace_id", "slug"],
+        )
+
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.create_index(
+            "roles_system_slug_scope_uni",
+            "roles",
+            ["slug", "scope"],
+            unique=True,
+            postgresql_where=sa.text("workspace_id IS NULL"),
         )
 
     with op.batch_alter_table("workspace_memberships") as batch_op:
@@ -78,11 +88,18 @@ def downgrade() -> None:
     )
     op.drop_table("workspace_membership_roles")
 
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.drop_index(
+            "roles_system_slug_scope_uni",
+            table_name="roles",
+        )
+
     with op.batch_alter_table("roles") as batch_op:
         batch_op.drop_constraint("roles_scope_workspace_slug_uniq", type_="unique")
         batch_op.drop_constraint("roles_workspace_id_fkey", type_="foreignkey")
         batch_op.drop_column("workspace_id")
-        batch_op.create_unique_constraint("roles_slug_key", ["slug"])
+        batch_op.create_unique_constraint("roles_slug_uniq", ["slug"])
 
     with op.batch_alter_table("workspace_memberships") as batch_op:
         batch_op.add_column(
