@@ -55,10 +55,10 @@ export function SetupWizard(): JSX.Element {
   })
 
   useEffect(() => {
-    if (!setupStatus.data?.requires_setup) {
+    if (!setupStatus.data?.requires_setup && step !== 'confirmation') {
       navigate('/login', { replace: true })
     }
-  }, [navigate, setupStatus.data?.requires_setup])
+  }, [navigate, setupStatus.data?.requires_setup, step])
 
   const setupMutation = useMutation<SessionEnvelope, ApiError, SetupRequest>({
     mutationFn: (payload) => submitSetup(payload),
@@ -134,7 +134,7 @@ export function SetupWizard(): JSX.Element {
     )
   }
 
-  if (!setupStatus.data?.requires_setup) {
+  if (!setupStatus.data?.requires_setup && step !== 'confirmation') {
     return <Spinner label="Redirecting to login" />
   }
 
@@ -198,7 +198,12 @@ export function SetupWizard(): JSX.Element {
             noValidate
             onSubmit={onSubmit}
           >
-            <FormField label="Display name" htmlFor="displayName" required>
+            <FormField
+              label="Display name"
+              htmlFor="displayName"
+              required
+              error={form.formState.errors.displayName?.message ?? null}
+            >
               <Input
                 id="displayName"
                 autoFocus
@@ -207,7 +212,12 @@ export function SetupWizard(): JSX.Element {
               />
             </FormField>
 
-            <FormField label="Email" htmlFor="email" required>
+            <FormField
+              label="Email"
+              htmlFor="email"
+              required
+              error={form.formState.errors.email?.message ?? null}
+            >
               <Input
                 id="email"
                 type="email"
@@ -222,6 +232,7 @@ export function SetupWizard(): JSX.Element {
               htmlFor="password"
               required
               description="Minimum 12 characters including a number and uppercase letter"
+              error={form.formState.errors.password?.message ?? null}
             >
               <Input
                 id="password"
@@ -232,7 +243,14 @@ export function SetupWizard(): JSX.Element {
               />
             </FormField>
 
-            <FormField label="Confirm password" htmlFor="confirmPassword" required>
+            <FormField
+              label="Confirm password"
+              htmlFor="confirmPassword"
+              required
+              error={
+                form.formState.errors.confirmPassword?.message ?? null
+              }
+            >
               <Input
                 id="confirmPassword"
                 type="password"
