@@ -1,12 +1,10 @@
-import type { JSX } from 'react'
+import { AppProviders } from "./providers";
+import { AppRouter } from "./router";
 
-import { AppProviders } from './providers'
-import { AppRouter } from './router'
-
-export function App(): JSX.Element {
+export default function App() {
   return (
     <AppProviders>
       <AppRouter />
     </AppProviders>
-  )
+  );
 }

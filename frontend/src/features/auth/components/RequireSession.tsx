@@ -1,43 +1,33 @@
-import type { JSX } from 'react'
-import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { Outlet, Navigate, useLocation } from "react-router-dom";
 
-import { Alert } from '../../../shared/components/Alert'
-import { Button } from '../../../shared/components/Button'
-import { Spinner } from '../../../shared/components/Spinner'
-import { useSessionQuery } from '../hooks/useSessionQuery'
+import { useSessionQuery } from "../hooks/useSessionQuery";
 
-export function RequireSession(): JSX.Element {
-  const location = useLocation()
-  const sessionQuery = useSessionQuery()
+export function RequireSession() {
+  const location = useLocation();
+  const { data, isLoading, error } = useSessionQuery();
 
-  if (sessionQuery.isLoading || sessionQuery.isFetching) {
-    return <Spinner label="Checking your session" />
-  }
-
-  if (sessionQuery.isError) {
+  if (isLoading) {
     return (
-      <div className="mx-auto max-w-lg py-12">
-        <Alert variant="error" title="We hit a snag loading your session">
-          <p className="mb-4 text-sm">
-            {sessionQuery.error instanceof Error
-              ? sessionQuery.error.message
-              : 'Please retry or contact support if this continues.'}
-          </p>
-          <Button onClick={() => sessionQuery.refetch()}>Try again</Button>
-        </Alert>
+      <div className="flex min-h-screen items-center justify-center text-sm text-slate-300">
+        Loading workspace…
       </div>
-    )
+    );
   }
 
-  if (!sessionQuery.data) {
+  if (error) {
     return (
-      <Navigate
-        to="/login"
-        replace
-        state={{ from: location.pathname + location.search }}
-      />
-    )
+      <div className="flex min-h-screen flex-col items-center justify-center gap-2 text-center text-sm text-rose-200">
+        <p>We were unable to confirm your session.</p>
+        <a href="/login" className="font-medium text-sky-300 hover:text-sky-200">
+          Return to sign in
+        </a>
+      </div>
+    );
   }
 
-  return <Outlet />
+  if (!data) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  return <Outlet context={data} />;
 }

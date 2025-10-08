@@ -1,13 +1,16 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery } from "@tanstack/react-query";
 
-import { queryKeys } from '../../../shared/api/query-keys'
-import type { ProviderDiscoveryResponse } from '../../../shared/api/types'
-import { fetchAuthProviders } from '../api'
+import { fetchAuthProviders } from "../api";
 
-export function useAuthProviders() {
-  return useQuery<ProviderDiscoveryResponse>({
-    queryKey: queryKeys.providers,
+export const authKeys = {
+  all: ["auth"] as const,
+  providers: () => [...authKeys.all, "providers"] as const,
+};
+
+export function useAuthProvidersQuery() {
+  return useQuery({
+    queryKey: authKeys.providers(),
     queryFn: fetchAuthProviders,
-    staleTime: 5 * 60_000,
-  })
+    staleTime: 60_000,
+  });
 }
