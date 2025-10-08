@@ -173,9 +173,7 @@ class ConfigurationsRepository:
         )
 
         configuration.is_active = True
-        configuration.activated_at = datetime.now(tz=UTC).isoformat(
-            timespec="seconds"
-        )
+        configuration.activated_at = datetime.now(tz=UTC).replace(microsecond=0)
         await self._session.flush()
         await self._session.refresh(configuration)
         return configuration
