@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { JSX } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { Alert } from '../../../shared/components/Alert'

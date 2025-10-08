@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { queryKeys } from '../../../shared/api/query-keys'
-import { ProviderDiscoveryResponse } from '../../../shared/api/types'
+import type { ProviderDiscoveryResponse } from '../../../shared/api/types'
 import { fetchAuthProviders } from '../api'
 
 export function useAuthProviders() {

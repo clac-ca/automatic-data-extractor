@@ -1,5 +1,5 @@
 import { apiClient } from '../../shared/api/client'
-import {
+import type {
   ProviderDiscoveryResponse,
   SessionEnvelope,
   LoginRequest,
