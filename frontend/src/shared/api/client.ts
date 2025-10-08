@@ -16,17 +16,41 @@ export interface ApiClientOptions extends RequestInit {
   parseJson?: boolean;
 }
 
+const DEFAULT_API_BASE_URL = "/api";
+
+function normalizeBaseUrl(baseUrl: string) {
+  if (!baseUrl) {
+    return "";
+  }
+
+  return baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+}
+
+function resolveUrl(baseUrl: string, path: string) {
+  if (!path.startsWith("/")) {
+    throw new Error("API paths must start with a leading slash");
+  }
+
+  if (!baseUrl) {
+    return path;
+  }
+
+  return `${baseUrl}${path}`;
+}
+
 export class ApiClient {
   private readonly baseUrl: string;
 
-  constructor(baseUrl: string = "") {
-    this.baseUrl = baseUrl;
+  constructor(baseUrl: string = DEFAULT_API_BASE_URL) {
+    this.baseUrl = normalizeBaseUrl(baseUrl);
   }
 
   async request<T = unknown>(path: string, init: ApiClientOptions = {}): Promise<T> {
     const { parseJson = true, headers, ...rest } = init;
 
-    const response = await fetch(`${this.baseUrl}${path}`, {
+    const url = resolveUrl(this.baseUrl, path);
+
+    const response = await fetch(url, {
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
@@ -68,7 +92,16 @@ export class ApiClient {
   }
 }
 
-export const apiClient = new ApiClient();
+function resolveBaseUrlFromEnv() {
+  const fromEnv = import.meta.env.VITE_API_BASE_URL;
+  if (typeof fromEnv === "string" && fromEnv.trim() !== "") {
+    return fromEnv.trim();
+  }
+
+  return DEFAULT_API_BASE_URL;
+}
+
+export const apiClient = new ApiClient(resolveBaseUrlFromEnv());
 
 export async function get<T>(path: string, init?: ApiClientOptions) {
   return apiClient.request<T>(path, { method: "GET", ...init });
