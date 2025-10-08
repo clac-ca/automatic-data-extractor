@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 
 import jwt
@@ -17,39 +18,71 @@ from app.db.session import get_session
 from ..users.models import User
 from ..users.schemas import UserProfile
 from ..users.service import UsersService
-from .dependencies import bind_current_user, require_admin_user
+from .dependencies import bind_current_principal, bind_current_user, require_admin_user
 from .schemas import (
     APIKeyIssueRequest,
     APIKeyIssueResponse,
     APIKeySummary,
-    InitialSetupRequest,
-    InitialSetupStatus,
-    LoginRequest,
+    AuthProvider,
+    ProviderDiscoveryResponse,
     SessionEnvelope,
+    SetupRequest,
+    SetupStatus,
+    LoginRequest,
 )
-from .service import SSO_STATE_COOKIE, AuthService
+from .service import (
+    SSO_STATE_COOKIE,
+    AuthService,
+    AuthenticatedIdentity,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+setup_router = APIRouter(prefix="/setup", tags=["setup"])
 
 
 @router.get(
-    "/initial-setup",
-    response_model=InitialSetupStatus,
+    "/providers",
+    response_model=ProviderDiscoveryResponse,
     status_code=status.HTTP_200_OK,
-    summary="Return whether initial admin setup is required",
+    summary="List configured authentication providers",
     openapi_extra={"security": []},
 )
-async def read_initial_setup_status(
+async def list_auth_providers(
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_app_settings)],
-) -> InitialSetupStatus:
+) -> ProviderDiscoveryResponse:
     service = AuthService(session=session, settings=settings)
-    required = await service.initial_setup_required()
-    return InitialSetupStatus(initial_setup_required=required)
+    discovery = service.get_provider_discovery()
+    providers = [
+        AuthProvider(
+            id=provider.id,
+            label=provider.label,
+            start_url=provider.start_url,
+            icon_url=provider.icon_url,
+        )
+        for provider in discovery.providers
+    ]
+    return ProviderDiscoveryResponse(providers=providers, force_sso=discovery.force_sso)
 
 
-@router.post(
-    "/initial-setup",
+@setup_router.get(
+    "/status",
+    response_model=SetupStatus,
+    status_code=status.HTTP_200_OK,
+    summary="Return whether initial administrator setup is required",
+    openapi_extra={"security": []},
+)
+async def read_setup_status(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+) -> SetupStatus:
+    service = AuthService(session=session, settings=settings)
+    requires_setup, completed_at = await service.get_initial_setup_status()
+    return SetupStatus(requires_setup=requires_setup, completed_at=completed_at)
+
+
+@setup_router.post(
+    "",
     response_model=SessionEnvelope,
     status_code=status.HTTP_200_OK,
     summary="Create the first administrator account",
@@ -61,10 +94,10 @@ async def read_initial_setup_status(
         }
     },
 )
-async def perform_initial_setup(
+async def complete_setup(
     request: Request,
     response: Response,
-    payload: InitialSetupRequest,
+    payload: SetupRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> SessionEnvelope:
@@ -86,10 +119,10 @@ async def perform_initial_setup(
 
 
 @router.post(
-    "/login",
+    "/session",
     response_model=SessionEnvelope,
     status_code=status.HTTP_200_OK,
-    summary="Authenticate with email and password",
+    summary="Create a browser session with email and password",
     openapi_extra={"security": []},
     responses={
         status.HTTP_401_UNAUTHORIZED: {
@@ -102,7 +135,7 @@ async def perform_initial_setup(
         },
     },
 )
-async def login(
+async def create_session(
     request: Request,
     response: Response,
     payload: LoginRequest,
@@ -127,8 +160,60 @@ async def login(
     )
 
 
+@router.get(
+    "/session",
+    response_model=SessionEnvelope,
+    status_code=status.HTTP_200_OK,
+    summary="Return the active session profile",
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to access the session profile.",
+            "model": ErrorMessage,
+        }
+    },
+)
+async def read_session(
+    request: Request,
+    principal: Annotated[AuthenticatedIdentity, Depends(bind_current_principal)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+) -> SessionEnvelope:
+    service = AuthService(session=session, settings=settings)
+    expires_at: datetime | None = None
+    refresh_expires_at: datetime | None = None
+
+    if principal.credentials == "session_cookie":
+        access_payload, refresh_payload = service.extract_session_payloads(
+            request, include_refresh=False
+        )
+        expires_at = access_payload.expires_at
+        if refresh_payload is not None:
+            refresh_expires_at = refresh_payload.expires_at
+    elif principal.credentials == "bearer_token":
+        auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
+        token_value: str | None = None
+        if auth_header:
+            parts = auth_header.split(" ", 1)
+            if len(parts) == 2:
+                token_value = parts[1].strip() or None
+        if not token_value:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session token missing")
+        try:
+            payload = service.decode_token(token_value, expected_type="access")
+        except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid session token") from exc
+        expires_at = payload.expires_at
+
+    profile = UserProfile.model_validate(principal.user)
+    return SessionEnvelope(
+        user=profile,
+        expires_at=expires_at,
+        refresh_expires_at=refresh_expires_at,
+    )
+
+
 @router.post(
-    "/refresh",
+    "/session/refresh",
     response_model=SessionEnvelope,
     status_code=status.HTTP_200_OK,
     summary="Refresh the active browser session",
@@ -174,8 +259,8 @@ async def refresh_session(
     )
 
 
-@router.post(
-    "/logout",
+@router.delete(
+    "/session",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Terminate the active session",
     openapi_extra={"security": []},
@@ -190,7 +275,7 @@ async def refresh_session(
         },
     },
 )
-async def logout(
+async def delete_session(
     request: Request,
     response: Response,
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -478,4 +563,4 @@ async def finish_sso_login(
     )
 
 
-__all__ = ["router"]
+__all__ = ["router", "setup_router"]

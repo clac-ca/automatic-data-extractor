@@ -31,7 +31,7 @@ def _csrf_headers(client: AsyncClient) -> dict[str, str]:
 
 async def _login(client: AsyncClient, email: str, password: str) -> dict[str, Any]:
     response = await client.post(
-        "/api/auth/login",
+        "/api/auth/session",
         json={"email": email, "password": password},
     )
     assert response.status_code == 200, response.text
@@ -47,11 +47,63 @@ async def test_create_session_and_me(
     payload = await _login(async_client, admin["email"], admin["password"])
     assert payload["user"]["email"] == admin["email"]
 
-    response = await async_client.get("/api/auth/me")
+    response = await async_client.get("/api/auth/session")
     assert response.status_code == 200
     data = response.json()
-    assert data["email"] == admin["email"]
-    assert data["role"] == "admin"
+    assert data["user"]["email"] == admin["email"]
+    assert data["user"]["role"] == "admin"
+
+
+async def test_provider_discovery_returns_config(async_client: AsyncClient, override_app_settings) -> None:
+    """GET /auth/providers should expose configured SSO metadata."""
+
+    override_app_settings(
+        auth_force_sso=True,
+        auth_providers=[
+            {
+                "id": "entra",
+                "label": "Microsoft Entra ID",
+                "start_url": "/auth/sso/login",
+                "icon_url": "/static/entra.svg",
+            },
+            {
+                "id": "okta",
+                "label": "Okta",
+                "start_url": "https://sso.example.test/start",
+                "icon_url": None,
+            },
+        ],
+    )
+
+    response = await async_client.get("/api/auth/providers")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["force_sso"] is True
+    assert payload["providers"] == [
+        {
+            "id": "entra",
+            "label": "Microsoft Entra ID",
+            "start_url": "/auth/sso/login",
+            "icon_url": "/static/entra.svg",
+        },
+        {
+            "id": "okta",
+            "label": "Okta",
+            "start_url": "https://sso.example.test/start",
+            "icon_url": None,
+        },
+    ]
+
+
+async def test_provider_discovery_defaults(async_client: AsyncClient, override_app_settings) -> None:
+    """Discovery should return an empty list when no providers are configured."""
+
+    override_app_settings(auth_force_sso=False, auth_providers=[])
+
+    response = await async_client.get("/api/auth/providers")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload == {"providers": [], "force_sso": False}
 
 async def test_login_sets_csrf_cookie_and_header(
     async_client: AsyncClient, seed_identity: dict[str, Any]
@@ -60,7 +112,7 @@ async def test_login_sets_csrf_cookie_and_header(
 
     admin = seed_identity["admin"]
     response = await async_client.post(
-        "/api/auth/login",
+        "/api/auth/session",
         json={"email": admin["email"], "password": admin["password"]},
     )
     assert response.status_code == 200, response.text
@@ -71,7 +123,7 @@ async def test_invalid_credentials_rejected(async_client: AsyncClient) -> None:
     """Submitting an unknown user should produce 401."""
 
     response = await async_client.post(
-        "/api/auth/login",
+        "/api/auth/session",
         json={"email": "missing@example.test", "password": "nope"},
     )
     assert response.status_code == 401
@@ -86,13 +138,13 @@ async def test_repeated_failed_logins_lock_account(
     lock_threshold = get_settings().failed_login_lock_threshold
     for _ in range(lock_threshold):
         response = await async_client.post(
-            "/api/auth/login",
+            "/api/auth/session",
             json={"email": user["email"], "password": "wrong-password"},
         )
         assert response.status_code == 401
 
     locked = await async_client.post(
-        "/api/auth/login",
+        "/api/auth/session",
         json={"email": user["email"], "password": user["password"]},
     )
     assert locked.status_code == 403
@@ -124,7 +176,7 @@ async def test_create_session_validation_errors(
     """Invalid credentials should surface as 422 validation errors."""
 
     response = await async_client.post(
-        "/api/auth/login",
+        "/api/auth/session",
         json={"email": username, "password": password},
     )
     assert response.status_code == 422, response.text
@@ -136,9 +188,9 @@ async def test_create_session_validation_errors(
         assert any(expected in message for message in messages)
 
 async def test_profile_requires_authentication(async_client: AsyncClient) -> None:
-    """GET /auth/me should require a valid session."""
+    """GET /auth/session should require a valid session."""
 
-    response = await async_client.get("/api/auth/me")
+    response = await async_client.get("/api/auth/session")
     assert response.status_code == 401
 
 async def test_refresh_requires_csrf_header(
@@ -149,11 +201,11 @@ async def test_refresh_requires_csrf_header(
     admin = seed_identity["admin"]
     await _login(async_client, admin["email"], admin["password"])
 
-    missing = await async_client.post("/api/auth/refresh")
+    missing = await async_client.post("/api/auth/session/refresh")
     assert missing.status_code == 403
 
     rotated = await async_client.post(
-        "/api/auth/refresh",
+        "/api/auth/session/refresh",
         headers=_csrf_headers(async_client),
     )
     assert rotated.status_code == 200, rotated.text
@@ -207,9 +259,9 @@ async def test_api_key_rotation_and_revocation(
     assert second_record["revoked_at"] is None
 
     async_client.cookies.clear()
-    response = await async_client.get("/api/auth/me", headers={"X-API-Key": first_key})
+    response = await async_client.get("/api/auth/session", headers={"X-API-Key": first_key})
     assert response.status_code == 200
-    response = await async_client.get("/api/auth/me", headers={"X-API-Key": second_key})
+    response = await async_client.get("/api/auth/session", headers={"X-API-Key": second_key})
     assert response.status_code == 200
 
     await _login(async_client, admin["email"], admin["password"])
@@ -220,9 +272,9 @@ async def test_api_key_rotation_and_revocation(
     assert revoke.status_code == 204
 
     async_client.cookies.clear()
-    denied = await async_client.get("/api/auth/me", headers={"X-API-Key": first_key})
+    denied = await async_client.get("/api/auth/session", headers={"X-API-Key": first_key})
     assert denied.status_code == 401
-    allowed = await async_client.get("/api/auth/me", headers={"X-API-Key": second_key})
+    allowed = await async_client.get("/api/auth/session", headers={"X-API-Key": second_key})
     assert allowed.status_code == 200
 
     await _login(async_client, admin["email"], admin["password"])
@@ -277,10 +329,10 @@ async def test_api_key_issue_marks_service_account(
 
     api_key = payload["api_key"]
     async_client.cookies.clear()
-    authorised = await async_client.get("/api/auth/me", headers={"X-API-Key": api_key})
+    authorised = await async_client.get("/api/auth/session", headers={"X-API-Key": api_key})
     assert authorised.status_code == 200
     body = authorised.json()
-    assert body["email"] == service_email
+    assert body["user"]["email"] == service_email
 
 
 async def test_api_key_payload_requires_target(
@@ -311,11 +363,12 @@ async def test_logout_clears_cookies(
     admin = seed_identity["admin"]
     await _login(async_client, admin["email"], admin["password"])
 
-    forbidden = await async_client.post("/api/auth/logout")
+    forbidden = await async_client.request("DELETE", "/api/auth/session")
     assert forbidden.status_code == 403
 
-    response = await async_client.post(
-        "/api/auth/logout",
+    response = await async_client.request(
+        "DELETE",
+        "/api/auth/session",
         headers=_csrf_headers(async_client),
     )
     assert response.status_code == 204
