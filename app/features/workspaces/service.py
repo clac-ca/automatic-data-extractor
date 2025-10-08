@@ -4,19 +4,24 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.features.roles.models import Role
-from app.features.roles.registry import SYSTEM_ROLES
+from app.features.roles.models import Role, RolePermission
+from app.features.roles.registry import PERMISSION_REGISTRY, SYSTEM_ROLES
+from app.features.roles.service import AuthorizationError, collect_permission_keys
 from ..users.models import User, UserRole
 from ..users.repository import UsersRepository
 from ..users.schemas import UserProfile
-from .models import Workspace, WorkspaceMembership
+from .models import Workspace, WorkspaceMembership, WorkspaceMembershipRole
+
+if TYPE_CHECKING:
+    from app.features.roles.schemas import RoleCreate, RoleUpdate
 from .repository import WorkspacesRepository
 from .schemas import (
     WorkspaceDefaultSelection,
@@ -349,6 +354,222 @@ class WorkspacesService:
     async def list_workspace_roles(self, workspace_id: str) -> list[Role]:
         return await self._repo.list_workspace_roles(workspace_id)
 
+    async def _ensure_slug_available(
+        self, *, workspace_id: str, slug: str
+    ) -> None:
+        existing = await self._session.execute(
+            select(Role.id).where(
+                Role.scope == "workspace",
+                Role.workspace_id == workspace_id,
+                Role.slug == slug,
+            )
+        )
+        if existing.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="Role slug already exists for this workspace",
+            )
+
+        system_conflict = await self._session.execute(
+            select(Role.id).where(
+                Role.scope == "workspace",
+                Role.workspace_id.is_(None),
+                Role.slug == slug,
+            )
+        )
+        if system_conflict.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="Role slug conflicts with a system role",
+            )
+
+    async def create_workspace_role(
+        self,
+        *,
+        workspace_id: str,
+        payload: "RoleCreate",
+        actor: User,
+    ) -> Role:
+        normalized_name = self._normalize_role_name(payload.name)
+        slug_source = payload.slug or normalized_name
+        normalized_slug = _slugify(slug_source)
+        if not normalized_slug:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Role slug is required",
+            )
+
+        await self._ensure_slug_available(
+            workspace_id=workspace_id, slug=normalized_slug
+        )
+
+        permission_keys = self._normalize_workspace_permission_keys(
+            payload.permissions
+        )
+
+        role = Role(
+            scope="workspace",
+            workspace_id=workspace_id,
+            slug=normalized_slug,
+            name=normalized_name,
+            description=self._normalize_description(payload.description),
+            is_system=False,
+            editable=True,
+            created_by=cast(str | None, getattr(actor, "id", None)),
+            updated_by=cast(str | None, getattr(actor, "id", None)),
+        )
+        self._session.add(role)
+        await self._session.flush([role])
+
+        if permission_keys:
+            self._session.add_all(
+                [
+                    RolePermission(
+                        role_id=cast(str, role.id), permission_key=key
+                    )
+                    for key in permission_keys
+                ]
+            )
+
+        await self._session.flush()
+        await self._session.refresh(role, attribute_names=["permissions"])
+        return role
+
+    async def update_workspace_role(
+        self,
+        *,
+        workspace_id: str,
+        role_id: str,
+        payload: "RoleUpdate",
+        actor: User,
+    ) -> Role:
+        role = await self._load_workspace_role(role_id, workspace_id)
+        if not role.editable or role.is_system:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="System roles cannot be edited",
+            )
+
+        role.name = self._normalize_role_name(payload.name)
+        role.description = self._normalize_description(payload.description)
+        role.updated_by = cast(str | None, getattr(actor, "id", None))
+
+        permission_keys = set(
+            self._normalize_workspace_permission_keys(payload.permissions)
+        )
+        current = {permission.permission_key for permission in role.permissions}
+
+        additions = sorted(permission_keys - current)
+        removals = sorted(current - permission_keys)
+
+        if additions:
+            self._session.add_all(
+                [
+                    RolePermission(
+                        role_id=cast(str, role.id), permission_key=key
+                    )
+                    for key in additions
+                ]
+            )
+
+        if removals:
+            await self._session.execute(
+                delete(RolePermission).where(
+                    RolePermission.role_id == role.id,
+                    RolePermission.permission_key.in_(removals),
+                )
+            )
+
+        await self._session.flush()
+
+        if not await self._workspace_has_governor(workspace_id):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="Workspace requires at least one governor with elevated permissions",
+            )
+
+        await self._session.refresh(role, attribute_names=["permissions"])
+        return role
+
+    async def delete_workspace_role(
+        self, *, workspace_id: str, role_id: str
+    ) -> None:
+        role = await self._load_workspace_role(role_id, workspace_id)
+        if not role.editable or role.is_system:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="System roles cannot be deleted",
+            )
+
+        assignment_exists = await self._session.execute(
+            select(WorkspaceMembershipRole).where(
+                WorkspaceMembershipRole.role_id == role.id
+            )
+        )
+        if assignment_exists.first() is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="Role is assigned to one or more members",
+            )
+
+        await self._session.delete(role)
+        await self._session.flush()
+
+        if not await self._workspace_has_governor(workspace_id):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="Workspace requires at least one governor with elevated permissions",
+            )
+
+    def _normalize_role_name(self, value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Role name is required",
+            )
+        return candidate
+
+    @staticmethod
+    def _normalize_description(value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    def _normalize_workspace_permission_keys(
+        self, permissions: Iterable[str]
+    ) -> tuple[str, ...]:
+        try:
+            collected = collect_permission_keys(permissions)
+        except AuthorizationError as exc:  # pragma: no cover - validated via tests
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
+
+        unique = tuple(dict.fromkeys(collected))
+        for key in unique:
+            definition = PERMISSION_REGISTRY.get(key)
+            if definition is None or definition.scope != "workspace":
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Permission '{key}' must be workspace-scoped",
+                )
+        return unique
+
+    async def _load_workspace_role(self, role_id: str, workspace_id: str) -> Role:
+        role = await self._session.get(Role, role_id)
+        if (
+            role is None
+            or role.scope != "workspace"
+            or (role.workspace_id not in (None, workspace_id))
+        ):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Role not found")
+
+        await self._session.refresh(role, attribute_names=["permissions"])
+        return role
+
     async def resolve_membership(
         self, *, user: User, workspace_id: str
     ) -> WorkspaceMembership:
@@ -456,7 +677,11 @@ class WorkspacesService:
             return []
 
         unique_ids = list(dict.fromkeys(role_ids))
-        stmt = select(Role).where(Role.id.in_(unique_ids))
+        stmt = (
+            select(Role)
+            .options(selectinload(Role.permissions))
+            .where(Role.id.in_(unique_ids))
+        )
         result = await self._session.execute(stmt)
         roles = list(result.scalars().all())
         found_ids = {cast(str, role.id) for role in roles}

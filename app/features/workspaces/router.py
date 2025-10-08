@@ -11,7 +11,8 @@ from app.db.session import get_session
 
 from ..auth.dependencies import bind_current_user
 from ..roles.dependencies import require_global_access
-from ..roles.schemas import RoleRead
+from ..roles.models import Role
+from ..roles.schemas import RoleCreate, RoleRead, RoleUpdate
 from ..users.models import User
 from .dependencies import get_workspace_profile, require_workspace_access
 from .schemas import (
@@ -31,6 +32,20 @@ WORKSPACE_MEMBER_BODY = Body(...)
 WORKSPACE_CREATE_BODY = Body(...)
 WORKSPACE_UPDATE_BODY = Body(...)
 WORKSPACE_MEMBER_UPDATE_BODY = Body(...)
+
+
+def _serialize_role(role: Role) -> RoleRead:
+    return RoleRead(
+        role_id=role.id,
+        slug=role.slug,
+        name=role.name,
+        description=role.description,
+        scope=role.scope,
+        workspace_id=role.workspace_id,
+        permissions=[permission.permission_key for permission in role.permissions],
+        is_system=role.is_system,
+        editable=role.editable,
+    )
 
 @router.post(
     "/workspaces",
@@ -189,20 +204,146 @@ async def list_workspace_roles(
 ) -> list[RoleRead]:
     service = WorkspacesService(session=session)
     roles = await service.list_workspace_roles(workspace.workspace_id)
-    return [
-        RoleRead(
-            role_id=role.id,
-            slug=role.slug,
-            name=role.name,
-            description=role.description,
-            scope=role.scope,
-            workspace_id=role.workspace_id,
-            permissions=[rp.permission_key for rp in role.permissions],
-            is_system=role.is_system,
-            editable=role.editable,
-        )
-        for role in roles
-    ]
+    return [_serialize_role(role) for role in roles]
+
+
+@router.post(
+    "/workspaces/{workspace_id}/roles",
+    response_model=RoleRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a workspace role",
+    responses={
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "System roles cannot be managed via this endpoint.",
+            "model": ErrorMessage,
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to manage workspace roles.",
+            "model": ErrorMessage,
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow managing roles.",
+            "model": ErrorMessage,
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "Role slug already exists or conflicts with a system role.",
+            "model": ErrorMessage,
+        },
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+            "description": "Invalid role name, slug, or permissions.",
+            "model": ErrorMessage,
+        },
+    },
+)
+async def create_workspace_role(
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(require_workspace_access, scopes=["Workspace.Roles.ReadWrite"]),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    current_user: Annotated[User, Depends(bind_current_user)],
+    payload: RoleCreate,
+) -> RoleRead:
+    service = WorkspacesService(session=session)
+    role = await service.create_workspace_role(
+        workspace_id=workspace.workspace_id,
+        payload=payload,
+        actor=current_user,
+    )
+    return _serialize_role(role)
+
+
+@router.put(
+    "/workspaces/{workspace_id}/roles/{role_id}",
+    response_model=RoleRead,
+    status_code=status.HTTP_200_OK,
+    summary="Update a workspace role",
+    responses={
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "System roles cannot be modified.",
+            "model": ErrorMessage,
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to manage workspace roles.",
+            "model": ErrorMessage,
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow managing roles.",
+            "model": ErrorMessage,
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Role not found for this workspace.",
+            "model": ErrorMessage,
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "Operation would violate governor guardrails.",
+            "model": ErrorMessage,
+        },
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+            "description": "Invalid role payload.",
+            "model": ErrorMessage,
+        },
+    },
+)
+async def update_workspace_role(
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(require_workspace_access, scopes=["Workspace.Roles.ReadWrite"]),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    current_user: Annotated[User, Depends(bind_current_user)],
+    role_id: Annotated[str, Path(min_length=1)],
+    payload: RoleUpdate,
+) -> RoleRead:
+    service = WorkspacesService(session=session)
+    role = await service.update_workspace_role(
+        workspace_id=workspace.workspace_id,
+        role_id=role_id,
+        payload=payload,
+        actor=current_user,
+    )
+    return _serialize_role(role)
+
+
+@router.delete(
+    "/workspaces/{workspace_id}/roles/{role_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a workspace role",
+    responses={
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "System roles cannot be deleted.",
+            "model": ErrorMessage,
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to manage workspace roles.",
+            "model": ErrorMessage,
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow managing roles.",
+            "model": ErrorMessage,
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Role not found for this workspace.",
+            "model": ErrorMessage,
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "Role is assigned or would violate governor guardrails.",
+            "model": ErrorMessage,
+        },
+    },
+)
+async def delete_workspace_role(
+    workspace: Annotated[
+        WorkspaceProfile,
+        Security(require_workspace_access, scopes=["Workspace.Roles.ReadWrite"]),
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    role_id: Annotated[str, Path(min_length=1)],
+) -> None:
+    service = WorkspacesService(session=session)
+    await service.delete_workspace_role(
+        workspace_id=workspace.workspace_id, role_id=role_id
+    )
 
 
 @router.post(
