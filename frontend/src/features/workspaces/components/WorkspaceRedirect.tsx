@@ -1,3 +1,4 @@
+import type { JSX } from 'react'
 import { Navigate } from 'react-router-dom'
 
 import { Alert } from '../../../shared/components/Alert'

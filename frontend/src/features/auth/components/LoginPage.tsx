@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { JSX } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -74,7 +75,7 @@ export function LoginPage(): JSX.Element {
 
     loginMutation.mutate(parsed.data, {
       onSuccess: () => {
-        queryClient.invalidateQueries(queryKeys.providers)
+        queryClient.invalidateQueries({ queryKey: queryKeys.providers })
         navigate(redirectTo, { replace: true })
       },
       onError: (error: ApiError) => {

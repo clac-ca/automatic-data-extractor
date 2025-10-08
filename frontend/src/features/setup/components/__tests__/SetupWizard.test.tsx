@@ -4,7 +4,7 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { queryKeys } from '../../../../shared/api/query-keys'
-import { SessionEnvelope } from '../../../../shared/api/types'
+import type { SessionEnvelope } from '../../../../shared/api/types'
 import { createTestQueryClient, renderWithQueryClient } from '../../../../test/test-utils'
 import * as setupApi from '../../api'
 import { SetupWizard } from '../SetupWizard'

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { JSX } from 'react'
 import { Link, NavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
 import { clsx } from 'clsx'
 

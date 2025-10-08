@@ -1,11 +1,13 @@
+import type { JSX, ReactNode } from 'react'
+
 interface DrawerProps {
   title: string
   isOpen: boolean
   onClose: () => void
-  children: React.ReactNode
+  children: ReactNode
 }
 
-export function Drawer({ title, isOpen, onClose, children }: DrawerProps) {
+export function Drawer({ title, isOpen, onClose, children }: DrawerProps): JSX.Element | null {
   if (!isOpen) {
     return null
   }

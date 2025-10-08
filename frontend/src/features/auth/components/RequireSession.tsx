@@ -1,3 +1,4 @@
+import type { JSX } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 
 import { Alert } from '../../../shared/components/Alert'
