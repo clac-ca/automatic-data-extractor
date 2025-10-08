@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
-import { completeSetup, fetchSetupStatus, fetchSession } from "../../auth/api";
+import { fetchSession } from "../../auth/api";
+import { completeSetup, fetchSetupStatus } from "../api";
 import { setupKeys } from "./useSetupStatusQuery";
 import { sessionKeys } from "../../auth/hooks/sessionKeys";
 import type { CompleteSetupPayload } from "../../../shared/api/types";
