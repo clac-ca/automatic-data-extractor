@@ -200,6 +200,10 @@ This keeps dependency drift intentional and auditable.
 
 Run the quality gates appropriate for the scope of your change set.
 
+### Frontend-specific expectations
+
+- When you modify anything under `frontend/`, run `npm test -- --watch=false` and `npm run build` to ensure the SPA both passes unit tests and builds successfully.
+
 ---
 
 ## Guiding Principle

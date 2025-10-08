@@ -2,10 +2,10 @@ import { useOutletContext, useParams } from "react-router-dom";
 
 import { useDocumentTypeQuery } from "../hooks/useDocumentTypeQuery";
 import { formatDateTime } from "../../../shared/dates";
-import type { WorkspaceSummary } from "../../../shared/api/types";
+import type { WorkspaceProfile } from "../../../shared/api/types";
 
 interface WorkspaceOutletContext {
-  workspace?: WorkspaceSummary;
+  workspace?: WorkspaceProfile;
 }
 
 export function DocumentTypeRoute() {
