@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping
-from enum import StrEnum
+from collections.abc import Mapping
 from typing import Any, cast
 
 from fastapi import HTTPException, status
@@ -14,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..users.models import User, UserRole
 from ..users.repository import UsersRepository
 from ..users.schemas import UserProfile
+from app.features.roles.registry import SYSTEM_ROLES
+
 from .models import Workspace, WorkspaceMembership, WorkspaceRole
 from .repository import WorkspacesRepository
 from .schemas import (
@@ -23,65 +24,17 @@ from .schemas import (
 )
 
 
-class WorkspaceScope(StrEnum):
-    """String constants that describe workspace permission scopes."""
-
-    WORKSPACE_READ = "workspace:read"
-    DOCUMENTS_READ = "workspace:documents:read"
-    DOCUMENTS_WRITE = "workspace:documents:write"
-    CONFIGURATIONS_READ = "workspace:configurations:read"
-    CONFIGURATIONS_WRITE = "workspace:configurations:write"
-    JOBS_READ = "workspace:jobs:read"
-    JOBS_WRITE = "workspace:jobs:write"
-    MEMBERS_READ = "workspace:members:read"
-    MEMBERS_MANAGE = "workspace:members:manage"
-    SETTINGS_MANAGE = "workspace:settings:manage"
+def _system_role_permissions(slug: str) -> tuple[str, ...]:
+    for definition in SYSTEM_ROLES:
+        if definition.slug == slug:
+            return definition.permissions
+    return ()
 
 
-ROLE_SCOPE_DEFAULTS: dict[WorkspaceRole, tuple[WorkspaceScope, ...]] = {
-    WorkspaceRole.MEMBER: (
-        WorkspaceScope.WORKSPACE_READ,
-        WorkspaceScope.DOCUMENTS_READ,
-        WorkspaceScope.DOCUMENTS_WRITE,
-        WorkspaceScope.CONFIGURATIONS_READ,
-        WorkspaceScope.JOBS_READ,
-    ),
-    WorkspaceRole.OWNER: (
-        WorkspaceScope.WORKSPACE_READ,
-        WorkspaceScope.DOCUMENTS_READ,
-        WorkspaceScope.DOCUMENTS_WRITE,
-        WorkspaceScope.CONFIGURATIONS_READ,
-        WorkspaceScope.CONFIGURATIONS_WRITE,
-        WorkspaceScope.JOBS_READ,
-        WorkspaceScope.JOBS_WRITE,
-        WorkspaceScope.MEMBERS_READ,
-        WorkspaceScope.MEMBERS_MANAGE,
-        WorkspaceScope.SETTINGS_MANAGE,
-    ),
+ROLE_PERMISSION_DEFAULTS: dict[WorkspaceRole, tuple[str, ...]] = {
+    WorkspaceRole.MEMBER: _system_role_permissions("workspace-member"),
+    WorkspaceRole.OWNER: _system_role_permissions("workspace-owner"),
 }
-
-
-def _coerce_scope(scope: str | WorkspaceScope) -> str:
-    if isinstance(scope, WorkspaceScope):
-        return scope.value
-    candidate = scope.strip()
-    if not candidate:
-        msg = "Workspace scope cannot be blank"
-        raise ValueError(msg)
-    return candidate
-
-
-def normalize_workspace_scopes(
-    scopes: Iterable[str | WorkspaceScope],
-) -> frozenset[str]:
-    """Return a unique set of scope strings for ``scopes``."""
-
-    normalized = set[str]()
-    for scope in scopes:
-        if scope is None:
-            continue
-        normalized.add(_coerce_scope(scope))
-    return frozenset(normalized)
 
 
 _SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
@@ -382,7 +335,7 @@ class WorkspacesService:
                 status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Workspace missing"
             )
 
-        permissions = self._merge_permissions(membership.role, membership.permissions)
+        permissions = self._permissions_for_role(membership.role)
         return WorkspaceProfile(
             workspace_id=workspace.id,
             name=workspace.name,
@@ -395,7 +348,7 @@ class WorkspacesService:
     def build_global_admin_profile(self, workspace: Workspace) -> WorkspaceProfile:
         """Return an owner-level profile used when a global admin inspects a workspace."""
 
-        permissions = self._merge_permissions(WorkspaceRole.OWNER, None)
+        permissions = self._permissions_for_role(WorkspaceRole.OWNER)
         return WorkspaceProfile(
             workspace_id=workspace.id,
             name=workspace.name,
@@ -412,7 +365,7 @@ class WorkspacesService:
                 status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Member user missing"
             )
 
-        permissions = self._merge_permissions(membership.role, membership.permissions)
+        permissions = self._permissions_for_role(membership.role)
         return WorkspaceMember(
             workspace_membership_id=membership.id,
             workspace_id=membership.workspace_id,
@@ -429,27 +382,12 @@ class WorkspacesService:
         return workspace
 
     @staticmethod
-    def _merge_permissions(role: WorkspaceRole, custom: Iterable[str] | None) -> list[str]:
-        seeds: list[str | WorkspaceScope]
-        base = ROLE_SCOPE_DEFAULTS.get(role, frozenset())
-        seeds = [*base]
-        if custom:
-            seeds.extend(permission for permission in custom if permission)
-
-        try:
-            combined = normalize_workspace_scopes(seeds)
-        except ValueError as exc:  # pragma: no cover - defensive guard for bad config
-            raise HTTPException(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Invalid workspace scope configuration",
-            ) from exc
-
-        return sorted(combined)
+    def _permissions_for_role(role: WorkspaceRole) -> list[str]:
+        permissions = ROLE_PERMISSION_DEFAULTS.get(role, ())
+        return sorted(dict.fromkeys(permissions))
 
 
 __all__ = [
-    "ROLE_SCOPE_DEFAULTS",
-    "WorkspaceScope",
+    "ROLE_PERMISSION_DEFAULTS",
     "WorkspacesService",
-    "normalize_workspace_scopes",
 ]

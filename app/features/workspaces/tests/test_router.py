@@ -16,7 +16,6 @@ from app.features.workspaces.models import (
     WorkspaceRole,
 )
 from app.features.workspaces.schemas import WorkspaceProfile
-from app.features.workspaces.service import WorkspaceScope
 
 
 pytestmark = pytest.mark.asyncio
@@ -61,6 +60,24 @@ async def _create_workspace(
     return response.json()
 
 
+async def test_workspace_creation_requires_global_permission(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Non-admin users should be denied when creating workspaces."""
+
+    member = seed_identity["member"]
+    token = await _login(async_client, member["email"], member["password"])
+
+    response = await async_client.post(
+        "/api/workspaces",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Unauthorized Workspace"},
+    )
+
+    assert response.status_code == 403
+
+
 async def test_workspace_route_returns_profile(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
@@ -78,8 +95,8 @@ async def test_workspace_route_returns_profile(
     payload = response.json()
     assert payload["workspace_id"] == seed_identity["workspace_id"]
     permissions = set(payload.get("permissions", []))
-    assert WorkspaceScope.DOCUMENTS_WRITE.value in permissions
-    assert WorkspaceScope.MEMBERS_MANAGE.value not in permissions
+    assert "Workspace.Documents.ReadWrite" in permissions
+    assert "Workspace.Members.ReadWrite" not in permissions
 
 
 async def test_workspace_owner_receives_membership_permissions(
@@ -103,9 +120,9 @@ async def test_workspace_owner_receives_membership_permissions(
     assert response.status_code == 200
     payload = response.json()
     permissions = set(payload.get("permissions", []))
-    assert WorkspaceScope.MEMBERS_READ.value in permissions
-    assert WorkspaceScope.MEMBERS_MANAGE.value in permissions
-    assert WorkspaceScope.SETTINGS_MANAGE.value in permissions
+    assert "Workspace.Members.Read" in permissions
+    assert "Workspace.Members.ReadWrite" in permissions
+    assert "Workspace.Settings.ReadWrite" in permissions
 
 
 async def test_missing_workspace_membership_returns_error(
@@ -144,7 +161,7 @@ async def test_admin_without_membership_can_access_workspace(
     assert payload["workspace_id"] == workspace_id
     assert payload["role"] == WorkspaceRole.OWNER.value
     permissions = set(payload.get("permissions", []))
-    assert WorkspaceScope.SETTINGS_MANAGE.value in permissions
+    assert "Workspace.Settings.ReadWrite" in permissions
 
 
 async def test_permission_required_for_members_route(
@@ -213,48 +230,6 @@ async def test_members_route_requires_read_scope_for_manage_member(
     assert response.status_code == 403
 
 
-async def test_members_route_allows_member_with_manage_and_read_permissions(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Members can list other members once both read and manage scopes are granted."""
-
-    member_with_manage = seed_identity["member_with_manage"]
-
-    session_factory = get_sessionmaker()
-    async with session_factory() as session:
-        result = await session.execute(
-            select(WorkspaceMembership).where(
-                WorkspaceMembership.user_id == member_with_manage["id"],
-                WorkspaceMembership.workspace_id == seed_identity["workspace_id"],
-            )
-        )
-        membership = result.scalar_one()
-        membership.permissions = [
-            WorkspaceScope.MEMBERS_MANAGE.value,
-            WorkspaceScope.MEMBERS_READ.value,
-        ]
-        await session.commit()
-
-    token = await _login(
-        async_client,
-        member_with_manage["email"],
-        member_with_manage["password"],
-    )
-
-    response = await async_client.get(
-        f"/api/workspaces/{seed_identity['workspace_id']}/members",
-        headers={
-            "Authorization": f"Bearer {token}",
-        },
-    )
-    assert response.status_code == 200
-    payload = response.json()
-    assert isinstance(payload, list)
-    member_ids = {member["user"]["user_id"] for member in payload}
-    assert seed_identity["member_with_manage"]["id"] in member_ids
-
-
 async def test_list_workspaces_orders_default_first(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
@@ -313,7 +288,7 @@ async def test_workspace_owner_can_add_member_with_role(
     assert payload["role"] == WorkspaceRole.OWNER.value
     assert payload["user"]["user_id"] == invitee["id"]
     permissions = set(payload.get("permissions", []))
-    assert WorkspaceScope.MEMBERS_MANAGE.value in permissions
+    assert "Workspace.Members.ReadWrite" in permissions
 
     session_factory = get_sessionmaker()
     async with session_factory() as session:
@@ -556,6 +531,23 @@ async def test_workspace_owner_can_delete_workspace(
         assert workspace is None
 
 
+async def test_workspace_member_cannot_delete_workspace(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Members lacking the delete permission should receive a 403."""
+
+    member = seed_identity["member"]
+    token = await _login(async_client, member["email"], member["password"])
+
+    response = await async_client.delete(
+        f"/api/workspaces/{seed_identity['workspace_id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 403
+
+
 async def test_workspace_owner_can_update_member_role(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
@@ -690,14 +682,14 @@ async def test_workspace_profile_fields() -> None:
         slug="example",
         role=WorkspaceRole.MEMBER,
         permissions=[
-            WorkspaceScope.WORKSPACE_READ.value,
-            WorkspaceScope.DOCUMENTS_READ.value,
+            "Workspace.Read",
+            "Workspace.Documents.Read",
         ],
         is_default=True,
     )
 
     assert profile.workspace_id == "ws-123"
     assert set(profile.permissions) == {
-        WorkspaceScope.WORKSPACE_READ.value,
-        WorkspaceScope.DOCUMENTS_READ.value,
+        "Workspace.Read",
+        "Workspace.Documents.Read",
     }
