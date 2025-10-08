@@ -1,12 +1,12 @@
 import { forwardRef } from 'react'
+import type { ButtonHTMLAttributes } from 'react'
 import { clsx } from 'clsx'
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost'
 
 type ButtonSize = 'md' | 'sm'
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
   size?: ButtonSize
   isLoading?: boolean

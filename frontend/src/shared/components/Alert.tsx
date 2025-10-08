@@ -1,9 +1,10 @@
 import { clsx } from 'clsx'
+import type { JSX, ReactNode } from 'react'
 
 interface AlertProps {
   variant?: 'info' | 'warning' | 'error' | 'success'
   title?: string
-  children?: React.ReactNode
+  children?: ReactNode
 }
 
 const variantStyles: Record<Required<AlertProps>['variant'], string> = {

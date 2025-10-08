@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { JSX } from 'react'
 import { useParams } from 'react-router-dom'
 
 import { Alert } from '../../../shared/components/Alert'
