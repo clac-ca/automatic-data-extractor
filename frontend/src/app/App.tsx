@@ -1,3 +1,5 @@
+import type { JSX } from 'react'
+
 import { AppProviders } from './providers'
 import { AppRouter } from './router'
 

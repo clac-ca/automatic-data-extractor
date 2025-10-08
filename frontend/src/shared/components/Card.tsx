@@ -1,8 +1,10 @@
+import type { JSX, ReactNode } from 'react'
+
 export interface CardProps {
   title?: string
   description?: string
-  children: React.ReactNode
-  actions?: React.ReactNode
+  children: ReactNode
+  actions?: ReactNode
   className?: string
 }
 

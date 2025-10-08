@@ -2,7 +2,7 @@ import { QueryClient, useQuery } from '@tanstack/react-query'
 
 import { ApiError } from '../../../shared/api/client'
 import { queryKeys } from '../../../shared/api/query-keys'
-import { SessionEnvelope } from '../../../shared/api/types'
+import type { SessionEnvelope } from '../../../shared/api/types'
 import { fetchSession } from '../api'
 
 export function useSessionQuery() {

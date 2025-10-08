@@ -1,4 +1,5 @@
 import { clsx } from 'clsx'
+import type { JSX, ReactNode } from 'react'
 
 interface FormFieldProps {
   label: string
@@ -6,7 +7,7 @@ interface FormFieldProps {
   required?: boolean
   description?: string
   error?: string | null
-  children: React.ReactNode
+  children: ReactNode
 }
 
 export function FormField({

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { JSX } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
@@ -12,7 +13,7 @@ import { Card } from '../../../shared/components/Card'
 import { FormField } from '../../../shared/components/FormField'
 import { Input } from '../../../shared/components/Input'
 import { Spinner } from '../../../shared/components/Spinner'
-import { SetupRequest, SessionEnvelope } from '../../../shared/api/types'
+import type { SetupRequest, SessionEnvelope } from '../../../shared/api/types'
 import { useAuthProviders } from '../../auth/hooks/useAuthProviders'
 import { setSessionQueryData } from '../../auth/hooks/useSessionQuery'
 import { fetchSetupStatus, submitSetup } from '../api'
@@ -73,7 +74,10 @@ export function SetupWizard(): JSX.Element {
     },
     onError: async (error) => {
       if (error.status === 409) {
-        await queryClient.fetchQuery(queryKeys.setupStatus, fetchSetupStatus)
+        await queryClient.fetchQuery({
+          queryKey: queryKeys.setupStatus,
+          queryFn: fetchSetupStatus,
+        })
         setFormError('Setup is already complete. Please sign in instead.')
         setStep('welcome')
         return
