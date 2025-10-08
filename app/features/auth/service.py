@@ -15,7 +15,7 @@ from fastapi import HTTPException, Request, Response, status
 from jwt import PyJWKClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import Settings
+from app.core.config import AuthProviderSettings, Settings
 
 from ..system_settings.repository import SystemSettingsRepository
 from ..users.models import User, UserRole
@@ -105,6 +105,24 @@ class SSOState:
     nonce: str
 
 
+@dataclass(slots=True)
+class AuthProvider:
+    """Discovery metadata describing an interactive login option."""
+
+    id: str
+    label: str
+    start_url: str
+    icon_url: str | None = None
+
+
+@dataclass(slots=True)
+class ProviderDiscovery:
+    """Bundle returned to the frontend when listing auth providers."""
+
+    providers: list[AuthProvider]
+    force_sso: bool
+
+
 _SSO_STATE_TTL_SECONDS = 300
 SSO_STATE_COOKIE = "ade_sso_state"
 
@@ -155,17 +173,22 @@ class AuthService:
     # ------------------------------------------------------------------
     # Password-based authentication
 
-    async def initial_setup_required(self) -> bool:
-        """Return ``True`` when the first admin account still needs creation."""
+    async def get_initial_setup_status(self) -> tuple[bool, datetime | None]:
+        """Return whether setup is required plus the completion timestamp."""
 
         setting = await self._system_settings.get(_INITIAL_SETUP_SETTING_KEY)
+        completed_at: datetime | None = None
         if setting is not None:
-            completed_at = (setting.value or {}).get("completed_at")
-            if completed_at:
-                return False
+            raw_completed = (setting.value or {}).get("completed_at")
+            if raw_completed:
+                try:
+                    completed_at = datetime.fromisoformat(str(raw_completed))
+                except ValueError:
+                    completed_at = None
 
         admin_count = await self._users.count_admins()
-        return admin_count == 0
+        requires_setup = completed_at is None and admin_count == 0
+        return requires_setup, completed_at
 
     async def complete_initial_setup(
         self,
@@ -418,10 +441,60 @@ class AuthService:
 
     def _refresh_cookie_path(self, session_path: str) -> str:
         base = session_path.rstrip("/")
-        suffix = "/api/auth/refresh"
+        suffix = "/api/auth/session/refresh"
         if not base or base == "/":
             return suffix
         return f"{base}{suffix}"
+
+    def extract_session_payloads(
+        self, request: Request, *, include_refresh: bool = True
+    ) -> tuple[TokenPayload, TokenPayload | None]:
+        """Decode the access token and optional refresh token from the request."""
+
+        session_cookie = request.cookies.get(self.settings.session_cookie_name)
+        if not session_cookie:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session token missing")
+        try:
+            access_payload = self.decode_token(session_cookie, expected_type="access")
+        except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid session token") from exc
+
+        refresh_cookie = request.cookies.get(self.settings.session_refresh_cookie_name)
+        if not refresh_cookie:
+            if include_refresh:
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Refresh token missing")
+            return access_payload, None
+        try:
+            refresh_payload = self.decode_token(refresh_cookie, expected_type="refresh")
+        except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token") from exc
+
+        if refresh_payload.session_id != access_payload.session_id or (
+            refresh_payload.user_id != access_payload.user_id
+        ):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session mismatch")
+
+        return access_payload, refresh_payload
+
+    def get_provider_discovery(self) -> ProviderDiscovery:
+        """Return configured providers and the force-SSO flag."""
+
+        providers: list[AuthProvider] = []
+        for provider in self.settings.auth_providers:
+            spec = (
+                provider
+                if isinstance(provider, AuthProviderSettings)
+                else AuthProviderSettings.model_validate(provider)
+            )
+            providers.append(
+                AuthProvider(
+                    id=spec.id,
+                    label=spec.label,
+                    start_url=spec.start_url,
+                    icon_url=spec.icon_url,
+                )
+            )
+        return ProviderDiscovery(providers=providers, force_sso=self.settings.auth_force_sso)
 
     async def resolve_user(self, payload: TokenPayload) -> User:
         """Return the user represented by ``payload`` if active."""
