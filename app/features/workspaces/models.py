@@ -2,22 +2,14 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
 
 from ..users.models import User
-
-
-class WorkspaceRole(StrEnum):
-    """Roles that govern workspace-level permissions."""
-
-    MEMBER = "member"
-    OWNER = "owner"
 
 
 class Workspace(ULIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -50,20 +42,40 @@ class WorkspaceMembership(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("workspaces.workspace_id", ondelete="CASCADE"),
         nullable=False,
     )
-    role: Mapped[WorkspaceRole] = mapped_column(
-        Enum(WorkspaceRole, name="workspacerole", native_enum=False, length=20),
-        nullable=False,
-        default=WorkspaceRole.MEMBER,
-    )
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    permissions: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-
     workspace: Mapped[Workspace] = relationship("Workspace", back_populates="memberships")
     user: Mapped[User] = relationship(User, lazy="joined")
+    membership_roles: Mapped[list["WorkspaceMembershipRole"]] = relationship(
+        "WorkspaceMembershipRole",
+        back_populates="membership",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         UniqueConstraint("user_id", "workspace_id"),
     )
 
 
-__all__ = ["Workspace", "WorkspaceMembership", "WorkspaceRole"]
+class WorkspaceMembershipRole(Base):
+    """Pivot table linking memberships to workspace-scoped roles."""
+
+    __tablename__ = "workspace_membership_roles"
+
+    workspace_membership_id: Mapped[str] = mapped_column(
+        String(26),
+        ForeignKey("workspace_memberships.workspace_membership_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    role_id: Mapped[str] = mapped_column(
+        String(26),
+        ForeignKey("roles.role_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    membership: Mapped[WorkspaceMembership] = relationship(
+        "WorkspaceMembership", back_populates="membership_roles"
+    )
+    role: Mapped["Role"] = relationship("Role")
+
+
+__all__ = ["Workspace", "WorkspaceMembership", "WorkspaceMembershipRole"]

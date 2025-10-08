@@ -10,8 +10,6 @@ from sqlalchemy import func, select
 
 from app.db.session import get_sessionmaker
 from app.features.configurations.models import Configuration
-from app.features.workspaces.models import WorkspaceMembership
-from app.features.workspaces.service import WorkspaceScope
 
 
 pytestmark = pytest.mark.asyncio
@@ -61,22 +59,6 @@ async def _create_configuration(
     return configuration_id
 
 
-async def _grant_job_permission(user_id: str, workspace_id: str) -> None:
-    session_factory = get_sessionmaker()
-    async with session_factory() as session:
-        result = await session.execute(
-            select(WorkspaceMembership).where(
-                WorkspaceMembership.user_id == user_id,
-                WorkspaceMembership.workspace_id == workspace_id,
-            )
-        )
-        membership = result.scalar_one()
-        permissions = set(membership.permissions or [])
-        permissions.add(WorkspaceScope.JOBS_WRITE.value)
-        membership.permissions = sorted(permissions)
-        await session.commit()
-
-
 async def test_submit_job_runs_extractor(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
@@ -109,7 +91,6 @@ async def test_submit_job_runs_extractor(
     )
 
     actor = seed_identity["workspace_owner"]
-    await _grant_job_permission(actor["id"], seed_identity["workspace_id"])
     token = await _login(async_client, actor["email"], actor["password"])
     workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
     headers = {
@@ -163,7 +144,6 @@ async def test_submit_job_missing_document_returns_404(
     workspace_id = seed_identity["workspace_id"]
     configuration_id = await _create_configuration(workspace_id=workspace_id)
     actor = seed_identity["workspace_owner"]
-    await _grant_job_permission(actor["id"], seed_identity["workspace_id"])
     token = await _login(async_client, actor["email"], actor["password"])
     workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
     headers = {
@@ -188,7 +168,6 @@ async def test_submit_job_missing_body_fields_returns_422(
     """FastAPI should reject incomplete job submissions with a 422 error."""
 
     actor = seed_identity["workspace_owner"]
-    await _grant_job_permission(actor["id"], seed_identity["workspace_id"])
     token = await _login(async_client, actor["email"], actor["password"])
     workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
     headers = {
@@ -215,7 +194,6 @@ async def test_submit_job_missing_configuration_returns_404(
     """Unknown configuration identifiers should yield 404."""
 
     actor = seed_identity["workspace_owner"]
-    await _grant_job_permission(actor["id"], seed_identity["workspace_id"])
     token = await _login(async_client, actor["email"], actor["password"])
     workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
     headers = {
@@ -256,7 +234,6 @@ async def test_submit_job_processor_failure_returns_500(
     )
 
     actor = seed_identity["workspace_owner"]
-    await _grant_job_permission(actor["id"], seed_identity["workspace_id"])
     token = await _login(async_client, actor["email"], actor["password"])
     workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
     headers = {

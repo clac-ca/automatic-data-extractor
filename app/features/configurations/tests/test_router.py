@@ -34,7 +34,7 @@ async def _create_configuration(*, workspace_id: str, **overrides: Any) -> str:
         is_active = overrides.get("is_active", False)
         activated_at = overrides.get("activated_at")
         if activated_at is None and is_active:
-            activated_at = datetime.now(UTC).isoformat(timespec="seconds")
+            activated_at = datetime.now(UTC).replace(microsecond=0)
 
         document_type = overrides.get("document_type", "invoice")
         result = await session.execute(
