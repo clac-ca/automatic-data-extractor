@@ -138,7 +138,12 @@ export function LoginPage(): JSX.Element {
           </div>
         ) : (
           <form className="space-y-6" noValidate onSubmit={handleSubmit}>
-            <FormField label="Email" htmlFor="email" required>
+            <FormField
+              label="Email"
+              htmlFor="email"
+              required
+              error={form.formState.errors.email?.message ?? null}
+            >
               <Input
                 id="email"
                 type="email"
@@ -148,7 +153,12 @@ export function LoginPage(): JSX.Element {
               />
             </FormField>
 
-            <FormField label="Password" htmlFor="password" required>
+            <FormField
+              label="Password"
+              htmlFor="password"
+              required
+              error={form.formState.errors.password?.message ?? null}
+            >
               <Input
                 id="password"
                 type="password"

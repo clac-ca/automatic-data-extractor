@@ -19,13 +19,16 @@ export function FormField({
 }: FormFieldProps): JSX.Element {
   return (
     <div className="space-y-2">
-      <label
-        htmlFor={htmlFor}
-        className="text-sm font-medium text-slate-900"
-      >
-        {label}
-        {required && <span className="ml-1 text-red-500">*</span>}
-      </label>
+      <div className="flex items-center gap-1">
+        <label htmlFor={htmlFor} className="text-sm font-medium text-slate-900">
+          {label}
+        </label>
+        {required && (
+          <span aria-hidden="true" className="text-sm font-medium text-red-500">
+            *
+          </span>
+        )}
+      </div>
       {description && (
         <p className="text-xs text-slate-500" id={`${htmlFor}-description`}>
           {description}
