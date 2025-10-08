@@ -7,11 +7,18 @@ export interface ProblemDetails {
   errors?: Record<string, string[]>;
 }
 
+export type UserRole = "admin" | "user";
+
 export interface SessionUser {
-  id: string;
-  display_name: string;
+  user_id: string;
   email: string;
+  role: UserRole;
+  is_active: boolean;
+  is_service_account: boolean;
+  display_name?: string | null;
   preferred_workspace_id?: string | null;
+  permissions?: string[];
+  id?: string;
 }
 
 export interface SessionEnvelope {
@@ -50,24 +57,22 @@ export interface LoginPayload {
   password: string;
 }
 
-export interface WorkspaceSummary {
+export interface CreateWorkspacePayload {
+  name: string;
+  slug?: string;
+  owner_user_id?: string;
+  settings?: Record<string, unknown>;
+}
+
+export type WorkspaceRole = "member" | "owner";
+
+export interface WorkspaceProfile {
   id: string;
   name: string;
-  status: "active" | "paused" | "error";
-  document_types: DocumentTypeSummary[];
-}
-
-export interface DocumentTypeSummary {
-  id: string;
-  display_name: string;
-  status: "healthy" | "degraded" | "error" | "paused";
-  active_configuration_id: string;
-  last_run_at: string | null;
-  recent_alerts?: string[];
-}
-
-export interface WorkspaceListResponse {
-  workspaces: WorkspaceSummary[];
+  slug: string;
+  role: WorkspaceRole;
+  permissions: string[];
+  is_default: boolean;
 }
 
 export interface DocumentTypeDetailResponse {

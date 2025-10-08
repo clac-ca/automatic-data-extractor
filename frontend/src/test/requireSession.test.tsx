@@ -36,10 +36,14 @@ describe("RequireSession", () => {
     useSessionQueryMock.mockReturnValue({
       data: {
         user: {
-          id: "user-1",
-          display_name: "Ada Lovelace",
+          user_id: "user-1",
           email: "ada@example.com",
           preferred_workspace_id: "workspace-1",
+          display_name: "Ada Lovelace",
+          role: "user",
+          is_active: true,
+          is_service_account: false,
+          permissions: [],
         },
         expires_at: new Date().toISOString(),
         refresh_expires_at: new Date().toISOString(),

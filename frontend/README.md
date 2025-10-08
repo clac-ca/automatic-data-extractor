@@ -1,71 +1,99 @@
 # ADE Frontend
 
-This package hosts the ADE operator console. The single-page application is built
-with Vite, React, TypeScript, Tailwind, and TanStack Query following the
-architecture captured in [`agents/FRONTEND_DESIGN.md`](../agents/FRONTEND_DESIGN.md).
+The ADE frontend is a single-page React application built with Vite, TypeScript,
+Tailwind CSS, React Router, and TanStack Query. It delivers the operator console
+used to set up the platform, manage authentication, and navigate between
+workspaces and document types. The behaviour, UX contract, and roadmap are
+defined in [`agents/FRONTEND_DESIGN.md`](../agents/FRONTEND_DESIGN.md).
 
-## Getting started
+## Design principles
 
-```bash
-npm install
-npm run dev
-```
+- **Predictable navigation.** Keep one primary action per screen, respect the
+  workspace-first layout, and reuse common entry points (top bar, navigation
+  rail, dialog patterns).
+- **Accessible, standard components.** Prefer semantic HTML and Tailwind utility
+  classes over custom widgets, with focus management handled by shared
+  components.
+- **Deterministic data flow.** Fetch server state through typed TanStack Query
+  hooks and keep mutations isolated to feature directories. Cache invalidation
+  happens at the feature boundary so related views stay in sync.
+- **Boundary validation.** Validate input at form submission, surface inline
+  errors, and let the backend remain the source of truth for permissions and
+  business rules.
 
-The development server listens on `http://localhost:5173` and forwards API calls
-to the FastAPI backend. Configure the target origin with the `VITE_API_BASE_URL`
-environment variable when the backend is not running on the same host/port.
-
-## Scripts
-
-| Command           | Description                                                 |
-| ----------------- | ----------------------------------------------------------- |
-| `npm run dev`     | Start Vite in development mode with hot module replacement. |
-| `npm run build`   | Type-check the project and emit a production build.         |
-| `npm run lint`    | Run ESLint using the shared configuration.                  |
-| `npm run test`    | Execute the Vitest suite once in CI mode.                   |
-| `npm run preview` | Preview the production bundle locally.                      |
-
-## Project layout
+## Project structure
 
 ```
-src/
-├─ app/                # Application shell (providers, router, error boundary)
-├─ features/
-│  ├─ auth/            # Session guard, login/logout flows, provider discovery
-│  ├─ setup/           # First-run setup wizard and status polling
-│  └─ workspaces/      # Workspace shell, overview, and document type detail
-├─ shared/
-│  ├─ api/             # API client, typed contracts, problem+JSON helpers
-│  ├─ components/      # Tailwind-based UI primitives
-│  ├─ hooks/           # Cross-cutting hooks (local storage, etc.)
-│  └─ utils/           # Formatting helpers
-└─ test/               # Vitest suites covering critical flows
+frontend/
+├─ index.html              # Vite entry point served during development
+├─ public/                 # Static assets copied as-is into the build output
+├─ src/
+│  ├─ app/                 # Application shell (providers, router, error boundary)
+│  ├─ features/            # Feature-first modules (auth, setup, workspaces, ...)
+│  │  └─ workspaces/       # Workspace shell, overview, document type routes
+│  ├─ shared/
+│  │  ├─ api/              # API client, typed contracts, error helpers
+│  │  ├─ components/       # Tailwind-based UI primitives
+│  │  ├─ hooks/            # Cross-cutting hooks (local storage, media queries)
+│  │  └─ utils/            # Formatting helpers and pure utilities
+│  └─ test/                # Vitest suites and shared test helpers
+├─ vite.config.ts          # Vite build configuration
+├─ tailwind.config.ts      # Tailwind theme and plugin configuration
+└─ tsconfig*.json          # TypeScript project references
 ```
 
-## Routing map
+Each feature folder owns its API hooks, components, routes, and Vitest coverage.
+Cross-cutting primitives live under `src/shared/` to avoid circular dependencies
+and keep imports explicit.
 
-- `/setup` — First-run setup wizard available only until an administrator exists.
-- `/login` — Credential login plus SSO provider discovery; redirects to `/setup`
-  if provisioning is still required.
-- `/workspaces/:workspaceId` — Authenticated workspace overview with persistent
-  navigation state.
-- `/workspaces/:workspaceId/document-types/:documentTypeId` — Document type
-  detail view with configuration drawer and status strip.
-- `/logout` — Clears the current session before redirecting to `/login`.
+## Backend integration
 
-## Data dependencies
+- **HTTP client.** `src/shared/api/client.ts` wraps the browser `fetch` API to
+  include credentials, parse JSON Problem Details, and apply the
+  `VITE_API_BASE_URL` environment variable that points to the FastAPI backend.
+- **Contracts.** TypeScript interfaces in `src/shared/api/types.ts` mirror the
+  backend response models. Update these alongside backend changes to keep the
+  SPA and API in lockstep.
+- **Data fetching.** TanStack Query hooks (for example,
+  `useSessionQuery`, `useWorkspacesQuery`, `useCreateWorkspaceMutation`) live in
+  their feature directories and are responsible for caching, optimistic updates,
+  and error handling.
+- **Routing.** Authenticated routes rely on the session query to guard access and
+  redirect unauthenticated users to `/login`. Workspace-aware routes read the
+  active workspace from the selector and pass identifiers to feature hooks that
+  call `/workspaces` and document-type endpoints.
 
-The SPA expects the following backend endpoints:
+## Development workflow
 
-- `GET /setup/status`, `POST /setup`
-- `GET /auth/session`, `POST /auth/session`, `DELETE /auth/session`,
-  `POST /auth/session/refresh`
-- `GET /auth/providers`
-- `GET /workspaces`
-- `GET /workspaces/:workspaceId/document-types/:documentTypeId`
+1. Install dependencies: `npm install`
+2. Run the development server: `npm run dev`
+   - The dev server listens on `http://localhost:5173` and proxies API calls to
+     the origin defined by `VITE_API_BASE_URL` (defaulting to
+     `http://localhost:8000`). Adjust this when the FastAPI backend runs on a
+     different host or port.
+3. Build for production: `npm run build`
+4. Preview the production bundle: `npm run preview`
 
-## Testing
+## Quality gates
 
-Vitest and Testing Library power the component and hook tests. Run `npm run test`
-to execute the suite. Tests mock TanStack Query hooks where appropriate to keep
-assertions deterministic and focused on component behaviour.
+When modifying frontend code, run both commands to keep CI parity:
+
+- `npm run build` — Type-checks the project and emits the production bundle.
+- `npm test -- --watch=false` — Executes the Vitest suite once in CI mode.
+
+ESLint (`npm run lint`) is available for targeted linting during development.
+
+## Testing philosophy
+
+Vitest and Testing Library back component and hook tests. Prefer shallow
+feature-level tests that exercise user flows, stubbing TanStack Query hooks or
+API helpers only when external dependencies would make assertions brittle.
+
+## Additional resources
+
+- [`agents/FRONTEND_DESIGN.md`](../agents/FRONTEND_DESIGN.md) — Product
+  specification and UX contract.
+- [`agents/WP_FRONTEND_REBUILD.md`](../agents/WP_FRONTEND_REBUILD.md) — Delivery
+  plan for ongoing frontend workstreams.
+- [`AGENTS.md`](../AGENTS.md) — Repository-wide conventions and testing
+  expectations.
