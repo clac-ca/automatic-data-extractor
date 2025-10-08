@@ -1,29 +1,44 @@
-import { apiClient } from '../../shared/api/client'
+import { ApiError, del, get, post } from "../../shared/api/client";
 import type {
-  ProviderDiscoveryResponse,
+  AuthProvider,
+  CompleteSetupPayload,
+  LoginPayload,
   SessionEnvelope,
-  LoginRequest,
-} from '../../shared/api/types'
+  SetupStatusResponse,
+} from "../../shared/api/types";
 
-export function fetchSession() {
-  return apiClient.get<SessionEnvelope>('/auth/session')
+export async function fetchSession() {
+  try {
+    return await get<SessionEnvelope | null>("/auth/session");
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      return null;
+    }
+
+    throw error;
+  }
 }
 
-export function createSession(payload: LoginRequest) {
-  return apiClient.post<LoginRequest, SessionEnvelope>('/auth/session', payload)
+export async function createSession(payload: LoginPayload) {
+  return post<SessionEnvelope>("/auth/session", payload);
 }
 
-export function deleteSession() {
-  return apiClient.delete<void>('/auth/session')
+export async function deleteSession() {
+  return del<void>("/auth/session", { parseJson: false });
 }
 
-export function refreshSession() {
-  return apiClient.post<Record<string, never>, SessionEnvelope>(
-    '/auth/session/refresh',
-    {},
-  )
+export async function refreshSession() {
+  return post<SessionEnvelope>("/auth/session/refresh", undefined);
 }
 
-export function fetchAuthProviders() {
-  return apiClient.get<ProviderDiscoveryResponse>('/auth/providers')
+export async function fetchAuthProviders() {
+  return get<{ providers: AuthProvider[]; force_sso: boolean }>("/auth/providers");
+}
+
+export async function fetchSetupStatus() {
+  return get<SetupStatusResponse>("/setup/status");
+}
+
+export async function completeSetup(payload: CompleteSetupPayload) {
+  return post<SessionEnvelope>("/setup", payload);
 }

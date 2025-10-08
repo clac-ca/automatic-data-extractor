@@ -1,174 +1,132 @@
-import { useMemo } from 'react'
-import type { JSX } from 'react'
-import { Link, NavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
-import { clsx } from 'clsx'
+import { useEffect } from "react";
+import { NavLink, Outlet, useNavigate, useOutletContext, useParams } from "react-router-dom";
 
-import { Button } from '../../../shared/components/Button'
-import { Spinner } from '../../../shared/components/Spinner'
-import { useLocalStorage } from '../../../shared/hooks/useLocalStorage'
-import { useSessionQuery } from '../../auth/hooks/useSessionQuery'
-import { useWorkspacesQuery } from '../hooks/useWorkspaces'
+import { useWorkspacesQuery } from "../hooks/useWorkspacesQuery";
+import type { SessionEnvelope } from "../../../shared/api/types";
+import { formatDateTime } from "../../../shared/dates";
 
-export function WorkspaceLayout(): JSX.Element {
-  const { workspaceId, documentTypeId } = useParams()
-  const navigate = useNavigate()
-  const session = useSessionQuery()
-  const workspacesQuery = useWorkspacesQuery()
-  const [isCollapsed, setIsCollapsed] = useLocalStorage('ade-nav-collapsed', false)
+export function WorkspaceLayout() {
+  const { data, isLoading, error } = useWorkspacesQuery();
+  const session = useOutletContext<SessionEnvelope | null>();
+  const navigate = useNavigate();
+  const params = useParams<{ workspaceId?: string }>();
 
-  const currentWorkspace = useMemo(() => {
-    return workspacesQuery.data?.find(
-      (workspace) => workspace.workspace_id === workspaceId,
-    )
-  }, [workspaceId, workspacesQuery.data])
-
-  if (workspacesQuery.isLoading) {
-    return <Spinner label="Loading workspaces" />
-  }
-
-  if (workspacesQuery.isError) {
+  if (isLoading) {
     return (
-      <div className="p-8">
-        <p className="text-sm text-red-600">
-          We were unable to load your workspaces. Please refresh the page.
-        </p>
+      <div className="flex min-h-screen items-center justify-center text-sm text-slate-300">
+        Loading workspaces…
       </div>
-    )
+    );
   }
 
-  const workspaces = workspacesQuery.data ?? []
-
-  if (!workspaces.length) {
+  if (error) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-50">
-        <h1 className="text-2xl font-semibold text-slate-900">
-          No workspaces yet
-        </h1>
-        <p className="max-w-md text-center text-sm text-slate-600">
-          Contact an administrator to be assigned to a workspace or create one
-          using the ADE CLI.
-        </p>
-        <Button onClick={() => navigate('/logout')} variant="secondary">
-          Sign out
-        </Button>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-2 text-center text-sm text-rose-200">
+        <p>We were unable to load your workspaces.</p>
+        <a href="/" className="font-medium text-sky-300 hover:text-sky-200">
+          Try again
+        </a>
       </div>
-    )
+    );
   }
 
-  const documentTypes = currentWorkspace?.document_types ?? []
+  const workspaces = data?.workspaces ?? [];
+
+  if (workspaces.length === 0) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-center text-sm text-slate-300">
+        No workspaces are available for your account yet. Ask an administrator to grant access.
+      </div>
+    );
+  }
+
+  const resolvedWorkspaceId =
+    params.workspaceId || session?.user.preferred_workspace_id || workspaces[0]?.id || undefined;
+
+  useEffect(() => {
+    if (!params.workspaceId && resolvedWorkspaceId) {
+      navigate(`/workspaces/${resolvedWorkspaceId}`, { replace: true });
+    }
+  }, [params.workspaceId, resolvedWorkspaceId, navigate]);
+
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === resolvedWorkspaceId) ?? workspaces[0];
+  const documentTypes = activeWorkspace?.document_types ?? [];
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <aside
-        className={clsx(
-          'flex flex-col border-r border-slate-200 bg-white transition-all duration-200',
-          isCollapsed ? 'w-20' : 'w-72',
-        )}
-      >
-        <div className="flex items-center justify-between px-4 py-4">
-          <Link to="/workspaces" className="text-sm font-semibold tracking-wide">
-            ADE Console
-          </Link>
-          <button
-            type="button"
-            className="rounded-md p-2 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-            onClick={() => setIsCollapsed(!isCollapsed)}
-          >
-            {isCollapsed ? '»' : '«'}
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-2 pb-6">
-          <p className="px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Workspaces
-          </p>
-          <nav className="mt-2 space-y-1">
+    <div className="flex min-h-screen bg-slate-950 text-slate-100">
+      <aside className="flex w-72 flex-col border-r border-slate-900 bg-slate-950/80 p-4">
+        <div className="mb-4">
+          <h2 className="text-sm font-semibold text-slate-200">Workspaces</h2>
+          <ul className="mt-2 space-y-1 text-sm">
             {workspaces.map((workspace) => (
-              <NavLink
-                key={workspace.workspace_id}
-                to={`/workspaces/${workspace.workspace_id}`}
-                className={({ isActive }) =>
-                  clsx(
-                    'block rounded-md px-3 py-2 text-sm font-medium transition',
-                    isActive
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900',
-                  )
-                }
-              >
-                {workspace.name}
-              </NavLink>
+              <li key={workspace.id}>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/workspaces/${workspace.id}`)}
+                  className={`w-full rounded px-3 py-2 text-left ${
+                    workspace.id === activeWorkspace?.id
+                      ? "bg-slate-900 text-slate-50"
+                      : "text-slate-400 hover:bg-slate-900/70 hover:text-slate-100"
+                  }`}
+                >
+                  <div className="font-medium">{workspace.name}</div>
+                  <div className="text-xs text-slate-500">{workspace.status}</div>
+                </button>
+              </li>
             ))}
-          </nav>
-
-          {documentTypes.length > 0 && (
-            <div className="mt-8">
-              <p className="px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Document types
-              </p>
-              <nav className="mt-2 space-y-1">
-                {documentTypes.map((doc) => (
-                  <NavLink
-                    key={doc.id}
-                    to={`/workspaces/${workspaceId}/document-types/${doc.id}`}
-                    className={({ isActive }) =>
-                      clsx(
-                        'block rounded-md px-3 py-2 text-sm transition',
-                        isActive
-                          ? 'bg-slate-900 text-white'
-                          : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900',
-                      )
-                    }
-                  >
-                    {doc.display_name}
-                  </NavLink>
-                ))}
-              </nav>
-            </div>
-          )}
+          </ul>
         </div>
-        <div className="border-t border-slate-200 px-4 py-4 text-xs text-slate-500">
-          Signed in as
-          <p className="truncate text-sm font-medium text-slate-900">
-            {session.data?.user.email}
-          </p>
-          <Link
-            to="/logout"
-            className="mt-2 inline-flex text-xs font-semibold text-primary hover:underline"
-          >
+        <div className="flex-1">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Document types</h3>
+          <ul className="mt-2 space-y-1 text-sm">
+            {documentTypes.map((documentType) => (
+              <li key={documentType.id}>
+                <NavLink
+                  to={`/workspaces/${activeWorkspace?.id ?? ""}/document-types/${documentType.id}`}
+                  className={({ isActive }) =>
+                    `block rounded px-3 py-2 ${
+                      isActive
+                        ? "bg-sky-500/20 text-sky-200"
+                        : "text-slate-400 hover:bg-slate-900/70 hover:text-slate-100"
+                    }`
+                  }
+                >
+                  <div className="font-medium">{documentType.display_name}</div>
+                  <div className="text-xs text-slate-500">Last run {formatDateTime(documentType.last_run_at)}</div>
+                </NavLink>
+              </li>
+            ))}
+            {documentTypes.length === 0 && (
+              <li className="px-3 py-2 text-xs text-slate-500">No document types yet.</li>
+            )}
+          </ul>
+        </div>
+        <div className="mt-6 border-t border-slate-900 pt-4 text-xs text-slate-500">
+          <p className="font-medium text-slate-300">{session?.user.display_name ?? ""}</p>
+          <p>{session?.user.email ?? ""}</p>
+          <a href="/logout" className="mt-3 inline-block text-slate-300 hover:text-slate-100">
             Sign out
-          </Link>
+          </a>
         </div>
       </aside>
-
       <main className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-8 py-5">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">
-              Workspace
-            </p>
-            <h1 className="text-xl font-semibold text-slate-900">
-              {currentWorkspace?.name ?? 'Workspace'}
-            </h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button variant="secondary" size="sm" onClick={() => navigate('/workspaces')}>
-              Overview
-            </Button>
-            {documentTypeId && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate(`/workspaces/${workspaceId}`)}
-              >
-                Back to workspace
-              </Button>
-            )}
-          </div>
-        </header>
-        <section className="flex-1 overflow-y-auto px-8 py-8">
-          <Outlet />
-        </section>
+        <WorkspaceHeader workspaceName={activeWorkspace?.name ?? "Workspace"} />
+        <div className="flex-1 overflow-y-auto px-8 py-10">
+          <Outlet context={{ workspace: activeWorkspace }} />
+        </div>
       </main>
     </div>
-  )
+  );
 }
+
+function WorkspaceHeader({ workspaceName }: { workspaceName: string }) {
+  return (
+    <header className="flex h-16 items-center justify-between border-b border-slate-900 bg-slate-950/70 px-8">
+      <div>
+        <h1 className="text-xl font-semibold text-slate-100">{workspaceName}</h1>
+        <p className="text-xs text-slate-500">Monitor extraction activity and review configuration details.</p>
+      </div>
+    </header>
+  );
+}
+

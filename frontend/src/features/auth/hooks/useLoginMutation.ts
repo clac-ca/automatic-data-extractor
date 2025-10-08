@@ -1,17 +1,27 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 
-import { ApiError } from '../../../shared/api/client'
-import { queryKeys } from '../../../shared/api/query-keys'
-import type { LoginRequest, SessionEnvelope } from '../../../shared/api/types'
-import { createSession } from '../api'
+import { createSession, fetchSession } from "../api";
+import { sessionKeys } from "./sessionKeys";
+import type { LoginPayload } from "../../../shared/api/types";
 
 export function useLoginMutation() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
-  return useMutation<SessionEnvelope, ApiError, LoginRequest>({
-    mutationFn: (payload) => createSession(payload),
-    onSuccess: (session) => {
-      queryClient.setQueryData(queryKeys.session, session)
+  return useMutation({
+    mutationFn: (payload: LoginPayload) => createSession(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: sessionKeys.all });
+      const resolvedSession = await fetchSession();
+      queryClient.setQueryData(sessionKeys.detail(), resolvedSession);
+
+      const preferredWorkspace = resolvedSession?.user.preferred_workspace_id ?? undefined;
+      if (preferredWorkspace) {
+        navigate(`/workspaces/${preferredWorkspace}`, { replace: true });
+      } else {
+        navigate("/workspaces", { replace: true });
+      }
     },
-  })
+  });
 }
