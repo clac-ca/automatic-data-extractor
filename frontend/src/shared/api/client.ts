@@ -115,14 +115,6 @@ export async function post<T>(path: string, body?: unknown, init?: ApiClientOpti
   });
 }
 
-export async function put<T>(path: string, body?: unknown, init?: ApiClientOptions) {
-  return apiClient.request<T>(path, {
-    method: "PUT",
-    body: body === undefined ? undefined : JSON.stringify(body),
-    ...init,
-  });
-}
-
 export async function del<T>(path: string, init?: ApiClientOptions) {
   return apiClient.request<T>(path, { method: "DELETE", ...init });
 }

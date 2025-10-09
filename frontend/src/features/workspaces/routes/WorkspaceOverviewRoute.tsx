@@ -1,9 +1,13 @@
 import { useOutletContext } from "react-router-dom";
 
-import type { WorkspaceLayoutContext } from "../components/WorkspaceLayout";
+import type { WorkspaceProfile } from "../../../shared/api/types";
+
+interface WorkspaceOutletContext {
+  workspace?: WorkspaceProfile;
+}
 
 export function WorkspaceOverviewRoute() {
-  const { workspace } = useOutletContext<WorkspaceLayoutContext>();
+  const { workspace } = useOutletContext<WorkspaceOutletContext>();
 
   if (!workspace) {
     return (
@@ -18,7 +22,9 @@ export function WorkspaceOverviewRoute() {
       <section className="rounded border border-slate-800 bg-slate-900/60 p-6">
         <header className="space-y-2">
           <h2 className="text-lg font-semibold text-slate-100">Workspace access</h2>
-          <p className="text-sm text-slate-300">{describeRoles(workspace.roles)}</p>
+          <p className="text-sm text-slate-300">
+            {workspace.role === "owner" ? "You are the owner of this workspace." : "You are a member of this workspace."}
+          </p>
         </header>
         <dl className="mt-4 grid gap-4 text-sm text-slate-300 md:grid-cols-2">
           <div>
@@ -48,29 +54,10 @@ export function WorkspaceOverviewRoute() {
       <section className="space-y-2 rounded border border-slate-800 bg-slate-900/60 p-6">
         <h3 className="text-lg font-semibold text-slate-100">Next steps</h3>
         <p className="text-sm text-slate-300">
-          Use the navigation to explore documents, jobs, configurations, and member management based on your permissions.
-          Owners can configure the workspace and manage roles.
+          Owners can invite teammates and configure document extraction once workspace management tools are available. For now,
+          use this area to review your access and confirm workspace details.
         </p>
       </section>
     </div>
   );
-}
-
-function describeRoles(roles: string[]): string {
-  if (!roles || roles.length === 0) {
-    return "You have read-only access to this workspace.";
-  }
-
-  const formatted = roles.map((role) =>
-    role
-      .split("-")
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" "),
-  );
-
-  if (roles.includes("workspace-owner")) {
-    return `You are a workspace owner (${formatted.join(", ")}).`;
-  }
-
-  return `You are assigned to: ${formatted.join(", ")}.`;
 }
