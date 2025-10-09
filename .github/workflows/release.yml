@@ -1,0 +1,131 @@
+name: release
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  changelog-release:
+    name: changelog-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Determine project version
+        id: versions
+        run: |
+          python <<'PY'
+          from __future__ import annotations
+
+          import os
+          import re
+          import subprocess
+          import tomllib
+
+          SEMVER_RE = re.compile(
+              r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+              r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
+              r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
+          )
+
+          def version_for_ref(ref: str) -> str:
+              try:
+                  output = subprocess.check_output(["git", "show", f"{ref}:pyproject.toml"], text=True)
+              except subprocess.CalledProcessError:
+                  return ""
+
+              data = tomllib.loads(output)
+              return data.get("project", {}).get("version", "")
+
+          current = version_for_ref("HEAD")
+          is_semver = "true" if current and SEMVER_RE.fullmatch(current) else "false"
+
+          tag = f"v{current}" if current else ""
+          try:
+              subprocess.check_call(["git", "rev-parse", "--verify", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+          except subprocess.CalledProcessError:
+              tag_exists = "false"
+          else:
+              tag_exists = "true"
+
+          outputs = {
+              "version": current,
+              "is_semver": is_semver,
+              "tag": tag,
+              "tag_exists": tag_exists,
+          }
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              for key, value in outputs.items():
+                  fh.write(f"{key}={value}\n")
+          PY
+
+      - name: Extract changelog entry
+        id: changelog
+        if: steps.versions.outputs.is_semver == 'true' && steps.versions.outputs.tag_exists == 'false'
+        env:
+          RELEASE_TAG: ${{ steps.versions.outputs.tag }}
+        run: |
+          python <<'PY'
+          from __future__ import annotations
+
+          import os
+          import re
+          from pathlib import Path
+
+          changelog_path = Path("CHANGELOG.md")
+          if not changelog_path.is_file():
+              raise SystemExit("CHANGELOG.md is required to publish release notes")
+
+          tag = os.environ["RELEASE_TAG"]
+          changelog = changelog_path.read_text(encoding="utf-8")
+
+          pattern = re.compile(rf"## \[{re.escape(tag)}\] - [^\n]+\n(?P<body>.*?)(?=\n## \[|$)", re.S)
+          match = pattern.search(changelog)
+          if not match:
+              raise SystemExit(f"Unable to find changelog entry for {tag}")
+
+          notes = match.group("body").strip() or "_No notable changes._"
+
+          output_path = Path("release-notes.md")
+          output_path.write_text(notes + "\n", encoding="utf-8")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write("notes<<EOF\n")
+              fh.write(notes)
+              fh.write("\nEOF\n")
+          PY
+
+      - name: Create GitHub release
+        if: steps.versions.outputs.is_semver == 'true' && steps.versions.outputs.tag_exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.versions.outputs.tag }}
+          name: ${{ steps.versions.outputs.tag }}
+          body: ${{ steps.changelog.outputs.notes }}
+          draft: false
+          prerelease: false
+
+      - name: Summarize release
+        if: steps.versions.outputs.is_semver == 'true' && steps.versions.outputs.tag_exists == 'false'
+        run: |
+          {
+            echo "## Release" >> "$GITHUB_STEP_SUMMARY";
+            echo "- Tag: ${{ steps.versions.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY";
+          }
