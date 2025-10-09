@@ -71,16 +71,29 @@ export interface WorkspaceProfile {
   is_default: boolean;
 }
 
-export interface WorkspaceRoleDefinition {
+export interface RoleDefinition {
   id: string;
   slug: string;
   name: string;
   description?: string | null;
-  scope: "global" | "workspace";
-  workspace_id?: string | null;
+  scope_type: "global" | "workspace";
+  scope_id?: string | null;
   permissions: string[];
-  is_system: boolean;
+  built_in: boolean;
   editable: boolean;
+}
+
+export interface RoleCreatePayload {
+  name: string;
+  slug?: string;
+  description?: string | null;
+  permissions: string[];
+}
+
+export interface RoleUpdatePayload {
+  name: string;
+  description?: string | null;
+  permissions: string[];
 }
 
 export interface WorkspaceMemberUser {
@@ -109,6 +122,40 @@ export interface WorkspaceMemberCreatePayload {
 
 export interface WorkspaceMemberRolesUpdatePayload {
   role_ids: string[];
+}
+
+export interface PermissionDefinition {
+  key: string;
+  resource: string;
+  action: string;
+  scope_type: "global" | "workspace";
+  label: string;
+  description: string;
+}
+
+export interface RoleAssignment {
+  id: string;
+  principal_id: string;
+  principal_type: "user";
+  user_id?: string | null;
+  user_email?: string | null;
+  user_display_name?: string | null;
+  role_id: string;
+  role_slug: string;
+  scope_type: "global" | "workspace";
+  scope_id?: string | null;
+  created_at: string;
+}
+
+export interface RoleAssignmentCreatePayload {
+  role_id: string;
+  principal_id?: string;
+  user_id?: string;
+}
+
+export interface UserSummary extends SessionUser {
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DocumentTypeDetailResponse {

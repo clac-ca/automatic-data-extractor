@@ -6,10 +6,19 @@ from datetime import datetime
 from typing import Annotated
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    Security,
+    status,
+)
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.security import require_authenticated, require_csrf, require_global
 from app.api.settings import get_app_settings
 from app.core.config import Settings
 from app.core.schema import ErrorMessage
@@ -18,7 +27,7 @@ from app.db.session import get_session
 from ..users.models import User
 from ..users.schemas import UserProfile
 from ..users.service import UsersService
-from .dependencies import bind_current_principal, bind_current_user, require_admin_user
+from .dependencies import get_current_identity
 from .schemas import (
     APIKeyIssueRequest,
     APIKeyIssueResponse,
@@ -173,10 +182,11 @@ async def create_session(
             "model": ErrorMessage,
         }
     },
+    dependencies=[Security(require_authenticated)],
 )
 async def read_session(
     request: Request,
-    principal: Annotated[AuthenticatedIdentity, Depends(bind_current_principal)],
+    principal: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> SessionEnvelope:
@@ -278,6 +288,7 @@ async def refresh_session(
             "model": ErrorMessage,
         },
     },
+    dependencies=[Security(require_authenticated), Security(require_csrf)],
 )
 async def delete_session(
     request: Request,
@@ -288,16 +299,6 @@ async def delete_session(
     """Remove authentication cookies and end the session."""
 
     service = AuthService(session=session, settings=settings)
-    session_cookie = request.cookies.get(service.settings.session_cookie_name)
-    if session_cookie:
-        try:
-            payload = service.decode_token(session_cookie, expected_type="access")
-        except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
-            raise HTTPException(
-                status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid session token",
-            ) from exc
-        service.enforce_csrf(request, payload)
     service.clear_session_cookies(response)
     response.status_code = status.HTTP_204_NO_CONTENT
     return response
@@ -320,8 +321,8 @@ async def delete_session(
         },
     },
 )
-async def who_am_i(
-    current_user: Annotated[User, Depends(bind_current_user)],
+async def read_me(
+    current_user: Annotated[User, Security(require_authenticated)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> UserProfile:
     """Return profile information for the active user."""
@@ -354,10 +355,14 @@ async def who_am_i(
             "model": ErrorMessage,
         },
     },
+    dependencies=[Security(require_csrf)],
 )
 async def create_api_key(
     payload: APIKeyIssueRequest,
-    _admin: Annotated[User, Depends(require_admin_user)],
+    _admin: Annotated[
+        User,
+        Security(require_global("System.Settings.ReadWrite")),
+    ],
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> APIKeyIssueResponse:
@@ -408,7 +413,10 @@ async def create_api_key(
     },
 )
 async def list_api_keys(
-    _admin: Annotated[User, Depends(require_admin_user)],
+    _admin: Annotated[
+        User,
+        Security(require_global("System.Settings.ReadWrite")),
+    ],
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> list[APIKeySummary]:
@@ -459,10 +467,14 @@ async def list_api_keys(
             "model": ErrorMessage,
         },
     },
+    dependencies=[Security(require_csrf)],
 )
 async def revoke_api_key(
     api_key_id: str,
-    _admin: Annotated[User, Depends(require_admin_user)],
+    _admin: Annotated[
+        User,
+        Security(require_global("System.Settings.ReadWrite")),
+    ],
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> Response:

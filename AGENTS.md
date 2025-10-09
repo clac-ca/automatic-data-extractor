@@ -9,6 +9,9 @@ This playbook explains how agents should interpret human instructions, how to in
 - **Read this file first.** If a user references any document in `agents/`, open it before touching code.
 - **Honor the planned layout.** Every backend task assumes the feature-first structure documented below.
 - **Keep changes boring.** Prioritise clarity, deterministic behaviour, and simple abstractions.
+- **Follow the shared authentication guards.** All authenticated routes rely on the dependencies described in
+  `docs/authentication.md` (`require_authenticated`, `require_global`, `require_workspace`, and `require_csrf`). Update that doc
+  and this file whenever authentication flows or credential types change.
 
 ---
 
@@ -180,6 +183,12 @@ The tree below describes the desired state of the repo once the restructure is c
 
 - **Default stance:** Stay in the standard library when a clear native solution exists.
 - **Adopt a dependency only if it is** widely used, actively maintained, and materially improves clarity or safety.
+
+### Migrations
+
+- **Single baseline migration:** There are no production installations yet, so all schema work happens in
+  `app/alembic/versions/0001_initial_schema.py`. When the schema evolves, update this file directly instead of adding new
+  versioned migrations.
 
 ### Dependency Protocol
 

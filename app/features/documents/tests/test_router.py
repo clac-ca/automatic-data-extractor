@@ -17,7 +17,7 @@ pytestmark = pytest.mark.asyncio
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
     response = await client.post(
-        "/api/auth/session",
+        "/api/v1/auth/session",
         json={"email": email, "password": password},
     )
     assert response.status_code == 200, response.text
@@ -34,7 +34,7 @@ async def test_upload_list_download_document(
 
     member = seed_identity["member"]
     token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
     }
@@ -80,7 +80,7 @@ async def test_upload_document_exceeds_limit_returns_413(
 
     member = seed_identity["member"]
     token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
     }
@@ -105,7 +105,7 @@ async def test_delete_document_marks_deleted(
 
     member = seed_identity["member"]
     token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
     }
@@ -149,7 +149,7 @@ async def test_download_missing_file_returns_404(
 
     member = seed_identity["member"]
     token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
     }

@@ -11,7 +11,7 @@ from app.features.roles.router import router as roles_router
 from app.features.users.router import router as users_router
 from app.features.workspaces.router import router as workspaces_router
 
-router = APIRouter()
+router = APIRouter(prefix="/v1")
 
 router.include_router(health_router, prefix="/health", tags=["health"])
 router.include_router(setup_router)

@@ -19,7 +19,7 @@ pytestmark = pytest.mark.asyncio
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
     response = await client.post(
-        "/api/auth/session",
+        "/api/v1/auth/session",
         json={"email": email, "password": password},
     )
     assert response.status_code == 200, response.text
@@ -105,7 +105,7 @@ async def test_list_configurations_supports_filters(
 
     admin = seed_identity["admin"]
     token = await _login(async_client, admin["email"], admin["password"])
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.get(
         f"{workspace_base}/configurations",
@@ -141,7 +141,7 @@ async def test_create_configuration_assigns_next_version(
 
     admin = seed_identity["admin"]
     token = await _login(async_client, admin["email"], admin["password"])
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.post(
         f"{workspace_base}/configurations",
@@ -178,7 +178,7 @@ async def test_read_configuration_returns_payload(
 
     admin = seed_identity["admin"]
     token = await _login(async_client, admin["email"], admin["password"])
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.get(
         f"{workspace_base}/configurations/{configuration_id}",
@@ -200,7 +200,7 @@ async def test_read_configuration_not_found_returns_404(
 
     admin = seed_identity["admin"]
     token = await _login(async_client, admin["email"], admin["password"])
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.get(
         f"{workspace_base}/configurations/does-not-exist",
@@ -227,7 +227,7 @@ async def test_update_configuration_replaces_fields(
 
     admin = seed_identity["admin"]
     token = await _login(async_client, admin["email"], admin["password"])
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.put(
         f"{workspace_base}/configurations/{configuration_id}",
@@ -263,7 +263,7 @@ async def test_delete_configuration_removes_record(
 
     admin = seed_identity["admin"]
     token = await _login(async_client, admin["email"], admin["password"])
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.delete(
         f"{workspace_base}/configurations/{configuration_id}",
@@ -298,7 +298,7 @@ async def test_activate_configuration_toggles_previous_active(
 
     admin = seed_identity["admin"]
     token = await _login(async_client, admin["email"], admin["password"])
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.post(
         f"{workspace_base}/configurations/{target_id}/activate",
@@ -345,7 +345,7 @@ async def test_list_active_configurations_returns_current(
 
     admin = seed_identity["admin"]
     token = await _login(async_client, admin["email"], admin["password"])
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.get(
         f"{workspace_base}/configurations/active",

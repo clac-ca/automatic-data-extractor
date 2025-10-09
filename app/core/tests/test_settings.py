@@ -275,7 +275,7 @@ def test_session_cookie_fields_trim_and_validate(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("ADE_SESSION_COOKIE_NAME", " ade_cookie ")
     monkeypatch.setenv("ADE_SESSION_REFRESH_COOKIE_NAME", "\tade_refresh")
     monkeypatch.setenv("ADE_SESSION_CSRF_COOKIE_NAME", "ade-csrf")
-    monkeypatch.setenv("ADE_SESSION_COOKIE_PATH", " /api ")
+    monkeypatch.setenv("ADE_SESSION_COOKIE_PATH", " /api/v1 ")
     reload_settings()
 
     settings = get_settings()
@@ -283,7 +283,7 @@ def test_session_cookie_fields_trim_and_validate(monkeypatch: pytest.MonkeyPatch
     assert settings.session_cookie_name == "ade_cookie"
     assert settings.session_refresh_cookie_name == "ade_refresh"
     assert settings.session_csrf_cookie_name == "ade-csrf"
-    assert settings.session_cookie_path == "/api"
+    assert settings.session_cookie_path == "/api/v1"
 
 
 def test_session_cookie_name_rejects_whitespace(monkeypatch: pytest.MonkeyPatch) -> None:

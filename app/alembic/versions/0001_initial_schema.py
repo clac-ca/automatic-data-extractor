@@ -1,4 +1,4 @@
-"""Initial ADE schema with Graph-style RBAC."""
+"""Initial ADE schema with unified RBAC."""
 
 from __future__ import annotations
 
@@ -10,23 +10,35 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
-PERMISSION_SCOPE = sa.Enum(
-    "global", "workspace", name="permissionscope", native_enum=False, length=20
+SCOPETYPE = sa.Enum(
+    "global",
+    "workspace",
+    name="scopetype",
+    native_enum=False,
+    length=20,
 )
-ROLE_SCOPE = sa.Enum("global", "workspace", name="rolescope", native_enum=False, length=20)
+
+PRINCIPALTYPE = sa.Enum(
+    "user",
+    name="principaltype",
+    native_enum=False,
+    length=20,
+)
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+
     _create_users()
     _create_user_credentials()
     _create_user_identities()
     _create_workspaces()
     _create_workspace_memberships()
     _create_permissions()
-    _create_roles()
+    _create_roles(bind)
     _create_role_permissions()
-    _create_user_global_roles()
-    _create_workspace_membership_roles()
+    _create_principals()
+    _create_role_assignments()
     _create_configurations()
     _create_documents()
     _create_jobs()
@@ -34,36 +46,8 @@ def upgrade() -> None:
     _create_system_settings()
 
 
-def downgrade() -> None:  # pragma: no cover - exercised in migration tests
-    bind = op.get_bind()
-    if bind.dialect.name == "postgresql":
-        op.drop_index("roles_system_slug_scope_uni", table_name="roles")
-
-    op.drop_table("system_settings")
-    op.drop_table("api_keys")
-    op.drop_table("jobs")
-    op.drop_table("documents")
-    op.drop_table("configurations")
-    op.drop_table("workspace_membership_roles")
-    op.drop_table("user_global_roles")
-    op.drop_table("role_permissions")
-    op.drop_table("roles")
-    op.drop_table("permissions")
-    op.drop_table("workspace_memberships")
-    op.drop_table("workspaces")
-    op.drop_table("user_identities")
-    op.drop_table("user_credentials")
-    op.drop_table("users")
-
-    # Drop Enum types for databases that materialise them (e.g., PostgreSQL)
-    try:
-        PERMISSION_SCOPE.drop(bind, checkfirst=False)
-    except NotImplementedError:
-        pass
-    try:
-        ROLE_SCOPE.drop(bind, checkfirst=False)
-    except NotImplementedError:
-        pass
+def downgrade() -> None:  # pragma: no cover - intentionally not implemented
+    raise NotImplementedError("Downgrade is not supported for the initial schema.")
 
 
 def _create_users() -> None:
@@ -166,20 +150,27 @@ def _create_permissions() -> None:
     op.create_table(
         "permissions",
         sa.Column("key", sa.String(length=120), primary_key=True),
-        sa.Column("scope", PERMISSION_SCOPE, nullable=False),
+        sa.Column("resource", sa.String(length=120), nullable=False),
+        sa.Column("action", sa.String(length=120), nullable=False),
+        sa.Column("scope_type", SCOPETYPE, nullable=False),
         sa.Column("label", sa.String(length=200), nullable=False),
         sa.Column("description", sa.Text(), nullable=False),
     )
-    op.create_index("permissions_scope_idx", "permissions", ["scope"], unique=False)
+    op.create_index(
+        "permissions_scope_type_idx",
+        "permissions",
+        ["scope_type"],
+        unique=False,
+    )
 
 
-def _create_roles() -> None:
+def _create_roles(bind: sa.engine.Connection) -> None:
     op.create_table(
         "roles",
         sa.Column("role_id", sa.String(length=26), primary_key=True),
-        sa.Column("scope", ROLE_SCOPE, nullable=False),
+        sa.Column("scope_type", SCOPETYPE, nullable=False),
         sa.Column(
-            "workspace_id",
+            "scope_id",
             sa.String(length=26),
             sa.ForeignKey("workspaces.workspace_id", ondelete="CASCADE"),
             nullable=True,
@@ -187,7 +178,7 @@ def _create_roles() -> None:
         sa.Column("slug", sa.String(length=100), nullable=False),
         sa.Column("name", sa.String(length=150), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("is_system", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column("built_in", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("editable", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column(
@@ -199,18 +190,29 @@ def _create_roles() -> None:
         ),
         sa.Column("created_by", sa.String(length=26), nullable=True),
         sa.Column("updated_by", sa.String(length=26), nullable=True),
-        sa.UniqueConstraint("scope", "workspace_id", "slug", name="roles_scope_workspace_slug_uniq"),
+        sa.UniqueConstraint("scope_type", "scope_id", "slug"),
     )
-    op.create_index("roles_scope_idx", "roles", ["scope"], unique=False)
-
-    bind = op.get_bind()
+    op.create_index(
+        "roles_scope_lookup_idx",
+        "roles",
+        ["scope_type", "scope_id"],
+        unique=False,
+    )
     if bind.dialect.name == "postgresql":
         op.create_index(
-            "roles_system_slug_scope_uni",
+            "roles_system_slug_scope_type_uni",
             "roles",
-            ["slug", "scope"],
+            ["slug", "scope_type"],
             unique=True,
-            postgresql_where=sa.text("workspace_id IS NULL"),
+            postgresql_where=sa.text("scope_id IS NULL"),
+        )
+    elif bind.dialect.name == "sqlite":
+        op.create_index(
+            "roles_system_slug_scope_type_uni",
+            "roles",
+            ["slug", "scope_type"],
+            unique=True,
+            sqlite_where=sa.text("scope_id IS NULL"),
         )
 
 
@@ -239,44 +241,40 @@ def _create_role_permissions() -> None:
     )
 
 
-def _create_user_global_roles() -> None:
+def _create_principals() -> None:
     op.create_table(
-        "user_global_roles",
+        "principals",
+        sa.Column("principal_id", sa.String(length=26), primary_key=True),
+        sa.Column("principal_type", PRINCIPALTYPE, nullable=False),
         sa.Column(
             "user_id",
             sa.String(length=26),
             sa.ForeignKey("users.user_id", ondelete="CASCADE"),
-            nullable=False,
+            unique=True,
         ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column(
-            "role_id",
-            sa.String(length=26),
-            sa.ForeignKey("roles.role_id", ondelete="CASCADE"),
+            "updated_at",
+            sa.DateTime(timezone=True),
             nullable=False,
+            server_default=sa.func.now(),
+            server_onupdate=sa.func.now(),
         ),
-        sa.PrimaryKeyConstraint("user_id", "role_id"),
-    )
-    op.create_index(
-        "user_global_roles_user_id_idx",
-        "user_global_roles",
-        ["user_id"],
-        unique=False,
-    )
-    op.create_index(
-        "user_global_roles_role_id_idx",
-        "user_global_roles",
-        ["role_id"],
-        unique=False,
+        sa.CheckConstraint(
+            "(principal_type = 'user' AND user_id IS NOT NULL)",
+            name="principals_user_fk_required",
+        ),
     )
 
 
-def _create_workspace_membership_roles() -> None:
+def _create_role_assignments() -> None:
     op.create_table(
-        "workspace_membership_roles",
+        "role_assignments",
+        sa.Column("assignment_id", sa.String(length=26), primary_key=True),
         sa.Column(
-            "workspace_membership_id",
+            "principal_id",
             sa.String(length=26),
-            sa.ForeignKey("workspace_memberships.workspace_membership_id", ondelete="CASCADE"),
+            sa.ForeignKey("principals.principal_id", ondelete="CASCADE"),
             nullable=False,
         ),
         sa.Column(
@@ -285,16 +283,46 @@ def _create_workspace_membership_roles() -> None:
             sa.ForeignKey("roles.role_id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.PrimaryKeyConstraint("workspace_membership_id", "role_id"),
+        sa.Column("scope_type", SCOPETYPE, nullable=False),
+        sa.Column(
+            "scope_id",
+            sa.String(length=26),
+            sa.ForeignKey("workspaces.workspace_id", ondelete="CASCADE"),
+            nullable=True,
+        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+            server_onupdate=sa.func.now(),
+        ),
+        sa.UniqueConstraint("principal_id", "role_id", "scope_type", "scope_id"),
+        sa.CheckConstraint(
+            "(scope_type = 'global' AND scope_id IS NULL) OR"
+            " (scope_type = 'workspace' AND scope_id IS NOT NULL)",
+            name="role_assignments_scope_consistency",
+        ),
     )
     op.create_index(
-        "workspace_membership_roles_role_id_idx",
-        "workspace_membership_roles",
-        ["role_id"],
+        "role_assignments_principal_scope_idx",
+        "role_assignments",
+        ["principal_id", "scope_type", "scope_id"],
         unique=False,
     )
-
-
+    op.create_index(
+        "role_assignments_role_scope_idx",
+        "role_assignments",
+        ["role_id", "scope_type", "scope_id"],
+        unique=False,
+    )
+    op.create_index(
+        "role_assignments_principal_role_idx",
+        "role_assignments",
+        ["principal_id", "role_id"],
+        unique=False,
+    )
 def _create_configurations() -> None:
     op.create_table(
         "configurations",

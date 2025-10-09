@@ -111,5 +111,13 @@ async def test_assign_member_roles_allows_replacing_when_other_governor(
 
         refreshed_owner = await session.get(WorkspaceMembership, owner_membership.id)
         assert refreshed_owner is not None
-        slugs = service._slugs_for_membership(refreshed_owner)
-        assert slugs == ["workspace-member"]
+        summaries = await service._summaries_for_workspace(
+            workspace_id, [refreshed_owner]
+        )
+        summary = service._summary_for_membership(
+            membership=refreshed_owner, summaries=summaries
+        )
+        member_view = service.build_member(
+            refreshed_owner, summary=summary
+        )
+        assert member_view.roles == ["workspace-member"]
