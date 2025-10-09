@@ -7,7 +7,7 @@ import type { WorkspaceProfile } from "../../../shared/api/types";
 export function useWorkspacesQuery() {
   return useQuery<WorkspaceProfile[]>({
     queryKey: workspaceKeys.lists(),
-    queryFn: ({ signal }) => fetchWorkspaces({ signal }),
+    queryFn: fetchWorkspaces,
     staleTime: 30_000,
   });
 }
