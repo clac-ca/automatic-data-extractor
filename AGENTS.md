@@ -215,6 +215,15 @@ Run the quality gates appropriate for the scope of your change set.
 
 ---
 
+## CHANGELOG expectations
+
+- Maintain `CHANGELOG.md` using the [Keep a Changelog](https://keepachangelog.com/) structure already seeded in the repo.
+- Update the `## [Unreleased]` section whenever you ship a behaviour change, workflow tweak, or documentation update that users or operators should know about. Examples include API changes, CLI flags, release automation adjustments, and notable bug fixes.
+- File entries under the appropriate subsection (`### Added`, `### Changed`, `### Deprecated`, `### Removed`, `### Fixed`, `### Security`). Add the subsection if it does not yet exist beneath `## [Unreleased]`.
+- Use short, imperative bullet points ("Add", "Fix", "Document") that describe the effect of the change—not the git diff.
+- Only promote `## [Unreleased]` to a dated release when explicitly instructed. Use `scripts/finalize_changelog.py` to roll the unreleased notes into a tagged version and regenerate the empty `Unreleased` skeleton.
+- Never manually duplicate, rename, or otherwise "roll" the `Unreleased` heading—running `scripts/finalize_changelog.py` automatically moves the section into the new release and restores a fresh `Unreleased` template.
+
 ## Guiding Principle
 
 > **Consistency, clarity, and pragmatism beat cleverness.**
