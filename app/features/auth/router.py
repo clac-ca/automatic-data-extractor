@@ -10,6 +10,7 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Query,
     Request,
     Response,
     Security,
@@ -33,16 +34,16 @@ from .schemas import (
     APIKeyIssueResponse,
     APIKeySummary,
     AuthProvider,
+    LoginRequest,
     ProviderDiscoveryResponse,
     SessionEnvelope,
     SetupRequest,
     SetupStatus,
-    LoginRequest,
 )
 from .service import (
     SSO_STATE_COOKIE,
-    AuthService,
     AuthenticatedIdentity,
+    AuthService,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -87,7 +88,11 @@ async def read_setup_status(
 ) -> SetupStatus:
     service = AuthService(session=session, settings=settings)
     requires_setup, completed_at = await service.get_initial_setup_status()
-    return SetupStatus(requires_setup=requires_setup, completed_at=completed_at)
+    return SetupStatus(
+        requires_setup=requires_setup,
+        completed_at=completed_at,
+        force_sso=settings.auth_force_sso,
+    )
 
 
 @setup_router.post(
@@ -213,7 +218,10 @@ async def read_session(
         try:
             payload = service.decode_token(token_value, expected_type="access")
         except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid session token") from exc
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid session token",
+            ) from exc
         expires_at = payload.expires_at
 
     user_profiles = UsersService(session=session)
@@ -499,11 +507,13 @@ async def start_sso_login(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_app_settings)],
+    next_path: Annotated[str | None, Query(alias="next")] = None,
 ) -> RedirectResponse:
     service = AuthService(session=session, settings=settings)
-    challenge = await service.prepare_sso_login()
+    challenge = await service.prepare_sso_login(return_to=next_path)
     redirect = RedirectResponse(challenge.redirect_url, status_code=status.HTTP_302_FOUND)
     secure_cookie = service.is_secure_request(request)
+    cookie_path = request.url.path.rsplit("/", 1)[0]
     redirect.set_cookie(
         key=SSO_STATE_COOKIE,
         value=challenge.state_token,
@@ -511,7 +521,7 @@ async def start_sso_login(
         secure=secure_cookie,
         max_age=challenge.expires_in,
         samesite="lax",
-        path="/auth/sso",
+        path=cookie_path,
     )
     return redirect
 
@@ -560,23 +570,25 @@ async def finish_sso_login(
         )
 
     try:
-        user = await service.complete_sso_login(
+        result = await service.complete_sso_login(
             code=code,
             state=state,
             state_token=state_cookie,
         )
     finally:
-        response.delete_cookie(SSO_STATE_COOKIE, path="/auth/sso")
+        cookie_path = request.url.path.rsplit("/", 1)[0]
+        response.delete_cookie(SSO_STATE_COOKIE, path=cookie_path)
 
-    tokens = await service.start_session(user=user)
+    tokens = await service.start_session(user=result.user)
     secure_cookie = service.is_secure_request(request)
     service.apply_session_cookies(response, tokens, secure=secure_cookie)
     user_profiles = UsersService(session=session)
-    profile = await user_profiles.get_profile(user=user)
+    profile = await user_profiles.get_profile(user=result.user)
     return SessionEnvelope(
         user=profile,
         expires_at=tokens.access_expires_at,
         refresh_expires_at=tokens.refresh_expires_at,
+        return_to=result.return_to,
     )
 
 

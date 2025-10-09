@@ -11,7 +11,7 @@ from pydantic import EmailStr, Field, SecretStr, field_validator, model_validato
 from app.core.schema import BaseSchema
 
 from ..users.schemas import UserProfile
-from .service import normalise_email
+from .utils import normalise_email
 
 
 def _validate_email(value: EmailStr | str, *, allow_reserved: bool = False) -> str:
@@ -32,6 +32,7 @@ class SetupStatus(BaseSchema):
 
     requires_setup: bool
     completed_at: datetime | None = None
+    force_sso: bool = False
 
 
 class SetupRequest(BaseSchema):
@@ -103,6 +104,7 @@ class SessionEnvelope(BaseSchema):
     user: UserProfile
     expires_at: datetime | None = None
     refresh_expires_at: datetime | None = None
+    return_to: str | None = None
 
 
 class AuthProvider(BaseSchema):

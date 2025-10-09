@@ -29,7 +29,9 @@ export function LoginRoute() {
   useEffect(() => {
     if (session) {
       const preferredWorkspace = session.user.preferred_workspace_id ?? undefined;
-      navigate(preferredWorkspace ? `/workspaces/${preferredWorkspace}` : "/workspaces", { replace: true });
+      const fallback = preferredWorkspace ? `/workspaces/${preferredWorkspace}` : "/workspaces";
+      const target = session.return_to ?? fallback;
+      navigate(target, { replace: true });
     }
   }, [session, navigate]);
 

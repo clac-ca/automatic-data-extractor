@@ -9,6 +9,7 @@ from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
@@ -19,6 +20,7 @@ DEFAULT_DOCUMENTS_SUBDIR = "documents"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS = ("http://localhost:5173", "http://localhost:8000")
 _AUTH_PROVIDER_ID_PATTERN = re.compile(r"^[a-zA-Z0-9._-]+$")
+_DOMAIN_SEGMENT_PATTERN = re.compile(r"^[a-zA-Z0-9-]+$")
 
 _DURATION_PATTERN = re.compile(
     r"^(?P<value>\d+(?:\.\d+)?)(?:\s*(?P<unit>[a-zA-Z]+))?$",
@@ -247,6 +249,16 @@ class Settings(BaseSettings):
                     key="ade_oidc_scopes",
                     split_pattern=r"[\s,]+",
                 )
+                cls._normalise_env_list(
+                    env_vars,
+                    key="ADE_AUTH_SSO_ALLOWED_DOMAINS",
+                    split_pattern=r"[\s,]+",
+                )
+                cls._normalise_env_list(
+                    env_vars,
+                    key="ade_auth_sso_allowed_domains",
+                    split_pattern=r"[\s,]+",
+                )
         return init_settings, env_settings, dotenv_settings, file_secret_settings
 
     debug: bool = Field(False, description="Enable FastAPI debug mode.")
@@ -348,6 +360,16 @@ class Settings(BaseSettings):
         None,
         description="Optional audience parameter requested from the identity provider.",
     )
+    auth_sso_auto_provision: bool = Field(
+        True,
+        description=(
+            "Automatically create users for new SSO identities when enabled."
+        ),
+    )
+    auth_sso_allowed_domains: list[str] = Field(
+        default_factory=list,
+        description="Optional allowlist restricting SSO email domains.",
+    )
     auth_force_sso: bool = Field(
         False,
         description=(
@@ -426,6 +448,81 @@ class Settings(BaseSettings):
         if isinstance(value, (list, tuple)):
             return list(value)
         raise TypeError("auth_providers must be provided as a JSON array or list of objects")
+
+    @field_validator("oidc_issuer", mode="before")
+    @classmethod
+    def _validate_oidc_issuer(cls, value: Any) -> str | None:
+        if value in (None, ""):
+            return None
+        candidate = str(value).strip()
+        if not candidate:
+            return None
+        parsed = urlparse(candidate)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("oidc_issuer must be an https URL")
+        normalised = parsed._replace(path=parsed.path.rstrip("/"))
+        return normalised.geturl().rstrip("/")
+
+    @field_validator("oidc_redirect_url", mode="before")
+    @classmethod
+    def _validate_oidc_redirect(cls, value: Any) -> str | None:
+        if value in (None, ""):
+            return None
+        candidate = str(value).strip()
+        if not candidate:
+            return None
+        if candidate.startswith("/"):
+            return candidate
+        parsed = urlparse(candidate)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError(
+                "oidc_redirect_url must be an https URL or an absolute path",
+            )
+        return parsed.geturl()
+
+    @field_validator("auth_sso_allowed_domains", mode="before")
+    @classmethod
+    def _prepare_allowed_domains(cls, value: Any) -> list[str]:
+        if value in (None, "", []):
+            return []
+        if isinstance(value, str):
+            payload = value.strip()
+            if not payload:
+                return []
+            try:
+                parsed = json.loads(payload)
+            except json.JSONDecodeError:
+                parsed = [segment.strip() for segment in re.split(r"[\s,]+", payload)]
+            raw_items = parsed
+        elif isinstance(value, (list, tuple, set)):
+            raw_items = list(value)
+        else:
+            raise TypeError(
+                "auth_sso_allowed_domains must be provided as a list or JSON array",
+            )
+
+        domains: set[str] = set()
+        for item in raw_items:
+            candidate = str(item).strip().lower()
+            if not candidate:
+                continue
+            if candidate.startswith(".") or candidate.endswith("."):
+                raise ValueError("auth_sso_allowed_domains entries must be hostnames")
+            if "@" in candidate or "/" in candidate or " " in candidate:
+                raise ValueError("auth_sso_allowed_domains entries must be hostnames")
+            segments = candidate.split(".")
+            if any(
+                not segment
+                or segment.startswith("-")
+                or segment.endswith("-")
+                or not _DOMAIN_SEGMENT_PATTERN.fullmatch(segment)
+                for segment in segments
+            ):
+                raise ValueError(
+                    "auth_sso_allowed_domains entries must be valid hostname labels",
+                )
+            domains.add(candidate)
+        return sorted(domains)
 
     @field_validator(
         "session_cookie_name",
@@ -569,9 +666,17 @@ class Settings(BaseSettings):
             ]
         self.server_cors_origins = unique_origins
 
+        redirect = self.oidc_redirect_url or ""
+        if redirect.startswith("/"):
+            base_origin = self.server_public_url.rstrip("/")
+            if not base_origin:
+                raise ValueError(
+                    "server_public_url must be configured when using relative oidc_redirect_url"
+                )
+            self.oidc_redirect_url = f"{base_origin}{redirect}"
+
         required = {
             "oidc_client_id": self.oidc_client_id,
-            "oidc_client_secret": self.oidc_client_secret,
             "oidc_issuer": self.oidc_issuer,
             "oidc_redirect_url": self.oidc_redirect_url,
         }
