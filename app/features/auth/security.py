@@ -13,16 +13,12 @@ from typing import Any, Literal
 import jwt
 from fastapi import HTTPException, status
 
-from ..users.models import UserRole
-
-
 @dataclass(slots=True)
 class TokenPayload:
     """Decoded contents of an issued authentication token."""
 
     user_id: str
     email: str
-    role: UserRole
     issued_at: datetime
     expires_at: datetime
     token_type: Literal["access", "refresh"]
@@ -104,7 +100,6 @@ def create_signed_token(
     *,
     user_id: str,
     email: str,
-    role: UserRole,
     session_id: str,
     token_type: Literal["access", "refresh"],
     secret: str,
@@ -118,7 +113,6 @@ def create_signed_token(
     payload: dict[str, Any] = {
         "sub": user_id,
         "email": email,
-        "role": role.value,
         "iat": int(now.timestamp()),
         "exp": int((now + expires_delta).timestamp()),
         "sid": session_id,
@@ -136,7 +130,6 @@ def decode_signed_token(*, token: str, secret: str, algorithms: Sequence[str]) -
 
     issued_at = datetime.fromtimestamp(int(data["iat"]), tz=UTC)
     expires_at = datetime.fromtimestamp(int(data["exp"]), tz=UTC)
-    role = UserRole(data["role"])
     token_type = str(data.get("typ", "")).lower()
     if token_type not in {"access", "refresh"}:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Unsupported token type")
@@ -148,7 +141,6 @@ def decode_signed_token(*, token: str, secret: str, algorithms: Sequence[str]) -
     return TokenPayload(
         user_id=str(data["sub"]),
         email=str(data.get("email", "")),
-        role=role,
         issued_at=issued_at,
         expires_at=expires_at,
         token_type=token_type,  # type: ignore[arg-type]

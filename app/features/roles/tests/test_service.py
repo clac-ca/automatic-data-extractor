@@ -15,7 +15,7 @@ from app.features.roles.service import (
     get_global_permissions_for_user,
     sync_permission_registry,
 )
-from app.features.users.models import User, UserRole
+from app.features.users.models import User
 
 
 def test_collect_permission_keys_rejects_unknown() -> None:
@@ -81,7 +81,6 @@ async def test_get_global_permissions_for_admin(
         admin_id = seed_identity["admin"]["id"]  # type: ignore[index]
         admin = await session.get(User, admin_id)
         assert admin is not None
-        admin.role = UserRole.ADMIN
 
         permissions = await get_global_permissions_for_user(session=session, user=admin)
 

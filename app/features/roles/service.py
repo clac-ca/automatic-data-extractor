@@ -7,10 +7,10 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Iterable, Mapping, Sequence
 
-from sqlalchemy import Select, delete, select
+from sqlalchemy import Select, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.users.models import User, UserRole
+from app.features.users.models import User
 
 from .models import Permission, Role, RolePermission, UserGlobalRole
 from .registry import PERMISSIONS, PERMISSION_REGISTRY, PermissionScope, SYSTEM_ROLES
@@ -155,12 +155,8 @@ async def get_global_permissions_for_user(
 ) -> frozenset[str]:
     """Return the flattened global permission set for ``user``."""
 
-    if user.role is UserRole.ADMIN:
-        return frozenset(
-            definition.key
-            for definition in PERMISSION_REGISTRY.values()
-            if definition.scope == "global"
-        )
+    if user.is_service_account:
+        return frozenset()
 
     stmt: Select[str] = (
         select(RolePermission.permission_key)
@@ -172,7 +168,59 @@ async def get_global_permissions_for_user(
         )
     )
     result = await session.execute(stmt)
+    permissions = frozenset(result.scalars().all())
+    if not permissions:
+        return permissions
+    return _expand_implications(permissions, scope="global")
+
+
+async def get_global_role_slugs_for_user(
+    *, session: AsyncSession, user: User
+) -> frozenset[str]:
+    """Return the global role slugs assigned to ``user``."""
+
+    if user.is_service_account:
+        return frozenset()
+
+    stmt: Select[str] = (
+        select(Role.slug)
+        .join(UserGlobalRole, UserGlobalRole.role_id == Role.id)
+        .where(
+            UserGlobalRole.user_id == user.id,
+            Role.scope == "global",
+        )
+    )
+    result = await session.execute(stmt)
     return frozenset(result.scalars().all())
+
+
+async def get_global_role_by_slug(
+    *, session: AsyncSession, slug: str
+) -> Role | None:
+    """Return the global role matching ``slug`` if present."""
+
+    stmt: Select[Role] = (
+        select(Role)
+        .where(Role.slug == slug, Role.scope == "global")
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def count_users_with_global_role(
+    *, session: AsyncSession, slug: str
+) -> int:
+    """Return the number of users assigned the global role ``slug``."""
+
+    stmt = (
+        select(func.count())
+        .select_from(UserGlobalRole)
+        .join(Role, Role.id == UserGlobalRole.role_id)
+        .where(Role.scope == "global", Role.slug == slug)
+    )
+    result = await session.execute(stmt)
+    return int(result.scalar_one() or 0)
 
 
 async def assign_global_role(
@@ -292,5 +340,8 @@ __all__ = [
     "collect_permission_keys",
     "assign_global_role",
     "get_global_permissions_for_user",
+    "get_global_role_slugs_for_user",
+    "get_global_role_by_slug",
+    "count_users_with_global_role",
     "sync_permission_registry",
 ]

@@ -110,7 +110,8 @@ async def complete_setup(
     tokens = await service.start_session(user=user)
     secure_cookie = service.is_secure_request(request)
     service.apply_session_cookies(response, tokens, secure=secure_cookie)
-    profile = UserProfile.model_validate(user)
+    user_profiles = UsersService(session=session)
+    profile = await user_profiles.get_profile(user=user)
     return SessionEnvelope(
         user=profile,
         expires_at=tokens.access_expires_at,
@@ -152,7 +153,8 @@ async def create_session(
     tokens = await service.start_session(user=user)
     secure_cookie = service.is_secure_request(request)
     service.apply_session_cookies(response, tokens, secure=secure_cookie)
-    profile = UserProfile.model_validate(user)
+    user_profiles = UsersService(session=session)
+    profile = await user_profiles.get_profile(user=user)
     return SessionEnvelope(
         user=profile,
         expires_at=tokens.access_expires_at,
@@ -204,7 +206,8 @@ async def read_session(
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid session token") from exc
         expires_at = payload.expires_at
 
-    profile = UserProfile.model_validate(principal.user)
+    user_profiles = UsersService(session=session)
+    profile = await user_profiles.get_profile(user=principal.user)
     return SessionEnvelope(
         user=profile,
         expires_at=expires_at,
@@ -251,7 +254,8 @@ async def refresh_session(
     tokens = await service.refresh_session(payload=payload, user=user)
     secure_cookie = service.is_secure_request(request)
     service.apply_session_cookies(response, tokens, secure=secure_cookie)
-    profile = UserProfile.model_validate(user)
+    user_profiles = UsersService(session=session)
+    profile = await user_profiles.get_profile(user=user)
     return SessionEnvelope(
         user=profile,
         expires_at=tokens.access_expires_at,
@@ -555,7 +559,8 @@ async def finish_sso_login(
     tokens = await service.start_session(user=user)
     secure_cookie = service.is_secure_request(request)
     service.apply_session_cookies(response, tokens, secure=secure_cookie)
-    profile = UserProfile.model_validate(user)
+    user_profiles = UsersService(session=session)
+    profile = await user_profiles.get_profile(user=user)
     return SessionEnvelope(
         user=profile,
         expires_at=tokens.access_expires_at,

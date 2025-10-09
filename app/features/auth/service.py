@@ -18,7 +18,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import AuthProviderSettings, Settings
 
 from ..system_settings.repository import SystemSettingsRepository
-from ..users.models import User, UserRole
+from app.features.roles.service import (
+    assign_global_role,
+    count_users_with_global_role,
+    get_global_role_by_slug,
+    sync_permission_registry,
+)
+
+from ..users.models import User
 from ..users.repository import UsersRepository
 from ..users.service import UsersService
 from .models import APIKey
@@ -154,6 +161,8 @@ def normalise_api_key_label(value: str | None) -> str | None:
 
 
 _INITIAL_SETUP_SETTING_KEY = "initial_setup"
+_GLOBAL_ADMIN_ROLE_SLUG = "global-admin"
+_GLOBAL_USER_ROLE_SLUG = "global-user"
 
 
 class AuthService:
@@ -186,7 +195,9 @@ class AuthService:
                 except ValueError:
                     completed_at = None
 
-        admin_count = await self._users.count_admins()
+        admin_count = await count_users_with_global_role(
+            session=self._session, slug=_GLOBAL_ADMIN_ROLE_SLUG
+        )
         requires_setup = completed_at is None and admin_count == 0
         return requires_setup, completed_at
 
@@ -201,6 +212,15 @@ class AuthService:
 
         session = self._session
 
+        # Ensure the canonical permission and role registry exists before
+        # provisioning the first administrator. In environments where the
+        # service is executed outside of the FastAPI lifespan (for example,
+        # CLI utilities or ephemeral setup scripts), the registry may not have
+        # been synced yet which would previously raise a 500 when assigning the
+        # `global-admin` role. Running the synchronisation here keeps the
+        # initial setup flow resilient regardless of the caller.
+        await sync_permission_registry(session=session)
+
         async with session.begin():
             setting = await self._system_settings.get_for_update(
                 _INITIAL_SETUP_SETTING_KEY
@@ -213,7 +233,9 @@ class AuthService:
 
             raw_value = setting.value or {}
             completed_at = raw_value.get("completed_at")
-            admin_count = await self._users.count_admins()
+            admin_count = await count_users_with_global_role(
+                session=session, slug=_GLOBAL_ADMIN_ROLE_SLUG
+            )
             if completed_at or admin_count > 0:
                 raise HTTPException(
                     status.HTTP_409_CONFLICT,
@@ -225,6 +247,10 @@ class AuthService:
                 email=email,
                 password=password,
                 display_name=display_name,
+            )
+
+            await self._assign_global_role(
+                user=user, slug=_GLOBAL_ADMIN_ROLE_SLUG, session=session
             )
 
             setting_value = dict(raw_value)
@@ -290,7 +316,6 @@ class AuthService:
         access_token = create_signed_token(
             user_id=cast(str, user.id),
             email=user.email,
-            role=user.role,
             session_id=session_identifier,
             token_type="access",
             secret=settings.jwt_secret_value,
@@ -301,7 +326,6 @@ class AuthService:
         refresh_token = create_signed_token(
             user_id=cast(str, user.id),
             email=user.email,
-            role=user.role,
             session_id=session_identifier,
             token_type="refresh",
             secret=settings.jwt_secret_value,
@@ -319,6 +343,26 @@ class AuthService:
             refresh_expires_at=refresh_expires_at,
             access_max_age=int(access_delta.total_seconds()),
             refresh_max_age=int(refresh_delta.total_seconds()),
+        )
+
+    async def _assign_global_role(
+        self,
+        *,
+        user: User,
+        slug: str,
+        session: AsyncSession | None = None,
+    ) -> None:
+        target_session = session or self._session
+        role = await get_global_role_by_slug(session=target_session, slug=slug)
+        if role is None:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Global role '{slug}' is not configured",
+            )
+        await assign_global_role(
+            session=target_session,
+            user_id=cast(str, user.id),
+            role_id=cast(str, role.id),
         )
 
     async def start_session(self, *, user: User) -> SessionTokens:
@@ -1056,8 +1100,11 @@ class AuthService:
             if user is None:
                 user = await self._users.create(
                     email=canonical,
-                    role=UserRole.USER,
                     is_active=True,
+                    is_service_account=False,
+                )
+                await self._assign_global_role(
+                    user=user, slug=_GLOBAL_USER_ROLE_SLUG
                 )
             elif not user.is_active:
                 raise HTTPException(
