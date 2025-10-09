@@ -14,8 +14,12 @@ from sqlalchemy.orm import selectinload
 
 from app.features.roles.models import Role, RolePermission
 from app.features.roles.registry import PERMISSION_REGISTRY, SYSTEM_ROLES
-from app.features.roles.service import AuthorizationError, collect_permission_keys
-from ..users.models import User, UserRole
+from app.features.roles.service import (
+    AuthorizationError,
+    collect_permission_keys,
+    get_global_permissions_for_user,
+)
+from ..users.models import User
 from ..users.repository import UsersRepository
 from ..users.schemas import UserProfile
 from .models import Workspace, WorkspaceMembership, WorkspaceMembershipRole
@@ -73,8 +77,15 @@ class WorkspacesService:
     ) -> WorkspaceProfile:
         """Return the workspace membership profile for ``user``."""
 
+        global_permissions = await get_global_permissions_for_user(
+            session=self._session, user=user
+        )
+        can_view_all_workspaces = bool(
+            {"Workspaces.Read.All", "Workspaces.ReadWrite.All"} & global_permissions
+        )
+
         if workspace_id is not None:
-            if user.role is UserRole.ADMIN:
+            if can_view_all_workspaces:
                 workspace = await self._repo.get_workspace(workspace_id)
                 if workspace is None:
                     raise HTTPException(
@@ -87,7 +98,7 @@ class WorkspacesService:
             )
             return self.build_profile(membership)
 
-        if user.role is UserRole.ADMIN:
+        if can_view_all_workspaces:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, detail="Workspace identifier required"
             )
@@ -103,7 +114,13 @@ class WorkspacesService:
     async def list_memberships(self, *, user: User) -> list[WorkspaceProfile]:
         """Return all workspace profiles associated with ``user`` in a stable order."""
 
-        if user.role is UserRole.ADMIN:
+        global_permissions = await get_global_permissions_for_user(
+            session=self._session, user=user
+        )
+        if {
+            "Workspaces.Read.All",
+            "Workspaces.ReadWrite.All",
+        } & global_permissions:
             workspaces = await self._repo.list_all()
             profiles = [self.build_global_admin_profile(workspace) for workspace in workspaces]
             profiles.sort(key=lambda profile: profile.slug)

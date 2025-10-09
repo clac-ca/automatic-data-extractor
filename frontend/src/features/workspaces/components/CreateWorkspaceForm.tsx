@@ -61,12 +61,13 @@ export function CreateWorkspaceForm({ onCreated, onCancel, autoFocus = false }: 
           }}
           disabled={isPending}
           autoFocus={autoFocus}
+          data-autofocus={autoFocus ? "true" : undefined}
           className="mt-2 w-full rounded border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 shadow-inner focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
           placeholder="e.g. Finance Operations"
         />
       </div>
       <p className="text-xs text-slate-500">
-        You'll be the workspace owner. Add teammates later from the workspace settings.
+        You'll be the workspace owner. Invite teammates from the Members tab after creation.
       </p>
       {error && (
         <p className="text-sm text-rose-300" role="alert">

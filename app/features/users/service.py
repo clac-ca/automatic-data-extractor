@@ -6,8 +6,13 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.features.roles.service import (
+    get_global_permissions_for_user,
+    get_global_role_slugs_for_user,
+)
+
 from ..auth.security import hash_password
-from .models import User, UserRole
+from .models import User
 from .repository import UsersRepository
 from .schemas import UserProfile, UserSummary
 
@@ -22,13 +27,38 @@ class UsersService:
     async def get_profile(self, *, user: User) -> UserProfile:
         """Return the profile for the authenticated user."""
 
-        return UserProfile.model_validate(user)
+        return await self._build_profile(user)
 
     async def list_users(self) -> list[UserSummary]:
         """Return all users ordered by email."""
 
         users = await self._repo.list_users()
-        return [UserSummary.model_validate(user) for user in users]
+        summaries: list[UserSummary] = []
+        for user in users:
+            profile = await self._build_profile(user)
+            summaries.append(
+                UserSummary(
+                    **profile.model_dump(),
+                    created_at=user.created_at,
+                    updated_at=user.updated_at,
+                )
+            )
+        return summaries
+
+    async def _build_profile(self, user: User) -> UserProfile:
+        permissions = await get_global_permissions_for_user(
+            session=self._session, user=user
+        )
+        roles = await get_global_role_slugs_for_user(session=self._session, user=user)
+        return UserProfile(
+            user_id=str(user.id),
+            email=user.email,
+            is_active=user.is_active,
+            is_service_account=user.is_service_account,
+            display_name=user.display_name,
+            roles=sorted(roles),
+            permissions=sorted(permissions),
+        )
 
     async def create_admin(
         self,
@@ -55,7 +85,6 @@ class UsersService:
                 email=canonical_email,
                 password_hash=password_hash,
                 display_name=cleaned_display_name,
-                role=UserRole.ADMIN,
                 is_active=True,
                 is_service_account=False,
             )

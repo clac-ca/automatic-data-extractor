@@ -10,7 +10,6 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
-USER_ROLE = sa.Enum("admin", "user", name="userrole", native_enum=False, length=20)
 PERMISSION_SCOPE = sa.Enum(
     "global", "workspace", name="permissionscope", native_enum=False, length=20
 )
@@ -58,10 +57,6 @@ def downgrade() -> None:  # pragma: no cover - exercised in migration tests
 
     # Drop Enum types for databases that materialise them (e.g., PostgreSQL)
     try:
-        USER_ROLE.drop(bind, checkfirst=False)
-    except NotImplementedError:  # SQLite with native_enum=False
-        pass
-    try:
         PERMISSION_SCOPE.drop(bind, checkfirst=False)
     except NotImplementedError:
         pass
@@ -80,7 +75,6 @@ def _create_users() -> None:
         sa.Column("display_name", sa.String(length=255), nullable=True),
         sa.Column("is_service_account", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
-        sa.Column("role", USER_ROLE, nullable=False, server_default="user"),
         sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "failed_login_count",

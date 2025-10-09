@@ -5,8 +5,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from app.features.users.models import UserRole
-
 from .commands import api_keys as api_keys_commands
 from .commands import docker as docker_command
 from .commands import reset as reset_command
@@ -78,8 +76,8 @@ def build_cli_app() -> argparse.ArgumentParser:
     create_parser.add_argument("--email", required=True, help="Email address for the user.")
     create_parser.add_argument(
         "--role",
-        choices=[role.value for role in UserRole],
-        default=UserRole.USER.value,
+        choices=user_commands.ROLE_CHOICES,
+        default="user",
         help="Role assigned to the user (default: user).",
     )
     create_parser.add_argument(
