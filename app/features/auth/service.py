@@ -159,7 +159,7 @@ _HTTP_TIMEOUT = httpx.Timeout(5.0, connect=5.0, read=5.0)
 _HTTP_LIMITS = httpx.Limits(max_connections=5, max_keepalive_connections=5)
 _METADATA_CACHE_TTL = timedelta(minutes=5)
 _JWKS_CACHE_TTL = timedelta(minutes=5)
-_ALLOWED_JWT_ALGORITHMS = {"RS256", "ES256"}
+_ALLOWED_JWT_ALGORITHMS = {"RS256", "RS384", "RS512", "ES256"}
 _JWT_LEEWAY_SECONDS = 60
 
 
