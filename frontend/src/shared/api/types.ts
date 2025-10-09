@@ -23,6 +23,7 @@ export interface SessionEnvelope {
   user: SessionUser;
   expires_at: string;
   refresh_expires_at: string;
+  return_to?: string | null;
 }
 
 export interface SessionResponse {
@@ -41,7 +42,7 @@ export interface AuthProvider {
 export interface SetupStatusResponse {
   requires_setup: boolean;
   completed_at: string | null;
-  force_sso?: boolean;
+  force_sso: boolean;
 }
 
 export interface CompleteSetupPayload {
