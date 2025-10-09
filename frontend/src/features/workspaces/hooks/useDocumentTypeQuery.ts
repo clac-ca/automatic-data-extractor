@@ -6,7 +6,7 @@ import { workspaceKeys } from "./workspaceKeys";
 export function useDocumentTypeQuery(workspaceId: string, documentTypeId: string) {
   return useQuery({
     queryKey: workspaceKeys.documentType(workspaceId, documentTypeId),
-    queryFn: () => fetchDocumentType(workspaceId, documentTypeId),
+    queryFn: ({ signal }) => fetchDocumentType(workspaceId, documentTypeId, { signal }),
     staleTime: 30_000,
   });
 }

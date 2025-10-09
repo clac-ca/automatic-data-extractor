@@ -2,18 +2,22 @@ import { useOutletContext, useParams } from "react-router-dom";
 
 import { useDocumentTypeQuery } from "../hooks/useDocumentTypeQuery";
 import { formatDateTime } from "../../../shared/dates";
-import type { WorkspaceProfile } from "../../../shared/api/types";
-
-interface WorkspaceOutletContext {
-  workspace?: WorkspaceProfile;
-}
+import type { WorkspaceLayoutContext } from "../components/WorkspaceLayout";
 
 export function DocumentTypeRoute() {
   const params = useParams<{ workspaceId: string; documentTypeId: string }>();
-  const { workspace } = useOutletContext<WorkspaceOutletContext>();
+  const { workspace } = useOutletContext<WorkspaceLayoutContext>();
 
   const workspaceId = params.workspaceId ?? workspace?.id;
   const documentTypeId = params.documentTypeId;
+
+  if (!workspace) {
+    return (
+      <div className="rounded border border-slate-800 bg-slate-900/60 p-6 text-sm text-slate-300">
+        Select a workspace document to view its details.
+      </div>
+    );
+  }
 
   if (!workspaceId || !documentTypeId) {
     return (
