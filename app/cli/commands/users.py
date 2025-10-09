@@ -6,10 +6,17 @@ from argparse import Namespace
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.auth.security import hash_password
-from app.features.users.models import User, UserRole
+from app.features.roles.service import (
+    assign_global_role,
+    get_global_role_by_slug,
+    sync_permission_registry,
+)
+from app.features.users.models import User
 from app.features.users.repository import UsersRepository
+from app.features.users.service import UsersService
 
 from ..core.output import ColumnSpec, print_json, print_rows
 from ..core.runtime import load_settings, normalise_email, open_session, read_secret
@@ -20,15 +27,27 @@ __all__ = [
     "activate",
     "deactivate",
     "set_password",
+    "ROLE_CHOICES",
 ]
 
 
-def _serialise_user(user: User) -> dict[str, Any]:
+_ROLE_SLUGS = {
+    "admin": "global-admin",
+    "user": "global-user",
+}
+
+ROLE_CHOICES = tuple(_ROLE_SLUGS.keys())
+
+
+async def _serialise_user(session: AsyncSession, user: User) -> dict[str, Any]:
+    profiles = UsersService(session=session)
+    profile = await profiles.get_profile(user=user)
     return {
         "id": user.id,
-        "email": user.email,
-        "display_name": user.display_name,
-        "role": user.role.value,
+        "email": profile.email,
+        "display_name": profile.display_name,
+        "global_roles": profile.roles,
+        "global_permissions": profile.permissions,
         "is_service_account": bool(user.is_service_account),
         "is_active": bool(user.is_active),
         "failed_login_count": int(user.failed_login_count),
@@ -47,7 +66,7 @@ def _user_columns() -> list[ColumnSpec]:
             "Type",
             lambda row: "service_account" if row["is_service_account"] else "user",
         ),
-        ("Role", "role"),
+        ("Global Roles", lambda row: ", ".join(row.get("global_roles", []))),
         (
             "Status",
             lambda row: (
@@ -106,11 +125,17 @@ async def create(args: Namespace) -> None:
     settings = load_settings()
     email = normalise_email(args.email)
     password_text = _resolve_password(args)
-    role = UserRole(args.role)
     is_active = not args.inactive
     is_service_account = bool(args.service_account)
+    role_choice = getattr(args, "role", "user")
+    try:
+        role_slug = _ROLE_SLUGS[role_choice]
+    except KeyError as exc:
+        msg = f"Unsupported role '{role_choice}'"
+        raise ValueError(msg) from exc
 
     async with open_session(settings=settings) as session:
+        await sync_permission_registry(session=session)
         repo = UsersRepository(session)
         existing = await repo.get_by_email(email)
         if existing is not None:
@@ -120,7 +145,6 @@ async def create(args: Namespace) -> None:
             user = await repo.create(
                 email=email,
                 password_hash=hash_password(password_text),
-                role=role,
                 is_active=is_active,
                 is_service_account=is_service_account,
             )
@@ -128,7 +152,13 @@ async def create(args: Namespace) -> None:
             msg = f"Failed to create user '{email}': {exc}"
             raise ValueError(msg) from exc
 
-    serialised = _serialise_user(user)
+        role = await get_global_role_by_slug(session=session, slug=role_slug)
+        if role is None:
+            msg = f"Global role '{role_slug}' not found"
+            raise ValueError(msg)
+        await assign_global_role(session=session, user_id=user.id, role_id=role.id)
+        serialised = await _serialise_user(session, user)
+
     if args.json:
         print_json({"user": serialised})
     else:
@@ -140,8 +170,7 @@ async def list_users(args: Namespace) -> None:
     async with open_session(settings=settings) as session:
         repo = UsersRepository(session)
         users = await repo.list_users()
-
-    serialised = [_serialise_user(user) for user in users]
+        serialised = [await _serialise_user(session, user) for user in users]
     if args.json:
         print_json({"users": serialised})
     else:
@@ -168,8 +197,7 @@ async def _toggle_active(args: Namespace, *, should_activate: bool) -> None:
         user.is_active = should_activate
         await session.flush()
         await session.refresh(user)
-
-    serialised = _serialise_user(user)
+        serialised = await _serialise_user(session, user)
     if args.json:
         print_json({"user": serialised})
     else:
@@ -188,8 +216,7 @@ async def set_password(args: Namespace) -> None:
         )
         await repo.set_password(user, hash_password(password_text))
         await session.refresh(user)
-
-    serialised = _serialise_user(user)
+        serialised = await _serialise_user(session, user)
     if args.json:
         print_json({"user": serialised})
     else:

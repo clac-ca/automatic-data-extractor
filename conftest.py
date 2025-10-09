@@ -22,9 +22,9 @@ from app.db.bootstrap import ensure_database_ready
 from app.db.engine import render_sync_url, reset_database_state
 from app.db.session import get_sessionmaker
 from app.features.auth.security import hash_password
-from app.features.roles.models import Role
+from app.features.roles.models import Role, UserGlobalRole
 from app.features.roles.service import sync_permission_registry
-from app.features.users.models import User, UserCredential, UserRole
+from app.features.users.models import User, UserCredential
 from app.features.workspaces.models import (
     Workspace,
     WorkspaceMembership,
@@ -154,36 +154,12 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
         orphan_email = f"orphan+{workspace_slug}@example.test"
         invitee_email = f"invitee+{workspace_slug}@example.test"
 
-        admin = User(
-            email=admin_email,
-            role=UserRole.ADMIN,
-            is_active=True,
-        )
-        workspace_owner = User(
-            email=workspace_owner_email,
-            role=UserRole.USER,
-            is_active=True,
-        )
-        member = User(
-            email=member_email,
-            role=UserRole.USER,
-            is_active=True,
-        )
-        member_with_manage = User(
-            email=member_manage_email,
-            role=UserRole.USER,
-            is_active=True,
-        )
-        orphan = User(
-            email=orphan_email,
-            role=UserRole.USER,
-            is_active=True,
-        )
-        invitee = User(
-            email=invitee_email,
-            role=UserRole.USER,
-            is_active=True,
-        )
+        admin = User(email=admin_email, is_active=True)
+        workspace_owner = User(email=workspace_owner_email, is_active=True)
+        member = User(email=member_email, is_active=True)
+        member_with_manage = User(email=member_manage_email, is_active=True)
+        orphan = User(email=orphan_email, is_active=True)
+        invitee = User(email=invitee_email, is_active=True)
 
         session.add_all(
             [
@@ -198,6 +174,24 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
             ]
         )
         await session.flush()
+
+        global_roles = await session.execute(
+            select(Role).where(
+                Role.scope == "global",
+                Role.slug.in_(["global-admin", "global-user"]),
+            )
+        )
+        global_role_map = {role.slug: role for role in global_roles.scalars()}
+
+        def _assign_global(user: User, slug: str) -> None:
+            role = global_role_map.get(slug)
+            if role is None:
+                return
+            session.add(UserGlobalRole(user_id=user.id, role_id=role.id))
+
+        _assign_global(admin, "global-admin")
+        for candidate in (workspace_owner, member, member_with_manage, orphan, invitee):
+            _assign_global(candidate, "global-user")
 
         def _add_password(user: User, password: str) -> None:
             session.add(

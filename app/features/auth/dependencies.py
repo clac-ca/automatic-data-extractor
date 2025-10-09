@@ -17,7 +17,9 @@ from app.api.settings import get_app_settings
 from app.core.config import Settings
 from app.db.session import get_session
 
-from ..users.models import User, UserRole
+from app.features.roles.service import get_global_permissions_for_user
+
+from ..users.models import User
 from .service import AuthenticatedIdentity, AuthService
 
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -78,11 +80,13 @@ async def require_authenticated_user(
 
 
 async def require_admin_user(
-    user: Annotated[User, Depends(bind_current_user)]
+    user: Annotated[User, Depends(bind_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> User:
     """Ensure the authenticated user holds the administrator role."""
 
-    if user.role != UserRole.ADMIN:
+    permissions = await get_global_permissions_for_user(session=session, user=user)
+    if "System.Settings.ReadWrite" not in permissions:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             detail="Administrator role required",
