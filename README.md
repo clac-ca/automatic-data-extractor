@@ -14,6 +14,25 @@ Guides now live under the [`docs/`](docs/README.md) directory:
 - [Admin Guide](docs/admin-guide/README.md) – deployment, configuration, and operational building blocks.
 - [Reference glossary](docs/reference/glossary.md) – shared terminology across API payloads and database entities.
 
+## Versioning, releases, and Docker images
+
+ADE's published container images are built from `main` and hosted on GitHub Container Registry (GHCR) under `ghcr.io/<org>/automatic-data-extractor`.
+
+- The FastAPI application version is defined once in [`pyproject.toml`](pyproject.toml) and must follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+- Pull requests trigger the Docker build to ensure the image continues to compile.
+- Merges to `main` authenticate to GHCR, reuse the build cache, and push three tags:
+  - `main` – the latest successful build from the default branch.
+  - `sha-<short>` – the short commit SHA for traceability.
+  - `vX.Y.Z` – emitted only when `project.version` is a valid semantic version.
+
+### Cutting a release
+
+1. Bump `project.version` in [`pyproject.toml`](pyproject.toml).
+2. Add notes beneath the `## [Unreleased]` heading in [`CHANGELOG.md`](CHANGELOG.md).
+3. Run `python scripts/finalize_changelog.py` to promote the unreleased section to the new `vX.Y.Z` entry. The script resets the "Unreleased" stub for the next iteration.
+4. Commit the version, changelog, and related code changes using [Conventional Commits](CONTRIBUTING.md#commit-messages).
+5. Open a pull request. Once it merges, the container workflow will publish the updated image to GHCR.
+
 ## Quickstart (local)
 
 ### Get set up
@@ -136,8 +155,8 @@ Shared infrastructure lives under [`app/core`](app/core) (logging, middleware, s
 
 Uploaded files and the SQLite database are stored beneath the [`var/`](var) directory by default. Override locations with the `ADE_STORAGE_DATA_DIR`, `ADE_DATABASE_DSN`, or `ADE_STORAGE_DOCUMENTS_DIR` environment variables when deploying to production systems.
 
-> **TODO**
-> Publish the official Docker image to GitHub Container Registry and update the admin guide once the frontend onboarding flow ships.
+> **Note**
+> Automated GHCR publishing now runs from the `main` branch. Update the admin guide with downstream deployment steps once the frontend onboarding flow ships.
 
 ## Frontend readiness
 
