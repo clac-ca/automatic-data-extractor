@@ -17,7 +17,6 @@ import { WorkspaceMembersRoute } from "../features/workspaces/routes/WorkspaceMe
 import { WorkspaceRolesRoute } from "../features/workspaces/routes/WorkspaceRolesRoute";
 import { WorkspaceSettingsRoute } from "../features/workspaces/routes/WorkspaceSettingsRoute";
 import { RequirePermission } from "../shared/rbac/RequirePermission";
-import { AccessDenied } from "../shared/rbac/AccessDenied";
 import { RBAC } from "../shared/rbac/permissions";
 
 export function createAppRouter() {
@@ -42,10 +41,7 @@ export function createAppRouter() {
                 {
                   path: "documents",
                   element: (
-                    <RequirePermission
-                      needed={[RBAC.Workspace.Documents.Read, RBAC.Workspace.Documents.ReadWrite]}
-                      fallback={<AccessDenied>You do not have permission to view documents.</AccessDenied>}
-                    >
+                    <RequirePermission needed={RBAC.Workspace.Documents.Read}>
                       <Outlet />
                     </RequirePermission>
                   ),
@@ -57,10 +53,7 @@ export function createAppRouter() {
                 {
                   path: "jobs",
                   element: (
-                    <RequirePermission
-                      needed={[RBAC.Workspace.Jobs.Read, RBAC.Workspace.Jobs.ReadWrite]}
-                      fallback={<AccessDenied>You do not have permission to view job history.</AccessDenied>}
-                    >
+                    <RequirePermission needed={RBAC.Workspace.Jobs.Read}>
                       <WorkspaceJobsRoute />
                     </RequirePermission>
                   ),
@@ -68,10 +61,7 @@ export function createAppRouter() {
                 {
                   path: "configurations",
                   element: (
-                    <RequirePermission
-                      needed={[RBAC.Workspace.Configurations.Read, RBAC.Workspace.Configurations.ReadWrite]}
-                      fallback={<AccessDenied>You do not have permission to view configurations.</AccessDenied>}
-                    >
+                    <RequirePermission needed={RBAC.Workspace.Configurations.Read}>
                       <WorkspaceConfigurationsRoute />
                     </RequirePermission>
                   ),
@@ -79,10 +69,7 @@ export function createAppRouter() {
                 {
                   path: "members",
                   element: (
-                    <RequirePermission
-                      needed={[RBAC.Workspace.Members.Read, RBAC.Workspace.Members.ReadWrite]}
-                      fallback={<AccessDenied>You do not have permission to view workspace members.</AccessDenied>}
-                    >
+                    <RequirePermission needed={RBAC.Workspace.Members.Read}>
                       <WorkspaceMembersRoute />
                     </RequirePermission>
                   ),
@@ -90,10 +77,7 @@ export function createAppRouter() {
                 {
                   path: "roles",
                   element: (
-                    <RequirePermission
-                      needed={[RBAC.Workspace.Roles.Read, RBAC.Workspace.Roles.ReadWrite]}
-                      fallback={<AccessDenied>You do not have permission to view the role catalog.</AccessDenied>}
-                    >
+                    <RequirePermission needed={RBAC.Workspace.Roles.Read}>
                       <WorkspaceRolesRoute />
                     </RequirePermission>
                   ),
@@ -101,12 +85,7 @@ export function createAppRouter() {
                 {
                   path: "settings",
                   element: (
-                    <RequirePermission
-                      needed={[RBAC.Workspace.Settings.ReadWrite]}
-                      fallback={
-                        <AccessDenied>Workspace settings require Workspace.Settings.ReadWrite permissions.</AccessDenied>
-                      }
-                    >
+                    <RequirePermission needed={RBAC.Workspace.Settings.ReadWrite}>
                       <WorkspaceSettingsRoute />
                     </RequirePermission>
                   ),
