@@ -11,7 +11,7 @@ pytestmark = pytest.mark.asyncio
 
 async def test_health_endpoint_returns_ok(async_client: AsyncClient) -> None:
     """The /health endpoint should return a successful payload."""
-    response = await async_client.get("/api/health")
+    response = await async_client.get("/api/v1/health")
 
     assert response.status_code == 200
     assert response.headers.get("X-Request-ID")

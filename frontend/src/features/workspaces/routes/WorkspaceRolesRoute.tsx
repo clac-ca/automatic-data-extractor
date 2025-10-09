@@ -47,16 +47,16 @@ export function WorkspaceRolesRoute() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   <span className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300">
-                    {role.scope === "global" ? "Global" : "Workspace"}
+                    {role.scope_type === "global" ? "Global" : "Workspace"}
                   </span>
                   <span
                     className={`rounded border px-2 py-1 ${
-                      role.is_system
+                      role.built_in
                         ? "border-sky-500/40 bg-sky-500/10 text-sky-200"
                         : "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"
                     }`}
                   >
-                    {role.is_system ? "System" : "Custom"}
+                    {role.built_in ? "System" : "Custom"}
                   </span>
                   <span
                     className={`rounded border px-2 py-1 ${

@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useMemo, useRef, useState, useId } from "rea
 import { useOutletContext } from "react-router-dom";
 
 import { ApiError } from "../../../shared/api/client";
-import type { WorkspaceMember, WorkspaceRoleDefinition } from "../../../shared/api/types";
+import type { WorkspaceMember, RoleDefinition } from "../../../shared/api/types";
 import type { WorkspaceLayoutContext } from "../components/WorkspaceLayout";
 import { useAddWorkspaceMemberMutation } from "../hooks/useAddWorkspaceMemberMutation";
 import { useRemoveWorkspaceMemberMutation } from "../hooks/useRemoveWorkspaceMemberMutation";
@@ -271,7 +271,7 @@ function RoleList({
   roleMap,
 }: {
   member: WorkspaceMember;
-  roleMap: Map<string, WorkspaceRoleDefinition>;
+  roleMap: Map<string, RoleDefinition>;
 }) {
   if (member.roles.length === 0) {
     return <span className="text-xs text-slate-500">workspace-member (default)</span>;
@@ -294,7 +294,7 @@ function RoleList({
 interface AddMemberDialogProps {
   open: boolean;
   onClose: () => void;
-  roles: WorkspaceRoleDefinition[];
+  roles: RoleDefinition[];
   isSubmitting: boolean;
   onSubmit: (payload: { user_id: string; role_ids?: string[] }) => Promise<void>;
 }
@@ -454,7 +454,7 @@ function AddMemberDialog({ open, onClose, roles, isSubmitting, onSubmit }: AddMe
 interface EditMemberRolesDialogProps {
   open: boolean;
   member: WorkspaceMember | null;
-  roles: WorkspaceRoleDefinition[];
+  roles: RoleDefinition[];
   isSubmitting: boolean;
   onClose: () => void;
   onSubmit: (membershipId: string, roleIds: string[]) => Promise<void>;
@@ -690,7 +690,7 @@ function RoleChecklist({
   onChange,
   disabled,
 }: {
-  roles: WorkspaceRoleDefinition[];
+  roles: RoleDefinition[];
   selectedRoleIds: string[];
   onChange: (next: string[]) => void;
   disabled?: boolean;
@@ -726,7 +726,7 @@ function RoleChecklist({
             <div>
               <div className="font-medium text-slate-100">{role.name}</div>
               <div className="text-xs text-slate-500">
-                {role.is_system ? "System role" : "Custom role"}
+                {role.built_in ? "System role" : "Custom role"}
                 {role.editable ? " • Editable" : " • Locked"}
               </div>
             </div>

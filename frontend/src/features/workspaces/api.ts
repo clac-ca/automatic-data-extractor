@@ -2,11 +2,11 @@ import { del, get, post, put, type ApiClientOptions } from "../../shared/api/cli
 import type {
   CreateWorkspacePayload,
   DocumentTypeDetailResponse,
+  RoleDefinition,
   WorkspaceMember,
   WorkspaceMemberCreatePayload,
   WorkspaceMemberRolesUpdatePayload,
   WorkspaceProfile,
-  WorkspaceRoleDefinition,
 } from "../../shared/api/types";
 
 interface WorkspaceProfileResponse {
@@ -40,10 +40,10 @@ interface WorkspaceRoleResponse {
   slug: string;
   name: string;
   description?: string | null;
-  scope: "global" | "workspace";
-  workspace_id?: string | null;
+  scope_type: "global" | "workspace";
+  scope_id?: string | null;
   permissions: string[];
-  is_system: boolean;
+  built_in: boolean;
   editable: boolean;
 }
 
@@ -77,18 +77,18 @@ function mapWorkspaceMember(payload: WorkspaceMemberResponse): WorkspaceMember {
   } satisfies WorkspaceMember;
 }
 
-function mapWorkspaceRole(payload: WorkspaceRoleResponse): WorkspaceRoleDefinition {
+function mapWorkspaceRole(payload: WorkspaceRoleResponse): RoleDefinition {
   return {
     id: payload.role_id,
     slug: payload.slug,
     name: payload.name,
     description: payload.description ?? null,
-    scope: payload.scope,
-    workspace_id: payload.workspace_id ?? null,
+    scope_type: payload.scope_type,
+    scope_id: payload.scope_id ?? null,
     permissions: payload.permissions ?? [],
-    is_system: payload.is_system,
+    built_in: payload.built_in,
     editable: payload.editable,
-  } satisfies WorkspaceRoleDefinition;
+  } satisfies RoleDefinition;
 }
 
 export async function fetchWorkspaces(options?: ApiClientOptions) {

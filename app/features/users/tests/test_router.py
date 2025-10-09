@@ -13,7 +13,7 @@ pytestmark = pytest.mark.asyncio
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
     response = await client.post(
-        "/api/auth/session",
+        "/api/v1/auth/session",
         json={"email": email, "password": password},
     )
     assert response.status_code == 200, response.text
@@ -31,7 +31,7 @@ async def test_list_users_requires_admin(
     token = await _login(async_client, member["email"], member["password"])
 
     response = await async_client.get(
-        "/api/users",
+        "/api/v1/users",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 403
@@ -46,7 +46,7 @@ async def test_list_users_admin_success(
     token = await _login(async_client, admin["email"], admin["password"])
 
     response = await async_client.get(
-        "/api/users",
+        "/api/v1/users",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200

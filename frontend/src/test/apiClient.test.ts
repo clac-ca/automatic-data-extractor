@@ -35,7 +35,7 @@ describe("ApiClient", () => {
     await get("/setup/status");
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/setup/status",
+      "/api/v1/setup/status",
       expect.objectContaining({ method: "GET" }),
     );
   });
