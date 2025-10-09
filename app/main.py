@@ -7,8 +7,10 @@ import shutil
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -17,6 +19,7 @@ from .core.config import Settings, get_settings
 from .core.logging import setup_logging
 from .core.middleware import register_middleware
 from .lifecycles import create_application_lifespan
+from .features.auth.dependencies import configure_auth_dependencies
 from .services.task_queue import TaskQueue
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -54,10 +57,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.state.settings = settings
     app.state.task_queue = task_queue
+    configure_auth_dependencies(settings=settings)
 
     register_middleware(app)
     _mount_static(app)
     _register_routes(app)
+    _configure_openapi(app, settings)
     return app
 
 
@@ -188,6 +193,54 @@ def _register_routes(app: FastAPI) -> None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="SPA build not found")
 
         return FileResponse(SPA_INDEX)
+
+
+def _configure_openapi(app: FastAPI, settings: Settings) -> None:
+    """Configure OpenAPI schema with shared security schemes."""
+
+    def custom_openapi() -> dict[str, Any]:
+        if app.openapi_schema:
+            return app.openapi_schema
+
+        schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+        )
+
+        components = schema.setdefault("components", {}).setdefault(
+            "securitySchemes", {}
+        )
+        components["SessionCookie"] = {
+            "type": "apiKey",
+            "in": "cookie",
+            "name": settings.session_cookie_name,
+            "description": "Browser session cookie issued after interactive sign-in.",
+        }
+        components.setdefault("HTTPBearer", {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Bearer access token returned by ADE or an identity provider.",
+        })
+        components.setdefault("APIKeyHeader", {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-API-Key",
+            "description": "Static API key for service integrations.",
+        })
+
+        schema["security"] = [
+            {"SessionCookie": []},
+            {"HTTPBearer": []},
+            {"APIKeyHeader": []},
+        ]
+
+        app.openapi_schema = schema
+        return schema
+
+    app.openapi = custom_openapi
 
 
 app = create_app()

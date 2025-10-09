@@ -5,7 +5,13 @@ from sqlalchemy import delete, select
 
 from app.db.session import get_sessionmaker
 from app.features.roles import registry
-from app.features.roles.models import Permission, Role, RolePermission, UserGlobalRole
+from app.features.roles.models import (
+    Permission,
+    Principal,
+    Role,
+    RoleAssignment,
+    RolePermission,
+)
 from app.features.roles.service import (
     AuthorizationError,
     assign_global_role,
@@ -13,6 +19,7 @@ from app.features.roles.service import (
     authorize_workspace,
     collect_permission_keys,
     get_global_permissions_for_user,
+    RoleScopeMismatchError,
     sync_permission_registry,
 )
 from app.features.users.models import User
@@ -121,9 +128,10 @@ async def test_role_updated_at_advances_on_update() -> None:
         role = Role(
             slug="test-role",
             name="Test Role",
-            scope="global",
+            scope_type="global",
+            scope_id=None,
             description="",
-            is_system=False,
+            built_in=False,
             editable=True,
         )
         session.add(role)
@@ -158,11 +166,14 @@ async def test_assign_global_role_rejects_workspace_role(
     async with session_factory() as session:
         workspace_role = (
             await session.execute(
-                select(Role).where(Role.slug == "workspace-owner")
+                select(Role).where(
+                    Role.slug == "workspace-owner",
+                    Role.scope_type == "workspace",
+                )
             )
         ).scalar_one()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(RoleScopeMismatchError):
             await assign_global_role(
                 session=session,
                 user_id=seed_identity["member"]["id"],  # type: ignore[index]
@@ -180,7 +191,13 @@ async def test_assign_global_role_succeeds_for_global_scope(
 
     async with session_factory() as session:
         global_role = (
-            await session.execute(select(Role).where(Role.slug == "global-admin"))
+            await session.execute(
+                select(Role).where(
+                    Role.slug == "global-administrator",
+                    Role.scope_type == "global",
+                    Role.scope_id.is_(None),
+                )
+            )
         ).scalar_one()
 
         user_id = seed_identity["member"]["id"]  # type: ignore[index]
@@ -191,15 +208,75 @@ async def test_assign_global_role_succeeds_for_global_scope(
             role_id=global_role.id,
         )
 
+        principal = (
+            await session.execute(
+                select(Principal).where(Principal.user_id == user_id)
+            )
+        ).scalar_one()
+
         result = await session.execute(
-            select(UserGlobalRole).where(
-                UserGlobalRole.user_id == user_id
+            select(RoleAssignment).where(
+                RoleAssignment.principal_id == principal.id,
+                RoleAssignment.scope_type == "global",
             )
         )
         assignments = result.scalars().all()
         assert any(assignment.role_id == global_role.id for assignment in assignments)
 
         await session.execute(
-            delete(UserGlobalRole).where(UserGlobalRole.user_id == user_id)
+            delete(RoleAssignment).where(
+                RoleAssignment.principal_id == principal.id
+            )
+        )
+        await session.execute(
+            delete(Principal).where(Principal.id == principal.id)
         )
         await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_assign_global_role_is_idempotent(
+    seed_identity: dict[str, object],
+) -> None:
+    session_factory = get_sessionmaker()
+    async with session_factory() as session:
+        await sync_permission_registry(session=session)
+
+    async with session_factory() as session:
+        global_role = (
+            await session.execute(
+                select(Role).where(
+                    Role.slug == "global-administrator",
+                    Role.scope_type == "global",
+                    Role.scope_id.is_(None),
+                )
+            )
+        ).scalar_one()
+
+        user_id = seed_identity["admin"]["id"]  # type: ignore[index]
+
+        first_assignment = await assign_global_role(
+            session=session,
+            user_id=user_id,
+            role_id=global_role.id,
+        )
+        second_assignment = await assign_global_role(
+            session=session,
+            user_id=user_id,
+            role_id=global_role.id,
+        )
+
+        assert first_assignment.id == second_assignment.id
+
+        stored_assignments = (
+            await session.execute(
+                select(RoleAssignment).where(
+                    RoleAssignment.principal_id == first_assignment.principal_id,
+                    RoleAssignment.role_id == global_role.id,
+                    RoleAssignment.scope_type == "global",
+                    RoleAssignment.scope_id.is_(None),
+                )
+            )
+        ).scalars().all()
+
+        assert len(stored_assignments) == 1

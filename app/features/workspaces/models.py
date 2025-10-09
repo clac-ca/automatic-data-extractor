@@ -45,37 +45,9 @@ class WorkspaceMembership(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     workspace: Mapped[Workspace] = relationship("Workspace", back_populates="memberships")
     user: Mapped[User] = relationship(User, lazy="joined")
-    membership_roles: Mapped[list["WorkspaceMembershipRole"]] = relationship(
-        "WorkspaceMembershipRole",
-        back_populates="membership",
-        cascade="all, delete-orphan",
-    )
-
     __table_args__ = (
         UniqueConstraint("user_id", "workspace_id"),
     )
 
 
-class WorkspaceMembershipRole(Base):
-    """Pivot table linking memberships to workspace-scoped roles."""
-
-    __tablename__ = "workspace_membership_roles"
-
-    workspace_membership_id: Mapped[str] = mapped_column(
-        String(26),
-        ForeignKey("workspace_memberships.workspace_membership_id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    role_id: Mapped[str] = mapped_column(
-        String(26),
-        ForeignKey("roles.role_id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-
-    membership: Mapped[WorkspaceMembership] = relationship(
-        "WorkspaceMembership", back_populates="membership_roles"
-    )
-    role: Mapped["Role"] = relationship("Role")
-
-
-__all__ = ["Workspace", "WorkspaceMembership", "WorkspaceMembershipRole"]
+__all__ = ["Workspace", "WorkspaceMembership"]

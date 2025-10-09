@@ -10,15 +10,16 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.db.session import get_sessionmaker
-from app.features.roles.models import Role, RolePermission, UserGlobalRole
-from app.features.workspaces.models import WorkspaceMembership, WorkspaceMembershipRole
+from app.features.roles.models import Principal, Role, RoleAssignment, RolePermission
+from app.features.roles.service import assign_global_role
+from app.features.workspaces.models import WorkspaceMembership
 
 pytestmark = pytest.mark.asyncio
 
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
     response = await client.post(
-        "/api/auth/session",
+        "/api/v1/auth/session",
         json={"email": email, "password": password},
     )
     assert response.status_code == 200, response.text
@@ -41,7 +42,7 @@ async def _create_workspace(
         payload["owner_user_id"] = owner_user_id
 
     response = await client.post(
-        "/api/workspaces",
+        "/api/v1/workspaces",
         headers={"Authorization": f"Bearer {token}"},
         json=payload,
     )
@@ -62,9 +63,10 @@ async def test_global_permission_allows_workspace_creation(
         role = Role(
             slug=role_slug,
             name="Workspace Creator",
-            scope="global",
+            scope_type="global",
+            scope_id=None,
             description="Allows workspace creation",
-            is_system=False,
+            built_in=False,
             editable=True,
         )
         session.add(role)
@@ -72,11 +74,13 @@ async def test_global_permission_allows_workspace_creation(
         session.add(
             RolePermission(role_id=role.id, permission_key="Workspaces.Create")
         )
-        session.add(UserGlobalRole(user_id=member["id"], role_id=role.id))
+        await assign_global_role(
+            session=session, user_id=member["id"], role_id=role.id
+        )
         await session.commit()
 
     response = await async_client.post(
-        "/api/workspaces",
+        "/api/v1/workspaces",
         headers={"Authorization": f"Bearer {token}"},
         json={"name": f"Workspace {uuid4().hex[:8]}"},
     )
@@ -91,7 +95,7 @@ async def test_member_profile_includes_permissions(
     token = await _login(async_client, member["email"], member["password"])
 
     response = await async_client.get(
-        f"/api/workspaces/{seed_identity['workspace_id']}",
+        f"/api/v1/workspaces/{seed_identity['workspace_id']}",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
@@ -111,7 +115,7 @@ async def test_owner_profile_contains_governor_permissions(
     token = await _login(async_client, owner["email"], owner["password"])
 
     response = await async_client.get(
-        f"/api/workspaces/{seed_identity['workspace_id']}",
+        f"/api/v1/workspaces/{seed_identity['workspace_id']}",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
@@ -131,7 +135,7 @@ async def test_admin_profile_shadows_owner(
     token = await _login(async_client, admin["email"], admin["password"])
 
     response = await async_client.get(
-        f"/api/workspaces/{seed_identity['workspace_id']}",
+        f"/api/v1/workspaces/{seed_identity['workspace_id']}",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
@@ -148,7 +152,7 @@ async def test_members_listing_requires_permission(
     token = await _login(async_client, member["email"], member["password"])
 
     response = await async_client.get(
-        f"/api/workspaces/{seed_identity['workspace_id']}/members",
+        f"/api/v1/workspaces/{seed_identity['workspace_id']}/members",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 403
@@ -162,7 +166,7 @@ async def test_owner_can_list_members(
     token = await _login(async_client, owner["email"], owner["password"])
 
     response = await async_client.get(
-        f"/api/workspaces/{seed_identity['workspace_id']}/members",
+        f"/api/v1/workspaces/{seed_identity['workspace_id']}/members",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
@@ -181,7 +185,7 @@ async def test_owner_adds_member_with_default_role(
 
     token = await _login(async_client, owner["email"], owner["password"])
     response = await async_client.post(
-        f"/api/workspaces/{created['workspace_id']}/members",
+        f"/api/v1/workspaces/{created['workspace_id']}/members",
         headers={"Authorization": f"Bearer {token}"},
         json={"user_id": invitee["id"]},
     )
@@ -200,7 +204,7 @@ async def test_manage_scope_required_for_member_add(
     token = await _login(async_client, member["email"], member["password"])
 
     response = await async_client.post(
-        f"/api/workspaces/{seed_identity['workspace_id']}/members",
+        f"/api/v1/workspaces/{seed_identity['workspace_id']}/members",
         headers={"Authorization": f"Bearer {token}"},
         json={"user_id": invitee["id"]},
     )
@@ -217,7 +221,7 @@ async def test_put_roles_replaces_assignments(
 
     token = await _login(async_client, owner["email"], owner["password"])
     add_response = await async_client.post(
-        f"/api/workspaces/{workspace_id}/members",
+        f"/api/v1/workspaces/{workspace_id}/members",
         headers={"Authorization": f"Bearer {token}"},
         json={"user_id": invitee["id"]},
     )
@@ -232,7 +236,7 @@ async def test_put_roles_replaces_assignments(
         owner_role = result.scalar_one()
 
     update_response = await async_client.put(
-        f"/api/workspaces/{workspace_id}/members/{membership_id}/roles",
+        f"/api/v1/workspaces/{workspace_id}/members/{membership_id}/roles",
         headers={"Authorization": f"Bearer {token}"},
         json={"role_ids": [owner_role.id]},
     )
@@ -244,11 +248,15 @@ async def test_put_roles_replaces_assignments(
         membership = await session.get(WorkspaceMembership, membership_id)
         assert membership is not None
         role_links = await session.execute(
-            select(WorkspaceMembershipRole).where(
-                WorkspaceMembershipRole.workspace_membership_id == membership_id
+            select(RoleAssignment.role_id)
+            .join(Principal, Principal.id == RoleAssignment.principal_id)
+            .where(
+                Principal.user_id == membership.user_id,
+                RoleAssignment.scope_type == "workspace",
+                RoleAssignment.scope_id == workspace_id,
             )
         )
-        linked_roles = [link.role_id for link in role_links.scalars()]
+        linked_roles = list(role_links.scalars().all())
         assert linked_roles == [owner_role.id]
 
 
@@ -261,7 +269,7 @@ async def test_put_roles_blocks_last_governor_demotion(
 
     token = await _login(async_client, owner["email"], owner["password"])
     memberships_response = await async_client.get(
-        f"/api/workspaces/{workspace_id}/members",
+        f"/api/v1/workspaces/{workspace_id}/members",
         headers={"Authorization": f"Bearer {token}"},
     )
     owner_entry = next(
@@ -271,7 +279,7 @@ async def test_put_roles_blocks_last_governor_demotion(
     )
 
     update_response = await async_client.put(
-        f"/api/workspaces/{workspace_id}/members/{owner_entry['workspace_membership_id']}/roles",
+        f"/api/v1/workspaces/{workspace_id}/members/{owner_entry['workspace_membership_id']}/roles",
         headers={"Authorization": f"Bearer {token}"},
         json={"role_ids": []},
     )
@@ -286,7 +294,7 @@ async def test_roles_listing_requires_read_scope(
     token = await _login(async_client, owner["email"], owner["password"])
 
     response = await async_client.get(
-        f"/api/workspaces/{seed_identity['workspace_id']}/roles",
+        f"/api/v1/workspaces/{seed_identity['workspace_id']}/roles",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
@@ -303,7 +311,7 @@ async def test_create_workspace_role(
     token = await _login(async_client, owner["email"], owner["password"])
 
     response = await async_client.post(
-        f"/api/workspaces/{workspace_id}/roles",
+        f"/api/v1/workspaces/{workspace_id}/roles",
         headers={"Authorization": f"Bearer {token}"},
         json={
             "name": "Contributors",
@@ -315,7 +323,8 @@ async def test_create_workspace_role(
     assert response.status_code == 201, response.text
     payload = response.json()
     assert payload["slug"] == "contributors"
-    assert payload["workspace_id"] == workspace_id
+    assert payload["scope_type"] == "workspace"
+    assert payload["scope_id"] == workspace_id
     assert payload["permissions"] == ["Workspace.Documents.Read"]
 
 
@@ -327,7 +336,7 @@ async def test_create_workspace_role_conflicting_slug(
     token = await _login(async_client, owner["email"], owner["password"])
 
     response = await async_client.post(
-        f"/api/workspaces/{workspace_id}/roles",
+        f"/api/v1/workspaces/{workspace_id}/roles",
         headers={"Authorization": f"Bearer {token}"},
         json={
             "name": "Duplicate",
@@ -348,7 +357,7 @@ async def test_update_workspace_role_blocks_governor_loss(
     token = await _login(async_client, owner["email"], owner["password"])
 
     create_response = await async_client.post(
-        f"/api/workspaces/{workspace_id}/roles",
+        f"/api/v1/workspaces/{workspace_id}/roles",
         headers={"Authorization": f"Bearer {token}"},
         json={
             "name": "Workspace Governor",
@@ -376,14 +385,14 @@ async def test_update_workspace_role_blocks_governor_loss(
         membership_id = membership.id
 
     update_membership = await async_client.put(
-        f"/api/workspaces/{workspace_id}/members/{membership_id}/roles",
+        f"/api/v1/workspaces/{workspace_id}/members/{membership_id}/roles",
         headers={"Authorization": f"Bearer {token}"},
         json={"role_ids": [role_id]},
     )
     assert update_membership.status_code == 200, update_membership.text
 
     downgrade_response = await async_client.put(
-        f"/api/workspaces/{workspace_id}/roles/{role_id}",
+        f"/api/v1/workspaces/{workspace_id}/roles/{role_id}",
         headers={"Authorization": f"Bearer {token}"},
         json={
             "name": "Workspace Governor",
@@ -402,7 +411,7 @@ async def test_delete_workspace_role_blocks_assignments(
     token = await _login(async_client, owner["email"], owner["password"])
 
     create_response = await async_client.post(
-        f"/api/workspaces/{workspace_id}/roles",
+        f"/api/v1/workspaces/{workspace_id}/roles",
         headers={"Authorization": f"Bearer {token}"},
         json={
             "name": "Temporary",
@@ -413,7 +422,7 @@ async def test_delete_workspace_role_blocks_assignments(
     role_id = create_response.json()["role_id"]
 
     list_response = await async_client.get(
-        f"/api/workspaces/{workspace_id}/members",
+        f"/api/v1/workspaces/{workspace_id}/members",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert list_response.status_code == 200, list_response.text
@@ -424,14 +433,14 @@ async def test_delete_workspace_role_blocks_assignments(
     )
 
     assign_response = await async_client.put(
-        f"/api/workspaces/{workspace_id}/members/{member_entry['workspace_membership_id']}/roles",
+        f"/api/v1/workspaces/{workspace_id}/members/{member_entry['workspace_membership_id']}/roles",
         headers={"Authorization": f"Bearer {token}"},
         json={"role_ids": [role_id]},
     )
     assert assign_response.status_code == 200, assign_response.text
 
     delete_response = await async_client.delete(
-        f"/api/workspaces/{workspace_id}/roles/{role_id}",
+        f"/api/v1/workspaces/{workspace_id}/roles/{role_id}",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert delete_response.status_code == 409
@@ -445,7 +454,7 @@ async def test_delete_workspace_role_succeeds_when_unassigned(
     token = await _login(async_client, owner["email"], owner["password"])
 
     create_response = await async_client.post(
-        f"/api/workspaces/{workspace_id}/roles",
+        f"/api/v1/workspaces/{workspace_id}/roles",
         headers={"Authorization": f"Bearer {token}"},
         json={
             "name": "Disposable",
@@ -456,7 +465,7 @@ async def test_delete_workspace_role_succeeds_when_unassigned(
     role_id = create_response.json()["role_id"]
 
     delete_response = await async_client.delete(
-        f"/api/workspaces/{workspace_id}/roles/{role_id}",
+        f"/api/v1/workspaces/{workspace_id}/roles/{role_id}",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert delete_response.status_code == 204, delete_response.text
@@ -478,7 +487,7 @@ async def test_update_system_role_rejected(
         ).scalar_one()
 
     response = await async_client.put(
-        f"/api/workspaces/{workspace_id}/roles/{system_role.id}",
+        f"/api/v1/workspaces/{workspace_id}/roles/{system_role.id}",
         headers={"Authorization": f"Bearer {token}"},
         json={
             "name": "Workspace Owner",

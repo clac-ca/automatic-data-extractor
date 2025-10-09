@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import HTTPException, status
@@ -12,17 +13,20 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.features.roles.models import Role, RolePermission
+from app.features.roles.models import Principal, Role, RoleAssignment, RolePermission
 from app.features.roles.registry import PERMISSION_REGISTRY, SYSTEM_ROLES
 from app.features.roles.service import (
     AuthorizationError,
+    assign_role,
     collect_permission_keys,
+    ensure_user_principal,
     get_global_permissions_for_user,
+    unassign_role,
 )
 from ..users.models import User
 from ..users.repository import UsersRepository
 from ..users.schemas import UserProfile
-from .models import Workspace, WorkspaceMembership, WorkspaceMembershipRole
+from .models import Workspace, WorkspaceMembership
 
 if TYPE_CHECKING:
     from app.features.roles.schemas import RoleCreate, RoleUpdate
@@ -61,6 +65,16 @@ def _system_role_permissions(slug: str) -> tuple[str, ...]:
     return ()
 
 
+@dataclass(frozen=True)
+class _MembershipRoleSummary:
+    role_ids: frozenset[str]
+    role_slugs: tuple[str, ...]
+    permissions: tuple[str, ...]
+
+
+_EMPTY_SUMMARY = _MembershipRoleSummary(frozenset(), (), ())
+
+
 class WorkspacesService:
     """Resolve workspace membership for authenticated users."""
 
@@ -69,7 +83,7 @@ class WorkspacesService:
         self._repo = WorkspacesRepository(session)
         self._users_repo = UsersRepository(session)
 
-    async def resolve_selection(
+    async def get_workspace_profile(
         self,
         *,
         user: User,
@@ -96,7 +110,13 @@ class WorkspacesService:
             membership = await self.resolve_membership(
                 user=user, workspace_id=workspace_id
             )
-            return self.build_profile(membership)
+            summaries = await self._summaries_for_workspace(
+                workspace_id, [membership]
+            )
+            summary = self._summary_for_membership(
+                membership=membership, summaries=summaries
+            )
+            return self.build_profile(membership, summary=summary)
 
         if can_view_all_workspaces:
             raise HTTPException(
@@ -109,7 +129,14 @@ class WorkspacesService:
                 status.HTTP_404_NOT_FOUND,
                 detail="No default workspace configured",
             )
-        return self.build_profile(membership)
+        workspace_identifier = cast(str, membership.workspace_id)
+        summaries = await self._summaries_for_workspace(
+            workspace_identifier, [membership]
+        )
+        summary = self._summary_for_membership(
+            membership=membership, summaries=summaries
+        )
+        return self.build_profile(membership, summary=summary)
 
     async def list_memberships(self, *, user: User) -> list[WorkspaceProfile]:
         """Return all workspace profiles associated with ``user`` in a stable order."""
@@ -128,7 +155,33 @@ class WorkspacesService:
 
         user_id = cast(str, user.id)
         memberships = await self._repo.list_for_user(user_id)
-        profiles = [self.build_profile(membership) for membership in memberships]
+        workspace_identifiers = list(
+            dict.fromkeys(cast(str, membership.workspace_id) for membership in memberships)
+        )
+        summaries_by_workspace: dict[str, dict[str, _MembershipRoleSummary]] = {}
+        for workspace_identifier in workspace_identifiers:
+            relevant_memberships = [
+                membership
+                for membership in memberships
+                if cast(str, membership.workspace_id) == workspace_identifier
+            ]
+            if relevant_memberships:
+                summaries_by_workspace[workspace_identifier] = (
+                    await self._summaries_for_workspace(
+                        workspace_identifier, relevant_memberships
+                    )
+                )
+            else:
+                summaries_by_workspace[workspace_identifier] = {}
+
+        profiles: list[WorkspaceProfile] = []
+        for membership in memberships:
+            workspace_identifier = cast(str, membership.workspace_id)
+            summary_map = summaries_by_workspace.get(workspace_identifier, {})
+            summary = self._summary_for_membership(
+                membership=membership, summaries=summary_map
+            )
+            profiles.append(self.build_profile(membership, summary=summary))
         profiles.sort(key=lambda profile: (not profile.is_default, profile.slug))
         return profiles
 
@@ -177,9 +230,10 @@ class WorkspacesService:
 
         owner_role = await self._get_system_workspace_role("workspace-owner")
         if owner_role is not None:
-            await self._repo.set_membership_roles(
-                membership_id=cast(str, membership.id),
-                role_ids=[cast(str, owner_role.id)],
+            await self._sync_workspace_assignments(
+                membership=membership,
+                workspace_id=cast(str, workspace.id),
+                desired_role_ids=[cast(str, owner_role.id)],
             )
 
         membership = await self._reload_membership(
@@ -187,7 +241,14 @@ class WorkspacesService:
             workspace_id=cast(str, workspace.id),
         )
 
-        return self.build_profile(membership)
+        summaries = await self._summaries_for_workspace(
+            cast(str, workspace.id), [membership]
+        )
+        summary = self._summary_for_membership(
+            membership=membership, summaries=summaries
+        )
+
+        return self.build_profile(membership, summary=summary)
 
     async def update_workspace(
         self,
@@ -234,7 +295,7 @@ class WorkspacesService:
                 status.HTTP_409_CONFLICT, detail="Workspace slug already in use"
             ) from exc
 
-        return await self.resolve_selection(user=user, workspace_id=workspace_id)
+        return await self.get_workspace_profile(user=user, workspace_id=workspace_id)
 
     async def delete_workspace(self, *, workspace_id: str) -> None:
         workspace_record = await self._ensure_workspace(workspace_id)
@@ -242,7 +303,16 @@ class WorkspacesService:
 
     async def list_members(self, *, workspace_id: str) -> list[WorkspaceMember]:
         memberships = await self._repo.list_members(workspace_id)
-        return [self.build_member(membership) for membership in memberships]
+        summaries = await self._summaries_for_workspace(workspace_id, memberships)
+        return [
+            self.build_member(
+                membership,
+                summary=self._summary_for_membership(
+                    membership=membership, summaries=summaries
+                ),
+            )
+            for membership in memberships
+        ]
 
     async def assign_member_roles(
         self,
@@ -273,15 +343,20 @@ class WorkspacesService:
                 detail="Workspace requires at least one governor with elevated permissions",
             )
 
-        await self._repo.set_membership_roles(
-            membership_id=cast(str, membership.id),
-            role_ids=[cast(str, role.id) for role in roles],
+        await self._sync_workspace_assignments(
+            membership=membership,
+            workspace_id=workspace_id,
+            desired_role_ids=[cast(str, role.id) for role in roles],
         )
         membership = await self._reload_membership(
             membership_id=cast(str, membership.id),
             workspace_id=workspace_id,
         )
-        return self.build_member(membership)
+        summaries = await self._summaries_for_workspace(workspace_id, [membership])
+        summary = self._summary_for_membership(
+            membership=membership, summaries=summaries
+        )
+        return self.build_member(membership, summary=summary)
 
     async def remove_member(
         self,
@@ -304,6 +379,9 @@ class WorkspacesService:
                 detail="Workspace requires at least one governor with elevated permissions",
             )
 
+        await self._remove_workspace_assignments(
+            membership=membership, workspace_id=workspace_id
+        )
         await self._repo.delete_membership(membership)
 
     async def set_default_workspace(
@@ -358,15 +436,20 @@ class WorkspacesService:
             if member_role is not None:
                 roles = [member_role]
 
-        await self._repo.set_membership_roles(
-            membership_id=cast(str, membership.id),
-            role_ids=[cast(str, role.id) for role in roles],
+        await self._sync_workspace_assignments(
+            membership=membership,
+            workspace_id=workspace_id,
+            desired_role_ids=[cast(str, role.id) for role in roles],
         )
         membership = await self._reload_membership(
             membership_id=cast(str, membership.id),
             workspace_id=workspace_id,
         )
-        return self.build_member(membership)
+        summaries = await self._summaries_for_workspace(workspace_id, [membership])
+        summary = self._summary_for_membership(
+            membership=membership, summaries=summaries
+        )
+        return self.build_member(membership, summary=summary)
 
     async def list_workspace_roles(self, workspace_id: str) -> list[Role]:
         return await self._repo.list_workspace_roles(workspace_id)
@@ -376,8 +459,8 @@ class WorkspacesService:
     ) -> None:
         existing = await self._session.execute(
             select(Role.id).where(
-                Role.scope == "workspace",
-                Role.workspace_id == workspace_id,
+                Role.scope_type == "workspace",
+                Role.scope_id == workspace_id,
                 Role.slug == slug,
             )
         )
@@ -389,8 +472,8 @@ class WorkspacesService:
 
         system_conflict = await self._session.execute(
             select(Role.id).where(
-                Role.scope == "workspace",
-                Role.workspace_id.is_(None),
+                Role.scope_type == "workspace",
+                Role.scope_id.is_(None),
                 Role.slug == slug,
             )
         )
@@ -425,12 +508,12 @@ class WorkspacesService:
         )
 
         role = Role(
-            scope="workspace",
-            workspace_id=workspace_id,
+            scope_type="workspace",
+            scope_id=workspace_id,
             slug=normalized_slug,
             name=normalized_name,
             description=self._normalize_description(payload.description),
-            is_system=False,
+            built_in=False,
             editable=True,
             created_by=cast(str | None, getattr(actor, "id", None)),
             updated_by=cast(str | None, getattr(actor, "id", None)),
@@ -461,7 +544,7 @@ class WorkspacesService:
         actor: User,
     ) -> Role:
         role = await self._load_workspace_role(role_id, workspace_id)
-        if not role.editable or role.is_system:
+        if not role.editable or role.built_in:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="System roles cannot be edited",
@@ -512,15 +595,16 @@ class WorkspacesService:
         self, *, workspace_id: str, role_id: str
     ) -> None:
         role = await self._load_workspace_role(role_id, workspace_id)
-        if not role.editable or role.is_system:
+        if not role.editable or role.built_in:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="System roles cannot be deleted",
             )
 
         assignment_exists = await self._session.execute(
-            select(WorkspaceMembershipRole).where(
-                WorkspaceMembershipRole.role_id == role.id
+            select(RoleAssignment.id).where(
+                RoleAssignment.role_id == role.id,
+                RoleAssignment.scope_type == "workspace",
             )
         )
         if assignment_exists.first() is not None:
@@ -579,8 +663,8 @@ class WorkspacesService:
         role = await self._session.get(Role, role_id)
         if (
             role is None
-            or role.scope != "workspace"
-            or (role.workspace_id not in (None, workspace_id))
+            or role.scope_type != "workspace"
+            or (role.scope_id not in (None, workspace_id))
         ):
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Role not found")
 
@@ -606,15 +690,20 @@ class WorkspacesService:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Workspace access denied")
         return membership
 
-    def build_profile(self, membership: WorkspaceMembership) -> WorkspaceProfile:
+    def build_profile(
+        self,
+        membership: WorkspaceMembership,
+        *,
+        summary: _MembershipRoleSummary = _EMPTY_SUMMARY,
+    ) -> WorkspaceProfile:
         workspace = membership.workspace
         if workspace is None:
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Workspace missing"
             )
 
-        permissions = self._permissions_for_membership(membership)
-        role_slugs = self._slugs_for_membership(membership)
+        permissions = list(summary.permissions)
+        role_slugs = list(summary.role_slugs)
         return WorkspaceProfile(
             workspace_id=workspace.id,
             name=workspace.name,
@@ -637,15 +726,20 @@ class WorkspacesService:
             is_default=False,
         )
 
-    def build_member(self, membership: WorkspaceMembership) -> WorkspaceMember:
+    def build_member(
+        self,
+        membership: WorkspaceMembership,
+        *,
+        summary: _MembershipRoleSummary = _EMPTY_SUMMARY,
+    ) -> WorkspaceMember:
         user = membership.user
         if user is None:
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Member user missing"
             )
 
-        permissions = self._permissions_for_membership(membership)
-        role_slugs = self._slugs_for_membership(membership)
+        permissions = list(summary.permissions)
+        role_slugs = list(summary.role_slugs)
         return WorkspaceMember(
             workspace_membership_id=membership.id,
             workspace_id=membership.workspace_id,
@@ -678,8 +772,8 @@ class WorkspacesService:
     async def _get_system_workspace_role(self, slug: str) -> Role | None:
         stmt = select(Role).where(
             Role.slug == slug,
-            Role.scope == "workspace",
-            Role.workspace_id.is_(None),
+            Role.scope_type == "workspace",
+            Role.scope_id.is_(None),
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
@@ -707,18 +801,163 @@ class WorkspacesService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Role not found")
 
         for role in roles:
-            if role.scope != "workspace":
+            if role.scope_type != "workspace":
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
                     detail="Only workspace roles can be assigned to memberships",
                 )
-            if role.workspace_id is not None and role.workspace_id != workspace_id:
+            if role.scope_id is not None and role.scope_id != workspace_id:
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
                     detail="Role is not defined for this workspace",
                 )
 
         return roles
+
+    async def _summaries_for_workspace(
+        self,
+        workspace_id: str,
+        memberships: Sequence[WorkspaceMembership],
+    ) -> dict[str, _MembershipRoleSummary]:
+        user_ids = [
+            cast(str, membership.user_id)
+            for membership in memberships
+            if membership.user_id is not None
+        ]
+        if not user_ids:
+            return {}
+
+        unique_user_ids = list(dict.fromkeys(user_ids))
+        buckets: dict[str, dict[str, set[str]]] = {
+            user_id: {"role_ids": set(), "role_slugs": set(), "permissions": set()}
+            for user_id in unique_user_ids
+        }
+
+        stmt = (
+            select(
+                Principal.user_id,
+                RoleAssignment.role_id,
+                Role.slug,
+                RolePermission.permission_key,
+            )
+            .select_from(RoleAssignment)
+            .join(Principal, Principal.id == RoleAssignment.principal_id)
+            .join(Role, Role.id == RoleAssignment.role_id)
+            .outerjoin(RolePermission, RolePermission.role_id == Role.id)
+            .where(
+                RoleAssignment.scope_type == "workspace",
+                RoleAssignment.scope_id == workspace_id,
+                Principal.principal_type == "user",
+                Principal.user_id.in_(unique_user_ids),
+            )
+        )
+        result = await self._session.execute(stmt)
+        for user_id, role_id, slug, permission_key in result:
+            if user_id is None:
+                continue
+            bucket = buckets.setdefault(
+                user_id,
+                {"role_ids": set(), "role_slugs": set(), "permissions": set()},
+            )
+            if role_id is not None:
+                bucket["role_ids"].add(role_id)
+            if slug:
+                bucket["role_slugs"].add(slug)
+            if permission_key:
+                bucket["permissions"].add(permission_key)
+
+        return {
+            user_id: _MembershipRoleSummary(
+                role_ids=frozenset(bucket["role_ids"]),
+                role_slugs=tuple(sorted(bucket["role_slugs"])),
+                permissions=tuple(sorted(bucket["permissions"])),
+            )
+            for user_id, bucket in buckets.items()
+        }
+
+    @staticmethod
+    def _summary_for_membership(
+        *,
+        membership: WorkspaceMembership,
+        summaries: Mapping[str, _MembershipRoleSummary],
+    ) -> _MembershipRoleSummary:
+        user_identifier = cast(str | None, membership.user_id)
+        if not user_identifier:
+            return _EMPTY_SUMMARY
+        return summaries.get(user_identifier, _EMPTY_SUMMARY)
+
+    async def _sync_workspace_assignments(
+        self,
+        *,
+        membership: WorkspaceMembership,
+        workspace_id: str,
+        desired_role_ids: Sequence[str],
+    ) -> None:
+        user = membership.user
+        if user is None:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Member user missing",
+            )
+
+        principal = getattr(user, "principal", None)
+        if principal is None:
+            principal = await ensure_user_principal(session=self._session, user=user)
+
+        desired_ids = set(dict.fromkeys(desired_role_ids))
+        current_stmt = (
+            select(RoleAssignment.role_id)
+            .where(
+                RoleAssignment.principal_id == principal.id,
+                RoleAssignment.scope_type == "workspace",
+                RoleAssignment.scope_id == workspace_id,
+            )
+        )
+        current_result = await self._session.execute(current_stmt)
+        current_ids = set(current_result.scalars().all())
+
+        additions = sorted(desired_ids - current_ids)
+        removals = sorted(current_ids - desired_ids)
+
+        for role_id in additions:
+            await assign_role(
+                session=self._session,
+                principal_id=cast(str, principal.id),
+                role_id=role_id,
+                scope_type="workspace",
+                scope_id=workspace_id,
+            )
+
+        for role_id in removals:
+            await unassign_role(
+                session=self._session,
+                principal_id=cast(str, principal.id),
+                role_id=role_id,
+                scope_type="workspace",
+                scope_id=workspace_id,
+            )
+
+    async def _remove_workspace_assignments(
+        self,
+        *,
+        membership: WorkspaceMembership,
+        workspace_id: str,
+    ) -> None:
+        user = membership.user
+        if user is None:
+            return
+
+        principal = getattr(user, "principal", None)
+        if principal is None:
+            principal = await ensure_user_principal(session=self._session, user=user)
+
+        await self._session.execute(
+            delete(RoleAssignment).where(
+                RoleAssignment.principal_id == principal.id,
+                RoleAssignment.scope_type == "workspace",
+                RoleAssignment.scope_id == workspace_id,
+            )
+        )
 
     async def _workspace_has_governor(
         self,
@@ -727,12 +966,14 @@ class WorkspacesService:
         ignore_membership_id: str | None = None,
     ) -> bool:
         memberships = await self._repo.list_members_for_update(workspace_id)
+        summaries = await self._summaries_for_workspace(workspace_id, memberships)
         for membership in memberships:
             if ignore_membership_id is not None and membership.id == ignore_membership_id:
                 continue
-            if self._has_governor_permissions(
-                self._permissions_for_membership(membership)
-            ):
+            summary = self._summary_for_membership(
+                membership=membership, summaries=summaries
+            )
+            if self._has_governor_permissions(summary.permissions):
                 return True
         return False
 
@@ -747,25 +988,5 @@ class WorkspacesService:
         for role in roles:
             permissions.extend(permission.permission_key for permission in role.permissions)
         return set(permissions)
-
-    def _permissions_for_membership(self, membership: WorkspaceMembership) -> list[str]:
-        keys: list[str] = []
-        for assignment in membership.membership_roles:
-            role = assignment.role
-            if role is None:
-                continue
-            keys.extend(permission.permission_key for permission in role.permissions)
-        if not keys:
-            return []
-        return sorted(dict.fromkeys(keys))
-
-    def _slugs_for_membership(self, membership: WorkspaceMembership) -> list[str]:
-        slugs = [
-            assignment.role.slug
-            for assignment in membership.membership_roles
-            if assignment.role is not None
-        ]
-        return sorted(dict.fromkeys(slugs))
-
 
 __all__ = ["WorkspacesService"]

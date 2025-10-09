@@ -62,6 +62,13 @@ class User(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         lazy="selectin",
         uselist=False,
     )
+    principal: Mapped["Principal | None"] = relationship(
+        "Principal",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        uselist=False,
+    )
 
     @validates("email")
     def _store_normalised_email(self, _key: str, value: str) -> str:

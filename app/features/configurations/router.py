@@ -7,16 +7,20 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.security import require_authenticated, require_csrf, require_workspace
 from app.core.responses import DefaultResponse
 from app.db.session import get_session
 
-from ..workspaces.dependencies import require_workspace_access
-from ..workspaces.schemas import WorkspaceProfile
+from ..users.models import User
 from .exceptions import ConfigurationNotFoundError
 from .schemas import ConfigurationCreate, ConfigurationRecord, ConfigurationUpdate
 from .service import ConfigurationsService
 
-router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["configurations"])
+router = APIRouter(
+    prefix="/workspaces/{workspace_id}",
+    tags=["configurations"],
+    dependencies=[Security(require_authenticated)],
+)
 
 CONFIGURATION_CREATE_BODY = Body(...)
 CONFIGURATION_UPDATE_BODY = Body(...)
@@ -30,21 +34,24 @@ CONFIGURATION_UPDATE_BODY = Body(...)
     response_model_exclude_none=True,
 )
 async def list_configurations(
-    workspace: Annotated[
-        WorkspaceProfile,
-        Security(
-            require_workspace_access,
-            scopes=["Workspace.Configurations.Read"],
-        ),
+    workspace_id: Annotated[
+        str, Path(min_length=1, description="Workspace identifier")
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Configurations.Read"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
     *,
     document_type: str | None = Query(None),
     is_active: bool | None = Query(None),
 ) -> list[ConfigurationRecord]:
     service = ConfigurationsService(session=session)
     return await service.list_configurations(
-        workspace_id=workspace.workspace_id,
+        workspace_id=workspace_id,
         document_type=document_type,
         is_active=is_active,
     )
@@ -52,26 +59,30 @@ async def list_configurations(
 
 @router.post(
     "/configurations",
+    dependencies=[Security(require_csrf)],
     response_model=ConfigurationRecord,
     status_code=status.HTTP_201_CREATED,
     summary="Create a configuration",
     response_model_exclude_none=True,
 )
 async def create_configuration(
-    workspace: Annotated[
-        WorkspaceProfile,
-        Security(
-            require_workspace_access,
-            scopes=["Workspace.Configurations.ReadWrite"],
-        ),
+    workspace_id: Annotated[
+        str, Path(min_length=1, description="Workspace identifier")
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Configurations.ReadWrite"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
     *,
     payload: ConfigurationCreate = CONFIGURATION_CREATE_BODY,
 ) -> ConfigurationRecord:
     service = ConfigurationsService(session=session)
     return await service.create_configuration(
-        workspace_id=workspace.workspace_id,
+        workspace_id=workspace_id,
         document_type=payload.document_type,
         title=payload.title,
         payload=payload.payload,
@@ -86,20 +97,23 @@ async def create_configuration(
     response_model_exclude_none=True,
 )
 async def list_active_configurations(
-    workspace: Annotated[
-        WorkspaceProfile,
-        Security(
-            require_workspace_access,
-            scopes=["Workspace.Configurations.Read"],
-        ),
+    workspace_id: Annotated[
+        str, Path(min_length=1, description="Workspace identifier")
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Configurations.Read"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
     *,
     document_type: str | None = Query(None),
 ) -> list[ConfigurationRecord]:
     service = ConfigurationsService(session=session)
     return await service.list_active_configurations(
-        workspace_id=workspace.workspace_id,
+        workspace_id=workspace_id,
         document_type=document_type,
     )
 
@@ -112,22 +126,25 @@ async def list_active_configurations(
     response_model_exclude_none=True,
 )
 async def read_configuration(
+    workspace_id: Annotated[
+        str, Path(min_length=1, description="Workspace identifier")
+    ],
     configuration_id: Annotated[
         str, Path(min_length=1, description="Configuration identifier")
     ],
-    workspace: Annotated[
-        WorkspaceProfile,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
         Security(
-            require_workspace_access,
-            scopes=["Workspace.Configurations.Read"],
+            require_workspace("Workspace.Configurations.Read"),
+            scopes=["{workspace_id}"],
         ),
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ConfigurationRecord:
     service = ConfigurationsService(session=session)
     try:
         return await service.get_configuration(
-            workspace_id=workspace.workspace_id,
+            workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
     except ConfigurationNotFoundError as exc:
@@ -136,30 +153,34 @@ async def read_configuration(
 
 @router.put(
     "/configurations/{configuration_id}",
+    dependencies=[Security(require_csrf)],
     response_model=ConfigurationRecord,
     status_code=status.HTTP_200_OK,
     summary="Replace a configuration",
     response_model_exclude_none=True,
 )
 async def replace_configuration(
+    workspace_id: Annotated[
+        str, Path(min_length=1, description="Workspace identifier")
+    ],
     configuration_id: Annotated[
         str, Path(min_length=1, description="Configuration identifier")
     ],
-    workspace: Annotated[
-        WorkspaceProfile,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
         Security(
-            require_workspace_access,
-            scopes=["Workspace.Configurations.ReadWrite"],
+            require_workspace("Workspace.Configurations.ReadWrite"),
+            scopes=["{workspace_id}"],
         ),
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
     *,
     payload: ConfigurationUpdate = CONFIGURATION_UPDATE_BODY,
 ) -> ConfigurationRecord:
     service = ConfigurationsService(session=session)
     try:
         return await service.update_configuration(
-            workspace_id=workspace.workspace_id,
+            workspace_id=workspace_id,
             configuration_id=configuration_id,
             title=payload.title,
             payload=payload.payload,
@@ -170,27 +191,31 @@ async def replace_configuration(
 
 @router.delete(
     "/configurations/{configuration_id}",
+    dependencies=[Security(require_csrf)],
     response_model=DefaultResponse,
     status_code=status.HTTP_200_OK,
     summary="Delete a configuration",
 )
 async def delete_configuration(
+    workspace_id: Annotated[
+        str, Path(min_length=1, description="Workspace identifier")
+    ],
     configuration_id: Annotated[
         str, Path(min_length=1, description="Configuration identifier")
     ],
-    workspace: Annotated[
-        WorkspaceProfile,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
         Security(
-            require_workspace_access,
-            scopes=["Workspace.Configurations.ReadWrite"],
+            require_workspace("Workspace.Configurations.ReadWrite"),
+            scopes=["{workspace_id}"],
         ),
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> DefaultResponse:
     service = ConfigurationsService(session=session)
     try:
         await service.delete_configuration(
-            workspace_id=workspace.workspace_id,
+            workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
     except ConfigurationNotFoundError as exc:
@@ -200,28 +225,32 @@ async def delete_configuration(
 
 @router.post(
     "/configurations/{configuration_id}/activate",
+    dependencies=[Security(require_csrf)],
     response_model=ConfigurationRecord,
     status_code=status.HTTP_200_OK,
     summary="Activate a configuration",
     response_model_exclude_none=True,
 )
 async def activate_configuration(
+    workspace_id: Annotated[
+        str, Path(min_length=1, description="Workspace identifier")
+    ],
     configuration_id: Annotated[
         str, Path(min_length=1, description="Configuration identifier")
     ],
-    workspace: Annotated[
-        WorkspaceProfile,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
         Security(
-            require_workspace_access,
-            scopes=["Workspace.Configurations.ReadWrite"],
+            require_workspace("Workspace.Configurations.ReadWrite"),
+            scopes=["{workspace_id}"],
         ),
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ConfigurationRecord:
     service = ConfigurationsService(session=session)
     try:
         return await service.activate_configuration(
-            workspace_id=workspace.workspace_id,
+            workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
     except ConfigurationNotFoundError as exc:
