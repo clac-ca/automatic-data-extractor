@@ -32,7 +32,7 @@ __all__ = [
 
 
 _ROLE_SLUGS = {
-    "admin": "global-admin",
+    "admin": "global-administrator",
     "user": "global-user",
 }
 

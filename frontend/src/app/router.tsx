@@ -1,4 +1,4 @@
-import { createBrowserRouter, Outlet, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, Navigate, Outlet, RouterProvider } from "react-router-dom";
 
 import { RootRoute } from "./RootRoute";
 import { NotFoundRoute } from "./NotFoundRoute";
@@ -17,6 +17,11 @@ import { WorkspaceMembersRoute } from "../features/workspaces/routes/WorkspaceMe
 import { WorkspaceRolesRoute } from "../features/workspaces/routes/WorkspaceRolesRoute";
 import { WorkspaceSettingsRoute } from "../features/workspaces/routes/WorkspaceSettingsRoute";
 import { RequirePermission } from "../shared/rbac/RequirePermission";
+import { RequireGlobalPermission } from "../shared/rbac/RequireGlobalPermission";
+import { AdminLayout } from "../features/admin/routes/AdminLayout";
+import { GlobalRolesRoute } from "../features/admin/routes/GlobalRolesRoute";
+import { GlobalAssignmentsRoute } from "../features/admin/routes/GlobalAssignmentsRoute";
+import { WorkspaceAssignmentsRoute } from "../features/admin/routes/WorkspaceAssignmentsRoute";
 import { RBAC } from "../shared/rbac/permissions";
 
 export function createAppRouter() {
@@ -25,6 +30,26 @@ export function createAppRouter() {
     { path: "/setup", element: <SetupRoute />, errorElement: <AppErrorPage /> },
     { path: "/login", element: <LoginRoute />, errorElement: <AppErrorPage /> },
     { path: "/logout", element: <LogoutRoute />, errorElement: <AppErrorPage /> },
+    {
+      path: "/admin",
+      element: <RequireSession />,
+      errorElement: <AppErrorPage />,
+      children: [
+        {
+          element: (
+            <RequireGlobalPermission needed={RBAC.Global.Roles.ReadAll}>
+              <AdminLayout />
+            </RequireGlobalPermission>
+          ),
+          children: [
+            { index: true, element: <Navigate to="global/roles" replace /> },
+            { path: "global/roles", element: <GlobalRolesRoute /> },
+            { path: "global/assignments", element: <GlobalAssignmentsRoute /> },
+            { path: "workspace", element: <WorkspaceAssignmentsRoute /> },
+          ],
+        },
+      ],
+    },
     {
       path: "/workspaces",
       element: <RequireSession />,

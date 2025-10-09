@@ -6,7 +6,7 @@ import secrets
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 from urllib.parse import urlencode
 
 import httpx
@@ -21,9 +21,13 @@ from ..system_settings.repository import SystemSettingsRepository
 from app.features.roles.service import (
     assign_global_role,
     count_users_with_global_role,
+    ensure_user_principal,
     get_global_role_by_slug,
     sync_permission_registry,
 )
+
+if TYPE_CHECKING:
+    from app.features.roles.models import Principal
 
 from ..users.models import User
 from ..users.repository import UsersRepository
@@ -64,6 +68,7 @@ class AuthenticatedIdentity:
     """Identity resolved during authentication."""
 
     user: User
+    principal: "Principal"
     credentials: Literal["session_cookie", "bearer_token", "api_key"]
     api_key: APIKey | None = None
 
@@ -161,7 +166,7 @@ def normalise_api_key_label(value: str | None) -> str | None:
 
 
 _INITIAL_SETUP_SETTING_KEY = "initial_setup"
-_GLOBAL_ADMIN_ROLE_SLUG = "global-admin"
+_GLOBAL_ADMIN_ROLE_SLUG = "global-administrator"
 _GLOBAL_USER_ROLE_SLUG = "global-user"
 
 
@@ -217,7 +222,7 @@ class AuthService:
         # service is executed outside of the FastAPI lifespan (for example,
         # CLI utilities or ephemeral setup scripts), the registry may not have
         # been synced yet which would previously raise a 500 when assigning the
-        # `global-admin` role. Running the synchronisation here keeps the
+        # `global-administrator` role. Running the synchronisation here keeps the
         # initial setup flow resilient regardless of the caller.
         await sync_permission_registry(session=session)
 
@@ -485,9 +490,9 @@ class AuthService:
 
     def _refresh_cookie_path(self, session_path: str) -> str:
         base = session_path.rstrip("/")
-        suffix = "/api/auth/session/refresh"
+        suffix = "/auth/session/refresh"
         if not base or base == "/":
-            return suffix
+            return "/api/v1" + suffix
         return f"{base}{suffix}"
 
     def extract_session_payloads(
@@ -677,15 +682,17 @@ class AuthService:
             user = await self._users.get_by_id(record.user_id)
         if user is None or not user.is_active:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
-        principal = AuthenticatedIdentity(
+        principal = await ensure_user_principal(session=self._session, user=user)
+        identity = AuthenticatedIdentity(
             user=user,
+            principal=principal,
             api_key=record,
             credentials="api_key",
         )
 
         if request is not None:
             await self._touch_api_key(record, request=request)
-        return principal
+        return identity
 
     async def _touch_api_key(self, record: APIKey, *, request: Request) -> None:
         interval = self.settings.session_last_seen_interval

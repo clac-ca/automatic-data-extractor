@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.features.roles.models import Role
-from .models import Workspace, WorkspaceMembership, WorkspaceMembershipRole
+from .models import Workspace, WorkspaceMembership
 
 
 class WorkspacesRepository:
@@ -30,10 +30,7 @@ class WorkspacesRepository:
             select(WorkspaceMembership)
             .options(
                 selectinload(WorkspaceMembership.workspace),
-                selectinload(WorkspaceMembership.membership_roles),
-                selectinload(WorkspaceMembership.membership_roles)
-                .joinedload(WorkspaceMembershipRole.role)
-                .joinedload(Role.permissions),
+                selectinload(WorkspaceMembership.user),
             )
             .where(
                 and_(
@@ -54,10 +51,6 @@ class WorkspacesRepository:
             .options(
                 selectinload(WorkspaceMembership.workspace),
                 selectinload(WorkspaceMembership.user),
-                selectinload(WorkspaceMembership.membership_roles),
-                selectinload(WorkspaceMembership.membership_roles)
-                .joinedload(WorkspaceMembershipRole.role)
-                .joinedload(Role.permissions),
             )
             .where(WorkspaceMembership.id == membership_id)
             .execution_options(populate_existing=True)
@@ -73,10 +66,6 @@ class WorkspacesRepository:
             .options(
                 selectinload(WorkspaceMembership.workspace),
                 selectinload(WorkspaceMembership.user),
-                selectinload(WorkspaceMembership.membership_roles),
-                selectinload(WorkspaceMembership.membership_roles)
-                .joinedload(WorkspaceMembershipRole.role)
-                .joinedload(Role.permissions),
             )
             .where(
                 and_(
@@ -94,10 +83,7 @@ class WorkspacesRepository:
             select(WorkspaceMembership)
             .options(
                 selectinload(WorkspaceMembership.workspace),
-                selectinload(WorkspaceMembership.membership_roles),
-                selectinload(WorkspaceMembership.membership_roles)
-                .joinedload(WorkspaceMembershipRole.role)
-                .joinedload(Role.permissions),
+                selectinload(WorkspaceMembership.user),
             )
             .where(
                 and_(
@@ -116,10 +102,7 @@ class WorkspacesRepository:
             select(WorkspaceMembership)
             .options(
                 selectinload(WorkspaceMembership.workspace),
-                selectinload(WorkspaceMembership.membership_roles),
-                selectinload(WorkspaceMembership.membership_roles)
-                .joinedload(WorkspaceMembershipRole.role)
-                .joinedload(Role.permissions),
+                selectinload(WorkspaceMembership.user),
             )
             .where(WorkspaceMembership.user_id == user_id)
             .execution_options(populate_existing=True)
@@ -133,10 +116,6 @@ class WorkspacesRepository:
             .options(
                 selectinload(WorkspaceMembership.workspace),
                 selectinload(WorkspaceMembership.user),
-                selectinload(WorkspaceMembership.membership_roles),
-                selectinload(WorkspaceMembership.membership_roles)
-                .joinedload(WorkspaceMembershipRole.role)
-                .joinedload(Role.permissions),
             )
             .where(WorkspaceMembership.workspace_id == workspace_id)
             .execution_options(populate_existing=True)
@@ -152,10 +131,6 @@ class WorkspacesRepository:
             .options(
                 selectinload(WorkspaceMembership.workspace),
                 selectinload(WorkspaceMembership.user),
-                selectinload(WorkspaceMembership.membership_roles),
-                selectinload(WorkspaceMembership.membership_roles)
-                .joinedload(WorkspaceMembershipRole.role)
-                .joinedload(Role.permissions),
             )
             .where(WorkspaceMembership.workspace_id == workspace_id)
             .with_for_update()
@@ -218,15 +193,6 @@ class WorkspacesRepository:
 
     async def delete_workspace(self, workspace: Workspace) -> None:
         await self._session.execute(
-            delete(WorkspaceMembershipRole).where(
-                WorkspaceMembershipRole.workspace_membership_id.in_(
-                    select(WorkspaceMembership.id).where(
-                        WorkspaceMembership.workspace_id == workspace.id
-                    )
-                )
-            )
-        )
-        await self._session.execute(
             delete(WorkspaceMembership).where(
                 WorkspaceMembership.workspace_id == workspace.id
             )
@@ -250,7 +216,7 @@ class WorkspacesRepository:
         await self._session.flush()
         await self._session.refresh(
             membership,
-            attribute_names=["workspace", "user", "membership_roles"],
+            attribute_names=["workspace", "user"],
         )
         return membership
 
@@ -258,35 +224,13 @@ class WorkspacesRepository:
         await self._session.delete(membership)
         await self._session.flush()
 
-    async def set_membership_roles(
-        self,
-        *,
-        membership_id: str,
-        role_ids: list[str],
-    ) -> None:
-        await self._session.execute(
-            delete(WorkspaceMembershipRole).where(
-                WorkspaceMembershipRole.workspace_membership_id == membership_id
-            )
-        )
-        if role_ids:
-            records = [
-                WorkspaceMembershipRole(
-                    workspace_membership_id=membership_id,
-                    role_id=role_id,
-                )
-                for role_id in dict.fromkeys(role_ids)
-            ]
-            self._session.add_all(records)
-        await self._session.flush()
-
     async def list_workspace_roles(self, workspace_id: str) -> list[Role]:
         stmt = (
             select(Role)
             .options(selectinload(Role.permissions))
             .where(
-                Role.scope == "workspace",
-                sa.or_(Role.workspace_id.is_(None), Role.workspace_id == workspace_id),
+                Role.scope_type == "workspace",
+                sa.or_(Role.scope_id.is_(None), Role.scope_id == workspace_id),
             )
             .order_by(Role.slug)
         )

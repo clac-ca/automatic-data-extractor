@@ -1,6 +1,6 @@
 import type { ProblemDetails } from "./types";
 
-const DEFAULT_API_BASE_URL = "/api";
+const DEFAULT_API_BASE_URL = "/api/v1";
 const DEFAULT_CSRF_COOKIE_NAME = "ade_csrf";
 const SAFE_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 
@@ -208,6 +208,14 @@ export async function get<T>(path: string, init?: ApiClientOptions) {
 export async function post<T>(path: string, body?: unknown, init?: ApiClientOptions) {
   return apiClient.request<T>(path, {
     method: "POST",
+    body: body === undefined ? undefined : JSON.stringify(body),
+    ...init,
+  });
+}
+
+export async function patch<T>(path: string, body?: unknown, init?: ApiClientOptions) {
+  return apiClient.request<T>(path, {
+    method: "PATCH",
     body: body === undefined ? undefined : JSON.stringify(body),
     ...init,
   });

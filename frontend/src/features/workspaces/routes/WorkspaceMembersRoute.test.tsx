@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 
-import type { WorkspaceMember, WorkspaceProfile, WorkspaceRoleDefinition } from "../../../shared/api/types";
+import type { RoleDefinition, WorkspaceMember, WorkspaceProfile } from "../../../shared/api/types";
 
 const useWorkspaceMembersQueryMock = vi.fn();
 const useWorkspaceRolesQueryMock = vi.fn();
@@ -62,16 +62,16 @@ describe("WorkspaceMembersRoute", () => {
         permissions: [],
       },
     };
-    const roles: WorkspaceRoleDefinition[] = [
+    const roles: RoleDefinition[] = [
       {
         id: "role-1",
         slug: "workspace-owner",
         name: "Workspace owner",
         description: null,
-        scope: "workspace",
-        workspace_id: "workspace-1",
+        scope_type: "workspace",
+        scope_id: "workspace-1",
         permissions: ["Workspace.Settings.ReadWrite"],
-        is_system: true,
+        built_in: true,
         editable: false,
       },
     ];
@@ -102,10 +102,10 @@ describe("WorkspaceMembersRoute", () => {
           slug: "workspace-owner",
           name: "Workspace owner",
           description: null,
-          scope: "workspace",
-          workspace_id: "workspace-1",
+          scope_type: "workspace",
+          scope_id: "workspace-1",
           permissions: ["Workspace.Settings.ReadWrite"],
-          is_system: true,
+          built_in: true,
           editable: false,
         },
       ],

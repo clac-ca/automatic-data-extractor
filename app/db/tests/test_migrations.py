@@ -39,6 +39,7 @@ async def test_alembic_upgrade_head(tmp_path: Path, monkeypatch: pytest.MonkeyPa
             )
             assert result.scalar_one() == 1
     finally:
-        command.downgrade(config, "base")
+        with pytest.raises(NotImplementedError):
+            command.downgrade(config, "base")
         reset_database_state()
         reload_settings()

@@ -17,7 +17,7 @@ pytestmark = pytest.mark.asyncio
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
     response = await client.post(
-        "/api/auth/session",
+        "/api/v1/auth/session",
         json={"email": email, "password": password},
     )
     assert response.status_code == 200, response.text
@@ -92,7 +92,7 @@ async def test_submit_job_runs_extractor(
 
     actor = seed_identity["workspace_owner"]
     token = await _login(async_client, actor["email"], actor["password"])
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
     }
@@ -145,7 +145,7 @@ async def test_submit_job_missing_document_returns_404(
     configuration_id = await _create_configuration(workspace_id=workspace_id)
     actor = seed_identity["workspace_owner"]
     token = await _login(async_client, actor["email"], actor["password"])
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
     }
@@ -169,7 +169,7 @@ async def test_submit_job_missing_body_fields_returns_422(
 
     actor = seed_identity["workspace_owner"]
     token = await _login(async_client, actor["email"], actor["password"])
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
     }
@@ -195,7 +195,7 @@ async def test_submit_job_missing_configuration_returns_404(
 
     actor = seed_identity["workspace_owner"]
     token = await _login(async_client, actor["email"], actor["password"])
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
     }
@@ -235,7 +235,7 @@ async def test_submit_job_processor_failure_returns_500(
 
     actor = seed_identity["workspace_owner"]
     token = await _login(async_client, actor["email"], actor["password"])
-    workspace_base = f"/api/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
     }

@@ -5,16 +5,15 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends, Path, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.security import require_authenticated, require_csrf, require_global, require_workspace
 from app.core.responses import DefaultResponse
 from app.core.schema import ErrorMessage
 from app.db.session import get_session
 
-from ..auth.dependencies import bind_current_user
-from ..roles.dependencies import require_global_access
 from ..roles.models import Role
 from ..roles.schemas import RoleCreate, RoleRead, RoleUpdate
 from ..users.models import User
-from .dependencies import get_workspace_profile, require_workspace_access
+from .dependencies import get_workspace_profile
 from .schemas import (
     WorkspaceCreate,
     WorkspaceDefaultSelection,
@@ -26,7 +25,7 @@ from .schemas import (
 )
 from .service import WorkspacesService
 
-router = APIRouter(tags=["workspaces"])
+router = APIRouter(tags=["workspaces"], dependencies=[Security(require_authenticated)])
 
 WORKSPACE_MEMBER_BODY = Body(...)
 WORKSPACE_CREATE_BODY = Body(...)
@@ -40,15 +39,16 @@ def _serialize_role(role: Role) -> RoleRead:
         slug=role.slug,
         name=role.name,
         description=role.description,
-        scope=role.scope,
-        workspace_id=role.workspace_id,
+        scope_type=role.scope_type,
+        scope_id=role.scope_id,
         permissions=[permission.permission_key for permission in role.permissions],
-        is_system=role.is_system,
+        built_in=role.built_in,
         editable=role.editable,
     )
 
 @router.post(
     "/workspaces",
+    dependencies=[Security(require_csrf)],
     response_model=WorkspaceProfile,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new workspace",
@@ -79,7 +79,7 @@ def _serialize_role(role: Role) -> RoleRead:
 async def create_workspace(
     admin_user: Annotated[
         User,
-        Security(require_global_access, scopes=["Workspaces.Create"]),
+        Security(require_global("Workspaces.Create")),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
     *,
@@ -113,7 +113,7 @@ async def create_workspace(
     },
 )
 async def list_workspaces(
-    current_user: Annotated[User, Depends(bind_current_user)],
+    current_user: Annotated[User, Security(require_authenticated)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[WorkspaceProfile]:
     service = WorkspacesService(session=session)
@@ -144,6 +144,13 @@ async def list_workspaces(
 )
 async def read_workspace(
     workspace: Annotated[WorkspaceProfile, Depends(get_workspace_profile)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Read"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
 ) -> WorkspaceProfile:
     return workspace
 
@@ -166,9 +173,13 @@ async def read_workspace(
     },
 )
 async def list_members(
-    workspace: Annotated[
-        WorkspaceProfile,
-        Security(require_workspace_access, scopes=["Workspace.Members.Read"]),
+    workspace: Annotated[WorkspaceProfile, Depends(get_workspace_profile)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Members.Read"),
+            scopes=["{workspace_id}"],
+        ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[WorkspaceMember]:
@@ -196,9 +207,13 @@ async def list_members(
     },
 )
 async def list_workspace_roles(
-    workspace: Annotated[
-        WorkspaceProfile,
-        Security(require_workspace_access, scopes=["Workspace.Roles.Read"]),
+    workspace: Annotated[WorkspaceProfile, Depends(get_workspace_profile)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Roles.Read"),
+            scopes=["{workspace_id}"],
+        ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[RoleRead]:
@@ -209,6 +224,7 @@ async def list_workspace_roles(
 
 @router.post(
     "/workspaces/{workspace_id}/roles",
+    dependencies=[Security(require_csrf)],
     response_model=RoleRead,
     status_code=status.HTTP_201_CREATED,
     summary="Create a workspace role",
@@ -236,25 +252,29 @@ async def list_workspace_roles(
     },
 )
 async def create_workspace_role(
-    workspace: Annotated[
-        WorkspaceProfile,
-        Security(require_workspace_access, scopes=["Workspace.Roles.ReadWrite"]),
+    workspace: Annotated[WorkspaceProfile, Depends(get_workspace_profile)],
+    actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Roles.ReadWrite"),
+            scopes=["{workspace_id}"],
+        ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
-    current_user: Annotated[User, Depends(bind_current_user)],
     payload: RoleCreate,
 ) -> RoleRead:
     service = WorkspacesService(session=session)
     role = await service.create_workspace_role(
         workspace_id=workspace.workspace_id,
         payload=payload,
-        actor=current_user,
+        actor=actor,
     )
     return _serialize_role(role)
 
 
 @router.put(
     "/workspaces/{workspace_id}/roles/{role_id}",
+    dependencies=[Security(require_csrf)],
     response_model=RoleRead,
     status_code=status.HTTP_200_OK,
     summary="Update a workspace role",
@@ -286,12 +306,15 @@ async def create_workspace_role(
     },
 )
 async def update_workspace_role(
-    workspace: Annotated[
-        WorkspaceProfile,
-        Security(require_workspace_access, scopes=["Workspace.Roles.ReadWrite"]),
+    workspace: Annotated[WorkspaceProfile, Depends(get_workspace_profile)],
+    actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Roles.ReadWrite"),
+            scopes=["{workspace_id}"],
+        ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
-    current_user: Annotated[User, Depends(bind_current_user)],
     role_id: Annotated[str, Path(min_length=1)],
     payload: RoleUpdate,
 ) -> RoleRead:
@@ -300,13 +323,14 @@ async def update_workspace_role(
         workspace_id=workspace.workspace_id,
         role_id=role_id,
         payload=payload,
-        actor=current_user,
+        actor=actor,
     )
     return _serialize_role(role)
 
 
 @router.delete(
     "/workspaces/{workspace_id}/roles/{role_id}",
+    dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a workspace role",
     responses={
@@ -333,9 +357,13 @@ async def update_workspace_role(
     },
 )
 async def delete_workspace_role(
-    workspace: Annotated[
-        WorkspaceProfile,
-        Security(require_workspace_access, scopes=["Workspace.Roles.ReadWrite"]),
+    workspace: Annotated[WorkspaceProfile, Depends(get_workspace_profile)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Roles.ReadWrite"),
+            scopes=["{workspace_id}"],
+        ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
     role_id: Annotated[str, Path(min_length=1)],
@@ -348,6 +376,7 @@ async def delete_workspace_role(
 
 @router.post(
     "/workspaces/{workspace_id}/members",
+    dependencies=[Security(require_csrf)],
     response_model=WorkspaceMember,
     status_code=status.HTTP_201_CREATED,
     summary="Add a member to a workspace",
@@ -372,9 +401,13 @@ async def delete_workspace_role(
     },
 )
 async def add_member(
-    workspace: Annotated[
-        WorkspaceProfile,
-        Security(require_workspace_access, scopes=["Workspace.Members.ReadWrite"]),
+    workspace: Annotated[WorkspaceProfile, Depends(get_workspace_profile)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Members.ReadWrite"),
+            scopes=["{workspace_id}"],
+        ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
     *,
@@ -391,6 +424,7 @@ async def add_member(
 
 @router.patch(
     "/workspaces/{workspace_id}",
+    dependencies=[Security(require_csrf)],
     response_model=WorkspaceProfile,
     status_code=status.HTTP_200_OK,
     summary="Update workspace metadata",
@@ -419,18 +453,21 @@ async def add_member(
     },
 )
 async def update_workspace(
-    workspace: Annotated[
-        WorkspaceProfile,
-        Security(require_workspace_access, scopes=["Workspace.Settings.ReadWrite"]),
+    workspace: Annotated[WorkspaceProfile, Depends(get_workspace_profile)],
+    actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Settings.ReadWrite"),
+            scopes=["{workspace_id}"],
+        ),
     ],
-    current_user: Annotated[User, Depends(bind_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
     *,
     payload: WorkspaceUpdate = WORKSPACE_UPDATE_BODY,
 ) -> WorkspaceProfile:
     service = WorkspacesService(session=session)
     workspace = await service.update_workspace(
-        user=current_user,
+        user=actor,
         workspace_id=workspace.workspace_id,
         name=payload.name,
         slug=payload.slug,
@@ -441,6 +478,7 @@ async def update_workspace(
 
 @router.delete(
     "/workspaces/{workspace_id}",
+    dependencies=[Security(require_csrf)],
     response_model=DefaultResponse,
     status_code=status.HTTP_200_OK,
     summary="Delete a workspace",
@@ -460,9 +498,13 @@ async def update_workspace(
     },
 )
 async def delete_workspace(
-    workspace: Annotated[
-        WorkspaceProfile,
-        Security(require_workspace_access, scopes=["Workspace.Delete"]),
+    workspace: Annotated[WorkspaceProfile, Depends(get_workspace_profile)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Delete"),
+            scopes=["{workspace_id}"],
+        ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> DefaultResponse:
@@ -473,6 +515,7 @@ async def delete_workspace(
 
 @router.put(
     "/workspaces/{workspace_id}/members/{membership_id}/roles",
+    dependencies=[Security(require_csrf)],
     response_model=WorkspaceMember,
     status_code=status.HTTP_200_OK,
     summary="Replace the set of roles for a workspace member",
@@ -497,11 +540,14 @@ async def delete_workspace(
     },
 )
 async def update_member(
-    workspace: Annotated[
-        WorkspaceProfile,
-        Security(require_workspace_access, scopes=["Workspace.Members.ReadWrite"]),
+    workspace: Annotated[WorkspaceProfile, Depends(get_workspace_profile)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Members.ReadWrite"),
+            scopes=["{workspace_id}"],
+        ),
     ],
-    current_user: Annotated[User, Depends(bind_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
     membership_id: str = Path(..., min_length=1, description="Membership identifier"),
     *,
@@ -518,6 +564,7 @@ async def update_member(
 
 @router.delete(
     "/workspaces/{workspace_id}/members/{membership_id}",
+    dependencies=[Security(require_csrf)],
     response_model=DefaultResponse,
     status_code=status.HTTP_200_OK,
     summary="Remove a workspace member",
@@ -541,9 +588,13 @@ async def update_member(
     },
 )
 async def remove_member(
-    workspace: Annotated[
-        WorkspaceProfile,
-        Security(require_workspace_access, scopes=["Workspace.Members.ReadWrite"]),
+    workspace: Annotated[WorkspaceProfile, Depends(get_workspace_profile)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Members.ReadWrite"),
+            scopes=["{workspace_id}"],
+        ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
     membership_id: str = Path(..., min_length=1, description="Membership identifier"),
@@ -557,6 +608,7 @@ async def remove_member(
 
 @router.post(
     "/workspaces/{workspace_id}/default",
+    dependencies=[Security(require_csrf)],
     response_model=WorkspaceDefaultSelection,
     status_code=status.HTTP_200_OK,
     summary="Mark a workspace as the caller's default",
@@ -573,13 +625,19 @@ async def remove_member(
 )
 async def set_default_workspace(
     workspace: Annotated[WorkspaceProfile, Depends(get_workspace_profile)],
-    current_user: Annotated[User, Depends(bind_current_user)],
+    actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Read"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> WorkspaceDefaultSelection:
     service = WorkspacesService(session=session)
     selection = await service.set_default_workspace(
         workspace_id=workspace.workspace_id,
-        user=current_user,
+        user=actor,
     )
     return selection
 

@@ -6,7 +6,7 @@ import os
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
@@ -22,14 +22,15 @@ from app.db.bootstrap import ensure_database_ready
 from app.db.engine import render_sync_url, reset_database_state
 from app.db.session import get_sessionmaker
 from app.features.auth.security import hash_password
-from app.features.roles.models import Role, UserGlobalRole
-from app.features.roles.service import sync_permission_registry
-from app.features.users.models import User, UserCredential
-from app.features.workspaces.models import (
-    Workspace,
-    WorkspaceMembership,
-    WorkspaceMembershipRole,
+from app.features.roles.models import Role
+from app.features.roles.service import (
+    assign_global_role,
+    assign_role,
+    ensure_user_principal,
+    sync_permission_registry,
 )
+from app.features.users.models import User, UserCredential
+from app.features.workspaces.models import Workspace, WorkspaceMembership
 from app.lifecycles import ensure_runtime_dirs
 from app.main import create_app
 
@@ -66,7 +67,6 @@ def _configure_database(
 
     yield
 
-    command.downgrade(config, "base")
     reset_database_state()
     reload_settings()
     for env_var in (
@@ -177,21 +177,35 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
 
         global_roles = await session.execute(
             select(Role).where(
-                Role.scope == "global",
-                Role.slug.in_(["global-admin", "global-user"]),
+                Role.scope_type == "global",
+                Role.scope_id.is_(None),
+                Role.slug.in_(["global-administrator", "global-user"]),
             )
         )
         global_role_map = {role.slug: role for role in global_roles.scalars()}
 
-        def _assign_global(user: User, slug: str) -> None:
-            role = global_role_map.get(slug)
-            if role is None:
-                return
-            session.add(UserGlobalRole(user_id=user.id, role_id=role.id))
+        admin_role = global_role_map.get("global-administrator")
+        if admin_role is not None:
+            await assign_global_role(
+                session=session,
+                user_id=cast(str, admin.id),
+                role_id=cast(str, admin_role.id),
+            )
 
-        _assign_global(admin, "global-admin")
-        for candidate in (workspace_owner, member, member_with_manage, orphan, invitee):
-            _assign_global(candidate, "global-user")
+        member_role = global_role_map.get("global-user")
+        if member_role is not None:
+            for candidate in (
+                workspace_owner,
+                member,
+                member_with_manage,
+                orphan,
+                invitee,
+            ):
+                await assign_global_role(
+                    session=session,
+                    user_id=cast(str, candidate.id),
+                    role_id=cast(str, member_role.id),
+                )
 
         def _add_password(user: User, password: str) -> None:
             session.add(
@@ -245,29 +259,40 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
 
         result = await session.execute(
             select(Role).where(
-                Role.scope == "workspace",
+                Role.scope_type == "workspace",
+                Role.scope_id.is_(None),
                 Role.slug.in_(["workspace-owner", "workspace-member"]),
             )
         )
         roles = {role.slug: role for role in result.scalars()}
 
-        def _assign_role(
-            membership: WorkspaceMembership, slug: str
+        async def _assign_workspace_role(
+            membership: WorkspaceMembership, user: User, slug: str
         ) -> None:
             role = roles.get(slug)
             if role is None:
                 return
-            session.add(
-                WorkspaceMembershipRole(
-                    workspace_membership_id=membership.id,
-                    role_id=role.id,
-                )
+            principal = await ensure_user_principal(session=session, user=user)
+            await assign_role(
+                session=session,
+                principal_id=principal.id,
+                role_id=role.id,
+                scope_type="workspace",
+                scope_id=membership.workspace_id,
             )
 
-        _assign_role(workspace_owner_membership, "workspace-owner")
-        _assign_role(member_membership, "workspace-member")
-        _assign_role(member_manage_default, "workspace-member")
-        _assign_role(member_manage_secondary, "workspace-member")
+        await _assign_workspace_role(
+            workspace_owner_membership, workspace_owner, "workspace-owner"
+        )
+        await _assign_workspace_role(
+            member_membership, member, "workspace-member"
+        )
+        await _assign_workspace_role(
+            member_manage_default, member_with_manage, "workspace-member"
+        )
+        await _assign_workspace_role(
+            member_manage_secondary, member_with_manage, "workspace-member"
+        )
 
         await session.commit()
 
