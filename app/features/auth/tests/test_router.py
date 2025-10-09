@@ -51,7 +51,8 @@ async def test_create_session_and_me(
     assert response.status_code == 200
     data = response.json()
     assert data["user"]["email"] == admin["email"]
-    assert data["user"]["role"] == "admin"
+    assert "Workspaces.Create" in data["user"].get("permissions", [])
+    assert "global-admin" in data["user"].get("roles", [])
 
 
 async def test_provider_discovery_returns_config(async_client: AsyncClient, override_app_settings) -> None:

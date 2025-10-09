@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import StrEnum
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
@@ -33,13 +32,6 @@ def _clean_display_name(value: str | None) -> str | None:
     return cleaned
 
 
-class UserRole(StrEnum):
-    """Supported ADE operator roles."""
-
-    ADMIN = "admin"
-    USER = "user"
-
-
 class User(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     """Single identity model for humans and service accounts."""
 
@@ -53,11 +45,6 @@ class User(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         Boolean, nullable=False, default=False
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, name="userrole", native_enum=False, length=20),
-        nullable=False,
-        default=UserRole.USER,
-    )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_login_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -140,4 +127,4 @@ class UserIdentity(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (UniqueConstraint("provider", "subject"),)
 
 
-__all__ = ["User", "UserIdentity", "UserCredential", "UserRole"]
+__all__ = ["User", "UserIdentity", "UserCredential"]

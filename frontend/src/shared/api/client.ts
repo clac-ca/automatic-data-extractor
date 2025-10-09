@@ -46,7 +46,7 @@ export class ApiClient {
   }
 
   async request<T = unknown>(path: string, init: ApiClientOptions = {}): Promise<T> {
-    const { parseJson = true, headers, ...rest } = init;
+    const { parseJson = true, headers, signal, ...rest } = init;
 
     const url = resolveUrl(this.baseUrl, path);
 
@@ -57,6 +57,7 @@ export class ApiClient {
         Accept: "application/json",
         ...headers,
       },
+      signal,
       ...rest,
     });
 
@@ -110,6 +111,14 @@ export async function get<T>(path: string, init?: ApiClientOptions) {
 export async function post<T>(path: string, body?: unknown, init?: ApiClientOptions) {
   return apiClient.request<T>(path, {
     method: "POST",
+    body: body === undefined ? undefined : JSON.stringify(body),
+    ...init,
+  });
+}
+
+export async function put<T>(path: string, body?: unknown, init?: ApiClientOptions) {
+  return apiClient.request<T>(path, {
+    method: "PUT",
     body: body === undefined ? undefined : JSON.stringify(body),
     ...init,
   });

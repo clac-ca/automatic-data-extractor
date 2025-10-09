@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .models import User, UserCredential, UserIdentity, UserRole
+from .models import User, UserCredential, UserIdentity
 
 
 def _canonical_email(value: str) -> str:
@@ -66,26 +66,18 @@ class UsersRepository:
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
-    async def count_admins(self) -> int:
-        stmt = select(func.count()).where(User.role == UserRole.ADMIN)
-        result = await self._session.execute(stmt)
-        count = result.scalar_one()
-        return int(count or 0)
-
     async def create(
         self,
         *,
         email: str,
         password_hash: str | None = None,
         display_name: str | None = None,
-        role: UserRole = UserRole.USER,
         is_active: bool = True,
         is_service_account: bool = False,
     ) -> User:
         user = User(
             email=email,
             display_name=display_name,
-            role=role,
             is_active=is_active,
             is_service_account=is_service_account,
             failed_login_count=0,
