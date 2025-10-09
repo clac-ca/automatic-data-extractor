@@ -23,8 +23,8 @@ describe("CreateWorkspaceForm", () => {
       id: "workspace-1",
       name: "Finance",
       slug: "finance",
-      role: "owner",
-      permissions: ["workspace:members:manage"],
+      roles: ["workspace-owner"],
+      permissions: ["Workspace.Members.ReadWrite"],
       is_default: false,
     };
     mutateAsync.mockResolvedValueOnce(createdWorkspace);
