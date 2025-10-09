@@ -64,52 +64,15 @@ export interface CreateWorkspacePayload {
   settings?: Record<string, unknown>;
 }
 
+export type WorkspaceRole = "member" | "owner";
+
 export interface WorkspaceProfile {
   id: string;
   name: string;
   slug: string;
-  roles: string[];
+  role: WorkspaceRole;
   permissions: string[];
   is_default: boolean;
-}
-
-export interface WorkspaceRoleDefinition {
-  id: string;
-  slug: string;
-  name: string;
-  description?: string | null;
-  scope: "global" | "workspace";
-  workspace_id?: string | null;
-  permissions: string[];
-  is_system: boolean;
-  editable: boolean;
-}
-
-export interface WorkspaceMemberUser {
-  user_id: string;
-  email: string;
-  role: UserRole;
-  is_active: boolean;
-  is_service_account: boolean;
-  display_name?: string | null;
-}
-
-export interface WorkspaceMember {
-  id: string;
-  workspace_id: string;
-  roles: string[];
-  permissions: string[];
-  is_default: boolean;
-  user: WorkspaceMemberUser;
-}
-
-export interface WorkspaceMemberCreatePayload {
-  user_id: string;
-  role_ids?: string[];
-}
-
-export interface WorkspaceMemberRolesUpdatePayload {
-  role_ids: string[];
 }
 
 export interface DocumentTypeDetailResponse {
