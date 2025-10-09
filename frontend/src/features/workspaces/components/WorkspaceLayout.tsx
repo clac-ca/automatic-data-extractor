@@ -6,7 +6,6 @@ import { CreateWorkspaceForm } from "./CreateWorkspaceForm";
 import { useWorkspacesQuery } from "../hooks/useWorkspacesQuery";
 import { useSessionQuery } from "../../auth/hooks/useSessionQuery";
 import { RBAC } from "../../../shared/rbac/permissions";
-import { hasAnyPermission } from "../../../shared/rbac/utils";
 import { globalCan } from "../../../shared/rbac/can";
 import { formatRoleList, formatRoleSlug } from "../utils/roles";
 
@@ -19,7 +18,7 @@ interface WorkspaceNavItem {
   label: string;
   to: string;
   end?: boolean;
-  requiredPermissions?: readonly string[];
+  requiredPermission?: string;
 }
 
 const NAVIGATION: WorkspaceNavItem[] = [
@@ -28,37 +27,37 @@ const NAVIGATION: WorkspaceNavItem[] = [
     id: "documents",
     label: "Documents",
     to: "documents",
-    requiredPermissions: [RBAC.Workspace.Documents.Read, RBAC.Workspace.Documents.ReadWrite],
+    requiredPermission: RBAC.Workspace.Documents.Read,
   },
   {
     id: "jobs",
     label: "Jobs",
     to: "jobs",
-    requiredPermissions: [RBAC.Workspace.Jobs.Read, RBAC.Workspace.Jobs.ReadWrite],
+    requiredPermission: RBAC.Workspace.Jobs.Read,
   },
   {
     id: "configurations",
     label: "Configurations",
     to: "configurations",
-    requiredPermissions: [RBAC.Workspace.Configurations.Read, RBAC.Workspace.Configurations.ReadWrite],
+    requiredPermission: RBAC.Workspace.Configurations.Read,
   },
   {
     id: "members",
     label: "Members",
     to: "members",
-    requiredPermissions: [RBAC.Workspace.Members.Read, RBAC.Workspace.Members.ReadWrite],
+    requiredPermission: RBAC.Workspace.Members.Read,
   },
   {
     id: "roles",
     label: "Roles",
     to: "roles",
-    requiredPermissions: [RBAC.Workspace.Roles.Read, RBAC.Workspace.Roles.ReadWrite],
+    requiredPermission: RBAC.Workspace.Roles.Read,
   },
   {
     id: "settings",
     label: "Settings",
     to: "settings",
-    requiredPermissions: [RBAC.Workspace.Settings.ReadWrite],
+    requiredPermission: RBAC.Workspace.Settings.ReadWrite,
   },
 ];
 
@@ -166,9 +165,9 @@ export function WorkspaceLayout() {
   }, [params.workspaceId, workspaces, resolvedWorkspaceId, navigate]);
 
   const navigationItems = useMemo(() => {
-    const permissions = activeWorkspace?.permissions ?? [];
+    const permissions = new Set(activeWorkspace?.permissions ?? []);
     return NAVIGATION.filter(
-      (item) => !item.requiredPermissions || hasAnyPermission(permissions, item.requiredPermissions),
+      (item) => !item.requiredPermission || permissions.has(item.requiredPermission),
     );
   }, [activeWorkspace]);
 
@@ -282,7 +281,7 @@ interface WorkspaceNavigationProps {
 }
 
 function WorkspaceNavigation({ items, workspaceId }: WorkspaceNavigationProps) {
-  if (!workspaceId || items.length === 0) {
+  if (!workspaceId || items.length <= 1) {
     return null;
   }
 

@@ -12,10 +12,3 @@ export function hasPermission(permissions: PermissionList, required: string): bo
   return permissions.includes(required);
 }
 
-export function hasAnyPermission(permissions: PermissionList, required: readonly string[]): boolean {
-  if (!permissions || permissions.length === 0) {
-    return false;
-  }
-
-  return required.some((permission) => permissions.includes(permission));
-}

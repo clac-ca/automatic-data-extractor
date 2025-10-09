@@ -10,6 +10,7 @@ import { useUpdateWorkspaceMemberRolesMutation } from "../hooks/useUpdateWorkspa
 import { useWorkspaceMembersQuery } from "../hooks/useWorkspaceMembersQuery";
 import { useWorkspaceRolesQuery } from "../hooks/useWorkspaceRolesQuery";
 import { workspaceCan } from "../../../shared/rbac/can";
+import { RBAC } from "../../../shared/rbac/permissions";
 import { formatRoleSlug } from "../utils/roles";
 
 export function WorkspaceMembersRoute() {
@@ -36,7 +37,7 @@ function WorkspaceMembersContent({ workspaceId, workspacePermissions }: Workspac
   const canManageMembers = workspaceCan.manageMembers(workspacePermissions);
   const canReadRoles =
     canManageMembers ||
-    workspaceCan.viewRoles(workspacePermissions) ||
+    workspacePermissions.includes(RBAC.Workspace.Roles.Read) ||
     workspaceCan.manageRoles(workspacePermissions);
 
   const membersQuery = useWorkspaceMembersQuery(workspaceId, true);
