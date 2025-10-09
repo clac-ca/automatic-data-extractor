@@ -1,101 +1,20 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Outlet, useNavigate, useParams } from "react-router-dom";
 
 import type { SessionEnvelope, WorkspaceProfile } from "../../../shared/api/types";
 import { CreateWorkspaceForm } from "./CreateWorkspaceForm";
 import { useWorkspacesQuery } from "../hooks/useWorkspacesQuery";
 import { useSessionQuery } from "../../auth/hooks/useSessionQuery";
-import { RBAC } from "../../../shared/rbac/permissions";
-import { hasAnyPermission } from "../../../shared/rbac/utils";
-import { globalCan } from "../../../shared/rbac/can";
-
-export interface WorkspaceLayoutContext {
-  workspace?: WorkspaceProfile;
-}
-
-interface WorkspaceNavItem {
-  id: string;
-  label: string;
-  to: string;
-  end?: boolean;
-  requiredPermissions?: readonly string[];
-}
-
-const NAVIGATION: WorkspaceNavItem[] = [
-  { id: "overview", label: "Overview", to: ".", end: true },
-  {
-    id: "documents",
-    label: "Documents",
-    to: "documents",
-    requiredPermissions: [RBAC.Workspace.Documents.Read, RBAC.Workspace.Documents.ReadWrite],
-  },
-  {
-    id: "jobs",
-    label: "Jobs",
-    to: "jobs",
-    requiredPermissions: [RBAC.Workspace.Jobs.Read, RBAC.Workspace.Jobs.ReadWrite],
-  },
-  {
-    id: "configurations",
-    label: "Configurations",
-    to: "configurations",
-    requiredPermissions: [RBAC.Workspace.Configurations.Read, RBAC.Workspace.Configurations.ReadWrite],
-  },
-  {
-    id: "members",
-    label: "Members",
-    to: "members",
-    requiredPermissions: [RBAC.Workspace.Members.Read, RBAC.Workspace.Members.ReadWrite],
-  },
-  {
-    id: "roles",
-    label: "Roles",
-    to: "roles",
-    requiredPermissions: [RBAC.Workspace.Roles.Read, RBAC.Workspace.Roles.ReadWrite],
-  },
-  {
-    id: "settings",
-    label: "Settings",
-    to: "settings",
-    requiredPermissions: [RBAC.Workspace.Settings.ReadWrite],
-  },
-];
 
 export function WorkspaceLayout() {
-  const { data: workspacesData, isLoading, error } = useWorkspacesQuery();
+  const { data, isLoading, error } = useWorkspacesQuery();
   const sessionQuery = useSessionQuery();
   const session = sessionQuery.data ?? null;
   const navigate = useNavigate();
   const params = useParams<{ workspaceId?: string }>();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const lastFocusedElementRef = useRef<HTMLElement | null>(null);
 
-  const captureFocus = () => {
-    lastFocusedElementRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  };
-
-  const restoreFocus = () => {
-    const element = lastFocusedElementRef.current;
-    lastFocusedElementRef.current = null;
-    if (element) {
-      window.setTimeout(() => {
-        element.focus();
-      }, 0);
-    }
-  };
-
-  const openCreateWorkspaceDialog = () => {
-    captureFocus();
-    setIsCreateDialogOpen(true);
-  };
-
-  const closeCreateWorkspaceDialog = () => {
-    setIsCreateDialogOpen(false);
-    restoreFocus();
-  };
-
-  const canCreateWorkspaces = canUserCreateWorkspaces(session);
+  const canCreateWorkspaces = canUserCreateWorkspaces(session ?? null);
 
   if (isLoading || (sessionQuery.isLoading && typeof sessionQuery.data === "undefined")) {
     return (
@@ -127,58 +46,30 @@ export function WorkspaceLayout() {
     );
   }
 
-  const workspaces = workspacesData ?? [];
+  const workspaces = data ?? [];
   const hasWorkspaces = workspaces.length > 0;
   const showEmptyState = !hasWorkspaces;
 
-  const preferredWorkspaceId = session?.user.preferred_workspace_id;
-  const fallbackWorkspaceId =
-    preferredWorkspaceId && workspaces.some((workspace) => workspace.id === preferredWorkspaceId)
-      ? preferredWorkspaceId
-      : workspaces[0]?.id;
-  const hasRouteWorkspace =
-    params.workspaceId && workspaces.some((workspace) => workspace.id === params.workspaceId);
-  const activeWorkspace = hasRouteWorkspace
-    ? workspaces.find((workspace) => workspace.id === params.workspaceId)
-    : fallbackWorkspaceId
-    ? workspaces.find((workspace) => workspace.id === fallbackWorkspaceId) ?? workspaces[0]
-    : workspaces[0];
-  const resolvedWorkspaceId = activeWorkspace?.id ?? undefined;
+  const resolvedWorkspaceId =
+    params.workspaceId || session?.user.preferred_workspace_id || workspaces[0]?.id || undefined;
 
   useEffect(() => {
-    if (!workspaces.length) {
-      return;
-    }
-
-    if (params.workspaceId) {
-      const exists = workspaces.some((workspace) => workspace.id === params.workspaceId);
-      if (!exists) {
-        navigate("/workspaces", { replace: true });
-      }
-      return;
-    }
-
-    if (resolvedWorkspaceId) {
+    if (!params.workspaceId && resolvedWorkspaceId) {
       navigate(`/workspaces/${resolvedWorkspaceId}`, { replace: true });
     }
-  }, [params.workspaceId, workspaces, resolvedWorkspaceId, navigate]);
+  }, [params.workspaceId, resolvedWorkspaceId, navigate]);
 
-  const navigationItems = useMemo(() => {
-    const permissions = activeWorkspace?.permissions ?? [];
-    return NAVIGATION.filter(
-      (item) => !item.requiredPermissions || hasAnyPermission(permissions, item.requiredPermissions),
-    );
-  }, [activeWorkspace]);
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === resolvedWorkspaceId) ?? workspaces[0];
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
       <WorkspaceTopBar
-        session={session}
+        session={session ?? null}
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspace?.id}
         onSelectWorkspace={(workspaceId) => navigate(`/workspaces/${workspaceId}`)}
         canCreateWorkspaces={canCreateWorkspaces}
-        onCreateWorkspace={openCreateWorkspaceDialog}
+        onCreateWorkspace={() => setIsCreateDialogOpen(true)}
       />
       <div className="flex flex-1">
         <WorkspaceSidebar
@@ -190,15 +81,14 @@ export function WorkspaceLayout() {
           {showEmptyState ? (
             <WorkspaceEmptyState
               canCreateWorkspaces={canCreateWorkspaces}
-              onCreateWorkspace={openCreateWorkspaceDialog}
-              session={session}
+              onCreateWorkspace={() => setIsCreateDialogOpen(true)}
+              session={session ?? null}
             />
           ) : (
             <>
               <WorkspaceHeader workspace={activeWorkspace} />
-              <WorkspaceNavigation items={navigationItems} />
               <div className="flex-1 overflow-y-auto px-8 py-10">
-                <Outlet context={{ workspace: activeWorkspace } satisfies WorkspaceLayoutContext} />
+                <Outlet context={{ workspace: activeWorkspace }} />
               </div>
             </>
           )}
@@ -206,11 +96,10 @@ export function WorkspaceLayout() {
       </div>
       <CreateWorkspaceDialog
         open={isCreateDialogOpen}
-        onClose={closeCreateWorkspaceDialog}
+        onClose={() => setIsCreateDialogOpen(false)}
         onCreated={(workspace) => {
           setIsCreateDialogOpen(false);
           navigate(`/workspaces/${workspace.id}`);
-          restoreFocus();
         }}
       />
     </div>
@@ -219,66 +108,20 @@ export function WorkspaceLayout() {
 
 function WorkspaceHeader({ workspace }: { workspace?: WorkspaceProfile }) {
   const name = workspace?.name ?? "Workspace";
-  const subtitleParts = [
-    workspace?.slug ? `Slug: ${workspace.slug}` : null,
-    workspace?.is_default ? "Default" : null,
-  ].filter(Boolean);
+  const roleLabel = workspace?.role === "owner" ? "Owner" : workspace?.role === "member" ? "Member" : undefined;
+  const subtitleParts = [roleLabel ? `Role: ${roleLabel}` : null, workspace?.slug ? `Slug: ${workspace.slug}` : null].filter(
+    Boolean,
+  );
+  const subtitle =
+    subtitleParts.length > 0 ? subtitleParts.join(" • ") : "Monitor extraction activity and review configuration details.";
 
   return (
-    <header className="flex flex-col gap-2 border-b border-slate-900 bg-slate-950/70 px-8 py-5 md:flex-row md:items-center md:justify-between">
+    <header className="flex h-16 items-center justify-between border-b border-slate-900 bg-slate-950/70 px-8">
       <div>
         <h1 className="text-xl font-semibold text-slate-100">{name}</h1>
-        <p className="text-xs text-slate-500">
-          {subtitleParts.length > 0
-            ? subtitleParts.join(" • ")
-            : "Monitor extraction activity, configure processing, and manage workspace access."}
-        </p>
+        <p className="text-xs text-slate-500">{subtitle}</p>
       </div>
-      {workspace?.roles && workspace.roles.length > 0 && (
-        <ul className="flex flex-wrap items-center gap-2 text-xs text-slate-100">
-          {workspace.roles.map((role) => (
-            <li
-              key={role}
-              className="rounded border border-slate-800 bg-slate-950 px-2 py-1 uppercase tracking-wide text-slate-300"
-            >
-              {formatRoleSlug(role)}
-            </li>
-          ))}
-        </ul>
-      )}
     </header>
-  );
-}
-
-interface WorkspaceNavigationProps {
-  items: WorkspaceNavItem[];
-}
-
-function WorkspaceNavigation({ items }: WorkspaceNavigationProps) {
-  if (items.length === 0) {
-    return null;
-  }
-
-  return (
-    <nav className="border-b border-slate-900 bg-slate-950/50 px-8">
-      <ul className="flex flex-wrap gap-3 py-3 text-sm text-slate-400">
-        {items.map((item) => (
-          <li key={item.id}>
-            <NavLink
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                `inline-flex items-center rounded px-3 py-2 font-medium transition ${
-                  isActive ? "bg-sky-500/20 text-sky-200" : "hover:bg-slate-900/80 hover:text-slate-200"
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
-          </li>
-        ))}
-      </ul>
-    </nav>
   );
 }
 
@@ -396,7 +239,11 @@ function WorkspaceSidebar({ workspaces, activeWorkspaceId, onSelectWorkspace }: 
               >
                 <div className="font-medium">{workspace.name}</div>
                 <div className="text-xs text-slate-500">
-                  {[formatRoleList(workspace.roles), workspace.slug, workspace.is_default ? "Default" : null]
+                  {[
+                    workspace.role === "owner" ? "Owner" : "Member",
+                    workspace.slug,
+                    workspace.is_default ? "Default" : null,
+                  ]
                     .filter(Boolean)
                     .join(" • ")}
                 </div>
@@ -416,24 +263,13 @@ interface CreateWorkspaceDialogProps {
 }
 
 function CreateWorkspaceDialog({ open, onClose, onCreated }: CreateWorkspaceDialogProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const descriptionId = useId();
-
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    const focusTarget =
-      containerRef.current?.querySelector<HTMLElement>('[data-autofocus]') ??
-      containerRef.current?.querySelector<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-    focusTarget?.focus();
-
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        event.preventDefault();
         onClose();
       }
     };
@@ -451,12 +287,9 @@ function CreateWorkspaceDialog({ open, onClose, onCreated }: CreateWorkspaceDial
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-6">
       <div
-        ref={containerRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-workspace-title"
-        aria-describedby={descriptionId}
-        tabIndex={-1}
         className="w-full max-w-lg rounded border border-slate-900 bg-slate-950 p-6 text-slate-100 shadow-xl"
       >
         <div className="flex items-start justify-between gap-4">
@@ -464,8 +297,8 @@ function CreateWorkspaceDialog({ open, onClose, onCreated }: CreateWorkspaceDial
             <h2 id="create-workspace-title" className="text-xl font-semibold">
               Create workspace
             </h2>
-            <p id={descriptionId} className="mt-1 text-sm text-slate-400">
-              Name your workspace. Invite teammates from the Members tab after creation.
+            <p className="mt-1 text-sm text-slate-400">
+              Name your workspace. You can invite teammates from the workspace settings after creation.
             </p>
           </div>
           <button
@@ -529,26 +362,22 @@ function WorkspaceEmptyState({ canCreateWorkspaces, onCreateWorkspace, session }
 }
 
 function canUserCreateWorkspaces(session: SessionEnvelope | null): boolean {
-  const user = session?.user;
-  if (!user || user.is_service_account) {
+  if (!session?.user || session.user.is_service_account) {
     return false;
   }
 
-  const permissions = Array.isArray(user.permissions) ? user.permissions : [];
-  return globalCan.createWorkspaces(permissions);
-}
-
-function formatRoleSlug(slug: string): string {
-  return slug
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function formatRoleList(roles: string[]): string {
-  if (!roles || roles.length === 0) {
-    return "";
+  const normalizedRole = String(session.user.role).toLowerCase();
+  if (normalizedRole === "admin") {
+    return true;
   }
 
-  return roles.map(formatRoleSlug).join(", ");
+  const permissions = Array.isArray(session.user.permissions) ? session.user.permissions : [];
+  return permissions
+    .map((permission) => permission.toLowerCase())
+    .some((permission) =>
+      permission === "workspace:create" ||
+      permission === "workspaces:create" ||
+      permission.startsWith("workspace:create:") ||
+      permission.startsWith("workspaces:create:")
+    );
 }
