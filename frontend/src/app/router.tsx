@@ -6,6 +6,7 @@ import { AppErrorPage } from "./AppErrorPage";
 import { SetupRoute } from "../features/setup/routes/SetupRoute";
 import { LoginRoute } from "../features/auth/routes/LoginRoute";
 import { LogoutRoute } from "../features/auth/routes/LogoutRoute";
+import { SsoCallbackRoute } from "../features/auth/routes/SsoCallbackRoute";
 import { RequireSession } from "../features/auth/components/RequireSession";
 import { WorkspaceLayout } from "../features/workspaces/components/WorkspaceLayout";
 import { WorkspaceOverviewRoute } from "../features/workspaces/routes/WorkspaceOverviewRoute";
@@ -30,6 +31,7 @@ export function createAppRouter() {
     { path: "/setup", element: <SetupRoute />, errorElement: <AppErrorPage /> },
     { path: "/login", element: <LoginRoute />, errorElement: <AppErrorPage /> },
     { path: "/logout", element: <LogoutRoute />, errorElement: <AppErrorPage /> },
+    { path: "/auth/callback", element: <SsoCallbackRoute />, errorElement: <AppErrorPage /> },
     {
       path: "/admin",
       element: <RequireSession />,

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import parse_qsl, urlparse
 from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
+from pydantic import SecretStr
 
 from app import get_settings, reload_settings
 from app.db.session import get_sessionmaker
@@ -55,7 +57,10 @@ async def test_create_session_and_me(
     assert "global-administrator" in data["user"].get("roles", [])
 
 
-async def test_provider_discovery_returns_config(async_client: AsyncClient, override_app_settings) -> None:
+async def test_provider_discovery_returns_config(
+    async_client: AsyncClient,
+    override_app_settings,
+) -> None:
     """GET /auth/providers should expose configured SSO metadata."""
 
     override_app_settings(
@@ -96,7 +101,10 @@ async def test_provider_discovery_returns_config(async_client: AsyncClient, over
     ]
 
 
-async def test_provider_discovery_defaults(async_client: AsyncClient, override_app_settings) -> None:
+async def test_provider_discovery_defaults(
+    async_client: AsyncClient,
+    override_app_settings,
+) -> None:
     """Discovery should return an empty list when no providers are configured."""
 
     override_app_settings(auth_force_sso=False, auth_providers=[])
@@ -105,6 +113,39 @@ async def test_provider_discovery_defaults(async_client: AsyncClient, override_a
     assert response.status_code == 200
     payload = response.json()
     assert payload == {"providers": [], "force_sso": False}
+
+
+async def test_provider_discovery_exposes_default_oidc_provider(
+    async_client: AsyncClient,
+    override_app_settings,
+) -> None:
+    """Enabling OIDC should surface a default SSO provider."""
+
+    override_app_settings(
+        auth_force_sso=False,
+        auth_providers=[],
+        oidc_enabled=True,
+        oidc_client_id="demo-client",
+        oidc_client_secret=SecretStr("demo-secret"),
+        oidc_issuer="https://issuer.example.com",
+        oidc_redirect_url="https://app.example.com/auth/callback",
+    )
+
+    response = await async_client.get("/api/v1/auth/providers")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload == {
+        "providers": [
+            {
+                "id": "sso",
+                "label": "Single sign-on",
+                "start_url": "/api/v1/auth/sso/login",
+                "icon_url": None,
+            }
+        ],
+        "force_sso": False,
+    }
+
 
 async def test_login_sets_csrf_cookie_and_header(
     async_client: AsyncClient, seed_identity: dict[str, Any]
@@ -128,6 +169,20 @@ async def test_invalid_credentials_rejected(async_client: AsyncClient) -> None:
         json={"email": "missing@example.test", "password": "nope"},
     )
     assert response.status_code == 401
+
+
+async def test_setup_status_carries_force_sso_flag(
+    async_client: AsyncClient,
+    override_app_settings,
+) -> None:
+    """GET /setup/status should surface the force-SSO toggle."""
+
+    override_app_settings(auth_force_sso=True)
+
+    response = await async_client.get("/api/v1/setup/status")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["force_sso"] is True
 
 
 async def test_repeated_failed_logins_lock_account(
@@ -429,6 +484,13 @@ async def test_sso_callback_rejects_state_mismatch(
     assert login.status_code in (302, 307)
     assert SSO_STATE_COOKIE in login.cookies
     state_cookie = login.cookies[SSO_STATE_COOKIE]
+    cookie_header = login.headers.get("set-cookie")
+    assert cookie_header and "Path=/api/v1/auth/sso" in cookie_header
+    location = login.headers.get("location")
+    assert location is not None
+    params = dict(parse_qsl(urlparse(location).query))
+    assert params.get("nonce")
+    assert params.get("state")
 
     callback = await async_client.get(
         "/api/v1/auth/sso/callback",

@@ -2,22 +2,23 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import ipaddress
+import json
+import logging
 import secrets
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal, cast
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 import jwt
 from fastapi import HTTPException, Request, Response, status
-from jwt import PyJWKClient
+from jwt.algorithms import ECAlgorithm, RSAAlgorithm
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import AuthProviderSettings, Settings
-
-from ..system_settings.repository import SystemSettingsRepository
 from app.features.roles.service import (
     assign_global_role,
     count_users_with_global_role,
@@ -26,9 +27,7 @@ from app.features.roles.service import (
     sync_permission_registry,
 )
 
-if TYPE_CHECKING:
-    from app.features.roles.models import Principal
-
+from ..system_settings.repository import SystemSettingsRepository
 from ..users.models import User
 from ..users.repository import UsersRepository
 from ..users.service import UsersService
@@ -41,9 +40,12 @@ from .security import (
     generate_api_key_components,
     hash_api_key,
     hash_csrf_token,
-    hash_password,
     verify_password,
 )
+from .utils import normalise_api_key_label, normalise_email
+
+if TYPE_CHECKING:
+    from app.features.roles.models import Principal
 
 
 @dataclass(slots=True)
@@ -68,7 +70,7 @@ class AuthenticatedIdentity:
     """Identity resolved during authentication."""
 
     user: User
-    principal: "Principal"
+    principal: Principal
     credentials: Literal["session_cookie", "bearer_token", "api_key"]
     api_key: APIKey | None = None
 
@@ -106,6 +108,7 @@ class SSOLoginChallenge:
     redirect_url: str
     state_token: str
     expires_in: int
+    return_to: str | None = None
 
 
 @dataclass(slots=True)
@@ -115,10 +118,19 @@ class SSOState:
     state: str
     code_verifier: str
     nonce: str
+    return_to: str | None = None
 
 
 @dataclass(slots=True)
-class AuthProvider:
+class SSOCompletionResult:
+    """Outcome of a completed SSO callback."""
+
+    user: User
+    return_to: str | None
+
+
+@dataclass(slots=True)
+class AuthProviderOption:
     """Discovery metadata describing an interactive login option."""
 
     id: str
@@ -128,43 +140,84 @@ class AuthProvider:
 
 
 @dataclass(slots=True)
-class ProviderDiscovery:
+class AuthProviderDiscovery:
     """Bundle returned to the frontend when listing auth providers."""
 
-    providers: list[AuthProvider]
+    providers: list[AuthProviderOption]
     force_sso: bool
+
+
+_DEFAULT_SSO_PROVIDER_ID = "sso"
+_DEFAULT_SSO_PROVIDER_LABEL = "Single sign-on"
+_DEFAULT_SSO_PROVIDER_START_URL = "/api/v1/auth/sso/login"
 
 
 _SSO_STATE_TTL_SECONDS = 300
 SSO_STATE_COOKIE = "ade_sso_state"
-
-_METADATA_CACHE: dict[str, OIDCProviderMetadata] = {}
-_JWK_CLIENTS: dict[str, PyJWKClient] = {}
-
-
-def normalise_email(value: str) -> str:
-    """Return a canonical representation for email comparisons."""
-
-    candidate = value.strip()
-    if not candidate:
-        msg = "Email must not be empty"
-        raise ValueError(msg)
-    return candidate.lower()
+_MAX_PROVIDER_RESPONSE_BYTES = 64 * 1024
+_HTTP_TIMEOUT = httpx.Timeout(5.0, connect=5.0, read=5.0)
+_HTTP_LIMITS = httpx.Limits(max_connections=5, max_keepalive_connections=5)
+_METADATA_CACHE_TTL = timedelta(minutes=5)
+_JWKS_CACHE_TTL = timedelta(minutes=5)
+_ALLOWED_JWT_ALGORITHMS = {"RS256", "RS384", "RS512", "ES256"}
+_JWT_LEEWAY_SECONDS = 60
 
 
-def normalise_api_key_label(value: str | None) -> str | None:
-    """Return a trimmed API key label limited to 100 characters."""
-
-    if value is None:
-        return None
-    cleaned = value.strip()
-    if not cleaned:
-        return None
-    if len(cleaned) > 100:
-        return cleaned[:100]
-    return cleaned
+@dataclass(slots=True)
+class _MetadataCacheEntry:
+    metadata: OIDCProviderMetadata
+    expires_at: datetime
 
 
+@dataclass(slots=True)
+class _JWKSCacheEntry:
+    keys: list[dict[str, Any]]
+    expires_at: datetime
+
+
+_METADATA_CACHE: dict[str, _MetadataCacheEntry] = {}
+_JWKS_CACHE: dict[str, _JWKSCacheEntry] = {}
+
+
+def _is_private_host(host: str) -> bool:
+    """Return ``True`` when ``host`` clearly points at a private network."""
+
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        lowered = host.lower()
+        return lowered in {"localhost", "127.0.0.1"} or lowered.endswith(".localhost")
+    return (
+        address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_reserved
+        or address.is_multicast
+    )
+
+
+def _ensure_public_https_url(raw_url: str, *, purpose: str) -> httpx.URL:
+    """Validate that ``raw_url`` is an HTTPS URL pointing at a public host."""
+
+    try:
+        url = httpx.URL(raw_url)
+    except ValueError as exc:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid identity provider URL for {purpose}",
+        ) from exc
+
+    if url.scheme != "https":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail=f"Identity provider {purpose} must use HTTPS",
+        )
+    if not url.host or _is_private_host(url.host):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail=f"Identity provider {purpose} URL targets a private host",
+        )
+    return url
 _INITIAL_SETUP_SETTING_KEY = "initial_setup"
 _GLOBAL_ADMIN_ROLE_SLUG = "global-administrator"
 _GLOBAL_USER_ROLE_SLUG = "global-user"
@@ -179,6 +232,7 @@ class AuthService:
         self._users = UsersRepository(session)
         self._api_keys = APIKeysRepository(session)
         self._system_settings = SystemSettingsRepository(session)
+        self._logger = logging.getLogger(__name__)
 
     @property
     def settings(self) -> Settings:
@@ -506,7 +560,10 @@ class AuthService:
         try:
             access_payload = self.decode_token(session_cookie, expected_type="access")
         except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid session token") from exc
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid session token",
+            ) from exc
 
         refresh_cookie = request.cookies.get(self.settings.session_refresh_cookie_name)
         if not refresh_cookie:
@@ -516,7 +573,10 @@ class AuthService:
         try:
             refresh_payload = self.decode_token(refresh_cookie, expected_type="refresh")
         except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token") from exc
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token",
+            ) from exc
 
         if refresh_payload.session_id != access_payload.session_id or (
             refresh_payload.user_id != access_payload.user_id
@@ -525,10 +585,10 @@ class AuthService:
 
         return access_payload, refresh_payload
 
-    def get_provider_discovery(self) -> ProviderDiscovery:
+    def get_provider_discovery(self) -> AuthProviderDiscovery:
         """Return configured providers and the force-SSO flag."""
 
-        providers: list[AuthProvider] = []
+        providers: list[AuthProviderOption] = []
         for provider in self.settings.auth_providers:
             spec = (
                 provider
@@ -536,14 +596,25 @@ class AuthService:
                 else AuthProviderSettings.model_validate(provider)
             )
             providers.append(
-                AuthProvider(
+                AuthProviderOption(
                     id=spec.id,
                     label=spec.label,
                     start_url=spec.start_url,
                     icon_url=spec.icon_url,
                 )
             )
-        return ProviderDiscovery(providers=providers, force_sso=self.settings.auth_force_sso)
+        if not providers and self.settings.oidc_enabled:
+            providers.append(
+                AuthProviderOption(
+                    id=_DEFAULT_SSO_PROVIDER_ID,
+                    label=_DEFAULT_SSO_PROVIDER_LABEL,
+                    start_url=_DEFAULT_SSO_PROVIDER_START_URL,
+                    icon_url=None,
+                )
+            )
+        return AuthProviderDiscovery(
+            providers=providers, force_sso=self.settings.auth_force_sso
+        )
 
     async def resolve_user(self, payload: TokenPayload) -> User:
         """Return the user represented by ``payload`` if active."""
@@ -714,7 +785,7 @@ class AuthService:
     # ------------------------------------------------------------------
     # SSO helpers
 
-    async def prepare_sso_login(self) -> SSOLoginChallenge:
+    async def prepare_sso_login(self, *, return_to: str | None = None) -> SSOLoginChallenge:
         """Return redirect metadata and a signed state token."""
 
         if not self.settings.oidc_enabled:
@@ -726,11 +797,13 @@ class AuthService:
         code_verifier = self._build_code_verifier()
         code_challenge = self._build_code_challenge(code_verifier)
         nonce = secrets.token_urlsafe(16)
+        normalised_return = self._normalise_return_target(return_to)
         state_token = self._encode_sso_state(
             state=state,
             code_verifier=code_verifier,
             nonce=nonce,
             issued_at=issued_at,
+            return_to=normalised_return,
         )
 
         params = {
@@ -739,6 +812,7 @@ class AuthService:
             "redirect_uri": str(self.settings.oidc_redirect_url),
             "scope": " ".join(self.settings.oidc_scopes),
             "state": state,
+            "nonce": nonce,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
@@ -747,6 +821,7 @@ class AuthService:
             redirect_url=redirect_url,
             state_token=state_token,
             expires_in=_SSO_STATE_TTL_SECONDS,
+            return_to=normalised_return,
         )
 
     def decode_sso_state(self, token: str) -> SSOState:
@@ -770,10 +845,16 @@ class AuthService:
         except jwt.InvalidTokenError as exc:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid SSO state") from exc
 
+        return_to_raw = payload.get("return_to")
+        return_to: str | None = None
+        if isinstance(return_to_raw, str) and return_to_raw:
+            return_to = self._normalise_return_target(return_to_raw)
+
         return SSOState(
             state=str(payload["state"]),
             code_verifier=str(payload["code_verifier"]),
             nonce=str(payload["nonce"]),
+            return_to=return_to,
         )
 
     async def complete_sso_login(
@@ -782,7 +863,7 @@ class AuthService:
         code: str,
         state: str,
         state_token: str,
-    ) -> User:
+    ) -> SSOCompletionResult:
         """Complete the SSO flow and return the authenticated user."""
 
         stored_state = self.decode_sso_state(state_token)
@@ -804,9 +885,9 @@ class AuthService:
                 detail="Invalid token response from identity provider",
             )
 
-        issuer_value = str(self.settings.oidc_issuer) if self.settings.oidc_issuer else ""
+        issuer_value = str(self.settings.oidc_issuer or "")
 
-        id_claims = self._verify_jwt_via_jwks(
+        id_claims = await self._verify_jwt_via_jwks(
             token=id_token,
             jwks_uri=metadata.jwks_uri,
             audience=self.settings.oidc_client_id,
@@ -816,7 +897,7 @@ class AuthService:
 
         resource_audience = self.settings.oidc_resource_audience
         if resource_audience:
-            self._verify_jwt_via_jwks(
+            await self._verify_jwt_via_jwks(
                 token=access_token,
                 jwks_uri=metadata.jwks_uri,
                 audience=resource_audience,
@@ -825,7 +906,6 @@ class AuthService:
 
         email = str(id_claims.get("email") or "")
         subject = str(id_claims.get("sub") or "")
-        email_verified = bool(id_claims.get("email_verified"))
         if not email or not subject:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -836,14 +916,13 @@ class AuthService:
             provider=issuer_value,
             subject=subject,
             email=email,
-            email_verified=email_verified,
         )
         now = self._now()
         user.last_login_at = now
         user.failed_login_count = 0
         user.locked_until = None
         await self._session.flush()
-        return user
+        return SSOCompletionResult(user=user, return_to=stored_state.return_to)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -929,6 +1008,40 @@ class AuthService:
     def _encode_base64(value: bytes) -> str:
         return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
 
+    def _normalise_return_target(self, value: str | None) -> str | None:
+        """Validate and canonicalise the requested post-login redirect."""
+
+        if value is None:
+            return None
+        candidate = value.strip()
+        if not candidate:
+            return None
+        if candidate.startswith("//"):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Invalid return target",
+            )
+        if candidate.startswith("/"):
+            return candidate
+
+        parsed = urlparse(candidate)
+        if parsed.scheme and parsed.netloc:
+            expected = urlparse(self.settings.server_public_url)
+            if (parsed.scheme, parsed.netloc) != (expected.scheme, expected.netloc):
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid return target",
+                )
+            path = parsed.path or "/"
+            query = f"?{parsed.query}" if parsed.query else ""
+            fragment = f"#{parsed.fragment}" if parsed.fragment else ""
+            return f"{path}{query}{fragment}"
+
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Invalid return target",
+        )
+
     def _encode_sso_state(
         self,
         *,
@@ -936,6 +1049,7 @@ class AuthService:
         code_verifier: str,
         nonce: str,
         issued_at: datetime,
+        return_to: str | None,
     ) -> str:
         secret = self.settings.jwt_secret_value
         if not secret:
@@ -950,31 +1064,27 @@ class AuthService:
             "iat": int(issued_at.timestamp()),
             "exp": int((issued_at + timedelta(seconds=_SSO_STATE_TTL_SECONDS)).timestamp()),
         }
+        if return_to:
+            payload["return_to"] = return_to
         return jwt.encode(payload, secret, algorithm=self.settings.jwt_algorithm)
 
     async def _get_oidc_metadata(self) -> OIDCProviderMetadata:
-        issuer = str(self.settings.oidc_issuer) if self.settings.oidc_issuer else ""
+        issuer = str(self.settings.oidc_issuer or "")
+        if not issuer:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="OIDC issuer is not configured",
+            )
+
+        now = self._now()
         cached = _METADATA_CACHE.get(issuer)
-        if cached is not None:
-            return cached
+        if cached and cached.expires_at > now:
+            return cached.metadata
 
         discovery_url = issuer.rstrip("/") + "/.well-known/openid-configuration"
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(discovery_url, headers={"Accept": "application/json"})
-                response.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail="Failed to load SSO metadata",
-            ) from exc
-        except httpx.HTTPError as exc:
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail="Unable to contact identity provider",
-            ) from exc
+        url = _ensure_public_https_url(discovery_url, purpose="discovery")
+        data = await self._fetch_provider_json(url, purpose="discovery")
 
-        data = response.json()
         try:
             metadata = OIDCProviderMetadata(
                 authorization_endpoint=str(data["authorization_endpoint"]),
@@ -987,8 +1097,67 @@ class AuthService:
                 detail="Incomplete SSO discovery document",
             ) from exc
 
-        _METADATA_CACHE[issuer] = metadata
+        _METADATA_CACHE[issuer] = _MetadataCacheEntry(
+            metadata=metadata,
+            expires_at=now + _METADATA_CACHE_TTL,
+        )
         return metadata
+
+    async def _fetch_provider_json(
+        self, url: httpx.URL, *, purpose: str
+    ) -> Mapping[str, Any]:
+        """Fetch and validate a JSON document from the identity provider."""
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=_HTTP_TIMEOUT,
+                limits=_HTTP_LIMITS,
+                follow_redirects=False,
+            ) as client:
+                response = await client.get(url, headers={"Accept": "application/json"})
+        except httpx.HTTPError as exc:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail=f"Unable to contact identity provider during {purpose}",
+            ) from exc
+
+        if response.status_code != status.HTTP_200_OK:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"Identity provider returned an error during {purpose}",
+            )
+
+        content_length = response.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > _MAX_PROVIDER_RESPONSE_BYTES:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        detail=f"Identity provider response too large during {purpose}",
+                    )
+            except ValueError:
+                pass
+        if len(response.content) > _MAX_PROVIDER_RESPONSE_BYTES:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"Identity provider response too large during {purpose}",
+            )
+
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"Identity provider returned invalid JSON during {purpose}",
+            ) from exc
+
+        if not isinstance(data, Mapping):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"Identity provider returned invalid JSON during {purpose}",
+            )
+
+        return data
 
     async def _exchange_authorization_code(
         self,
@@ -1012,37 +1181,60 @@ class AuthService:
             auth = (self.settings.oidc_client_id or "", secret_value)
             payload["client_secret"] = secret_value
 
+        token_endpoint = _ensure_public_https_url(
+            metadata.token_endpoint,
+            purpose="token exchange",
+        )
+
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                if auth is not None:
-                    auth_param = cast(tuple[str | bytes, str | bytes], auth)
-                    response = await client.post(
-                        metadata.token_endpoint,
-                        data=payload,
-                        headers={"Accept": "application/json"},
-                        auth=auth_param,
-                    )
-                else:
-                    response = await client.post(
-                        metadata.token_endpoint,
-                        data=payload,
-                        headers={"Accept": "application/json"},
-                    )
-                response.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail="SSO token exchange failed",
-            ) from exc
+            async with httpx.AsyncClient(
+                timeout=_HTTP_TIMEOUT,
+                limits=_HTTP_LIMITS,
+                follow_redirects=False,
+            ) as client:
+                response = await client.post(
+                    token_endpoint,
+                    data=payload,
+                    headers={"Accept": "application/json"},
+                    auth=cast(tuple[str | bytes, str | bytes] | None, auth),
+                )
         except httpx.HTTPError as exc:
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
                 detail="Unable to contact identity provider",
             ) from exc
 
-        return response.json()
+        if response.status_code != status.HTTP_200_OK:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="SSO token exchange failed",
+            )
 
-    def _verify_jwt_via_jwks(
+        content_length = response.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > _MAX_PROVIDER_RESPONSE_BYTES:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        detail="Identity provider response too large",
+                    )
+            except ValueError:
+                pass
+        if len(response.content) > _MAX_PROVIDER_RESPONSE_BYTES:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Identity provider response too large",
+            )
+
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Identity provider returned invalid JSON",
+            ) from exc
+
+    async def _verify_jwt_via_jwks(
         self,
         *,
         token: str,
@@ -1051,20 +1243,58 @@ class AuthService:
         issuer: str,
         nonce: str | None = None,
     ) -> Mapping[str, Any]:
-        client = self._get_jwk_client(jwks_uri)
-        try:
-            signing_key = client.get_signing_key_from_jwt(token)
-            options: dict[str, Any] = {"require": ["exp", "iat", "iss", "sub"]}
-            if audience is not None:
-                options["require"].append("aud")
-            payload = jwt.decode(
-                token,
-                signing_key.key,
-                algorithms=["RS256", "RS384", "RS512"],
-                audience=audience,
-                issuer=issuer,
-                options=options,
+        if not issuer:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="OIDC issuer is not configured",
             )
+
+        try:
+            header = jwt.get_unverified_header(token)
+        except jwt.InvalidTokenError as exc:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Invalid token from identity provider",
+            ) from exc
+
+        algorithm = str(header.get("alg") or "")
+        if algorithm not in _ALLOWED_JWT_ALGORITHMS:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Identity provider token used an unsupported algorithm",
+            )
+
+        kid = header.get("kid")
+        keys = await self._get_jwks_keys(jwks_uri)
+        jwk = self._select_jwk(keys, kid, algorithm)
+        if jwk is None and kid is not None:
+            keys = await self._get_jwks_keys(jwks_uri, force_refresh=True)
+            jwk = self._select_jwk(keys, kid, algorithm)
+        if jwk is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="No signing key matched the identity provider response",
+            )
+
+        signing_key = self._materialise_jwk(jwk, algorithm)
+        options: dict[str, Any] = {"require": ["exp", "iat", "iss", "sub"]}
+        if audience is not None:
+            options["require"].append("aud")
+        else:
+            options["verify_aud"] = False
+
+        decode_kwargs: dict[str, Any] = {
+            "key": signing_key,
+            "algorithms": [algorithm],
+            "issuer": issuer,
+            "leeway": _JWT_LEEWAY_SECONDS,
+            "options": options,
+        }
+        if audience is not None:
+            decode_kwargs["audience"] = audience
+
+        try:
+            payload = jwt.decode(token, **decode_kwargs)
         except jwt.InvalidTokenError as exc:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -1079,12 +1309,79 @@ class AuthService:
 
         return payload
 
-    def _get_jwk_client(self, jwks_uri: str) -> PyJWKClient:
-        client = _JWK_CLIENTS.get(jwks_uri)
-        if client is None:
-            client = PyJWKClient(jwks_uri)
-            _JWK_CLIENTS[jwks_uri] = client
-        return client
+    async def _get_jwks_keys(
+        self, jwks_uri: str, *, force_refresh: bool = False
+    ) -> list[dict[str, Any]]:
+        if not jwks_uri:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Identity provider JWKS endpoint is not configured",
+            )
+
+        now = self._now()
+        cached = _JWKS_CACHE.get(jwks_uri)
+        if cached and not force_refresh and cached.expires_at > now:
+            return cached.keys
+
+        url = _ensure_public_https_url(jwks_uri, purpose="JWKS retrieval")
+        document = await self._fetch_provider_json(url, purpose="JWKS retrieval")
+        keys = document.get("keys")
+        if not isinstance(keys, list) or not keys:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Identity provider JWKS document is missing keys",
+            )
+
+        parsed: list[dict[str, Any]] = []
+        for item in keys:
+            if isinstance(item, Mapping):
+                parsed.append({str(k): v for k, v in item.items()})
+
+        if not parsed:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Identity provider JWKS document is missing keys",
+            )
+
+        _JWKS_CACHE[jwks_uri] = _JWKSCacheEntry(
+            keys=parsed,
+            expires_at=now + _JWKS_CACHE_TTL,
+        )
+        return parsed
+
+    @staticmethod
+    def _select_jwk(
+        keys: list[dict[str, Any]], kid: str | None, algorithm: str
+    ) -> dict[str, Any] | None:
+        if kid:
+            for key in keys:
+                if str(key.get("kid")) == kid:
+                    return key
+            return None
+
+        if len(keys) == 1:
+            return keys[0]
+
+        for key in keys:
+            key_alg = str(key.get("alg") or "")
+            if key_alg == algorithm:
+                return key
+        for key in keys:
+            if str(key.get("use")) == "sig":
+                return key
+        return None
+
+    @staticmethod
+    def _materialise_jwk(jwk: Mapping[str, Any], algorithm: str) -> Any:
+        jwk_payload = json.dumps(dict(jwk))
+        if algorithm.startswith("RS"):
+            return RSAAlgorithm.from_jwk(jwk_payload)
+        if algorithm.startswith("ES"):
+            return ECAlgorithm.from_jwk(jwk_payload)
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Identity provider token used an unsupported algorithm",
+        )
 
     async def _resolve_sso_user(
         self,
@@ -1092,19 +1389,38 @@ class AuthService:
         provider: str,
         subject: str,
         email: str,
-        email_verified: bool,
     ) -> User:
-        if not email_verified:
+        canonical = normalise_email(email)
+        if "@" not in canonical:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail="Email not verified by identity provider",
+                detail="Identity provider response missing required claims",
             )
 
-        canonical = normalise_email(email)
+        allowed_domains = self.settings.auth_sso_allowed_domains
+        domain = canonical.rsplit("@", 1)[1]
+        if allowed_domains and domain not in allowed_domains:
+            self._logger.warning(
+                "SSO login denied for %s: domain not allowed", canonical
+            )
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail="Email domain is not permitted for SSO",
+            )
+
         identity = await self._users.get_identity(provider, subject)
         if identity is None:
             user = await self._users.get_by_email(canonical)
             if user is None:
+                if not self.settings.auth_sso_auto_provision:
+                    self._logger.warning(
+                        "SSO login denied for %s: auto-provisioning disabled",
+                        canonical,
+                    )
+                    raise HTTPException(
+                        status.HTTP_403_FORBIDDEN,
+                        detail="User not invited",
+                    )
                 user = await self._users.create(
                     email=canonical,
                     is_active=True,
@@ -1112,6 +1428,9 @@ class AuthService:
                 )
                 await self._assign_global_role(
                     user=user, slug=_GLOBAL_USER_ROLE_SLUG
+                )
+                self._logger.info(
+                    "Provisioned new SSO user %s via %s", canonical, provider
                 )
             elif not user.is_active:
                 raise HTTPException(
@@ -1122,6 +1441,24 @@ class AuthService:
                 lockout_error = self._lockout_error(user)
                 if lockout_error is not None:
                     raise lockout_error
+
+                conflicting_identity = next(
+                    (
+                        record
+                        for record in getattr(user, "identities", []) or []
+                        if record.provider == provider and record.subject != subject
+                    ),
+                    None,
+                )
+                if conflicting_identity is not None:
+                    self._logger.error(
+                        "SSO identity conflict for %s: subject mismatch",
+                        canonical,
+                    )
+                    raise HTTPException(
+                        status.HTTP_409_CONFLICT,
+                        detail="SSO identity conflict for this user; contact an administrator",
+                    )
             if user.email_canonical != canonical:
                 user.email = email.strip()
             identity = await self._users.create_identity(
@@ -1150,11 +1487,11 @@ class AuthService:
 __all__ = [
     "APIKeyIssueResult",
     "AuthenticatedIdentity",
+    "AuthProviderDiscovery",
+    "AuthProviderOption",
     "AuthService",
     "OIDCProviderMetadata",
+    "SSOCompletionResult",
     "SSOLoginChallenge",
     "SSO_STATE_COOKIE",
-    "hash_password",
-    "normalise_email",
-    "normalise_api_key_label",
 ]

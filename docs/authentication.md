@@ -29,6 +29,28 @@ tied to `/api/v1/auth/session/refresh`. Secure cookies are used whenever the req
 * `require_csrf` runs on every mutating endpoint. It only enforces CSRF for session-cookie identities and delegates to
 `AuthService.enforce_csrf`, which compares the hashed token in the JWT with the submitted value.【F:app/api/security.py†L19-L40】
 
+## Single Sign-On (OpenID Connect)
+
+### Configuration
+
+* Provide the standard `ADE_OIDC_CLIENT_ID`, `ADE_OIDC_CLIENT_SECRET`, `ADE_OIDC_ISSUER`, `ADE_OIDC_REDIRECT_URL`, and `ADE_OIDC_SCOPES` variables to enable the flow. The redirect URL should point at the SPA callback route (`/auth/callback`), which finalises the login before forwarding the user to their requested destination. Supplement these with `ADE_AUTH_FORCE_SSO`, `ADE_AUTH_SSO_AUTO_PROVISION`, and optional `ADE_AUTH_SSO_ALLOWED_DOMAINS` to control rollout and provisioning policy.【F:.env.example†L52-L59】【F:frontend/src/features/auth/routes/SsoCallbackRoute.tsx†L1-L74】
+* The settings layer normalises scopes, enforces HTTPS issuers and redirect URLs, converts relative callbacks against `server_public_url`, and parses the allowed-domain list into a lower-cased, deduplicated allowlist.【F:app/core/config.py†L256-L330】【F:app/core/config.py†L351-L414】【F:app/core/config.py†L503-L548】
+* When those settings are present, `/auth/providers` automatically publishes a "Single sign-on" option so the login page advertises SSO alongside the credential form. Leave `ADE_AUTH_FORCE_SSO=false` during rollout so the inaugural administrator can continue signing in with their password, then flip it once the identity provider login is verified.【F:app/features/auth/service.py†L143-L166】【F:frontend/src/features/auth/components/LoginForm.tsx†L90-L139】
+
+### Login flow
+
+* `AuthService.prepare_sso_login` signs a short-lived state token, requires PKCE S256, and only permits return targets that resolve to same-origin paths before redirecting to the provider.【F:app/features/auth/service.py†L700-L756】【F:app/features/auth/service.py†L816-L860】
+* The state cookie is issued as `Secure`, `HttpOnly`, `SameSite=Lax`, and scoped to the API SSO prefix so the callback can validate it without exposing it to other routes.【F:app/features/auth/router.py†L487-L566】
+* Provider discovery and JWKS fetches enforce HTTPS, block private hosts, respect bounded timeouts, and reject oversized or non-JSON responses.【F:app/features/auth/service.py†L628-L698】【F:app/features/auth/service.py†L758-L817】【F:app/features/auth/service.py†L1032-L1112】
+* The SPA callback route reads the IdP query parameters, invokes `/api/v1/auth/sso/callback`, and redirects to either the stored `return_to` hint or the user’s preferred workspace once the backend issues cookies.【F:frontend/src/features/auth/routes/SsoCallbackRoute.tsx†L1-L74】【F:frontend/src/features/auth/routes/LoginRoute.tsx†L24-L44】
+* Token exchange responses must include a bearer `id_token`/`access_token` pair; the service allows only RS256/ES256 signatures, validates issuer, audience, nonce, and time claims with small leeway, and refreshes JWKS data when a signing key is unknown.【F:app/features/auth/service.py†L817-L939】【F:app/features/auth/service.py†L939-L1031】
+
+### Provisioning policy
+
+* `AuthService._resolve_sso_user` trusts the IdP email, enforces the optional domain allowlist, reuses matching users, and auto-provisions new accounts (with the default global role) when `ADE_AUTH_SSO_AUTO_PROVISION=true`. Conflicting subjects or disabled accounts produce actionable errors rather than silent merges.【F:app/features/auth/service.py†L1115-L1189】
+* The callback records the desired return path from state, resets lockout counters, and returns both the session envelope and the post-login redirect hint to the frontend.【F:app/features/auth/service.py†L864-L906】【F:app/features/auth/router.py†L168-L205】
+* The setup API echoes the `force_sso` flag so the wizard can warn operators that the credential form disappears once forced SSO is enabled, preserving a predictable path for the break-glass administrator they create during initial setup.【F:app/features/auth/router.py†L49-L78】【F:frontend/src/features/setup/routes/SetupRoute.tsx†L1-L58】
+
 ## Security Dependencies
 
 All feature routers include the shared dependencies from `app/api/security.py` so that OpenAPI documents the requirements and
