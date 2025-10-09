@@ -1,5 +1,9 @@
 import type { ProblemDetails } from "./types";
 
+const DEFAULT_API_BASE_URL = "/api";
+const DEFAULT_CSRF_COOKIE_NAME = "ade_csrf";
+const SAFE_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
+
 export class ApiError extends Error {
   readonly status: number;
   readonly problem?: ProblemDetails;
@@ -15,8 +19,6 @@ export class ApiError extends Error {
 export interface ApiClientOptions extends RequestInit {
   parseJson?: boolean;
 }
-
-const DEFAULT_API_BASE_URL = "/api";
 
 function normalizeBaseUrl(baseUrl: string) {
   if (!baseUrl) {
@@ -38,6 +40,90 @@ function resolveUrl(baseUrl: string, path: string) {
   return `${baseUrl}${path}`;
 }
 
+function applyHeaders(target: Headers, source?: HeadersInit) {
+  if (!source) {
+    return;
+  }
+
+  if (source instanceof Headers) {
+    source.forEach((value, key) => {
+      target.set(key, value);
+    });
+    return;
+  }
+
+  if (Array.isArray(source)) {
+    source.forEach(([key, value]) => {
+      target.set(key, value);
+    });
+    return;
+  }
+
+  Object.entries(source).forEach(([key, value]) => {
+    if (typeof value === "undefined") {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      target.set(key, value.join(", "));
+      return;
+    }
+
+    target.set(key, value);
+  });
+}
+
+function resolveCsrfCookieName() {
+  const fromEnv = import.meta.env.VITE_SESSION_CSRF_COOKIE_NAME;
+  if (typeof fromEnv === "string" && fromEnv.trim() !== "") {
+    return fromEnv.trim();
+  }
+
+  return DEFAULT_CSRF_COOKIE_NAME;
+}
+
+function resolveCsrfCookieCandidates(): string[] {
+  const primary = resolveCsrfCookieName();
+  const candidates = new Set<string>([primary, DEFAULT_CSRF_COOKIE_NAME, "ade-csrf"]);
+
+  if (primary.includes("_")) {
+    candidates.add(primary.replace(/_/g, "-"));
+  }
+
+  if (primary.includes("-")) {
+    candidates.add(primary.replace(/-/g, "_"));
+  }
+
+  return Array.from(candidates);
+}
+
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined" || typeof document.cookie !== "string") {
+    return null;
+  }
+
+  const cookies = document.cookie ? document.cookie.split(";") : [];
+  for (const cookie of cookies) {
+    const [rawKey, ...rawValue] = cookie.trim().split("=");
+    if (rawKey === name) {
+      return decodeURIComponent(rawValue.join("="));
+    }
+  }
+
+  return null;
+}
+
+function readCsrfToken(): string | null {
+  for (const name of resolveCsrfCookieCandidates()) {
+    const value = readCookie(name);
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
 export class ApiClient {
   private readonly baseUrl: string;
 
@@ -46,19 +132,30 @@ export class ApiClient {
   }
 
   async request<T = unknown>(path: string, init: ApiClientOptions = {}): Promise<T> {
-    const { parseJson = true, headers, signal, ...rest } = init;
+    const { parseJson = true, headers, signal, method: initMethod, ...rest } = init;
+    const method = typeof initMethod === "string" ? initMethod.toUpperCase() : "GET";
 
     const url = resolveUrl(this.baseUrl, path);
 
+    const requestHeaders = new Headers({
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    });
+    applyHeaders(requestHeaders, headers);
+
+    if (!SAFE_HTTP_METHODS.has(method) && !requestHeaders.has("X-CSRF-Token")) {
+      const csrfToken = readCsrfToken();
+      if (csrfToken) {
+        requestHeaders.set("X-CSRF-Token", csrfToken);
+      }
+    }
+
     const response = await fetch(url, {
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        ...headers,
-      },
+      headers: requestHeaders,
       signal,
       ...rest,
+      method,
     });
 
     if (!response.ok) {

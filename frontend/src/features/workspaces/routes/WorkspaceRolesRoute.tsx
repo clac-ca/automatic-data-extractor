@@ -4,6 +4,7 @@ import type { WorkspaceLayoutContext } from "../components/WorkspaceLayout";
 import { useWorkspaceRolesQuery } from "../hooks/useWorkspaceRolesQuery";
 import { RBAC } from "../../../shared/rbac/permissions";
 import { hasPermission } from "../../../shared/rbac/utils";
+import { formatRoleSlug } from "../utils/roles";
 
 export function WorkspaceRolesRoute() {
   const { workspace } = useOutletContext<WorkspaceLayoutContext>();
@@ -42,7 +43,7 @@ export function WorkspaceRolesRoute() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-base font-semibold text-slate-100">{role.name}</h3>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">{role.slug}</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">{formatRoleSlug(role.slug)}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   <span className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300">
