@@ -196,6 +196,20 @@ describe("WorkspaceLayout", () => {
     expect(documentsLink).toHaveAttribute("href", "/workspaces/workspace-1/documents");
   });
 
+  it("hides the workspace navigation when only overview is available", () => {
+    useParamsMock.mockReturnValue({ workspaceId: "workspace-1" });
+    useSessionQueryMock.mockReturnValue({ data: baseSession, isLoading: false, error: null });
+    useWorkspacesQueryMock.mockReturnValue({
+      data: [workspace({ id: "workspace-1", permissions: [] })],
+      isLoading: false,
+      error: null,
+    });
+
+    render(<WorkspaceLayout />);
+
+    expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+  });
+
   it("redirects to the workspace list when the route workspace is unknown", () => {
     useSessionQueryMock.mockReturnValue({ data: baseSession, isLoading: false, error: null });
     useWorkspacesQueryMock.mockReturnValue({

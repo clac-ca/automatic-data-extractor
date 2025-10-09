@@ -1,29 +1,22 @@
 import type { ReactNode } from "react";
-import { useOutletContext } from "react-router-dom";
+import { Navigate, useOutletContext, useParams } from "react-router-dom";
 
 import type { WorkspaceLayoutContext } from "../../features/workspaces/components/WorkspaceLayout";
-import { hasAnyPermission } from "./utils";
 
 interface RequirePermissionProps {
-  needed: string | readonly string[];
-  mode?: "any" | "all";
+  needed: string;
   children: ReactNode;
-  fallback?: ReactNode;
 }
 
-export function RequirePermission({ needed, mode = "any", children, fallback = null }: RequirePermissionProps) {
+export function RequirePermission({ needed, children }: RequirePermissionProps) {
   const { workspace } = useOutletContext<WorkspaceLayoutContext>();
+  const { workspaceId } = useParams();
   const permissions = workspace?.permissions ?? [];
-  const required = Array.isArray(needed) ? needed : [needed];
-
-  const allowed =
-    required.length === 0 ||
-    (mode === "all"
-      ? required.every((permission) => permissions.includes(permission))
-      : hasAnyPermission(permissions, required));
+  const allowed = !needed || permissions.includes(needed);
 
   if (!allowed) {
-    return <>{fallback}</>;
+    const destination = workspaceId ? `/workspaces/${workspaceId}` : "/workspaces";
+    return <Navigate to={destination} replace />;
   }
 
   return <>{children}</>;
