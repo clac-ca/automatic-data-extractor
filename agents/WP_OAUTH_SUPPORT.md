@@ -12,27 +12,27 @@
 
 ## Milestone 1 Summary
 - Environment toggles documented and wired through `Settings`, including HTTPS issuer/redirect validation and domain allowlist
-  normalisation.【F:app/core/config.py†L256-L548】
+  normalisation.【F:ade/settings.py†L256-L548】
 - Auth service enforces PKCE S256, nonce/state validation, SSRF protections, bounded metadata/JWKS caches, strict token checks,
-  and deterministic provisioning with the documented auto-provision/domain rules.【F:app/features/auth/service.py†L700-L1189】
+  and deterministic provisioning with the documented auto-provision/domain rules.【F:ade/features/auth/service.py†L700-L1189】
 - API router issues scoped state cookies, clears them on callback, and returns the redirect hint consumed by the SPA
-  callback handler.【F:app/features/auth/router.py†L487-L566】【F:frontend/src/features/auth/routes/SsoCallbackRoute.tsx†L1-L74】
+  callback handler.【F:ade/features/auth/router.py†L487-L566】【F:frontend/src/features/auth/routes/SsoCallbackRoute.tsx†L1-L74】
 - Operator docs and `.env.example` now present the OIDC + SSO variables together with rollout guidance.【F:.env.example†L52-L59】【F:docs/authentication.md†L33-L78】
 - Regression tests cover return-target sanitisation, provisioning toggles, domain allowlist, and frontend callback UX alongside
-  the existing router tests.【F:app/features/auth/tests/test_sso.py†L1-L121】【F:frontend/src/test/ssoCallbackRoute.test.tsx†L1-L65】
+  the existing router tests.【F:ade/features/auth/tests/test_sso.py†L1-L121】【F:frontend/src/test/ssoCallbackRoute.test.tsx†L1-L65】
 
 ## Objective
 Stabilise the environment-driven OAuth/OIDC login flow so administrators can enable SSO reliably before we build GUI-based configuration.
 
 ## Current State Findings
-- `Settings` automatically flips `oidc_enabled` on when the client id, secret, issuer, and redirect URL are all supplied. Scopes are normalised from either JSON or comma-separated strings, and provider metadata for discovery is parsed into structured `AuthProviderSettings` objects.【F:app/core/config.py†L335-L592】
-- Every toggle exposed via environment variables maps through the `Settings` defaults (e.g. `auth_force_sso=False`, safe JWT secrets, permissive redirect placeholders), so ADE boots with a working local-auth stack even when no OAuth variables are present.【F:app/core/config.py†L207-L335】
-- The auth service already implements the PKCE authorisation code flow: it builds state + nonce JWTs, requests the provider metadata, exchanges the code, and validates both ID/access tokens through JWKS. Successful logins reuse the existing provisioning path that creates or reactivates users and assigns the default global role.【F:app/features/auth/service.py†L528-L1120】
-- `/auth/sso/login` and `/auth/sso/callback` are exposed as unauthenticated endpoints. The login route issues a signed state cookie, requires PKCE, and redirects to the IdP; the callback verifies the code/state pair, rejects mismatches, and establishes the ADE session.【F:app/features/auth/router.py†L487-L569】
-- The service provisions missing users immediately and flags them as active, but there is no operator control for auto-provisioning or merge behaviour when a matching email already exists under the built-in auth backend.【F:app/features/auth/service.py†L763-L884】
-- The FastAPI settings layer enforces the `ADE_` environment prefix and automatically maps fields such as `auth_force_sso` and `auth_providers` to predictable names, so any new toggles need to stay aligned with the existing `ADE_AUTH_*` / `ADE_OIDC_*` families.【F:app/core/config.py†L184-L360】
+- `Settings` automatically flips `oidc_enabled` on when the client id, secret, issuer, and redirect URL are all supplied. Scopes are normalised from either JSON or comma-separated strings, and provider metadata for discovery is parsed into structured `AuthProviderSettings` objects.【F:ade/settings.py†L335-L592】
+- Every toggle exposed via environment variables maps through the `Settings` defaults (e.g. `auth_force_sso=False`, safe JWT secrets, permissive redirect placeholders), so ADE boots with a working local-auth stack even when no OAuth variables are present.【F:ade/settings.py†L207-L335】
+- The auth service already implements the PKCE authorisation code flow: it builds state + nonce JWTs, requests the provider metadata, exchanges the code, and validates both ID/access tokens through JWKS. Successful logins reuse the existing provisioning path that creates or reactivates users and assigns the default global role.【F:ade/features/auth/service.py†L528-L1120】
+- `/auth/sso/login` and `/auth/sso/callback` are exposed as unauthenticated endpoints. The login route issues a signed state cookie, requires PKCE, and redirects to the IdP; the callback verifies the code/state pair, rejects mismatches, and establishes the ADE session.【F:ade/features/auth/router.py†L487-L569】
+- The service provisions missing users immediately and flags them as active, but there is no operator control for auto-provisioning or merge behaviour when a matching email already exists under the built-in auth backend.【F:ade/features/auth/service.py†L763-L884】
+- The FastAPI settings layer enforces the `ADE_` environment prefix and automatically maps fields such as `auth_force_sso` and `auth_providers` to predictable names, so any new toggles need to stay aligned with the existing `ADE_AUTH_*` / `ADE_OIDC_*` families.【F:ade/settings.py†L184-L360】
 - `.env.example` only lists the base OIDC variables (client ID/secret, issuer, redirect, scopes) and never surfaces `ADE_AUTH_FORCE_SSO` or other auth toggles, leaving administrators without a documented naming template for the extra knobs we plan to introduce.【F:.env.example†L56-L65】
-- Automated coverage only asserts the state-mismatch guard at the callback layer. There are no positive-path tests for the handshake, metadata caching, or failure modes like discovery/token exchange errors.【F:app/features/auth/tests/test_router.py†L360-L439】
+- Automated coverage only asserts the state-mismatch guard at the callback layer. There are no positive-path tests for the handshake, metadata caching, or failure modes like discovery/token exchange errors.【F:ade/features/auth/tests/test_router.py†L360-L439】
 
 > **Note:** Current implementation already signs the state cookie and enforces PKCE, but cookie flags (`Secure`, `HttpOnly`, `SameSite`) and token-claim validation rules need to be documented and hardened to avoid regressions during the rollout.
 
@@ -42,7 +42,7 @@ Stabilise the environment-driven OAuth/OIDC login flow so administrators can ena
 - We only accept a single IdP; future multi-tenant requirements might need per-workspace overrides or multiple providers in discovery.
 - Need explicit guidance on forced SSO rollouts: should `force_sso` disable local credentials entirely and how does that interact with emergency admin access?
 - Clarify the provisioning policy when an SSO login arrives for a new email. Do we auto-create users by default, gate on an `SSO_AUTO_PROVISION` flag, or require manual invitation? How should we handle duplicates when multiple users share the same email?
-- Confirm the naming convention for new provisioning toggles so we do not introduce inconsistent environment variables once force-SSO and auto-provision controls ship.【F:app/core/config.py†L184-L360】
+- Confirm the naming convention for new provisioning toggles so we do not introduce inconsistent environment variables once force-SSO and auto-provision controls ship.【F:ade/settings.py†L184-L360】
 - Discovery SSRF: ensure `issuer` is HTTPS and public; block non-HTTPS schemes, private networks, and oversized responses.
 - Token validation: specify allowed signing algorithms, reject `none`, and validate `iss`/`aud` (and `azp` when applicable), time-based claims, and nonce.
 
@@ -63,7 +63,7 @@ regressions; new work should focus on the remaining gaps called out in the Risks
 ### Phase 1 – Configuration & Validation
 - Add stricter validation for `oidc_redirect_url` (require HTTPS or resolve relative paths against `server_public_url`) and surface clearer startup errors when required env vars are missing or malformed.
 - Decide whether to allow secret-less clients; if so, treat the secret as optional in settings while ensuring HTTP Basic is skipped when absent.
-- Lock in the naming plan for SSO provisioning controls (e.g. `ADE_AUTH_FORCE_SSO`, `ADE_AUTH_SSO_AUTO_PROVISION`, optional allowed-domain list), update `.env.example`, and extend `docs/authentication.md` so operators see consistent, descriptive knobs while keeping sensible defaults that leave SSO disabled unless explicitly configured.【F:app/core/config.py†L207-L360】【F:.env.example†L56-L65】 Document the new toggles immediately beneath the existing OIDC sample block so administrators can copy the complete environment configuration in one place.【F:.env.example†L56-L65】
+- Lock in the naming plan for SSO provisioning controls (e.g. `ADE_AUTH_FORCE_SSO`, `ADE_AUTH_SSO_AUTO_PROVISION`, optional allowed-domain list), update `.env.example`, and extend `docs/authentication.md` so operators see consistent, descriptive knobs while keeping sensible defaults that leave SSO disabled unless explicitly configured.【F:ade/settings.py†L207-L360】【F:.env.example†L56-L65】 Document the new toggles immediately beneath the existing OIDC sample block so administrators can copy the complete environment configuration in one place.【F:.env.example†L56-L65】
 - Extend `.env.example` and `docs/authentication.md` with the expected redirect path, scope guidance, and notes on default role assignment for new SSO users.
 - Validate the issuer/discovery URL to mitigate SSRF: enforce HTTPS, block private network ranges, restrict redirects, and set httpx connect/read timeouts plus a bounded response size.
 - Document cookie requirements for state/session: `Secure`, `HttpOnly`, `SameSite=Lax` (or `None`+`Secure` if cross-site), and ensure the state token has a short TTL.

@@ -7,10 +7,10 @@ anywhere without provisioning external infrastructure.
 
 ## 1. What ADE Ships With
 - **Self-contained storage** – ADE persists all metadata in
-  `var/db/ade.sqlite`. Documents and other artefacts live alongside it
-  under `var/`. No external database service is required.
+  `data/db/ade.sqlite`. Documents and other artefacts live alongside it
+  under `data/`. No external database service is required.
 - **Deterministic FastAPI backend** – requests are handled by the app in
-  `app/main.py`. Background work stays inside the same process.
+  `ade/main.py`. Background work stays inside the same process.
 - **Admin CLI** – the `ade` command lets you manage users and API keys from any
   terminal that can read the project’s environment.
 - **(TODO)** The forthcoming frontend will guide first-time administrators
@@ -47,7 +47,7 @@ cp .env.example .env
 ```
 
 If you delete `.env`, ADE falls back to its defaults (SQLite in
-`var/db`, docs disabled outside `local`, etc.). Time-based settings
+`data/db`, docs disabled outside `local`, etc.). Time-based settings
 accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
 `30d`, so you can stay consistent whether you configure them via `.env` or the
 `ade start --env KEY=VALUE` flags.
@@ -76,11 +76,11 @@ accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
 
    Each invocation performs an idempotent bootstrap before `uvicorn` comes online:
 
-   - create the SQLite directory (`var/db/`) and its parents if they are missing,
+   - create the SQLite directory (`data/db/`) and its parents if they are missing,
    - run Alembic migrations in order, logging progress to the console, and
    - print a summary of the resolved settings (sourced from `.env` and the environment).
 
-   Successful boot ends with the FastAPI reload server listening on the configured host and serving the compiled SPA from `app/web/`, so <http://localhost:8000/> delivers both the UI and API. Use `--rebuild-frontend` to run the Vite production build and copy fresh assets before launch. Other helpful flags: `--no-reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm`.
+   Successful boot ends with the FastAPI reload server listening on the configured host and serving the compiled SPA from `ade/web/`, so <http://localhost:8000/> delivers both the UI and API. Use `--rebuild-frontend` to run the Vite production build and copy fresh assets before launch. Other helpful flags: `--no-reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm`.
 
 3. Confirm the API is healthy:
 
@@ -88,14 +88,14 @@ accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
    curl http://localhost:8000/health
    ```
 
-All runtime state stays under `var/`. Stop the FastAPI process before deleting files and remove only the pieces you need to refresh. Deleting `var/db/` after the app stops resets the SQLite database; the next bootstrap recreates the directory and reapplies migrations automatically. Leave `var/documents/` intact unless you intend to delete uploaded sources.
+All runtime state stays under `data/`. Stop the FastAPI process before deleting files and remove only the pieces you need to refresh. Deleting `data/db/` after the app stops resets the SQLite database; the next bootstrap recreates the directory and reapplies migrations automatically. Leave `data/documents/` intact unless you intend to delete uploaded sources.
 
 ### Run backend and frontend manually (optional)
 `ade start` serves the prebuilt SPA. For frontend development with hot module reload, run the backend and the Vite dev server in separate terminals. Install dependencies in `frontend/` first (repeat only after dependency updates).
 
 ```bash
 # Terminal 1
-uvicorn app.main:app --reload
+uvicorn ade.main:create_app --reload --factory
 
 # Terminal 2
 cd frontend
@@ -126,9 +126,9 @@ docker build -t ade-backend:local -f docker/backend/Dockerfile .
 docker run -d --name ade-backend \
   --env-file .env \
   -p 8000:8000 \
-  -v "$(pwd)/var:/app/var" \
+  -v "$(pwd)/data:/ade/data" \
   ade-backend:local \
-  uvicorn app.main:app --host 0.0.0.0 --port 8000
+  uvicorn ade.main:create_app --host 0.0.0.0 --port 8000 --factory
 ```
 
 The bind mount keeps the SQLite database and documents on the host so they
@@ -138,7 +138,7 @@ survive container restarts. Check health the same way:
 curl http://localhost:8000/health
 ```
 
-When you deploy the frontend in production, compile it once (`ade start --rebuild-frontend` or `npm run build` followed by copying `frontend/dist/` into `app/web/`). FastAPI serves those files directly, so your reverse proxy only
+When you deploy the frontend in production, compile it once (`ade start --rebuild-frontend` or `npm run build` followed by copying `frontend/dist/` into `ade/web/`). FastAPI serves those files directly, so your reverse proxy only
 needs to forward requests to the backend.
 
 To stop and remove the container:
@@ -220,18 +220,18 @@ bootstrap helper:
 
 4. Restart the API or retry the CLI command.
 
-If you need a clean slate, stop all ADE processes, remove `var/db/`, and start
+If you need a clean slate, stop all ADE processes, remove `data/db/`, and start
 the API or CLI again. The bootstrap helper recreates the directory, reapplies
-migrations, and leaves other artefacts (such as `var/documents/`) untouched.
-Capture a backup of `var/` before deleting anything if you may need to inspect
+migrations, and leaves other artefacts (such as `data/documents/`) untouched.
+Capture a backup of `data/` before deleting anything if you may need to inspect
 historical documents.
 
 ## 8. Where ADE Stores Data
-- `var/db/ade.sqlite` – primary metadata database (SQLite).
-- `var/documents/` – uploaded source files.
-- `var/logs/` *(if enabled)* – structured JSON logs.
+- `data/db/ade.sqlite` – primary metadata database (SQLite).
+- `data/documents/` – uploaded source files.
+- `data/logs/` *(if enabled)* – structured JSON logs.
 
-Back up the `var/` directory to retain everything you need for a full
+Back up the `data/` directory to retain everything you need for a full
 restore.
 
 ## 9. Roadmap + TODOs
@@ -248,5 +248,5 @@ administrators confidently using the CLI.
 ## 10. Troubleshooting
 - **`ade start` exits immediately:** ensure the Python dependencies are installed (`pip install -e .[dev]`) and that the configured port is free. Run with `--no-reload` if you suspect the reload watcher cannot spawn a subprocess.
 - **Port conflicts on 8000:** choose another port with `ade start --port 9000` or stop the conflicting process.
-- **Frontend shows a blank page:** rebuild assets with `ade start --rebuild-frontend` (or run `npm run build` and copy `frontend/dist/` into `app/web/`).
+- **Frontend shows a blank page:** rebuild assets with `ade start --rebuild-frontend` (or run `npm run build` and copy `frontend/dist/` into `ade/web/`).
 - **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api` prefix.

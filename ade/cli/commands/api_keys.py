@@ -1,0 +1,104 @@
+"""API key management commands for the ADE CLI."""
+
+from __future__ import annotations
+
+from argparse import Namespace
+from typing import Any
+
+from ade.features.auth.models import APIKey
+from ade.features.auth.service import APIKeyIssueResult, AuthService
+
+from ..core.output import ColumnSpec, print_json, print_rows
+from ..core.runtime import load_settings, normalise_email, open_session
+
+__all__ = ["issue", "list_keys", "revoke"]
+
+
+def _serialise_api_key(api_key: APIKey) -> dict[str, Any]:
+    user = api_key.user
+    return {
+        "id": api_key.id,
+        "user_id": api_key.user_id,
+        "user_email": getattr(user, "email", None),
+        "principal_type": (
+            "service_account" if getattr(user, "is_service_account", False) else "user"
+        ),
+        "token_prefix": api_key.token_prefix,
+        "label": api_key.label,
+        "created_at": api_key.created_at.isoformat() if api_key.created_at else None,
+        "expires_at": api_key.expires_at.isoformat() if api_key.expires_at else None,
+        "last_seen_at": api_key.last_seen_at.isoformat() if api_key.last_seen_at else None,
+        "revoked_at": api_key.revoked_at.isoformat() if api_key.revoked_at else None,
+    }
+
+
+def _api_key_columns() -> list[ColumnSpec]:
+    return [
+        ("ID", "id"),
+        ("Prefix", "token_prefix"),
+        ("Label", lambda row: row.get("label") or "-"),
+        ("Type", "principal_type"),
+        ("User", lambda row: row.get("user_email") or row["user_id"]),
+        ("Expires", lambda row: row.get("expires_at") or "-"),
+        ("Revoked", lambda row: row.get("revoked_at") or "-"),
+    ]
+
+
+def _issue_result_payload(result: APIKeyIssueResult) -> dict[str, Any]:
+    api_key = _serialise_api_key(result.api_key)
+    api_key["principal_type"] = result.principal_type
+    api_key["principal_label"] = result.principal_label
+    return {"api_key": api_key, "raw_key": result.raw_key}
+
+
+async def issue(args: Namespace) -> None:
+    settings = load_settings()
+    async with open_session(settings=settings) as session:
+        service = AuthService(session=session, settings=settings)
+        expires_in = args.expires_in
+        if args.user_id:
+            result = await service.issue_api_key_for_user_id(
+                user_id=args.user_id,
+                expires_in_days=expires_in,
+                label=args.label,
+            )
+        else:
+            email = normalise_email(args.email)
+            result = await service.issue_api_key_for_email(
+                email=email,
+                expires_in_days=expires_in,
+                label=args.label,
+            )
+
+    payload = _issue_result_payload(result)
+    if args.json:
+        print_json(payload)
+    else:
+        print_rows([payload["api_key"]], _api_key_columns())
+        print("Raw key:", payload["raw_key"])
+
+
+async def list_keys(args: Namespace) -> None:
+    settings = load_settings()
+    async with open_session(settings=settings) as session:
+        service = AuthService(session=session, settings=settings)
+        records = await service.list_api_keys()
+
+    serialised = [_serialise_api_key(record) for record in records]
+    if args.json:
+        print_json({"api_keys": serialised})
+    else:
+        print_rows(serialised, _api_key_columns())
+
+
+async def revoke(args: Namespace) -> None:
+    settings = load_settings()
+    async with open_session(settings=settings) as session:
+        service = AuthService(session=session, settings=settings)
+        await service.revoke_api_key(args.api_key_id)
+
+    payload = {"revoked": args.api_key_id}
+    if args.json:
+        print_json(payload)
+    else:
+        print(f"Revoked API key {args.api_key_id}")

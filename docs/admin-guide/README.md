@@ -3,10 +3,10 @@
 Administrators install, configure, and operate the Automatic Data Extractor. This guide captures the durable pieces of that workflow while deeper runbooks are drafted.
 
 ## Deployment at a glance
-- ADE is a FastAPI application created in [`app/main.py`](../../app/main.py) with its settings defined in [`app/core/config.py`](../../app/core/config.py).
+- ADE is a FastAPI application created in [`ade/main.py`](../../ade/main.py) with its settings defined in [`ade/settings.py`](../../ade/settings.py).
 - Development defaults to a single process: `ade start` runs FastAPI with reload enabled and serves the compiled SPA. Use `--rebuild-frontend` when you need to refresh the production bundle before testing, and `--frontend-dir` if the SPA lives outside the default `frontend/` directory. For Vite hot module reload, start `uvicorn` and `npm run dev -- --host` in separate terminals instead.
 - Production deployments build the frontend once (`npm run build`) and serve the static bundle behind the same reverse proxy that forwards API traffic to a managed ASGI process (Uvicorn, Uvicorn+Gunicorn, systemd, or a container orchestrator).
-- Persistent state lives under the `var/` directory by default. SQLite databases and uploaded documents sit beneath `var/db/` and `var/documents/`; both paths can be overridden through environment variables.
+- Persistent state lives under the `data/` directory by default. SQLite databases and uploaded documents sit beneath `data/db/` and `data/documents/`; both paths can be overridden through environment variables.
 - API and CLI entry points call the shared database bootstrap helper before opening sessions. It creates the SQLite directory, runs Alembic migrations, and surfaces progress in the logs before mirroring the manual fallback documented in the [admin getting started guide](getting_started.md#manual-migrations-and-recovery).
 
 ## Configuration snapshot
@@ -20,9 +20,9 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
   five minutes after five consecutive failures.
 
 ## Operational building blocks
-- Database connections are created via the async SQLAlchemy engine in [`app/db/engine.py`](../../app/db/engine.py) and scoped sessions from [`app/db/session.py`](../../app/db/session.py).
-- Background work is handled by the in-process task queue defined in [`app/services/task_queue.py`](../../app/services/task_queue.py).
-- Structured logging and correlation IDs are configured through [`app/core/logging.py`](../../app/core/logging.py) and middleware in [`app/core/middleware.py`](../../app/core/middleware.py).
+- Database connections are created via the async SQLAlchemy engine in [`ade/db/engine.py`](../../ade/db/engine.py) and scoped sessions from [`ade/db/session.py`](../../ade/db/session.py).
+- Background work is handled by the in-process task queue defined in [`ade/services/task_queue.py`](../../ade/services/task_queue.py).
+- Structured logging and correlation IDs are configured through [`ade/core/logging.py`](../../ade/core/logging.py) and middleware in [`ade/core/middleware.py`](../../ade/core/middleware.py).
 
 Future sections will expand on security hardening, backup procedures, and frontend onboarding once those pieces land. The components listed above are already in place and unlikely to change dramatically.
 

@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### Added
 - Placeholder for upcoming changes.
 
+### Changed
+- Rename the backend package to ``ade`` and update defaults, documentation, and tooling to use the new ``data/`` storage root.
+- Simplify the ADE settings module to use direct BaseSettings fields with clearer path resolution and OIDC/cors parsing.
+- Relocate the ADE settings module to ``ade/settings.py`` and update imports and docs to match the new location.
+
 ## [v0.1.0] - 2025-10-09
 
 ### Added

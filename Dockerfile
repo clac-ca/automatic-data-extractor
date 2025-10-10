@@ -18,7 +18,7 @@ RUN apt-get update \
     && apt-get install --no-install-recommends -y build-essential python3-dev \
     && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml README.md alembic.ini ./
-COPY app/ ./app/
+COPY ade/ ./ade/
 RUN python -m venv "$VIRTUAL_ENV"
 RUN pip install --upgrade pip \
     && pip install --no-cache-dir .
@@ -36,12 +36,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=python-builder /opt/venv /opt/venv
 COPY --from=python-builder /app/alembic.ini ./
-COPY --from=python-builder /app/app ./app
-COPY --from=frontend-builder /frontend/dist ./app/web
+COPY --from=python-builder /app/ade ./ade
+COPY --from=frontend-builder /frontend/dist ./ade/web
 RUN addgroup --system ade \
     && adduser --system --ingroup ade --home /home/ade ade \
     && mkdir -p /var/lib/ade/documents \
     && chown -R ade:ade /app /var/lib/ade
 USER ade
 EXPOSE 8000
-CMD ["uvicorn", "app.main:create_app", "--host", "0.0.0.0", "--port", "8000", "--factory"]
+CMD ["uvicorn", "ade.main:create_app", "--host", "0.0.0.0", "--port", "8000", "--factory"]
