@@ -1,11 +1,11 @@
-"""Copy the compiled React assets into ``app/web``."""
+"""Copy the compiled React assets into ``ade/web``."""
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
 
-from app.main import (
+from ade.main import (
     DEFAULT_FRONTEND_DIR,
     FRONTEND_BUILD_DIRNAME,
     WEB_DIR,
@@ -24,7 +24,7 @@ def copy_frontend_build(src: Path, dest: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Copy frontend/dist assets into app/web for packaging.",
+        description="Copy frontend/dist assets into ade/web for packaging.",
     )
     parser.add_argument(
         "--dist",
@@ -36,7 +36,7 @@ def main() -> None:
         "--static",
         type=Path,
         default=DEFAULT_STATIC,
-        help="Destination static directory inside the app package.",
+        help="Destination static directory inside the ade package.",
     )
     args = parser.parse_args()
     copy_frontend_build(args.dist, args.static)
