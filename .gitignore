@@ -28,6 +28,10 @@ frontend/dist/
 frontend/coverage/
 frontend/.vite/
 
+# Backend static artefacts
+ade/web/*
+!ade/web/.gitkeep
+
 
 # Static analysis and tooling
 .mypy_cache/
@@ -37,3 +41,4 @@ coverage.xml
 htmlcov/
 # Backend runtime artefacts
 # (covered by var/ entry above)
+data/db/ade.sqlite
