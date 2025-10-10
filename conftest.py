@@ -17,22 +17,22 @@ from alembic.config import Config
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app import Settings, get_settings, reload_settings
-from app.db.bootstrap import ensure_database_ready
-from app.db.engine import render_sync_url, reset_database_state
-from app.db.session import get_sessionmaker
-from app.features.auth.security import hash_password
-from app.features.roles.models import Role
-from app.features.roles.service import (
+from ade import Settings, get_settings, reload_settings
+from ade.db.bootstrap import ensure_database_ready
+from ade.db.engine import render_sync_url, reset_database_state
+from ade.db.session import get_sessionmaker
+from ade.features.auth.security import hash_password
+from ade.features.roles.models import Role
+from ade.features.roles.service import (
     assign_global_role,
     assign_role,
     ensure_user_principal,
     sync_permission_registry,
 )
-from app.features.users.models import User, UserCredential
-from app.features.workspaces.models import Workspace, WorkspaceMembership
-from app.lifecycles import ensure_runtime_dirs
-from app.main import create_app
+from ade.features.users.models import User, UserCredential
+from ade.features.workspaces.models import Workspace, WorkspaceMembership
+from ade.lifecycles import ensure_runtime_dirs
+from ade.main import create_app
 
 
 @pytest.fixture(scope="session")

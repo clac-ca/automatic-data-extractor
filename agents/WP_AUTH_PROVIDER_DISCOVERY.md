@@ -26,7 +26,7 @@ whether credentials should be hidden.
 ## Deliverables
 - Auth settings that validate provider definitions (`id`, `label`, optional
   `icon_url`, `start_url`) plus a `force_sso` flag.
-- Pure helper in `app/features/auth/service.py` that returns provider metadata
+- Pure helper in `ade/features/auth/service.py` that returns provider metadata
   and the `force_sso` decision.
 - Public FastAPI route `/auth/providers` returning `{ providers, force_sso }`.
 - Unit tests covering empty, populated, and force-only configurations.
@@ -34,12 +34,12 @@ whether credentials should be hidden.
   setup and login.
 
 ## Tasks
-1. Extend `app/core/config.py` with Pydantic models for provider definitions and
+1. Extend `ade/settings.py` with Pydantic models for provider definitions and
    the `force_sso` flag; prune unused auth settings.
-2. Implement the provider helper in `app/features/auth/service.py` and reuse it
+2. Implement the provider helper in `ade/features/auth/service.py` and reuse it
    anywhere discovery is needed.
-3. Add response schemas to `app/features/auth/schemas.py` and expose the
-   unauthenticated `/auth/providers` route in `app/features/auth/router.py`.
+3. Add response schemas to `ade/features/auth/schemas.py` and expose the
+   unauthenticated `/auth/providers` route in `ade/features/auth/router.py`.
 4. Cover helper and route with unit tests.
 5. Update docs (`agents/FRONTEND_DESIGN.md`, auth runbook) to reflect the
    contract.

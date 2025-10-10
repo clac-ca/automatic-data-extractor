@@ -227,7 +227,7 @@ class UserBase(BaseModel):
     website: AnyUrl | None = None
 ```
 ### Custom Base Model
-Having a controllable global base model allows us to customize all the models within the app. For instance, we can enforce a standard datetime format or introduce a common method for all subclasses of the base model.
+Having a controllable global base model allows us to customize all the models within the ade. For instance, we can enforce a standard datetime format or introduce a common method for all subclasses of the base model.
 ```python
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -294,7 +294,7 @@ class Config(BaseSettings):
     DATABASE_URL: PostgresDsn
     REDIS_URL: RedisDsn
 
-    SITE_DOMAIN: str = "myapp.com"
+    SITE_DOMAIN: str = "myade.com"
 
     ENVIRONMENT: Environment = Environment.PRODUCTION
 
@@ -541,7 +541,7 @@ class ProfileResponse(BaseModel):
         return self
 
 
-@app.get("/", response_model=ProfileResponse)
+@ade.get("/", response_model=ProfileResponse)
 async def root():
     return ProfileResponse()
 ```
@@ -564,7 +564,7 @@ from my_sync_library import SyncAPIClient
 app = FastAPI()
 
 
-@app.get("/")
+@ade.get("/")
 async def call_my_sync_library():
     my_data = await service.get_my_data()
 
@@ -606,7 +606,7 @@ router = APIRouter()
 async def get_creator_posts(profile_data: ProfileCreate):
    pass
 ```
-> **ADE note:** The `/auth/session` route validates credentials with `LoginRequest`, keeping malformed emails/passwords at the 422 boundary while the service layer works with normalised data.【F:app/features/auth/schemas.py†L71-L159】【F:app/features/auth/router.py†L121-L212】
+> **ADE note:** The `/auth/session` route validates credentials with `LoginRequest`, keeping malformed emails/passwords at the 422 boundary while the service layer works with normalised data.【F:ade/features/auth/schemas.py†L71-L159】【F:ade/features/auth/router.py†L121-L212】
 **Response Example:**
 
 <img backend="images/value_error_response.png" width="400" height="auto">
