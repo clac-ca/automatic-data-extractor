@@ -39,18 +39,18 @@ dev = [
 ]
 
 [project.scripts]
-ade = "app.cli.__main__:main"
+ade = "ade.cli.__main__:main"
 
 # ---- Packaging (auto-discover all backend* packages) ----
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["app*"]
+include = ["ade*"]
 
 # Keep type marker; add other assets here only if needed at runtime
 [tool.setuptools.package-data]
-app = [
+ade = [
   "py.typed",
   "web/**/*",
   "static/README.md",
@@ -61,7 +61,7 @@ app = [
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = [
-  "app",
+  "ade",
 ]
 asyncio_mode = "auto"
 addopts = "-ra"
@@ -85,12 +85,12 @@ no_implicit_optional = true
 pretty = true
 
 [[tool.mypy.overrides]]
-module = "app.*.tests.*"
+module = "ade.*.tests.*"
 disallow_untyped_defs = false
 
 [tool.coverage.run]
 branch = true
-source = ["app"]
+source = ["ade"]
 
 [tool.coverage.report]
 skip_empty = true

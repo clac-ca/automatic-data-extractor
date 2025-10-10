@@ -28,7 +28,7 @@ frontend/
 ├─ index.html              # Vite entry point served during development
 ├─ public/                 # Static assets copied as-is into the build output
 ├─ src/
-│  ├─ app/                 # Application shell (providers, router, error boundary)
+│  ├─ ade/                 # Application shell (providers, router, error boundary)
 │  ├─ features/            # Feature-first modules (auth, setup, workspaces, ...)
 │  │  └─ workspaces/       # Workspace shell, overview, document type routes
 │  ├─ shared/

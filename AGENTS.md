@@ -29,7 +29,7 @@ The tree below describes the desired state of the repo once the restructure is c
 │  ├─ fastapi-best-practices.md
 │  ├─ code_review_instructions.md
 │  └─ WP_*.md                 # Long-form work packages coordinating refactors
-├─ app/                       # Deployable FastAPI package (API + CLI + workers + static web)
+├─ ade/                       # Deployable FastAPI package (API + CLI + workers + static web)
 │  ├─ __init__.py
 │  ├─ main.py                 # App factory; mounts v1 router; serves SPA/static files
 │  ├─ lifecycles.py           # Startup/shutdown hooks (SQLite PRAGMAs, health checks, JWKS warmup)
@@ -135,11 +135,11 @@ The tree below describes the desired state of the repo once the restructure is c
 ### Module Responsibilities (Cheat Sheet)
 
 - **Features own their HTTP contract.** Keep routers, schemas, models, repositories, services, workers, and feature tests together.
-- **`app/api/` is a thin shell.** Limit it to version routing, shared dependencies, and exception mapping. Never move business logic here.
-- **`app/core/` hosts cross-cutting concerns.** Settings, auth backends, logging, security helpers, and pure utilities belong here.
-- **`app/db/` centralises persistence glue.** Declarative base, session management, and migrations stay together for easy engine swaps.
-- **`app/web/` contains built assets only.** Source files for the SPA remain under `frontend/`.
-- **Shared integrations live in `app/services/` only when two or more features need them.** Otherwise, keep code inside the owning feature to avoid premature abstraction.
+- **`ade/api/` is a thin shell.** Limit it to version routing, shared dependencies, and exception mapping. Never move business logic here.
+- **`ade/core/` hosts cross-cutting concerns.** Settings, auth backends, logging, security helpers, and pure utilities belong here.
+- **`ade/db/` centralises persistence glue.** Declarative base, session management, and migrations stay together for easy engine swaps.
+- **`ade/web/` contains built assets only.** Source files for the SPA remain under `frontend/`.
+- **Shared integrations live in `ade/services/` only when two or more features need them.** Otherwise, keep code inside the owning feature to avoid premature abstraction.
 
 ---
 
@@ -187,7 +187,7 @@ The tree below describes the desired state of the repo once the restructure is c
 ### Migrations
 
 - **Single baseline migration:** There are no production installations yet, so all schema work happens in
-  `app/alembic/versions/0001_initial_schema.py`. When the schema evolves, update this file directly instead of adding new
+  `ade/alembic/versions/0001_initial_schema.py`. When the schema evolves, update this file directly instead of adding new
   versioned migrations.
 
 ### Dependency Protocol
