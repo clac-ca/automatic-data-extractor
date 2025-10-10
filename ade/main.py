@@ -151,6 +151,8 @@ def sync_frontend_assets(
     target.mkdir(parents=True, exist_ok=True)
 
     for entry in target.iterdir():
+        if entry.name == "README.md":
+            continue
         if entry.is_dir():
             shutil.rmtree(entry)
         else:
