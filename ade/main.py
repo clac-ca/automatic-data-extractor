@@ -23,7 +23,8 @@ from .features.auth.dependencies import configure_auth_dependencies
 from .services.task_queue import TaskQueue
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
-SPA_INDEX = WEB_DIR / "index.html"
+WEB_STATIC_DIR = WEB_DIR / "static"
+SPA_INDEX = WEB_STATIC_DIR / "index.html"
 API_PREFIX = "/api"
 DEFAULT_FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
 FRONTEND_BUILD_DIRNAME = "dist"
@@ -95,9 +96,9 @@ def start(
             npm_command=npm_command,
             env=os.environ,
         )
-        print("Frontend: rebuilt and synced to ade/web")
+        print("Frontend: rebuilt and synced to ade/web/static")
     else:
-        print("Frontend: serving existing assets from ade/web")
+        print("Frontend: serving existing assets from ade/web/static")
 
     print("ADE application server")
     print("---------------------")
@@ -147,7 +148,7 @@ def sync_frontend_assets(
     if not build_dir.exists() or not build_dir.is_dir():
         raise ValueError(f"Frontend build output not found at {build_dir}")
 
-    target = Path(static_dir).expanduser().resolve() if static_dir else WEB_DIR
+    target = Path(static_dir).expanduser().resolve() if static_dir else WEB_STATIC_DIR
     target.mkdir(parents=True, exist_ok=True)
 
     for entry in target.iterdir():
@@ -162,8 +163,11 @@ def sync_frontend_assets(
 
 
 def _mount_static(app: FastAPI) -> None:
-    WEB_DIR.mkdir(parents=True, exist_ok=True)
-    app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
+    WEB_STATIC_DIR.mkdir(parents=True, exist_ok=True)
+
+    assets_dir = WEB_STATIC_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
     @app.get("/", include_in_schema=False)
     async def read_spa_root() -> FileResponse:
@@ -252,6 +256,7 @@ __all__ = [
     "DEFAULT_FRONTEND_DIR",
     "FRONTEND_BUILD_DIRNAME",
     "WEB_DIR",
+    "WEB_STATIC_DIR",
     "app",
     "build_frontend_assets",
     "create_app",

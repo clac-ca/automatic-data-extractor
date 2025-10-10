@@ -44,7 +44,7 @@ def register_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--rebuild-frontend",
         action="store_true",
-        help="Run the Vite production build and copy assets into ade/web before starting.",
+        help="Run the Vite production build and copy assets into ade/web/static before starting.",
     )
     parser.add_argument(
         "--frontend-dir",
@@ -104,3 +104,4 @@ __all__ = [
     "register_arguments",
     "start",
 ]
+

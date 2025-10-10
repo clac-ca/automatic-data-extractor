@@ -1,28 +1,32 @@
+
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
-import { fetchSession } from "../../auth/api";
-import { completeSetup, fetchSetupStatus } from "../api";
-import { setupKeys } from "./useSetupStatusQuery";
-import { sessionKeys } from "../../auth/hooks/sessionKeys";
-import type { CompleteSetupPayload } from "../../../shared/api/types";
+import { completeSetup } from "../api";
+import { useSessionQuery } from "../../auth/hooks/useSessionQuery";
+import { sessionKeys } from "../../auth/sessionKeys";
+import type { SetupPayload } from "../../../shared/types/auth";
 
 export function useCompleteSetupMutation() {
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { session } = useSessionQuery({ enabled: false });
 
   return useMutation({
-    mutationFn: (payload: CompleteSetupPayload) => completeSetup(payload),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: setupKeys.all });
-      await queryClient.invalidateQueries({ queryKey: sessionKeys.all });
-      const session = await fetchSession();
-      queryClient.setQueryData(sessionKeys.detail(), session);
-      navigate("/workspaces", { replace: true });
+    mutationFn: (payload: SetupPayload) => completeSetup(payload),
+    onSuccess(envelope) {
+      queryClient.setQueryData(sessionKeys.detail(), {
+        session: envelope,
+        providers: [],
+        force_sso: false,
+      });
+      const next = envelope.return_to ?? "/";
+      navigate(next, { replace: true });
     },
-    onError: async () => {
-      await queryClient.invalidateQueries({ queryKey: setupKeys.all });
-      await fetchSetupStatus();
+    onSettled() {
+      if (session) {
+        queryClient.invalidateQueries({ queryKey: sessionKeys.detail() });
+      }
     },
   });
 }

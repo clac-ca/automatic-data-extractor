@@ -1,10 +1,10 @@
 import { get, post } from "../../shared/api/client";
-import type { CompleteSetupPayload, SetupStatusResponse, SessionEnvelope } from "../../shared/api/types";
+import type { SessionEnvelope, SetupPayload, SetupStatus } from "../../shared/types/auth";
 
 export async function fetchSetupStatus() {
-  return get<SetupStatusResponse>("/setup/status");
+  return get<SetupStatus>("/setup/status");
 }
 
-export async function completeSetup(payload: CompleteSetupPayload) {
+export async function completeSetup(payload: SetupPayload) {
   return post<SessionEnvelope>("/setup", payload);
 }

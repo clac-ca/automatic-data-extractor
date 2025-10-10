@@ -1,8 +1,17 @@
-import type { ProblemDetails } from "./types";
+const DEFAULT_BASE_URL = "/api/v1";
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
-const DEFAULT_API_BASE_URL = "/api/v1";
-const DEFAULT_CSRF_COOKIE_NAME = "ade_csrf";
-const SAFE_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
+export type ApiOptions = RequestInit & {
+  readonly parseJson?: boolean;
+};
+
+export interface ProblemDetails {
+  readonly type?: string;
+  readonly title?: string;
+  readonly status?: number;
+  readonly detail?: string;
+  readonly errors?: Record<string, string[]>;
+}
 
 export class ApiError extends Error {
   readonly status: number;
@@ -16,151 +25,48 @@ export class ApiError extends Error {
   }
 }
 
-export interface ApiClientOptions extends RequestInit {
-  parseJson?: boolean;
-}
-
-function normalizeBaseUrl(baseUrl: string) {
-  if (!baseUrl) {
-    return "";
-  }
-
-  return baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
-}
-
-function resolveUrl(baseUrl: string, path: string) {
-  if (!path.startsWith("/")) {
-    throw new Error("API paths must start with a leading slash");
-  }
-
-  if (!baseUrl) {
-    return path;
-  }
-
-  return `${baseUrl}${path}`;
-}
-
-function applyHeaders(target: Headers, source?: HeadersInit) {
-  if (!source) {
-    return;
-  }
-
-  if (source instanceof Headers) {
-    source.forEach((value, key) => {
-      target.set(key, value);
-    });
-    return;
-  }
-
-  if (Array.isArray(source)) {
-    source.forEach(([key, value]) => {
-      target.set(key, value);
-    });
-    return;
-  }
-
-  Object.entries(source).forEach(([key, value]) => {
-    if (typeof value === "undefined") {
-      return;
-    }
-
-    if (Array.isArray(value)) {
-      target.set(key, value.join(", "));
-      return;
-    }
-
-    target.set(key, value);
-  });
-}
-
-function resolveCsrfCookieName() {
-  const fromEnv = import.meta.env.VITE_SESSION_CSRF_COOKIE_NAME;
-  if (typeof fromEnv === "string" && fromEnv.trim() !== "") {
-    return fromEnv.trim();
-  }
-
-  return DEFAULT_CSRF_COOKIE_NAME;
-}
-
-function resolveCsrfCookieCandidates(): string[] {
-  const primary = resolveCsrfCookieName();
-  const candidates = new Set<string>([primary, DEFAULT_CSRF_COOKIE_NAME, "ade-csrf"]);
-
-  if (primary.includes("_")) {
-    candidates.add(primary.replace(/_/g, "-"));
-  }
-
-  if (primary.includes("-")) {
-    candidates.add(primary.replace(/-/g, "_"));
-  }
-
-  return Array.from(candidates);
-}
-
-function readCookie(name: string): string | null {
-  if (typeof document === "undefined" || typeof document.cookie !== "string") {
-    return null;
-  }
-
-  const cookies = document.cookie ? document.cookie.split(";") : [];
-  for (const cookie of cookies) {
-    const [rawKey, ...rawValue] = cookie.trim().split("=");
-    if (rawKey === name) {
-      return decodeURIComponent(rawValue.join("="));
-    }
-  }
-
-  return null;
-}
-
-function readCsrfToken(): string | null {
-  for (const name of resolveCsrfCookieCandidates()) {
-    const value = readCookie(name);
-    if (value) {
-      return value;
-    }
-  }
-
-  return null;
-}
-
 export class ApiClient {
   private readonly baseUrl: string;
 
-  constructor(baseUrl: string = DEFAULT_API_BASE_URL) {
-    this.baseUrl = normalizeBaseUrl(baseUrl);
+  constructor(baseUrl: string = DEFAULT_BASE_URL) {
+    this.baseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
   }
 
-  async request<T = unknown>(path: string, init: ApiClientOptions = {}): Promise<T> {
-    const { parseJson = true, headers, signal, method: initMethod, ...rest } = init;
-    const method = typeof initMethod === "string" ? initMethod.toUpperCase() : "GET";
+  async request<T = unknown>(path: string, options: ApiOptions = {}): Promise<T> {
+    const { parseJson = true, headers: headersInit, body, method: rawMethod, credentials, ...rest } =
+      options;
 
-    const url = resolveUrl(this.baseUrl, path);
+    const method = (rawMethod ?? "GET").toUpperCase();
+    const url = this.composeUrl(path);
 
     const requestHeaders = new Headers({
-      "Content-Type": "application/json",
       Accept: "application/json",
     });
-    applyHeaders(requestHeaders, headers);
 
-    if (!SAFE_HTTP_METHODS.has(method) && !requestHeaders.has("X-CSRF-Token")) {
-      const csrfToken = readCsrfToken();
+    this.copyHeaders(requestHeaders, headersInit);
+
+    if (body && !(body instanceof FormData) && !requestHeaders.has("Content-Type")) {
+      requestHeaders.set("Content-Type", "application/json");
+    }
+
+    if (!SAFE_METHODS.has(method) && !requestHeaders.has("X-CSRF-Token")) {
+      const csrfToken = readCookie(getCsrfCookieName());
       if (csrfToken) {
         requestHeaders.set("X-CSRF-Token", csrfToken);
       }
     }
 
     const response = await fetch(url, {
-      credentials: "include",
-      headers: requestHeaders,
-      signal,
       ...rest,
       method,
+      headers: requestHeaders,
+      body,
+      credentials: credentials ?? "include",
     });
 
     if (!response.ok) {
-      const problem = await this.parseProblem(response);
-      const message = problem?.title || `Request failed with status ${response.status}`;
+      const problem = await this.tryParseProblem(response);
+      const message = problem?.title ?? `Request failed with status ${response.status}`;
       throw new ApiError(message, response.status, problem);
     }
 
@@ -168,67 +74,113 @@ export class ApiClient {
       return undefined as T;
     }
 
-    const text = await response.text();
-    if (!text) {
+    if (response.status === 204) {
       return undefined as T;
     }
 
-    return JSON.parse(text) as T;
+    const text = await response.text();
+    return text ? (JSON.parse(text) as T) : (undefined as T);
   }
 
-  private async parseProblem(response: Response): Promise<ProblemDetails | undefined> {
-    const contentType = response.headers.get("content-type");
-    if (contentType?.includes("application/json")) {
-      try {
-        return (await response.json()) as ProblemDetails;
-      } catch (error) {
-        console.warn("Failed to parse problem details", error);
-      }
+  private composeUrl(path: string) {
+    if (!path.startsWith("/")) {
+      throw new Error("API paths must include a leading slash.");
     }
 
-    return undefined;
+    if (!this.baseUrl) {
+      return path;
+    }
+
+    return `${this.baseUrl}${path}`;
+  }
+
+  private copyHeaders(target: Headers, init?: HeadersInit) {
+    if (!init) {
+      return;
+    }
+
+    if (init instanceof Headers) {
+      init.forEach((value, key) => target.set(key, value));
+      return;
+    }
+
+    if (Array.isArray(init)) {
+      init.forEach(([key, value]) => target.set(key, value));
+      return;
+    }
+
+    Object.entries(init).forEach(([key, value]) => {
+      if (typeof value === "undefined") {
+        return;
+      }
+      target.set(key, Array.isArray(value) ? value.join(", ") : value);
+    });
+  }
+
+  private async tryParseProblem(response: Response): Promise<ProblemDetails | undefined> {
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      return undefined;
+    }
+
+    try {
+      return (await response.json()) as ProblemDetails;
+    } catch (error) {
+      console.warn("Failed to parse problem details", error);
+      return undefined;
+    }
   }
 }
 
-function resolveBaseUrlFromEnv() {
-  const fromEnv = import.meta.env.VITE_API_BASE_URL;
-  if (typeof fromEnv === "string" && fromEnv.trim() !== "") {
+function getCsrfCookieName() {
+  const fromEnv = import.meta.env.VITE_SESSION_CSRF_COOKIE ?? import.meta.env.VITE_SESSION_CSRF_COOKIE_NAME;
+  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
     return fromEnv.trim();
   }
-
-  return DEFAULT_API_BASE_URL;
+  return "ade_csrf";
 }
 
-export const apiClient = new ApiClient(resolveBaseUrlFromEnv());
+function readCookie(name: string) {
+  if (typeof document === "undefined") {
+    return null;
+  }
 
-export async function get<T>(path: string, init?: ApiClientOptions) {
-  return apiClient.request<T>(path, { method: "GET", ...init });
+  const cookies = document.cookie.split(";");
+  for (const cookie of cookies) {
+    const [rawName, ...valueParts] = cookie.trim().split("=");
+    if (rawName === name) {
+      return decodeURIComponent(valueParts.join("="));
+    }
+  }
+
+  return null;
 }
 
-export async function post<T>(path: string, body?: unknown, init?: ApiClientOptions) {
-  return apiClient.request<T>(path, {
+const defaultClient = new ApiClient(import.meta.env.VITE_API_BASE_URL ?? DEFAULT_BASE_URL);
+
+export function get<T>(path: string, options?: ApiOptions) {
+  return defaultClient.request<T>(path, { ...options, method: "GET" });
+}
+
+export function post<T>(path: string, body?: unknown, options?: ApiOptions) {
+  const payload =
+    body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body);
+  return defaultClient.request<T>(path, {
+    ...options,
     method: "POST",
-    body: body === undefined ? undefined : JSON.stringify(body),
-    ...init,
+    body: payload,
   });
 }
 
-export async function patch<T>(path: string, body?: unknown, init?: ApiClientOptions) {
-  return apiClient.request<T>(path, {
+export function del<T>(path: string, options?: ApiOptions) {
+  return defaultClient.request<T>(path, { ...options, method: "DELETE" });
+}
+
+export function patch<T>(path: string, body?: unknown, options?: ApiOptions) {
+  const payload = body === undefined ? undefined : JSON.stringify(body);
+  return defaultClient.request<T>(path, {
+    ...options,
     method: "PATCH",
-    body: body === undefined ? undefined : JSON.stringify(body),
-    ...init,
+    body: payload,
   });
-}
-
-export async function put<T>(path: string, body?: unknown, init?: ApiClientOptions) {
-  return apiClient.request<T>(path, {
-    method: "PUT",
-    body: body === undefined ? undefined : JSON.stringify(body),
-    ...init,
-  });
-}
-
-export async function del<T>(path: string, init?: ApiClientOptions) {
-  return apiClient.request<T>(path, { method: "DELETE", ...init });
 }

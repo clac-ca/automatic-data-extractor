@@ -1,33 +1,52 @@
-import { Outlet, Navigate, useLocation } from "react-router-dom";
+import type { ReactNode } from "react";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { useSessionQuery } from "../hooks/useSessionQuery";
 
-export function RequireSession() {
+export interface RequireSessionProps {
+  readonly redirectTo?: string;
+  readonly children?: ReactNode;
+}
+
+export function RequireSession({ redirectTo = "/login", children }: RequireSessionProps) {
   const location = useLocation();
-  const { data, isLoading, error } = useSessionQuery();
+  const { session, isLoading, error, refetch } = useSessionQuery();
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-slate-300">
-        Loading workspace…
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
+        <p>Loading your workspace…</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-2 text-center text-sm text-rose-200">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-50 text-center text-sm text-slate-500">
         <p>We were unable to confirm your session.</p>
-        <a href="/login" className="font-medium text-sky-300 hover:text-sky-200">
-          Return to sign in
-        </a>
+        <button
+          onClick={() => refetch()}
+          className="focus-ring rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100"
+        >
+          Try again
+        </button>
       </div>
     );
   }
 
-  if (!data) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+  if (!session) {
+    return (
+      <Navigate
+        to={redirectTo}
+        replace
+        state={{ next: location.pathname + location.search + location.hash }}
+      />
+    );
   }
 
-  return <Outlet context={data} />;
+  if (children) {
+    return <>{children}</>;
+  }
+
+  return <Outlet />;
 }
