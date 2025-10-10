@@ -15,6 +15,8 @@ __pycache__
 .pytest_cache
 .python-version
 .coverage*
+.ruff_cache
+coverage.xml
 htmlcov
 
 # Virtual environments
@@ -23,14 +25,23 @@ venv
 ENV
 env
 
+# Environment files
+.env
+.env.*
+!.env.example
+
 # Build artefacts
 build
 dist
 var
+ade/web/*
 
 # Node artefacts
 frontend/node_modules
 frontend/dist
+frontend/coverage
+frontend/.vite
+frontend/.eslintcache
 
 # Editor and OS files
 *.log
@@ -38,3 +49,5 @@ frontend/dist
 *.swo
 .DS_Store
 Thumbs.db
+.vscode
+.idea
