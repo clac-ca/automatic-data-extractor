@@ -148,62 +148,48 @@ All paths below already apply the API prefix (`/api/v1`). Mutating routes requir
 - Backend tests rely on `pytest` with async fixtures from `conftest.py`. The `test_csrf_guards.py` suite will fail if new mutating routes omit `require_csrf`, so ensure the frontend always attaches the CSRF header (the shared `ApiClient` already does this).
 
 ## Milestones & Tasks
-### M0 - Backend Alignment & Prep
-1. Confirm the new session resource and `/setup` contracts, including problem
-   details, before frontend work begins.
-2. Introduce shared `apiClient`, session query utilities, and setup status query
-  under the legacy code to unblock the rebuild and ease retirement of
-  `AuthContext`.
-3. Plan the legacy SPA sunset (deployment cutover, archival steps) so the new
-  structure can launch cleanly.
-4. Catalogue parity requirements from the current SPA (Query client defaults, API client behaviours, RBAC guards) so they can be re-implemented intentionally in the new scaffold.
+### M0 — Alignment & Visual Direction
+1. Reconfirm requirements across `AGENTS.md`, `docs/authentication.md`, and `agents/FRONTEND_DESIGN.md`; document any deltas in this work package.
+2. Define the visual baseline (color system, typography scale, spacing tokens) and capture them in updated Tailwind config notes.
+3. Map the primary operator journeys (first-run setup, daily login, workspace triage) so the navigation hierarchy and wayfinding stay grounded in user needs.
 
-### M1 — Foundation
-1. Scaffold the Vite React TS project, enable ESLint/Prettier/Tailwind, and write
-   the initial README with run scripts.
-2. Establish project structure (`src/app`, `src/features`, `src/shared`) and
-   placeholder routes for `/login`, `/setup`, and `/workspaces/...`.
-3. Implement the shared `apiClient` with credential forwarding and CSRF handling.
+### M1 — Foundation & Design System
+1. Refresh the Vite + React + TypeScript scaffold with ESLint, Prettier, Vitest, and Tailwind using upstream defaults.
+2. Establish the design system primitives (buttons, inputs, form controls, modals, alert banners) with accessibility baked in via Headless UI/ARIA patterns.
+3. Capture component usage guidance in `frontend/README.md` and ensure shared spacing/typography tokens flow through Tailwind and component styles.
 
-### M2 — Initial Setup Flow
-1. Build the `/setup` route that reads `GET /setup/status` and denies access once
-   an administrator exists.
-2. Implement the multi-step wizard collecting administrator profile information
-   with React Hook Form + Zod.
-3. Call `POST /setup`, handle validation errors and concurrency conflicts, and on
-   success bootstrap the session and redirect to `/workspaces`.
-4. Pull `/auth/providers` to explain SSO expectations during setup.
-5. Cover wizard happy path and "setup already complete" guard with Vitest +
-   Testing Library.
+### M2 — Application Shell & Navigation
+1. Build the responsive app chrome: fixed top bar, collapsible workspace navigation rail, and content area with standard padding/breakpoints.
+2. Implement the global loading/empty/skeleton states and error boundaries to keep route transitions polished.
+3. Wire placeholder routes for `/login`, `/setup`, `/workspaces/*`, `/admin/*`, and `/settings` so the shell mirrors the final sitemap.
 
-### M3 — Authentication Loop
-1. Implement `useSessionQuery` backed by `GET /auth/session` and hydrate provider
-  discovery alongside session state.
-2. Build the login page with credential form, provider tiles, force-SSO handling,
-  and redirect logic.
-3. Wire logout via `DELETE /auth/session` and guard authenticated routes with a
-  `RequireSession` layout.
-4. Test login validation and session guard behaviour.
+### M3 — Authentication & Session Management
+1. Implement the session query + React Query cache hydration, including CSRF-safe mutations for login, logout, and refresh.
+2. Deliver the `/login` experience with password and SSO entry points, error messaging, and redirect handling using established form primitives.
+3. Finish `RequireSession` and related guards so authenticated routes render only when the session cache is populated.
 
-### M4 — Workspace Shell
-1. Construct the workspace layout: top bar, navigation rail, and responsive
-   behaviour down to tablet widths.
-2. Integrate workspace listing query and default-selection logic using TanStack
-   Query.
-3. Render workspace overview content with placeholders for future analytics.
+### M4 — First-Run Setup Experience
+1. Complete the `/setup` wizard flow (status gate, profile form, password validation) using Zod + React Hook Form.
+2. Present provider discovery during setup to prepare administrators for SSO-only deployments.
+3. Ensure successful setup logs the user in and routes them into the shell with onboarding messaging.
 
-### M5 — Document Type Detail & Configuration Drawer
-1. Implement the document type detail view with status strip and context cards
-   tied to backend fields.
-2. Build a read-only configuration drawer skeleton with revision metadata.
-3. Add placeholder mutation hooks that assert payload shapes.
-4. Write tests covering drawer open/close flows and data hook rendering.
+### M5 — Workspace Home & Navigation Depth
+1. Implement the workspace overview route with document/job summaries, recent activity, and clear calls-to-action.
+2. Finalise workspace selection logic (preferred workspace, fallbacks) and persist the choice across sessions.
+3. Introduce contextual navigation (breadcrumbs, tab highlights) so users understand their location within a workspace.
 
-### M6 — Hardening & Handover
-1. Sweep for accessibility basics (focus management, keyboard navigation,
-   aria wiring).
-2. Document API dependencies, routing table, and environment requirements in the
-   README.
-3. Run lint/test suite, update `agents/FRONTEND_DESIGN.md`, and track remaining
-   gaps as follow-up issues.
+### M6 — Documents & Configuration Surfaces
+1. Deliver the document list/detail and document-type routes with status, metadata, and action panels.
+2. Build the configuration drawer and detail screens, including version history and read-only previews.
+3. Provide optimistic or state-aware mutations for configuration activation and document deletion using shared API helpers.
+
+### M7 — Admin & Settings Surfaces
+1. Implement the workspace membership and role management views with bulk actions and inline feedback.
+2. Build the global admin area (`/admin`) for role catalogues and assignments, reusing list/detail patterns from earlier milestones.
+3. Introduce the application settings panel (feature flags, organisational settings, notification preferences) using the design system components.
+
+### M8 — Polish & Handover
+1. Sweep for accessibility (focus management, keyboard support, color contrast) and responsive edge cases.
+2. Document API dependencies, routing topology, and UI conventions in `frontend/README.md` and relevant agent docs.
+3. Run the full lint/test/build pipeline, update `agents/FRONTEND_DESIGN.md` with final state, and capture any follow-up items for post-launch iterations.
 
