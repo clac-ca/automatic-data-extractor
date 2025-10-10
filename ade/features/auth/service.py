@@ -18,7 +18,7 @@ from fastapi import HTTPException, Request, Response, status
 from jwt.algorithms import ECAlgorithm, RSAAlgorithm
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade.settings import AuthProviderSettings, Settings
+from ade.settings import Settings
 from ade.features.roles.service import (
     assign_global_role,
     count_users_with_global_role,
@@ -157,26 +157,8 @@ SSO_STATE_COOKIE = "ade_sso_state"
 _MAX_PROVIDER_RESPONSE_BYTES = 64 * 1024
 _HTTP_TIMEOUT = httpx.Timeout(5.0, connect=5.0, read=5.0)
 _HTTP_LIMITS = httpx.Limits(max_connections=5, max_keepalive_connections=5)
-_METADATA_CACHE_TTL = timedelta(minutes=5)
-_JWKS_CACHE_TTL = timedelta(minutes=5)
 _ALLOWED_JWT_ALGORITHMS = {"RS256", "RS384", "RS512", "ES256"}
 _JWT_LEEWAY_SECONDS = 60
-
-
-@dataclass(slots=True)
-class _MetadataCacheEntry:
-    metadata: OIDCProviderMetadata
-    expires_at: datetime
-
-
-@dataclass(slots=True)
-class _JWKSCacheEntry:
-    keys: list[dict[str, Any]]
-    expires_at: datetime
-
-
-_METADATA_CACHE: dict[str, _MetadataCacheEntry] = {}
-_JWKS_CACHE: dict[str, _JWKSCacheEntry] = {}
 
 
 def _is_private_host(host: str) -> bool:
@@ -589,21 +571,7 @@ class AuthService:
         """Return configured providers and the force-SSO flag."""
 
         providers: list[AuthProviderOption] = []
-        for provider in self.settings.auth_providers:
-            spec = (
-                provider
-                if isinstance(provider, AuthProviderSettings)
-                else AuthProviderSettings.model_validate(provider)
-            )
-            providers.append(
-                AuthProviderOption(
-                    id=spec.id,
-                    label=spec.label,
-                    start_url=spec.start_url,
-                    icon_url=spec.icon_url,
-                )
-            )
-        if not providers and self.settings.oidc_enabled:
+        if self.settings.oidc_enabled:
             providers.append(
                 AuthProviderOption(
                     id=_DEFAULT_SSO_PROVIDER_ID,
@@ -895,15 +863,6 @@ class AuthService:
             nonce=stored_state.nonce,
         )
 
-        resource_audience = self.settings.oidc_resource_audience
-        if resource_audience:
-            await self._verify_jwt_via_jwks(
-                token=access_token,
-                jwks_uri=metadata.jwks_uri,
-                audience=resource_audience,
-                issuer=issuer_value,
-            )
-
         email = str(id_claims.get("email") or "")
         subject = str(id_claims.get("sub") or "")
         if not email or not subject:
@@ -1076,11 +1035,6 @@ class AuthService:
                 detail="OIDC issuer is not configured",
             )
 
-        now = self._now()
-        cached = _METADATA_CACHE.get(issuer)
-        if cached and cached.expires_at > now:
-            return cached.metadata
-
         discovery_url = issuer.rstrip("/") + "/.well-known/openid-configuration"
         url = _ensure_public_https_url(discovery_url, purpose="discovery")
         data = await self._fetch_provider_json(url, purpose="discovery")
@@ -1097,10 +1051,6 @@ class AuthService:
                 detail="Incomplete SSO discovery document",
             ) from exc
 
-        _METADATA_CACHE[issuer] = _MetadataCacheEntry(
-            metadata=metadata,
-            expires_at=now + _METADATA_CACHE_TTL,
-        )
         return metadata
 
     async def _fetch_provider_json(
@@ -1174,12 +1124,15 @@ class AuthService:
             "client_id": self.settings.oidc_client_id,
         }
 
-        auth: tuple[str, str] | None = None
         client_secret = self.settings.oidc_client_secret
-        if client_secret:
-            secret_value = client_secret.get_secret_value()
-            auth = (self.settings.oidc_client_id or "", secret_value)
-            payload["client_secret"] = secret_value
+        if client_secret is None:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="OIDC client secret is not configured",
+            )
+        secret_value = client_secret.get_secret_value()
+        payload["client_secret"] = secret_value
+        auth: tuple[str, str] = (self.settings.oidc_client_id or "", secret_value)
 
         token_endpoint = _ensure_public_https_url(
             metadata.token_endpoint,
@@ -1196,7 +1149,7 @@ class AuthService:
                     token_endpoint,
                     data=payload,
                     headers={"Accept": "application/json"},
-                    auth=cast(tuple[str | bytes, str | bytes] | None, auth),
+                    auth=cast(tuple[str | bytes, str | bytes], auth),
                 )
         except httpx.HTTPError as exc:
             raise HTTPException(
@@ -1267,9 +1220,6 @@ class AuthService:
         kid = header.get("kid")
         keys = await self._get_jwks_keys(jwks_uri)
         jwk = self._select_jwk(keys, kid, algorithm)
-        if jwk is None and kid is not None:
-            keys = await self._get_jwks_keys(jwks_uri, force_refresh=True)
-            jwk = self._select_jwk(keys, kid, algorithm)
         if jwk is None:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -1309,19 +1259,12 @@ class AuthService:
 
         return payload
 
-    async def _get_jwks_keys(
-        self, jwks_uri: str, *, force_refresh: bool = False
-    ) -> list[dict[str, Any]]:
+    async def _get_jwks_keys(self, jwks_uri: str) -> list[dict[str, Any]]:
         if not jwks_uri:
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Identity provider JWKS endpoint is not configured",
             )
-
-        now = self._now()
-        cached = _JWKS_CACHE.get(jwks_uri)
-        if cached and not force_refresh and cached.expires_at > now:
-            return cached.keys
 
         url = _ensure_public_https_url(jwks_uri, purpose="JWKS retrieval")
         document = await self._fetch_provider_json(url, purpose="JWKS retrieval")
@@ -1343,10 +1286,6 @@ class AuthService:
                 detail="Identity provider JWKS document is missing keys",
             )
 
-        _JWKS_CACHE[jwks_uri] = _JWKSCacheEntry(
-            keys=parsed,
-            expires_at=now + _JWKS_CACHE_TTL,
-        )
         return parsed
 
     @staticmethod
@@ -1395,17 +1334,6 @@ class AuthService:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="Identity provider response missing required claims",
-            )
-
-        allowed_domains = self.settings.auth_sso_allowed_domains
-        domain = canonical.rsplit("@", 1)[1]
-        if allowed_domains and domain not in allowed_domains:
-            self._logger.warning(
-                "SSO login denied for %s: domain not allowed", canonical
-            )
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                detail="Email domain is not permitted for SSO",
             )
 
         identity = await self._users.get_identity(provider, subject)
