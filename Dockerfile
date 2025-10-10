@@ -37,7 +37,7 @@ RUN apt-get update \
 COPY --from=python-builder /opt/venv /opt/venv
 COPY --from=python-builder /app/alembic.ini ./
 COPY --from=python-builder /app/ade ./ade
-COPY --from=frontend-builder /frontend/dist ./ade/web
+COPY --from=frontend-builder /frontend/dist ./ade/web/static
 RUN addgroup --system ade \
     && adduser --system --ingroup ade --home /home/ade ade \
     && mkdir -p /var/lib/ade/documents \

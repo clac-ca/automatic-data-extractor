@@ -1,27 +1,31 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
-import { createSession, fetchSession } from "../api";
-import { sessionKeys } from "./sessionKeys";
-import type { LoginPayload } from "../../../shared/api/types";
+import { createSession } from "../api";
+import { sessionKeys } from "../sessionKeys";
+import type { LoginPayload, SessionEnvelope } from "../../../shared/types/auth";
 
-export function useLoginMutation() {
-  const queryClient = useQueryClient();
+interface UseLoginMutationOptions {
+  readonly onSuccess?: (session: SessionEnvelope) => void;
+}
+
+export function useLoginMutation(options: UseLoginMutationOptions = {}) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (payload: LoginPayload) => createSession(payload),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: sessionKeys.all });
-      const resolvedSession = await fetchSession();
-      queryClient.setQueryData(sessionKeys.detail(), resolvedSession);
-
-      const preferredWorkspace = resolvedSession?.user.preferred_workspace_id ?? undefined;
-      if (preferredWorkspace) {
-        navigate(`/workspaces/${preferredWorkspace}`, { replace: true });
-      } else {
-        navigate("/workspaces", { replace: true });
-      }
+    onSuccess(session) {
+      queryClient.setQueryData(sessionKeys.detail(), {
+        session,
+        providers: [],
+        force_sso: false,
+      });
+      const searchParams = new URLSearchParams(location.search);
+      const next = session.return_to ?? searchParams.get("next") ?? "/";
+      options.onSuccess?.(session);
+      navigate(next, { replace: true });
     },
   });
 }

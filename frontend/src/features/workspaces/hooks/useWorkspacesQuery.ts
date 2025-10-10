@@ -1,13 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from '@tanstack/react-query';
 
-import { fetchWorkspaces } from "../api";
-import { workspaceKeys } from "./workspaceKeys";
-import type { WorkspaceProfile } from "../../../shared/api/types";
+import { fetchWorkspaces } from '../api';
+
+export const workspaceKeys = {
+  all: ['workspaces'] as const,
+  list: () => [...workspaceKeys.all, 'list'] as const,
+};
 
 export function useWorkspacesQuery() {
-  return useQuery<WorkspaceProfile[]>({
-    queryKey: workspaceKeys.lists(),
-    queryFn: ({ signal }) => fetchWorkspaces({ signal }),
-    staleTime: 30_000,
+  return useQuery({
+    queryKey: workspaceKeys.list(),
+    queryFn: ({ signal }) => fetchWorkspaces(signal),
+    staleTime: 60_000,
   });
 }
+

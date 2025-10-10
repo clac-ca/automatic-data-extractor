@@ -72,7 +72,7 @@ ADE's published container images are built from `main` and hosted on GitHub Cont
    ade start
    ```
 
-   `ade start` performs a full bootstrap before launching `uvicorn` with reload enabled and serving the prebuilt SPA from `ade/web/`:
+   `ade start` performs a full bootstrap before launching `uvicorn` with reload enabled and serving the prebuilt SPA from `ade/web/static/`:
 
    - creates the SQLite directory (`data/db/`) if it does not exist,
    - applies any pending Alembic migrations, and
@@ -95,7 +95,7 @@ ADE's published container images are built from `main` and hosted on GitHub Cont
 
 ### Start each service manually (optional)
 
-`ade start` serves the prebuilt SPA from `ade/web/`. If you prefer Vite hot module reload while developing the frontend, run the backend and Vite dev server in separate terminals:
+`ade start` serves the prebuilt SPA from `ade/web/static/`. If you prefer Vite hot module reload while developing the frontend, run the backend and Vite dev server in separate terminals:
 
 ```bash
 # Terminal 1 – backend (from repo root)
@@ -151,7 +151,7 @@ ADE follows a feature-first layout inside the `ade/` package:
 - [`ade/features/users`](ade/features/users) – identity management, roles, and repositories shared across features.
 - [`ade/features/system_settings`](ade/features/system_settings) – repository and models for instance-wide configuration toggles.
 
-Shared infrastructure lives under [`ade/core`](ade/core) (logging, middleware, settings, and cross-cutting helpers) and [`ade/db`](ade/db) (SQLAlchemy metadata, mixins, and persistence utilities). Background worker entry points now reside in [`ade/workers`](ade/workers), and React build artefacts are served from [`ade/web`](ade/web) by FastAPI.
+Shared infrastructure lives under [`ade/core`](ade/core) (logging, middleware, settings, and cross-cutting helpers) and [`ade/db`](ade/db) (SQLAlchemy metadata, mixins, and persistence utilities). Background worker entry points now reside in [`ade/workers`](ade/workers), and React build artefacts are served from [`ade/web/static`](ade/web/static) by FastAPI.
 
 Uploaded files and the SQLite database are stored beneath the [`data/`](data) directory by default. Override locations with the `ADE_STORAGE_DATA_DIR`, `ADE_DATABASE_DSN`, or `ADE_STORAGE_DOCUMENTS_DIR` environment variables when deploying to production systems.
 
@@ -163,7 +163,7 @@ Uploaded files and the SQLite database are stored beneath the [`data/`](data) di
 ADE is ready for the upcoming web interface:
 
 - [`ade/main.py`](ade/main.py) already serves the built single-page application from `/static`, falls back to `index.html` for unknown routes, and exposes the API under `/api`, so the React app can assume a unified origin.
-- The `ade start` command and [`build_frontend_assets`](ade/main.py) helper rebuild the frontend on demand, keeping `ade/web/` in sync with the Vite output for local or CI usage.
+- The `ade start` command and [`build_frontend_assets`](ade/main.py) helper rebuild the frontend on demand, keeping `ade/web/static/` in sync with the Vite output for local or CI usage.
 - Core routes now publish non-200 responses in the OpenAPI schema, giving the frontend typed failure contracts for authentication, documents, jobs, and workspace management.
 - The [API Guide](docs/reference/api-guide.md) documents the shared error envelopes so the frontend can surface precise messages without re-inspecting backend code.
 - Jobs execute through a typed processor contract (`JobProcessorRequest`/`JobProcessorResult`), so swapping in the real extractor or a mock from the frontend test suite only requires calling `set_job_processor` once.

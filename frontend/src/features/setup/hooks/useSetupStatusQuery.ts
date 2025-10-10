@@ -3,14 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchSetupStatus } from "../api";
 
 export const setupKeys = {
-  all: ["setup"] as const,
-  status: () => [...setupKeys.all, "status"] as const,
+  status: ["setup", "status"] as const,
 };
 
-export function useSetupStatusQuery() {
+export function useSetupStatusQuery(options: { enabled?: boolean } = {}) {
   return useQuery({
-    queryKey: setupKeys.status(),
+    queryKey: setupKeys.status,
     queryFn: fetchSetupStatus,
-    staleTime: 30_000,
+    enabled: options.enabled ?? true,
   });
 }

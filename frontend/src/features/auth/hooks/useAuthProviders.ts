@@ -1,16 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchAuthProviders } from "../api";
+import { fetchProviders } from "../api";
+import { sessionKeys } from "../sessionKeys";
 
-export const authKeys = {
-  all: ["auth"] as const,
-  providers: () => [...authKeys.all, "providers"] as const,
-};
-
-export function useAuthProvidersQuery() {
+export function useAuthProviders(options: { enabled?: boolean } = {}) {
   return useQuery({
-    queryKey: authKeys.providers(),
-    queryFn: fetchAuthProviders,
-    staleTime: 60_000,
+    queryKey: sessionKeys.providers(),
+    queryFn: fetchProviders,
+    enabled: options.enabled ?? true,
   });
 }

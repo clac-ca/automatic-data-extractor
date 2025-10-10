@@ -2,11 +2,9 @@
 
 ## Status
 - **Owner:** Experience Squad
-- **Last Reviewed:** 2025-10-08
+- **Last Reviewed:** 2025-10-10
 - **State:** _Execution_
-- **Notes:** SPA scaffold, setup wizard, authentication loop, workspace shell,
-  and document type detail are now implemented with baseline tests. Remaining
-  hardening tasks cover configuration mutations and analytics surfaces.
+- **Notes:** Fresh Vite scaffold, shell layout, login/setup flows, and API client are in place. Next focus: design system primitives, authenticated workspace surfaces, navigation redesign (header tabs + document rail), end-user login polish, `/auth/callback` handling, and test coverage.
 
 ## Objective
 Rebuild the ADE single-page application with a standard React + TypeScript
@@ -32,13 +30,32 @@ with the updated authentication and setup contracts.
   hooks.
 
 ## Implementation Guidance
+- Anchor UI tokens in `tailwind.config.ts` (color palette, spacing, radius) and consume them through utility classes; avoid inline style drift across features.
+- House reusable primitives under `frontend/src/ui/` with prop-driven variants rather than bespoke screen-level styling; keep accessibility baked in (focus traps, ARIA labels).
+- Route-level data should come from TanStack Query hooks that wrap `frontend/src/shared/api/client.ts`; mutations must reuse the shared CSRF-aware client helpers.
+- Prefer composition over global state: let React Router loaders/queries drive layout state, and keep session/workspace context limited to providers already defined in `AppProviders`.
+- When extending auth/setup flows, mirror backend schemas in `frontend/src/shared/api/types.ts` and add Vitest + Testing Library coverage alongside the change.
+- Follow AGENTS.md heuristics—clarity over cleverness, deterministic behaviour, and boring abstractions—before introducing new dependencies or optimisations.
+- Keep workspace-level navigation in the shell header (active workspace selector, overview/documents tabs) and reserve the left rail for document-centric context (recent uploads, presence indicators) to reinforce workspace scoping.
+- Ensure SSO surfaces include a `/auth/callback` route that completes the redirect flow and feeds back into session hydration.
+
+## Progress Snapshot
+- Rebuilt `frontend/` from scratch (archived legacy app in `frontend.old/`), configured Tailwind 3.x, React Router, React Query, and updated developer docs.
+- Implemented `AppProviders`, `AppRouter`, `ShellLayout`, and `RequireSession`, providing authenticated chrome plus placeholder routes for admin, workspaces, jobs, documents, and settings.
+- Delivered initial auth/setup flows (session query, login with SSO discovery, setup status + provisioning mutation) and wired logout redirect handling.
+- Updated backend asset pipeline: `ade start --rebuild-frontend` now publishes bundles to `ade/web/static/`; Docker/CLI/docs reflect the new location.
+- Shared UI primitives ( `src/ui`) now expose buttons, inputs, alerts, and form helpers to keep feature screens consistent. 
+- Workspace shell now persists active selection, shows breadcrumbs, and provides placeholder routes for per-section views.
+- Header navigation now surfaces workspace-scoped tabs (overview/documents) with a document rail scaffold in the sidebar ready for real-time presence indicators.
+- Added an `AppShell` wrapper so `/workspaces`, `/workspaces/new`, and `/workspaces/{id}/…` all share the same header/profile chrome; the workspace layout now passes tabs, sidebar content, and workspace switcher into that shell.
+- Outstanding work includes expanding workspace-specific UI, introducing data visualisations, wiring document/job routes, enriching the document rail with live data, completing `/auth/callback` backend wiring, and covering flows with Vitest.
 
 ### Patterns to Carry Forward
-- `frontend/src/app/providers.tsx` centralises the TanStack Query client, disables retries on `401`, caps other retries at two, and only mounts React Query Devtools during development—retain that behaviour in the rebuild.
-- `frontend/src/shared/api/client.ts` normalises base URLs, injects the CSRF token from the signed cookie, and surfaces `ApiError` with Problem Details; hook all fetches through this client so mutating requests continue to satisfy `require_csrf`.
-- SPA routing (`frontend/src/app/router.tsx`) keeps public routes (`/setup`, `/login`) outside `<RequireSession />` and hides feature paths behind permission guards (`RequirePermission`, `RequireGlobalPermission`). Preserve this layering so route-based protection stays declarative.
-- `WorkspaceLayout` is the canonical pattern for picking the active workspace: read the route param, fall back to the preferred workspace, then first membership. It also scopes navigation by permission and restores focus after dialogs; copy these UX details.
-- RBAC helpers in `frontend/src/shared/rbac` (permission registry, `can.ts`, guard components) already mirror backend keys and include tests—lift them into the new structure instead of inventing new checks.
+- `frontend/src/app/AppProviders.tsx` centralises React Query defaults (limited retries, dev-only devtools) and must wrap the router.
+- `frontend/src/shared/api/client.ts` handles CSRF, base URLs, and Problem Details—use it for all HTTP interactions.
+- `frontend/src/app/AppRouter.tsx` separates public and authenticated routes; keep guard logic (`RequireSession`) near the top-level router.
+- `frontend/src/app/layouts/ShellLayout.tsx` will host the header-level workspace tabs and the document rail; evolve it rather than replacing it wholesale.
+- Add future shared components under `frontend/src/ui/` to keep feature code lean and consistent.
 
 ### Environment & Build Hooks
 - `VITE_API_BASE_URL` drives the HTTP base URL (defaults to `/api/v1`); the backend serves the SPA from `ade.main.start(rebuild_frontend=True|False)`.
@@ -154,29 +171,34 @@ All paths below already apply the API prefix (`/api/v1`). Mutating routes requir
 3. Map the primary operator journeys (first-run setup, daily login, workspace triage) so the navigation hierarchy and wayfinding stay grounded in user needs.
 
 ### M1 — Foundation & Design System
-1. Refresh the Vite + React + TypeScript scaffold with ESLint, Prettier, Vitest, and Tailwind using upstream defaults.
-2. Establish the design system primitives (buttons, inputs, form controls, modals, alert banners) with accessibility baked in via Headless UI/ARIA patterns.
-3. Capture component usage guidance in `frontend/README.md` and ensure shared spacing/typography tokens flow through Tailwind and component styles.
+1. (Done) Refresh the Vite + React + TypeScript scaffold with linting, Tailwind, and developer docs.
+2. (Next) Establish reusable design-system primitives (buttons, inputs, alerts, modal scaffolds) with accessible patterns.
+3. (Next) Document component usage in `frontend/README.md` and propagate spacing/typography tokens through Tailwind.
 
 ### M2 — Application Shell & Navigation
-1. Build the responsive app chrome: fixed top bar, collapsible workspace navigation rail, and content area with standard padding/breakpoints.
-2. Implement the global loading/empty/skeleton states and error boundaries to keep route transitions polished.
-3. Wire placeholder routes for `/login`, `/setup`, `/workspaces/*`, `/admin/*`, and `/settings` so the shell mirrors the final sitemap.
+1. (Done) Build the responsive app chrome with top bar, navigation rail, and content container.
+2. (Next) Add global loading/empty states and error boundaries for page transitions.
+3. (Done) Wire placeholder routes for `/login`, `/setup`, `/workspaces/*`, `/admin/*`, and `/settings`.
+4. (Done) Relocate workspace-level navigation into the header (overview/documents tabs + active workspace indicator).
+5. (In progress) Convert the left rail into a document list/presence sidebar scaffold ready for real-time updates.
 
 ### M3 — Authentication & Session Management
-1. Implement the session query + React Query cache hydration, including CSRF-safe mutations for login, logout, and refresh.
-2. Deliver the `/login` experience with password and SSO entry points, error messaging, and redirect handling using established form primitives.
-3. Finish `RequireSession` and related guards so authenticated routes render only when the session cache is populated.
+1. (Done) Implement session query + React Query cache hydration, including CSRF-safe login/logout mutations.
+2. (Done) Deliver `/login` with credentials + SSO discovery and redirect handling.
+3. (Done) Finish `RequireSession` guard and logout control in the shell.
+4. (Next) Add Vitest coverage for auth flows (happy path, error states, forced SSO).
+5. (Done) Improve login UX: auto-check `/setup/status`, redirect to setup when required, remove redundant setup link, and refresh copy for end users.
+6. (Done) Add `/auth/callback` route handling that finalises SSO flows and drops the user back into the shell.
 
 ### M4 — First-Run Setup Experience
-1. Complete the `/setup` wizard flow (status gate, profile form, password validation) using Zod + React Hook Form.
-2. Present provider discovery during setup to prepare administrators for SSO-only deployments.
-3. Ensure successful setup logs the user in and routes them into the shell with onboarding messaging.
+1. (In progress) Replace the current controlled form with Zod + React Hook Form (status validation, inline errors).
+2. (Next) Surface provider discovery/force-SSO messaging during setup.
+3. (Done) Ensure successful setup logs the user in and routes into the shell.
 
 ### M5 — Workspace Home & Navigation Depth
-1. Implement the workspace overview route with document/job summaries, recent activity, and clear calls-to-action.
-2. Finalise workspace selection logic (preferred workspace, fallbacks) and persist the choice across sessions.
-3. Introduce contextual navigation (breadcrumbs, tab highlights) so users understand their location within a workspace.
+1. (Done) Implement initial workspace overview route pulling live `/workspaces` data with quick actions and counts.
+2. (In progress) Finalise workspace selection logic (preferred workspace, fallbacks) and persist the choice across sessions.
+3. (Next) Introduce contextual navigation (breadcrumbs, tab highlights) so users understand their location within a workspace.
 
 ### M6 — Documents & Configuration Surfaces
 1. Deliver the document list/detail and document-type routes with status, metadata, and action panels.
