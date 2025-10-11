@@ -1,41 +1,14 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-
 import { LoginForm } from "../components/LoginForm";
 import { useAuthProvidersQuery } from "../hooks/useAuthProviders";
-import { useOptionalSession } from "../hooks/useOptionalSession";
-import { useSetupStatusQuery } from "../../setup/hooks/useSetupStatusQuery";
 
 export function LoginRoute() {
-  const navigate = useNavigate();
   const {
     data: providersData,
     isLoading: isLoadingProviders,
     error: providersError,
   } = useAuthProvidersQuery();
-  const {
-    data: setupStatus,
-    isLoading: isLoadingSetup,
-    error: setupError,
-  } = useSetupStatusQuery();
-  const { data: session, isLoading: isLoadingSession } = useOptionalSession();
 
-  useEffect(() => {
-    if (setupStatus?.requires_setup) {
-      navigate("/setup", { replace: true });
-    }
-  }, [setupStatus, navigate]);
-
-  useEffect(() => {
-    if (session) {
-      const preferredWorkspace = session.user.preferred_workspace_id ?? undefined;
-      const fallback = preferredWorkspace ? `/workspaces/${preferredWorkspace}` : "/workspaces";
-      const target = session.return_to ?? fallback;
-      navigate(target, { replace: true });
-    }
-  }, [session, navigate]);
-
-  if (isLoadingProviders || isLoadingSetup || isLoadingSession) {
+  if (isLoadingProviders) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-slate-300">
         Preparing sign-in…
@@ -43,7 +16,7 @@ export function LoginRoute() {
     );
   }
 
-  if (setupError || providersError) {
+  if (providersError) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-2 text-center text-sm text-rose-200">
         <p>We were unable to load the sign-in options.</p>
@@ -52,10 +25,6 @@ export function LoginRoute() {
         </a>
       </div>
     );
-  }
-
-  if (setupStatus?.requires_setup || session) {
-    return null;
   }
 
   return (

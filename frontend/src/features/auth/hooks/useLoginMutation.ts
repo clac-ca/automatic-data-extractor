@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { createSession, fetchSession } from "../api";
 import { sessionKeys } from "./sessionKeys";
 import type { LoginPayload } from "../../../shared/api/types";
+import { resolveSessionDestination } from "../utils/resolveSessionDestination";
 
 export function useLoginMutation() {
   const queryClient = useQueryClient();
@@ -16,12 +17,7 @@ export function useLoginMutation() {
       const resolvedSession = await fetchSession();
       queryClient.setQueryData(sessionKeys.detail(), resolvedSession);
 
-      const preferredWorkspace = resolvedSession?.user.preferred_workspace_id ?? undefined;
-      if (preferredWorkspace) {
-        navigate(`/workspaces/${preferredWorkspace}`, { replace: true });
-      } else {
-        navigate("/workspaces", { replace: true });
-      }
+      navigate(resolveSessionDestination(resolvedSession), { replace: true });
     },
   });
 }

@@ -2,92 +2,104 @@ import { type FormEvent, useState } from "react";
 
 import { ApiError } from "../../../shared/api/client";
 import { useCompleteSetupMutation } from "../hooks/useCompleteSetupMutation";
+import {
+  FormAlert,
+  TextField,
+  hasFieldErrors,
+  parseProblemErrors,
+  type FieldErrors,
+  validateConfirmPassword,
+  validateEmail,
+  validatePassword,
+  validateRequired,
+} from "../../../shared/forms";
 
 type Step = "welcome" | "form" | "done";
 
-type FieldErrors = Partial<{
-  display_name: string;
-  email: string;
-  password: string;
-  confirm_password: string;
-}>;
+const SETUP_FIELDS = ["display_name", "email", "password", "confirm_password"] as const;
+type SetupField = (typeof SETUP_FIELDS)[number];
 
-function validate(values: {
-  display_name: string;
-  email: string;
-  password: string;
-  confirm_password: string;
-}) {
-  const errors: FieldErrors = {};
-
-  if (!values.display_name.trim()) {
-    errors.display_name = "Provide a display name";
-  }
-
-  const emailPattern = /.+@.+\..+/;
-  if (!emailPattern.test(values.email.trim())) {
-    errors.email = "Enter a valid email";
-  }
-
-  if (values.password.length < 12) {
-    errors.password = "Password must be at least 12 characters";
-  }
-
-  if (!/[A-Z]/.test(values.password) || !/[a-z]/.test(values.password) || !/[0-9]/.test(values.password)) {
-    const message = "Include uppercase, lowercase, and numeric characters";
-    errors.password = errors.password ? `${errors.password}. ${message}` : message;
-  }
-
-  if (values.password !== values.confirm_password) {
-    errors.confirm_password = "Passwords must match";
-  }
-
-  return errors;
+function isSetupField(field: string): field is SetupField {
+  return SETUP_FIELDS.some((candidate) => candidate === field);
 }
 
 export function SetupWizard() {
   const [step, setStep] = useState<Step>("welcome");
-  const [formValues, setFormValues] = useState({
+  const [values, setValues] = useState({
     display_name: "",
     email: "",
     password: "",
     confirm_password: "",
   });
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<SetupField>>({});
   const [alert, setAlert] = useState<string | null>(null);
   const { mutateAsync, isPending } = useCompleteSetupMutation();
 
+  const updateField = (field: SetupField, value: string) => {
+    setValues((previous) => ({ ...previous, [field]: value }));
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const errors = validate(formValues);
+    const errors: FieldErrors<SetupField> = {};
+
+    const displayNameError = validateRequired(values.display_name, "Provide a display name");
+    if (displayNameError) {
+      errors.display_name = displayNameError;
+    }
+
+    const emailError = validateEmail(values.email, {
+      requiredMessage: "Enter a valid email",
+      invalidMessage: "Enter a valid email",
+    });
+    if (emailError) {
+      errors.email = emailError;
+    }
+
+    const passwordError = validatePassword(values.password, {
+      requiredMessage: "",
+      minLength: 12,
+      minLengthMessage: "Password must be at least 12 characters",
+      requireComplexity: true,
+      complexityMessage: "Include uppercase, lowercase, and numeric characters",
+    });
+    if (passwordError) {
+      errors.password = passwordError;
+    }
+
+    const confirmError = validateConfirmPassword(values.password, values.confirm_password);
+    if (confirmError) {
+      errors.confirm_password = confirmError;
+    }
+
     setFieldErrors(errors);
     setAlert(null);
 
-    if (Object.keys(errors).length > 0) {
+    if (hasFieldErrors(errors)) {
       return;
     }
 
     try {
       await mutateAsync({
-        display_name: formValues.display_name.trim(),
-        email: formValues.email.trim(),
-        password: formValues.password,
+        display_name: values.display_name.trim(),
+        email: values.email.trim(),
+        password: values.password,
       });
       setStep("done");
+      setFieldErrors({});
+      setAlert(null);
     } catch (error) {
       if (error instanceof ApiError) {
-        const apiErrors = error.problem?.errors ?? {};
-        const nextErrors: FieldErrors = {};
-        if (apiErrors.display_name?.length) {
-          nextErrors.display_name = apiErrors.display_name.join(" ");
+        const problemErrors = parseProblemErrors(error.problem);
+        const nextErrors: FieldErrors<SetupField> = {};
+
+        for (const [field, message] of Object.entries(problemErrors)) {
+          if (isSetupField(field) && message) {
+            nextErrors[field] = message;
+          }
         }
-        if (apiErrors.email?.length) {
-          nextErrors.email = apiErrors.email.join(" ");
-        }
-        if (apiErrors.password?.length) {
-          nextErrors.password = apiErrors.password.join(" ");
-        }
-        setFieldErrors(nextErrors);
+
+        setFieldErrors((previous) => ({ ...previous, ...nextErrors }));
         setAlert(error.problem?.detail ?? "We could not complete setup. Try again.");
       } else {
         setAlert("We could not complete setup. Try again.");
@@ -104,7 +116,11 @@ export function SetupWizard() {
         </p>
         <button
           type="button"
-          onClick={() => setStep("form")}
+          onClick={() => {
+            setStep("form");
+            setAlert(null);
+            setFieldErrors({});
+          }}
           className="inline-flex items-center justify-center rounded bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
         >
           Begin setup
@@ -123,113 +139,61 @@ export function SetupWizard() {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-6 rounded-xl border border-slate-800 bg-slate-900/60 p-6"
-      noValidate
-    >
+    <form onSubmit={handleSubmit} className="space-y-6 rounded-xl border border-slate-800 bg-slate-900/60 p-6" noValidate>
       <header className="space-y-1 text-center">
         <h2 className="text-xl font-semibold text-slate-50">Administrator account</h2>
         <p className="text-sm text-slate-400">Provide credentials for the inaugural administrator.</p>
       </header>
-      {alert && (
-        <div className="rounded border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200" role="alert">
-          {alert}
-        </div>
-      )}
-      <div className="space-y-1">
-        <label htmlFor="display_name" className="text-sm font-medium text-slate-200">
-          Display name
-        </label>
-        <input
-          id="display_name"
-          name="display_name"
-          value={formValues.display_name}
-          onChange={(event) => setFormValues((prev) => ({ ...prev, display_name: event.target.value }))}
-          disabled={isPending}
-          autoComplete="name"
-          className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-400"
-          aria-invalid={fieldErrors.display_name ? "true" : undefined}
-          aria-describedby={fieldErrors.display_name ? "display-name-error" : undefined}
-        />
-        {fieldErrors.display_name && (
-          <p id="display-name-error" className="text-xs text-rose-300">
-            {fieldErrors.display_name}
-          </p>
-        )}
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="email" className="text-sm font-medium text-slate-200">
-          Email
-        </label>
-        <input
-          id="email"
-          name="email"
-          type="email"
-          value={formValues.email}
-          onChange={(event) => setFormValues((prev) => ({ ...prev, email: event.target.value }))}
-          disabled={isPending}
-          autoComplete="email"
-          className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-400"
-          aria-invalid={fieldErrors.email ? "true" : undefined}
-          aria-describedby={fieldErrors.email ? "email-error" : undefined}
-        />
-        {fieldErrors.email && (
-          <p id="email-error" className="text-xs text-rose-300">
-            {fieldErrors.email}
-          </p>
-        )}
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="password" className="text-sm font-medium text-slate-200">
-          Password
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          value={formValues.password}
-          onChange={(event) => setFormValues((prev) => ({ ...prev, password: event.target.value }))}
-          disabled={isPending}
-          autoComplete="new-password"
-          className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-400"
-          aria-invalid={fieldErrors.password ? "true" : undefined}
-          aria-describedby={fieldErrors.password ? "password-error" : undefined}
-        />
-        {fieldErrors.password && (
-          <p id="password-error" className="text-xs text-rose-300">
-            {fieldErrors.password}
-          </p>
-        )}
-        <p className="text-xs text-slate-500">Use at least 12 characters, including upper and lower case letters and a number.</p>
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="confirm_password" className="text-sm font-medium text-slate-200">
-          Confirm password
-        </label>
-        <input
-          id="confirm_password"
-          name="confirm_password"
-          type="password"
-          value={formValues.confirm_password}
-          onChange={(event) => setFormValues((prev) => ({ ...prev, confirm_password: event.target.value }))}
-          disabled={isPending}
-          autoComplete="new-password"
-          className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-400"
-          aria-invalid={fieldErrors.confirm_password ? "true" : undefined}
-          aria-describedby={fieldErrors.confirm_password ? "confirm-password-error" : undefined}
-        />
-        {fieldErrors.confirm_password && (
-          <p id="confirm-password-error" className="text-xs text-rose-300">
-            {fieldErrors.confirm_password}
-          </p>
-        )}
-      </div>
+      <FormAlert message={alert} />
+      <TextField
+        name="display_name"
+        label="Display name"
+        value={values.display_name}
+        onChange={(value) => updateField("display_name", value)}
+        disabled={isPending}
+        autoComplete="name"
+        error={fieldErrors.display_name}
+      />
+      <TextField
+        name="email"
+        label="Email"
+        type="email"
+        value={values.email}
+        onChange={(value) => updateField("email", value)}
+        disabled={isPending}
+        autoComplete="email"
+        error={fieldErrors.email}
+      />
+      <TextField
+        name="password"
+        label="Password"
+        type="password"
+        value={values.password}
+        onChange={(value) => updateField("password", value)}
+        disabled={isPending}
+        autoComplete="new-password"
+        error={fieldErrors.password}
+        description="Use at least 12 characters, including upper and lower case letters and a number."
+      />
+      <TextField
+        name="confirm_password"
+        label="Confirm password"
+        type="password"
+        value={values.confirm_password}
+        onChange={(value) => updateField("confirm_password", value)}
+        disabled={isPending}
+        autoComplete="new-password"
+        error={fieldErrors.confirm_password}
+      />
       <div className="flex items-center justify-between">
         <button
           type="button"
           className="rounded border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800"
-          onClick={() => setStep("welcome")}
+          onClick={() => {
+            setStep("welcome");
+            setAlert(null);
+            setFieldErrors({});
+          }}
           disabled={isPending}
         >
           Back

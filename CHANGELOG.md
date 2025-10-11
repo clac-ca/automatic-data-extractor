@@ -7,9 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
-- Placeholder for upcoming changes.
+- Introduce a shared right-aligned drawer primitive for workspace chrome flows.
 
 ### Changed
+- Refine the workspace document type detail view with a responsive header, status strip, and configuration drawer.
+- Extract the document type detail layout into a shared provider so drawer state and future actions live behind one context.
 - Rename the backend package to ``ade`` and update defaults, documentation, and tooling to use the new ``data/`` storage root.
 - Simplify the ADE settings module to use direct BaseSettings fields with clearer path resolution and OIDC/cors parsing.
 - Relocate the ADE settings module to ``ade/settings.py`` and update imports and docs to match the new location.

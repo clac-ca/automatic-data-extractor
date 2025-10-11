@@ -6,7 +6,7 @@ interface AppProvidersProps {
   children: ReactNode;
 }
 
-const queryClient = new QueryClient({
+export const appQueryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
@@ -23,7 +23,7 @@ const queryClient = new QueryClient({
 
 export function AppProviders({ children }: AppProvidersProps) {
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={appQueryClient}>
       {children}
       {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>

@@ -2,11 +2,20 @@
 
 ## Status
 - **Owner:** Experience Squad
-- **Last Reviewed:** 2025-10-08
+- **Last Reviewed:** 2025-10-10
 - **State:** _Execution_
 - **Notes:** SPA scaffold, setup wizard, authentication loop, workspace shell,
-  and document type detail are now implemented with baseline tests. Remaining
-  hardening tasks cover configuration mutations and analytics surfaces.
+  and document type detail are in place. Workspace chrome now exposes matching
+  "New workspace" entry points from the header, rail, and empty state so the
+  creation flow is always discoverable. Feature route registries now live with
+  their owning features, leaving `createAppRouter` to stitch the arrays
+  together. Session/setup guards now sit under `app/guards`, supplying outlet
+  context and redirect helpers so routes stay declarative. Root routing now
+  primes session and setup queries through a shared loader so downstream guards
+  and layouts can reuse cached data immediately. Shared form primitives and the
+  workspace chrome are in place, and the document type detail now relies on the
+  reusable drawer shell. The next pass should plug in configuration mutations
+  and revision timelines before layering analytics.
 
 ## Objective
 Rebuild the ADE single-page application with a standard React + TypeScript
@@ -32,16 +41,81 @@ with the updated authentication and setup contracts.
   hooks.
 
 ## Current State Findings
-- The legacy SPA centralises authentication, setup, and bootstrap logic inside a
-  bespoke context. The rebuild will replace it with feature hooks backed by
-  TanStack Query.
-- Login UI mixes setup, credentials, and lockout behaviour with custom
-  validation. The new plan separates setup at `/setup` and keeps `/login`
-  focused on sessions and SSO.
-- Auth API naming must switch from `/auth/me`, `/auth/login`, `/auth/logout`,
-  `/auth/refresh` to the standard session resource used in the design doc.
-- First-admin creation remains required; the new `/setup` wizard must create the
-  inaugural administrator before exposing `/login`.
+- **Forms now share a baseline primitive layer, but still need the planned
+  schema-driven wrapper.**
+  - Files: `frontend/src/shared/forms/`,
+    `frontend/src/features/setup/components/SetupWizard.tsx`,
+    `frontend/src/features/auth/components/LoginForm.tsx`.
+  - Status: 🔄 Implemented first-pass `TextField`, `FormAlert`, and validation
+    utilities so login/setup flows use consistent markup, messaging, and
+    problem-details handling. Still need to swap the custom state helpers for
+    the `react-hook-form` + Zod wrapper once dependency access is cleared.
+- **Session and setup state are fetched in multiple surfaces.**
+  - Files: `frontend/src/app/loaders/rootLoader.ts`,
+    `frontend/src/app/RootRoute.tsx`.
+  - Status: ✅ Implemented. The root loader now prefetches both resources and
+    exposes cached values to route elements so guards reuse the same data.
+- **Workspace shell blends layout, data, and modal focus logic.**
+  - File: `frontend/src/features/workspaces/components/WorkspaceLayout.tsx`
+    (≈400 lines).
+  - Issue: the top bar, workspace rail, navigation tabs, empty state, collapse
+    toggle, and create-workspace dialog all live in one module with hand-rolled
+    focus capture/restore helpers. As a result the sidebar cannot collapse or
+    resize cleanly at tablet breakpoints, and the content area never stretches
+    into a true full-width view.
+  - Action: split this into primitives (`WorkspaceChrome`, `WorkspaceRail`,
+    `WorkspaceHeader`, `WorkspaceDialogs`) and move dialog behaviour onto a
+    shared accessible modal primitive before layering analytics panes.
+- **Navigation rail lacks responsive/collapsible behaviour.**
+  - File: `frontend/src/features/workspaces/components/WorkspaceLayout.tsx`.
+  - Issue: the navigation rail is hard-coded at desktop width and hidden on
+    narrow screens, which forces the global header to shoulder navigation and
+    makes the main canvas feel cramped.
+  - Action: introduce a `useWorkspaceChromeState` store that tracks
+    `railCollapsed`, `railPinned`, and last viewport width. On desktop the rail
+    should animate between 288px expanded and 72px collapsed; on tablet the rail
+    should slide over the content with a backdrop and obey reduced-motion
+    settings.
+- **Workspace navigation is incomplete.**
+  - File: `frontend/src/features/workspaces/components/WorkspaceLayout.tsx`.
+  - Issue: the sidebar lists only workspaces; the planned document-type rail,
+    collapse persistence, and quick links are missing, so deep routes depend on
+    the browser location alone.
+  - Action: add the secondary rail + persistence hooks once the layout is
+    modular, and re-use them on the overview + detail screens.
+- **Document type detail now exposes the planned chrome but still needs action
+  wiring.**
+  - Files: `frontend/src/features/workspaces/routes/DocumentTypeRoute.tsx`,
+    `frontend/src/features/workspaces/documentTypes/*`,
+    `frontend/src/shared/chrome/RightDrawer.tsx`.
+  - Status: 🔄 Introduced the responsive header/status strip composition and a
+    shared `RightDrawer` primitive so configuration details live in a dedicated
+    panel. The document type layout now flows through a `DocumentTypeDetailProvider`
+    that centralises drawer orchestration for upcoming publish/rollback actions.
+    Still need to attach mutation hooks for publishing/rollback and feed revision
+    timelines into the drawer body.
+## Layout Direction After Refactor
+- **Shared form primitives:** introduce `src/shared/forms/` with our `Form`,
+  `Field`, `ErrorSummary`, and schema helpers so auth/setup flows consume the
+  same building blocks.
+- **Guard components:** add a `src/app/guards/` directory housing
+  `RequireSession`, `RequireNoSession`, and `RequireSetupComplete` variants that
+  encapsulate redirects declaratively and can be reused across route modules.
+- **Workspace chrome:** refactor the shell into `src/features/workspaces/layout/`
+  containing the top bar, navigation rail(s), and modal/drawer orchestration to
+  keep feature routes lean. Base the layout on a CSS grid with three named
+  areas (`header`, `rail`, `canvas`) so the main document surface can stretch to
+  100% width when the rail is collapsed.
+- **Feature route registries:** export route arrays from each feature (auth,
+  setup, workspaces, admin) so `createAppRouter` only stitches them together.
+- **Drawer & panel system:** stand up a shared `RightDrawer` primitive the
+  document type detail can use immediately, then extend it to configurations and
+  analytics later.
+- **Responsive navigation pattern:** add a `WorkspaceChromeContext` that exposes
+  `toggleRail`, `isRailCollapsed`, and `isOverlayOpen`, and wire it into the top
+  navigation so global actions (e.g. "Collapse navigation") are reachable from
+  keyboard shortcuts. Persist the collapsed state per-device with
+  `localStorage`, but fall back to viewport detection when no preference exists.
 
 ## Milestones & Tasks
 ### M0 — Backend Alignment & Prep

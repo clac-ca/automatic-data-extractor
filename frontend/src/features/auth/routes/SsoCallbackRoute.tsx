@@ -5,12 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ApiError, get } from "../../../shared/api/client";
 import type { SessionEnvelope } from "../../../shared/api/types";
 import { sessionKeys } from "../hooks/sessionKeys";
-
-function resolveDestination(session: SessionEnvelope): string {
-  const preferredWorkspace = session.user.preferred_workspace_id ?? undefined;
-  const fallback = preferredWorkspace ? `/workspaces/${preferredWorkspace}` : "/workspaces";
-  return session.return_to ?? fallback;
-}
+import { resolveSessionDestination } from "../utils/resolveSessionDestination";
 
 export function SsoCallbackRoute() {
   const [searchParams] = useSearchParams();
@@ -51,7 +46,7 @@ export function SsoCallbackRoute() {
         }
 
         queryClient.setQueryData(sessionKeys.detail(), session);
-        navigate(resolveDestination(session), { replace: true });
+        navigate(resolveSessionDestination(session), { replace: true });
       } catch (error_) {
         if (cancelled) {
           return;

@@ -1,19 +1,10 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLoaderData } from "react-router-dom";
 
-import { useOptionalSession } from "../features/auth/hooks/useOptionalSession";
-import { useSetupStatusQuery } from "../features/setup/hooks/useSetupStatusQuery";
+import { resolveSessionDestination } from "../features/auth/utils/resolveSessionDestination";
+import type { RootLoaderData } from "./loaders/rootLoader";
 
 export function RootRoute() {
-  const { data: session, isLoading: isLoadingSession } = useOptionalSession();
-  const { data: setupStatus, isLoading: isLoadingSetup, error: setupError } = useSetupStatusQuery();
-
-  if (isLoadingSession || isLoadingSetup) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-slate-300">
-        Loading…
-      </div>
-    );
-  }
+  const { session, setupStatus, setupError } = useLoaderData() as RootLoaderData;
 
   if (setupError) {
     return (
@@ -31,8 +22,7 @@ export function RootRoute() {
   }
 
   if (session) {
-    const preferredWorkspace = session.user.preferred_workspace_id ?? undefined;
-    return <Navigate to={preferredWorkspace ? `/workspaces/${preferredWorkspace}` : "/workspaces"} replace />;
+    return <Navigate to={resolveSessionDestination(session)} replace />;
   }
 
   return <Navigate to="/login" replace />;

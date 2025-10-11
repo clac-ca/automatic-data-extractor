@@ -2,6 +2,15 @@ import { type FormEvent, useState } from "react";
 
 import { ApiError } from "../../../shared/api/client";
 import { useLoginMutation } from "../hooks/useLoginMutation";
+import {
+  FormAlert,
+  TextField,
+  hasFieldErrors,
+  parseProblemErrors,
+  type FieldErrors,
+  validateEmail,
+  validatePassword,
+} from "../../../shared/forms";
 
 type Provider = { id: string; label: string; icon_url?: string | null; start_url: string };
 
@@ -10,40 +19,34 @@ type LoginFormProps = {
   forceSso: boolean;
 };
 
-type FieldErrors = Partial<Record<"email" | "password", string>>;
+const LOGIN_FIELDS = ["email", "password"] as const;
+type LoginField = (typeof LOGIN_FIELDS)[number];
 
-function validateEmail(value: string) {
-  if (!value.trim()) {
-    return "Enter your email";
-  }
-
-  const pattern = /.+@.+\..+/;
-  return pattern.test(value) ? undefined : "Enter a valid email";
-}
-
-function validatePassword(value: string) {
-  if (!value) {
-    return "Enter your password";
-  }
-
-  return undefined;
+function isLoginField(field: string): field is LoginField {
+  return LOGIN_FIELDS.includes(field as LoginField);
 }
 
 export function LoginForm({ providers, forceSso }: LoginFormProps) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [values, setValues] = useState({ email: "", password: "" });
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<LoginField>>({});
   const [alert, setAlert] = useState<string | null>(null);
   const { mutateAsync, isPending } = useLoginMutation();
 
+  const updateField = (field: LoginField, value: string) => {
+    setValues((previous) => ({ ...previous, [field]: value }));
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const errors: FieldErrors = {};
-    const emailError = validateEmail(email);
+    const errors: FieldErrors<LoginField> = {};
+    const emailError = validateEmail(values.email, {
+      requiredMessage: "Enter your email",
+      invalidMessage: "Enter a valid email",
+    });
     if (emailError) {
       errors.email = emailError;
     }
-    const passwordError = validatePassword(password);
+    const passwordError = validatePassword(values.password);
     if (passwordError) {
       errors.password = passwordError;
     }
@@ -51,23 +54,24 @@ export function LoginForm({ providers, forceSso }: LoginFormProps) {
     setFieldErrors(errors);
     setAlert(null);
 
-    if (Object.keys(errors).length > 0) {
+    if (hasFieldErrors(errors)) {
       return;
     }
 
     try {
-      await mutateAsync({ email: email.trim(), password });
+      await mutateAsync({ email: values.email.trim(), password: values.password });
     } catch (error) {
       if (error instanceof ApiError) {
-        const apiErrors = error.problem?.errors ?? {};
-        const nextErrors: FieldErrors = {};
-        if (apiErrors.email?.length) {
-          nextErrors.email = apiErrors.email.join(" ");
+        const problemErrors = parseProblemErrors(error.problem);
+        const nextErrors: FieldErrors<LoginField> = {};
+
+        for (const [field, message] of Object.entries(problemErrors)) {
+          if (isLoginField(field) && message) {
+            nextErrors[field] = message;
+          }
         }
-        if (apiErrors.password?.length) {
-          nextErrors.password = apiErrors.password.join(" ");
-        }
-        setFieldErrors(nextErrors);
+
+        setFieldErrors((previous) => ({ ...previous, ...nextErrors }));
         setAlert(error.problem?.detail ?? "Unable to sign in. Try again.");
       } else {
         setAlert("Unable to sign in. Check your connection and try again.");
@@ -109,55 +113,27 @@ export function LoginForm({ providers, forceSso }: LoginFormProps) {
         <h2 className="text-xl font-semibold text-slate-50">Sign in</h2>
         <p className="text-sm text-slate-400">Use your ADE credentials to continue.</p>
       </header>
-      {alert && (
-        <div className="rounded border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200" role="alert">
-          {alert}
-        </div>
-      )}
-      <div className="space-y-1">
-        <label htmlFor="email" className="text-sm font-medium text-slate-200">
-          Email
-        </label>
-        <input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          disabled={isPending}
-          className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-400"
-          aria-invalid={fieldErrors.email ? "true" : undefined}
-          aria-describedby={fieldErrors.email ? "email-error" : undefined}
-        />
-        {fieldErrors.email && (
-          <p id="email-error" className="text-xs text-rose-300">
-            {fieldErrors.email}
-          </p>
-        )}
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="password" className="text-sm font-medium text-slate-200">
-          Password
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          disabled={isPending}
-          className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-400"
-          aria-invalid={fieldErrors.password ? "true" : undefined}
-          aria-describedby={fieldErrors.password ? "password-error" : undefined}
-        />
-        {fieldErrors.password && (
-          <p id="password-error" className="text-xs text-rose-300">
-            {fieldErrors.password}
-          </p>
-        )}
-      </div>
+      <FormAlert message={alert} />
+      <TextField
+        name="email"
+        label="Email"
+        type="email"
+        autoComplete="email"
+        value={values.email}
+        onChange={(value) => updateField("email", value)}
+        disabled={isPending}
+        error={fieldErrors.email}
+      />
+      <TextField
+        name="password"
+        label="Password"
+        type="password"
+        autoComplete="current-password"
+        value={values.password}
+        onChange={(value) => updateField("password", value)}
+        disabled={isPending}
+        error={fieldErrors.password}
+      />
       <button
         type="submit"
         className="w-full rounded bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400 disabled:opacity-60"
