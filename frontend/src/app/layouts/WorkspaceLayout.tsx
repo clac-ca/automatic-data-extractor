@@ -1,104 +1,80 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
+import type { ReactNode } from "react";
+import { Outlet, useLoaderData, useMatches, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useSessionQuery } from "../../features/auth/hooks/useSessionQuery";
-import { useWorkspacesQuery } from "../../features/workspaces/hooks/useWorkspacesQuery";
+import { WorkspaceProvider, useWorkspaceContext } from "../../features/workspaces/context/WorkspaceContext";
+import { workspaceKeys } from "../../features/workspaces/hooks/useWorkspacesQuery";
+import { WorkspaceDocumentRail } from "../../features/documents/components/WorkspaceDocumentRail";
+import type { WorkspaceLoaderData } from "../workspaces/loader";
 import type { WorkspaceProfile } from "../../shared/types/workspaces";
-import { createScopedStorage } from "../../shared/lib/storage";
+import {
+  buildWorkspaceSectionPath,
+  defaultWorkspaceSection,
+  matchWorkspaceSection,
+  workspaceSections,
+} from "../workspaces/sections";
 import { writePreferredWorkspace } from "../../shared/lib/workspace";
 import { Button } from "../../ui";
 import { AppShell, type AppShellNavItem, type AppShellProfileMenuItem } from "./AppShell";
-import { DocumentDrawer } from "../components/DocumentDrawer";
-import { PageState } from "../components/PageState";
-
-type HeaderNavKey = "documents" | "jobs" | "configurations" | "members" | "settings";
-
-const NAV_LINKS: Array<{ key: HeaderNavKey; label: string; description: string }> = [
-  { key: "documents", label: "Documents", description: "Uploads, processing status, download history" },
-  { key: "jobs", label: "Jobs", description: "Extraction queues and run history" },
-  { key: "configurations", label: "Configurations", description: "Document type rules and deployment" },
-  { key: "members", label: "Members", description: "Invite teammates, manage roles" },
-  { key: "settings", label: "Settings", description: "Workspace preferences and integrations" },
-];
-
-const SECTION_LABELS: Record<string, string> = {
-  documents: "Documents",
-  jobs: "Jobs",
-  configurations: "Configurations",
-  members: "Members",
-  settings: "Settings",
-};
-
-const storage = createScopedStorage("ade.active_workspace");
 
 export function WorkspaceLayout() {
-  const { workspaceId } = useParams<{ workspaceId: string }>();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { session } = useSessionQuery();
-  const userPermissions = session?.user.permissions ?? [];
-
-  if (!workspaceId) {
-    return <Navigate to="/workspaces" replace />;
-  }
-
-  const workspacesQuery = useWorkspacesQuery();
-
-  if (workspacesQuery.isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <PageState title="Loading workspace" variant="loading" />
-      </div>
-    );
-  }
-
-  if (workspacesQuery.isError) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <PageState
-          title="Unable to load workspaces"
-          description="Refresh the page or try again later."
-          variant="error"
-          action={
-            <Button variant="secondary" onClick={() => workspacesQuery.refetch()}>
-              Try again
-            </Button>
-          }
-        />
-      </div>
-    );
-  }
-
-  const workspaces = workspacesQuery.data ?? [];
-  if (workspaces.length === 0) {
-    return <Navigate to="/workspaces" replace />;
-  }
-
-  const activeWorkspace =
-    workspaces.find((workspace) => workspace.id === workspaceId) ?? workspaces[0] ?? null;
-
-  if (!activeWorkspace) {
-    return <Navigate to="/workspaces" replace />;
-  }
+  const { workspace, workspaces } = useLoaderData<WorkspaceLoaderData>();
+  const [drawerCollapsed, setDrawerCollapsed] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    storage.set(activeWorkspace.id);
-    writePreferredWorkspace(activeWorkspace);
-  }, [activeWorkspace]);
+    queryClient.setQueryData(workspaceKeys.list(), workspaces);
+  }, [queryClient, workspaces]);
 
-  const canCreateWorkspace = userPermissions.includes("Workspaces.Create");
-  const canManageWorkspace = userPermissions.includes("Workspaces.ReadWrite.All");
-  const canManageAdmin = userPermissions.includes("System.Settings.ReadWrite");
+  useEffect(() => {
+    writePreferredWorkspace(workspace);
+  }, [workspace]);
 
-  const navItems: AppShellNavItem[] = useMemo(
-    () =>
-      NAV_LINKS.map((link) => ({
-        label: link.label,
-        to: `/workspaces/${workspaceId}/${link.key}`,
-        end: link.key === "documents",
-      })),
-    [workspaceId],
+  return (
+    <WorkspaceProvider workspace={workspace} workspaces={workspaces}>
+      <WorkspaceDetailLayout
+        drawerCollapsed={drawerCollapsed}
+        onToggleDrawer={() => setDrawerCollapsed((value) => !value)}
+      >
+        <Outlet />
+      </WorkspaceDetailLayout>
+    </WorkspaceProvider>
   );
+}
+
+interface WorkspaceDetailLayoutProps {
+  readonly children: ReactNode;
+  readonly drawerCollapsed: boolean;
+  readonly onToggleDrawer: () => void;
+}
+
+function WorkspaceDetailLayout({ children, drawerCollapsed, onToggleDrawer }: WorkspaceDetailLayoutProps) {
+  const { workspace, workspaces, hasPermission } = useWorkspaceContext();
+  const { session } = useSessionQuery();
+  const navigate = useNavigate();
+  const matches = useMatches();
+
+  const activeSection = useMemo(() => matchWorkspaceSection(matches), [matches]);
+
+  const navItems = useMemo<AppShellNavItem[]>(
+    () =>
+      workspaceSections.map((section) => ({
+        label: section.label,
+        to: buildWorkspaceSectionPath(workspace.id, section.id),
+        end: section.id === defaultWorkspaceSection.id,
+      })),
+    [workspace.id],
+  );
+
+  const breadcrumbs = useMemo(() => [workspace.name, activeSection.label], [workspace.name, activeSection.label]);
+
+  const userPermissions = session?.user.permissions ?? [];
+  const canCreateWorkspace = userPermissions.includes("Workspaces.Create");
+  const canManageAdmin = userPermissions.includes("System.Settings.ReadWrite");
+  const canManageWorkspace =
+    hasPermission("Workspace.Settings.ReadWrite") || userPermissions.includes("Workspaces.ReadWrite.All");
 
   const profileMenuItems: AppShellProfileMenuItem[] = useMemo(() => {
     const items: AppShellProfileMenuItem[] = [];
@@ -106,95 +82,72 @@ export function WorkspaceLayout() {
       items.push({
         type: "nav",
         label: "Workspace settings",
-        to: `/workspaces/${workspaceId}/settings`,
+        to: buildWorkspaceSectionPath(workspace.id, "settings"),
       });
     }
     if (canManageAdmin) {
       items.push({ type: "nav", label: "Admin settings", to: "/settings" });
     }
     return items;
-  }, [canManageAdmin, canManageWorkspace, workspaceId]);
-
-  const activeSection = useMemo<HeaderNavKey>(() => {
-    const [, , , section] = location.pathname.split("/");
-    if (!section || !NAV_LINKS.find((link) => link.key === section)) {
-      return "documents";
-    }
-    return section as HeaderNavKey;
-  }, [location.pathname]);
-
-  const breadcrumbs = useMemo(
-    () => getBreadcrumbSegments(activeWorkspace.name, activeSection),
-    [activeWorkspace.name, activeSection],
-  );
+  }, [canManageAdmin, canManageWorkspace, workspace.id]);
 
   const leading = (
     <WorkspaceSwitcher
       workspaces={workspaces}
-      activeWorkspace={activeWorkspace}
-      onSelect={(workspace) => navigate(`/workspaces/${workspace.id}/documents`)}
+      activeWorkspace={workspace}
+      onSelect={(target) => navigate(buildWorkspaceSectionPath(target.id, defaultWorkspaceSection.id))}
       onCreate={() => navigate("/workspaces/new")}
       canCreate={canCreateWorkspace}
     />
   );
 
   const actions = canCreateWorkspace ? (
-    <Button variant="primary" onClick={() => navigate("/workspaces/new")}>
-      New workspace
-    </Button>
+    <Button variant="primary" onClick={() => navigate("/workspaces/new")}>New workspace</Button>
   ) : undefined;
-
-  const [drawerCollapsed, setDrawerCollapsed] = useState(false);
-
-  const sidebar = {
-    content: (
-      <DocumentDrawer
-        workspaceId={workspaceId}
-        collapsed={drawerCollapsed}
-        onToggleCollapse={() => setDrawerCollapsed((value) => !value)}
-        onCreateDocument={() => navigate(`/workspaces/${workspaceId}/documents`)}
-        onSelectDocument={(documentId) => navigate(`/workspaces/${workspaceId}/documents?document=${documentId}`)}
-      />
-    ),
-    width: 280,
-    collapsedWidth: 72,
-    isCollapsed: drawerCollapsed,
-  } as const;
 
   return (
     <AppShell
       brand={{
         label: "Automatic Data Extractor",
-        subtitle: activeWorkspace.name,
-        onClick: () => navigate(`/workspaces/${workspaceId}/documents`),
+        subtitle: workspace.name,
+        onClick: () => navigate(buildWorkspaceSectionPath(workspace.id, defaultWorkspaceSection.id)),
       }}
       breadcrumbs={breadcrumbs}
       navItems={navItems}
       leading={leading}
       actions={actions}
-      sidebar={sidebar}
+      sidebar={{
+        content: (
+          <WorkspaceDocumentRail
+            workspaceId={workspace.id}
+            collapsed={drawerCollapsed}
+            onToggleCollapse={onToggleDrawer}
+            onCreateDocument={() => navigate(buildWorkspaceSectionPath(workspace.id, "documents"))}
+            onSelectDocument={(documentId) =>
+              navigate(`${buildWorkspaceSectionPath(workspace.id, "documents")}?document=${documentId}`)
+            }
+          />
+        ),
+        width: 280,
+        collapsedWidth: 72,
+        isCollapsed: drawerCollapsed,
+      }}
       profileMenuItems={profileMenuItems}
     >
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
-        <Outlet />
-      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">{children}</div>
     </AppShell>
   );
 }
 
-function WorkspaceSwitcher({
-  workspaces,
-  activeWorkspace,
-  onSelect,
-  onCreate,
-  canCreate,
-}: {
-  workspaces: WorkspaceProfile[];
+interface WorkspaceSwitcherProps {
+  workspaces: readonly WorkspaceProfile[];
   activeWorkspace: WorkspaceProfile;
   onSelect: (workspace: WorkspaceProfile) => void;
   onCreate: () => void;
   canCreate: boolean;
-}) {
+}
+
+function WorkspaceSwitcher({ workspaces, activeWorkspace, onSelect, onCreate, canCreate }: WorkspaceSwitcherProps) {
   if (workspaces.length === 0) {
     return null;
   }
@@ -228,9 +181,4 @@ function WorkspaceSwitcher({
       </select>
     </label>
   );
-}
-
-function getBreadcrumbSegments(workspaceName: string, section: HeaderNavKey) {
-  const sectionLabel = SECTION_LABELS[section] ?? section.charAt(0).toUpperCase() + section.slice(1);
-  return [workspaceName, sectionLabel];
 }

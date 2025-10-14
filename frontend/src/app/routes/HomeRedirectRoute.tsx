@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useSessionQuery } from "../../features/auth/hooks/useSessionQuery";
 import { useWorkspacesQuery } from "../../features/workspaces/hooks/useWorkspacesQuery";
 import { readPreferredWorkspaceId } from "../../shared/lib/workspace";
+import { getDefaultWorkspacePath } from "../workspaces/loader";
 import { Button } from "../../ui";
 import { PageState } from "../components/PageState";
 
@@ -50,5 +51,5 @@ export function HomeRedirectRoute() {
 
   const targetWorkspace = preferredWorkspace ?? workspaces[0];
 
-  return <Navigate to={`/workspaces/${targetWorkspace.id}/overview`} replace />;
+  return <Navigate to={getDefaultWorkspacePath(targetWorkspace.id)} replace />;
 }
