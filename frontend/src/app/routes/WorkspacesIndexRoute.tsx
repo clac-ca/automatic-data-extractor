@@ -125,9 +125,9 @@ function DirectorySidebar({ canCreate, onCreate }: { canCreate: boolean; onCreat
           <h2 className="text-sm font-semibold text-slate-900">Workspace setup checklist</h2>
         </header>
         <ul className="space-y-2 text-xs text-slate-600">
-          <li>• Invite at least one additional administrator.</li>
-          <li>• Configure document types before uploading production files.</li>
-          <li>• Review workspace permissions for external collaborators.</li>
+          <li>Invite at least one additional administrator.</li>
+          <li>Review configurations before uploading production files.</li>
+          <li>Review workspace permissions for external collaborators.</li>
         </ul>
       </section>
     </div>

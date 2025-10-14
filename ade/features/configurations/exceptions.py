@@ -12,43 +12,20 @@ class ConfigurationNotFoundError(Exception):
 
 
 class ActiveConfigurationNotFoundError(Exception):
-    """Raised when a document type lacks an active configuration."""
+    """Raised when a workspace lacks an active configuration."""
 
-    def __init__(self, document_type: str) -> None:
-        super().__init__(f"No active configuration found for {document_type!r}")
-        self.document_type = document_type
-
-
-class ConfigurationMismatchError(Exception):
-    """Raised when a configuration does not match the expected document type."""
-
-    def __init__(
-        self,
-        configuration_id: str,
-        *,
-        expected_document_type: str,
-        actual_document_type: str,
-    ) -> None:
-        message = (
-            "Configuration "
-            f"{configuration_id!r} belongs to document type "
-            f"{actual_document_type!r}, not {expected_document_type!r}"
-        )
-        super().__init__(message)
-        self.configuration_id = configuration_id
-        self.expected_document_type = expected_document_type
-        self.actual_document_type = actual_document_type
+    def __init__(self, workspace_id: str) -> None:
+        super().__init__(f"No active configuration found for workspace {workspace_id!r}")
+        self.workspace_id = workspace_id
 
 
 class ConfigurationVersionNotFoundError(Exception):
-    """Raised when a document type lacks the requested configuration version."""
+    """Raised when a workspace lacks the requested configuration version."""
 
-    def __init__(self, document_type: str, version: int) -> None:
-        message = (
-            f"Configuration version {version} not found for {document_type!r}"
-        )
+    def __init__(self, workspace_id: str, version: int) -> None:
+        message = f"Configuration version {version} not found for workspace {workspace_id!r}"
         super().__init__(message)
-        self.document_type = document_type
+        self.workspace_id = workspace_id
         self.version = version
 
 
@@ -74,7 +51,6 @@ class ConfigurationVersionMismatchError(Exception):
 
 __all__ = [
     "ActiveConfigurationNotFoundError",
-    "ConfigurationMismatchError",
     "ConfigurationNotFoundError",
     "ConfigurationVersionNotFoundError",
     "ConfigurationVersionMismatchError",

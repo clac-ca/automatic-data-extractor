@@ -25,7 +25,6 @@ class Job(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     workspace: Mapped[Workspace] = relationship("Workspace", lazy="joined")
-    document_type: Mapped[str] = mapped_column(String(100), nullable=False)
     configuration_id: Mapped[str] = mapped_column(
         String(26), ForeignKey("configurations.configuration_id", ondelete="RESTRICT"), nullable=False
     )

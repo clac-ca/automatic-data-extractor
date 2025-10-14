@@ -36,11 +36,9 @@ async def _create_configuration(*, workspace_id: str, **overrides: Any) -> str:
         if activated_at is None and is_active:
             activated_at = datetime.now(UTC).replace(microsecond=0)
 
-        document_type = overrides.get("document_type", "invoice")
         result = await session.execute(
             select(func.max(Configuration.version)).where(
                 Configuration.workspace_id == workspace_id,
-                Configuration.document_type == document_type,
             )
         )
         latest = result.scalar_one_or_none() or 0
@@ -48,7 +46,6 @@ async def _create_configuration(*, workspace_id: str, **overrides: Any) -> str:
 
         configuration = Configuration(
             workspace_id=workspace_id,
-            document_type=document_type,
             title=overrides.get("title", "Baseline configuration"),
             version=version,
             is_active=is_active,
@@ -60,7 +57,6 @@ async def _create_configuration(*, workspace_id: str, **overrides: Any) -> str:
                 update(Configuration)
                 .where(
                     Configuration.workspace_id == workspace_id,
-                    Configuration.document_type == document_type,
                     Configuration.is_active.is_(True),
                 )
                 .values(is_active=False, activated_at=None)
@@ -83,24 +79,21 @@ async def test_list_configurations_supports_filters(
     app: FastAPI,
     seed_identity: dict[str, Any],
 ) -> None:
-    """Listing configurations should support document type and status filters."""
+    """Listing configurations should support status filters."""
 
     workspace_id = seed_identity["workspace_id"]
 
     inactive_id = await _create_configuration(
         workspace_id=workspace_id,
-        document_type="invoice",
         is_active=False,
     )
     active_id = await _create_configuration(
         workspace_id=workspace_id,
-        document_type="invoice",
         is_active=True,
     )
     await _create_configuration(
         workspace_id=workspace_id,
-        document_type="receipt",
-        is_active=True,
+        is_active=False,
     )
 
     admin = seed_identity["admin"]
@@ -109,7 +102,7 @@ async def test_list_configurations_supports_filters(
 
     response = await async_client.get(
         f"{workspace_base}/configurations",
-        params={"document_type": "invoice", "is_active": "true"},
+        params={"is_active": "true"},
         headers={
             "Authorization": f"Bearer {token}",
         },
@@ -133,7 +126,6 @@ async def test_create_configuration_assigns_next_version(
     workspace_id = seed_identity["workspace_id"]
     baseline_id = await _create_configuration(
         workspace_id=workspace_id,
-        document_type="invoice",
     )
     baseline = await _get_configuration(baseline_id)
     assert baseline is not None
@@ -146,7 +138,6 @@ async def test_create_configuration_assigns_next_version(
     response = await async_client.post(
         f"{workspace_base}/configurations",
         json={
-            "document_type": "invoice",
             "title": "Updated rules",
             "payload": {"rules": ["A", "B"]},
         },
@@ -157,9 +148,9 @@ async def test_create_configuration_assigns_next_version(
 
     assert response.status_code == 201, response.text
     payload = response.json()
-    assert payload["document_type"] == "invoice"
     assert payload["version"] == baseline_version + 1
     assert payload["is_active"] is False
+    assert "document_type" not in payload
 
     configuration = await _get_configuration(payload["configuration_id"])
     assert configuration is not None
@@ -287,12 +278,10 @@ async def test_activate_configuration_toggles_previous_active(
     workspace_id = seed_identity["workspace_id"]
     previous_id = await _create_configuration(
         workspace_id=workspace_id,
-        document_type="invoice",
         is_active=True,
     )
     target_id = await _create_configuration(
         workspace_id=workspace_id,
-        document_type="invoice",
         is_active=False,
     )
 
@@ -324,22 +313,19 @@ async def test_list_active_configurations_returns_current(
     app: FastAPI,
     seed_identity: dict[str, Any],
 ) -> None:
-    """Active configurations endpoint should only return active versions."""
+    """Active configurations endpoint should only return the current active version."""
 
     workspace_id = seed_identity["workspace_id"]
-    invoice_id = await _create_configuration(
+    active_id = await _create_configuration(
         workspace_id=workspace_id,
-        document_type="invoice",
-        is_active=True,
-    )
-    receipt_id = await _create_configuration(
-        workspace_id=workspace_id,
-        document_type="receipt",
         is_active=True,
     )
     await _create_configuration(
         workspace_id=workspace_id,
-        document_type="invoice",
+        is_active=False,
+    )
+    await _create_configuration(
+        workspace_id=workspace_id,
         is_active=False,
     )
 
@@ -357,5 +343,5 @@ async def test_list_active_configurations_returns_current(
     assert response.status_code == 200
     payload = response.json()
     identifiers = {item["configuration_id"] for item in payload}
-    assert identifiers == {invoice_id, receipt_id}
+    assert identifiers == {active_id}
 

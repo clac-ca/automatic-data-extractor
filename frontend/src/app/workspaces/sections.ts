@@ -47,11 +47,11 @@ export const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
     id: "configurations",
     path: "configurations",
     label: "Configurations",
-    description: "Document type rules and deployment",
+    description: "Workspace rules and deployment",
     placeholder: {
       title: "Configurations",
       description:
-        "Define document types, map columns, and manage deployment snapshots. The configuration hub is coming soon.",
+        "Define extraction rules, map columns, and manage deployment snapshots. The configuration hub is coming soon.",
       cta: { href: "../documents", label: "View documents" },
     },
   },
