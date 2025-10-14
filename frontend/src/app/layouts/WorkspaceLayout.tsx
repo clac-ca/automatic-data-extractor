@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
 import { Outlet, useLoaderData, useMatches, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { useSessionQuery } from "../../features/auth/hooks/useSessionQuery";
 import { WorkspaceProvider, useWorkspaceContext } from "../../features/workspaces/context/WorkspaceContext";
 import { workspaceKeys } from "../../features/workspaces/hooks/useWorkspacesQuery";
 import { WorkspaceDocumentRail } from "../../features/documents/components/WorkspaceDocumentRail";
@@ -18,11 +17,14 @@ import {
 import { writePreferredWorkspace } from "../../shared/lib/workspace";
 import { Button } from "../../ui";
 import { AppShell, type AppShellNavItem, type AppShellProfileMenuItem } from "./AppShell";
+import { useSession } from "../../features/auth/context/SessionContext";
+import { useLogoutMutation } from "../../features/auth/hooks/useLogoutMutation";
+import { useWorkspaceRailState } from "../workspaces/useWorkspaceRailState";
 
 export function WorkspaceLayout() {
   const { workspace, workspaces } = useLoaderData<WorkspaceLoaderData>();
-  const [drawerCollapsed, setDrawerCollapsed] = useState(false);
   const queryClient = useQueryClient();
+  const railState = useWorkspaceRailState(workspace.id);
 
   useEffect(() => {
     queryClient.setQueryData(workspaceKeys.list(), workspaces);
@@ -35,8 +37,10 @@ export function WorkspaceLayout() {
   return (
     <WorkspaceProvider workspace={workspace} workspaces={workspaces}>
       <WorkspaceDetailLayout
-        drawerCollapsed={drawerCollapsed}
-        onToggleDrawer={() => setDrawerCollapsed((value) => !value)}
+        drawerCollapsed={railState.isCollapsed}
+        onToggleDrawer={railState.toggleCollapse}
+        pinnedDocumentIds={railState.pinnedDocumentIds}
+        onTogglePin={railState.setPinned}
       >
         <Outlet />
       </WorkspaceDetailLayout>
@@ -48,11 +52,20 @@ interface WorkspaceDetailLayoutProps {
   readonly children: ReactNode;
   readonly drawerCollapsed: boolean;
   readonly onToggleDrawer: () => void;
+  readonly pinnedDocumentIds: readonly string[];
+  readonly onTogglePin: (documentId: string, nextPinned: boolean) => void;
 }
 
-function WorkspaceDetailLayout({ children, drawerCollapsed, onToggleDrawer }: WorkspaceDetailLayoutProps) {
+function WorkspaceDetailLayout({
+  children,
+  drawerCollapsed,
+  onToggleDrawer,
+  pinnedDocumentIds,
+  onTogglePin,
+}: WorkspaceDetailLayoutProps) {
   const { workspace, workspaces, hasPermission } = useWorkspaceContext();
-  const { session } = useSessionQuery();
+  const session = useSession();
+  const logoutMutation = useLogoutMutation();
   const navigate = useNavigate();
   const matches = useMatches();
 
@@ -70,7 +83,7 @@ function WorkspaceDetailLayout({ children, drawerCollapsed, onToggleDrawer }: Wo
 
   const breadcrumbs = useMemo(() => [workspace.name, activeSection.label], [workspace.name, activeSection.label]);
 
-  const userPermissions = session?.user.permissions ?? [];
+  const userPermissions = session.user.permissions ?? [];
   const canCreateWorkspace = userPermissions.includes("Workspaces.Create");
   const canManageAdmin = userPermissions.includes("System.Settings.ReadWrite");
   const canManageWorkspace =
@@ -105,6 +118,9 @@ function WorkspaceDetailLayout({ children, drawerCollapsed, onToggleDrawer }: Wo
     <Button variant="primary" onClick={() => navigate("/workspaces/new")}>New workspace</Button>
   ) : undefined;
 
+  const displayName = session.user.display_name || session.user.email || "Signed in";
+  const email = session.user.email ?? "";
+
   return (
     <AppShell
       brand={{
@@ -126,6 +142,8 @@ function WorkspaceDetailLayout({ children, drawerCollapsed, onToggleDrawer }: Wo
             onSelectDocument={(documentId) =>
               navigate(`${buildWorkspaceSectionPath(workspace.id, "documents")}?document=${documentId}`)
             }
+            pinnedDocumentIds={pinnedDocumentIds}
+            onTogglePin={onTogglePin}
           />
         ),
         width: 280,
@@ -133,6 +151,9 @@ function WorkspaceDetailLayout({ children, drawerCollapsed, onToggleDrawer }: Wo
         isCollapsed: drawerCollapsed,
       }}
       profileMenuItems={profileMenuItems}
+      user={{ displayName, email }}
+      onSignOut={() => logoutMutation.mutate()}
+      isSigningOut={logoutMutation.isPending}
     >
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">{children}</div>
     </AppShell>

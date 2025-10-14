@@ -18,14 +18,20 @@ The dev server runs on <http://localhost:5173>. Set `VITE_API_BASE_URL` in a
 
 ## Available scripts
 
-| Command         | Description                                  |
-| --------------- | -------------------------------------------- |
-| `npm run dev`   | Start the Vite development server with HMR   |
-| `npm run build` | Type-check and create the production bundle  |
-| `npm run preview` | Preview the production bundle locally     |
-| `npm run lint`  | Run ESLint with the shared project config    |
+| Command             | Description                                             |
+| ------------------- | ------------------------------------------------------- |
+| `npm run dev`       | Start the Vite development server with HMR              |
+| `npm run build`     | Type-check and create the production bundle             |
+| `npm run preview`   | Preview the production bundle locally                   |
+| `npm run lint`      | Run ESLint with the shared project config               |
+| `npm test`          | Execute the Vitest unit suite once (jsdom environment)  |
+| `npm run test:watch` | Run Vitest in watch mode for rapid feedback            |
+| `npm run test:coverage` | Generate coverage reports with Vitest             |
 
-Add Vitest and story-based tooling when the first feature demands them.
+Vitest, Testing Library, and Jest DOM are configured out of the box. Tests live
+alongside the modules they cover (for example `src/features/**/__tests__`). Use
+the shared helpers in `src/test/test-utils.tsx` to render components with
+`AppProviders` so Query Client state and other context is initialised for you.
 
 ## Project structure
 
@@ -74,12 +80,24 @@ URL, attaches the CSRF token, and surfaces Problem Details in errors.
 
 Additional environment helpers live in `src/shared/config/env.ts`.
 
+## Testing methodology
+
+- Unit and integration tests use Vitest with the jsdom environment to exercise
+  React components and hooks in isolation.
+- React Testing Library powers DOM assertions and event simulation; rely on the
+  helpers in `src/test/test-utils.tsx` to avoid duplicating provider wiring.
+- Coverage reports are available via `npm run test:coverage` and stored in
+  `frontend/coverage/`.
+- Keep fast, deterministic tests close to the modules they validate (co-located
+  `__tests__` folders). Prefer querying by accessible roles/text rather than
+  DOM implementation details.
+
 ## Next steps
 
 - Replace placeholder routes with real feature implementations (setup, auth,
   workspaces, documents, jobs) and wire their data hooks.
-- Extend the shared component library in `src/ui`/`src/app/components` with cards, modals, and tables as needed.
-- Add Vitest when feature work introduces logic worth testing in isolation.
+- Extend the shared component library in `src/ui`/`src/app/components` with
+  cards, modals, and tables as needed.
 
 Keep the codebase boring, predictable, and easy to reason about. Favour small,
 composable components and encapsulate data-fetching concerns in feature-specific
