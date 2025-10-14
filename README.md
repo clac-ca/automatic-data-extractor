@@ -66,19 +66,19 @@ ADE's published container images are built from `main` and hosted on GitHub Cont
    pip install -e .[dev]
    ```
 
-3. Start the application server:
+3. Start the application server (add `--reload` while you're iterating locally):
 
    ```bash
-   ade start
+   ade start --reload
    ```
 
-   `ade start` performs a full bootstrap before launching `uvicorn` with reload enabled and serving the prebuilt SPA from `ade/web/static/`:
+   `ade start` mirrors `uvicorn ade.main:create_app --factory`, so each invocation performs a full bootstrap before `uvicorn` comes online:
 
    - creates the SQLite directory (`data/db/`) if it does not exist,
    - applies any pending Alembic migrations, and
    - emits a short summary of the effective settings so you can confirm the environment.
 
-   If you need to rebuild frontend assets, add `--rebuild-frontend`. Additional quality-of-life flags include `--no-reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm`. Should the automatic bootstrap ever fail, fall back to the [manual migration checklist](docs/admin-guide/getting_started.md#manual-migrations-and-recovery) in the admin guide before restarting the service.
+   When you pass `--reload`, uvicorn watches the source tree for changes; omit it for a single-process server. If you need to rebuild frontend assets, add `--rebuild-frontend`. Additional quality-of-life flags include `--reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm` (`--no-reload` remains available as a compatibility alias). Should the automatic bootstrap ever fail, fall back to the [manual migration checklist](docs/admin-guide/getting_started.md#manual-migrations-and-recovery) in the admin guide before restarting the service.
 
    Example: `ade start --rebuild-frontend --env ADE_LOGGING_LEVEL=DEBUG --env ADE_JWT_ACCESS_TTL=15m`
    Adjust the backend bind address with `ADE_SERVER_HOST` / `ADE_SERVER_PORT` (for example `0.0.0.0:8000` inside a container). Use `ADE_SERVER_PUBLIC_URL` for the public origin that browsers or webhooks should hit. Time-based settings such as `ADE_JWT_ACCESS_TTL` accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or `30d`. The frontend targets the same origin at `/api`, so no additional configuration is required when you deploy both pieces together.

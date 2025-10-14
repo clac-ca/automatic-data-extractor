@@ -71,7 +71,7 @@ accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
 2. Start the application server:
 
    ```bash
-   ade start
+   ade start --reload
    ```
 
    Each invocation performs an idempotent bootstrap before `uvicorn` comes online:
@@ -80,7 +80,7 @@ accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
    - run Alembic migrations in order, logging progress to the console, and
    - print a summary of the resolved settings (sourced from `.env` and the environment).
 
-   Successful boot ends with the FastAPI reload server listening on the configured host and serving the compiled SPA from `ade/web/static/`, so <http://localhost:8000/> delivers both the UI and API. Use `--rebuild-frontend` to run the Vite production build and copy fresh assets before launch. Other helpful flags: `--no-reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm`.
+   With `--reload`, uvicorn watches the repository for changes while still serving the compiled SPA from `ade/web/static/`, so <http://localhost:8000/> delivers both the UI and API. Omit `--reload` to run in a single process (the same semantics as `uvicorn ade.main:create_app --factory`). Use `--rebuild-frontend` to run the Vite production build and copy fresh assets before launch. Other helpful flags: `--reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm` (`--no-reload` remains available as a backwards-compatible alias).
 
 3. Confirm the API is healthy:
 
@@ -246,7 +246,7 @@ With these basics you can run ADE on a laptop, VM, or container host and manage
 administrators confidently using the CLI.
 
 ## 10. Troubleshooting
-- **`ade start` exits immediately:** ensure the Python dependencies are installed (`pip install -e .[dev]`) and that the configured port is free. Run with `--no-reload` if you suspect the reload watcher cannot spawn a subprocess.
+- **`ade start` exits immediately:** ensure the Python dependencies are installed (`pip install -e .[dev]`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`ade start` or `ade start --no-reload`).
 - **Port conflicts on 8000:** choose another port with `ade start --port 9000` or stop the conflicting process.
 - **Frontend shows a blank page:** rebuild assets with `ade start --rebuild-frontend` (or run `npm run build` and copy `frontend/dist/` into `ade/web/static/`).
 - **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api` prefix.
