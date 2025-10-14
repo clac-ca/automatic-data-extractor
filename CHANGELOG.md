@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Require confidential OIDC clients, retain the `ADE_AUTH_SSO_AUTO_PROVISION` toggle (defaulting to true), and remove the unused domain controls.
 - Simplify SSO discovery by removing in-process metadata and JWKS caches in favour of per-request fetches.
 - Drop configurable provider lists; `/auth/providers` now surfaces the default SSO option whenever OIDC is enabled.
+- Align `ade start` with `uvicorn ade.main:create_app --factory`, make reload opt-in, and fix the Windows exit bug when running without reload.
 
 ## [v0.1.0] - 2025-10-09
 

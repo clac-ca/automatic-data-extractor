@@ -107,8 +107,9 @@ def start(
 
     import uvicorn
 
+    target = "ade.main:create_app" if reload else create_app
     uvicorn.run(
-        "ade.main:create_app",
+        target,
         host=bind_host,
         port=bind_port,
         reload=reload,
@@ -249,15 +250,12 @@ def _configure_openapi(app: FastAPI, settings: Settings) -> None:
     app.openapi = custom_openapi
 
 
-app = create_app()
-
 __all__ = [
     "API_PREFIX",
     "DEFAULT_FRONTEND_DIR",
     "FRONTEND_BUILD_DIRNAME",
     "WEB_DIR",
     "WEB_STATIC_DIR",
-    "app",
     "build_frontend_assets",
     "create_app",
     "start",

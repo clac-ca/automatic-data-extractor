@@ -36,10 +36,15 @@ def register_arguments(parser: argparse.ArgumentParser) -> None:
         help=f"Port for uvicorn to bind (default: {port_default}).",
     )
     parser.add_argument(
+        "--reload",
+        action="store_true",
+        help="Enable auto-reload for development (equivalent to uvicorn --reload).",
+    )
+    parser.add_argument(
         "--no-reload",
         dest="reload",
         action="store_false",
-        help="Disable auto-reload. Reload is enabled by default for development.",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--rebuild-frontend",
@@ -68,7 +73,7 @@ def register_arguments(parser: argparse.ArgumentParser) -> None:
             "multiple entries (e.g. --env ADE_LOGGING_LEVEL=DEBUG)."
         ),
     )
-    parser.set_defaults(reload=True)
+    parser.set_defaults(reload=False)
 
 
 def start(args: CLIArgs) -> None:
