@@ -328,7 +328,6 @@ def _create_configurations() -> None:
         "configurations",
         sa.Column("configuration_id", sa.String(length=26), primary_key=True),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
-        sa.Column("document_type", sa.String(length=100), nullable=False),
         sa.Column("title", sa.String(length=255), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.false()),
@@ -337,12 +336,12 @@ def _create_configurations() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.workspace_id"], ondelete="CASCADE"),
-        sa.UniqueConstraint("workspace_id", "document_type", "version"),
+        sa.UniqueConstraint("workspace_id", "version"),
     )
     op.create_index(
         "configurations_workspace_active_idx",
         "configurations",
-        ["workspace_id", "document_type"],
+        ["workspace_id"],
         unique=True,
         sqlite_where=sa.text("is_active = 1"),
     )
@@ -387,7 +386,6 @@ def _create_jobs() -> None:
         "jobs",
         sa.Column("job_id", sa.String(length=26), primary_key=True),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
-        sa.Column("document_type", sa.String(length=100), nullable=False),
         sa.Column("configuration_id", sa.String(length=26), nullable=False),
         sa.Column("status", sa.String(length=20), nullable=False),
         sa.Column("created_by_user_id", sa.String(length=26), nullable=True),

@@ -104,7 +104,6 @@ class JobsService:
 
         job = Job(
             workspace_id=workspace_id,
-            document_type=configuration.document_type,
             configuration_id=config_identifier,
             status="pending",
             created_by_user_id=actor_identifier,
@@ -158,7 +157,6 @@ class JobsService:
         processor_configuration: dict[str, Any] = {
             "configuration_id": config_identifier,
             "version": configuration.version,
-            "document_type": configuration.document_type,
         }
         processor_configuration.update(configuration_payload)
 

@@ -15,7 +15,6 @@ class ConfigurationRecord(BaseSchema):
 
     configuration_id: str = Field(alias="id", serialization_alias="configuration_id")
     workspace_id: str
-    document_type: str
     title: str
     version: int
     is_active: bool
@@ -28,7 +27,6 @@ class ConfigurationRecord(BaseSchema):
 class ConfigurationCreate(BaseSchema):
     """Payload for creating a configuration version."""
 
-    document_type: str = Field(..., max_length=100)
     title: str = Field(..., max_length=255)
     payload: dict[str, Any] = Field(default_factory=dict)
 

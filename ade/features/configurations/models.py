@@ -36,7 +36,6 @@ class Configuration(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     workspace: Mapped[Workspace] = relationship("Workspace", lazy="joined")
 
-    document_type: Mapped[str] = mapped_column(String(100), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -48,11 +47,10 @@ class Configuration(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("workspace_id", "document_type", "version"),
+        UniqueConstraint("workspace_id", "version"),
         Index(
             "configurations_workspace_active_idx",
             "workspace_id",
-            "document_type",
             unique=True,
             sqlite_where=text("is_active = 1"),
         ),

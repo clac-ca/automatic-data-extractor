@@ -38,7 +38,6 @@ class JobRecord(BaseSchema):
 
     job_id: str
     workspace_id: str
-    document_type: str
     configuration_id: str
     status: str
     created_at: datetime
