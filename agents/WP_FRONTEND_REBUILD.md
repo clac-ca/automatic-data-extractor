@@ -50,6 +50,13 @@ with the updated authentication and setup contracts.
 - Added an `AppShell` wrapper so `/workspaces`, `/workspaces/new`, and `/workspaces/{id}/…` all share the same header/profile chrome; the workspace layout now passes tabs, sidebar content, and workspace switcher into that shell.
 - Outstanding work includes expanding workspace-specific UI, introducing data visualisations, wiring document/job routes, enriching the document rail with live data, completing `/auth/callback` backend wiring, and covering flows with Vitest.
 
+### Layout & Navigation Progress (2025-10-18)
+- Canonicalised workspace routing with a React Router loader that resolves slugs to IDs, writes the active workspace to storage, and primes the React Query cache for nested routes.
+- Centralised workspace section metadata in `frontend/src/app/workspaces/sections.ts`, eliminating duplicated label/path constants across the router, shell layout, and placeholder routes.
+- Refactored `WorkspaceLayout` to consume loader data through a dedicated `WorkspaceProvider`, ensuring breadcrumbs, navigation tabs, and profile menus derive from a single workspace context.
+- Replaced the mock document drawer with `frontend/src/features/documents/components/WorkspaceDocumentRail.tsx`, powered by a TanStack Query hook and per-workspace pin persistence.
+- Introduced `WorkspaceDirectoryLayout` so index and detail routes share consistent AppShell composition and admin profile menu wiring.
+
 ### Patterns to Carry Forward
 - `frontend/src/app/AppProviders.tsx` centralises React Query defaults (limited retries, dev-only devtools) and must wrap the router.
 - `frontend/src/shared/api/client.ts` handles CSRF, base URLs, and Problem Details—use it for all HTTP interactions.
