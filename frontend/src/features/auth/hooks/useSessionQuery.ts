@@ -3,7 +3,6 @@ import { useEffect } from "react";
 
 import { fetchSession } from "../api";
 import { sessionKeys } from "../sessionKeys";
-import type { SessionEnvelope } from "../../../shared/types/auth";
 
 interface UseSessionOptions {
   readonly enabled?: boolean;
@@ -32,7 +31,3 @@ export function useSessionQuery(options: UseSessionOptions = {}) {
   };
 }
 
-export function useSession(): SessionEnvelope | null {
-  const { session } = useSessionQuery();
-  return session;
-}

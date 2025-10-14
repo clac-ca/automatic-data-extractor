@@ -2,9 +2,6 @@ import { Fragment, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
-import { useSessionQuery } from "../../features/auth/hooks/useSessionQuery";
-import { useLogoutMutation } from "../../features/auth/hooks/useLogoutMutation";
-
 export interface AppShellNavItem {
   readonly label: string;
   readonly to: string;
@@ -34,6 +31,12 @@ export interface AppShellProps {
   readonly actions?: ReactNode;
   readonly sidebar?: AppShellSidebarConfig;
   readonly profileMenuItems?: AppShellProfileMenuItem[];
+  readonly user: {
+    displayName: string;
+    email: string;
+  };
+  readonly onSignOut: () => void;
+  readonly isSigningOut?: boolean;
   readonly children: ReactNode;
 }
 
@@ -45,22 +48,20 @@ export function AppShell({
   actions,
   sidebar,
   profileMenuItems = [],
+  user,
+  onSignOut,
+  isSigningOut = false,
   children,
 }: AppShellProps) {
-  const { session } = useSessionQuery();
-  const logoutMutation = useLogoutMutation();
   const navigate = useNavigate();
-
-  const displayName = session?.user.display_name || session?.user.email || "Signed in";
-  const email = session?.user.email ?? "";
 
   const combinedProfileMenuItems: AppShellProfileMenuItem[] = [
     ...profileMenuItems,
     {
       type: "action",
-      label: logoutMutation.isPending ? "Signing out…" : "Sign out",
-      onSelect: () => logoutMutation.mutate(),
-      disabled: logoutMutation.isPending,
+      label: isSigningOut ? "Signing out…" : "Sign out",
+      onSelect: onSignOut,
+      disabled: isSigningOut,
     },
   ];
 
@@ -109,8 +110,8 @@ export function AppShell({
               {actions}
               <ProfileMenu
                 items={combinedProfileMenuItems}
-                displayName={displayName}
-                email={email}
+                displayName={user.displayName}
+                email={user.email}
                 navigate={navigate}
               />
             </div>
