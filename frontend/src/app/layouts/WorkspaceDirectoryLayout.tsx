@@ -2,8 +2,9 @@ import type { ReactNode } from "react";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { useSessionQuery } from "../../features/auth/hooks/useSessionQuery";
 import { AppShell, type AppShellProfileMenuItem, type AppShellSidebarConfig } from "./AppShell";
+import { useSession } from "../../features/auth/context/SessionContext";
+import { useLogoutMutation } from "../../features/auth/hooks/useLogoutMutation";
 
 export interface WorkspaceDirectoryLayoutProps {
   readonly children: ReactNode;
@@ -12,9 +13,10 @@ export interface WorkspaceDirectoryLayoutProps {
 }
 
 export function WorkspaceDirectoryLayout({ children, actions, sidebar }: WorkspaceDirectoryLayoutProps) {
-  const { session } = useSessionQuery();
+  const session = useSession();
+  const logoutMutation = useLogoutMutation();
   const navigate = useNavigate();
-  const userPermissions = session?.user.permissions ?? [];
+  const userPermissions = session.user.permissions ?? [];
   const canManageAdmin = userPermissions.includes("System.Settings.ReadWrite");
 
   const profileMenuItems = useMemo<AppShellProfileMenuItem[]>(() => {
@@ -36,6 +38,12 @@ export function WorkspaceDirectoryLayout({ children, actions, sidebar }: Workspa
       actions={actions}
       sidebar={sidebar}
       profileMenuItems={profileMenuItems}
+      user={{
+        displayName: session.user.display_name || session.user.email || "Signed in",
+        email: session.user.email ?? "",
+      }}
+      onSignOut={() => logoutMutation.mutate()}
+      isSigningOut={logoutMutation.isPending}
     >
       {children}
     </AppShell>

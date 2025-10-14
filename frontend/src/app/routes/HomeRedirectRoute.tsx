@@ -1,14 +1,14 @@
 import { Navigate } from "react-router-dom";
 
-import { useSessionQuery } from "../../features/auth/hooks/useSessionQuery";
 import { useWorkspacesQuery } from "../../features/workspaces/hooks/useWorkspacesQuery";
 import { readPreferredWorkspaceId } from "../../shared/lib/workspace";
 import { getDefaultWorkspacePath } from "../workspaces/loader";
 import { Button } from "../../ui";
 import { PageState } from "../components/PageState";
+import { useSession } from "../../features/auth/context/SessionContext";
 
 export function HomeRedirectRoute() {
-  const { session } = useSessionQuery();
+  const session = useSession();
   const workspacesQuery = useWorkspacesQuery();
 
   if (workspacesQuery.isLoading) {
@@ -42,7 +42,7 @@ export function HomeRedirectRoute() {
     return <Navigate to="/workspaces" replace />;
   }
 
-  const preferredIds = [readPreferredWorkspaceId(), session?.user.preferred_workspace_id]
+  const preferredIds = [readPreferredWorkspaceId(), session.user.preferred_workspace_id]
     .filter((value): value is string => Boolean(value));
 
   const preferredWorkspace = preferredIds

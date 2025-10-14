@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { useSessionQuery } from "../hooks/useSessionQuery";
+import { SessionProvider } from "../context/SessionContext";
 
 export interface RequireSessionProps {
   readonly redirectTo?: string;
@@ -45,8 +46,16 @@ export function RequireSession({ redirectTo = "/login", children }: RequireSessi
   }
 
   if (children) {
-    return <>{children}</>;
+    return (
+      <SessionProvider session={session} refetch={refetch}>
+        {children}
+      </SessionProvider>
+    );
   }
 
-  return <Outlet />;
+  return (
+    <SessionProvider session={session} refetch={refetch}>
+      <Outlet />
+    </SessionProvider>
+  );
 }

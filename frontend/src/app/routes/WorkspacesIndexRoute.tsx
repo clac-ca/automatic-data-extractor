@@ -1,17 +1,17 @@
 import { useNavigate } from "react-router-dom";
 
-import { useSessionQuery } from "../../features/auth/hooks/useSessionQuery";
 import { useWorkspacesQuery } from "../../features/workspaces/hooks/useWorkspacesQuery";
 import { Button } from "../../ui";
 import { WorkspaceDirectoryLayout } from "../layouts/WorkspaceDirectoryLayout";
 import { PageState } from "../components/PageState";
 import { buildWorkspaceSectionPath, defaultWorkspaceSection } from "../workspaces/sections";
+import { useSession } from "../../features/auth/context/SessionContext";
 
 export function WorkspacesIndexRoute() {
   const navigate = useNavigate();
-  const { session } = useSessionQuery();
+  const session = useSession();
   const workspacesQuery = useWorkspacesQuery();
-  const userPermissions = session?.user.permissions ?? [];
+  const userPermissions = session.user.permissions ?? [];
   const canCreateWorkspace = userPermissions.includes("Workspaces.Create");
 
   if (workspacesQuery.isLoading) {

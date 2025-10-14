@@ -1,26 +1,47 @@
 import clsx from "clsx";
-import { useState } from "react";
 import { Navigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 import { useSessionQuery } from "../../features/auth/hooks/useSessionQuery";
 import { useLoginMutation } from "../../features/auth/hooks/useLoginMutation";
 import { useAuthProviders } from "../../features/auth/hooks/useAuthProviders";
 import { useSetupStatusQuery } from "../../features/setup/hooks/useSetupStatusQuery";
-import type { LoginPayload } from "../../shared/types/auth";
 import { Alert, Button, FormField, Input } from "../../ui";
 
-export function LoginRoute() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [formError, setFormError] = useState<string | null>(null);
+const loginSchema = z.object({
+  email: z
+    .string()
+    .min(1, "Enter your email address.")
+    .email("Enter a valid email address."),
+  password: z.string().min(1, "Enter your password."),
+});
 
+type LoginFormValues = z.infer<typeof loginSchema>;
+
+export function LoginRoute() {
   const { session } = useSessionQuery({ enabled: false });
   const setupStatusQuery = useSetupStatusQuery({ enabled: !session });
   const providersQuery = useAuthProviders();
 
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    setError,
+    clearErrors,
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
+
   const loginMutation = useLoginMutation({
     onSuccess() {
-      setFormError(null);
+      clearErrors("root");
     },
   });
 
@@ -34,18 +55,6 @@ export function LoginRoute() {
 
   const providers = providersQuery.data?.providers ?? [];
   const forceSso = providersQuery.data?.force_sso ?? false;
-
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setFormError(null);
-
-    const payload: LoginPayload = { email, password };
-    loginMutation.mutate(payload, {
-      onError(error) {
-        setFormError(error instanceof Error ? error.message : "Unable to sign in.");
-      },
-    });
-  }
 
   return (
     <div className="mx-auto flex min-h-screen flex-col justify-center bg-slate-50 px-6 py-16">
@@ -84,32 +93,43 @@ export function LoginRoute() {
         ) : null}
 
         {!forceSso ? (
-          <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-            <FormField label="Email address" required>
+          <form
+            className="mt-8 space-y-6"
+            onSubmit={handleSubmit((values) => {
+              clearErrors("root");
+              loginMutation.mutate(values, {
+                onError(error) {
+                  setError("root", {
+                    type: "server",
+                    message: error instanceof Error ? error.message : "Unable to sign in.",
+                  });
+                },
+              });
+            })}
+          >
+            <FormField label="Email address" required error={errors.email?.message}>
               <Input
                 id="email"
                 type="email"
                 autoComplete="email"
                 placeholder="you@example.com"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                {...register("email")}
+                invalid={Boolean(errors.email)}
               />
             </FormField>
 
-            <FormField label="Password" required>
+            <FormField label="Password" required error={errors.password?.message}>
               <Input
                 id="password"
                 type="password"
                 autoComplete="current-password"
                 placeholder="••••••••"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                {...register("password")}
+                invalid={Boolean(errors.password)}
               />
             </FormField>
 
-            {formError ? (
-              <Alert tone="danger">{formError}</Alert>
-            ) : null}
+            {errors.root ? <Alert tone="danger">{errors.root.message}</Alert> : null}
 
             <Button type="submit" className="w-full justify-center" isLoading={loginMutation.isPending}>
               {loginMutation.isPending ? "Signing in…" : "Continue"}
