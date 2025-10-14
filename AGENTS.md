@@ -211,7 +211,8 @@ Run the quality gates appropriate for the scope of your change set.
 
 ### Frontend-specific expectations
 
-- When you modify anything under `frontend/`, run `npm test -- --watch=false` and `npm run build` to ensure the SPA both passes unit tests and builds successfully.
+- When you modify anything under `frontend/`, run `npm test -- --watch=false` (Vitest jsdom suite) and `npm run build` to ensure the SPA both passes unit tests and builds successfully. Use `npm run test:coverage` when coverage metrics are required.
+- Co-locate React tests beside the modules they exercise (for example `src/features/auth/__tests__`) and rely on `src/test/test-utils.tsx` for rendering so shared providers remain consistent.
 
 ---
 

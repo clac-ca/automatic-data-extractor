@@ -1,31 +1,49 @@
-import type { ChangeEvent, FormEvent } from "react";
-import { useState } from "react";
 import { Navigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 import { useSetupStatusQuery } from "../../features/setup/hooks/useSetupStatusQuery";
 import { useCompleteSetupMutation } from "../../features/setup/hooks/useCompleteSetupMutation";
-import type { SetupPayload } from "../../shared/types/auth";
 import { Alert, Button, FormField, Input } from "../../ui";
 import { PageState } from "../components/PageState";
 
-interface SetupFormState {
-  displayName: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-}
+const setupSchema = z
+  .object({
+    displayName: z.string().min(1, "Display name is required."),
+    email: z
+      .string()
+      .min(1, "Email is required.")
+      .email("Enter a valid email address."),
+    password: z.string().min(12, "Use at least 12 characters."),
+    confirmPassword: z.string().min(1, "Confirm your password."),
+  })
+  .refine((values) => values.password === values.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Passwords do not match.",
+  });
+
+type SetupFormValues = z.infer<typeof setupSchema>;
 
 export function SetupRoute() {
   const statusQuery = useSetupStatusQuery();
   const completeSetup = useCompleteSetupMutation();
 
-  const [form, setForm] = useState<SetupFormState>({
-    displayName: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    setError,
+    clearErrors,
+  } = useForm<SetupFormValues>({
+    resolver: zodResolver(setupSchema),
+    defaultValues: {
+      displayName: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+    },
   });
-  const [formError, setFormError] = useState<string | null>(null);
 
   if (statusQuery.isLoading) {
     return (
@@ -58,40 +76,6 @@ export function SetupRoute() {
     return <Navigate to="/login" replace />;
   }
 
-  function handleChange<K extends keyof SetupFormState>(key: K) {
-    return (event: ChangeEvent<HTMLInputElement>) => {
-      const value = event.target.value;
-      setForm((current) => ({ ...current, [key]: value }));
-    };
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setFormError(null);
-
-    if (form.password.trim().length < 12) {
-      setFormError("Use at least 12 characters for your password.");
-      return;
-    }
-
-    if (form.password !== form.confirmPassword) {
-      setFormError("Passwords do not match. Check both fields and try again.");
-      return;
-    }
-
-    const payload: SetupPayload = {
-      display_name: form.displayName,
-      email: form.email,
-      password: form.password,
-    };
-
-    completeSetup.mutate(payload, {
-      onError(error) {
-        setFormError(error instanceof Error ? error.message : "Setup failed. Try again.");
-      },
-    });
-  }
-
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center bg-slate-50 px-6 py-16">
       <div className="rounded-2xl border border-slate-200 bg-white p-10 shadow-soft">
@@ -113,50 +97,75 @@ export function SetupRoute() {
           </Alert>
         ) : null}
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form
+          className="mt-8 space-y-6"
+          onSubmit={handleSubmit((values) => {
+            clearErrors("root");
+            completeSetup.mutate(
+              {
+                display_name: values.displayName,
+                email: values.email,
+                password: values.password,
+              },
+              {
+                onError(error) {
+                  setError("root", {
+                    type: "server",
+                    message: error instanceof Error ? error.message : "Setup failed. Try again.",
+                  });
+                },
+              },
+            );
+          })}
+        >
           <div className="grid gap-6 md:grid-cols-2">
-            <FormField label="Display name" required>
+            <FormField label="Display name" required error={errors.displayName?.message}>
               <Input
                 id="displayName"
                 placeholder="Casey Operator"
-                value={form.displayName}
-                onChange={handleChange("displayName")}
+                {...register("displayName")}
+                invalid={Boolean(errors.displayName)}
               />
             </FormField>
-            <FormField label="Email" required>
+            <FormField label="Email" required error={errors.email?.message}>
               <Input
                 id="email"
                 type="email"
                 placeholder="casey@example.com"
-                value={form.email}
-                onChange={handleChange("email")}
+                {...register("email")}
+                invalid={Boolean(errors.email)}
               />
             </FormField>
           </div>
 
-          <FormField label="Password" hint="Use at least 12 characters." required>
+          <FormField
+            label="Password"
+            hint="Use at least 12 characters."
+            required
+            error={errors.password?.message}
+          >
             <Input
               id="password"
               type="password"
               minLength={12}
               placeholder="••••••••••••"
-              value={form.password}
-              onChange={handleChange("password")}
+              {...register("password")}
+              invalid={Boolean(errors.password)}
             />
           </FormField>
 
-          <FormField label="Confirm password" required>
+          <FormField label="Confirm password" required error={errors.confirmPassword?.message}>
             <Input
               id="confirmPassword"
               type="password"
               minLength={12}
               placeholder="Re-enter your password"
-              value={form.confirmPassword}
-              onChange={handleChange("confirmPassword")}
+              {...register("confirmPassword")}
+              invalid={Boolean(errors.confirmPassword)}
             />
           </FormField>
 
-          {formError ? <Alert tone="danger">{formError}</Alert> : null}
+          {errors.root ? <Alert tone="danger">{errors.root.message}</Alert> : null}
 
           <div className="flex justify-end">
             <Button type="submit" isLoading={completeSetup.isPending}>

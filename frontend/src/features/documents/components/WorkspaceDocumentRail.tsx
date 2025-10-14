@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
-import { createScopedStorage } from "../../../shared/lib/storage";
 import { DocumentDrawer } from "./DocumentDrawer";
 import type { DocumentDrawerDocument } from "./DocumentDrawer";
 import { useWorkspaceDocumentsQuery } from "../hooks/useWorkspaceDocumentsQuery";
@@ -11,6 +10,8 @@ export interface WorkspaceDocumentRailProps {
   readonly onToggleCollapse: () => void;
   readonly onSelectDocument: (documentId: string) => void;
   readonly onCreateDocument?: () => void;
+  readonly pinnedDocumentIds: readonly string[];
+  readonly onTogglePin: (documentId: string, nextPinned: boolean) => void;
 }
 
 function formatUpdatedAt(timestamp: string) {
@@ -31,21 +32,9 @@ export function WorkspaceDocumentRail({
   onToggleCollapse,
   onSelectDocument,
   onCreateDocument,
+  pinnedDocumentIds,
+  onTogglePin,
 }: WorkspaceDocumentRailProps) {
-  const pinsStorage = useMemo(
-    () => createScopedStorage(`ade.workspace.${workspaceId}.document_pins`),
-    [workspaceId],
-  );
-  const [pinnedIds, setPinnedIds] = useState<string[]>(() => pinsStorage.get<string[]>() ?? []);
-
-  useEffect(() => {
-    setPinnedIds(pinsStorage.get<string[]>() ?? []);
-  }, [pinsStorage, workspaceId]);
-
-  useEffect(() => {
-    pinsStorage.set(pinnedIds);
-  }, [pinsStorage, pinnedIds]);
-
   const documentsQuery = useWorkspaceDocumentsQuery(workspaceId);
   const documents = documentsQuery.data ?? [];
 
@@ -53,7 +42,7 @@ export function WorkspaceDocumentRail({
     return documents.map((document) => {
       const metadata = document.metadata as { pinned?: unknown };
       const pinnedFromMetadata = metadata?.pinned === true;
-      const pinned = pinnedFromMetadata || pinnedIds.includes(document.id);
+      const pinned = pinnedFromMetadata || pinnedDocumentIds.includes(document.id);
       return {
         id: document.id,
         name: document.name,
@@ -61,22 +50,7 @@ export function WorkspaceDocumentRail({
         pinned,
       } satisfies DocumentDrawerDocument;
     });
-  }, [documents, pinnedIds]);
-
-  const handleTogglePin = useCallback(
-    (documentId: string, nextPinned: boolean) => {
-      setPinnedIds((current) => {
-        const set = new Set(current);
-        if (nextPinned) {
-          set.add(documentId);
-        } else {
-          set.delete(documentId);
-        }
-        return Array.from(set);
-      });
-    },
-    [],
-  );
+  }, [documents, pinnedDocumentIds]);
 
   return (
     <DocumentDrawer
@@ -85,7 +59,7 @@ export function WorkspaceDocumentRail({
       onToggleCollapse={onToggleCollapse}
       onSelectDocument={onSelectDocument}
       onCreateDocument={onCreateDocument}
-      onTogglePin={handleTogglePin}
+      onTogglePin={onTogglePin}
       isLoading={documentsQuery.isLoading}
       isError={documentsQuery.isError}
       onRetry={documentsQuery.refetch}
