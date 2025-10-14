@@ -1,11 +1,11 @@
-import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useSessionQuery } from "../../features/auth/hooks/useSessionQuery";
 import { useWorkspacesQuery } from "../../features/workspaces/hooks/useWorkspacesQuery";
 import { Button } from "../../ui";
-import { AppShell, type AppShellProfileMenuItem } from "../layouts/AppShell";
+import { WorkspaceDirectoryLayout } from "../layouts/WorkspaceDirectoryLayout";
 import { PageState } from "../components/PageState";
+import { buildWorkspaceSectionPath, defaultWorkspaceSection } from "../workspaces/sections";
 
 export function WorkspacesIndexRoute() {
   const navigate = useNavigate();
@@ -13,7 +13,6 @@ export function WorkspacesIndexRoute() {
   const workspacesQuery = useWorkspacesQuery();
   const userPermissions = session?.user.permissions ?? [];
   const canCreateWorkspace = userPermissions.includes("Workspaces.Create");
-  const canManageAdmin = userPermissions.includes("System.Settings.ReadWrite");
 
   if (workspacesQuery.isLoading) {
     return (
@@ -41,12 +40,17 @@ export function WorkspacesIndexRoute() {
   }
 
   const workspaces = workspacesQuery.data ?? [];
-  const profileMenuItems: AppShellProfileMenuItem[] = useMemo(() => {
-    if (!canManageAdmin) {
-      return [];
-    }
-    return [{ type: "nav", label: "Admin settings", to: "/settings" }];
-  }, [canManageAdmin]);
+
+  const actions = canCreateWorkspace ? (
+    <Button variant="primary" onClick={() => navigate("/workspaces/new")}>
+      Create workspace
+    </Button>
+  ) : undefined;
+
+  const sidebar = {
+    content: <DirectorySidebar canCreate={canCreateWorkspace} onCreate={() => navigate("/workspaces/new")} />,
+    width: 280,
+  } as const;
 
   const mainContent =
     workspaces.length === 0 ? (
@@ -66,7 +70,9 @@ export function WorkspacesIndexRoute() {
             <button
               key={workspace.id}
               type="button"
-              onClick={() => navigate(`/workspaces/${workspace.id}/documents`)}
+              onClick={() =>
+                navigate(buildWorkspaceSectionPath(workspace.id, defaultWorkspaceSection.id))
+              }
               className="group rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
             >
               <div className="flex items-center justify-between">
@@ -89,29 +95,9 @@ export function WorkspacesIndexRoute() {
     );
 
   return (
-    <AppShell
-      brand={{
-        label: "Automatic Data Extractor",
-        subtitle: "Workspace Directory",
-        onClick: () => navigate("/workspaces"),
-      }}
-      navItems={[{ label: "All workspaces", to: "/workspaces", end: true }]}
-      breadcrumbs={["Workspaces"]}
-      actions={
-        canCreateWorkspace ? (
-          <Button variant="primary" onClick={() => navigate("/workspaces/new")}>
-            Create workspace
-          </Button>
-        ) : undefined
-      }
-      sidebar={{
-        content: <DirectorySidebar canCreate={canCreateWorkspace} onCreate={() => navigate("/workspaces/new")} />,
-        width: 280,
-      }}
-      profileMenuItems={profileMenuItems}
-    >
+    <WorkspaceDirectoryLayout actions={actions} sidebar={sidebar}>
       {mainContent}
-    </AppShell>
+    </WorkspaceDirectoryLayout>
   );
 }
 

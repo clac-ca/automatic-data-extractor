@@ -10,6 +10,15 @@ import { RequireSession } from "../features/auth/components/RequireSession";
 import { WorkspacePlaceholderRoute } from "./routes/WorkspacePlaceholderRoute";
 import { WorkspaceCreateRoute } from "./routes/WorkspaceCreateRoute";
 import { AuthCallbackRoute } from "./routes/AuthCallbackRoute";
+import { workspaceLoader } from "./workspaces/loader";
+import { workspaceSections, defaultWorkspaceSection } from "./workspaces/sections";
+import type { WorkspaceRouteHandle } from "./workspaces/sections";
+
+const workspaceSectionRoutes = workspaceSections.map((section) => ({
+  path: section.path,
+  element: <WorkspacePlaceholderRoute sectionId={section.id} />,
+  handle: { workspaceSectionId: section.id } satisfies WorkspaceRouteHandle,
+}));
 
 const appRouter = createBrowserRouter([
   {
@@ -29,14 +38,11 @@ const appRouter = createBrowserRouter([
           {
             path: ":workspaceId",
             element: <WorkspaceLayout />,
+            loader: workspaceLoader,
             children: [
-              { path: "documents", element: <WorkspacePlaceholderRoute section="documents" /> },
-              { path: "jobs", element: <WorkspacePlaceholderRoute section="jobs" /> },
-              { path: "configurations", element: <WorkspacePlaceholderRoute section="configurations" /> },
-              { path: "members", element: <WorkspacePlaceholderRoute section="members" /> },
-              { path: "settings", element: <WorkspacePlaceholderRoute section="settings" /> },
+              ...workspaceSectionRoutes,
               { path: "overview", element: <Navigate to="../documents" replace /> },
-              { index: true, element: <Navigate to="documents" replace /> },
+              { index: true, element: <Navigate to={defaultWorkspaceSection.path} replace /> },
             ],
           },
         ],

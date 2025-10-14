@@ -1,107 +1,63 @@
 import { useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 
-import { Button } from "../../ui";
+import { Button } from "../../../ui";
 
-type DocumentViewer = {
-  readonly id: string;
-  readonly initials: string;
-  readonly color: string;
-};
-
-type DocumentEntry = {
+export interface DocumentDrawerDocument {
   readonly id: string;
   readonly name: string;
-  readonly updatedAt: string;
-  readonly pinned?: boolean;
-  readonly viewers: DocumentViewer[];
-};
-
-type HydratedDocument = DocumentEntry & { readonly pinned: boolean };
+  readonly updatedAtLabel: string;
+  readonly pinned: boolean;
+}
 
 export interface DocumentDrawerProps {
-  readonly workspaceId: string;
+  readonly documents: readonly DocumentDrawerDocument[];
   readonly collapsed: boolean;
   readonly onToggleCollapse: () => void;
   readonly onSelectDocument: (documentId: string) => void;
   readonly onCreateDocument?: () => void;
+  readonly onTogglePin: (documentId: string, nextPinned: boolean) => void;
+  readonly isLoading?: boolean;
+  readonly isError?: boolean;
+  readonly onRetry?: () => void;
 }
 
 export function DocumentDrawer({
-  workspaceId,
+  documents,
   collapsed,
   onToggleCollapse,
   onSelectDocument,
   onCreateDocument,
+  onTogglePin,
+  isLoading = false,
+  isError = false,
+  onRetry,
 }: DocumentDrawerProps) {
   const [query, setQuery] = useState("");
-  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
 
-  const documents = useMemo<DocumentEntry[]>(
-    () => [
-      {
-        id: `${workspaceId}-1`,
-        name: "Invoice batch – March",
-        updatedAt: "2 minutes ago",
-        viewers: [
-          { id: "u1", initials: "AB", color: "bg-brand-500" },
-          { id: "u2", initials: "CD", color: "bg-emerald-500" },
-        ],
-      },
-      {
-        id: `${workspaceId}-2`,
-        name: "Vendor intake forms",
-        updatedAt: "14 minutes ago",
-        pinned: true,
-        viewers: [{ id: "u3", initials: "EF", color: "bg-amber-500" }],
-      },
-      {
-        id: `${workspaceId}-3`,
-        name: "Quarterly summary template",
-        updatedAt: "Yesterday",
-        viewers: [],
-      },
-    ],
-    [workspaceId],
-  );
-
-  const hydratedDocuments = useMemo<HydratedDocument[]>(
-    () =>
-      documents.map((doc) => ({
-        ...doc,
-        pinned: pinnedIds.includes(doc.id) || Boolean(doc.pinned),
-      })),
-    [documents, pinnedIds],
-  );
-
-  const filteredDocuments = useMemo<HydratedDocument[]>(() => {
+  const filteredDocuments = useMemo(() => {
     const search = query.trim().toLowerCase();
     if (!search) {
-      return hydratedDocuments;
+      return documents;
     }
-    return hydratedDocuments.filter((doc) => doc.name.toLowerCase().includes(search));
-  }, [hydratedDocuments, query]);
+    return documents.filter((document) => document.name.toLowerCase().includes(search));
+  }, [documents, query]);
 
   const pinnedDocuments = useMemo(
-    () => filteredDocuments.filter((doc) => doc.pinned),
+    () => filteredDocuments.filter((document) => document.pinned),
     [filteredDocuments],
   );
 
   const recentDocuments = useMemo(
-    () => filteredDocuments.filter((doc) => !doc.pinned),
+    () => filteredDocuments.filter((document) => !document.pinned),
     [filteredDocuments],
   );
 
-  const showEmptyState = filteredDocuments.length === 0;
+  const showEmptyState = !isLoading && !isError && filteredDocuments.length === 0;
 
   function handlePinToggle(event: MouseEvent<HTMLButtonElement>, documentId: string, pinned: boolean) {
     event.stopPropagation();
-    setPinnedIds((current) => {
-      if (pinned) {
-        return current.filter((id) => id !== documentId);
-      }
-      return current.includes(documentId) ? current : [...current, documentId];
-    });
+    onTogglePin(documentId, !pinned);
   }
 
   if (collapsed) {
@@ -121,30 +77,45 @@ export function DocumentDrawer({
         </button>
 
         <nav className="flex-1 overflow-y-auto">
-          <ul className="flex flex-col items-center gap-2">
-            {pinnedDocuments.map((document) => (
-              <CollapsedDocumentButton
-                key={document.id}
-                document={document}
-                onSelect={onSelectDocument}
-              />
-            ))}
-            {pinnedDocuments.length > 0 && recentDocuments.length > 0 ? (
-              <li className="my-1 h-px w-10 bg-slate-300/70" aria-hidden="true" />
-            ) : null}
-            {recentDocuments.map((document) => (
-              <CollapsedDocumentButton
-                key={document.id}
-                document={document}
-                onSelect={onSelectDocument}
-              />
-            ))}
-            {showEmptyState ? (
-              <li className="mt-2 text-center text-[10px] uppercase tracking-wide text-slate-400">
-                No matches
-              </li>
-            ) : null}
-          </ul>
+          {isLoading ? (
+            <p className="px-3 text-center text-[10px] uppercase tracking-wide text-slate-400">Loading…</p>
+          ) : isError ? (
+            <div className="flex flex-col items-center gap-2 px-2 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-600">Error</p>
+              {onRetry ? (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="focus-ring inline-flex h-7 items-center justify-center rounded-full bg-rose-600 px-3 text-[10px] font-semibold uppercase tracking-wide text-white transition hover:bg-rose-700"
+                >
+                  Retry
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <ul className="flex flex-col items-center gap-2">
+              {pinnedDocuments.map((document) => (
+                <CollapsedDocumentButton
+                  key={document.id}
+                  document={document}
+                  onSelect={onSelectDocument}
+                />
+              ))}
+              {pinnedDocuments.length > 0 && recentDocuments.length > 0 ? (
+                <li className="my-1 h-px w-10 bg-slate-300/70" aria-hidden="true" />
+              ) : null}
+              {recentDocuments.map((document) => (
+                <CollapsedDocumentButton
+                  key={document.id}
+                  document={document}
+                  onSelect={onSelectDocument}
+                />
+              ))}
+              {showEmptyState ? (
+                <li className="mt-2 text-center text-[10px] uppercase tracking-wide text-slate-400">No documents</li>
+              ) : null}
+            </ul>
+          )}
         </nav>
 
         <CollapseButton collapsed={collapsed} onToggle={onToggleCollapse} />
@@ -203,26 +174,43 @@ export function DocumentDrawer({
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto pr-1">
-        {pinnedDocuments.length > 0 ? (
-          <DocumentSection
-            title="Pinned"
-            documents={pinnedDocuments}
-            onSelectDocument={onSelectDocument}
-            onPinToggle={handlePinToggle}
-          />
-        ) : null}
+        {isLoading ? (
+          <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">
+            Loading documents…
+          </div>
+        ) : isError ? (
+          <div className="space-y-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 shadow-sm">
+            <p className="font-semibold">We couldn't load the recent documents.</p>
+            {onRetry ? (
+              <Button variant="secondary" size="sm" onClick={onRetry}>
+                Try again
+              </Button>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            {pinnedDocuments.length > 0 ? (
+              <DocumentSection
+                title="Pinned"
+                documents={pinnedDocuments}
+                onSelectDocument={onSelectDocument}
+                onPinToggle={handlePinToggle}
+              />
+            ) : null}
 
-        {pinnedDocuments.length > 0 && recentDocuments.length > 0 ? (
-          <div className="border-t border-slate-200/70" />
-        ) : null}
+            {pinnedDocuments.length > 0 && recentDocuments.length > 0 ? (
+              <div className="border-t border-slate-200/70" />
+            ) : null}
 
-        <DocumentSection
-          title="Recent"
-          documents={recentDocuments}
-          emptyMessage={showEmptyState ? "No documents match your search yet." : undefined}
-          onSelectDocument={onSelectDocument}
-          onPinToggle={handlePinToggle}
-        />
+            <DocumentSection
+              title="Recent"
+              documents={recentDocuments}
+              emptyMessage={showEmptyState ? "No documents match your search yet." : undefined}
+              onSelectDocument={onSelectDocument}
+              onPinToggle={handlePinToggle}
+            />
+          </>
+        )}
       </div>
 
       <div className="flex items-center justify-between border-t border-transparent pt-2">
@@ -241,7 +229,7 @@ function DocumentSection({
   onPinToggle,
 }: {
   title?: string;
-  documents: HydratedDocument[];
+  documents: readonly DocumentDrawerDocument[];
   emptyMessage?: string;
   onSelectDocument: (documentId: string) => void;
   onPinToggle: (event: MouseEvent<HTMLButtonElement>, documentId: string, pinned: boolean) => void;
@@ -276,11 +264,11 @@ function DocumentListItem({
   onSelectDocument,
   onPinToggle,
 }: {
-  document: HydratedDocument;
+  document: DocumentDrawerDocument;
   onSelectDocument: (documentId: string) => void;
   onPinToggle: (event: MouseEvent<HTMLButtonElement>, documentId: string, pinned: boolean) => void;
 }) {
-  const { id, name, updatedAt, viewers, pinned } = document;
+  const { id, name, updatedAtLabel, pinned } = document;
 
   return (
     <li>
@@ -293,16 +281,12 @@ function DocumentListItem({
           <span className="font-semibold text-slate-800 group-hover:text-brand-600 group-focus-within:text-brand-600">
             {name}
           </span>
-          <span className="text-xs text-slate-500">Updated {updatedAt}</span>
+          <span className="text-xs text-slate-500">Updated {updatedAtLabel}</span>
         </button>
         <div className="flex items-center gap-2">
-          {viewers.length > 0 ? (
-            <ViewerStack viewers={viewers} />
-          ) : (
-            <span className="rounded-full border border-dashed border-slate-300 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">
-              Idle
-            </span>
-          )}
+          <span className="rounded-full border border-dashed border-slate-300 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">
+            Idle
+          </span>
           <button
             type="button"
             onClick={(event) => onPinToggle(event, id, pinned)}
@@ -329,26 +313,11 @@ function DocumentListItem({
   );
 }
 
-function ViewerStack({ viewers }: { viewers: DocumentViewer[] }) {
-  return (
-    <ul className="flex items-center -space-x-2">
-      {viewers.map((viewer) => (
-        <li
-          key={viewer.id}
-          className={`flex h-6 w-6 items-center justify-center rounded-full border-2 border-white text-[10px] font-semibold text-white ${viewer.color}`}
-        >
-          {viewer.initials}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 function CollapsedDocumentButton({
   document,
   onSelect,
 }: {
-  document: HydratedDocument;
+  document: DocumentDrawerDocument;
   onSelect: (documentId: string) => void;
 }) {
   const glyph = getDocumentGlyph(document.name);
@@ -362,7 +331,7 @@ function CollapsedDocumentButton({
         type="button"
         onClick={() => onSelect(document.id)}
         className={`focus-ring flex h-9 w-9 items-center justify-center rounded-full border-2 text-[10px] font-semibold transition ${pinnedStyle}`}
-        title={`${document.name} • Updated ${document.updatedAt}`}
+        title={`${document.name} • Updated ${document.updatedAtLabel}`}
       >
         {glyph}
       </button>
@@ -400,13 +369,10 @@ function CollapseButton({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 }
 
 function getDocumentGlyph(name: string) {
-  const trimmed = name.trim();
-  if (!trimmed) {
-    return "D";
-  }
-  const words = trimmed.split(/\s+/);
-  if (words.length === 1) {
-    return words[0]!.slice(0, 2).toUpperCase();
-  }
-  return `${words[0]?.[0] ?? ""}${words[1]?.[0] ?? ""}`.toUpperCase();
+  const [first = "?", second = ""] = name
+    .split(" ")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  const letters = `${first.charAt(0)}${second.charAt(0)}`.toUpperCase();
+  return letters || name.charAt(0).toUpperCase() || "?";
 }
