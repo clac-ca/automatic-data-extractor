@@ -23,6 +23,7 @@ src/
     app.routes.ts            # Route table with /setup guard + shell children
     core/
       layout/                # AppShellComponent (header + collapsible workspace sidebar)
+      workspaces/            # Workspace directory service powering navigation state
       setup/                 # Placeholder /setup guard (replace with service in later phases)
     features/
       setup/                 # First-run admin creation placeholder view
@@ -50,7 +51,7 @@ Unit tests run through Karma and Jasmine:
 npm test
 ```
 
-The default configuration runs tests in Chrome Headless and watches for file changes. For one-off CI runs use `npm test -- --watch=false`.
+The default configuration runs tests in a Puppeteer-managed Chrome Headless session and watches for file changes. Use `npm test -- --watch=false` for one-off CI runs that should exit after a single pass.
 
 Run Angular ESLint with:
 
@@ -58,9 +59,7 @@ Run Angular ESLint with:
 npm run lint
 ```
 
-> Unit tests run in Chrome Headless. If Chrome is not installed on your machine or CI
-> runner, set the `CHROME_BIN` environment variable to the Chromium executable before
-> running `npm test`.
+> The workspace automatically downloads a compatible Chromium binary via Puppeteer so system Chrome installations are not required for unit tests.
 
 ## Building
 

@@ -14,24 +14,35 @@
     </button>
     <div class="app-shell__brand">
       <span class="app-shell__brand-title">Automatic Data Extractor</span>
-      @if (workspaceOptions.length) {
+      @if (loadingWorkspaces()) {
+        <span class="app-shell__workspace-status" role="status">Loading workspaces…</span>
+      } @else if (workspaceError()) {
+        <div class="app-shell__workspace-status app-shell__workspace-status--error" role="alert">
+          <span>{{ workspaceError() }}</span>
+          <button type="button" class="app-shell__workspace-retry" (click)="retryWorkspaceLoad()">
+            Retry
+          </button>
+        </div>
+      } @else if (hasWorkspaces()) {
         <label class="app-shell__workspace-switcher">
           <span class="visually-hidden">Choose workspace</span>
           <select
             class="app-shell__workspace-select"
-            [value]="currentWorkspaceId() ?? defaultWorkspaceId"
-            (change)="onWorkspaceSelect(($event.target as HTMLSelectElement).value)"
+            [value]="activeWorkspaceId()"
+            (change)="onWorkspaceSelect($any($event.target).value || '')"
           >
-            @for (workspace of workspaceOptions; track workspace.id) {
+            @for (workspace of workspaces(); track workspace.id) {
               <option [value]="workspace.id">{{ workspace.name }}</option>
             }
           </select>
         </label>
+      } @else {
+        <span class="app-shell__workspace-status">No workspaces available yet.</span>
       }
-      @if (currentWorkspaceId(); as workspaceId) {
+      @if (activeWorkspace(); as workspace) {
         <span class="app-shell__workspace-meta">
           <span class="app-shell__workspace-label">Workspace</span>
-          <span class="app-shell__workspace-name">{{ workspaceId }}</span>
+          <span class="app-shell__workspace-name">{{ workspace.name }}</span>
         </span>
       }
     </div>
