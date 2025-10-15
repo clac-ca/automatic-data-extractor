@@ -27,7 +27,7 @@ WEB_STATIC_DIR = WEB_DIR / "static"
 SPA_INDEX = WEB_STATIC_DIR / "index.html"
 API_PREFIX = "/api"
 DEFAULT_FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
-FRONTEND_BUILD_DIRNAME = Path("dist") / "frontend"
+FRONTEND_BUILD_DIRNAME = Path("dist")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
