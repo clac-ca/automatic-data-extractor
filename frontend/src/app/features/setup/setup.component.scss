@@ -1,0 +1,19 @@
+.setup {
+  max-width: 32rem;
+  margin: 4rem auto;
+  padding: 2rem;
+  border-radius: 1rem;
+  background: #f9fafb;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
+
+  h1 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+  }
+
+  p {
+    margin: 0;
+    color: #475467;
+    line-height: 1.6;
+  }
+}
