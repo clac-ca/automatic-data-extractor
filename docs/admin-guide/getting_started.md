@@ -18,7 +18,7 @@ anywhere without provisioning external infrastructure.
 
 
 ## 2. Prerequisites
-- **Python 3.11** with `pip` available on your `PATH`. Windows installers live at
+- **Python 3.12** with `pip` available on your `PATH`. Windows installers live at
   <https://www.python.org/downloads/>.
 - **Node.js 20 LTS** (includes `npm`). Download from
   <https://nodejs.org/en/download/>.
@@ -61,7 +61,7 @@ accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
    cd automatic-data-extractor
    cp .env.example .env
 
-   python3.11 -m venv .venv
+   python3.12 -m venv .venv
    source .venv/bin/activate  # Windows PowerShell: .\.venv\Scripts\Activate.ps1
 
    python -m pip install --upgrade pip

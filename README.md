@@ -38,7 +38,7 @@ ADE's published container images are built from `main` and hosted on GitHub Cont
 ### Get set up
 
 1. Install prerequisites (skip any you already have):
-   - [Python 3.11](https://www.python.org/downloads/) with `pip`
+   - [Python 3.12](https://www.python.org/downloads/) with `pip`
    - [Node.js 20 LTS](https://nodejs.org/en/download/) (includes `npm`)
    - [Git](https://git-scm.com/downloads)
 
