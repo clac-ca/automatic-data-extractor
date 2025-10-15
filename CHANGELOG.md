@@ -7,9 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
-- Placeholder for upcoming changes.
+- Introduce an Angular workspace directory service with loading and error states to power the app shell navigation.
 
 ### Changed
+- Run Angular unit tests against a Puppeteer-managed Chrome Headless binary so contributors do not need a system Chrome install.
 - Rename the backend package to ``ade`` and update defaults, documentation, and tooling to use the new ``data/`` storage root.
 - Simplify the ADE settings module to use direct BaseSettings fields with clearer path resolution and OIDC/cors parsing.
 - Relocate the ADE settings module to ``ade/settings.py`` and update imports and docs to match the new location.

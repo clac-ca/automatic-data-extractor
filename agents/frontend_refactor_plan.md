@@ -62,8 +62,8 @@ Track progress with the checklist below. Update statuses as work completes.
 6. **Phase 5** locks in quality, accessibility, and release confidence.
 
 > **Status notes**
-> - Phase 0: ✅ Angular workspace restored with strict typing, CLI-managed linting, headless Karma, and a placeholder `/setup` guard syncing with the backend build pipeline.
-> - Phase 1: ⧗ App shell, navigation scaffold, and workspace stubs in place; next up is wiring real workspace data and interaction states.
+> - Phase 0: ✅ Angular workspace restored with strict typing, CLI-managed linting, Puppeteer-backed headless Karma, and a placeholder `/setup` guard syncing with the backend build pipeline.
+> - Phase 1: ⧗ App shell, navigation scaffold, and workspace stubs in place; workspace directory service now feeds navigation with loading/error states—next up is wiring live workspace data sources and richer sidebar interactions.
 > - Phase 2:
 > - Phase 3:
 > - Phase 4:
