@@ -1,27 +1,70 @@
 <a class="skip-link" href="#main-content">Skip to main content</a>
+
 <div class="app-shell" [ngClass]="{ 'app-shell--sidebar-collapsed': !sidebarOpen() }">
   <header class="app-shell__header">
-    <button type="button" class="app-shell__sidebar-toggle" (click)="toggleSidebar()">
-      <span class="visually-hidden">Toggle navigation</span>
-      ☰
+    <button
+      type="button"
+      class="app-shell__sidebar-toggle"
+      [disabled]="!workspaceNavVisible()"
+      [attr.aria-expanded]="workspaceNavVisible() ? sidebarOpen() : false"
+      (click)="toggleSidebar()"
+    >
+      <span class="visually-hidden">Toggle workspace navigation</span>
+      <span aria-hidden="true" class="app-shell__sidebar-icon">|||</span>
     </button>
-    <div class="app-shell__title">Automatic Data Extractor</div>
-    <nav class="app-shell__workspace-actions">
-      <a routerLink="/workspaces" routerLinkActive="is-active">Workspaces</a>
+    <div class="app-shell__brand">
+      <span class="app-shell__brand-title">Automatic Data Extractor</span>
+      @if (workspaceOptions.length) {
+        <label class="app-shell__workspace-switcher">
+          <span class="visually-hidden">Choose workspace</span>
+          <select
+            class="app-shell__workspace-select"
+            [value]="currentWorkspaceId() ?? defaultWorkspaceId"
+            (change)="onWorkspaceSelect(($event.target as HTMLSelectElement).value)"
+          >
+            @for (workspace of workspaceOptions; track workspace.id) {
+              <option [value]="workspace.id">{{ workspace.name }}</option>
+            }
+          </select>
+        </label>
+      }
+      @if (currentWorkspaceId(); as workspaceId) {
+        <span class="app-shell__workspace-meta">
+          <span class="app-shell__workspace-label">Workspace</span>
+          <span class="app-shell__workspace-name">{{ workspaceId }}</span>
+        </span>
+      }
+    </div>
+    <nav class="app-shell__global-nav" aria-label="Global navigation">
+      <a
+        [routerLink]="workspaceDocumentsLink()"
+        routerLinkActive="is-active"
+        [routerLinkActiveOptions]="{ exact: false }"
+      >
+        Workspaces
+      </a>
       <a routerLink="/settings" routerLinkActive="is-active">Settings</a>
     </nav>
   </header>
+
   <div class="app-shell__body">
-    <aside class="app-shell__sidebar" aria-label="Workspace navigation">
-      <h2 class="app-shell__sidebar-heading">Workspace</h2>
-      <ul class="app-shell__sidebar-list">
-        <li><a routerLink="documents" routerLinkActive="is-active">Documents</a></li>
-        <li><a routerLink="configurations" routerLinkActive="is-active">Configurations</a></li>
-        <li><a routerLink="jobs" routerLinkActive="is-active">Jobs</a></li>
-      </ul>
-    </aside>
+    @if (workspaceNavVisible()) {
+      <aside class="app-shell__sidebar" aria-label="Workspace navigation">
+        <h2 class="app-shell__sidebar-heading">Workspace navigation</h2>
+        <ul class="app-shell__sidebar-links">
+          @for (link of workspaceNavLinks; track link.path) {
+            <li>
+              <a [routerLink]="workspaceLink(link.path)" routerLinkActive="is-active">
+                {{ link.label }}
+              </a>
+            </li>
+          }
+        </ul>
+      </aside>
+    }
+
     <main id="main-content" class="app-shell__content" role="main">
-      <router-outlet></router-outlet>
+      <router-outlet />
     </main>
   </div>
 </div>

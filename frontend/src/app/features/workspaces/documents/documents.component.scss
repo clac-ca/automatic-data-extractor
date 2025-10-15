@@ -1,25 +1,4 @@
-.workspace-documents {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.workspace-documents__header {
-  h1 {
-    margin: 0;
-  }
-
-  p {
-    margin: 0.5rem 0 0;
-    color: #475467;
-  }
-}
-
-.workspace-documents__empty {
-  padding: 2rem;
-  border: 1px dashed #d0d5dd;
-  border-radius: 0.75rem;
-  background-color: #f8f9fb;
-  color: #475467;
-  text-align: center;
+.documents {
+  display: grid;
+  gap: 1rem;
 }

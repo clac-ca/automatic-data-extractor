@@ -1,10 +1,10 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 
 @Component({
-  selector: 'app-settings',
+  selector: 'app-workspace-jobs',
   standalone: true,
-  templateUrl: './settings.component.html',
-  styleUrl: './settings.component.scss',
+  templateUrl: './jobs.component.html',
+  styleUrl: './jobs.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class SettingsComponent {}
+export class JobsComponent {}

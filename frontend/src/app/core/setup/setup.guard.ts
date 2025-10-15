@@ -1,12 +1,12 @@
 import { CanMatchFn } from '@angular/router';
 
 /**
- * Placeholder guard protecting the first-run /setup flow.
+ * Placeholder guard used to protect the `/setup` wizard route.
  *
- * Later phases will replace the stub logic with a call into
- * the backend to determine whether an initial admin exists.
+ * Future phases will inject a setup service that interrogates the backend
+ * to determine whether the initial administrator has been provisioned.
  */
 export const setupGuard: CanMatchFn = () => {
-  // TODO: inject SetupService to determine when the guard should allow navigation.
+  // TODO: replace stub with real bootstrap state check.
   return true;
 };

@@ -1,8 +1,9 @@
 import { Routes } from '@angular/router';
 import { AppShellComponent } from './core/layout/app-shell.component';
+import { DEFAULT_WORKSPACE_ID } from './core/constants';
 import { setupGuard } from './core/setup/setup.guard';
 
-export const APP_ROUTES: Routes = [
+export const routes: Routes = [
   {
     path: 'setup',
     canMatch: [setupGuard],
@@ -16,14 +17,24 @@ export const APP_ROUTES: Routes = [
       {
         path: '',
         pathMatch: 'full',
-        redirectTo: 'workspaces',
+        redirectTo: `workspaces/${DEFAULT_WORKSPACE_ID}/documents`,
       },
       {
         path: 'workspaces',
-        loadChildren: () =>
-          import('./features/workspaces/workspaces.routes').then(
-            (m) => m.WORKSPACES_ROUTES,
-          ),
+        children: [
+          {
+            path: '',
+            pathMatch: 'full',
+            redirectTo: `${DEFAULT_WORKSPACE_ID}/documents`,
+          },
+          {
+            path: ':workspaceId',
+            loadChildren: () =>
+              import('./features/workspaces/workspaces.routes').then(
+                (m) => m.WORKSPACES_ROUTES,
+              ),
+          },
+        ],
       },
       {
         path: 'settings',
@@ -36,6 +47,6 @@ export const APP_ROUTES: Routes = [
   },
   {
     path: '**',
-    redirectTo: 'workspaces',
+    redirectTo: `workspaces/${DEFAULT_WORKSPACE_ID}/documents`,
   },
 ];
