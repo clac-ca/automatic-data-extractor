@@ -27,7 +27,7 @@ WEB_STATIC_DIR = WEB_DIR / "static"
 SPA_INDEX = WEB_STATIC_DIR / "index.html"
 API_PREFIX = "/api"
 DEFAULT_FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
-FRONTEND_BUILD_DIRNAME = "dist"
+FRONTEND_BUILD_DIRNAME = Path("dist") / "frontend"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -149,6 +149,14 @@ def sync_frontend_assets(
     if not build_dir.exists() or not build_dir.is_dir():
         raise ValueError(f"Frontend build output not found at {build_dir}")
 
+    browser_dir = build_dir / "browser"
+    if browser_dir.exists() and browser_dir.is_dir():
+        primary_sources = list(browser_dir.iterdir())
+        extra_sources = [path for path in build_dir.iterdir() if path.name != "browser"]
+    else:
+        primary_sources = list(build_dir.iterdir())
+        extra_sources: list[Path] = []
+
     target = Path(static_dir).expanduser().resolve() if static_dir else WEB_STATIC_DIR
     target.mkdir(parents=True, exist_ok=True)
 
@@ -160,7 +168,18 @@ def sync_frontend_assets(
         else:
             entry.unlink()
 
-    shutil.copytree(build_dir, target, dirs_exist_ok=True)
+    def _copy_path(source: Path, destination: Path) -> None:
+        if source.is_dir():
+            shutil.copytree(source, destination, dirs_exist_ok=True)
+        else:
+            shutil.copy2(source, destination)
+
+    for source in primary_sources:
+        _copy_path(source, target / source.name)
+
+    for source in extra_sources:
+        destination = target / source.name
+        _copy_path(source, destination)
 
 
 def _mount_static(app: FastAPI) -> None:

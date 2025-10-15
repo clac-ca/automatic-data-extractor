@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 
 @Component({
-  selector: 'ade-setup',
+  selector: 'app-setup',
   standalone: true,
   templateUrl: './setup.component.html',
   styleUrl: './setup.component.scss',
