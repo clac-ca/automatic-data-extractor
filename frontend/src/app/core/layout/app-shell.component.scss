@@ -24,6 +24,34 @@
   letter-spacing: 0.02em;
 }
 
+.app-shell__workspace-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: rgba(249, 250, 251, 0.84);
+}
+
+.app-shell__workspace-status--error {
+  color: #fecaca;
+}
+
+.app-shell__workspace-retry {
+  appearance: none;
+  border: 1px solid rgba(249, 250, 251, 0.4);
+  border-radius: 0.5rem;
+  background: rgba(249, 250, 251, 0.08);
+  color: inherit;
+  padding: 0.2rem 0.75rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.app-shell__workspace-retry:focus-visible {
+  outline: 3px solid #60a5fa;
+  outline-offset: 2px;
+}
+
 .app-shell__sidebar-toggle {
   border: 1px solid transparent;
   border-radius: 0.5rem;
