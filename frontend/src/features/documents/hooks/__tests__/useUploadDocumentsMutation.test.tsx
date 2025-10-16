@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { WorkspaceDocumentSummary } from "../../../../shared/types/documents";
+import type { DocumentRecord } from "../../../../shared/types/documents";
 import { uploadWorkspaceDocument } from "../../api";
 import { useUploadDocumentsMutation } from "../useUploadDocumentsMutation";
 
@@ -24,14 +24,23 @@ describe("useUploadDocumentsMutation", () => {
 
     const mockedUpload = vi.mocked(uploadWorkspaceDocument);
     mockedUpload.mockImplementation(async (_workspaceId: string, { file }: { file: File }) => ({
-      id: `doc-${file.name}`,
+      document_id: `doc-${file.name}`,
+      workspace_id: "workspace-123",
       name: file.name,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      byteSize: file.size,
-      contentType: file.type,
+      content_type: file.type,
+      byte_size: file.size,
       metadata: {},
-    } as WorkspaceDocumentSummary));
+      status: "uploaded",
+      source: "manual_upload",
+      expires_at: new Date().toISOString(),
+      last_run_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      deleted_at: null,
+      deleted_by: null,
+      tags: [],
+      uploader: null,
+    } as DocumentRecord));
 
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },

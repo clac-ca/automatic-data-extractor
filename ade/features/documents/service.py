@@ -4,15 +4,17 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Mapping
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from fastapi import UploadFile
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased, selectinload
 
 from ade.settings import Settings
 from ade.db import generate_ulid
+from ade.core.pagination import paginate
 from ade.features.users.models import User
 
 from .exceptions import (
@@ -20,8 +22,15 @@ from .exceptions import (
     DocumentNotFoundError,
     InvalidDocumentExpirationError,
 )
-from .models import Document
-from .schemas import DocumentRecord
+from .filtering import (
+    DocumentFilters,
+    DocumentSort,
+    DocumentSortableField,
+    DocumentSource,
+    DocumentStatus,
+)
+from .models import Document, DocumentTag
+from .schemas import DocumentListResponse, DocumentRecord
 from .storage import DocumentStorage
 
 
@@ -45,6 +54,7 @@ class DocumentsService:
         metadata: Mapping[str, Any] | None = None,
         expires_at: str | None = None,
         produced_by_job_id: str | None = None,
+        actor: User | None = None,
     ) -> DocumentRecord:
         """Persist ``upload`` to storage and return the resulting metadata record."""
 
@@ -73,26 +83,56 @@ class DocumentsService:
             sha256=stored.sha256,
             stored_uri=stored_uri,
             attributes=metadata_payload,
+            uploaded_by_user_id=cast(str | None, getattr(actor, "id", None)),
+            status=DocumentStatus.UPLOADED.value,
+            source=DocumentSource.MANUAL_UPLOAD.value,
             expires_at=expiration,
+            last_run_at=None,
             produced_by_job_id=produced_by_job_id,
         )
         self._session.add(document)
         await self._session.flush()
+        stmt = self._base_query(workspace_id).where(Document.id == document_id)
+        result = await self._session.execute(stmt)
+        hydrated = result.scalar_one()
 
-        return DocumentRecord.model_validate(document)
+        return DocumentRecord.model_validate(hydrated)
 
     async def list_documents(
-        self, *, workspace_id: str, limit: int, offset: int
-    ) -> list[DocumentRecord]:
-        """Return non-deleted documents ordered by recency."""
+        self,
+        *,
+        workspace_id: str,
+        page: int,
+        per_page: int,
+        include_total: bool = False,
+        filters: DocumentFilters | None = None,
+        sort: DocumentSort | None = None,
+        actor: User | None = None,
+    ) -> DocumentListResponse:
+        """Return paginated documents ordered by recency."""
+
+        filters = filters or DocumentFilters()
+        sort = sort or DocumentSort.parse(None)
 
         stmt = self._base_query(workspace_id).where(Document.deleted_at.is_(None))
-        stmt = stmt.order_by(Document.created_at.desc()).offset(offset).limit(limit)
-        result = await self._session.execute(stmt)
-        documents = result.scalars().all()
-        records = [DocumentRecord.model_validate(item) for item in documents]
+        stmt = self._apply_filters(
+            stmt,
+            filters=filters,
+            actor=actor,
+        )
+        envelope = await paginate(
+            self._session,
+            stmt,
+            page=page,
+            per_page=per_page,
+            order_by=self._resolve_ordering(sort),
+            include_total=include_total,
+        )
+        envelope["items"] = [
+            DocumentRecord.model_validate(item) for item in envelope["items"]
+        ]
 
-        return records
+        return DocumentListResponse.model_validate(envelope)
 
     async def get_document(self, *, workspace_id: str, document_id: str) -> DocumentRecord:
         """Return document metadata for ``document_id``."""
@@ -152,7 +192,108 @@ class DocumentsService:
         return document
 
     def _base_query(self, workspace_id: str) -> Select[tuple[Document]]:
-        return select(Document).where(Document.workspace_id == workspace_id)
+        return (
+            select(Document)
+            .options(
+                selectinload(Document.uploaded_by_user),
+                selectinload(Document.tags),
+            )
+            .where(Document.workspace_id == workspace_id)
+        )
+
+    def _apply_filters(
+        self,
+        stmt: Select[tuple[Document]],
+        *,
+        filters: DocumentFilters,
+        actor: User | None,
+    ) -> Select[tuple[Document]]:
+        conditions = []
+
+        if filters.status:
+            conditions.append(Document.status.in_([status.value for status in filters.status]))
+        if filters.source:
+            conditions.append(Document.source.in_([source.value for source in filters.source]))
+        if filters.tags:
+            conditions.append(Document.tags.any(DocumentTag.tag.in_(filters.tags)))
+
+        uploader_checks: list[str] = []
+        if filters.uploader_me:
+            if actor is None:
+                raise RuntimeError("uploader=me requires an authenticated actor")
+            uploader_checks.append(getattr(actor, "id"))
+        if filters.uploader_ids:
+            uploader_checks.extend(filters.uploader_ids)
+        if uploader_checks:
+            conditions.append(Document.uploaded_by_user_id.in_(uploader_checks))
+
+        if filters.created_from is not None:
+            conditions.append(Document.created_at >= filters.created_from)
+        if filters.created_to is not None:
+            conditions.append(Document.created_at <= filters.created_to)
+
+        if filters.last_run_from is not None:
+            conditions.append(Document.last_run_at.is_not(None))
+            conditions.append(Document.last_run_at >= filters.last_run_from)
+        if filters.last_run_to is not None:
+            conditions.append(
+                or_(Document.last_run_at <= filters.last_run_to, Document.last_run_at.is_(None))
+            )
+
+        if filters.byte_size_min is not None:
+            conditions.append(Document.byte_size >= filters.byte_size_min)
+        if filters.byte_size_max is not None:
+            conditions.append(Document.byte_size <= filters.byte_size_max)
+
+        if filters.q:
+            uploader_alias = aliased(User)
+            pattern = f"%{filters.q}%"
+            lowered_pattern = func.lower(literal(pattern))
+            stmt = stmt.outerjoin(uploader_alias, Document.uploaded_by_user)
+            conditions.append(
+                or_(
+                    func.lower(Document.original_filename).like(lowered_pattern),
+                    func.lower(uploader_alias.display_name).like(lowered_pattern),
+                    func.lower(uploader_alias.email).like(lowered_pattern),
+                )
+            )
+
+        if conditions:
+            stmt = stmt.where(*conditions)
+
+        return stmt
+
+    def _resolve_ordering(self, sort: DocumentSort) -> tuple[object, ...]:
+        column_map = {
+            DocumentSortableField.CREATED_AT: Document.created_at,
+            DocumentSortableField.STATUS: Document.status,
+            DocumentSortableField.LAST_RUN_AT: Document.last_run_at,
+            DocumentSortableField.BYTE_SIZE: Document.byte_size,
+            DocumentSortableField.SOURCE: Document.source,
+            DocumentSortableField.NAME: Document.original_filename,
+        }
+
+        column = column_map[sort.field]
+        if sort.field is DocumentSortableField.NAME:
+            ordered_column = func.lower(column)
+        else:
+            ordered_column = column
+
+        direction = (
+            ordered_column.desc() if sort.descending else ordered_column.asc()
+        )
+
+        order_parts: list[object] = []
+        if sort.field is DocumentSortableField.LAST_RUN_AT:
+            order_parts.append(Document.last_run_at.is_(None))
+            direction = (
+                column.desc() if sort.descending else column.asc()
+            )
+
+        order_parts.append(direction)
+        order_parts.append(Document.id.desc())
+
+        return tuple(order_parts)
 
     def _resolve_expiration(self, override: str | None, now: datetime) -> datetime:
         if override is None:
