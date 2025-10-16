@@ -61,11 +61,10 @@ const secondaryDefinitions: Partial<Record<WorkspaceSectionId, SecondaryNavConfi
   config: {
     type: "static",
     items: [
-      (workspaceId) => ({ id: "config-connectors", label: "Connectors", href: `/workspaces/${workspaceId}/config?view=connectors` }),
-      (workspaceId) => ({ id: "config-webhooks", label: "Webhooks", href: `/workspaces/${workspaceId}/config?view=webhooks` }),
-      (workspaceId) => ({ id: "config-automation", label: "Automations", href: `/workspaces/${workspaceId}/config?view=automations` }),
+      (workspaceId) => ({ id: "config-columns", label: "Columns", href: `/workspaces/${workspaceId}/config?view=columns` }),
+      (workspaceId) => ({ id: "config-scripts", label: "Scripts", href: `/workspaces/${workspaceId}/config?view=scripts` }),
     ],
-    emptyLabel: "Configure integrations to unlock additional controls.",
+    emptyLabel: "Define columns and scripts to configure extraction logic.",
   },
   settings: {
     type: "static",

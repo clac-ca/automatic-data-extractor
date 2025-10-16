@@ -40,6 +40,8 @@ def upgrade() -> None:
     _create_principals()
     _create_role_assignments()
     _create_configurations()
+    _create_configuration_script_versions()
+    _create_configuration_columns()
     _create_documents()
     _create_document_tags()
     _create_jobs(bind)
@@ -345,6 +347,100 @@ def _create_configurations() -> None:
         ["workspace_id"],
         unique=True,
         sqlite_where=sa.text("is_active = 1"),
+    )
+
+
+def _create_configuration_script_versions() -> None:
+    op.create_table(
+        "configuration_script_versions",
+        sa.Column("script_version_id", sa.String(length=26), primary_key=True),
+        sa.Column("configuration_id", sa.String(length=26), nullable=False),
+        sa.Column("canonical_key", sa.String(length=255), nullable=False),
+        sa.Column("version", sa.Integer(), nullable=False),
+        sa.Column(
+            "language",
+            sa.String(length=50),
+            nullable=False,
+            server_default=sa.text("'python'"),
+        ),
+        sa.Column("code", sa.Text(), nullable=False),
+        sa.Column("code_sha256", sa.String(length=64), nullable=False),
+        sa.Column("doc_name", sa.String(length=255), nullable=False),
+        sa.Column("doc_description", sa.Text(), nullable=True),
+        sa.Column("doc_declared_version", sa.Integer(), nullable=True),
+        sa.Column("validated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("validation_errors", sa.JSON(), nullable=True),
+        sa.Column("created_by_user_id", sa.String(length=26), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["configuration_id"],
+            ["configurations.configuration_id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["created_by_user_id"],
+            ["users.user_id"],
+            ondelete="SET NULL",
+        ),
+        sa.UniqueConstraint("configuration_id", "canonical_key", "version"),
+    )
+    op.create_index(
+        "configuration_script_versions_config_canonical_idx",
+        "configuration_script_versions",
+        ["configuration_id", "canonical_key"],
+        unique=False,
+    )
+
+
+def _create_configuration_columns() -> None:
+    op.create_table(
+        "configuration_columns",
+        sa.Column("configuration_id", sa.String(length=26), nullable=False),
+        sa.Column("canonical_key", sa.String(length=255), nullable=False),
+        sa.Column("ordinal", sa.Integer(), nullable=False),
+        sa.Column("display_label", sa.String(length=255), nullable=False),
+        sa.Column("header_color", sa.String(length=20), nullable=True),
+        sa.Column("width", sa.Integer(), nullable=True),
+        sa.Column(
+            "required",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+        ),
+        sa.Column(
+            "enabled",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.true(),
+        ),
+        sa.Column("script_version_id", sa.String(length=26), nullable=True),
+        sa.Column(
+            "params",
+            sa.JSON(),
+            nullable=False,
+            server_default=sa.text("'{}'"),
+        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["configuration_id"],
+            ["configurations.configuration_id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["script_version_id"],
+            ["configuration_script_versions.script_version_id"],
+            ondelete="RESTRICT",
+        ),
+        sa.PrimaryKeyConstraint("configuration_id", "canonical_key"),
+        sa.UniqueConstraint("configuration_id", "ordinal"),
+    )
+    op.create_index(
+        "configuration_columns_config_ordinal_idx",
+        "configuration_columns",
+        ["configuration_id", "ordinal"],
+        unique=False,
     )
 
 
