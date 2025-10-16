@@ -16,7 +16,6 @@ describe("useWorkspaceChromeState", () => {
       key,
       JSON.stringify({
         navCollapsed: true,
-        sectionCollapsed: true,
         focusMode: true,
       }),
     );
@@ -25,7 +24,6 @@ describe("useWorkspaceChromeState", () => {
 
     await waitFor(() => {
       expect(result.current.isNavCollapsed).toBe(true);
-      expect(result.current.isSectionCollapsed).toBe(true);
       expect(result.current.isFocusMode).toBe(true);
     });
   });
@@ -42,20 +40,6 @@ describe("useWorkspaceChromeState", () => {
     expect(result.current.isNavCollapsed).toBe(true);
     const stored = JSON.parse(window.localStorage.getItem(storageKey("workspace-456")) ?? "{}");
     expect(stored.navCollapsed).toBe(true);
-  });
-
-  it("toggles section collapse state and persists it", () => {
-    const { result } = renderHook(() => useWorkspaceChromeState("workspace-112"));
-
-    expect(result.current.isSectionCollapsed).toBe(false);
-
-    act(() => {
-      result.current.toggleSectionCollapsed();
-    });
-
-    expect(result.current.isSectionCollapsed).toBe(true);
-    const stored = JSON.parse(window.localStorage.getItem(storageKey("workspace-112")) ?? "{}");
-    expect(stored.sectionCollapsed).toBe(true);
   });
 
   it("toggles focus mode and persists it", () => {
