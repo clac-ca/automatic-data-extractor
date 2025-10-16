@@ -200,6 +200,15 @@ The outcome is a stable configuration and authoring layer that the job engine ca
 
 ## Reference — Configuration Script Template (verbatim)
 
+A **Configuration Script** is a single Python module for one canonical column key (e.g., `full_name`). The pack can include:
+
+* an optional `setup(context)` that runs **once** and returns a `state` object,
+* **one or more** `detect_*` functions (names must start with `detect_`) that run **per physical column** and return **score adjustments** (positive or negative) for `self` and/or other columns,
+* an optional `transform_cell(...)` that runs **per cell** after mapping and returns **row cell outputs** for `self` and optionally other columns (fill-if-empty merge policy).
+
+The host application handles discovery, merging, tie-breaking, and application of transforms. Authors only write small, obvious functions with a uniform return shape.
+
+
 ```python
 """
 name: full_name
