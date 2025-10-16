@@ -3,14 +3,7 @@ import type { ComponentType, SVGProps } from "react";
 import type { WorkspaceProfile } from "../../shared/types/workspaces";
 import type { WorkspaceSectionDescriptor, WorkspaceSectionId } from "./sections";
 import { buildWorkspaceSectionPath, workspaceSections } from "./sections";
-import {
-  ConfigureIcon,
-  DataIcon,
-  DocumentsIcon,
-  OverviewIcon,
-  RunsIcon,
-  SettingsIcon,
-} from "./icons";
+import { ConfigureIcon, DocumentsIcon, SettingsIcon } from "./icons";
 
 export interface WorkspacePrimaryNavItem {
   readonly id: WorkspaceSectionId;
@@ -35,9 +28,6 @@ export interface WorkspaceSecondaryNavigation {
 
 const sectionIcons: Record<WorkspaceSectionId, ComponentType<SVGProps<SVGSVGElement>>> = {
   documents: DocumentsIcon,
-  overview: OverviewIcon,
-  runs: RunsIcon,
-  data: DataIcon,
   config: ConfigureIcon,
   settings: SettingsIcon,
 };
@@ -68,15 +58,6 @@ interface DynamicSecondaryNavConfig {
 type SecondaryNavConfig = StaticSecondaryNavConfig | DynamicSecondaryNavConfig;
 
 const secondaryDefinitions: Partial<Record<WorkspaceSectionId, SecondaryNavConfig>> = {
-  data: {
-    type: "static",
-    items: [
-      (workspaceId) => ({ id: "data-sources", label: "Sources", href: `/workspaces/${workspaceId}/data?view=sources` }),
-      (workspaceId) => ({ id: "data-schemas", label: "Schemas", href: `/workspaces/${workspaceId}/data?view=schemas` }),
-      (workspaceId) => ({ id: "data-exports", label: "Exports", href: `/workspaces/${workspaceId}/data?view=exports` }),
-    ],
-    emptyLabel: "Add a connector to populate data views.",
-  },
   config: {
     type: "static",
     items: [
@@ -89,9 +70,9 @@ const secondaryDefinitions: Partial<Record<WorkspaceSectionId, SecondaryNavConfi
   settings: {
     type: "static",
     items: [
-      (workspaceId) => ({ id: "settings-profile", label: "Workspace profile", href: `/workspaces/${workspaceId}/settings?view=profile` }),
-      (workspaceId) => ({ id: "settings-permissions", label: "Members & access", href: `/workspaces/${workspaceId}/settings?view=permissions` }),
-      (workspaceId) => ({ id: "settings-retention", label: "Retention", href: `/workspaces/${workspaceId}/settings?view=retention` }),
+      (workspaceId) => ({ id: "settings-general", label: "General", href: `/workspaces/${workspaceId}/settings?view=general` }),
+      (workspaceId) => ({ id: "settings-members", label: "Members", href: `/workspaces/${workspaceId}/settings?view=members` }),
+      (workspaceId) => ({ id: "settings-roles", label: "Roles", href: `/workspaces/${workspaceId}/settings?view=roles` }),
     ],
     emptyLabel: "Workspace settings will appear here soon.",
   },
