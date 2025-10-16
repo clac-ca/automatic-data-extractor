@@ -18,7 +18,7 @@ anywhere without provisioning external infrastructure.
 
 
 ## 2. Prerequisites
-- **Python 3.11** with `pip` available on your `PATH`. Windows installers live at
+- **Python 3.12** with `pip` available on your `PATH`. Windows installers live at
   <https://www.python.org/downloads/>.
 - **Node.js 20 LTS** (includes `npm`). Download from
   <https://nodejs.org/en/download/>.
@@ -61,7 +61,7 @@ accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
    cd automatic-data-extractor
    cp .env.example .env
 
-   python3.11 -m venv .venv
+   python3.12 -m venv .venv
    source .venv/bin/activate  # Windows PowerShell: .\.venv\Scripts\Activate.ps1
 
    python -m pip install --upgrade pip
@@ -71,7 +71,7 @@ accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
 2. Start the application server:
 
    ```bash
-   ade start
+   ade start --reload
    ```
 
    Each invocation performs an idempotent bootstrap before `uvicorn` comes online:
@@ -80,7 +80,7 @@ accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
    - run Alembic migrations in order, logging progress to the console, and
    - print a summary of the resolved settings (sourced from `.env` and the environment).
 
-   Successful boot ends with the FastAPI reload server listening on the configured host and serving the compiled SPA from `ade/web/`, so <http://localhost:8000/> delivers both the UI and API. Use `--rebuild-frontend` to run the Vite production build and copy fresh assets before launch. Other helpful flags: `--no-reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm`.
+   With `--reload`, uvicorn watches the repository for changes while still serving the compiled SPA from `ade/web/static/`, so <http://localhost:8000/> delivers both the UI and API. Omit `--reload` to run in a single process (the same semantics as `uvicorn ade.main:create_app --factory`). Use `--rebuild-frontend` to run the Vite production build and copy fresh assets before launch. Other helpful flags: `--reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm` (`--no-reload` remains available as a backwards-compatible alias).
 
 3. Confirm the API is healthy:
 
@@ -138,7 +138,7 @@ survive container restarts. Check health the same way:
 curl http://localhost:8000/health
 ```
 
-When you deploy the frontend in production, compile it once (`ade start --rebuild-frontend` or `npm run build` followed by copying `frontend/dist/` into `ade/web/`). FastAPI serves those files directly, so your reverse proxy only
+When you deploy the frontend in production, compile it once (`ade start --rebuild-frontend` or `npm run build` followed by copying `frontend/dist/` into `ade/web/static/`). FastAPI serves those files directly, so your reverse proxy only
 needs to forward requests to the backend.
 
 To stop and remove the container:
@@ -246,7 +246,8 @@ With these basics you can run ADE on a laptop, VM, or container host and manage
 administrators confidently using the CLI.
 
 ## 10. Troubleshooting
-- **`ade start` exits immediately:** ensure the Python dependencies are installed (`pip install -e .[dev]`) and that the configured port is free. Run with `--no-reload` if you suspect the reload watcher cannot spawn a subprocess.
+- **`ade start` exits immediately:** ensure the Python dependencies are installed (`pip install -e .[dev]`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`ade start` or `ade start --no-reload`).
 - **Port conflicts on 8000:** choose another port with `ade start --port 9000` or stop the conflicting process.
-- **Frontend shows a blank page:** rebuild assets with `ade start --rebuild-frontend` (or run `npm run build` and copy `frontend/dist/` into `ade/web/`).
+- **Frontend shows a blank page:** rebuild assets with `ade start --rebuild-frontend` (or run `npm run build` and copy `frontend/dist/` into `ade/web/static/`).
 - **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api` prefix.
+

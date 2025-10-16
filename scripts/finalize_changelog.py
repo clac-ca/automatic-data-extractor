@@ -13,14 +13,14 @@ import datetime as dt
 import re
 from pathlib import Path
 
-try:  # Python 3.11+
-    import tomllib  # type: ignore[attr-defined]
+try:  # Python 3.12+
+    import tomllib  # type: ignore[attr-define]
 except ModuleNotFoundError:  # pragma: no cover - Python < 3.11 fallback
     try:
         import tomli as tomllib  # type: ignore[no-redef]
     except ModuleNotFoundError as exc:  # pragma: no cover - dependency missing
         raise SystemExit(
-            "Python 3.11+ or the 'tomli' package is required to parse pyproject.toml"
+            "Python 3.12+ or the 'tomli' package is required to parse pyproject.toml"
         ) from exc
 
 CHANGELOG_PATH = Path("CHANGELOG.md")

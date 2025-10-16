@@ -45,7 +45,7 @@ Notification settings let you choose whether to receive email alerts when jobs f
 
 ## Managing history and collaboration
 
-The activity timeline shows who uploaded each document, when extractions ran, and who viewed the outputs. Use filters to isolate a particular client, reporting period, or document type.
+The activity timeline shows who uploaded each document, when extractions ran, and who viewed the outputs. Use filters to isolate a particular client, reporting period, or workspace.
 
 Team collaboration features include:
 

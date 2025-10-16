@@ -12,10 +12,10 @@ the product and UX contract that the app must satisfy.
   cycles.
 
 ## 2. Personas
-- **Operations Lead** — Monitors processing health and resolves errors.
-- **Configuration Specialist** — Adjusts extraction rules and publishes
+- **Operations Lead** â€” Monitors processing health and resolves errors.
+- **Configuration Specialist** â€” Adjusts extraction rules and publishes
   revisions.
-- **Auditor / Reviewer** — Reviews outcomes and configuration history with
+- **Auditor / Reviewer** â€” Reviews outcomes and configuration history with
   read-only access.
 
 ## 3. Design Tenets
@@ -29,23 +29,23 @@ the product and UX contract that the app must satisfy.
    before exposing the login surface.
 2. Authentication loop (`/login`) with credentials, optional SSO, and redirect
    into the workspace shell.
-3. Workspace shell listing accessible workspaces and summarising document types.
-4. Document type detail view with status strip and configuration drawer.
+3. Workspace shell listing accessible workspaces and surfacing configuration status.
+4. Configuration detail view with status strip and configuration drawer.
 
 ## 5. Experience Map
 ### 5.1 Routes
-- `/setup` — Public wizard available only while setup is required.
-- `/login` — Public authentication surface once setup completes.
-- `/workspaces/:workspaceId` — Default authenticated landing experience.
-- `/workspaces/:workspaceId/document-types/:documentTypeId` — Document type
+- `/setup` â€” Public wizard available only while setup is required.
+- `/login` â€” Public authentication surface once setup completes.
+- `/workspaces/:workspaceId` â€” Default authenticated landing experience.
+- `/workspaces/:workspaceId/configurations/:configurationId` - Configuration
   detail inside the workspace shell.
-- `/logout` — Calls `DELETE /auth/session` then redirects to `/login`.
+- `/logout` â€” Calls `DELETE /auth/session` then redirects to `/login`.
 
 ### 5.2 Layout
 - Top bar: product logo, workspace selector, user menu, connectivity indicator.
-- Navigation rail lists workspaces then document types; collapse below tablet
+- Navigation rail lists workspaces and key sections; collapse below tablet
   widths and persist the preference in `localStorage`.
-- Right pane renders the active document type with breadcrumbs.
+- Right pane renders the active workspace section with breadcrumbs.
 
 ## 6. Screen Specifications
 ### 6.1 `/setup`
@@ -79,10 +79,10 @@ the product and UX contract that the app must satisfy.
 - Workspace selection defaults to `preferred_workspace_id` from
   `GET /auth/session`, otherwise the first `/workspaces` entry.
 - Navigation rail persists last selection in `localStorage`.
-- Document type cards show name, status badge, and last-run timestamp supplied by
-  `useWorkspaceOverviewQuery`.
+- Overview panels show configuration title, activation status, and last-run
+  timestamp supplied by `useWorkspaceOverviewQuery`.
 
-### 6.4 Document Type Detail
+### 6.4 Configuration Detail
 - Status strip surfaces `last_run_at`, `success_rate_7d`, and `pending_jobs`.
 - Primary actions: `Review configuration` (primary CTA) and `View history`
   (secondary link, stub until analytics ship).
@@ -94,27 +94,25 @@ the product and UX contract that the app must satisfy.
 - Right-anchored drawer that traps focus until closed.
 - Sections: `Overview` (name, description, version metadata, publish status) plus
   read-only `Inputs` and `Publishing` summaries.
-- Show revision breadcrumbs (e.g., `v12 • Published by Dana • 2025-03-04`).
+- Show revision breadcrumbs (e.g., `v12 â€¢ Published by Dana â€¢ 2025-03-04`).
 - Exit handling: `Done` button returns focus to its trigger and confirms before
   discarding unsaved changes.
 
 ## 7. Data Contracts
-- `GET /setup/status` → `{ requires_setup: bool, completed_at: datetime | null }`.
-- `POST /setup` → accepts `{ display_name, email, password }`, returns
+- `GET /setup/status` â†’ `{ requires_setup: bool, completed_at: datetime | null }`.
   `SessionEnvelope` and transitions into the authenticated shell.
-- `GET /auth/session` → active session profile powering TanStack Query.
-- `POST /auth/session` → credential sign-in returning `SessionEnvelope`
+- `GET /auth/session` â†’ active session profile powering TanStack Query.
+- `POST /auth/session` â†’ credential sign-in returning `SessionEnvelope`
   (`user`, `expires_at`, `refresh_expires_at`).
-- `DELETE /auth/session` → clears cookies/tokens and redirects to `/login`.
-- `POST /auth/session/refresh` → rotates refresh token and returns updated
+- `DELETE /auth/session` â†’ clears cookies/tokens and redirects to `/login`.
+- `POST /auth/session/refresh` â†’ rotates refresh token and returns updated
   `SessionEnvelope`.
-- `/auth/providers` → `{ providers: List[Provider], force_sso: bool }` where
+- `/auth/providers` â†’ `{ providers: List[Provider], force_sso: bool }` where
   `Provider` includes `id`, `label`, `icon_url`, `start_url`.
-- `/workspaces` → each workspace includes `id`, `name`, `status`, and
-  `document_types: List[DocumentTypeSummary]`.
-- `DocumentTypeSummary` → `id`, `display_name`, `status`,
+- `/workspaces` â†’ each workspace includes `id`, `name`, `status`, and
+- `ConfigurationSummary` → `id`, `title`, `status`,
   `active_configuration_id`, `last_run_at`, `recent_alerts` (optional list).
-- `/configurations/:id` → `version`, `published_by`, `published_at`, `draft`
+- `/configurations/:id` â†’ `version`, `published_by`, `published_at`, `draft`
   status, input schema summary, revision notes.
 
 ## 8. Accessibility and Telemetry
@@ -123,7 +121,7 @@ the product and UX contract that the app must satisfy.
 - Use `aria-live="assertive"` for error summaries and `aria-describedby` for
   inline errors.
 - Emit telemetry for setup completion, login success/failure, workspace switch,
-  document type selection, and configuration publish/save events.
+  configuration selection, and configuration publish/save events.
 
 ## 9. Implementation Guardrails
 - Bootstrap with Vite + React + TypeScript, ESLint, Prettier, Vitest, and Testing
@@ -141,15 +139,15 @@ the product and UX contract that the app must satisfy.
 - Expose `useInitialSetupStatus` to gate `/setup` and `/login` appropriately.
 
 ## 10. Component Map
-- `AppShell` — Routing, query client, and session providers.
-- `SetupWizard` — Guides first-run administrator creation and redirects on
+- `AppShell` â€” Routing, query client, and session providers.
+- `SetupWizard` â€” Guides first-run administrator creation and redirects on
   completion.
-- `LoginPage` — Fetches provider discovery, renders credential form/SSO tiles.
-- `WorkspaceLayout` — Navigation rail and top bar around nested routes.
-- `WorkspaceOverviewPage` — Lists document types with status and last-run info.
-- `DocumentTypePage` — Renders status strip, context cards, and actions.
-- `ConfigurationDrawer` — Handles review flow with focus trap.
-- Shared primitives — Button, Input, Select, Card, Drawer, Spinner, Empty State,
+- `LoginPage` â€” Fetches provider discovery, renders credential form/SSO tiles.
+- `WorkspaceLayout` â€” Navigation rail and top bar around nested routes.
+- `WorkspaceOverviewPage` → Highlights active configuration status and last-run info.
+- `ConfigurationPage` → Renders status strip, context cards, and actions.
+- `ConfigurationDrawer` â€” Handles review flow with focus trap.
+- Shared primitives â€” Button, Input, Select, Card, Drawer, Spinner, Empty State,
   Alert components.
 
 ## 11. Deferred Features

@@ -23,14 +23,12 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        document_type: str | None = None,
         is_active: bool | None = None,
     ) -> list[ConfigurationRecord]:
         """Return configurations ordered by recency."""
 
         configurations = await self._repository.list_configurations(
             workspace_id=workspace_id,
-            document_type=document_type,
             is_active=is_active,
         )
         records = [ConfigurationRecord.model_validate(row) for row in configurations]
@@ -58,7 +56,6 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        document_type: str,
         title: str,
         payload: Mapping[str, Any],
     ) -> ConfigurationRecord:
@@ -66,11 +63,9 @@ class ConfigurationsService:
 
         version = await self._repository.determine_next_version(
             workspace_id=workspace_id,
-            document_type=document_type,
         )
         configuration = await self._repository.create_configuration(
             workspace_id=workspace_id,
-            document_type=document_type,
             title=title,
             payload=payload,
             version=version,
@@ -113,7 +108,6 @@ class ConfigurationsService:
 
         await self._repository.delete_configuration(configuration)
 
-
     async def activate_configuration(
         self,
         *,
@@ -136,13 +130,11 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        document_type: str | None = None,
     ) -> list[ConfigurationRecord]:
-        """Return currently active configurations grouped by document type."""
+        """Return currently active configurations for the workspace."""
 
         configurations = await self._repository.list_active_configurations(
             workspace_id=workspace_id,
-            document_type=document_type,
         )
         return [ConfigurationRecord.model_validate(row) for row in configurations]
 

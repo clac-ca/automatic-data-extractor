@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from fastapi.routing import APIRoute
 
 from ade.api.security import require_csrf
-from ade.main import app
+from ade.main import create_app
 
 MUTATING_METHODS: set[str] = {"POST", "PUT", "PATCH", "DELETE"}
 # Routes that intentionally omit CSRF enforcement because they either run
@@ -40,6 +40,7 @@ def _has_require_csrf(route: APIRoute) -> bool:
 
 
 def test_mutating_routes_require_csrf() -> None:
+    app = create_app()
     violations: list[str] = []
     for route in app.routes:
         if not isinstance(route, APIRoute):

@@ -45,7 +45,6 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_OIDC_REDIRECT_URL",
         "ADE_OIDC_SCOPES",
         "ADE_AUTH_FORCE_SSO",
-        "ADE_AUTH_PROVIDERS",
     ):
         monkeypatch.delenv(var, raising=False)
     try:
@@ -330,16 +329,3 @@ def test_storage_upload_max_bytes_must_be_positive(monkeypatch: pytest.MonkeyPat
         reload_settings()
 
 
-def test_auth_provider_ids_must_be_unique(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Provider definitions should reject duplicate identifiers."""
-
-    monkeypatch.setenv(
-        "ADE_AUTH_PROVIDERS",
-        '[{"id": "entra", "label": "Entra", "start_url": "/auth/sso"},'
-        ' {"id": "entra", "label": "Duplicate", "start_url": "/auth/other"}]',
-    )
-
-    with pytest.raises(ValidationError) as excinfo:
-        reload_settings()
-
-    assert "auth_providers entries must use unique ids" in str(excinfo.value)

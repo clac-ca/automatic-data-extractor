@@ -23,10 +23,11 @@ from .features.auth.dependencies import configure_auth_dependencies
 from .services.task_queue import TaskQueue
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
-SPA_INDEX = WEB_DIR / "index.html"
+WEB_STATIC_DIR = WEB_DIR / "static"
+SPA_INDEX = WEB_STATIC_DIR / "index.html"
 API_PREFIX = "/api"
 DEFAULT_FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
-FRONTEND_BUILD_DIRNAME = "dist"
+FRONTEND_BUILD_DIRNAME = Path("dist")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -95,9 +96,9 @@ def start(
             npm_command=npm_command,
             env=os.environ,
         )
-        print("Frontend: rebuilt and synced to ade/web")
+        print("Frontend: rebuilt and synced to ade/web/static")
     else:
-        print("Frontend: serving existing assets from ade/web")
+        print("Frontend: serving existing assets from ade/web/static")
 
     print("ADE application server")
     print("---------------------")
@@ -106,8 +107,9 @@ def start(
 
     import uvicorn
 
+    target = "ade.main:create_app" if reload else create_app
     uvicorn.run(
-        "ade.main:create_app",
+        target,
         host=bind_host,
         port=bind_port,
         reload=reload,
@@ -147,21 +149,45 @@ def sync_frontend_assets(
     if not build_dir.exists() or not build_dir.is_dir():
         raise ValueError(f"Frontend build output not found at {build_dir}")
 
-    target = Path(static_dir).expanduser().resolve() if static_dir else WEB_DIR
+    browser_dir = build_dir / "browser"
+    if browser_dir.exists() and browser_dir.is_dir():
+        primary_sources = list(browser_dir.iterdir())
+        extra_sources = [path for path in build_dir.iterdir() if path.name != "browser"]
+    else:
+        primary_sources = list(build_dir.iterdir())
+        extra_sources: list[Path] = []
+
+    target = Path(static_dir).expanduser().resolve() if static_dir else WEB_STATIC_DIR
     target.mkdir(parents=True, exist_ok=True)
 
     for entry in target.iterdir():
+        if entry.name == "README.md":
+            continue
         if entry.is_dir():
             shutil.rmtree(entry)
         else:
             entry.unlink()
 
-    shutil.copytree(build_dir, target, dirs_exist_ok=True)
+    def _copy_path(source: Path, destination: Path) -> None:
+        if source.is_dir():
+            shutil.copytree(source, destination, dirs_exist_ok=True)
+        else:
+            shutil.copy2(source, destination)
+
+    for source in primary_sources:
+        _copy_path(source, target / source.name)
+
+    for source in extra_sources:
+        destination = target / source.name
+        _copy_path(source, destination)
 
 
 def _mount_static(app: FastAPI) -> None:
-    WEB_DIR.mkdir(parents=True, exist_ok=True)
-    app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
+    WEB_STATIC_DIR.mkdir(parents=True, exist_ok=True)
+
+    assets_dir = WEB_STATIC_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
     @app.get("/", include_in_schema=False)
     async def read_spa_root() -> FileResponse:
@@ -243,14 +269,12 @@ def _configure_openapi(app: FastAPI, settings: Settings) -> None:
     app.openapi = custom_openapi
 
 
-app = create_app()
-
 __all__ = [
     "API_PREFIX",
     "DEFAULT_FRONTEND_DIR",
     "FRONTEND_BUILD_DIRNAME",
     "WEB_DIR",
-    "app",
+    "WEB_STATIC_DIR",
     "build_frontend_assets",
     "create_app",
     "start",

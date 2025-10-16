@@ -33,8 +33,8 @@ tied to `/api/v1/auth/session/refresh`. Secure cookies are used whenever the req
 
 ### Configuration
 
-* Provide the standard `ADE_OIDC_CLIENT_ID`, `ADE_OIDC_CLIENT_SECRET`, `ADE_OIDC_ISSUER`, `ADE_OIDC_REDIRECT_URL`, and `ADE_OIDC_SCOPES` variables to enable the flow. The redirect URL should point at the SPA callback route (`/auth/callback`), which finalises the login before forwarding the user to their requested destination. Supplement these with `ADE_AUTH_FORCE_SSO`, `ADE_AUTH_SSO_AUTO_PROVISION`, and optional `ADE_AUTH_SSO_ALLOWED_DOMAINS` to control rollout and provisioning policy.【F:.env.example†L52-L59】【F:frontend/src/features/auth/routes/SsoCallbackRoute.tsx†L1-L74】
-* The settings layer normalises scopes, enforces HTTPS issuers and redirect URLs, converts relative callbacks against `server_public_url`, and parses the allowed-domain list into a lower-cased, deduplicated allowlist.【F:ade/settings.py†L256-L330】【F:ade/settings.py†L351-L414】【F:ade/settings.py†L503-L548】
+* Provide `ADE_OIDC_CLIENT_ID`, `ADE_OIDC_CLIENT_SECRET`, `ADE_OIDC_ISSUER`, `ADE_OIDC_REDIRECT_URL`, and `ADE_OIDC_SCOPES` to enable the flow. ADE always authenticates as a confidential client, so the secret is required. The redirect URL should point at the SPA callback route (`/auth/callback`), which finalises the login before forwarding the user to their requested destination. Supplement this with `ADE_AUTH_FORCE_SSO` when you are ready to disable password-based logins entirely, and use `ADE_AUTH_SSO_AUTO_PROVISION` if you need to pause automatic account creation.【F:.env.example†L58-L66】【F:frontend/src/features/auth/routes/SsoCallbackRoute.tsx†L1-L74】
+* The settings layer normalises scopes, enforces HTTPS issuers and redirect URLs, and converts relative callbacks against `server_public_url`.【F:ade/settings.py†L410-L437】【F:ade/settings.py†L439-L499】【F:ade/settings.py†L561-L584】
 * When those settings are present, `/auth/providers` automatically publishes a "Single sign-on" option so the login page advertises SSO alongside the credential form. Leave `ADE_AUTH_FORCE_SSO=false` during rollout so the inaugural administrator can continue signing in with their password, then flip it once the identity provider login is verified.【F:ade/features/auth/service.py†L143-L166】【F:frontend/src/features/auth/components/LoginForm.tsx†L90-L139】
 
 ### Login flow
@@ -47,7 +47,7 @@ tied to `/api/v1/auth/session/refresh`. Secure cookies are used whenever the req
 
 ### Provisioning policy
 
-* `AuthService._resolve_sso_user` trusts the IdP email, enforces the optional domain allowlist, reuses matching users, and auto-provisions new accounts (with the default global role) when `ADE_AUTH_SSO_AUTO_PROVISION=true`. Conflicting subjects or disabled accounts produce actionable errors rather than silent merges.【F:ade/features/auth/service.py†L1115-L1189】
+* `AuthService._resolve_sso_user` trusts the IdP email, reuses matching users, and auto-provisions new accounts with the default global role when `ADE_AUTH_SSO_AUTO_PROVISION` is true; otherwise it blocks new users until an administrator invites them. Conflicting subjects or disabled accounts produce actionable errors rather than silent merges.【F:ade/features/auth/service.py†L1386-L1459】
 * The callback records the desired return path from state, resets lockout counters, and returns both the session envelope and the post-login redirect hint to the frontend.【F:ade/features/auth/service.py†L864-L906】【F:ade/features/auth/router.py†L168-L205】
 * The setup API echoes the `force_sso` flag so the wizard can warn operators that the credential form disappears once forced SSO is enabled, preserving a predictable path for the break-glass administrator they create during initial setup.【F:ade/features/auth/router.py†L49-L78】【F:frontend/src/features/setup/routes/SetupRoute.tsx†L1-L58】
 

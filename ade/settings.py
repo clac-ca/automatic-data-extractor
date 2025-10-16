@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, SecretStr, ValidationInfo, field_validator, model_validator
+from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,8 +27,6 @@ DEFAULT_DATABASE_FILENAME = "ade.sqlite"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS = ("http://localhost:5173", DEFAULT_PUBLIC_URL)
 
-_AUTH_PROVIDER_ID_PATTERN = re.compile(r"^[a-zA-Z0-9._-]+$")
-_DOMAIN_SEGMENT_PATTERN = re.compile(r"^[a-zA-Z0-9-]+$")
 _DURATION_PATTERN = re.compile(r"^(?P<value>\d+(?:\.\d+)?)(?:\s*(?P<unit>[a-zA-Z]+))?$", re.IGNORECASE)
 _DURATION_UNITS = {
     "s": 1,
@@ -112,61 +110,6 @@ def _load_json_list(value: str) -> list[Any]:
 # ---------------------------------------------------------------------------
 
 
-class AuthProviderSettings(BaseModel):
-    """Configuration describing a single interactive authentication provider."""
-
-    id: str
-    label: str
-    start_url: str
-    icon_url: str | None = None
-
-    @field_validator("id", mode="before")
-    @classmethod
-    def _clean_identifier(cls, value: Any) -> str:
-        if value is None:
-            raise ValueError("Provider id must not be empty")
-        identifier = str(value).strip()
-        if not identifier:
-            raise ValueError("Provider id must not be empty")
-        if not _AUTH_PROVIDER_ID_PATTERN.fullmatch(identifier):
-            raise ValueError("Provider id must include only letters, numbers, dots, hyphens, or underscores")
-        return identifier
-
-    @field_validator("label", mode="before")
-    @classmethod
-    def _clean_label(cls, value: Any) -> str:
-        if value is None:
-            raise ValueError("Provider label must not be empty")
-        label = str(value).strip()
-        if not label:
-            raise ValueError("Provider label must not be empty")
-        return label
-
-    @field_validator("start_url", mode="before")
-    @classmethod
-    def _clean_start_url(cls, value: Any) -> str:
-        if value is None:
-            raise ValueError("Provider start_url must not be empty")
-        url = str(value).strip()
-        if not url:
-            raise ValueError("Provider start_url must not be empty")
-        if not (url.startswith("/") or re.match(r"^https?://", url)):
-            raise ValueError("start_url must be an absolute https? URL or a path starting with '/'")
-        return url
-
-    @field_validator("icon_url", mode="before")
-    @classmethod
-    def _clean_icon_url(cls, value: Any) -> str | None:
-        if value in (None, ""):
-            return None
-        icon = str(value).strip()
-        if not icon:
-            return None
-        if not (icon.startswith("/") or re.match(r"^https?://", icon)):
-            raise ValueError("icon_url must be an absolute https? URL or a path starting with '/'")
-        return icon
-
-
 class Settings(BaseSettings):
     """FastAPI configuration loaded from environment variables."""
 
@@ -206,7 +149,6 @@ class Settings(BaseSettings):
         for source in (env_settings, dotenv_settings):
             _prepare_env_list(source, "ADE_SERVER_CORS_ORIGINS")
             _prepare_env_list(source, "ADE_OIDC_SCOPES")
-            _prepare_env_list(source, "ADE_AUTH_SSO_ALLOWED_DOMAINS")
 
         return init_settings, env_settings, dotenv_settings, file_secret_settings
 
@@ -264,13 +206,9 @@ class Settings(BaseSettings):
     oidc_issuer: str | None = None
     oidc_redirect_url: str | None = None
     oidc_scopes: list[str] = Field(default_factory=lambda: ["openid", "email", "profile"])
-    oidc_resource_audience: str | None = None
-
     # Authentication -------------------------------------------------------------
-    auth_sso_auto_provision: bool = True
-    auth_sso_allowed_domains: list[str] = Field(default_factory=list)
     auth_force_sso: bool = False
-    auth_providers: list[AuthProviderSettings] = Field(default_factory=list)
+    auth_sso_auto_provision: bool = True
 
     # ------------------------------------------------------------------
     # Validators
@@ -388,7 +326,7 @@ class Settings(BaseSettings):
         text = str(value).strip()
         return text or None
 
-    @field_validator("oidc_client_id", "oidc_resource_audience", mode="before")
+    @field_validator("oidc_client_id", mode="before")
     @classmethod
     def _trim_optional(cls, value: Any) -> str | None:
         if value is None:
@@ -458,57 +396,6 @@ class Settings(BaseSettings):
             raise ValueError("oidc_scopes must not be empty")
         return scopes
 
-    @field_validator("auth_sso_allowed_domains", mode="before")
-    @classmethod
-    def _prepare_allowed_domains(cls, value: Any) -> list[str]:
-        if value in (None, "", []):
-            return []
-        if isinstance(value, str):
-            payload = value.strip()
-            if not payload:
-                return []
-            if payload.startswith("["):
-                items = _load_json_list(payload)
-            else:
-                items = [segment.strip() for segment in payload.split(",")]
-        elif isinstance(value, (list, tuple, set)):
-            items = [str(item).strip() for item in value]
-        else:
-            raise TypeError("auth_sso_allowed_domains must be provided as a string or list")
-        cleaned: set[str] = set()
-        for candidate in items:
-            hostname = candidate.lower().strip()
-            if not hostname:
-                continue
-            if hostname.startswith(".") or hostname.endswith("."):
-                raise ValueError("auth_sso_allowed_domains entries must be hostnames")
-            if "@" in hostname or "/" in hostname or " " in hostname:
-                raise ValueError("auth_sso_allowed_domains entries must be hostnames")
-            segments = hostname.split(".")
-            if any(
-                not segment
-                or segment.startswith("-")
-                or segment.endswith("-")
-                or not _DOMAIN_SEGMENT_PATTERN.fullmatch(segment)
-                for segment in segments
-            ):
-                raise ValueError("auth_sso_allowed_domains entries must be valid hostname labels")
-            cleaned.add(hostname)
-        return sorted(cleaned)
-
-    @field_validator("auth_providers", mode="before")
-    @classmethod
-    def _prepare_auth_providers(cls, value: Any) -> list[Any]:
-        if value in (None, "", []):
-            return []
-        if isinstance(value, str):
-            payload = value.strip()
-            if not payload:
-                return []
-            return _load_json_list(payload)
-        if isinstance(value, (list, tuple)):
-            return list(value)
-        raise TypeError("auth_providers must be provided as a JSON array or list of objects")
 
     # ------------------------------------------------------------------
     # Finalisation
@@ -544,20 +431,6 @@ class Settings(BaseSettings):
             origins = [origin for origin in origins if origin != DEFAULT_PUBLIC_URL]
         self.server_cors_origins = origins
 
-        providers: list[AuthProviderSettings] = []
-        seen_provider_ids: set[str] = set()
-        for entry in self.auth_providers:
-            provider = (
-                entry
-                if isinstance(entry, AuthProviderSettings)
-                else AuthProviderSettings.model_validate(entry)
-            )
-            if provider.id in seen_provider_ids:
-                raise ValueError("auth_providers entries must use unique ids")
-            seen_provider_ids.add(provider.id)
-            providers.append(provider)
-        self.auth_providers = providers
-
         redirect = self.oidc_redirect_url or ""
         if redirect.startswith("/"):
             base_origin = self.server_public_url.rstrip("/")
@@ -567,6 +440,7 @@ class Settings(BaseSettings):
 
         required = {
             "oidc_client_id": self.oidc_client_id,
+            "oidc_client_secret": self.oidc_client_secret,
             "oidc_issuer": self.oidc_issuer,
             "oidc_redirect_url": self.oidc_redirect_url,
         }
@@ -613,7 +487,6 @@ __all__ = [
     "DEFAULT_DATABASE_SUBDIR",
     "DEFAULT_PUBLIC_URL",
     "PROJECT_ROOT",
-    "AuthProviderSettings",
     "Settings",
     "get_settings",
     "reload_settings",

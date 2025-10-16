@@ -1,124 +1,139 @@
-# Work Package: Frontend Rebuild
+# Work Package: ADE Frontend Rebuild
 
-## Status
-- **Owner:** Experience Squad
-- **Last Reviewed:** 2025-10-08
-- **State:** _Execution_
-- **Notes:** SPA scaffold, setup wizard, authentication loop, workspace shell,
-  and document type detail are now implemented with baseline tests. Remaining
-  hardening tasks cover configuration mutations and analytics surfaces.
+## Summary
+- Rebuild the ADE operator console in `frontend/` so it satisfies the scope and UX contract in `agents/FRONTEND_DESIGN.md`.
+- Carry forward the proven patterns from `frontend.old/` while addressing gaps in test coverage, modularity, and placeholder flows.
+- Deliver a production-ready, type-safe React/Vite application that pairs cleanly with the FastAPI v1 surface.
 
-## Objective
-Rebuild the ADE single-page application with a standard React + TypeScript
-stack. Deliver only the flows required for day-to-day operations while aligning
-with the updated authentication and setup contracts.
+## Goals
+- Ship the initial route set (`/setup`, `/login`, authenticated workspace shell, configuration detail/drawer, `/logout`) with deterministic behaviour.
+- Preserve the feature-first directory layout (`src/app`, `src/features/<feature>`, `src/shared`, `src/ui`) and the API boundary patterns that kept the legacy client maintainable.
+- Ensure forms, navigation, and data-fetching respect the accessibility, validation, and telemetry guidance in the design doc.
+- Stand up fast, reliable tooling (Vite, Vitest, Testing Library, ESLint, Tailwind) with CI-friendly scripts and consistent developer ergonomics.
 
-## Deliverables
-- Vite + React + TypeScript project initialised with ESLint, Prettier, Vitest,
-  and Testing Library using upstream defaults.
-- Routing shell with authentication guard, shared layout chrome, and feature
-  routes built on React Router v6.
-- Shared UI primitives (button, input, card, modal) styled with Tailwind.
-- TanStack Query configuration plus a typed `apiClient` for authenticated
-  requests and error handling.
-- Authentication workflow: session resource (`GET/POST/DELETE /auth/session`,
-  `POST /auth/session/refresh`), `/auth/providers` integration, credential form,
-  provider redirect, logout, and first-run setup wizard via `/setup`.
-- Feature scaffolds for workspace overview and document type detail with typed
-  data hooks.
-- Frontend README covering scripts, environment configuration, routing map, and
-  contribution expectations.
-- Baseline tests for routing guard, setup wizard, login validation, and data
-  hooks.
+## Non-Goals
+- Adding analytics, history, document upload workflows, or admin consoles beyond what `agents/FRONTEND_DESIGN.md` lists as release scope.
+- Replacing backend authentication or API contracts (coordinate with backend owners if gaps are discovered).
+- Migrating or deleting `frontend.old/` during this work package; keep it intact as a historical reference until the new shell is stable.
 
-## Current State Findings
-- The legacy SPA centralises authentication, setup, and bootstrap logic inside a
-  bespoke context. The rebuild will replace it with feature hooks backed by
-  TanStack Query.
-- Login UI mixes setup, credentials, and lockout behaviour with custom
-  validation. The new plan separates setup at `/setup` and keeps `/login`
-  focused on sessions and SSO.
-- Auth API naming must switch from `/auth/me`, `/auth/login`, `/auth/logout`,
-  `/auth/refresh` to the standard session resource used in the design doc.
-- First-admin creation remains required; the new `/setup` wizard must create the
-  inaugural administrator before exposing `/login`.
+## Legacy Frontend Lessons
 
-## Milestones & Tasks
-### M0 — Backend Alignment & Prep
-1. Confirm the new session resource and `/setup` contracts, including problem
-   details, before frontend work begins.
-2. Introduce shared `apiClient`, session query utilities, and setup status query
-  under the legacy code to unblock the rebuild and ease retirement of
-  `AuthContext`.
-3. Plan the legacy SPA sunset (deployment cutover, archival steps) so the new
-  structure can launch cleanly.
+### Strengths to Preserve
+- `frontend.old/src/app/AppProviders.tsx` demonstrates a stable `QueryClient` factory with tuned defaults (retry=1, 30s stale, no focus refetch). Mirror this so network behaviour stays predictable.
+- The API client in `frontend.old/src/shared/api/client.ts` normalises CSRF tokens, default headers, and Problem+JSON errors; keep the same ergonomics and error surfaces.
+- Session and workspace contexts (`frontend.old/src/features/auth/context/SessionContext.tsx`, `frontend.old/src/features/workspaces/context/WorkspaceContext.tsx`) gave components a clean way to read identity and permissions—recreate them with the same hooks and test seams.
+- Local storage helpers (`frontend.old/src/shared/lib/storage.ts`, `frontend.old/src/app/workspaces/useWorkspaceRailState.ts`) already guard against SSR and JSON failures; reuse the pattern for persisted UI state.
+- Shared UI primitives (`frontend.old/src/ui`) encapsulate focus styles, button loading states, and FormField accessibility; port and expand them instead of scattering Tailwind classes.
+- Query key factories (e.g., `frontend.old/src/features/auth/sessionKeys.ts`) and lightweight normalisers (e.g., `frontend.old/src/features/workspaces/api.ts`) kept server interactions deterministic—continue organising network calls this way.
 
-### M1 — Foundation
-1. Scaffold the Vite React TS project, enable ESLint/Prettier/Tailwind, and write
-   the initial README with run scripts.
-2. Establish project structure (`src/app`, `src/features`, `src/shared`) and
-   placeholder routes for `/login`, `/setup`, and `/workspaces/...`.
-3. Implement the shared `apiClient` with credential forwarding and CSRF handling.
+### Gaps to Address
+- Placeholder routes and stubs (documents/jobs/configurations) stopped short of the experience promised in `agents/FRONTEND_DESIGN.md`. The rebuild must wire real data flows and UX polish for the configuration detail/drawer and document rail.
+- Complex components such as `frontend.old/src/features/documents/components/DocumentDrawer.tsx` grew large and lightly tested. Plan for smaller subcomponents and behavioural tests that exercise filtering, pinning, and empty/error states.
+- Auth and setup flows currently share minimal integration coverage (only component-level tests). Introduce feature-level tests that mock API responses, include SSO callback paths, and verify redirect logic.
+- Telemetry and logging hooks are absent. The redesign calls for instrumenting key events (setup completion, login success/failure, workspace switch); add a shared telemetry helper so events can be piped to the backend later.
+- Linting relies on a single config with few project rules. We should extend ESLint/TypeScript settings to enforce import boundaries (feature-first) and ensure consistent quote/casing options caught by the old code review comments.
 
-### M2 — Initial Setup Flow
-1. Build the `/setup` route that reads `GET /setup/status` and denies access once
-   an administrator exists.
-2. Implement the multi-step wizard collecting administrator profile information
-   with React Hook Form + Zod.
-3. Call `POST /setup`, handle validation errors and concurrency conflicts, and on
-   success bootstrap the session and redirect to `/workspaces`.
-4. Pull `/auth/providers` to explain SSO expectations during setup.
-5. Cover wizard happy path and "setup already complete" guard with Vitest +
-   Testing Library.
+## Target Architecture & Conventions
+- **Tech stack:** Vite + React 19 + TypeScript 5 + React Router v6.28+ (`createBrowserRouter`), TanStack Query v5, Tailwind CSS, clsx, React Hook Form + Zod, Vitest + Testing Library. Match the dependency versions already vetted in `frontend.old/package.json`.
+- **Directory layout:** `src/app` (router, layouts, providers), `src/features/<feature>` (api, hooks, components, tests), `src/shared` (types, api client, config, lib), `src/ui` (headless primitives), `src/test` (render helpers), `src/index.css`.
+- **State management:** TanStack Query for server cache, feature hooks wrap mutations/queries, React context only for session/workspace state and UI chrome preferences.
+- **Routing:** Route objects with loaders for workspace hydration, guarded layouts via `RequireSession`, and explicit `/setup` vs `/login` gating based on `useSetupStatusQuery`.
+- **Styling:** Tailwind theme tokens from `frontend.old/tailwind.config.js` (brand palette, `shadow-soft`, focus styles). Extend only when design doc demands it.
+- **Persistence:** Limit `localStorage` usage to workspace/doc drawer state and navigation collapse toggles, reusing the scoped helper.
+- **Testing:** Co-locate Vitest specs next to features (`__tests__`). Use `src/test/test-utils.tsx` to wrap providers, add request mocking via MSW (or equivalent) to cover fetch flows, and capture coverage through `npm run test:coverage`.
+- **Scripts:** Keep npm scripts (`dev`, `build`, `lint`, `test`, `test:watch`, `test:coverage`, `preview`) aligned with the legacy package.json so CI pipelines stay consistent.
 
-### M3 — Authentication Loop
-1. Implement `useSessionQuery` backed by `GET /auth/session` and hydrate provider
-  discovery alongside session state.
-2. Build the login page with credential form, provider tiles, force-SSO handling,
-  and redirect logic.
-3. Wire logout via `DELETE /auth/session` and guard authenticated routes with a
-  `RequireSession` layout.
-4. Test login validation and session guard behaviour.
+### Layout & Navigation Blueprint
+- **Hierarchy:** Enforce a single visual stack—global top bar, primary navigation rail on the left, main work surface, and an optional right-hand detail panel.
+- **Top bar (global):** Hosts branding, workspace switcher, search (when ready), session controls, and system-level alerts. Keep the chrome slim so it never steals vertical space from work.
+- **Left rail (pages):** Lists first-level destinations (e.g., Documents, Jobs, Configurations, Members, Settings). Provide collapsed and overlay modes so the main canvas expands when the rail is dismissed or on narrow screens.
+- **Main content (do work):** Dedicated to the task view. Use secondary tabs within this area to pivot between page-level views (e.g., list vs. activity) without touching the primary navigation.
+- **Right panel (details):** Reserved for contextual item details, drawers, or inspectors. It must be optional, closable, and default to overlay/collapsed on smaller breakpoints so focus returns to the main canvas.
+- **Responsiveness:** Both side panels collapse or slide over the main content when screen width is constrained. Persist user preferences (expanded/collapsed) in scoped local storage.
+- **Predictability:** Avoid nesting navigation levels deeper than necessary—primary nav for pages, tabs for page variants, right panel for object details. No other navigation metaphors unless the design doc expands scope.
 
-### M4 — Workspace Shell
-1. Construct the workspace layout: top bar, navigation rail, and responsive
-   behaviour down to tablet widths.
-2. Integrate workspace listing query and default-selection logic using TanStack
-   Query.
-3. Render workspace overview content with placeholders for future analytics.
+### Workspace Navigation Story
+- **User story:** As a workspace user, I need a clean, spacious layout with predictable navigation so I can land on Documents, move between sections quickly, and keep work front-and-center.
+- **Acceptance criteria:**
+  - Top bar stays visible, minimal, and includes workspace switch, search, help, profile, plus a toggle for the left rail.
+  - Left rail lists workspace sections with Documents first (default landing page), collapses to icons, and persists the expanded state.
+  - Main content owns all remaining real estate and is never obscured by navigation in its default state.
+  - Right inspector is closed by default, opens as a slide-in for item details, closes via Esc, and overlays on narrow breakpoints.
+  - Sub-items (section groups) live in the left rail; reserve tabs for switching views within the same page.
+  - Focus mode hides both panels with one action and expands the main content to full width.
+  - Responsive behaviour: left rail becomes a drawer, inspector becomes a full-height overlay, main content remains primary.
+  - Keyboard/A11y: provide visible focus states, Escape closes panels, and expose ARIA landmarks for header/nav/main/aside.
+- **Happy path:**
+  - Landing on a workspace routes to Documents by default.
+  - Collapsing the left rail immediately widens main content.
+  - Opening a document slides in the inspector; pressing Esc closes it.
+  - Enabling focus mode makes the work surface edge-to-edge.
 
-### M5 — Document Type Detail & Configuration Drawer
-1. Implement the document type detail view with status strip and context cards
-   tied to backend fields.
-2. Build a read-only configuration drawer skeleton with revision metadata.
-3. Add placeholder mutation hooks that assert payload shapes.
-4. Write tests covering drawer open/close flows and data hook rendering.
+## Delivery Plan
 
-### M6 — Hardening & Handover
-1. Sweep for accessibility basics (focus management, keyboard navigation,
-   aria wiring).
-2. Document API dependencies, routing table, and environment requirements in the
-   README.
-3. Run lint/test suite, update `agents/FRONTEND_DESIGN.md`, and track remaining
-   gaps as follow-up issues.
+### 1. Foundation & Tooling
+- Bootstrap a fresh Vite + React + TypeScript project inside `frontend/` and port over configuration files (`tsconfig*.json`, `vite.config.ts`, Tailwind/PostCSS, ESLint) tuned to the decisions above.
+- Recreate the project README with setup instructions; ensure environment variables (`VITE_API_BASE_URL`, `VITE_SESSION_CSRF_COOKIE`) are documented.
+- Validate that linting, tests, and builds succeed in isolation.
 
-## Dependencies
-- `/auth/providers` endpoint (see `WP_AUTH_PROVIDER_DISCOVERY`).
-- `/setup/status` + `POST /setup` contract for first-run provisioning.
-- Session resource (`GET/POST/DELETE /auth/session`, `POST /auth/session/refresh`).
-- `/workspaces` and `/configurations/:id` APIs for data contracts.
-- Stable auth cookie/CSRF behaviour from the backend.
+### 2. Shared Infrastructure
+- Implement `AppProviders`, `AppRouter`, and `AppShell` scaffolding with responsive layout, breadcrumbs, and profile menu patterns from `frontend.old/src/app/layouts/AppShell.tsx`.
+- Port `ApiClient`, `ApiError`, and verb helpers with unit tests that cover CSRF header injection, JSON parsing, and error propagation.
+- Stand up shared telemetry/logging helpers (stubbed to console for now) and a typed event catalogue for future backend ingestion.
+
+### 3. Authentication Core
+- Recreate session hooks (`useSessionQuery`, `useLoginMutation`, `useLogoutMutation`, `useAuthProviders`), session context/provider, and route guard (`RequireSession`), including tests for loading/error/redirect paths.
+- Implement SSO callback handling with robust error cases and unit tests mirroring `frontend.old/src/app/routes/AuthCallbackRoute.tsx`.
+- Ensure session invalidation clears provider queries and cached workspace data.
+
+### 4. Setup Experience
+- Build the `/setup` wizard per `FRONTEND_DESIGN.md` using React Hook Form + Zod, inline errors, and `PageState` loading/error shells.
+- Coordinate API payloads with backend specs (`POST /setup`, `GET /setup/status`); add tests that cover successful completion, validation errors, 409 conflicts, and `force_sso` messaging.
+
+### 5. Login Flow
+- Implement `/login` with provider tiles, SSO enforcement, credential form, and redirect handling (`return_to` + `?next=`). Ensure state is restored post-login.
+- Add telemetry for login success/failure and provider selection.
+- Write tests covering force-SSO, provider fetch failure, and error messaging.
+
+### 6. Workspace Shell & Navigation
+- Implement workspace loader, layout, and switcher, persisting preferred workspace and nav collapse state per workspace.
+- Build the navigation rail using `workspaceSections` metadata aligned with the design doc, including placeholder content where APIs are still pending.
+- Wire `WorkspaceDocumentRail` with pinning/filtering and ensure it hydrates from TanStack Query + local storage.
+- Add tests for loader redirects, permissions gating, profile menu items, and rail state persistence.
+
+### 7. Configuration Detail & Drawer
+- Deliver the configuration status strip, context cards, and primary/secondary actions described in Section 6.4–6.5 of the design doc.
+- Build the right-anchored drawer with focus trap, revision breadcrumbs, and unsaved-change confirmation.
+- Integrate data hooks (`useConfigurationQuery`, `useConfigurationHistoryQuery`) with optimistic updates for publish actions once backend endpoints arrive.
+- Cover rendering, telemetry, and focus control with component tests.
+
+### 8. Quality, Telemetry & Handoff
+- Implement global error boundaries and idle/logout handling (session expiry refresh) to match backend expectations.
+- Instrument telemetry events (setup complete, login, workspace switch, configuration selected/published) and add unit tests to confirm payload composition.
+- Execute accessibility audits (keyboard traversal, aria-live regions, colour contrast) and write regression tests for critical flows.
+- Update docs (`README.md`, `agents/FRONTEND_DESIGN.md` if adjustments arise) and capture CHANGELOG notes under `## [Unreleased]`.
+- Schedule removal/archive plan for `frontend.old/` once parity is confirmed (outside this work package).
+
+## Dependencies & Coordination
+- Confirm authentication endpoints, CSRF cookie naming, and SSO callback parameters with backend owners (`ade/core/auth_backends.py`, `docs/authentication.md`).
+- Ensure workspace/document/configuration API contracts are available or stubbed in FastAPI before wiring UI hooks.
+- Coordinate telemetry schema with whoever owns observability so event payloads land in an agreed queue.
 
 ## Risks & Mitigations
-- **Backend gaps** — Block frontend release until discovery, session, and setup
-  routes are live.
-- **Contract drift** — Lock schemas early and cover critical flows with tests.
-- **Scope creep** — Keep deferred features in the design doc; do not add new
-  surfaces during this rebuild.
+- **API drift:** Backend contracts may evolve during the rebuild. Mitigate with TypeScript interfaces + Zod parsing at the boundary and early backend alignment.
+- **Large component complexity:** Recreating advanced UI (document rail, configuration drawer) could bloat components. Mitigate by carving subcomponents, writing stateful hooks, and enforcing size limits in review.
+- **Auth edge cases:** SSO/credential fallbacks are sensitive; build automated tests with MSW mocks to guard against regressions.
+- **Timeline pressure:** Implementing every feature at once risks context switching. Follow the phased workstreams above and land incremental PRs with feature flags when possible.
 
-## Definition of Done
-- Milestone tasks complete with reviewed PRs.
-- Frontend build passes lint, tests, and produces artefacts served via FastAPI.
-- Documentation (`agents/FRONTEND_DESIGN.md`, frontend README) reflects the
-  implemented architecture.
-- Legacy `AuthContext` and initial-setup flows removed or clearly deprecated.
+## Acceptance Checklist
+- [ ] All routes described in `agents/FRONTEND_DESIGN.md` render with production-ready UX and real API integrations.
+- [ ] Shared infrastructure (API client, providers, contexts, telemetry) is covered by unit tests.
+- [ ] Feature flows (setup, login, workspace shell, configuration drawer) have Vitest + Testing Library coverage exercising success, empty, error, and retry states.
+- [ ] `npm run build`, `npm run lint`, and `npm test` succeed locally and in CI.
+- [ ] Documentation (`frontend/README.md`, CHANGELOG entry) reflects the new stack and any required environment variables.
+- [ ] Sign-off obtained from design/ops stakeholders on layout fidelity and accessibility.
+
+## Open Questions
+- Do we need an interim mock server (MSW or FastAPI stub) to develop before backend endpoints are final?
+- Should telemetry events be queued locally (e.g., batching) or fire-and-forget via API calls?
+- Are we adopting Playwright/Cypress end-to-end coverage in this rebuild, or deferring to a later task?
