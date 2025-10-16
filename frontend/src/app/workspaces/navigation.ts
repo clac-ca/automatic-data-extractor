@@ -68,32 +68,33 @@ interface DynamicSecondaryNavConfig {
 type SecondaryNavConfig = StaticSecondaryNavConfig | DynamicSecondaryNavConfig;
 
 const secondaryDefinitions: Partial<Record<WorkspaceSectionId, SecondaryNavConfig>> = {
+  documents: {
+    type: "static",
+    items: [
+      (workspaceId) => ({ id: "documents-inbox", label: "Inbox", href: `/workspaces/${workspaceId}/documents?view=inbox` }),
+      (workspaceId) => ({ id: "documents-processing", label: "Processing", href: `/workspaces/${workspaceId}/documents?view=processing` }),
+      (workspaceId) => ({ id: "documents-completed", label: "Completed", href: `/workspaces/${workspaceId}/documents?view=completed` }),
+      (workspaceId) => ({ id: "documents-failed", label: "Failed", href: `/workspaces/${workspaceId}/documents?view=failed` }),
+      (workspaceId) => ({ id: "documents-archived", label: "Archived", href: `/workspaces/${workspaceId}/documents?view=archived` }),
+      (workspaceId) => ({ id: "documents-saved", label: "Saved filters", href: `/workspaces/${workspaceId}/documents?view=saved` }),
+    ],
+    emptyLabel: "No saved document views yet.",
+  },
+  runs: {
+    type: "static",
+    items: [
+      (workspaceId) => ({ id: "runs-active", label: "Active jobs", href: `/workspaces/${workspaceId}/runs?view=active` }),
+      (workspaceId) => ({ id: "runs-history", label: "History", href: `/workspaces/${workspaceId}/runs?view=history` }),
+      (workspaceId) => ({ id: "runs-alerts", label: "Alerts", href: `/workspaces/${workspaceId}/runs?view=alerts`, badge: "3" }),
+    ],
+    emptyLabel: "No job filters pinned yet.",
+  },
   data: {
     type: "static",
     items: [
-      (workspaceId) => ({ id: "data-sources", label: "Sources", href: `/workspaces/${workspaceId}/data?view=sources` }),
-      (workspaceId) => ({ id: "data-schemas", label: "Schemas", href: `/workspaces/${workspaceId}/data?view=schemas` }),
+      (workspaceId) => ({ id: "data-datasets", label: "Datasets", href: `/workspaces/${workspaceId}/data?view=datasets` }),
       (workspaceId) => ({ id: "data-exports", label: "Exports", href: `/workspaces/${workspaceId}/data?view=exports` }),
     ],
-    emptyLabel: "Add a connector to populate data views.",
-  },
-  config: {
-    type: "static",
-    items: [
-      (workspaceId) => ({ id: "config-connectors", label: "Connectors", href: `/workspaces/${workspaceId}/config?view=connectors` }),
-      (workspaceId) => ({ id: "config-webhooks", label: "Webhooks", href: `/workspaces/${workspaceId}/config?view=webhooks` }),
-      (workspaceId) => ({ id: "config-automation", label: "Automations", href: `/workspaces/${workspaceId}/config?view=automations` }),
-    ],
-    emptyLabel: "Configure integrations to unlock additional controls.",
-  },
-  settings: {
-    type: "static",
-    items: [
-      (workspaceId) => ({ id: "settings-profile", label: "Workspace profile", href: `/workspaces/${workspaceId}/settings?view=profile` }),
-      (workspaceId) => ({ id: "settings-permissions", label: "Members & access", href: `/workspaces/${workspaceId}/settings?view=permissions` }),
-      (workspaceId) => ({ id: "settings-retention", label: "Retention", href: `/workspaces/${workspaceId}/settings?view=retention` }),
-    ],
-    emptyLabel: "Workspace settings will appear here soon.",
   },
 };
 
