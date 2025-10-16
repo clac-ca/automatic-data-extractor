@@ -4,13 +4,6 @@ import clsx from "clsx";
 
 import type { WorkspaceSectionDescriptor } from "../../workspaces/sections";
 
-interface WorkspaceSectionNavProps {
-  readonly workspaceId: string;
-  readonly section: WorkspaceSectionDescriptor;
-  readonly className?: string;
-  readonly onCloseDrawer?: () => void;
-}
-
 interface SectionNavItem {
   readonly id: string;
   readonly label: string;
@@ -18,55 +11,146 @@ interface SectionNavItem {
   readonly badge?: string;
 }
 
-export function WorkspaceSectionNav({ workspaceId, section, className, onCloseDrawer }: WorkspaceSectionNavProps) {
+export interface WorkspaceSectionNavProps {
+  readonly workspaceId: string;
+  readonly section: WorkspaceSectionDescriptor;
+  readonly collapsed: boolean;
+  readonly onToggleCollapse: () => void;
+  readonly onNavigate?: () => void;
+  readonly className?: string;
+  readonly animatedWidth?: boolean;
+}
+
+export function WorkspaceSectionNav({
+  workspaceId,
+  section,
+  collapsed,
+  onToggleCollapse,
+  onNavigate,
+  className,
+  animatedWidth = true,
+}: WorkspaceSectionNavProps) {
   const items = useMemo<SectionNavItem[]>(() => getSectionNavItems(workspaceId, section.id), [section.id, workspaceId]);
+
+  const containerClass = clsx(
+    "flex h-full flex-col border-r border-slate-200 bg-white/90 transition-[width] duration-300 ease-in-out",
+    className,
+  );
+
+  const width = collapsed ? "4.5rem" : "16rem";
 
   if (items.length === 0) {
     return (
-      <aside
-        className={clsx(
-          "hidden w-64 flex-shrink-0 border-r border-slate-200 bg-white/80 px-4 py-6 text-sm text-slate-400 lg:flex",
-          className,
-        )}
-        aria-label={`${section.label} views`}
-      >
-        <p>No saved views for this section yet.</p>
+      <aside className={containerClass} style={animatedWidth ? { width } : undefined} aria-label={`${section.label} views`}>
+        <div className="flex flex-1 flex-col items-center justify-center px-4 text-center text-sm text-slate-400">
+          <p className={clsx(collapsed && "sr-only")}>
+            No saved views for this section yet.
+          </p>
+        </div>
+        <SectionCollapseButton collapsed={collapsed} onToggle={onToggleCollapse} />
       </aside>
     );
   }
 
   return (
-    <nav
-      className={clsx(
-        "hidden w-64 flex-shrink-0 border-r border-slate-200 bg-white/90 px-4 py-6 shadow-[0_1px_2px_rgba(15,23,42,0.08)] lg:flex",
-        className,
-      )}
-      aria-label={`${section.label} views`}
-    >
-      <ul className="space-y-1 w-full">
+    <nav className={containerClass} style={animatedWidth ? { width } : undefined} aria-label={`${section.label} views`}>
+      <div className="border-b border-slate-200 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <span
+            className={clsx(
+              "text-xs font-semibold uppercase tracking-wide text-slate-400 transition-[opacity,transform] duration-200",
+              collapsed ? "pointer-events-none opacity-0 -translate-x-2" : "opacity-100 translate-x-0",
+            )}
+            aria-hidden={collapsed}
+          >
+            {section.label}
+          </span>
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-brand-200 hover:text-brand-700"
+            aria-label={collapsed ? "Expand section navigation" : "Collapse section navigation"}
+            aria-pressed={collapsed}
+          >
+            <SectionCollapseIcon collapsed={collapsed} />
+          </button>
+        </div>
+      </div>
+      <ul className="flex-1 space-y-1 px-3 py-4">
         {items.map((item) => (
           <li key={item.id}>
             <NavLink
               to={item.href}
               className={({ isActive }) =>
                 clsx(
-                  "flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+                  "group flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
                   isActive ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100",
+                  collapsed && "justify-center",
                 )
               }
-              onClick={onCloseDrawer}
+              aria-label={item.label}
+              onClick={onNavigate}
             >
-              <span>{item.label}</span>
-              {item.badge ? (
-                <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
-                  {item.badge}
-                </span>
-              ) : null}
+              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-slate-100 text-xs font-semibold text-slate-500">
+                {item.label.charAt(0).toUpperCase()}
+              </span>
+              <span
+                className={clsx(
+                  "flex min-w-0 flex-1 items-center justify-between gap-2 overflow-hidden transition-[opacity,transform] duration-200 ease-out",
+                  collapsed ? "pointer-events-none opacity-0 -translate-x-3" : "opacity-100 translate-x-0",
+                )}
+                aria-hidden={collapsed}
+              >
+                <span className="truncate">{item.label}</span>
+                {item.badge ? (
+                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
+                    {item.badge}
+                  </span>
+                ) : null}
+              </span>
             </NavLink>
           </li>
         ))}
       </ul>
+      <SectionCollapseButton collapsed={collapsed} onToggle={onToggleCollapse} />
     </nav>
+  );
+}
+
+function SectionCollapseButton({
+  collapsed,
+  onToggle,
+}: {
+  readonly collapsed: boolean;
+  readonly onToggle: () => void;
+}) {
+  return (
+    <div className="border-t border-slate-200 px-3 py-4">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="focus-ring inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700"
+        aria-label={collapsed ? "Expand section navigation" : "Collapse section navigation"}
+        aria-pressed={collapsed}
+      >
+        <SectionCollapseIcon collapsed={collapsed} />
+        {!collapsed ? <span>Collapse</span> : null}
+      </button>
+    </div>
+  );
+}
+
+function SectionCollapseIcon({ collapsed }: { readonly collapsed: boolean }) {
+  return collapsed ? (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <path d="M4 4h12v12H4z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 10l-2 2m2-2l-2-2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ) : (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <path d="M4 4h12v12H4z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M11 10l2-2m-2 2l2 2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
