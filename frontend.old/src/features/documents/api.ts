@@ -4,7 +4,7 @@ import type { DocumentRecord, WorkspaceDocumentSummary } from "../../shared/type
 function normaliseDocument(record: DocumentRecord): WorkspaceDocumentSummary {
   return {
     id: record.document_id,
-    name: record.original_filename,
+    name: record.name,
     updatedAt: record.updated_at,
     createdAt: record.created_at,
     byteSize: record.byte_size,

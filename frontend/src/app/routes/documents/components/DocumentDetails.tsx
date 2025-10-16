@@ -1,5 +1,5 @@
 import type { DocumentRow } from "../utils";
-import { formatDateTime, formatFileSize, formatStatusLabel } from "../utils";
+import { formatDateTime, formatFileSize, formatLastRunLabel, formatStatusLabel } from "../utils";
 
 interface DocumentDetailsProps {
   readonly document: DocumentRow;
@@ -15,7 +15,11 @@ export function DocumentDetails({ document }: DocumentDetailsProps) {
           <Detail term="Status" value={formatStatusLabel(document.status)} />
           <Detail term="Source" value={document.source} />
           <Detail term="Uploaded" value={formatDateTime(document.uploadedAt)} />
-          <Detail term="Last run" value={document.lastRunAt ? `${document.lastRunLabel} (${formatDateTime(document.lastRunAt)})` : document.lastRunLabel} />
+          <Detail
+            term="Last run"
+            value={document.lastRunAt ? `${formatLastRunLabel(document.lastRunAt)} (${formatDateTime(document.lastRunAt)})` : "Never"}
+          />
+          <Detail term="Expires" value={formatDateTime(document.expiresAt)} />
           <Detail term="Size" value={formatFileSize(document.byteSize)} />
         </dl>
       </section>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import (
@@ -11,6 +12,7 @@ from fastapi import (
     HTTPException,
     Path,
     Query,
+    Request,
     Security,
     UploadFile,
     status,
@@ -20,8 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade.api.settings import get_app_settings
 from ade.settings import Settings
+from ade.api.errors import ProblemDetail, ProblemException
+from ade.api.deps import PaginationParamsDependency
 from ade.core.schema import ErrorMessage
 from ade.db.session import get_session
+from pydantic import ValidationError
 
 from ade.api.security import require_authenticated, require_csrf, require_workspace
 from ..users.models import User
@@ -31,7 +36,8 @@ from .exceptions import (
     DocumentTooLargeError,
     InvalidDocumentExpirationError,
 )
-from .schemas import DocumentRecord
+from .filtering import DocumentFilterParams
+from .schemas import DocumentListResponse, DocumentRecord
 from .service import DocumentsService
 
 router = APIRouter(
@@ -57,6 +63,82 @@ def _parse_metadata(metadata: str | None) -> dict[str, Any]:
             detail="metadata must be a JSON object",
         )
     return decoded
+
+
+def _parse_document_filters(
+    request: Request,
+    *,
+    status_values: list[str] | None,
+    source: list[str] | None,
+    tag: list[str] | None,
+    uploader: str | None,
+    uploader_ids: list[str] | None,
+    q: str | None,
+    created_from: datetime | None,
+    created_to: datetime | None,
+    last_run_from: datetime | None,
+    last_run_to: datetime | None,
+    byte_size_min: int | None,
+    byte_size_max: int | None,
+    sort: str | None,
+) -> DocumentFilterParams:
+    allowed_filter_keys = {
+        "status",
+        "source",
+        "tag",
+        "uploader",
+        "uploader_id",
+        "q",
+        "created_from",
+        "created_to",
+        "last_run_from",
+        "last_run_to",
+        "byte_size_min",
+        "byte_size_max",
+        "sort",
+    }
+    allowed_query_keys = allowed_filter_keys | {"page", "per_page", "include_total"}
+
+    for key in request.query_params.keys():
+        if key not in allowed_query_keys:
+            message = f"Unknown query parameter: {key}"
+            raise ProblemException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                title="Invalid query parameter",
+                detail=message,
+                errors={key: ["Unknown query parameter"]},
+            )
+
+    raw = {
+        "status": status_values or [],
+        "source": source or [],
+        "tags": tag or [],
+        "uploader": uploader,
+        "uploader_ids": uploader_ids or [],
+        "q": q,
+        "created_from": created_from,
+        "created_to": created_to,
+        "last_run_from": last_run_from,
+        "last_run_to": last_run_to,
+        "byte_size_min": byte_size_min,
+        "byte_size_max": byte_size_max,
+        "sort": sort,
+    }
+
+    try:
+        return DocumentFilterParams.model_validate(raw)
+    except ValidationError as exc:
+        errors: dict[str, list[str]] = {}
+        for error in exc.errors():
+            loc = error.get("loc", ())
+            field = str(loc[0]) if loc else "query"
+            errors.setdefault(field, []).append(error.get("msg", "Invalid value"))
+        raise ProblemException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            title="Invalid query parameters",
+            detail="One or more query parameters are invalid.",
+            errors=errors or None,
+        ) from exc
 
 
 @router.post(
@@ -111,6 +193,7 @@ async def upload_document(
             upload=file,
             metadata=payload,
             expires_at=expires_at,
+            actor=_actor,
         )
     except DocumentTooLargeError as exc:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(exc)) from exc
@@ -120,7 +203,7 @@ async def upload_document(
 
 @router.get(
     "/documents",
-    response_model=list[DocumentRecord],
+    response_model=DocumentListResponse,
     status_code=status.HTTP_200_OK,
     summary="List documents",
     response_model_exclude_none=True,
@@ -133,14 +216,20 @@ async def upload_document(
             "description": "Workspace permissions do not allow document access.",
             "model": ErrorMessage,
         },
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "Query parameters are invalid or unsupported.",
+            "model": ProblemDetail,
+        },
     },
 )
 async def list_documents(
     workspace_id: Annotated[
         str, Path(min_length=1, description="Workspace identifier")
     ],
+    request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_app_settings)],
+    pagination: PaginationParamsDependency,
     _actor: Annotated[
         User,
         Security(
@@ -149,12 +238,125 @@ async def list_documents(
         ),
     ],
     *,
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-) -> list[DocumentRecord]:
+    status: Annotated[
+        list[str] | None,
+        Query(
+            description="Filter by one or more document statuses.",
+            example=["uploaded", "processed"],
+        ),
+    ] = None,
+    source: Annotated[
+        list[str] | None,
+        Query(
+            description="Restrict results to the given document sources.",
+            example=["manual_upload"],
+        ),
+    ] = None,
+    tag: Annotated[
+        list[str] | None,
+        Query(
+            description="Return documents containing any of the provided tags.",
+            example=["finance", "2024"],
+        ),
+    ] = None,
+    uploader: Annotated[
+        str | None,
+        Query(
+            description="Identity shortcut; use `me` to resolve to the authenticated uploader.",
+            example="me",
+        ),
+    ] = None,
+    uploader_id: Annotated[
+        list[str] | None,
+        Query(
+            description="Filter by explicit uploader ULIDs (repeatable).",
+            example=["01H0H0H0H0H0H0H0H0H0H0H0H"],
+        ),
+    ] = None,
+    q: Annotated[
+        str | None,
+        Query(
+            description="Substring search applied to document name or uploader metadata.",
+            example="quarterly",
+        ),
+    ] = None,
+    created_from: Annotated[
+        datetime | None,
+        Query(
+            description="Return documents created on/after this UTC timestamp.",
+            example="2024-01-01T00:00:00Z",
+        ),
+    ] = None,
+    created_to: Annotated[
+        datetime | None,
+        Query(
+            description="Return documents created on/before this UTC timestamp.",
+            example="2024-01-31T23:59:59Z",
+        ),
+    ] = None,
+    last_run_from: Annotated[
+        datetime | None,
+        Query(
+            description="Return documents with a last run on/after this UTC timestamp.",
+            example="2024-02-01T00:00:00Z",
+        ),
+    ] = None,
+    last_run_to: Annotated[
+        datetime | None,
+        Query(
+            description="Return documents with a last run on/before this UTC timestamp (inclusive).",
+            example="2024-02-29T23:59:59Z",
+        ),
+    ] = None,
+    byte_size_min: Annotated[
+        int | None,
+        Query(
+            ge=0,
+            description="Only include documents at least this many bytes in size.",
+            example=1024,
+        ),
+    ] = None,
+    byte_size_max: Annotated[
+        int | None,
+        Query(
+            ge=0,
+            description="Only include documents at most this many bytes in size.",
+            example=1048576,
+        ),
+    ] = None,
+    sort: Annotated[
+        str | None,
+        Query(
+            description="Single-field sort directive (prefix with '-' for descending).",
+            example="-created_at",
+        ),
+    ] = None,
+) -> DocumentListResponse:
+    filters = _parse_document_filters(
+        request,
+        status_values=status,
+        source=source,
+        tag=tag,
+        uploader=uploader,
+        uploader_ids=uploader_id,
+        q=q,
+        created_from=created_from,
+        created_to=created_to,
+        last_run_from=last_run_from,
+        last_run_to=last_run_to,
+        byte_size_min=byte_size_min,
+        byte_size_max=byte_size_max,
+        sort=sort,
+    )
     service = DocumentsService(session=session, settings=settings)
     return await service.list_documents(
-        workspace_id=workspace_id, limit=limit, offset=offset
+        workspace_id=workspace_id,
+        page=pagination.page,
+        per_page=pagination.per_page,
+        include_total=pagination.include_total,
+        filters=filters.to_filters(),
+        sort=filters.sort,
+        actor=_actor,
     )
 
 

@@ -1,21 +1,48 @@
 import { ApiError } from "../../../shared/api/client";
-import type { SessionUser } from "../../../shared/types/auth";
-import type { WorkspaceDocumentSummary } from "../../../shared/types/documents";
+import type { DocumentRecord, DocumentStatus } from "../../../shared/types/documents";
 import { trackEvent } from "../../../shared/telemetry/events";
 
-export type OwnerFilterValue = "mine" | "all";
-
-export type DocumentStatus = "inbox" | "processing" | "completed" | "failed" | "archived";
-
-export type StatusFilterValue = "all" | DocumentStatus;
+export type UploaderFilterValue = "all" | "me";
 
 export type SortColumn = "name" | "status" | "source" | "uploadedAt" | "lastRunAt" | "byteSize";
-
 export type SortDirection = "asc" | "desc";
 
 export interface SortState {
   readonly column: SortColumn;
   readonly direction: SortDirection;
+}
+
+const COLUMN_TO_PARAM: Record<SortColumn, string> = {
+  name: "name",
+  status: "status",
+  source: "source",
+  uploadedAt: "created_at",
+  lastRunAt: "last_run_at",
+  byteSize: "byte_size",
+};
+
+const PARAM_TO_COLUMN = Object.fromEntries(
+  Object.entries(COLUMN_TO_PARAM).map(([column, param]) => [param, column as SortColumn]),
+) as Record<string, SortColumn>;
+
+export const DEFAULT_SORT_STATE: SortState = { column: "uploadedAt", direction: "desc" };
+export const DEFAULT_SORT_PARAM = "-created_at";
+
+export function parseSortParam(param: string | undefined | null): SortState {
+  if (!param) {
+    return DEFAULT_SORT_STATE;
+  }
+  const descending = param.startsWith("-");
+  const field = descending ? param.slice(1) : param;
+  const column = PARAM_TO_COLUMN[field] ?? DEFAULT_SORT_STATE.column;
+  const direction: SortDirection = descending ? "desc" : "asc";
+  return { column, direction };
+}
+
+export function toSortParam(state: SortState): string {
+  const field = COLUMN_TO_PARAM[state.column];
+  const prefix = state.direction === "desc" ? "-" : "";
+  return `${prefix}${field}`;
 }
 
 export interface DocumentRow {
@@ -27,27 +54,43 @@ export interface DocumentRow {
   readonly uploadedAt: Date;
   readonly byteSize: number;
   readonly contentType: string | null;
-  readonly uploaderName: string;
   readonly uploaderId: string | null;
+  readonly uploaderName: string;
   readonly uploaderEmail: string | null;
-  readonly lastRunLabel: string;
   readonly lastRunAt: Date | null;
   readonly metadata: Record<string, unknown>;
+  readonly expiresAt: Date;
+  readonly updatedAt: Date;
+  readonly deletedAt: Date | null;
 }
 
-export const OWNER_FILTER_OPTIONS = [
-  { value: "mine", label: "My Documents" },
-  { value: "all", label: "All Documents" },
-] as const;
+export function toDocumentRows(records: readonly DocumentRecord[] | undefined): DocumentRow[] {
+  if (!records) {
+    return [];
+  }
 
-export const STATUS_FILTER_OPTIONS = [
-  { value: "all", label: "All statuses" },
-  { value: "inbox", label: "Inbox" },
-  { value: "processing", label: "Processing" },
-  { value: "completed", label: "Completed" },
-  { value: "failed", label: "Failed" },
-  { value: "archived", label: "Archived" },
-] as const;
+  return records.map((record) => {
+    const uploaderName = record.uploader?.name?.trim() || record.uploader?.email || "Unknown";
+    return {
+      id: record.document_id,
+      name: record.name,
+      status: record.status,
+      source: record.source,
+      tags: [...(record.tags ?? [])],
+      uploadedAt: parseRequiredDate(record.created_at),
+      byteSize: record.byte_size,
+      contentType: record.content_type,
+      uploaderId: record.uploader?.id ?? null,
+      uploaderName,
+      uploaderEmail: record.uploader?.email ?? null,
+      lastRunAt: parseOptionalDate(record.last_run_at),
+      metadata: record.metadata ?? {},
+      expiresAt: parseRequiredDate(record.expires_at),
+      updatedAt: parseRequiredDate(record.updated_at),
+      deletedAt: parseOptionalDate(record.deleted_at),
+    } satisfies DocumentRow;
+  });
+}
 
 export const SUPPORTED_FILE_EXTENSIONS = [
   ".pdf",
@@ -61,126 +104,19 @@ export const SUPPORTED_FILE_EXTENSIONS = [
 
 export const SUPPORTED_FILE_TYPES_LABEL = "PDF, CSV, TSV, XLS, XLSX, XLSM, XLSB";
 
-export const DEFAULT_SORT_STATE: SortState = { column: "uploadedAt", direction: "desc" };
-
-const STATUS_SORT_ORDER: Record<DocumentStatus, number> = {
-  processing: 0,
-  inbox: 1,
-  failed: 2,
-  completed: 3,
-  archived: 4,
-};
-
-const ALLOWED_EXTENSIONS = new Set(SUPPORTED_FILE_EXTENSIONS.map((value) => value.toLowerCase()));
-
-interface DocumentFilters {
-  readonly owner: OwnerFilterValue;
-  readonly status: StatusFilterValue;
-  readonly search: string;
-  readonly currentUser: SessionUser | null;
+export interface SplitFilesResult {
+  readonly accepted: File[];
+  readonly rejected: File[];
 }
 
-export function toDocumentRows(documents: readonly WorkspaceDocumentSummary[] | undefined): DocumentRow[] {
-  if (!documents) {
-    return [];
-  }
-
-  return documents.map((document) => {
-    const metadata = document.metadata ?? {};
-    const uploader = resolveUploader(metadata);
-    const lastRun = resolveLastRun(metadata);
-
-    return {
-      id: document.id,
-      name: document.name,
-      status: resolveStatus(metadata),
-      source: resolveSource(metadata),
-      tags: resolveTags(metadata),
-      uploadedAt: resolveUploadedAt(document),
-      byteSize: document.byteSize,
-      contentType: document.contentType,
-      uploaderName: uploader.name,
-      uploaderId: uploader.id,
-      uploaderEmail: uploader.email,
-      lastRunLabel: lastRun.label,
-      lastRunAt: lastRun.completedAt,
-      metadata,
-    } satisfies DocumentRow;
-  });
-}
-
-export function applyDocumentFilters(rows: readonly DocumentRow[], filters: DocumentFilters) {
-  const term = filters.search.trim().toLowerCase();
-
-  return rows.filter((row) => {
-    if (filters.owner === "mine" && !isOwnedByUser(row, filters.currentUser)) {
-      return false;
-    }
-
-    if (filters.status !== "all" && row.status !== filters.status) {
-      return false;
-    }
-
-    if (!term) {
-      return true;
-    }
-
-    return [row.name, row.source, row.uploaderName, row.lastRunLabel, ...row.tags]
-      .filter(Boolean)
-      .some((value) => value.toLowerCase().includes(term));
-  });
-}
-
-export function sortDocumentRows(rows: readonly DocumentRow[], sortState: SortState) {
-  const { column, direction } = sortState;
-  const directionMultiplier = direction === "asc" ? 1 : -1;
-
-  const compare = (a: DocumentRow, b: DocumentRow) => {
-    switch (column) {
-      case "name":
-        return a.name.localeCompare(b.name);
-      case "status":
-        return STATUS_SORT_ORDER[a.status] - STATUS_SORT_ORDER[b.status] || a.name.localeCompare(b.name);
-      case "source":
-        return a.source.localeCompare(b.source);
-      case "uploadedAt":
-        return a.uploadedAt.getTime() - b.uploadedAt.getTime();
-      case "lastRunAt": {
-        const timeA = a.lastRunAt?.getTime() ?? 0;
-        const timeB = b.lastRunAt?.getTime() ?? 0;
-        if (timeA === timeB) {
-          return a.name.localeCompare(b.name);
-        }
-        return timeA - timeB;
-      }
-      case "byteSize":
-        return a.byteSize - b.byteSize;
-      default:
-        return 0;
-    }
-  };
-
-  return [...rows].sort((a, b) => compare(a, b) * directionMultiplier);
-}
-
-export function toggleSort(column: SortColumn, current: SortState): SortState {
-  if (current.column !== column) {
-    return {
-      column,
-      direction: column === "uploadedAt" || column === "lastRunAt" || column === "byteSize" ? "desc" : "asc",
-    };
-  }
-
-  return { column, direction: current.direction === "asc" ? "desc" : "asc" };
-}
-
-export function splitSupportedFiles(files: readonly File[]) {
+export function splitSupportedFiles(files: readonly File[]): SplitFilesResult {
   const accepted: File[] = [];
   const rejected: File[] = [];
+  const allowed = new Set(SUPPORTED_FILE_EXTENSIONS.map((value) => value.toLowerCase()));
 
   for (const file of files) {
     const extension = getFileExtension(file.name);
-    if (extension && ALLOWED_EXTENSIONS.has(extension)) {
+    if (extension && allowed.has(extension)) {
       accepted.push(file);
     } else {
       rejected.push(file);
@@ -244,7 +180,27 @@ export function formatFileSize(bytes: number) {
 }
 
 export function formatStatusLabel(status: DocumentStatus) {
-  return status.charAt(0).toUpperCase() + status.slice(1);
+  switch (status) {
+    case "uploaded":
+      return "Uploaded";
+    case "processing":
+      return "Processing";
+    case "processed":
+      return "Processed";
+    case "failed":
+      return "Failed";
+    case "archived":
+      return "Archived";
+    default:
+      return status;
+  }
+}
+
+export function formatLastRunLabel(value: Date | null) {
+  if (!value) {
+    return "Never";
+  }
+  return formatRelativeTime(value);
 }
 
 export function resolveApiErrorMessage(error: unknown, fallback: string) {
@@ -259,141 +215,28 @@ export function resolveApiErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-export function trackDocumentsEvent(action: string, workspaceId: string, payload: Record<string, unknown> = {}) {
+export function trackDocumentsEvent(
+  action: string,
+  workspaceId: string,
+  payload: Record<string, unknown> = {},
+) {
   trackEvent({
     name: `documents.${action}`,
     payload: { workspaceId, ...payload },
   });
 }
 
-function isOwnedByUser(row: DocumentRow, user: SessionUser | null) {
-  if (!user) {
-    return false;
-  }
-
-  if (row.uploaderId && user.user_id && row.uploaderId === user.user_id) {
-    return true;
-  }
-
-  const normalizedName = (user.display_name ?? "").trim().toLowerCase();
-  if (normalizedName && row.uploaderName.trim().toLowerCase() === normalizedName) {
-    return true;
-  }
-
-  const normalizedEmail = user.email.trim().toLowerCase();
-  if (row.uploaderEmail && row.uploaderEmail.trim().toLowerCase() === normalizedEmail) {
-    return true;
-  }
-
-  return false;
-}
-
-function resolveStatus(metadata: Record<string, unknown>): DocumentStatus {
-  if (metadata.archived === true) {
-    return "archived";
-  }
-
-  const rawStatus = readString(metadata, ["status", "state"]).toLowerCase();
-  switch (rawStatus) {
-    case "processing":
-    case "running":
-      return "processing";
-    case "failed":
-    case "error":
-      return "failed";
-    case "completed":
-    case "done":
-      return "completed";
-    case "archived":
-      return "archived";
-    case "inbox":
-      return "inbox";
-    default:
-      return metadata.completed === true ? "completed" : "inbox";
-  }
-}
-
-function resolveSource(metadata: Record<string, unknown>) {
-  return readString(metadata, ["source", "ingestSource"], "Manual upload");
-}
-
-function resolveTags(metadata: Record<string, unknown>) {
-  const raw = metadata.tags;
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-
-  return raw
-    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-    .map((value) => value.trim());
-}
-
-function resolveUploadedAt(document: WorkspaceDocumentSummary) {
-  const timestamp = document.updatedAt ?? document.createdAt;
-  return parseDateOrNow(timestamp);
-}
-
-function resolveUploader(metadata: Record<string, unknown>) {
-  const uploader = metadata.uploader;
-  if (uploader && typeof uploader === "object" && !Array.isArray(uploader)) {
-    const record = uploader as Record<string, unknown>;
-    return {
-      id: typeof record.id === "string" && record.id.trim() ? record.id : null,
-      name: readString(record, ["name"], "Unknown"),
-      email: readString(record, ["email"], "") || null,
-    };
-  }
-
-  return {
-    id: null,
-    name: readString(metadata, ["uploadedBy", "createdBy"], "Unknown"),
-    email: readString(metadata, ["uploadedByEmail", "createdByEmail"], "") || null,
-  };
-}
-
-function resolveLastRun(metadata: Record<string, unknown>) {
-  const job = metadata.lastRun;
-  if (job && typeof job === "object" && !Array.isArray(job)) {
-    const record = job as Record<string, unknown>;
-    const status = readString(record, ["status"], "Never run");
-    const finishedAt = readString(record, ["finishedAt"], "");
-    return {
-      label: status || "Never run",
-      completedAt: finishedAt ? parseDateOrNow(finishedAt) : null,
-    };
-  }
-
-  const label = readString(metadata, ["lastRunStatus"], "Never run");
-  const timestamp = readString(metadata, ["lastRunAt", "lastRunTimestamp"], "");
-
-  return {
-    label: label || "Never run",
-    completedAt: timestamp ? parseDateOrNow(timestamp) : null,
-  };
-}
-
-function readString(metadata: Record<string, unknown>, keys: readonly string[], fallback = "") {
-  for (const key of keys) {
-    const value = metadata[key];
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-
-  return fallback;
-}
-
-function parseDateOrNow(value: string | undefined | null) {
-  if (!value) {
-    return new Date();
-  }
-
+function parseRequiredDate(value: string) {
   const timestamp = Date.parse(value);
-  if (Number.isNaN(timestamp)) {
-    return new Date();
-  }
+  return Number.isNaN(timestamp) ? new Date() : new Date(timestamp);
+}
 
-  return new Date(timestamp);
+function parseOptionalDate(value: string | null) {
+  if (!value) {
+    return null;
+  }
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : new Date(timestamp);
 }
 
 function getFileExtension(filename: string) {

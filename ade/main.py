@@ -18,6 +18,7 @@ from .api.v1.router import router as api_router
 from .settings import Settings, get_settings
 from .core.logging import setup_logging
 from .core.middleware import register_middleware
+from .api.errors import register_exception_handlers
 from .lifecycles import create_application_lifespan
 from .features.auth.dependencies import configure_auth_dependencies
 from .services.task_queue import TaskQueue
@@ -61,6 +62,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_auth_dependencies(settings=settings)
 
     register_middleware(app)
+    register_exception_handlers(app)
     _mount_static(app)
     _register_routes(app)
     _configure_openapi(app, settings)
