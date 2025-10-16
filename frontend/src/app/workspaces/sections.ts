@@ -1,6 +1,6 @@
 import type { UIMatch } from "react-router-dom";
 
-export type WorkspaceSectionId = "documents" | "overview" | "runs" | "data" | "config" | "settings";
+export type WorkspaceSectionId = "documents" | "config" | "settings";
 
 export interface WorkspaceSectionDescriptor {
   readonly id: WorkspaceSectionId;
@@ -37,48 +37,12 @@ export const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
     },
   },
   {
-    id: "overview",
-    path: "overview",
-    label: "Overview",
-    description: "Workspace health, metrics, and recent activity",
-    placeholder: {
-      title: "Workspace overview",
-      description:
-        "Dashboards for activity, throughput, and adoption will land here once analytics wiring is complete.",
-      cta: { href: "../documents", label: "View documents" },
-    },
-  },
-  {
-    id: "runs",
-    path: "runs",
-    label: "Runs & Jobs",
-    description: "Extraction queue, job history, and alerts",
-    placeholder: {
-      title: "Runs & Jobs",
-      description:
-        "Monitor active extraction jobs, retry failures, and audit job history. The orchestration view is under active development.",
-      cta: { href: "../documents", label: "View documents" },
-    },
-  },
-  {
-    id: "data",
-    path: "data",
-    label: "Data",
-    description: "Datasets, exports, and records",
-    placeholder: {
-      title: "Data",
-      description:
-        "Access curated datasets, exports, and downstream records once the data hub ships later this quarter.",
-      cta: { href: "../documents", label: "View documents" },
-    },
-  },
-  {
     id: "config",
     path: "config",
-    label: "Configure",
+    label: "Configuration",
     description: "Rules, pipelines, and automation",
     placeholder: {
-      title: "Configure",
+      title: "Configuration",
       description:
         "Define extraction rules, map columns, and manage deployment snapshots. The configuration hub is coming soon.",
       cta: { href: "../documents", label: "View documents" },
@@ -87,10 +51,10 @@ export const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
   {
     id: "settings",
     path: "settings",
-    label: "Settings",
-    description: "Workspace preferences and integrations",
+    label: "Workspace Settings",
+    description: "Workspace preferences and access controls",
     placeholder: {
-      title: "Settings",
+      title: "Workspace settings",
       description:
         "Adjust workspace preferences, integrations, and retention rules. The full settings experience will appear after the authentication revamp ships.",
     },
@@ -135,20 +99,11 @@ export function matchWorkspaceSectionMeta(matches: readonly UIMatch[]): Workspac
 }
 
 export const workspacePlaceholderSections = new Map(
-  [
-    [
-      "overview",
-      {
-        title: "Workspace overview",
-        description:
-          "We’re building dashboards for workspace health, recent activity, and quick links to the actions you use every day.",
-        cta: { href: "../documents", label: "View documents" },
-      },
-    ],
-    ...workspaceSections.map((section) => [section.id, section.placeholder]),
-  ].filter(([, placeholder]) => Boolean(placeholder)) as Array<
-    [string, WorkspaceSectionDescriptor["placeholder"]]
-  >,
+  workspaceSections
+    .map((section) => [section.id, section.placeholder])
+    .filter(([, placeholder]) => Boolean(placeholder)) as Array<
+      [string, WorkspaceSectionDescriptor["placeholder"]]
+    >,
 );
 
 export function getWorkspacePlaceholder(sectionId: string) {

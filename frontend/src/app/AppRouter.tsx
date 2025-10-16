@@ -16,7 +16,7 @@ import { workspaceLoader } from "./workspaces/loader";
 import { workspaceSections, defaultWorkspaceSection } from "./workspaces/sections";
 import type { WorkspaceRouteHandle } from "./workspaces/sections";
 
-const sectionsWithContextNav = new Set(["data", "config", "settings"]);
+const sectionsWithContextNav = new Set(["config", "settings"]);
 
 const workspaceSectionRoutes = workspaceSections.map((section) => ({
   path: section.path,
