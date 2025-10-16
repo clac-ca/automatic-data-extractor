@@ -16,6 +16,8 @@ import { workspaceLoader } from "./workspaces/loader";
 import { workspaceSections, defaultWorkspaceSection } from "./workspaces/sections";
 import type { WorkspaceRouteHandle } from "./workspaces/sections";
 
+const sectionsWithContextNav = new Set(["data", "config", "settings"]);
+
 const workspaceSectionRoutes = workspaceSections.map((section) => ({
   path: section.path,
   element:
@@ -24,7 +26,10 @@ const workspaceSectionRoutes = workspaceSections.map((section) => ({
       : section.id === "config"
         ? <ConfigurationsRoute />
         : <WorkspacePlaceholderRoute sectionId={section.id} />,
-  handle: { workspaceSectionId: section.id } satisfies WorkspaceRouteHandle,
+  handle: {
+    workspaceSectionId: section.id,
+    meta: { showContextNav: sectionsWithContextNav.has(section.id) },
+  } satisfies WorkspaceRouteHandle,
 }));
 
 const appRouter = createBrowserRouter([
