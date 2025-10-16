@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- Deliver workspace chrome toggles and a redesigned documents page with filters, grid/list views, bulk actions, and an inspector drawer.
 - Introduce an Angular workspace directory service with loading and error states to power the app shell navigation.
 - Rebuild the ADE frontend in `frontend/` with a Vite/React workspace shell, focus mode, inspector context, and document/configuration surfaces.
 - Add a stubbed telemetry helper (`trackEvent`) to prepare for backend event collection.
