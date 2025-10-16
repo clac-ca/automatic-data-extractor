@@ -4,16 +4,45 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Security, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    Header,
+    HTTPException,
+    Path,
+    Query,
+    Response,
+    Security,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ade.api.errors import ProblemException
 from ade.api.security import require_authenticated, require_csrf, require_workspace
 from ade.core.responses import DefaultResponse
 from ade.db.session import get_session
 
 from ..users.models import User
-from .exceptions import ConfigurationNotFoundError
-from .schemas import ConfigurationCreate, ConfigurationRecord, ConfigurationUpdate
+from .exceptions import (
+    ActiveConfigurationNotFoundError,
+    ConfigurationColumnNotFoundError,
+    ConfigurationColumnValidationError,
+    ConfigurationNotFoundError,
+    ConfigurationScriptValidationError,
+    ConfigurationScriptVersionNotFoundError,
+    ConfigurationScriptVersionOwnershipError,
+)
+from .schemas import (
+    ConfigurationColumnBindingUpdate,
+    ConfigurationColumnIn,
+    ConfigurationColumnOut,
+    ConfigurationCreate,
+    ConfigurationRecord,
+    ConfigurationScriptVersionIn,
+    ConfigurationScriptVersionOut,
+    ConfigurationUpdate,
+)
 from .service import ConfigurationsService
 
 router = APIRouter(
@@ -24,6 +53,9 @@ router = APIRouter(
 
 CONFIGURATION_CREATE_BODY = Body(...)
 CONFIGURATION_UPDATE_BODY = Body(...)
+CONFIGURATION_COLUMNS_BODY = Body(...)
+CONFIGURATION_SCRIPT_BODY = Body(...)
+CONFIGURATION_COLUMN_BINDING_BODY = Body(...)
 
 
 @router.get(
@@ -79,11 +111,18 @@ async def create_configuration(
     payload: ConfigurationCreate = CONFIGURATION_CREATE_BODY,
 ) -> ConfigurationRecord:
     service = ConfigurationsService(session=session)
-    return await service.create_configuration(
-        workspace_id=workspace_id,
-        title=payload.title,
-        payload=payload.payload,
-    )
+    try:
+        return await service.create_configuration(
+            workspace_id=workspace_id,
+            title=payload.title,
+            payload=payload.payload,
+            clone_from_configuration_id=payload.clone_from_configuration_id,
+            clone_from_active=payload.clone_from_active,
+        )
+    except ConfigurationNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ActiveConfigurationNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.get(
@@ -249,6 +288,391 @@ async def activate_configuration(
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get(
+    "/configurations/{configuration_id}/columns",
+    response_model=list[ConfigurationColumnOut],
+    status_code=status.HTTP_200_OK,
+    summary="List columns for a configuration",
+    response_model_exclude_none=True,
+)
+async def list_configuration_columns(
+    workspace_id: Annotated[
+        str, Path(min_length=1, description="Workspace identifier")
+    ],
+    configuration_id: Annotated[
+        str, Path(min_length=1, description="Configuration identifier")
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Configurations.Read"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
+) -> list[ConfigurationColumnOut]:
+    service = ConfigurationsService(session=session)
+    try:
+        return await service.list_columns(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+        )
+    except ConfigurationNotFoundError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="Configuration not found",
+            detail=str(exc),
+        )
+
+
+@router.put(
+    "/configurations/{configuration_id}/columns",
+    dependencies=[Security(require_csrf)],
+    response_model=list[ConfigurationColumnOut],
+    status_code=status.HTTP_200_OK,
+    summary="Replace configuration columns",
+    response_model_exclude_none=True,
+)
+async def replace_configuration_columns(
+    workspace_id: Annotated[
+        str, Path(min_length=1, description="Workspace identifier")
+    ],
+    configuration_id: Annotated[
+        str, Path(min_length=1, description="Configuration identifier")
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Configurations.ReadWrite"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
+    *,
+    columns: list[ConfigurationColumnIn] = CONFIGURATION_COLUMNS_BODY,
+) -> list[ConfigurationColumnOut]:
+    service = ConfigurationsService(session=session)
+    try:
+        return await service.replace_columns(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            columns=columns,
+        )
+    except ConfigurationNotFoundError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="Configuration not found",
+            detail=str(exc),
+        )
+    except ConfigurationColumnValidationError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            title="Invalid configuration column payload",
+            detail=str(exc),
+            errors=exc.errors,
+        )
+    except ConfigurationScriptVersionNotFoundError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="Script version not found",
+            detail=str(exc),
+        )
+    except ConfigurationScriptVersionOwnershipError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_409_CONFLICT,
+            title="Script version belongs to another configuration",
+            detail=str(exc),
+        )
+
+
+@router.put(
+    "/configurations/{configuration_id}/columns/{canonical_key}/binding",
+    dependencies=[Security(require_csrf)],
+    response_model=ConfigurationColumnOut,
+    status_code=status.HTTP_200_OK,
+    summary="Update column binding metadata",
+    response_model_exclude_none=True,
+)
+async def update_configuration_column_binding(
+    workspace_id: Annotated[
+        str, Path(min_length=1, description="Workspace identifier")
+    ],
+    configuration_id: Annotated[
+        str, Path(min_length=1, description="Configuration identifier")
+    ],
+    canonical_key: Annotated[
+        str, Path(min_length=1, description="Column canonical key")
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Configurations.ReadWrite"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
+    *,
+    payload: ConfigurationColumnBindingUpdate = CONFIGURATION_COLUMN_BINDING_BODY,
+) -> ConfigurationColumnOut:
+    service = ConfigurationsService(session=session)
+    try:
+        return await service.update_column_binding(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            canonical_key=canonical_key,
+            binding=payload,
+        )
+    except ConfigurationNotFoundError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="Configuration not found",
+            detail=str(exc),
+        )
+    except ConfigurationColumnNotFoundError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="Configuration column not found",
+            detail=str(exc),
+        )
+    except ConfigurationColumnValidationError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            title="Invalid configuration column payload",
+            detail=str(exc),
+            errors=exc.errors,
+        )
+    except ConfigurationScriptVersionNotFoundError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="Script version not found",
+            detail=str(exc),
+        )
+    except ConfigurationScriptVersionOwnershipError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_409_CONFLICT,
+            title="Script version belongs to another configuration",
+            detail=str(exc),
+        )
+
+
+@router.post(
+    "/configurations/{configuration_id}/scripts/{canonical_key}/versions",
+    dependencies=[Security(require_csrf)],
+    response_model=ConfigurationScriptVersionOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a configuration script version",
+    response_model_exclude_none=True,
+)
+async def create_configuration_script_version(
+    workspace_id: Annotated[
+        str, Path(min_length=1, description="Workspace identifier")
+    ],
+    configuration_id: Annotated[
+        str, Path(min_length=1, description="Configuration identifier")
+    ],
+    canonical_key: Annotated[
+        str, Path(min_length=1, description="Canonical column key")
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Configurations.ReadWrite"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
+    response: Response,
+    *,
+    payload: ConfigurationScriptVersionIn = CONFIGURATION_SCRIPT_BODY,
+) -> ConfigurationScriptVersionOut:
+    service = ConfigurationsService(session=session)
+    try:
+        script, etag = await service.create_script_version(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            canonical_key=canonical_key,
+            payload=payload,
+            actor_id=str(_actor.id),
+        )
+    except ConfigurationNotFoundError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="Configuration not found",
+            detail=str(exc),
+        )
+    except ConfigurationScriptValidationError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            title="Invalid configuration script",
+            detail=str(exc),
+            errors=exc.errors,
+        )
+
+    response.headers["ETag"] = f'W/"{etag}"'
+    return script
+
+
+@router.get(
+    "/configurations/{configuration_id}/scripts/{canonical_key}/versions",
+    response_model=list[ConfigurationScriptVersionOut],
+    status_code=status.HTTP_200_OK,
+    summary="List configuration script versions",
+    response_model_exclude_none=True,
+)
+async def list_configuration_script_versions(
+    workspace_id: Annotated[
+        str, Path(min_length=1, description="Workspace identifier")
+    ],
+    configuration_id: Annotated[
+        str, Path(min_length=1, description="Configuration identifier")
+    ],
+    canonical_key: Annotated[
+        str, Path(min_length=1, description="Canonical column key")
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Configurations.Read"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
+) -> list[ConfigurationScriptVersionOut]:
+    service = ConfigurationsService(session=session)
+    try:
+        return await service.list_script_versions(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            canonical_key=canonical_key,
+        )
+    except ConfigurationNotFoundError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="Configuration not found",
+            detail=str(exc),
+        )
+
+
+@router.get(
+    "/configurations/{configuration_id}/scripts/{canonical_key}/versions/{script_version_id}",
+    response_model=ConfigurationScriptVersionOut,
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve a configuration script version",
+    response_model_exclude_none=True,
+)
+async def get_configuration_script_version(
+    workspace_id: Annotated[
+        str, Path(min_length=1, description="Workspace identifier")
+    ],
+    configuration_id: Annotated[
+        str, Path(min_length=1, description="Configuration identifier")
+    ],
+    canonical_key: Annotated[
+        str, Path(min_length=1, description="Canonical column key")
+    ],
+    script_version_id: Annotated[
+        str, Path(min_length=1, description="Script version identifier")
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Configurations.Read"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
+    *,
+    include_code: bool = Query(False, description="Include script code in the response"),
+) -> ConfigurationScriptVersionOut:
+    service = ConfigurationsService(session=session)
+    try:
+        return await service.get_script_version(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            canonical_key=canonical_key,
+            script_version_id=script_version_id,
+            include_code=include_code,
+        )
+    except ConfigurationNotFoundError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="Configuration not found",
+            detail=str(exc),
+        )
+    except ConfigurationScriptVersionNotFoundError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="Script version not found",
+            detail=str(exc),
+        )
+
+
+@router.post(
+    "/configurations/{configuration_id}/scripts/{canonical_key}/versions/{script_version_id}:validate",
+    dependencies=[Security(require_csrf)],
+    response_model=ConfigurationScriptVersionOut,
+    status_code=status.HTTP_200_OK,
+    summary="Revalidate a configuration script version",
+    response_model_exclude_none=True,
+)
+async def validate_configuration_script_version(
+    workspace_id: Annotated[
+        str, Path(min_length=1, description="Workspace identifier")
+    ],
+    configuration_id: Annotated[
+        str, Path(min_length=1, description="Configuration identifier")
+    ],
+    canonical_key: Annotated[
+        str, Path(min_length=1, description="Canonical column key")
+    ],
+    script_version_id: Annotated[
+        str, Path(min_length=1, description="Script version identifier")
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Configurations.ReadWrite"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
+    response: Response,
+    *,
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+) -> ConfigurationScriptVersionOut:
+    service = ConfigurationsService(session=session)
+    try:
+        script, etag = await service.validate_script_version(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            canonical_key=canonical_key,
+            script_version_id=script_version_id,
+            if_match=if_match,
+        )
+    except ConfigurationNotFoundError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="Configuration not found",
+            detail=str(exc),
+        )
+    except ConfigurationScriptVersionNotFoundError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="Script version not found",
+            detail=str(exc),
+        )
+    except ConfigurationScriptValidationError as exc:
+        raise ProblemException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            title="ETag mismatch",
+            detail=str(exc),
+            errors=exc.errors,
+        )
+
+    response.headers["ETag"] = f'W/"{etag}"'
+    return script
 
 
 __all__ = ["router"]

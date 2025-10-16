@@ -196,3 +196,12 @@ export function patch<T>(path: string, body?: unknown, options?: ApiOptions) {
     body: payload,
   });
 }
+
+export function put<T>(path: string, body?: unknown, options?: ApiOptions) {
+  const payload = body === undefined ? undefined : JSON.stringify(body);
+  return defaultClient.request<T>(path, {
+    ...options,
+    method: "PUT",
+    body: payload,
+  });
+}

@@ -40,12 +40,12 @@ export const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
     id: "config",
     path: "config",
     label: "Configuration",
-    description: "Rules, pipelines, and automation",
+    description: "Author extraction columns, scripts, and deployment snapshots",
     placeholder: {
       title: "Configuration",
       description:
-        "Define extraction rules, map columns, and manage deployment snapshots. The configuration hub is coming soon.",
-      cta: { href: "../documents", label: "View documents" },
+        "Define columns, bind scripts, and activate configurations to control how ADE processes documents.",
+      cta: { href: "../config?view=columns", label: "Open configuration" },
     },
   },
   {
