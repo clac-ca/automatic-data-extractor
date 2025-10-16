@@ -46,13 +46,11 @@ async def list_configurations(
         ),
     ],
     *,
-    document_type: str | None = Query(None),
     is_active: bool | None = Query(None),
 ) -> list[ConfigurationRecord]:
     service = ConfigurationsService(session=session)
     return await service.list_configurations(
         workspace_id=workspace_id,
-        document_type=document_type,
         is_active=is_active,
     )
 
@@ -83,7 +81,6 @@ async def create_configuration(
     service = ConfigurationsService(session=session)
     return await service.create_configuration(
         workspace_id=workspace_id,
-        document_type=payload.document_type,
         title=payload.title,
         payload=payload.payload,
     )
@@ -108,13 +105,10 @@ async def list_active_configurations(
             scopes=["{workspace_id}"],
         ),
     ],
-    *,
-    document_type: str | None = Query(None),
 ) -> list[ConfigurationRecord]:
     service = ConfigurationsService(session=session)
     return await service.list_active_configurations(
         workspace_id=workspace_id,
-        document_type=document_type,
     )
 
 

@@ -30,14 +30,12 @@ async def _create_configuration(
     *,
     workspace_id: str,
     payload: dict[str, Any] | None = None,
-    document_type: str = "invoice",
 ) -> str:
     session_factory = get_sessionmaker()
     async with session_factory() as session:
         result = await session.execute(
             select(func.max(Configuration.version)).where(
                 Configuration.workspace_id == workspace_id,
-                Configuration.document_type == document_type,
             )
         )
         next_version = result.scalar_one_or_none() or 0
@@ -45,7 +43,6 @@ async def _create_configuration(
 
         configuration = Configuration(
             workspace_id=workspace_id,
-            document_type=document_type,
             title="Test configuration",
             version=version,
             is_active=False,

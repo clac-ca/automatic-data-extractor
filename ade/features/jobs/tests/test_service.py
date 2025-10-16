@@ -60,13 +60,11 @@ async def test_submit_job_records_metrics() -> None:
         result = await session.execute(
             select(func.max(Configuration.version)).where(
                 Configuration.workspace_id == workspace.id,
-                Configuration.document_type == "invoice",
             )
         )
         next_version = (result.scalar_one_or_none() or 0) + 1
         configuration = Configuration(
             workspace_id=workspace.id,
-            document_type="invoice",
             title="Inline configuration",
             version=next_version,
             is_active=False,
@@ -125,13 +123,11 @@ async def test_submit_job_records_failure_and_raises() -> None:
         result = await session.execute(
             select(func.max(Configuration.version)).where(
                 Configuration.workspace_id == workspace.id,
-                Configuration.document_type == "invoice",
             )
         )
         next_version = (result.scalar_one_or_none() or 0) + 1
         configuration = Configuration(
             workspace_id=workspace.id,
-            document_type="invoice",
             title="Failing configuration",
             version=next_version,
             is_active=False,
@@ -190,13 +186,11 @@ async def test_custom_processor_override_returns_typed_payload() -> None:
         result = await session.execute(
             select(func.max(Configuration.version)).where(
                 Configuration.workspace_id == workspace.id,
-                Configuration.document_type == "invoice",
             )
         )
         next_version = (result.scalar_one_or_none() or 0) + 1
         configuration = Configuration(
             workspace_id=workspace.id,
-            document_type="invoice",
             title="Custom processor configuration",
             version=next_version,
             is_active=False,

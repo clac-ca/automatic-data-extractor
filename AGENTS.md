@@ -138,7 +138,7 @@ The tree below describes the desired state of the repo once the restructure is c
 - **`ade/api/` is a thin shell.** Limit it to version routing, shared dependencies, and exception mapping. Never move business logic here.
 - **`ade/core/` hosts cross-cutting concerns.** Settings, auth backends, logging, security helpers, and pure utilities belong here.
 - **`ade/db/` centralises persistence glue.** Declarative base, session management, and migrations stay together for easy engine swaps.
-- **`ade/web/` contains built assets only.** Source files for the SPA remain under `frontend/`.
+- **`ade/web/static/` contains built assets only.** Source files for the SPA remain under `frontend/`.
 - **Shared integrations live in `ade/services/` only when two or more features need them.** Otherwise, keep code inside the owning feature to avoid premature abstraction.
 
 ---
@@ -211,7 +211,8 @@ Run the quality gates appropriate for the scope of your change set.
 
 ### Frontend-specific expectations
 
-- When you modify anything under `frontend/`, run `npm test -- --watch=false` and `npm run build` to ensure the SPA both passes unit tests and builds successfully.
+- When you modify anything under `frontend/`, run `npm test -- --watch=false` (Vitest jsdom suite) and `npm run build` to ensure the SPA both passes unit tests and builds successfully. Use `npm run test:coverage` when coverage metrics are required.
+- Co-locate React tests beside the modules they exercise (for example `src/features/auth/__tests__`) and rely on `src/test/test-utils.tsx` for rendering so shared providers remain consistent.
 
 ---
 

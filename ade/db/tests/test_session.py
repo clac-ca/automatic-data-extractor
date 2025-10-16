@@ -40,7 +40,6 @@ async def test_session_dependency_commits_and_populates_context(
             configuration_id = generate_ulid()
             payload = {
                 "configuration_id": configuration_id,
-                "document_type": "invoice",
                 "title": "Test Configuration",
                 "version": 1,
                 "is_active": False,
@@ -54,7 +53,6 @@ async def test_session_dependency_commits_and_populates_context(
                     """
                     INSERT INTO configurations (
                         configuration_id,
-                        document_type,
                         title,
                         version,
                         is_active,
@@ -64,7 +62,6 @@ async def test_session_dependency_commits_and_populates_context(
                         workspace_id
                     ) VALUES (
                         :configuration_id,
-                        :document_type,
                         :title,
                         :version,
                         :is_active,

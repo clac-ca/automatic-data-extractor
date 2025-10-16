@@ -57,57 +57,13 @@ async def test_create_session_and_me(
     assert "global-administrator" in data["user"].get("roles", [])
 
 
-async def test_provider_discovery_returns_config(
-    async_client: AsyncClient,
-    override_app_settings,
-) -> None:
-    """GET /auth/providers should expose configured SSO metadata."""
-
-    override_app_settings(
-        auth_force_sso=True,
-        auth_providers=[
-            {
-                "id": "entra",
-                "label": "Microsoft Entra ID",
-                "start_url": "/auth/sso/login",
-                "icon_url": "/static/entra.svg",
-            },
-            {
-                "id": "okta",
-                "label": "Okta",
-                "start_url": "https://sso.example.test/start",
-                "icon_url": None,
-            },
-        ],
-    )
-
-    response = await async_client.get("/api/v1/auth/providers")
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["force_sso"] is True
-    assert payload["providers"] == [
-        {
-            "id": "entra",
-            "label": "Microsoft Entra ID",
-            "start_url": "/auth/sso/login",
-            "icon_url": "/static/entra.svg",
-        },
-        {
-            "id": "okta",
-            "label": "Okta",
-            "start_url": "https://sso.example.test/start",
-            "icon_url": None,
-        },
-    ]
-
-
-async def test_provider_discovery_defaults(
+async def test_provider_discovery_empty_without_oidc(
     async_client: AsyncClient,
     override_app_settings,
 ) -> None:
     """Discovery should return an empty list when no providers are configured."""
 
-    override_app_settings(auth_force_sso=False, auth_providers=[])
+    override_app_settings(auth_force_sso=False)
 
     response = await async_client.get("/api/v1/auth/providers")
     assert response.status_code == 200
@@ -122,8 +78,7 @@ async def test_provider_discovery_exposes_default_oidc_provider(
     """Enabling OIDC should surface a default SSO provider."""
 
     override_app_settings(
-        auth_force_sso=False,
-        auth_providers=[],
+        auth_force_sso=True,
         oidc_enabled=True,
         oidc_client_id="demo-client",
         oidc_client_secret=SecretStr("demo-secret"),
@@ -143,7 +98,7 @@ async def test_provider_discovery_exposes_default_oidc_provider(
                 "icon_url": None,
             }
         ],
-        "force_sso": False,
+        "force_sso": True,
     }
 
 

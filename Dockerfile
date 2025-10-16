@@ -7,7 +7,7 @@ RUN npm ci
 COPY frontend/. ./
 RUN npm run build
 
-FROM python:3.11.10-slim-bookworm AS python-builder
+FROM python:3.12.7-slim-bookworm AS python-builder
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -23,7 +23,7 @@ RUN python -m venv "$VIRTUAL_ENV"
 RUN pip install --upgrade pip \
     && pip install --no-cache-dir .
 
-FROM python:3.11.10-slim-bookworm AS runtime
+FROM python:3.12.7-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     VIRTUAL_ENV=/opt/venv \
@@ -37,7 +37,7 @@ RUN apt-get update \
 COPY --from=python-builder /opt/venv /opt/venv
 COPY --from=python-builder /app/alembic.ini ./
 COPY --from=python-builder /app/ade ./ade
-COPY --from=frontend-builder /frontend/dist ./ade/web
+COPY --from=frontend-builder /frontend/dist ./ade/web/static
 RUN addgroup --system ade \
     && adduser --system --ingroup ade --home /home/ade ade \
     && mkdir -p /var/lib/ade/documents \

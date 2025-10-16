@@ -22,7 +22,6 @@ class ConfigurationsRepository:
         self,
         *,
         workspace_id: str,
-        document_type: str | None = None,
         is_active: bool | None = None,
     ) -> list[Configuration]:
         """Return configurations ordered by recency."""
@@ -35,8 +34,6 @@ class ConfigurationsRepository:
                 Configuration.id.desc(),
             )
         )
-        if document_type:
-            stmt = stmt.where(Configuration.document_type == document_type)
         if is_active is not None:
             stmt = stmt.where(Configuration.is_active.is_(is_active))
 
@@ -59,15 +56,13 @@ class ConfigurationsRepository:
         self,
         *,
         workspace_id: str,
-        document_type: str,
     ) -> Configuration | None:
-        """Return the active configuration for ``document_type`` when present."""
+        """Return the active configuration for ``workspace_id`` when present."""
 
         stmt: Select[tuple[Configuration]] = (
             select(Configuration)
             .where(
                 Configuration.workspace_id == workspace_id,
-                Configuration.document_type == document_type,
                 Configuration.is_active.is_(True),
             )
             .limit(1)
@@ -79,9 +74,8 @@ class ConfigurationsRepository:
         self,
         *,
         workspace_id: str,
-        document_type: str | None = None,
     ) -> list[Configuration]:
-        """Return active configurations scoped by optional ``document_type``."""
+        """Return active configurations scoped by ``workspace_id``."""
 
         stmt: Select[tuple[Configuration]] = (
             select(Configuration)
@@ -89,22 +83,18 @@ class ConfigurationsRepository:
                 Configuration.workspace_id == workspace_id,
                 Configuration.is_active.is_(True),
             )
-            .order_by(Configuration.document_type.asc())
         )
-        if document_type:
-            stmt = stmt.where(Configuration.document_type == document_type)
 
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
     async def determine_next_version(
-        self, *, workspace_id: str, document_type: str
+        self, *, workspace_id: str
     ) -> int:
-        """Return the next sequential version for ``document_type``."""
+        """Return the next sequential version for ``workspace_id``."""
 
         stmt = select(Configuration.version).where(
             Configuration.workspace_id == workspace_id,
-            Configuration.document_type == document_type,
         )
         stmt = stmt.order_by(Configuration.version.desc()).limit(1)
         result = await self._session.execute(stmt)
@@ -115,7 +105,6 @@ class ConfigurationsRepository:
         self,
         *,
         workspace_id: str,
-        document_type: str,
         title: str,
         payload: Mapping[str, Any],
         version: int,
@@ -124,7 +113,6 @@ class ConfigurationsRepository:
 
         configuration = Configuration(
             workspace_id=workspace_id,
-            document_type=document_type,
             title=title,
             version=version,
             is_active=False,
@@ -160,13 +148,12 @@ class ConfigurationsRepository:
     async def activate_configuration(
         self, configuration: Configuration
     ) -> Configuration:
-        """Mark ``configuration`` as active and deactivate others for its document type."""
+        """Mark ``configuration`` as active and deactivate others for the workspace."""
 
         await self._session.execute(
             update(Configuration)
             .where(
                 Configuration.workspace_id == configuration.workspace_id,
-                Configuration.document_type == configuration.document_type,
                 Configuration.id != configuration.id,
             )
             .values(is_active=False, activated_at=None)
@@ -182,16 +169,14 @@ class ConfigurationsRepository:
         self,
         *,
         workspace_id: str,
-        document_type: str,
         version: int,
     ) -> Configuration | None:
-        """Return the configuration for ``document_type`` at ``version`` when present."""
+        """Return the configuration for ``workspace_id`` at ``version`` when present."""
 
         stmt: Select[tuple[Configuration]] = (
             select(Configuration)
             .where(
                 Configuration.workspace_id == workspace_id,
-                Configuration.document_type == document_type,
                 Configuration.version == version,
             )
             .limit(1)
