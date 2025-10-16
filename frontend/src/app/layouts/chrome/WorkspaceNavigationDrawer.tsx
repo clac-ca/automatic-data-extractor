@@ -14,7 +14,7 @@ export interface WorkspaceNavigationDrawerProps {
   readonly workspace: WorkspaceProfile;
   readonly workspaces: readonly WorkspaceProfile[];
   readonly section: WorkspaceSectionDescriptor;
-  readonly navigation?: WorkspaceSecondaryNavigation | null;
+  readonly navigation: WorkspaceSecondaryNavigation;
   readonly onClose: () => void;
   readonly onNavigate?: () => void;
   readonly onSelectWorkspace: (workspaceId: string) => void;
@@ -95,13 +95,11 @@ export function WorkspaceNavigationDrawer({
           />
 
           <NavigationGroup title="Workspace" items={primaryItems} onNavigate={onNavigate} />
-          {navigation ? (
-            <SecondaryNavigationGroup
-              title={section.label}
-              navigation={navigation}
-              onNavigate={onNavigate}
-            />
-          ) : null}
+          <SecondaryNavigationGroup
+            title={section.label}
+            navigation={navigation}
+            onNavigate={onNavigate}
+          />
         </div>
       </div>
     </div>
