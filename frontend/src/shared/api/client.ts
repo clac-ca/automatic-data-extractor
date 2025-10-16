@@ -3,7 +3,6 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 export type ApiOptions = RequestInit & {
   readonly parseJson?: boolean;
-  readonly returnRawResponse?: boolean;
 };
 
 export interface ProblemDetails {
@@ -34,21 +33,14 @@ export class ApiClient {
   }
 
   async request<T = unknown>(path: string, options: ApiOptions = {}): Promise<T> {
-    const {
-      parseJson = true,
-      returnRawResponse = false,
-      headers: headersInit,
-      body,
-      method: rawMethod,
-      credentials,
-      ...rest
-    } = options;
+    const { parseJson = true, headers: headersInit, body, method: rawMethod, credentials, ...rest } =
+      options;
 
     const method = (rawMethod ?? "GET").toUpperCase();
     const url = this.composeUrl(path);
 
     const requestHeaders = new Headers({
-      Accept: parseJson && !returnRawResponse ? "application/json" : "*/*",
+      Accept: "application/json",
     });
 
     this.copyHeaders(requestHeaders, headersInit);
@@ -76,10 +68,6 @@ export class ApiClient {
       const problem = await this.tryParseProblem(response);
       const message = problem?.title ?? `Request failed with status ${response.status}`;
       throw new ApiError(message, response.status, problem);
-    }
-
-    if (returnRawResponse) {
-      return response as unknown as T;
     }
 
     if (!parseJson) {
