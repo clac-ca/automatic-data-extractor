@@ -1,23 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { buildDocumentsSearchParams } from "../api";
+import { normaliseStatusFilter } from "../api";
 
-describe("buildDocumentsSearchParams", () => {
-  it("serialises repeatable parameters for arrays", () => {
-    const params = buildDocumentsSearchParams({
-      status: ["uploaded", "processed"],
-      tag: ["finance", "ops"],
-      uploader_id: ["01H", "01J"],
-      page: 2,
-      per_page: 100,
-      include_total: true,
-    });
+describe("normaliseStatusFilter", () => {
+  it("returns undefined when the status is empty", () => {
+    expect(normaliseStatusFilter(undefined)).toBeUndefined();
+    expect(normaliseStatusFilter(null)).toBeUndefined();
+    expect(normaliseStatusFilter([])).toBeUndefined();
+  });
 
-    expect(params.getAll("status")).toEqual(["uploaded", "processed"]);
-    expect(params.getAll("tag")).toEqual(["finance", "ops"]);
-    expect(params.getAll("uploader_id")).toEqual(["01H", "01J"]);
-    expect(params.get("page")).toBe("2");
-    expect(params.get("per_page")).toBe("100");
-    expect(params.get("include_total")).toBe("true");
+  it("wraps a single status value in an array", () => {
+    expect(normaliseStatusFilter("uploaded")).toEqual(["uploaded"]);
+  });
+
+  it("returns the provided array when multiple statuses are supplied", () => {
+    expect(normaliseStatusFilter(["uploaded", "processed"])).toEqual(["uploaded", "processed"]);
   });
 });
