@@ -36,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### Fixed
 - Ensure document uploads stream to the backend API, clear progress indicators per file, and immediately refresh the workspace list after completion.
 - Fix the upload picker so selected files are processed before the input resets, keeping button and drag-and-drop uploads consistent.
+- Automatically refresh browser sessions before access tokens expire so idle users are not met with unexpected 401 errors.
 
 ## [v0.1.0] - 2025-10-09
 
