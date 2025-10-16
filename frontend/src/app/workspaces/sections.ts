@@ -1,6 +1,6 @@
 import type { UIMatch } from "react-router-dom";
 
-export type WorkspaceSectionId = "documents" | "jobs" | "configurations" | "members" | "settings";
+export type WorkspaceSectionId = "documents" | "overview" | "runs" | "data" | "config" | "settings";
 
 export interface WorkspaceSectionDescriptor {
   readonly id: WorkspaceSectionId;
@@ -32,39 +32,51 @@ export const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
     },
   },
   {
-    id: "jobs",
-    path: "jobs",
-    label: "Exports",
-    description: "Download-ready data extracts and job history",
+    id: "overview",
+    path: "overview",
+    label: "Overview",
+    description: "Workspace health, metrics, and recent activity",
     placeholder: {
-      title: "Exports",
+      title: "Workspace overview",
       description:
-        "Review bulk exports once the job service ships. You’ll be able to generate fresh extracts and download prior runs here.",
+        "Dashboards for activity, throughput, and adoption will land here once analytics wiring is complete.",
       cta: { href: "../documents", label: "View documents" },
     },
   },
   {
-    id: "configurations",
-    path: "configurations",
-    label: "Configurations",
-    description: "Workspace rules and deployment",
+    id: "runs",
+    path: "runs",
+    label: "Runs & Jobs",
+    description: "Extraction queue, job history, and alerts",
     placeholder: {
-      title: "Configurations",
+      title: "Runs & Jobs",
+      description:
+        "Monitor active extraction jobs, retry failures, and audit job history. The orchestration view is under active development.",
+      cta: { href: "../documents", label: "View documents" },
+    },
+  },
+  {
+    id: "data",
+    path: "data",
+    label: "Data",
+    description: "Datasets, exports, and records",
+    placeholder: {
+      title: "Data",
+      description:
+        "Access curated datasets, exports, and downstream records once the data hub ships later this quarter.",
+      cta: { href: "../documents", label: "View documents" },
+    },
+  },
+  {
+    id: "config",
+    path: "config",
+    label: "Configure",
+    description: "Rules, pipelines, and automation",
+    placeholder: {
+      title: "Configure",
       description:
         "Define extraction rules, map columns, and manage deployment snapshots. The configuration hub is coming soon.",
       cta: { href: "../documents", label: "View documents" },
-    },
-  },
-  {
-    id: "members",
-    path: "members",
-    label: "Members",
-    description: "Invite teammates, manage roles",
-    placeholder: {
-      title: "Members",
-      description:
-        "Invite teammates, review role assignments, and audit workspace permissions. Collaborative tools land next.",
-      cta: { href: "../settings", label: "Workspace settings" },
     },
   },
   {

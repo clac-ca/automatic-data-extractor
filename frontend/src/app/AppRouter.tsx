@@ -21,7 +21,7 @@ const workspaceSectionRoutes = workspaceSections.map((section) => ({
   element:
     section.id === "documents"
       ? <DocumentsRoute />
-      : section.id === "configurations"
+      : section.id === "config"
         ? <ConfigurationsRoute />
         : <WorkspacePlaceholderRoute sectionId={section.id} />,
   handle: { workspaceSectionId: section.id } satisfies WorkspaceRouteHandle,
@@ -48,7 +48,6 @@ const appRouter = createBrowserRouter([
             loader: workspaceLoader,
             children: [
               ...workspaceSectionRoutes,
-              { path: "overview", element: <Navigate to="../documents" replace /> },
               { index: true, element: <Navigate to={defaultWorkspaceSection.path} replace /> },
             ],
           },
