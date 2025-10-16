@@ -14,8 +14,13 @@ export interface WorkspaceSectionDescriptor {
   };
 }
 
+export interface WorkspaceRouteMeta {
+  readonly showContextNav?: boolean;
+}
+
 export interface WorkspaceRouteHandle {
   readonly workspaceSectionId?: WorkspaceSectionId;
+  readonly meta?: WorkspaceRouteMeta;
 }
 
 export const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
@@ -117,6 +122,16 @@ export function matchWorkspaceSection(matches: readonly UIMatch[]): WorkspaceSec
     }
   }
   return defaultWorkspaceSection;
+}
+
+export function matchWorkspaceSectionMeta(matches: readonly UIMatch[]): WorkspaceRouteMeta {
+  for (let index = matches.length - 1; index >= 0; index -= 1) {
+    const handle = matches[index].handle as WorkspaceRouteHandle | undefined;
+    if (handle?.workspaceSectionId) {
+      return handle.meta ?? {};
+    }
+  }
+  return {};
 }
 
 export const workspacePlaceholderSections = new Map(
