@@ -2,7 +2,13 @@ import clsx from "clsx";
 
 import { Button } from "../../../../ui";
 import type { DocumentRow, SortColumn, SortState } from "../utils";
-import { formatDateTime, formatFileSize, formatRelativeTime, formatStatusLabel } from "../utils";
+import {
+  formatDateTime,
+  formatFileSize,
+  formatLastRunLabel,
+  formatRelativeTime,
+  formatStatusLabel,
+} from "../utils";
 
 interface DocumentsTableProps {
   readonly rows: readonly DocumentRow[];
@@ -13,6 +19,7 @@ interface DocumentsTableProps {
   readonly onDelete: (row: DocumentRow) => void;
   readonly downloadingId: string | null;
   readonly deletingId: string | null;
+  readonly isLoading: boolean;
 }
 
 const columns: { id: SortColumn | "tags" | "actions"; label: string; widthClass?: string; align?: "start" | "center" | "end"; sortable?: boolean }[] = [
@@ -27,9 +34,9 @@ const columns: { id: SortColumn | "tags" | "actions"; label: string; widthClass?
 ];
 
 const STATUS_BADGES = {
-  inbox: "bg-indigo-100 text-indigo-700",
+  uploaded: "bg-slate-100 text-slate-700",
   processing: "bg-amber-100 text-amber-800",
-  completed: "bg-emerald-100 text-emerald-700",
+  processed: "bg-emerald-100 text-emerald-700",
   failed: "bg-danger-100 text-danger-700",
   archived: "bg-slate-200 text-slate-700",
 } as const satisfies Record<DocumentRow["status"], string>;
@@ -43,6 +50,7 @@ export function DocumentsTable({
   onDelete,
   downloadingId,
   deletingId,
+  isLoading,
 }: DocumentsTableProps) {
   return (
     <div role="grid" className="absolute inset-0 overflow-auto">
@@ -66,17 +74,21 @@ export function DocumentsTable({
           </tr>
         </thead>
         <tbody className="bg-white">
-          {rows.map((row) => (
-            <DocumentsRow
-              key={row.id}
-              row={row}
-              onInspect={onInspect}
-              onDownload={onDownload}
-              onDelete={onDelete}
-              isDownloading={downloadingId === row.id}
-              isDeleting={deletingId === row.id}
-            />
-          ))}
+          {isLoading && rows.length === 0 ? (
+            <SkeletonRows />
+          ) : (
+            rows.map((row) => (
+              <DocumentsRow
+                key={row.id}
+                row={row}
+                onInspect={onInspect}
+                onDownload={onDownload}
+                onDelete={onDelete}
+                isDownloading={downloadingId === row.id}
+                isDeleting={deletingId === row.id}
+              />
+            ))
+          )}
         </tbody>
       </table>
     </div>
@@ -184,7 +196,11 @@ function DocumentsRow({ row, onInspect, onDownload, onDelete, isDownloading, isD
         <Timestamp value={row.uploadedAt} />
       </td>
       <td className="px-4 py-4 align-top text-slate-700">
-        {row.lastRunAt ? <Timestamp value={row.lastRunAt} description={row.lastRunLabel} /> : <span className="text-sm text-slate-500">{row.lastRunLabel}</span>}
+        {row.lastRunAt ? (
+          <Timestamp value={row.lastRunAt} description={formatLastRunLabel(row.lastRunAt)} />
+        ) : (
+          <span className="text-sm text-slate-500">Never</span>
+        )}
       </td>
       <td className="px-4 py-4 align-top text-right text-sm font-semibold text-slate-700">{formatFileSize(row.byteSize)}</td>
       <td className="px-4 py-4 align-top">
@@ -243,5 +259,24 @@ function StatusBadge({ status }: { readonly status: DocumentRow["status"] }) {
     >
       {formatStatusLabel(status)}
     </span>
+  );
+}
+
+function SkeletonRows() {
+  return (
+    <>
+      {Array.from({ length: 8 }).map((_, index) => (
+        <tr key={index} className="border-b border-slate-100 last:border-b-0">
+          {columns.map((column) => (
+            <td
+              key={column.id}
+              className={clsx("px-4 py-4", column.align === "end" ? "text-right" : "")}
+            >
+              <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
   );
 }

@@ -1,59 +1,113 @@
-import { useCallback, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, DragEvent } from "react";
+import { useCallback, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import clsx from "clsx";
 
-import { useSession } from "../../features/auth/context/SessionContext";
-import { useWorkspaceDocumentsQuery } from "../../features/documents/hooks/useWorkspaceDocumentsQuery";
+import { useDocumentsQuery } from "../../features/documents/hooks/useWorkspaceDocumentsQuery";
 import { useUploadDocumentsMutation } from "../../features/documents/hooks/useUploadDocumentsMutation";
 import { useDeleteDocumentsMutation } from "../../features/documents/hooks/useDeleteDocumentsMutation";
 import { downloadWorkspaceDocument } from "../../features/documents/api";
 import { useWorkspaceContext } from "../../features/workspaces/context/WorkspaceContext";
 import { useWorkspaceChrome } from "../workspaces/WorkspaceChromeContext";
-import { PageState } from "../components/PageState";
 import { Alert, Button } from "../../ui";
 import {
-  DEFAULT_SORT_STATE,
   SUPPORTED_FILE_EXTENSIONS,
   SUPPORTED_FILE_TYPES_LABEL,
-  applyDocumentFilters,
   resolveApiErrorMessage,
-  sortDocumentRows,
   splitSupportedFiles,
   toDocumentRows,
-  toggleSort,
+  toSortParam,
   trackDocumentsEvent,
   triggerBrowserDownload,
+  parseSortParam,
+  type DocumentRow,
+  type SortColumn,
+  type SortState,
+  type SplitFilesResult,
+  type UploaderFilterValue,
 } from "./documents/utils";
-import type { DocumentRow, OwnerFilterValue, SortColumn, SortState, StatusFilterValue } from "./documents/utils";
 import { DocumentsToolbar } from "./documents/components/DocumentsToolbar";
 import { DocumentsTable } from "./documents/components/DocumentsTable";
 import { DocumentsEmptyState } from "./documents/components/DocumentsEmptyState";
 import { DocumentDetails } from "./documents/components/DocumentDetails";
+import { useDocumentsParams, DEFAULT_SORT_PARAM } from "./documents/hooks/useDocumentsParams";
 
-type FeedbackTone = "info" | "success" | "warning" | "danger";
-interface FeedbackState {
-  readonly tone: FeedbackTone;
-  readonly message: string;
+function nextSort(column: SortColumn, current: SortState): SortState {
+  if (current.column !== column) {
+    const defaultDirection = column === "uploadedAt" || column === "lastRunAt" || column === "byteSize" ? "desc" : "asc";
+    return { column, direction: defaultDirection };
+  }
+  return { column, direction: current.direction === "asc" ? "desc" : "asc" };
 }
 
 export function DocumentsRoute() {
   const { workspace } = useWorkspaceContext();
-  const { user: currentUser } = useSession();
   const { openInspector } = useWorkspaceChrome();
 
-  const documentsQuery = useWorkspaceDocumentsQuery(workspace.id);
+  const documentsParams = useDocumentsParams();
+  const {
+    urlState,
+    apiParams,
+    setStatuses,
+    addTag,
+    removeTag,
+    setUploader,
+    setSearch,
+    setSort,
+    setPage,
+    setPerPage,
+    setCreatedRange,
+    setLastRunRange,
+    clearFilters,
+  } = documentsParams;
+
+  const documentsQuery = useDocumentsQuery(workspace.id, apiParams);
   const uploadDocuments = useUploadDocumentsMutation(workspace.id);
   const deleteDocuments = useDeleteDocumentsMutation(workspace.id);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [ownerFilter, setOwnerFilter] = useState<OwnerFilterValue>("mine");
-  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("all");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sortState, setSortState] = useState<SortState>(DEFAULT_SORT_STATE);
-  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const [feedback, setFeedback] = useState<{ tone: "info" | "success" | "warning" | "danger"; message: string } | null>(
+    null,
+  );
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [dragDepth, setDragDepth] = useState(0);
+
+  const sortState = useMemo(() => parseSortParam(urlState.sort), [urlState.sort]);
+  const rows: DocumentRow[] = useMemo(
+    () => toDocumentRows(documentsQuery.data?.items),
+    [documentsQuery.data?.items],
+  );
+
+  const availableTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    for (const record of documentsQuery.data?.items ?? []) {
+      for (const tag of record.tags ?? []) {
+        tagSet.add(tag);
+      }
+    }
+    return Array.from(tagSet).sort((a, b) => a.localeCompare(b));
+  }, [documentsQuery.data?.items]);
+
+  const isLoading = documentsQuery.isLoading;
+  const hasNext = documentsQuery.data?.has_next ?? false;
+  const noDocumentsExist = Boolean(
+    documentsQuery.data &&
+      documentsQuery.data.page === 1 &&
+      documentsQuery.data.items.length === 0 &&
+      !documentsQuery.data.has_next,
+  );
+  const hasDocuments = !noDocumentsExist;
+  const hasActiveFilters =
+    urlState.status.length > 0 ||
+    urlState.tags.length > 0 ||
+    urlState.uploader === "me" ||
+    urlState.q.trim().length > 0 ||
+    Boolean(urlState.createdFrom) ||
+    Boolean(urlState.createdTo) ||
+    Boolean(urlState.lastRunFrom) ||
+    Boolean(urlState.lastRunTo) ||
+    urlState.sort !== DEFAULT_SORT_PARAM ||
+    urlState.perPage !== 50 ||
+    urlState.page !== 1;
 
   const containsFiles = useCallback((event: DragEvent<HTMLDivElement>) => {
     const { dataTransfer } = event;
@@ -67,56 +121,59 @@ export function DocumentsRoute() {
     return !!types && Array.from(types).includes("Files");
   }, []);
 
-  const documents = useMemo(() => toDocumentRows(documentsQuery.data), [documentsQuery.data]);
-  const filteredDocuments = useMemo(
-    () =>
-      applyDocumentFilters(documents, {
-        owner: ownerFilter,
-        status: statusFilter,
-        search: searchTerm,
-        currentUser,
-      }),
-    [documents, ownerFilter, statusFilter, searchTerm, currentUser],
+  const showFeedback = useCallback(
+    (value: { tone: "info" | "success" | "warning" | "danger"; message: string }) => setFeedback(value),
+    [],
   );
-  const visibleDocuments = useMemo(
-    () => sortDocumentRows(filteredDocuments, sortState),
-    [filteredDocuments, sortState],
-  );
-
-  const totalCount = documents.length;
-  const resultCount = visibleDocuments.length;
-  const hasDocuments = totalCount > 0;
-  const hasVisibleDocuments = resultCount > 0;
-  const isDragging = dragDepth > 0;
-
   const clearFeedback = useCallback(() => setFeedback(null), []);
-  const showFeedback = useCallback((value: FeedbackState) => setFeedback(value), []);
 
   const handleSortChange = useCallback(
     (column: SortColumn) => {
-      setSortState((current) => {
-        const next = toggleSort(column, current);
-        trackDocumentsEvent("sort", workspace.id, { column: next.column, direction: next.direction });
-        return next;
-      });
+      const next = nextSort(column, sortState);
+      setSort(toSortParam(next));
+      trackDocumentsEvent("sort", workspace.id, { column: next.column, direction: next.direction });
     },
-    [workspace.id],
+    [sortState, setSort, workspace.id],
   );
 
-  const handleOwnerChange = useCallback(
-    (value: OwnerFilterValue) => {
-      setOwnerFilter(value);
+  const handleUploaderChange = useCallback(
+    (value: UploaderFilterValue) => {
+      setUploader(value === "me" ? "me" : null);
       trackDocumentsEvent("filter_owner", workspace.id, { owner: value });
     },
-    [workspace.id],
+    [setUploader, workspace.id],
   );
 
-  const handleStatusChange = useCallback(
-    (value: StatusFilterValue) => {
-      setStatusFilter(value);
-      trackDocumentsEvent("filter_status", workspace.id, { status: value });
+  const handleStatusesChange = useCallback(
+    (values: string[]) => {
+      setStatuses(values);
+      trackDocumentsEvent("filter_status", workspace.id, { statuses: values });
     },
-    [workspace.id],
+    [setStatuses, workspace.id],
+  );
+
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearch(value);
+      trackDocumentsEvent("filter_search", workspace.id, { value });
+    },
+    [setSearch, workspace.id],
+  );
+
+  const handleAddTag = useCallback(
+    (tag: string) => {
+      addTag(tag);
+      trackDocumentsEvent("filter_tag_add", workspace.id, { tag });
+    },
+    [addTag, workspace.id],
+  );
+
+  const handleRemoveTag = useCallback(
+    (tag: string) => {
+      removeTag(tag);
+      trackDocumentsEvent("filter_tag_remove", workspace.id, { tag });
+    },
+    [removeTag, workspace.id],
   );
 
   const handleInspect = useCallback(
@@ -171,7 +228,7 @@ export function DocumentsRoute() {
         return;
       }
 
-      const { accepted, rejected } = splitSupportedFiles(files);
+      const { accepted, rejected }: SplitFilesResult = splitSupportedFiles(files);
       if (accepted.length === 0) {
         showFeedback({
           tone: "warning",
@@ -243,20 +300,6 @@ export function DocumentsRoute() {
     [containsFiles, dragDepth],
   );
 
-  const handleDragOver = useCallback(
-    (event: DragEvent<HTMLDivElement>) => {
-      if (!containsFiles(event) && dragDepth === 0) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      if (event.dataTransfer) {
-        event.dataTransfer.dropEffect = "copy";
-      }
-    },
-    [containsFiles, dragDepth],
-  );
-
   const handleDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
       if (!containsFiles(event)) {
@@ -271,77 +314,91 @@ export function DocumentsRoute() {
     [containsFiles, handleFilesSelected],
   );
 
-  const openFileDialog = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
-
-  const handleUploadClick = useCallback(() => {
-    trackDocumentsEvent("upload_click", workspace.id);
-    openFileDialog();
-  }, [openFileDialog, workspace.id]);
-
-  if (documentsQuery.isLoading) {
-    return <PageState title="Loading documents" description="Fetching workspace documents." variant="loading" />;
-  }
-
-  if (documentsQuery.isError) {
-    return (
-      <PageState
-        title="Unable to load documents"
-        description="Refresh the page or try again later."
-        variant="error"
-        action={
-          <Button variant="secondary" onClick={() => documentsQuery.refetch()}>
-            Retry
-          </Button>
-        }
-      />
-    );
-  }
+  const isDragging = dragDepth > 0;
+  const showEmptyState = !isLoading && rows.length === 0;
+  const uploaderFilter = urlState.uploader === "me" ? "me" : "all";
 
   return (
-    <section className="flex h-full flex-col gap-3">
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept={SUPPORTED_FILE_EXTENSIONS.join(",")}
-        className="hidden"
-        onChange={handleFileInputChange}
+    <div className="flex h-full flex-col">
+      <DocumentsToolbar
+        uploader={uploaderFilter}
+        onUploaderChange={handleUploaderChange}
+        statuses={urlState.status}
+        onStatusesChange={handleStatusesChange}
+        tags={urlState.tags}
+        onAddTag={handleAddTag}
+        onRemoveTag={handleRemoveTag}
+        availableTags={availableTags}
+        createdFrom={urlState.createdFrom}
+        createdTo={urlState.createdTo}
+        onCreatedRangeChange={setCreatedRange}
+        lastRunFrom={urlState.lastRunFrom}
+        lastRunTo={urlState.lastRunTo}
+        onLastRunRangeChange={setLastRunRange}
+        search={urlState.q}
+        onSearchChange={handleSearchChange}
+        onClearFilters={clearFilters}
+        onUploadClick={() => fileInputRef.current?.click()}
+        isUploading={uploadDocuments.isPending}
+        itemCount={rows.length}
+        page={urlState.page}
+        perPage={urlState.perPage}
+        onPerPageChange={setPerPage}
+        canClearFilters={hasActiveFilters}
       />
 
-      {feedback ? <Alert tone={feedback.tone}>{feedback.message}</Alert> : null}
-
       <div
-        role="region"
-        aria-label="Workspace documents"
-        aria-busy={documentsQuery.isFetching}
         className={clsx(
-          "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-soft transition",
-          isDragging ? "border-dashed border-brand-400 ring-4 ring-brand-100" : "hover:border-slate-300",
+          "relative flex-1",
+          isDragging ? "ring-2 ring-dashed ring-brand-500" : "",
         )}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
-        onDragOver={handleDragOver}
         onDrop={handleDrop}
+        onDragOver={(event) => {
+          if (containsFiles(event)) {
+            event.preventDefault();
+          }
+        }}
       >
-        <DocumentsToolbar
-          owner={ownerFilter}
-          onOwnerChange={handleOwnerChange}
-          status={statusFilter}
-          onStatusChange={handleStatusChange}
-          search={searchTerm}
-          onSearchChange={setSearchTerm}
-          onUploadClick={handleUploadClick}
-          isUploading={uploadDocuments.isPending}
-          resultCount={resultCount}
-          totalCount={totalCount}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={SUPPORTED_FILE_EXTENSIONS.join(",")}
+          className="hidden"
+          onChange={handleFileInputChange}
         />
 
-        <div className="relative flex-1">
-          {hasVisibleDocuments ? (
+        {feedback ? (
+          <div className="border-b border-slate-200 bg-slate-50 px-5 py-3">
+            <Alert tone={feedback.tone}>
+              <div className="flex items-start justify-between gap-3">
+                <span>{feedback.message}</span>
+                <button
+                  type="button"
+                  onClick={clearFeedback}
+                  className="text-xs font-semibold uppercase tracking-wide text-slate-500 transition hover:text-slate-700"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </Alert>
+          </div>
+        ) : null}
+
+        {showEmptyState ? (
+          <DocumentsEmptyState
+            hasDocuments={hasDocuments}
+            hasActiveFilters={hasActiveFilters}
+            onClearFilters={clearFilters}
+            onUpload={() => fileInputRef.current?.click()}
+            isUploading={uploadDocuments.isPending}
+          />
+        ) : (
+          <>
             <DocumentsTable
-              rows={visibleDocuments}
+              rows={rows}
               sortState={sortState}
               onSortChange={handleSortChange}
               onInspect={handleInspect}
@@ -349,26 +406,40 @@ export function DocumentsRoute() {
               onDelete={handleDelete}
               downloadingId={downloadingId}
               deletingId={deletingId}
+              isLoading={isLoading}
             />
-          ) : (
-            <DocumentsEmptyState
-              owner={ownerFilter}
-              status={statusFilter}
-              hasDocuments={hasDocuments}
-              onViewAll={() => handleOwnerChange("all")}
-              onClearStatus={() => handleStatusChange("all")}
-              onUpload={handleUploadClick}
-              isUploading={uploadDocuments.isPending}
-            />
-          )}
+            <div className="flex items-center justify-between border-t border-slate-200 px-5 py-3 text-sm text-slate-600">
+              <span>Page {urlState.page}</span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setPage(Math.max(1, urlState.page - 1))}
+                  disabled={urlState.page === 1 || documentsQuery.isLoading}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setPage(urlState.page + 1)}
+                  disabled={!hasNext || documentsQuery.isLoading}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
 
-          {isDragging ? (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl border-4 border-dashed border-brand-300 bg-brand-50/80 text-sm font-semibold text-brand-700">
+        {isDragging ? (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/80">
+            <div className="rounded-lg border-2 border-dashed border-brand-500 bg-white px-6 py-4 text-center text-sm font-semibold text-brand-600 shadow-sm">
               Drop files to upload
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </div>
-    </section>
+    </div>
   );
 }

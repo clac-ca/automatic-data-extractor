@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from starlette.datastructures import Headers
 
 from ade import get_settings
+from ade.db import generate_ulid
 from ade.db.session import get_sessionmaker
 from ade.features.configurations.models import Configuration
 from ade.features.documents.service import DocumentsService
@@ -25,6 +26,7 @@ from ade.features.jobs.processor import (
 )
 from ade.features.jobs.service import JobsService
 from ade.features.workspaces.models import Workspace
+from ade.features.users.models import User
 
 
 pytestmark = pytest.mark.asyncio
@@ -44,7 +46,10 @@ async def test_submit_job_records_metrics() -> None:
         session.add(workspace)
         await session.flush()
 
-        actor = SimpleNamespace(id="user-1", email="user@example.test")
+        actor = SimpleNamespace(id=generate_ulid(), email="user@example.test")
+
+        session.add(User(id=actor.id, email=actor.email, display_name="User 1"))
+        await session.flush()
 
         documents_service = DocumentsService(session=session, settings=settings)
         upload = UploadFile(
@@ -55,6 +60,7 @@ async def test_submit_job_records_metrics() -> None:
         document_record = await documents_service.create_document(
             workspace_id=str(workspace.id),
             upload=upload,
+            actor=actor,
         )
 
         result = await session.execute(
@@ -107,7 +113,10 @@ async def test_submit_job_records_failure_and_raises() -> None:
         session.add(workspace)
         await session.flush()
 
-        actor = SimpleNamespace(id="user-2", email="user2@example.test")
+        actor = SimpleNamespace(id=generate_ulid(), email="user2@example.test")
+
+        session.add(User(id=actor.id, email=actor.email, display_name="User 2"))
+        await session.flush()
 
         documents_service = DocumentsService(session=session, settings=settings)
         upload = UploadFile(
@@ -118,6 +127,7 @@ async def test_submit_job_records_failure_and_raises() -> None:
         document_record = await documents_service.create_document(
             workspace_id=str(workspace.id),
             upload=upload,
+            actor=actor,
         )
 
         result = await session.execute(
@@ -170,7 +180,10 @@ async def test_custom_processor_override_returns_typed_payload() -> None:
         session.add(workspace)
         await session.flush()
 
-        actor = SimpleNamespace(id="user-3", email="user3@example.test")
+        actor = SimpleNamespace(id=generate_ulid(), email="user3@example.test")
+
+        session.add(User(id=actor.id, email=actor.email, display_name="User 3"))
+        await session.flush()
 
         documents_service = DocumentsService(session=session, settings=settings)
         upload = UploadFile(
@@ -181,6 +194,7 @@ async def test_custom_processor_override_returns_typed_payload() -> None:
         document_record = await documents_service.create_document(
             workspace_id=str(workspace.id),
             upload=upload,
+            actor=actor,
         )
 
         result = await session.execute(
