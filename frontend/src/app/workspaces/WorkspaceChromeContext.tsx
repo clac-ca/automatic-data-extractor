@@ -12,6 +12,9 @@ interface WorkspaceChromeContextValue {
   readonly isNavCollapsed: boolean;
   readonly toggleNavCollapsed: () => void;
   readonly setNavCollapsed: (next: boolean) => void;
+  readonly isSectionCollapsed: boolean;
+  readonly toggleSectionCollapsed: () => void;
+  readonly setSectionCollapsed: (next: boolean) => void;
   readonly isFocusMode: boolean;
   readonly toggleFocusMode: () => void;
   readonly setFocusMode: (next: boolean) => void;
@@ -30,6 +33,9 @@ export interface WorkspaceChromeProviderProps {
   readonly isNavCollapsed: boolean;
   readonly toggleNavCollapsed: () => void;
   readonly setNavCollapsed: (next: boolean) => void;
+  readonly isSectionCollapsed: boolean;
+  readonly toggleSectionCollapsed: () => void;
+  readonly setSectionCollapsed: (next: boolean) => void;
   readonly isFocusMode: boolean;
   readonly toggleFocusMode: () => void;
   readonly setFocusMode: (next: boolean) => void;
@@ -40,6 +46,9 @@ export function WorkspaceChromeProvider({
   isNavCollapsed,
   toggleNavCollapsed,
   setNavCollapsed,
+  isSectionCollapsed,
+  toggleSectionCollapsed,
+  setSectionCollapsed,
   isFocusMode,
   toggleFocusMode,
   setFocusMode,
@@ -73,6 +82,9 @@ export function WorkspaceChromeProvider({
       isNavCollapsed,
       toggleNavCollapsed,
       setNavCollapsed,
+      isSectionCollapsed,
+      toggleSectionCollapsed,
+      setSectionCollapsed,
       isFocusMode,
       toggleFocusMode,
       setFocusMode,
@@ -90,10 +102,13 @@ export function WorkspaceChromeProvider({
       inspector.title,
       inspectorOpen,
       isFocusMode,
+      isSectionCollapsed,
       isNavCollapsed,
       openInspector,
+      setSectionCollapsed,
       setFocusMode,
       setNavCollapsed,
+      toggleSectionCollapsed,
       toggleFocusMode,
       toggleNavCollapsed,
     ],
