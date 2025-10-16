@@ -41,7 +41,8 @@ def upgrade() -> None:
     _create_role_assignments()
     _create_configurations()
     _create_documents()
-    _create_jobs()
+    _create_document_tags()
+    _create_jobs(bind)
     _create_api_keys()
     _create_system_settings()
 
@@ -358,7 +359,21 @@ def _create_documents() -> None:
         sa.Column("sha256", sa.String(length=64), nullable=False),
         sa.Column("stored_uri", sa.String(length=512), nullable=False),
         sa.Column("attributes", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
+        sa.Column("uploaded_by_user_id", sa.String(length=26), nullable=True),
+        sa.Column(
+            "status",
+            sa.String(length=20),
+            nullable=False,
+            server_default=sa.text("'uploaded'"),
+        ),
+        sa.Column(
+            "source",
+            sa.String(length=50),
+            nullable=False,
+            server_default=sa.text("'manual_upload'"),
+        ),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("last_run_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
@@ -366,11 +381,46 @@ def _create_documents() -> None:
         sa.Column("produced_by_job_id", sa.String(length=26), nullable=True),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.workspace_id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["deleted_by_user_id"], ["users.user_id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["uploaded_by_user_id"], ["users.user_id"], ondelete="SET NULL"
+        ),
+        sa.CheckConstraint(
+            "status IN ('uploaded','processing','processed','failed','archived')",
+            name="documents_status_ck",
+        ),
+        sa.CheckConstraint(
+            "source IN ('manual_upload')",
+            name="documents_source_ck",
+        ),
     )
     op.create_index(
-        "documents_workspace_id_idx",
+        "documents_workspace_status_created_idx",
         "documents",
-        ["workspace_id"],
+        ["workspace_id", "status", "created_at"],
+        unique=False,
+    )
+    op.create_index(
+        "documents_workspace_created_idx",
+        "documents",
+        ["workspace_id", "created_at"],
+        unique=False,
+    )
+    op.create_index(
+        "documents_workspace_last_run_idx",
+        "documents",
+        ["workspace_id", "last_run_at"],
+        unique=False,
+    )
+    op.create_index(
+        "documents_workspace_source_idx",
+        "documents",
+        ["workspace_id", "source"],
+        unique=False,
+    )
+    op.create_index(
+        "documents_workspace_uploader_idx",
+        "documents",
+        ["workspace_id", "uploaded_by_user_id"],
         unique=False,
     )
     op.create_index(
@@ -381,7 +431,29 @@ def _create_documents() -> None:
     )
 
 
-def _create_jobs() -> None:
+def _create_document_tags() -> None:
+    op.create_table(
+        "document_tags",
+        sa.Column("document_id", sa.String(length=26), nullable=False),
+        sa.Column("tag", sa.String(length=100), nullable=False),
+        sa.ForeignKeyConstraint(["document_id"], ["documents.document_id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("document_id", "tag"),
+    )
+    op.create_index(
+        "document_tags_document_id_idx",
+        "document_tags",
+        ["document_id"],
+        unique=False,
+    )
+    op.create_index(
+        "document_tags_tag_idx",
+        "document_tags",
+        ["tag"],
+        unique=False,
+    )
+
+
+def _create_jobs(bind: sa.engine.Connection) -> None:
     op.create_table(
         "jobs",
         sa.Column("job_id", sa.String(length=26), primary_key=True),
@@ -403,6 +475,24 @@ def _create_jobs() -> None:
     )
     op.create_index("jobs_workspace_id_idx", "jobs", ["workspace_id"], unique=False)
     op.create_index("jobs_input_document_id_idx", "jobs", ["input_document_id"], unique=False)
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table("documents") as batch_op:
+            batch_op.create_foreign_key(
+                "documents_produced_by_job_id_fkey",
+                "jobs",
+                ["produced_by_job_id"],
+                ["job_id"],
+                ondelete="SET NULL",
+            )
+    else:
+        op.create_foreign_key(
+            "documents_produced_by_job_id_fkey",
+            "documents",
+            "jobs",
+            ["produced_by_job_id"],
+            ["job_id"],
+            ondelete="SET NULL",
+        )
 
 
 def _create_api_keys() -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import event
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool, StaticPool
@@ -71,10 +72,22 @@ def _create_engine(settings: Settings) -> AsyncEngine:
     if connect_args:
         engine_kwargs["connect_args"] = connect_args
 
-    return create_async_engine(
+    engine = create_async_engine(
         url.render_as_string(hide_password=False),
         **engine_kwargs,
     )
+
+    if url.get_backend_name() == "sqlite":
+
+        @event.listens_for(engine.sync_engine, "connect")
+        def _set_sqlite_pragma(dbapi_connection, _connection_record) -> None:
+            cursor = dbapi_connection.cursor()
+            try:
+                cursor.execute("PRAGMA foreign_keys=ON")
+            finally:
+                cursor.close()
+
+    return engine
 
 
 def get_engine(settings: Settings | None = None) -> AsyncEngine:

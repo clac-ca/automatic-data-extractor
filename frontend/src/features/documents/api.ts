@@ -1,24 +1,95 @@
 import { del, get, post } from "../../shared/api/client";
-import type { DocumentRecord, WorkspaceDocumentSummary } from "../../shared/types/documents";
+import type { DocumentListResponse, DocumentRecord } from "../../shared/types/documents";
 
-function normaliseDocument(record: DocumentRecord): WorkspaceDocumentSummary {
-  return {
-    id: record.document_id,
-    name: record.original_filename,
-    updatedAt: record.updated_at,
-    createdAt: record.created_at,
-    byteSize: record.byte_size,
-    contentType: record.content_type,
-    metadata: record.metadata ?? {},
-  };
+export interface DocumentsQueryParams {
+  readonly status?: readonly string[];
+  readonly source?: readonly string[];
+  readonly tag?: readonly string[];
+  readonly uploader?: string;
+  readonly uploader_id?: readonly string[];
+  readonly q?: string;
+  readonly created_from?: string;
+  readonly created_to?: string;
+  readonly last_run_from?: string;
+  readonly last_run_to?: string;
+  readonly byte_size_min?: number;
+  readonly byte_size_max?: number;
+  readonly sort?: string;
+  readonly page?: number;
+  readonly per_page?: number;
+  readonly include_total?: boolean;
 }
 
-export async function fetchWorkspaceDocuments(workspaceId: string, signal?: AbortSignal) {
-  const params = new URLSearchParams({ limit: "200", offset: "0" });
-  const response = await get<DocumentRecord[]>(`/workspaces/${workspaceId}/documents?${params.toString()}`, {
-    signal,
-  });
-  return response.map((record) => normaliseDocument(record));
+export function buildDocumentsSearchParams(params: DocumentsQueryParams) {
+  const search = new URLSearchParams();
+
+  const appendMany = (key: string, values: readonly string[] | undefined) => {
+    if (!values) {
+      return;
+    }
+    for (const value of values) {
+      if (value) {
+        search.append(key, value);
+      }
+    }
+  };
+
+  appendMany("status", params.status);
+  appendMany("source", params.source);
+  appendMany("tag", params.tag);
+  appendMany("uploader_id", params.uploader_id);
+
+  if (params.uploader) {
+    search.set("uploader", params.uploader);
+  }
+  if (params.q) {
+    search.set("q", params.q);
+  }
+  if (params.created_from) {
+    search.set("created_from", params.created_from);
+  }
+  if (params.created_to) {
+    search.set("created_to", params.created_to);
+  }
+  if (params.last_run_from) {
+    search.set("last_run_from", params.last_run_from);
+  }
+  if (params.last_run_to) {
+    search.set("last_run_to", params.last_run_to);
+  }
+  if (typeof params.byte_size_min === "number") {
+    search.set("byte_size_min", params.byte_size_min.toString());
+  }
+  if (typeof params.byte_size_max === "number") {
+    search.set("byte_size_max", params.byte_size_max.toString());
+  }
+  if (params.sort) {
+    search.set("sort", params.sort);
+  }
+  if (typeof params.page === "number") {
+    search.set("page", params.page.toString());
+  }
+  if (typeof params.per_page === "number") {
+    search.set("per_page", params.per_page.toString());
+  }
+  if (params.include_total) {
+    search.set("include_total", "true");
+  }
+
+  return search;
+}
+
+export async function fetchWorkspaceDocuments(
+  workspaceId: string,
+  params: DocumentsQueryParams,
+  signal?: AbortSignal,
+) {
+  const search = buildDocumentsSearchParams(params);
+  const response = await get<DocumentListResponse>(
+    `/workspaces/${workspaceId}/documents?${search.toString()}`,
+    { signal },
+  );
+  return response;
 }
 
 interface UploadWorkspaceDocumentInput {
@@ -40,8 +111,7 @@ export async function uploadWorkspaceDocument(
     formData.append("expires_at", input.expiresAt);
   }
 
-  const response = await post<DocumentRecord>(`/workspaces/${workspaceId}/documents`, formData);
-  return normaliseDocument(response);
+  return post<DocumentRecord>(`/workspaces/${workspaceId}/documents`, formData);
 }
 
 export async function deleteWorkspaceDocuments(workspaceId: string, documentIds: readonly string[]) {

@@ -50,11 +50,17 @@ async def test_upload_list_download_document(
     document_id = payload["document_id"]
     assert payload["byte_size"] == len(b"hello world")
     assert payload["metadata"] == {"source": "tests"}
+    assert payload["tags"] == []
 
     listing = await async_client.get(f"{workspace_base}/documents", headers=headers)
     assert listing.status_code == 200
-    records = listing.json()
-    assert any(item["document_id"] == document_id for item in records)
+    payload = listing.json()
+    assert payload["page"] == 1
+    assert payload["per_page"] == 50
+    assert payload["has_next"] is False
+    assert "total" not in payload
+    assert any(item["document_id"] == document_id for item in payload["items"])
+    assert all(isinstance(item.get("tags"), list) for item in payload["items"])
 
     detail = await async_client.get(
         f"{workspace_base}/documents/{document_id}", headers=headers
@@ -161,7 +167,12 @@ async def test_download_missing_file_returns_404(
     )
     payload = upload.json()
     document_id = payload["document_id"]
-    stored_uri = payload["stored_uri"]
+
+    session_factory = get_sessionmaker()
+    async with session_factory() as session:
+        row = await session.get(Document, document_id)
+        assert row is not None
+        stored_uri = row.stored_uri
 
     settings = get_settings()
     stored_path = settings.storage_documents_dir / stored_uri
@@ -174,3 +185,98 @@ async def test_download_missing_file_returns_404(
     )
     assert download.status_code == 404
     assert "was not found" in download.text
+
+
+async def test_list_documents_unknown_param_returns_400(
+    async_client: AsyncClient,
+    seed_identity: dict[str, object],
+) -> None:
+    member = seed_identity["member"]
+    token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = await async_client.get(
+        f"{workspace_base}/documents",
+        headers=headers,
+        params={"unexpected": "value"},
+    )
+
+    assert response.status_code == 400
+    assert response.headers["content-type"].startswith("application/problem+json")
+    problem = response.json()
+    assert problem["title"] == "Invalid query parameter"
+    assert problem["detail"] == "Unknown query parameter: unexpected"
+    assert problem["errors"] == {"unexpected": ["Unknown query parameter"]}
+
+
+async def test_list_documents_invalid_filter_returns_problem_details(
+    async_client: AsyncClient,
+    seed_identity: dict[str, object],
+) -> None:
+    member = seed_identity["member"]
+    token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = await async_client.get(
+        f"{workspace_base}/documents",
+        headers=headers,
+        params={"status": "bogus"},
+    )
+
+    assert response.status_code == 400
+    assert response.headers["content-type"].startswith("application/problem+json")
+    payload = response.json()
+    assert payload["title"] == "Invalid query parameters"
+    assert payload["status"] == 400
+    assert "status" in payload["errors"]
+    assert any("uploaded" in message for message in payload["errors"]["status"])
+
+
+async def test_list_documents_uploader_me_filters(
+    async_client: AsyncClient,
+    seed_identity: dict[str, object],
+) -> None:
+    member = seed_identity["member"]
+    owner = seed_identity["workspace_owner"]
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
+
+    member_token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    member_headers = {"Authorization": f"Bearer {member_token}"}
+
+    upload_one = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=member_headers,
+        files={"file": ("member.txt", b"member", "text/plain")},
+    )
+    assert upload_one.status_code == 201, upload_one.text
+
+    owner_token = await _login(
+        async_client,
+        owner["email"],
+        owner["password"],
+    )  # type: ignore[index]
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+
+    upload_two = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=owner_headers,
+        files={"file": ("owner.txt", b"owner", "text/plain")},
+    )
+    assert upload_two.status_code == 201, upload_two.text
+
+    # Re-authenticate as the member for filtering assertions.
+    member_token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    member_headers = {"Authorization": f"Bearer {member_token}"}
+
+    listing = await async_client.get(
+        f"{workspace_base}/documents",
+        headers=member_headers,
+        params={"uploader": "me"},
+    )
+
+    assert listing.status_code == 200, listing.text
+    payload = listing.json()
+    assert len(payload["items"]) == 1
+    assert payload["items"][0]["name"] == "member.txt"

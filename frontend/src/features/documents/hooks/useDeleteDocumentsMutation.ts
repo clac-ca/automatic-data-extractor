@@ -12,7 +12,7 @@ export function useDeleteDocumentsMutation(workspaceId: string) {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: documentKeys.list(workspaceId),
+        queryKey: documentKeys.lists(workspaceId),
         refetchType: "active",
       });
     },
