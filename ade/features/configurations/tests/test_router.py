@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
+import textwrap
 
 import pytest
 from fastapi import FastAPI
@@ -12,6 +13,27 @@ from sqlalchemy import func, select, update
 
 from ade.db.session import get_sessionmaker
 from ade.features.configurations.models import Configuration
+
+
+VALID_SCRIPT = textwrap.dedent(
+    '''
+    """
+    name: sample_column
+    description: Example configuration script for tests.
+    version: 1
+    """
+
+    def detect_sample(
+        *, header=None, values=None, table=None, column_index=None, state=None, context=None, **kwargs
+    ):
+        return {"scores": {"self": 1.0}}
+
+    def transform_cell(
+        *, value=None, row_index=None, column_index=None, table=None, state=None, context=None, **kwargs
+    ):
+        return {"cells": {"self": value}}
+    '''
+)
 
 
 pytestmark = pytest.mark.asyncio
@@ -183,6 +205,30 @@ async def test_read_configuration_returns_payload(
     assert payload["configuration_id"] == configuration_id
 
 
+async def _create_script_version(
+    *,
+    async_client: AsyncClient,
+    workspace_base: str,
+    configuration_id: str,
+    token: str,
+    canonical_key: str = "sample_column",
+) -> tuple[str, str]:
+    response = await async_client.post(
+        f"{workspace_base}/configurations/{configuration_id}/scripts/{canonical_key}/versions",
+        json={
+            "canonical_key": canonical_key,
+            "language": "python",
+            "code": VALID_SCRIPT,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    etag = response.headers.get("etag")
+    assert etag, "ETag header missing"
+    return body["script_version_id"], etag
+
+
 async def test_read_configuration_not_found_returns_404(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
@@ -344,4 +390,300 @@ async def test_list_active_configurations_returns_current(
     payload = response.json()
     identifiers = {item["configuration_id"] for item in payload}
     assert identifiers == {active_id}
+
+
+async def test_replace_columns_round_trip(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """PUT should replace columns and GET should return the stored order."""
+
+    workspace_id = seed_identity["workspace_id"]
+    configuration_id = await _create_configuration(workspace_id=workspace_id)
+
+    admin = seed_identity["admin"]
+    token = await _login(async_client, admin["email"], admin["password"])
+    workspace_base = f"/api/v1/workspaces/{workspace_id}"
+
+    response = await async_client.put(
+        f"{workspace_base}/configurations/{configuration_id}/columns",
+        json=[
+            {
+                "canonical_key": "sample_column",
+                "ordinal": 0,
+                "display_label": "Sample",
+                "header_color": "#ffffff",
+                "width": 120,
+                "required": True,
+                "enabled": True,
+                "params": {"threshold": 1},
+            },
+            {
+                "canonical_key": "secondary",
+                "ordinal": 1,
+                "display_label": "Secondary",
+                "required": False,
+                "enabled": True,
+                "params": {},
+            },
+        ],
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert [column["canonical_key"] for column in payload] == [
+        "sample_column",
+        "secondary",
+    ]
+
+    fetch = await async_client.get(
+        f"{workspace_base}/configurations/{configuration_id}/columns",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert fetch.status_code == 200
+    listed = fetch.json()
+    assert len(listed) == 2
+    assert listed[0]["display_label"] == "Sample"
+    assert "script_version" not in listed[0]
+
+
+async def test_configuration_script_version_lifecycle(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Uploading, listing, fetching, and validating scripts should work."""
+
+    workspace_id = seed_identity["workspace_id"]
+    configuration_id = await _create_configuration(workspace_id=workspace_id)
+
+    admin = seed_identity["admin"]
+    token = await _login(async_client, admin["email"], admin["password"])
+    workspace_base = f"/api/v1/workspaces/{workspace_id}"
+
+    script_id, etag = await _create_script_version(
+        async_client=async_client,
+        workspace_base=workspace_base,
+        configuration_id=configuration_id,
+        token=token,
+    )
+
+    listing = await async_client.get(
+        f"{workspace_base}/configurations/{configuration_id}/scripts/sample_column/versions",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert listing.status_code == 200
+    versions = listing.json()
+    assert [item["script_version_id"] for item in versions] == [script_id]
+    assert "code" not in versions[0]
+
+    fetch = await async_client.get(
+        f"{workspace_base}/configurations/{configuration_id}/scripts/sample_column/versions/{script_id}",
+        params={"include_code": "true"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert fetch.status_code == 200
+    fetched = fetch.json()
+    assert fetched["script_version_id"] == script_id
+    assert "name: sample_column" in fetched["code"]
+
+    validate = await async_client.post(
+        f"{workspace_base}/configurations/{configuration_id}/scripts/sample_column/versions/{script_id}:validate",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "If-Match": etag,
+        },
+    )
+    assert validate.status_code == 200, validate.text
+    assert validate.headers.get("etag") == etag
+    validated = validate.json()
+    assert validated["validated_at"] is not None
+
+
+async def test_configuration_script_size_limit_is_enforced(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Scripts larger than the size cap should record validation errors."""
+
+    workspace_id = seed_identity["workspace_id"]
+    configuration_id = await _create_configuration(workspace_id=workspace_id)
+
+    admin = seed_identity["admin"]
+    token = await _login(async_client, admin["email"], admin["password"])
+    workspace_base = f"/api/v1/workspaces/{workspace_id}"
+
+    oversized_payload = "x" * 40000
+    script = textwrap.dedent(
+        f'''
+        """
+        name: sample_column
+        description: Oversized configuration script.
+        version: 1
+        """
+
+        DATA = "{oversized_payload}"
+        def detect_sample(*, **_):
+            return {{"scores": {{"self": 1.0}}}}
+        '''
+    )
+
+    response = await async_client.post(
+        f"{workspace_base}/configurations/{configuration_id}/scripts/sample_column/versions",
+        json={
+            "canonical_key": "sample_column",
+            "language": "python",
+            "code": script,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["validation_errors"] is not None
+    error_messages = payload["validation_errors"].get("code")
+    assert error_messages and any("32 KiB" in message for message in error_messages)
+    assert payload.get("validated_at") is None
+
+
+async def test_configuration_script_validation_times_out(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Long-running scripts should be terminated and flagged."""
+
+    workspace_id = seed_identity["workspace_id"]
+    configuration_id = await _create_configuration(workspace_id=workspace_id)
+
+    admin = seed_identity["admin"]
+    token = await _login(async_client, admin["email"], admin["password"])
+    workspace_base = f"/api/v1/workspaces/{workspace_id}"
+
+    hanging_script = textwrap.dedent(
+        '''
+        """
+        name: sample_column
+        description: Script that never finishes executing.
+        version: 1
+        """
+
+        while True:
+            pass
+        '''
+    )
+
+    response = await async_client.post(
+        f"{workspace_base}/configurations/{configuration_id}/scripts/sample_column/versions",
+        json={
+            "canonical_key": "sample_column",
+            "language": "python",
+            "code": hanging_script,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["validation_errors"] is not None
+    timeout_errors = payload["validation_errors"].get("timeout")
+    assert timeout_errors and "terminated" in timeout_errors[0]
+    assert payload.get("validated_at") is None
+
+
+async def test_validate_script_version_requires_matching_etag(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Validation should return 412 when the If-Match header is stale."""
+
+    workspace_id = seed_identity["workspace_id"]
+    configuration_id = await _create_configuration(workspace_id=workspace_id)
+
+    admin = seed_identity["admin"]
+    token = await _login(async_client, admin["email"], admin["password"])
+    workspace_base = f"/api/v1/workspaces/{workspace_id}"
+
+    script_id, _ = await _create_script_version(
+        async_client=async_client,
+        workspace_base=workspace_base,
+        configuration_id=configuration_id,
+        token=token,
+    )
+
+    response = await async_client.post(
+        f"{workspace_base}/configurations/{configuration_id}/scripts/sample_column/versions/{script_id}:validate",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "If-Match": 'W/"mismatch"',
+        },
+    )
+    assert response.status_code == 412
+    payload = response.json()
+    assert payload["title"] == "ETag mismatch"
+
+
+async def test_update_column_binding_attaches_script(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Binding a script version to a column should include metadata in the response."""
+
+    workspace_id = seed_identity["workspace_id"]
+    configuration_id = await _create_configuration(workspace_id=workspace_id)
+
+    admin = seed_identity["admin"]
+    token = await _login(async_client, admin["email"], admin["password"])
+    workspace_base = f"/api/v1/workspaces/{workspace_id}"
+
+    columns_response = await async_client.put(
+        f"{workspace_base}/configurations/{configuration_id}/columns",
+        json=[
+            {
+                "canonical_key": "sample_column",
+                "ordinal": 0,
+                "display_label": "Sample",
+                "required": True,
+                "enabled": True,
+                "params": {},
+            },
+            {
+                "canonical_key": "secondary",
+                "ordinal": 1,
+                "display_label": "Secondary",
+                "required": False,
+                "enabled": True,
+                "params": {},
+            },
+        ],
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert columns_response.status_code == 200, columns_response.text
+
+    script_id, _ = await _create_script_version(
+        async_client=async_client,
+        workspace_base=workspace_base,
+        configuration_id=configuration_id,
+        token=token,
+    )
+
+    binding = await async_client.put(
+        f"{workspace_base}/configurations/{configuration_id}/columns/sample_column/binding",
+        json={
+            "script_version_id": script_id,
+            "required": True,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert binding.status_code == 200, binding.text
+    bound = binding.json()
+    assert bound["script_version"]["script_version_id"] == script_id
+
+    mismatch = await async_client.put(
+        f"{workspace_base}/configurations/{configuration_id}/columns/secondary/binding",
+        json={"script_version_id": script_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert mismatch.status_code == 400
+    problem = mismatch.json()
+    assert problem["title"] == "Invalid configuration column payload"
 

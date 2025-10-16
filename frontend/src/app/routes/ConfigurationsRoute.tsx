@@ -1,183 +1,280 @@
-import { useMemo } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 
-import { Button } from "../../ui";
-import { useWorkspaceChrome } from "../workspaces/WorkspaceChromeContext";
-import { trackEvent } from "../../shared/telemetry/events";
+import { Alert, Button } from "../../ui";
+import { useWorkspaceContext } from "../../features/workspaces/context/WorkspaceContext";
+import { useConfigurationsQuery } from "../../features/configurations/hooks/useConfigurationsQuery";
+import { useCreateConfigurationMutation } from "../../features/configurations/hooks/useCreateConfigurationMutation";
+import { useActivateConfigurationMutation } from "../../features/configurations/hooks/useActivateConfigurationMutation";
+import { ConfigurationSidebar } from "../../features/configurations/components/ConfigurationSidebar";
+import { ConfigurationColumnsEditor } from "../../features/configurations/components/ConfigurationColumnsEditor";
+import { ConfigurationScriptPanel } from "../../features/configurations/components/ConfigurationScriptPanel";
+import type { ConfigurationRecord } from "../../shared/types/configurations";
 
-interface ConfigurationSummary {
-  readonly id: string;
-  readonly title: string;
-  readonly status: "draft" | "published" | "archived";
-  readonly lastRunAt: string;
-  readonly successRate7d: number;
-  readonly pendingJobs: number;
-  readonly version: string;
-  readonly publishedBy: string;
-  readonly publishedAt: string;
-  readonly notes: string;
-}
-
-// TODO: replace with real API call once configuration endpoints are available.
-const placeholderConfiguration: ConfigurationSummary = {
-  id: "config-001",
-  title: "Invoice extraction rules",
-  status: "published",
-  lastRunAt: new Date().toISOString(),
-  successRate7d: 0.92,
-  pendingJobs: 3,
-  version: "v12",
-  publishedBy: "Dana Operator",
-  publishedAt: new Date(Date.now() - 86_400_000).toISOString(),
-  notes: "Latest revision adds support for multi-line descriptions and VAT parsing.",
-};
+const VIEW_OPTIONS = [
+  { id: "columns", label: "Columns" },
+  { id: "scripts", label: "Scripts" },
+] as const;
 
 export function ConfigurationsRoute() {
-  const { openInspector } = useWorkspaceChrome();
-  const configuration = placeholderConfiguration;
+  const { workspace } = useWorkspaceContext();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewParam = (searchParams.get("view") as typeof VIEW_OPTIONS[number]["id"]) ?? "columns";
+  const requestedConfigurationId = searchParams.get("configurationId");
+  const requestedColumn = searchParams.get("column");
+  const requestedScriptVersionId = searchParams.get("scriptVersionId");
 
-  const statusBadge = useMemo(() => {
-    switch (configuration.status) {
-      case "published":
-        return { label: "Published", className: "bg-success-50 text-success-700" };
-      case "draft":
-        return { label: "Draft", className: "bg-warning-50 text-warning-700" };
-      case "archived":
-      default:
-        return { label: "Archived", className: "bg-slate-200 text-slate-700" };
+  const {
+    data: configurations,
+    isLoading,
+    isError,
+  } = useConfigurationsQuery(workspace.id);
+
+  const selectedConfiguration = useMemo(() => {
+    if (!configurations || configurations.length === 0) {
+      return null;
     }
-  }, [configuration.status]);
+    const byId = configurations.find((config) => config.configuration_id === requestedConfigurationId);
+    if (byId) {
+      return byId;
+    }
+    const active = configurations.find((config) => config.is_active);
+    return active ?? configurations[0];
+  }, [configurations, requestedConfigurationId]);
+
+  useEffect(() => {
+    if (selectedConfiguration && requestedConfigurationId !== selectedConfiguration.configuration_id) {
+      const next = new URLSearchParams(searchParams);
+      next.set("configurationId", selectedConfiguration.configuration_id);
+      if (!next.has("view")) {
+        next.set("view", "columns");
+      }
+      setSearchParams(next, { replace: true });
+    }
+  }, [requestedConfigurationId, searchParams, selectedConfiguration, setSearchParams]);
+
+  const createMutation = useCreateConfigurationMutation(workspace.id);
+  const activateMutation = useActivateConfigurationMutation(workspace.id);
+
+  const handleSelectConfiguration = (configurationId: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("configurationId", configurationId);
+    if (!next.has("view")) {
+      next.set("view", "columns");
+    }
+    next.delete("column");
+    next.delete("scriptVersionId");
+    setSearchParams(next, { replace: true });
+  };
+
+  const handleChangeView = (nextView: typeof VIEW_OPTIONS[number]["id"]) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("view", nextView);
+    if (nextView !== "scripts") {
+      next.delete("column");
+      next.delete("scriptVersionId");
+    }
+    setSearchParams(next, { replace: true });
+  };
+
+  const handleManageScript = (canonicalKey: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("view", "scripts");
+    next.set("column", canonicalKey);
+    next.delete("scriptVersionId");
+    setSearchParams(next, { replace: true });
+  };
+
+  const handleSelectScriptVersion = (scriptVersionId: string | null) => {
+    const next = new URLSearchParams(searchParams);
+    if (scriptVersionId) {
+      next.set("scriptVersionId", scriptVersionId);
+    } else {
+      next.delete("scriptVersionId");
+    }
+    setSearchParams(next, { replace: true });
+  };
+
+  const handleCreateFromActive = async () => {
+    if (createMutation.isPending) {
+      return;
+    }
+    const title = buildDraftTitle(configurations, "Copy of active configuration");
+    try {
+      const result = await createMutation.mutateAsync({
+        title,
+        clone_from_active: true,
+        payload: {},
+      });
+      handleSelectConfiguration(result.configuration_id);
+      handleChangeView("columns");
+    } catch (error) {
+      console.error("Failed to create configuration from active", error);
+    }
+  };
+
+  const handleCreateBlank = async () => {
+    if (createMutation.isPending) {
+      return;
+    }
+    const title = buildDraftTitle(configurations, "New configuration");
+    try {
+      const result = await createMutation.mutateAsync({
+        title,
+        payload: {},
+      });
+      handleSelectConfiguration(result.configuration_id);
+      handleChangeView("columns");
+    } catch (error) {
+      console.error("Failed to create configuration", error);
+    }
+  };
+
+  const handleActivate = async (configurationId: string) => {
+    if (activateMutation.isPending) {
+      return;
+    }
+    const confirmed = window.confirm("Activate this configuration? This will replace the current active version.");
+    if (!confirmed) {
+      return;
+    }
+    try {
+      await activateMutation.mutateAsync(configurationId);
+    } catch (error) {
+      console.error("Failed to activate configuration", error);
+    }
+  };
 
   return (
     <section className="space-y-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 id="page-title" className="text-2xl font-semibold text-slate-900">
-            {configuration.title}
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Manage extraction rules, deployment status, and revision history.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="primary"
-            onClick={() => {
-              trackEvent({ name: "configurations.inspect", payload: { configurationId: configuration.id } });
-              openInspector({
-                title: configuration.title,
-                content: <ConfigurationInspector configuration={configuration} />,
-              });
-            }}
-          >
-            Review configuration
-          </Button>
-          <Button variant="ghost">View history</Button>
-        </div>
+      <header className="space-y-1">
+        <h1 className="text-2xl font-semibold text-slate-900">Configuration workspace</h1>
+        <p className="text-sm text-slate-500">
+          Create drafts, manage column bindings, and validate scripts before deploying to the workspace.
+        </p>
       </header>
 
-      <section className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 md:grid-cols-3">
-        <StatusTile
-          label="Last run"
-          value={formatTimestamp(configuration.lastRunAt)}
-          details={`${Math.round(configuration.successRate7d * 100)}% success (7d)`}
-        />
-        <StatusTile label="Pending jobs" value={configuration.pendingJobs.toString()} details="Awaiting processing" />
-        <StatusTile label="Status" value={statusBadge.label} badgeClassName={statusBadge.className} />
-      </section>
+      {isError ? (
+        <Alert tone="danger" heading="Unable to load configurations">
+          Please refresh the page or try again later.
+        </Alert>
+      ) : null}
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
-          <h2 className="text-sm font-semibold text-slate-800">Deployment summary</h2>
-          <dl className="space-y-2 text-sm text-slate-600">
-            <InfoRow label="Version">{configuration.version}</InfoRow>
-            <InfoRow label="Published by">{configuration.publishedBy}</InfoRow>
-            <InfoRow label="Published at">{formatTimestamp(configuration.publishedAt)}</InfoRow>
-          </dl>
-        </div>
-        <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
-          <h2 className="text-sm font-semibold text-slate-800">Notes</h2>
-          <p className="text-sm leading-relaxed text-slate-600">{configuration.notes}</p>
-        </div>
-      </section>
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <ConfigurationSidebar
+          configurations={configurations}
+          selectedId={selectedConfiguration?.configuration_id ?? null}
+          onSelect={handleSelectConfiguration}
+          onCreateFromActive={handleCreateFromActive}
+          onCreateBlank={handleCreateBlank}
+          onActivate={handleActivate}
+          isCreating={createMutation.isPending}
+          isActivating={activateMutation.isPending}
+        />
+
+        <main className="flex-1 space-y-6">
+          {selectedConfiguration ? (
+            <ConfigurationSummary configuration={selectedConfiguration} />
+          ) : isLoading ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-soft">
+              Loading configuration summary…
+            </div>
+          ) : (
+            <Alert tone="info" heading="No configurations yet">
+              Create a draft configuration to begin defining columns and scripts.
+            </Alert>
+          )}
+
+          <nav className="flex gap-2 rounded-full border border-slate-200 bg-white p-1 shadow-soft">
+            {VIEW_OPTIONS.map((option) => {
+              const isActive = option.id === viewParam;
+              return (
+                <Button
+                  key={option.id}
+                  variant={isActive ? "primary" : "ghost"}
+                  size="sm"
+                  onClick={() => handleChangeView(option.id)}
+                >
+                  {option.label}
+                </Button>
+              );
+            })}
+          </nav>
+
+          {viewParam === "scripts" ? (
+            <ConfigurationScriptPanel
+              workspaceId={workspace.id}
+              configurationId={selectedConfiguration?.configuration_id ?? null}
+              canonicalKey={requestedColumn ?? null}
+              selectedScriptVersionId={requestedScriptVersionId}
+              onSelectScriptVersion={handleSelectScriptVersion}
+            />
+          ) : (
+            <ConfigurationColumnsEditor
+              workspaceId={workspace.id}
+              configurationId={selectedConfiguration?.configuration_id ?? null}
+              onManageScript={handleManageScript}
+            />
+          )}
+        </main>
+      </div>
     </section>
   );
 }
 
-function StatusTile({
-  label,
-  value,
-  details,
-  badgeClassName,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly details?: string;
-  readonly badgeClassName?: string;
-}) {
+function ConfigurationSummary({ configuration }: { readonly configuration: ConfigurationRecord }) {
+  const status = configuration.is_active ? "Active" : "Draft";
   return (
-    <div className="rounded-xl bg-white p-4 shadow-soft">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-slate-900">
-        {badgeClassName ? (
-          <span className={`inline-flex items-center rounded-full px-2 py-1 text-sm font-semibold ${badgeClassName}`}>
-            {value}
-          </span>
-        ) : (
-          value
-        )}
-      </p>
-      {details ? <p className="mt-2 text-xs text-slate-500">{details}</p> : null}
-    </div>
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">{configuration.title}</h2>
+          <p className="text-sm text-slate-500">Version {configuration.version}</p>
+        </div>
+        <span
+          className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${
+            configuration.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"
+          }`}
+        >
+          {status}
+        </span>
+      </div>
+      <dl className="mt-4 grid gap-4 md:grid-cols-2">
+        <SummaryRow label="Created">{formatTimestamp(configuration.created_at)}</SummaryRow>
+        <SummaryRow label="Updated">{formatTimestamp(configuration.updated_at)}</SummaryRow>
+        <SummaryRow label="Activated">
+          {configuration.activated_at ? formatTimestamp(configuration.activated_at) : "Not activated"}
+        </SummaryRow>
+        <SummaryRow label="Workspace">{configuration.workspace_id}</SummaryRow>
+      </dl>
+    </section>
   );
 }
 
-function InfoRow({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+function SummaryRow({ label, children }: { readonly label: string; readonly children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</dt>
+    <div className="space-y-1">
+      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
       <dd className="text-sm text-slate-700">{children}</dd>
     </div>
   );
 }
 
-function ConfigurationInspector({
-  configuration,
-}: {
-  readonly configuration: ConfigurationSummary;
-}) {
-  return (
-    <div className="space-y-6 text-sm text-slate-600">
-      <section className="space-y-2">
-        <h3 className="text-base font-semibold text-slate-900">Version details</h3>
-        <dl className="space-y-2">
-          <InfoRow label="Version">{configuration.version}</InfoRow>
-          <InfoRow label="Published by">{configuration.publishedBy}</InfoRow>
-          <InfoRow label="Published at">{formatTimestamp(configuration.publishedAt)}</InfoRow>
-        </dl>
-      </section>
-      <section className="space-y-2">
-        <h3 className="text-base font-semibold text-slate-900">Change log</h3>
-        <p className="leading-relaxed">{configuration.notes}</p>
-      </section>
-      <section className="space-y-2">
-        <h3 className="text-base font-semibold text-slate-900">Next steps</h3>
-        <ul className="list-disc space-y-1 pl-5">
-          <li>Validate sample documents against the new schema.</li>
-          <li>Communicate changes to downstream reviewers.</li>
-        </ul>
-      </section>
-    </div>
-  );
+function formatTimestamp(value: string) {
+  try {
+    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  } catch {
+    return value;
+  }
 }
 
-function formatTimestamp(timestamp: string) {
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(timestamp));
-  } catch {
-    return timestamp;
+function buildDraftTitle(
+  configurations: readonly ConfigurationRecord[] | undefined,
+  fallback: string,
+) {
+  if (!configurations || configurations.length === 0) {
+    return `${fallback} 1`;
   }
+  const highestVersion = configurations.reduce((max, config) => Math.max(max, config.version), 0);
+  return `${fallback} v${highestVersion + 1}`;
 }
