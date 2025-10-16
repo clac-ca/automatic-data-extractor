@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Add a stubbed telemetry helper (`trackEvent`) to prepare for backend event collection.
 - Introduce a command palette (`⌘K` / `Ctrl+K`) and refined navigation chrome inspired by best-in-class productivity apps.
 - Enable document uploads and deletions directly from the Documents page with API-backed mutations, toasts, and inspector download shortcuts.
+- Introduce configuration column and script-version tables with matching ORM and Pydantic models to back the configuration authoring flows.
+- Ship a configuration workspace UI with version management, column editing, and script authoring complete with validation previews and docstring parsing.
 
 ### Changed
 - Run Angular unit tests against a Puppeteer-managed Chrome Headless binary so contributors do not need a system Chrome install.
@@ -29,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Fetch documents via the v1 API with enlarged batch sizes, surface backend download streams with filename parsing, and show inline loading across inspectors and menus while files are retrieved.
 - Refine document uploads with drag-and-drop handling, client-side filtering of supported formats, and clearer status messaging during manual uploads.
 - Surface a workspace upload progress tray that lists in-flight files while backend uploads run, keeping drag-and-drop and picker flows transparent.
+- Validate configuration scripts inside a sandboxed subprocess with size limits, timeouts, and network isolation.
 
 ### Removed
 - Drop the placeholder “Connect source” affordances from the documents surface to keep the MVP focused on manual uploads.

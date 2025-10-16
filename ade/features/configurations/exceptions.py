@@ -49,9 +49,63 @@ class ConfigurationVersionMismatchError(Exception):
         self.actual_version = actual_version
 
 
+class ConfigurationColumnNotFoundError(Exception):
+    """Raised when a configuration column cannot be located."""
+
+    def __init__(self, configuration_id: str, canonical_key: str) -> None:
+        message = (
+            f"Column {canonical_key!r} not found for configuration {configuration_id!r}"
+        )
+        super().__init__(message)
+        self.configuration_id = configuration_id
+        self.canonical_key = canonical_key
+
+
+class ConfigurationColumnValidationError(Exception):
+    """Raised when a bulk column update fails validation."""
+
+    def __init__(self, errors: dict[str, list[str]]) -> None:
+        super().__init__("Invalid column definitions")
+        self.errors = errors
+
+
+class ConfigurationScriptVersionNotFoundError(Exception):
+    """Raised when a configuration script version lookup fails."""
+
+    def __init__(self, script_version_id: str) -> None:
+        super().__init__(f"Configuration script version {script_version_id!r} not found")
+        self.script_version_id = script_version_id
+
+
+class ConfigurationScriptValidationError(Exception):
+    """Raised when a configuration script fails validation checks."""
+
+    def __init__(self, errors: dict[str, list[str]]) -> None:
+        super().__init__("Configuration script did not pass validation")
+        self.errors = errors
+
+
+class ConfigurationScriptVersionOwnershipError(Exception):
+    """Raised when a script version does not belong to the target configuration."""
+
+    def __init__(self, script_version_id: str, configuration_id: str) -> None:
+        message = (
+            f"Script version {script_version_id!r} does not belong to configuration "
+            f"{configuration_id!r}"
+        )
+        super().__init__(message)
+        self.script_version_id = script_version_id
+        self.configuration_id = configuration_id
+
+
 __all__ = [
     "ActiveConfigurationNotFoundError",
     "ConfigurationNotFoundError",
     "ConfigurationVersionNotFoundError",
     "ConfigurationVersionMismatchError",
+    "ConfigurationColumnNotFoundError",
+    "ConfigurationColumnValidationError",
+    "ConfigurationScriptValidationError",
+    "ConfigurationScriptVersionNotFoundError",
+    "ConfigurationScriptVersionOwnershipError",
 ]

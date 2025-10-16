@@ -39,31 +39,31 @@ The outcome is a stable configuration and authoring layer that the job engine ca
 
 **Checklist**
 
-* [ ] **Edit** `ade/alembic/versions/0001_initial_schema.py` to add:
+* [x] **Edit** `ade/alembic/versions/0001_initial_schema.py` to add:
 
-  * [ ] `configuration_script_versions` with:
+  * [x] `configuration_script_versions` with:
     - `script_version_id` (ULID, PK), `configuration_id` (FK CASCADE)
     - `canonical_key` (TEXT), `version` (INT, monotonic per `{configuration_id, canonical_key}`)
     - `language` (TEXT default `'python'`), `code` (TEXT), `code_sha256` (CHAR(64))
     - `doc_name` (== `canonical_key`), `doc_description` (TEXT), `doc_declared_version` (INT)
     - `validated_at` (ts), `validation_errors` (JSON), `created_by_user_id` (FK→users)
     - timestamps; **UNIQUE(configuration_id, canonical_key, version)**; index `(configuration_id, canonical_key)`
-  * [ ] `configuration_columns` with:
+  * [x] `configuration_columns` with:
     - PK `(configuration_id, canonical_key)`, `ordinal` (UNIQUE within configuration)
     - `display_label` (TEXT), `header_color` (TEXT, optional), `width` (INT, optional)
     - `required` (BOOL), `enabled` (BOOL)
     - `script_version_id` (FK→`configuration_script_versions.script_version_id`, RESTRICT, NULL)
     - `params` (JSON default `{}`), timestamps; index `(configuration_id, ordinal)`
-  * [ ] Ensure `configurations` has unique active per workspace partial index (SQLite: `sqlite_where=sa.text("is_active = 1")`)
-* [ ] **Recreate** local SQLite DB from this initial schema (no backfill needed).
-* [ ] Add **ORM models** + relationships for the two new tables.
-* [ ] Add **Pydantic** schemas:
+  * [x] Ensure `configurations` has unique active per workspace partial index (SQLite: `sqlite_where=sa.text("is_active = 1")`)
+* [x] **Recreate** local SQLite DB from this initial schema (no backfill needed).
+* [x] Add **ORM models** + relationships for the two new tables.
+* [x] Add **Pydantic** schemas:
 
-  * [ ] `ConfigurationOptions` (unknown_policy, output, sheet_detection, notes?)
-  * [ ] `ConfigurationColumnIn/Out` (incl. binding fields)
-  * [ ] `ConfigurationScriptVersionIn/Out` (incl. code & validation meta)
-* [ ] Add ULID factory util and timestamp helpers.
-* [ ] Smoke test migration & constraints.
+  * [x] `ConfigurationOptions` (unknown_policy, output, sheet_detection, notes?)
+  * [x] `ConfigurationColumnIn/Out` (incl. binding fields)
+  * [x] `ConfigurationScriptVersionIn/Out` (incl. code & validation meta)
+* [x] Add ULID factory util and timestamp helpers.
+* [x] Smoke test migration & constraints.
 
 **Exit criteria**
 
@@ -77,21 +77,21 @@ The outcome is a stable configuration and authoring layer that the job engine ca
 
 **Checklist**
 
-* [ ] **Configurations**
+* [x] **Configurations**
 
-  * [ ] `POST /configurations` (create new version; may clone from active)
-  * [ ] `POST /configurations/{id}:activate` (enforce one active per workspace)
-  * [ ] `GET /configurations/{id}` (details, including options)
-* [ ] **Columns**
+  * [x] `POST /configurations` (create new version; may clone from active)
+  * [x] `POST /configurations/{id}:activate` (enforce one active per workspace)
+  * [x] `GET /configurations/{id}` (details, including options)
+* [x] **Columns**
 
-  * [ ] `GET /configurations/{id}/columns` (ordered list)
-  * [ ] `PUT /configurations/{id}/columns` (bulk replace identity/order/display)
-  * [ ] `PUT /configurations/{id}/columns/{canonical_key}/binding`
+  * [x] `GET /configurations/{id}/columns` (ordered list)
+  * [x] `PUT /configurations/{id}/columns` (bulk replace identity/order/display)
+  * [x] `PUT /configurations/{id}/columns/{canonical_key}/binding`
     - Request: `{ script_version_id?, params?, enabled?, required? }`
     - Enforce `script_version_id` belongs to same `configuration_id`
-* [ ] **Configuration Scripts (versions)**
+* [x] **Configuration Scripts (versions)**
 
-  * [ ] `POST /configurations/{id}/scripts/{canonical_key}/versions`
+  * [x] `POST /configurations/{id}/scripts/{canonical_key}/versions`
     - Compute `code_sha256`
     - Parse docstring (`name`, `description`, `version`) → set `doc_*`
     - Enforce `doc_name == canonical_key`
@@ -100,17 +100,17 @@ The outcome is a stable configuration and authoring layer that the job engine ca
     - **Light return‑shape checks** using a tiny synthetic table for 1 detect & optional transform
     - Persist `validated_at` or `validation_errors`
     - Response: metadata + `ETag: W/"{sha256}"`
-  * [ ] `GET /configurations/{id}/scripts/{canonical_key}/versions` (list)
-  * [ ] `GET /configurations/{id}/scripts/{canonical_key}/versions/{version_id}?include_code=true` (fetch)
-  * [ ] `POST /configurations/{id}/scripts/{canonical_key}/versions/{version_id}:validate` (dry‑run only)
-* [ ] **Error model**
+  * [x] `GET /configurations/{id}/scripts/{canonical_key}/versions` (list)
+  * [x] `GET /configurations/{id}/scripts/{canonical_key}/versions/{version_id}?include_code=true` (fetch)
+  * [x] `POST /configurations/{id}/scripts/{canonical_key}/versions/{version_id}:validate` (dry‑run only)
+* [x] **Error model**
 
-  * [ ] Use Problem+JSON for 400/404/409; return structured `invalid_params` where relevant
-  * [ ] Support `If‑Match` with `ETag` (sha256) to prevent lost updates
-* [ ] **Security & limits**
+  * [x] Use Problem+JSON for 400/404/409; return structured `invalid_params` where relevant
+  * [x] Support `If‑Match` with `ETag` (sha256) to prevent lost updates
+* [x] **Security & limits**
 
-  * [ ] Validation sandbox: process isolation, import allowlist, code size cap, per‑validation timeout
-  * [ ] Network **disabled** during validation (runner will allow network in `setup` only)
+  * [x] Validation sandbox: process isolation, import allowlist, code size cap, per‑validation timeout
+  * [x] Network **disabled** during validation (runner will allow network in `setup` only)
 * [ ] **OpenAPI**
 
   * [ ] Document ABI, endpoints, and a minimal example payload
@@ -127,30 +127,30 @@ The outcome is a stable configuration and authoring layer that the job engine ca
 
 **Checklist**
 
-* [ ] **Config list & activation**
+* [x] **Config list & activation**
 
-  * [ ] View configurations per workspace; show active
-  * [ ] Create a new version (clone or empty); activate with confirmation
-* [ ] **Column editor**
+  * [x] View configurations per workspace; show active
+  * [x] Create a new version (clone or empty); activate with confirmation
+* [x] **Column editor**
 
-  * [ ] Add/remove/reorder (drag or ordinal)
-  * [ ] Edit: label, header color, width, required/enabled
-  * [ ] Attach/detach **script version** (per canonical key) via dropdown
-  * [ ] Edit per‑column `params` (JSON editor or key/value form)
-  * [ ] Persist via `PUT /configurations/{id}/columns` and `PUT /.../binding`
-* [ ] **Script editor**
+  * [x] Add/remove/reorder (drag or ordinal)
+  * [x] Edit: label, header color, width, required/enabled
+  * [x] Attach/detach **script version** (per canonical key) via dropdown
+  * [x] Edit per‑column `params` (JSON editor or key/value form)
+  * [x] Persist via `PUT /configurations/{id}/columns` and `PUT /.../binding`
+* [x] **Script editor**
 
-  * [ ] Create/upload a **configuration script version** (per canonical key)
-  * [ ] Code editor with syntax highlight + docstring preview
-  * [ ] Call `:validate` and show parsed doc + any `validation_errors`
-  * [ ] Display `sha256`, `validated_at`, and `doc_version`
-* [ ] **Guardrails**
+  * [x] Create/upload a **configuration script version** (per canonical key)
+  * [x] Code editor with syntax highlight + docstring preview
+  * [x] Call `:validate` and show parsed doc + any `validation_errors`
+  * [x] Display `sha256`, `validated_at`, and `doc_version`
+* [x] **Guardrails**
 
-  * [ ] Confirm before swapping a bound script version on a column
-  * [ ] Warn when a bound version has validation errors
-* [ ] **Deep links**
+  * [x] Confirm before swapping a bound script version on a column
+  * [x] Warn when a bound version has validation errors
+* [x] **Deep links**
 
-  * [ ] URLs that address a specific config version, column, or script version
+  * [x] URLs that address a specific config version, column, or script version
 
 **Exit criteria**
 

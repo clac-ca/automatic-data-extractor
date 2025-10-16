@@ -2,24 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import ClassVar
 
 from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
-from ulid import ULID
 
-__all__ = [
-    "generate_ulid",
-    "TimestampMixin",
-    "ULIDPrimaryKeyMixin",
-]
+from ade.core.ids import generate_ulid
+from ade.core.time import utc_now
 
-
-def generate_ulid() -> str:
-    """Return a lexicographically sortable ULID string."""
-
-    return str(ULID())
+__all__ = ["generate_ulid", "TimestampMixin", "ULIDPrimaryKeyMixin"]
 
 
 class ULIDPrimaryKeyMixin:
@@ -43,7 +35,7 @@ class TimestampMixin:
 
     @staticmethod
     def _timestamp() -> datetime:
-        return datetime.now(tz=UTC)
+        return utc_now()
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
