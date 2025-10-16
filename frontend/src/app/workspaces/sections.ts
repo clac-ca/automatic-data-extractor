@@ -34,12 +34,12 @@ export const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
   {
     id: "jobs",
     path: "jobs",
-    label: "Jobs",
-    description: "Extraction queues and run history",
+    label: "Exports",
+    description: "Download-ready data extracts and job history",
     placeholder: {
-      title: "Jobs",
+      title: "Exports",
       description:
-        "Track the extraction queue, investigate failures, and replay runs. This screen will arrive once the job service is wired.",
+        "Review bulk exports once the job service ships. You’ll be able to generate fresh extracts and download prior runs here.",
       cta: { href: "../documents", label: "View documents" },
     },
   },

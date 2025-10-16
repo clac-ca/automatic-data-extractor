@@ -60,3 +60,7 @@ export const PinIcon = createIcon(
 export const ArchiveIcon = createIcon(
   "M4 7h16v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Zm1-4h14a2 2 0 0 1 2 2v2H3V5a2 2 0 0 1 2-2Zm5 8h4",
 );
+
+export const FocusTargetIcon = createIcon(
+  "M4 12h3m10 0h3M12 4v3m0 10v3M8 8h8v8H8z",
+);
