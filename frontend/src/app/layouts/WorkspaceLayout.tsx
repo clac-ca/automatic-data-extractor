@@ -8,12 +8,7 @@ import { WorkspaceProvider, useWorkspaceContext } from "../../features/workspace
 import { workspaceKeys } from "../../features/workspaces/hooks/useWorkspacesQuery";
 import type { WorkspaceLoaderData } from "../workspaces/loader";
 import type { WorkspaceProfile } from "../../shared/types/workspaces";
-import {
-  buildWorkspaceSectionPath,
-  defaultWorkspaceSection,
-  matchWorkspaceSection,
-  type WorkspaceSectionDescriptor,
-} from "../workspaces/sections";
+import { buildWorkspaceSectionPath, defaultWorkspaceSection, matchWorkspaceSection } from "../workspaces/sections";
 import { writePreferredWorkspace } from "../../shared/lib/workspace";
 import { useSession } from "../../features/auth/context/SessionContext";
 import { useLogoutMutation } from "../../features/auth/hooks/useLogoutMutation";
@@ -23,6 +18,8 @@ import { WorkspaceQuickSwitcher } from "../workspaces/WorkspaceQuickSwitcher";
 import { UserMenu, type UserMenuItem } from "./components/UserMenu";
 import { WorkspacePrimaryNav } from "./components/WorkspacePrimaryNav";
 import { WorkspaceSectionNav } from "./components/WorkspaceSectionNav";
+import { GlobalTopBar } from "./components/GlobalTopBar";
+import { GlobalSearchBar } from "./components/GlobalSearchBar";
 
 export function WorkspaceLayout() {
   const { workspace, workspaces } = useLoaderData<WorkspaceLoaderData>();
@@ -43,6 +40,9 @@ export function WorkspaceLayout() {
         isNavCollapsed={chromeState.isNavCollapsed}
         toggleNavCollapsed={chromeState.toggleNavCollapsed}
         setNavCollapsed={chromeState.setNavCollapsed}
+        isSectionCollapsed={chromeState.isSectionCollapsed}
+        toggleSectionCollapsed={chromeState.toggleSectionCollapsed}
+        setSectionCollapsed={chromeState.setSectionCollapsed}
         isFocusMode={false}
         toggleFocusMode={() => undefined}
         setFocusMode={() => undefined}
@@ -68,13 +68,27 @@ function WorkspaceLayoutInner({ workspace, workspaces, children }: WorkspaceLayo
   const matches = useMatches();
   const location = useLocation();
   const { hasPermission } = useWorkspaceContext();
-  const { isNavCollapsed, toggleNavCollapsed, inspector, closeInspector } = useWorkspaceChrome();
+  const {
+    isNavCollapsed,
+    toggleNavCollapsed,
+    isSectionCollapsed,
+    toggleSectionCollapsed,
+    inspector,
+    closeInspector,
+  } = useWorkspaceChrome();
+  const [mobilePrimaryOpen, setMobilePrimaryOpen] = useState(false);
+  const [mobileSectionOpen, setMobileSectionOpen] = useState(false);
 
   const activeSection = useMemo(() => matchWorkspaceSection(matches), [matches]);
   const breadcrumbs = useMemo(
     () => [workspace.name, activeSection.label],
     [workspace.name, activeSection.label],
   );
+
+  useEffect(() => {
+    setMobilePrimaryOpen(false);
+    setMobileSectionOpen(false);
+  }, [location.pathname, location.search]);
 
   const userPermissions = session.user.permissions ?? [];
   const canManageWorkspace =
@@ -118,57 +132,128 @@ function WorkspaceLayoutInner({ workspace, workspaces, children }: WorkspaceLayo
     return items;
   }, [canManageAdmin, canManageWorkspace, handleOpenAdmin, handleOpenWorkspaceSettings]);
 
-  const [primaryDrawerOpen, setPrimaryDrawerOpen] = useState(false);
-  const [sectionDrawerOpen, setSectionDrawerOpen] = useState(false);
-
-  useEffect(() => {
-    setPrimaryDrawerOpen(false);
-    setSectionDrawerOpen(false);
-  }, [location.pathname, location.search]);
-
   const displayName = session.user.display_name || session.user.email || "Signed in";
   const email = session.user.email ?? "";
 
   const showInspector = inspector.isOpen && Boolean(inspector.content);
 
-  return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
-      <WorkspaceTopBar
+  const topBarStart = (
+    <>
+      <button
+        type="button"
+        onClick={() => setMobilePrimaryOpen(true)}
+        className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-white md:hidden"
+        aria-label="Open navigation"
+      >
+        <MenuIcon />
+      </button>
+      <button
+        type="button"
+        onClick={toggleNavCollapsed}
+        className={clsx(
+          "hidden h-10 w-10 items-center justify-center rounded-lg border bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700 md:inline-flex",
+          isNavCollapsed ? "border-brand-200 text-brand-700" : "border-slate-200",
+        )}
+        aria-pressed={isNavCollapsed}
+        aria-label={isNavCollapsed ? "Expand navigation" : "Collapse navigation"}
+      >
+        <SidebarIcon collapsed={isNavCollapsed} />
+      </button>
+      <WorkspaceQuickSwitcher
         workspace={workspace}
         workspaces={workspaces}
-        collapsed={isNavCollapsed}
-        onToggleCollapsed={toggleNavCollapsed}
-        onOpenPrimaryDrawer={() => setPrimaryDrawerOpen(true)}
-        onOpenSectionDrawer={() => setSectionDrawerOpen(true)}
         onSelectWorkspace={handleSelectWorkspace}
         onCreateWorkspace={() => navigate("/workspaces/new")}
-        onOpenWorkspaceSettings={handleOpenWorkspaceSettings}
-        profileMenuItems={profileMenuItems}
+        onManageWorkspace={handleOpenWorkspaceSettings}
+        variant="brand"
+        glyphOverride="ADE"
+        title="Automatic Data Extractor"
+        subtitle={workspace.name}
+        showSlug={false}
+      />
+    </>
+  );
+
+  const topBarEnd = (
+    <>
+      <button
+        type="button"
+        className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700 lg:hidden"
+        aria-label="Open section navigation"
+        onClick={() => setMobileSectionOpen(true)}
+      >
+        <PanelsIcon />
+      </button>
+      <button
+        type="button"
+        className={clsx(
+          "hidden h-10 w-10 items-center justify-center rounded-lg border bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700 lg:inline-flex",
+          isSectionCollapsed ? "border-brand-200 text-brand-700" : "border-slate-200",
+        )}
+        onClick={toggleSectionCollapsed}
+        aria-label={isSectionCollapsed ? "Expand section navigation" : "Collapse section navigation"}
+        aria-pressed={isSectionCollapsed}
+      >
+        <PanelsIcon />
+      </button>
+      <button
+        type="button"
+        className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700"
+        aria-label="Open command palette (⌘K)"
+      >
+        <CommandIcon />
+      </button>
+      <button
+        type="button"
+        className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700"
+        aria-label="View notifications"
+      >
+        <BellIcon />
+      </button>
+      <button
+        type="button"
+        className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700"
+        aria-label="Open help center"
+      >
+        <HelpIcon />
+      </button>
+      <UserMenu
         displayName={displayName}
         email={email}
+        items={profileMenuItems}
         onSignOut={() => logoutMutation.mutate()}
         isSigningOut={logoutMutation.isPending}
       />
+    </>
+  );
 
-      <div className="flex flex-1 overflow-hidden">
-        <WorkspacePrimaryDrawer
-          workspace={workspace}
-          collapsed={isNavCollapsed}
-          isDrawerOpen={primaryDrawerOpen}
-          onCloseDrawer={() => setPrimaryDrawerOpen(false)}
-        />
+  return (
+    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
+      <GlobalTopBar start={topBarStart} center={<GlobalSearchBar />} end={topBarEnd} />
 
-        <WorkspaceSectionDrawer
-          workspaceId={workspace.id}
-          section={activeSection}
-          onCloseDrawer={() => setSectionDrawerOpen(false)}
-        />
+      <div className="relative flex flex-1 overflow-hidden">
+        <div className="hidden h-full md:flex">
+          <WorkspacePrimaryNav
+            workspace={workspace}
+            collapsed={isNavCollapsed}
+            onToggleCollapse={toggleNavCollapsed}
+            onNavigate={() => setMobilePrimaryOpen(false)}
+          />
+        </div>
+
+        <div className="hidden h-full lg:flex">
+          <WorkspaceSectionNav
+            workspaceId={workspace.id}
+            section={activeSection}
+            collapsed={isSectionCollapsed}
+            onToggleCollapse={toggleSectionCollapsed}
+            onNavigate={() => setMobileSectionOpen(false)}
+          />
+        </div>
 
         <main className="relative flex-1 overflow-y-auto">
           <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-6">
-            <WorkspaceContentSurface breadcrumbs={breadcrumbs}>
-              {children}
-            </WorkspaceContentSurface>
+            <WorkspaceContentSurface breadcrumbs={breadcrumbs}>{children}</WorkspaceContentSurface>
           </div>
         </main>
 
@@ -179,192 +264,35 @@ function WorkspaceLayoutInner({ workspace, workspaces, children }: WorkspaceLayo
         ) : null}
       </div>
 
-      {primaryDrawerOpen ? (
-        <DrawerBackdrop onDismiss={() => setPrimaryDrawerOpen(false)} />
-      ) : null}
-
-      {sectionDrawerOpen ? (
-        <DrawerBackdrop onDismiss={() => setSectionDrawerOpen(false)} />
-      ) : null}
-
-      {sectionDrawerOpen ? (
-        <aside className="fixed inset-y-0 right-0 z-40 w-72 max-w-[85vw] border-l border-slate-200 bg-white shadow-xl lg:hidden">
-          <WorkspaceSectionNav
-            workspaceId={workspace.id}
-            section={activeSection}
-            onCloseDrawer={() => setSectionDrawerOpen(false)}
-          />
-        </aside>
-      ) : null}
-
-      {showInspector ? (
-        <aside className="fixed inset-y-0 right-0 z-40 flex w-[min(90vw,360px)] flex-col border-l border-slate-200 bg-white p-4 shadow-xl xl:hidden">
-          <WorkspaceInspectorPanel inspector={inspector} onClose={closeInspector} />
-        </aside>
-      ) : null}
-    </div>
-  );
-}
-
-function WorkspaceTopBar({
-  workspace,
-  workspaces,
-  collapsed,
-  onToggleCollapsed,
-  onOpenPrimaryDrawer,
-  onOpenSectionDrawer,
-  onSelectWorkspace,
-  onCreateWorkspace,
-  onOpenWorkspaceSettings,
-  profileMenuItems,
-  displayName,
-  email,
-  onSignOut,
-  isSigningOut,
-}: {
-  readonly workspace: WorkspaceProfile;
-  readonly workspaces: readonly WorkspaceProfile[];
-  readonly collapsed: boolean;
-  readonly onToggleCollapsed: () => void;
-  readonly onOpenPrimaryDrawer: () => void;
-  readonly onOpenSectionDrawer: () => void;
-  readonly onSelectWorkspace: (workspaceId: string) => void;
-  readonly onCreateWorkspace: () => void;
-  readonly onOpenWorkspaceSettings: () => void;
-  readonly profileMenuItems: readonly UserMenuItem[];
-  readonly displayName: string;
-  readonly email: string;
-  readonly onSignOut: () => void;
-  readonly isSigningOut: boolean;
-}) {
-  return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onOpenPrimaryDrawer}
-            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-white md:hidden"
-            aria-label="Open navigation"
-          >
-            <MenuIcon />
-          </button>
-          <button
-            type="button"
-            onClick={onToggleCollapsed}
-            className="hidden h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-white md:inline-flex"
-            aria-pressed={collapsed}
-            aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-          >
-            <SidebarIcon collapsed={collapsed} />
-          </button>
-          <WorkspaceQuickSwitcher
-            workspace={workspace}
-            workspaces={workspaces}
-            onSelectWorkspace={onSelectWorkspace}
-            onCreateWorkspace={onCreateWorkspace}
-            onManageWorkspace={onOpenWorkspaceSettings}
-            variant="brand"
-            glyphOverride="ADE"
-            title="Automatic Data Extractor"
-            subtitle={workspace.name}
-            showSlug={false}
-          />
-        </div>
-
-        <div className="flex flex-1 items-center justify-center px-4">
-          <GlobalSearchBar />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700"
-            aria-label="Open workspace views"
-            onClick={onOpenSectionDrawer}
-          >
-            <PanelsIcon />
-          </button>
-          <button
-            type="button"
-            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700"
-            aria-label="Open command palette (⌘K)"
-          >
-            <CommandIcon />
-          </button>
-          <button
-            type="button"
-            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700"
-            aria-label="View notifications"
-          >
-            <BellIcon />
-          </button>
-          <button
-            type="button"
-            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700"
-            aria-label="Open help center"
-          >
-            <HelpIcon />
-          </button>
-          <UserMenu
-            displayName={displayName}
-            email={email}
-            items={profileMenuItems}
-            onSignOut={onSignOut}
-            isSigningOut={isSigningOut}
-          />
-        </div>
-      </div>
-    </header>
-  );
-}
-
-function WorkspacePrimaryDrawer({
-  workspace,
-  collapsed,
-  isDrawerOpen,
-  onCloseDrawer,
-}: {
-  readonly workspace: WorkspaceProfile;
-  readonly collapsed: boolean;
-  readonly isDrawerOpen: boolean;
-  readonly onCloseDrawer: () => void;
-}) {
-  return (
-    <>
-      <div
-        className={clsx("fixed inset-0 z-30 bg-slate-900/40 md:hidden", isDrawerOpen ? "block" : "hidden")}
-        aria-hidden="true"
-        onClick={onCloseDrawer}
-      />
-      <aside
-        className={clsx(
-          "fixed inset-y-0 left-0 z-40 flex w-72 max-w-[80vw] transform flex-col transition md:relative md:z-auto md:flex md:h-full md:w-auto md:max-w-none md:translate-x-0 md:border-r md:border-slate-200 md:bg-white",
-          isDrawerOpen ? "translate-x-0 bg-white shadow-xl" : "-translate-x-full md:bg-white md:shadow-none",
-        )}
-      >
+      <MobilePanel side="left" open={mobilePrimaryOpen} onClose={() => setMobilePrimaryOpen(false)}>
         <WorkspacePrimaryNav
           workspace={workspace}
-          collapsed={collapsed && !isDrawerOpen}
-          onCloseDrawer={onCloseDrawer}
-          className={clsx(collapsed && "md:w-20")}
+          collapsed={false}
+          onToggleCollapse={toggleNavCollapsed}
+          onNavigate={() => setMobilePrimaryOpen(false)}
+          animatedWidth={false}
         />
-      </aside>
-    </>
-  );
-}
+      </MobilePanel>
 
-function WorkspaceSectionDrawer({
-  workspaceId,
-  section,
-  onCloseDrawer,
-}: {
-  readonly workspaceId: string;
-  readonly section: WorkspaceSectionDescriptor;
-  readonly onCloseDrawer: () => void;
-}) {
-  return (
-    <WorkspaceSectionNav workspaceId={workspaceId} section={section} onCloseDrawer={onCloseDrawer} className="hidden lg:flex" />
+      <MobilePanel side="right" open={mobileSectionOpen} onClose={() => setMobileSectionOpen(false)}>
+        <WorkspaceSectionNav
+          workspaceId={workspace.id}
+          section={activeSection}
+          collapsed={false}
+          onToggleCollapse={toggleSectionCollapsed}
+          onNavigate={() => setMobileSectionOpen(false)}
+          animatedWidth={false}
+        />
+      </MobilePanel>
+
+      {showInspector ? (
+        <MobilePanel side="right" open onClose={closeInspector}>
+          <div className="flex h-full flex-col p-4">
+            <WorkspaceInspectorPanel inspector={inspector} onClose={closeInspector} />
+          </div>
+        </MobilePanel>
+      ) : null}
+    </div>
   );
 }
 
@@ -438,53 +366,51 @@ function WorkspaceInspectorPanel({
         <button
           type="button"
           onClick={onClose}
-          className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300"
+          className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-slate-500 transition hover:border-slate-200 hover:text-slate-700"
           aria-label="Close inspector"
         >
           <CloseIcon />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto pr-1 text-sm text-slate-700">{inspector.content}</div>
+      <div className="flex-1 overflow-y-auto">{inspector.content}</div>
     </div>
   );
 }
 
-function DrawerBackdrop({ onDismiss }: { readonly onDismiss: () => void }) {
+function MobilePanel({
+  side,
+  open,
+  onClose,
+  children,
+}: {
+  readonly side: "left" | "right";
+  readonly open: boolean;
+  readonly onClose: () => void;
+  readonly children: ReactNode;
+}) {
   return (
-    <div className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden" aria-hidden="true" onClick={onDismiss} />
-  );
-}
-
-function GlobalSearchBar() {
-  const [value, setValue] = useState("");
-
-  return (
-    <form
-      role="search"
-      className="relative w-full max-w-xl"
-      onSubmit={(event) => {
-        event.preventDefault();
-      }}
-    >
-      <label htmlFor="workspace-global-search" className="sr-only">
-        Search workspace
-      </label>
-      <input
-        id="workspace-global-search"
-        type="search"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        placeholder="Search documents, runs, members, or actions…"
-        className="w-full rounded-full border border-slate-200 bg-white px-5 py-3 pl-12 text-base text-slate-800 shadow-[0_12px_32px_rgba(15,23,42,0.08)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+    <div aria-hidden={!open}>
+      <div
+        className={clsx(
+          "fixed inset-0 z-40 bg-slate-900/40 transition-opacity duration-300",
+          open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0",
+        )}
+        onClick={onClose}
       />
-      <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-slate-400">
-        <SearchIcon />
-      </span>
-      <span className="pointer-events-none absolute inset-y-0 right-5 hidden items-center gap-1 text-xs text-slate-300 sm:flex">
-        <kbd className="rounded border border-slate-200 px-1 py-0.5 font-sans text-[11px]">⌘</kbd>
-        <kbd className="rounded border border-slate-200 px-1 py-0.5 font-sans text-[11px]">K</kbd>
-      </span>
-    </form>
+      <div
+        className={clsx(
+          "fixed inset-y-0 z-50 flex w-72 max-w-[85vw] flex-col bg-white shadow-xl transition-transform duration-300",
+          side === "left" ? "left-0" : "right-0",
+          open
+            ? "translate-x-0"
+            : side === "left"
+              ? "-translate-x-full"
+              : "translate-x-full",
+        )}
+      >
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -551,18 +477,6 @@ function CloseIcon() {
   return (
     <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
       <path d="M5 5l10 10M15 5l-10 10" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        d="M8.5 3a5.5 5.5 0 013.934 9.35l3.108 3.107a1 1 0 01-1.414 1.415l-3.108-3.108A5.5 5.5 0 118.5 3zm0 2a3.5 3.5 0 100 7 3.5 3.5 0 000-7z"
-        clipRule="evenodd"
-      />
     </svg>
   );
 }
