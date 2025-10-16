@@ -12,7 +12,6 @@ import {
   buildWorkspaceSectionPath,
   defaultWorkspaceSection,
   matchWorkspaceSection,
-  matchWorkspaceSectionMeta,
   type WorkspaceSectionDescriptor,
 } from "../workspaces/sections";
 import { writePreferredWorkspace } from "../../shared/lib/workspace";
@@ -87,11 +86,9 @@ function WorkspaceLayoutInner({ workspace, workspaces, children }: WorkspaceLayo
   const [navigationOpen, setNavigationOpen] = useState(false);
 
   const activeSection = useMemo(() => matchWorkspaceSection(matches), [matches]);
-  const sectionMeta = useMemo(() => matchWorkspaceSectionMeta(matches), [matches]);
-  const showContextNav = sectionMeta.showContextNav === true;
   const sectionNavigation = useMemo(
-    () => (showContextNav ? getWorkspaceSecondaryNavigation(workspace.id, activeSection) : null),
-    [workspace.id, activeSection, showContextNav],
+    () => getWorkspaceSecondaryNavigation(workspace.id, activeSection),
+    [workspace.id, activeSection.id, activeSection.label],
   );
   const breadcrumbs = useMemo(
     () => [workspace.name, activeSection.label],
@@ -202,24 +199,20 @@ function WorkspaceLayoutInner({ workspace, workspaces, children }: WorkspaceLayo
           onNavigate={() => setNavigationOpen(false)}
         />
 
-        {showContextNav && sectionNavigation ? (
-          <WorkspaceSectionSidebar
-            section={activeSection}
-            collapsed={isSectionCollapsed}
-            onToggleCollapse={toggleSectionCollapsed}
-            onNavigate={() => setNavigationOpen(false)}
-            navigation={sectionNavigation}
-          />
-        ) : null}
+        <WorkspaceSectionSidebar
+          section={activeSection}
+          collapsed={isSectionCollapsed}
+          onToggleCollapse={toggleSectionCollapsed}
+          onNavigate={() => setNavigationOpen(false)}
+          navigation={sectionNavigation}
+        />
 
         <main className="relative flex-1 overflow-y-auto">
-          {showContextNav && sectionNavigation ? (
-            <SectionNavigationBar
-              section={activeSection}
-              navigation={sectionNavigation}
-              onNavigate={() => setNavigationOpen(false)}
-            />
-          ) : null}
+          <SectionNavigationBar
+            section={activeSection}
+            navigation={sectionNavigation}
+            onNavigate={() => setNavigationOpen(false)}
+          />
           <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-6">
             <WorkspaceContentSurface breadcrumbs={breadcrumbs}>{children}</WorkspaceContentSurface>
           </div>
