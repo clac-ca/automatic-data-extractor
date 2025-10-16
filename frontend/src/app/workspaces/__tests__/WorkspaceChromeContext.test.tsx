@@ -10,9 +10,6 @@ function wrapper({ children }: { readonly children: ReactNode }) {
       isNavCollapsed={false}
       toggleNavCollapsed={() => undefined}
       setNavCollapsed={() => undefined}
-      isSectionCollapsed={false}
-      toggleSectionCollapsed={() => undefined}
-      setSectionCollapsed={() => undefined}
       isFocusMode={false}
       toggleFocusMode={() => undefined}
       setFocusMode={() => undefined}

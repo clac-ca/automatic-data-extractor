@@ -1,2 +1,0 @@
-export const NAV_SURFACE_COLLAPSED_WIDTH = 72;
-export const NAV_SURFACE_EXPANDED_WIDTH = 272;
