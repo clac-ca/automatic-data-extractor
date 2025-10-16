@@ -8,19 +8,21 @@ import { WorkspaceProvider, useWorkspaceContext } from "../../features/workspace
 import { workspaceKeys } from "../../features/workspaces/hooks/useWorkspacesQuery";
 import type { WorkspaceLoaderData } from "../workspaces/loader";
 import type { WorkspaceProfile } from "../../shared/types/workspaces";
-import { buildWorkspaceSectionPath, defaultWorkspaceSection, matchWorkspaceSection } from "../workspaces/sections";
+import {
+  buildWorkspaceSectionPath,
+  defaultWorkspaceSection,
+  matchWorkspaceSection,
+  type WorkspaceSectionDescriptor,
+} from "../workspaces/sections";
 import { writePreferredWorkspace } from "../../shared/lib/workspace";
 import { useSession } from "../../features/auth/context/SessionContext";
 import { useLogoutMutation } from "../../features/auth/hooks/useLogoutMutation";
 import { WorkspaceChromeProvider, useWorkspaceChrome } from "../workspaces/WorkspaceChromeContext";
 import { useWorkspaceChromeState } from "../workspaces/useWorkspaceChromeState";
 import { WorkspaceQuickSwitcher } from "../workspaces/WorkspaceQuickSwitcher";
-import { WorkspaceHelpButton } from "../workspaces/WorkspaceHelpButton";
-import { GlobalTopBar } from "./chrome/GlobalTopBar";
-import { WorkspaceNavigationRail } from "./chrome/WorkspaceNavigationRail";
-import { WorkspaceSectionSidebar } from "./chrome/WorkspaceSectionSidebar";
-import { WorkspaceNavigationDrawer } from "./chrome/WorkspaceNavigationDrawer";
-import { ProfileDropdown, type ProfileDropdownAction } from "./chrome/ProfileDropdown";
+import { UserMenu, type UserMenuItem } from "./components/UserMenu";
+import { WorkspacePrimaryNav } from "./components/WorkspacePrimaryNav";
+import { WorkspaceSectionNav } from "./components/WorkspaceSectionNav";
 
 export function WorkspaceLayout() {
   const { workspace, workspaces } = useLoaderData<WorkspaceLoaderData>();
@@ -41,9 +43,6 @@ export function WorkspaceLayout() {
         isNavCollapsed={chromeState.isNavCollapsed}
         toggleNavCollapsed={chromeState.toggleNavCollapsed}
         setNavCollapsed={chromeState.setNavCollapsed}
-        isSectionCollapsed={chromeState.isSectionCollapsed}
-        toggleSectionCollapsed={chromeState.toggleSectionCollapsed}
-        setSectionCollapsed={chromeState.setSectionCollapsed}
         isFocusMode={false}
         toggleFocusMode={() => undefined}
         setFocusMode={() => undefined}
@@ -69,25 +68,13 @@ function WorkspaceLayoutInner({ workspace, workspaces, children }: WorkspaceLayo
   const matches = useMatches();
   const location = useLocation();
   const { hasPermission } = useWorkspaceContext();
-  const {
-    isNavCollapsed,
-    toggleNavCollapsed,
-    isSectionCollapsed,
-    toggleSectionCollapsed,
-    inspector,
-    closeInspector,
-  } = useWorkspaceChrome();
-  const [navigationOpen, setNavigationOpen] = useState(false);
+  const { isNavCollapsed, toggleNavCollapsed, inspector, closeInspector } = useWorkspaceChrome();
 
   const activeSection = useMemo(() => matchWorkspaceSection(matches), [matches]);
   const breadcrumbs = useMemo(
     () => [workspace.name, activeSection.label],
     [workspace.name, activeSection.label],
   );
-
-  useEffect(() => {
-    setNavigationOpen(false);
-  }, [location.pathname, location.search]);
 
   const userPermissions = session.user.permissions ?? [];
   const canManageWorkspace =
@@ -110,8 +97,8 @@ function WorkspaceLayoutInner({ workspace, workspaces, children }: WorkspaceLayo
     navigate("/settings");
   }, [navigate]);
 
-  const profileMenuItems = useMemo<ProfileDropdownAction[]>(() => {
-    const items: ProfileDropdownAction[] = [];
+  const profileMenuItems = useMemo<UserMenuItem[]>(() => {
+    const items: UserMenuItem[] = [];
     if (canManageWorkspace) {
       items.push({
         id: "workspace-settings",
@@ -131,110 +118,253 @@ function WorkspaceLayoutInner({ workspace, workspaces, children }: WorkspaceLayo
     return items;
   }, [canManageAdmin, canManageWorkspace, handleOpenAdmin, handleOpenWorkspaceSettings]);
 
+  const [primaryDrawerOpen, setPrimaryDrawerOpen] = useState(false);
+  const [sectionDrawerOpen, setSectionDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    setPrimaryDrawerOpen(false);
+    setSectionDrawerOpen(false);
+  }, [location.pathname, location.search]);
+
   const displayName = session.user.display_name || session.user.email || "Signed in";
   const email = session.user.email ?? "";
 
   const showInspector = inspector.isOpen && Boolean(inspector.content);
 
-  const topBarLeading = (
-    <div className="flex items-center gap-2">
-      <TopBarButton
-        icon={<MenuIcon />}
-        label="Open navigation"
-        className="lg:hidden"
-        onClick={() => setNavigationOpen(true)}
-      />
-      <TopBarToggleButton
-        icon={<SidebarIcon collapsed={isNavCollapsed} />}
-        label={isNavCollapsed ? "Expand primary navigation" : "Collapse primary navigation"}
-        pressed={isNavCollapsed}
-        onClick={toggleNavCollapsed}
-        className="hidden lg:inline-flex"
-      />
-      <WorkspaceQuickSwitcher
-        workspace={workspace}
-        workspaces={workspaces}
-        onSelectWorkspace={(workspaceId) => {
-          handleSelectWorkspace(workspaceId);
-          setNavigationOpen(false);
-        }}
-        onCreateWorkspace={() => navigate("/workspaces/new")}
-        onManageWorkspace={handleOpenWorkspaceSettings}
-        variant="brand"
-        glyphOverride="ADE"
-        title="Automatic Data Extractor"
-        subtitle={workspace.name}
-        showSlug={false}
-      />
-    </div>
-  );
-
-  const topBarCenter = <CommandLauncher />;
-
-  const topBarTrailing = (
-    <div className="flex items-center gap-2">
-      <WorkspaceHelpButton />
-      <ProfileDropdown
-        displayName={displayName}
-        email={email}
-        actions={profileMenuItems}
-        onSignOut={() => logoutMutation.mutate()}
-        signingOut={logoutMutation.isPending}
-      />
-    </div>
-  );
-
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
-      <GlobalTopBar leading={topBarLeading} center={topBarCenter} trailing={topBarTrailing} />
+      <WorkspaceTopBar
+        workspace={workspace}
+        workspaces={workspaces}
+        collapsed={isNavCollapsed}
+        onToggleCollapsed={toggleNavCollapsed}
+        onOpenPrimaryDrawer={() => setPrimaryDrawerOpen(true)}
+        onOpenSectionDrawer={() => setSectionDrawerOpen(true)}
+        onSelectWorkspace={handleSelectWorkspace}
+        onCreateWorkspace={() => navigate("/workspaces/new")}
+        onOpenWorkspaceSettings={handleOpenWorkspaceSettings}
+        profileMenuItems={profileMenuItems}
+        displayName={displayName}
+        email={email}
+        onSignOut={() => logoutMutation.mutate()}
+        isSigningOut={logoutMutation.isPending}
+      />
 
-      <div className="relative flex flex-1 overflow-hidden">
-        <WorkspaceNavigationRail
+      <div className="flex flex-1 overflow-hidden">
+        <WorkspacePrimaryDrawer
           workspace={workspace}
           collapsed={isNavCollapsed}
-          onToggleCollapse={toggleNavCollapsed}
-          onNavigate={() => setNavigationOpen(false)}
+          isDrawerOpen={primaryDrawerOpen}
+          onCloseDrawer={() => setPrimaryDrawerOpen(false)}
         />
 
-        <WorkspaceSectionSidebar
+        <WorkspaceSectionDrawer
           workspaceId={workspace.id}
           section={activeSection}
-          collapsed={isSectionCollapsed}
-          onToggleCollapse={toggleSectionCollapsed}
-          onNavigate={() => setNavigationOpen(false)}
+          onCloseDrawer={() => setSectionDrawerOpen(false)}
         />
 
         <main className="relative flex-1 overflow-y-auto">
           <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-6">
-            <WorkspaceContentSurface breadcrumbs={breadcrumbs}>{children}</WorkspaceContentSurface>
+            <WorkspaceContentSurface breadcrumbs={breadcrumbs}>
+              {children}
+            </WorkspaceContentSurface>
           </div>
         </main>
 
         {showInspector ? (
-          <aside className="hidden w-96 flex-shrink-0 flex-col border-l border-slate-200 bg-white p-4 xl:flex">
+          <aside className="hidden xl:flex w-96 flex-shrink-0 flex-col border-l border-slate-200 bg-white p-4">
             <WorkspaceInspectorPanel inspector={inspector} onClose={closeInspector} />
           </aside>
         ) : null}
       </div>
 
-      <WorkspaceNavigationDrawer
-        open={navigationOpen}
-        workspace={workspace}
-        workspaces={workspaces}
-        section={activeSection}
-        onClose={() => setNavigationOpen(false)}
-        onNavigate={() => setNavigationOpen(false)}
-        onSelectWorkspace={handleSelectWorkspace}
-        onCreateWorkspace={() => navigate("/workspaces/new")}
-        onManageWorkspace={handleOpenWorkspaceSettings}
-      />
+      {primaryDrawerOpen ? (
+        <DrawerBackdrop onDismiss={() => setPrimaryDrawerOpen(false)} />
+      ) : null}
+
+      {sectionDrawerOpen ? (
+        <DrawerBackdrop onDismiss={() => setSectionDrawerOpen(false)} />
+      ) : null}
+
+      {sectionDrawerOpen ? (
+        <aside className="fixed inset-y-0 right-0 z-40 w-72 max-w-[85vw] border-l border-slate-200 bg-white shadow-xl lg:hidden">
+          <WorkspaceSectionNav
+            workspaceId={workspace.id}
+            section={activeSection}
+            onCloseDrawer={() => setSectionDrawerOpen(false)}
+          />
+        </aside>
+      ) : null}
 
       {showInspector ? (
-        <InspectorOverlay onClose={closeInspector} title={inspector.title}>
+        <aside className="fixed inset-y-0 right-0 z-40 flex w-[min(90vw,360px)] flex-col border-l border-slate-200 bg-white p-4 shadow-xl xl:hidden">
           <WorkspaceInspectorPanel inspector={inspector} onClose={closeInspector} />
-        </InspectorOverlay>
+        </aside>
       ) : null}
     </div>
+  );
+}
+
+function WorkspaceTopBar({
+  workspace,
+  workspaces,
+  collapsed,
+  onToggleCollapsed,
+  onOpenPrimaryDrawer,
+  onOpenSectionDrawer,
+  onSelectWorkspace,
+  onCreateWorkspace,
+  onOpenWorkspaceSettings,
+  profileMenuItems,
+  displayName,
+  email,
+  onSignOut,
+  isSigningOut,
+}: {
+  readonly workspace: WorkspaceProfile;
+  readonly workspaces: readonly WorkspaceProfile[];
+  readonly collapsed: boolean;
+  readonly onToggleCollapsed: () => void;
+  readonly onOpenPrimaryDrawer: () => void;
+  readonly onOpenSectionDrawer: () => void;
+  readonly onSelectWorkspace: (workspaceId: string) => void;
+  readonly onCreateWorkspace: () => void;
+  readonly onOpenWorkspaceSettings: () => void;
+  readonly profileMenuItems: readonly UserMenuItem[];
+  readonly displayName: string;
+  readonly email: string;
+  readonly onSignOut: () => void;
+  readonly isSigningOut: boolean;
+}) {
+  return (
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
+      <div className="mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onOpenPrimaryDrawer}
+            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-white md:hidden"
+            aria-label="Open navigation"
+          >
+            <MenuIcon />
+          </button>
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            className="hidden h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-white md:inline-flex"
+            aria-pressed={collapsed}
+            aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+          >
+            <SidebarIcon collapsed={collapsed} />
+          </button>
+          <WorkspaceQuickSwitcher
+            workspace={workspace}
+            workspaces={workspaces}
+            onSelectWorkspace={onSelectWorkspace}
+            onCreateWorkspace={onCreateWorkspace}
+            onManageWorkspace={onOpenWorkspaceSettings}
+            variant="brand"
+            glyphOverride="ADE"
+            title="Automatic Data Extractor"
+            subtitle={workspace.name}
+            showSlug={false}
+          />
+        </div>
+
+        <div className="flex flex-1 items-center justify-center px-4">
+          <GlobalSearchBar />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700"
+            aria-label="Open workspace views"
+            onClick={onOpenSectionDrawer}
+          >
+            <PanelsIcon />
+          </button>
+          <button
+            type="button"
+            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700"
+            aria-label="Open command palette (⌘K)"
+          >
+            <CommandIcon />
+          </button>
+          <button
+            type="button"
+            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700"
+            aria-label="View notifications"
+          >
+            <BellIcon />
+          </button>
+          <button
+            type="button"
+            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700"
+            aria-label="Open help center"
+          >
+            <HelpIcon />
+          </button>
+          <UserMenu
+            displayName={displayName}
+            email={email}
+            items={profileMenuItems}
+            onSignOut={onSignOut}
+            isSigningOut={isSigningOut}
+          />
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function WorkspacePrimaryDrawer({
+  workspace,
+  collapsed,
+  isDrawerOpen,
+  onCloseDrawer,
+}: {
+  readonly workspace: WorkspaceProfile;
+  readonly collapsed: boolean;
+  readonly isDrawerOpen: boolean;
+  readonly onCloseDrawer: () => void;
+}) {
+  return (
+    <>
+      <div
+        className={clsx("fixed inset-0 z-30 bg-slate-900/40 md:hidden", isDrawerOpen ? "block" : "hidden")}
+        aria-hidden="true"
+        onClick={onCloseDrawer}
+      />
+      <aside
+        className={clsx(
+          "fixed inset-y-0 left-0 z-40 flex w-72 max-w-[80vw] transform flex-col transition md:relative md:z-auto md:flex md:h-full md:w-auto md:max-w-none md:translate-x-0 md:border-r md:border-slate-200 md:bg-white",
+          isDrawerOpen ? "translate-x-0 bg-white shadow-xl" : "-translate-x-full md:bg-white md:shadow-none",
+        )}
+      >
+        <WorkspacePrimaryNav
+          workspace={workspace}
+          collapsed={collapsed && !isDrawerOpen}
+          onCloseDrawer={onCloseDrawer}
+          className={clsx(collapsed && "md:w-20")}
+        />
+      </aside>
+    </>
+  );
+}
+
+function WorkspaceSectionDrawer({
+  workspaceId,
+  section,
+  onCloseDrawer,
+}: {
+  readonly workspaceId: string;
+  readonly section: WorkspaceSectionDescriptor;
+  readonly onCloseDrawer: () => void;
+}) {
+  return (
+    <WorkspaceSectionNav workspaceId={workspaceId} section={section} onCloseDrawer={onCloseDrawer} className="hidden lg:flex" />
   );
 }
 
@@ -276,6 +406,15 @@ function PageHeader({ breadcrumbs }: { readonly breadcrumbs: readonly string[] }
         <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
         <p className="text-sm text-slate-500">All the controls and insights for this section live below.</p>
       </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="focus-ring inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700"
+        >
+          <PlusIcon />
+          <span>New action</span>
+        </button>
+      </div>
     </div>
   );
 }
@@ -296,101 +435,56 @@ function WorkspaceInspectorPanel({
         <div>
           <h2 className="text-base font-semibold text-slate-900">{inspector.title ?? "Details"}</h2>
         </div>
-        <TopBarButton icon={<CloseIcon />} label="Close inspector" onClick={onClose} />
+        <button
+          type="button"
+          onClick={onClose}
+          className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300"
+          aria-label="Close inspector"
+        >
+          <CloseIcon />
+        </button>
       </div>
-      <div className="flex-1 overflow-y-auto">{inspector.content}</div>
+      <div className="flex-1 overflow-y-auto pr-1 text-sm text-slate-700">{inspector.content}</div>
     </div>
   );
 }
 
-function CommandLauncher() {
+function DrawerBackdrop({ onDismiss }: { readonly onDismiss: () => void }) {
   return (
-    <button
-      type="button"
-      className="focus-ring hidden h-11 min-w-[16rem] items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-left text-sm font-medium text-slate-500 shadow-sm transition hover:border-brand-200 hover:text-slate-700 md:flex"
-      aria-label="Open search (⌘K)"
+    <div className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden" aria-hidden="true" onClick={onDismiss} />
+  );
+}
+
+function GlobalSearchBar() {
+  const [value, setValue] = useState("");
+
+  return (
+    <form
+      role="search"
+      className="relative w-full max-w-xl"
+      onSubmit={(event) => {
+        event.preventDefault();
+      }}
     >
-      <span className="inline-flex items-center gap-2">
+      <label htmlFor="workspace-global-search" className="sr-only">
+        Search workspace
+      </label>
+      <input
+        id="workspace-global-search"
+        type="search"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder="Search documents, runs, members, or actions…"
+        className="w-full rounded-full border border-slate-200 bg-white px-5 py-3 pl-12 text-base text-slate-800 shadow-[0_12px_32px_rgba(15,23,42,0.08)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+      />
+      <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-slate-400">
         <SearchIcon />
-        Search documents, jobs, and data
       </span>
-      <span className="text-xs text-slate-400">⌘K</span>
-    </button>
-  );
-}
-
-function TopBarButton({
-  icon,
-  label,
-  onClick,
-  className,
-}: {
-  readonly icon: ReactNode;
-  readonly label: string;
-  readonly onClick: () => void;
-  readonly className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={clsx(
-        "focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700",
-        className,
-      )}
-      aria-label={label}
-    >
-      {icon}
-    </button>
-  );
-}
-
-function TopBarToggleButton({
-  icon,
-  label,
-  pressed,
-  onClick,
-  className,
-}: {
-  readonly icon: ReactNode;
-  readonly label: string;
-  readonly pressed: boolean;
-  readonly onClick: () => void;
-  readonly className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={clsx(
-        "focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border bg-white text-slate-600 shadow-sm transition hover:border-brand-200 hover:text-brand-700",
-        pressed ? "border-brand-200 text-brand-700" : "border-slate-200",
-        className,
-      )}
-      aria-label={label}
-      aria-pressed={pressed}
-    >
-      {icon}
-    </button>
-  );
-}
-
-function InspectorOverlay({
-  children,
-  onClose,
-  title,
-}: {
-  readonly children: ReactNode;
-  readonly onClose: () => void;
-  readonly title?: string;
-}) {
-  return (
-    <div className="fixed inset-0 z-40 flex items-stretch justify-end bg-slate-900/30 backdrop-blur-sm lg:hidden" role="dialog" aria-modal="true" aria-label={title ?? "Inspector"}>
-      <button type="button" className="flex-1" aria-label="Close inspector" onClick={onClose} />
-      <div className="relative flex h-full w-[min(24rem,90vw)] flex-col border-l border-slate-200 bg-white p-4 shadow-2xl">
-        {children}
-      </div>
-    </div>
+      <span className="pointer-events-none absolute inset-y-0 right-5 hidden items-center gap-1 text-xs text-slate-300 sm:flex">
+        <kbd className="rounded border border-slate-200 px-1 py-0.5 font-sans text-[11px]">⌘</kbd>
+        <kbd className="rounded border border-slate-200 px-1 py-0.5 font-sans text-[11px]">K</kbd>
+      </span>
+    </form>
   );
 }
 
@@ -418,6 +512,41 @@ function SidebarIcon({ collapsed }: { readonly collapsed: boolean }) {
   );
 }
 
+function PanelsIcon() {
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <rect x="3" y="3" width="6" height="14" rx="1.2" />
+      <rect x="11" y="3" width="6" height="8" rx="1.2" />
+      <rect x="11" y="13" width="6" height="4" rx="1.2" />
+    </svg>
+  );
+}
+
+function CommandIcon() {
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <path d="M7 3a3 3 0 0 0-3 3v1h3V3Zm6 0v4h3V6a3 3 0 0 0-3-3ZM4 13v1a3 3 0 1 0 3-3H4Zm9-2a3 3 0 1 0 3 3v-1h-3Z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M7 7h6v6H7z" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function BellIcon() {
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <path d="M10 17a2 2 0 0 0 2-2H8a2 2 0 0 0 2 2Zm6-5V9a6 6 0 0 0-12 0v3l-1 2h14l-1-2Z" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function HelpIcon() {
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <path d="M10 18a8 8 0 1 0-8-8 8 8 0 0 0 8 8Zm0-5v.01M8.5 7.5a1.5 1.5 0 1 1 3 0c0 1-1.5 1.5-1.5 3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function CloseIcon() {
   return (
     <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
@@ -428,9 +557,20 @@ function CloseIcon() {
 
 function SearchIcon() {
   return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
-      <circle cx="9" cy="9" r="5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="m13.5 13.5 3 3" strokeLinecap="round" strokeLinejoin="round" />
+    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path
+        fillRule="evenodd"
+        d="M8.5 3a5.5 5.5 0 013.934 9.35l3.108 3.107a1 1 0 01-1.414 1.415l-3.108-3.108A5.5 5.5 0 118.5 3zm0 2a3.5 3.5 0 100 7 3.5 3.5 0 000-7z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path d="M10 4v12M4 10h12" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
