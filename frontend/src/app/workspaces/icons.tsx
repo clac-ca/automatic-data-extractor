@@ -29,6 +29,22 @@ export const DocumentsIcon = createIcon(
   "M7 3h7l7 7v11a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM14 3v5a1 1 0 0 0 1 1h5",
 );
 
+export const OverviewIcon = createIcon(
+  "M4 6h4v10H4zM9 3h4v13H9zM14 9h4v7h-4z",
+);
+
+export const RunsIcon = createIcon(
+  "M5 4h14M5 10h10M5 16h6",
+);
+
+export const DataIcon = createIcon(
+  "M4 6c0-1.1 3-2 6-2s6 .9 6 2-3 2-6 2-6-.9-6-2Zm12 4c0 1.1-3 2-6 2s-6-.9-6-2m12 4c0 1.1-3 2-6 2s-6-.9-6-2",
+);
+
+export const ConfigureIcon = createIcon(
+  "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7.4-3a1 1 0 0 0 .1-.4 1 1 0 0 0-.1-.4l2-1.6a1 1 0 0 0 .2-1.3l-1.9-3.2a1 1 0 0 0-1.2-.4l-2.3.9a7 7 0 0 0-1.3-.8l-.4-2.4A1 1 0 0 0 13.5 1h-3a1 1 0 0 0-1 .9l-.4 2.4a7 7 0 0 0-1.3.8l-2.3-.9a1 1 0 0 0-1.2.4L2.4 7.8a1 1 0 0 0 .2 1.3l2 1.5a3 3 0 0 0 0 .8l-2 1.6a1 1 0 0 0-.2 1.3l1.9 3.2a1 1 0 0 0 1.2.4l2.3-.9a7 7 0 0 0 1.3.8l.4 2.4a1 1 0 0 0 1 .9h3a1 1 0 0 0 1-.9l.4-2.4a7 7 0 0 0 1.3-.8l2.3.9a1 1 0 0 0 1.2-.4l1.9-3.1a1 1 0 0 0-.2-1.3l-2-1.7Z",
+);
+
 export const JobsIcon = createIcon(
   "M21 12a9 9 0 1 1-9-9m0 9 3.5 3.5M17 3v4m0 0h4M7 21v-4m0 0H3",
 );
