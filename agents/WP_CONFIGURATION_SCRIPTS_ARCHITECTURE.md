@@ -198,6 +198,63 @@ The outcome is a stable configuration and authoring layer that the job engine ca
 
 ---
 
+### Phase 3 — Backend alignment & FastAPI consistency review
+
+**Goal:** Fold in the design review feedback so the configuration feature matches ADE’s feature-first FastAPI layout, keeps responsibilities sharp, and removes redundant plumbing.
+
+**Checklist**
+
+* [x] **Router layout & guards**
+
+  * [x] Keep every path operation in `ade/features/configurations/router.py` with `prefix="/workspaces/{workspace_id}"`, mirroring the patterns already used by jobs, documents, and workspaces.
+  * [x] Declare shared dependencies through `dependencies=[Security(require_authenticated)]` on the router and prefer `Security(require_workspace(...), scopes=["{workspace_id}"])` per endpoint rather than manual session lookups.
+  * [x] Apply `Security(require_csrf)` to mutating routes only, surface `DefaultResponse` for `204` writes, and return FastAPI `HTTPException` responses with clear detail strings instead of custom helpers.
+  * [x] Ensure the router is registered exactly once in `ade/api/v1/router.py` via `include_router(configurations.router)` so the OpenAPI document stays in sync.
+
+* [x] **Service/repository seams**
+
+  * [x] Limit routers to deserialising payloads, resolving dependencies, and delegating to `ConfigurationsService`; never touch the SQLAlchemy session directly outside the service.
+  * [x] Keep SQLAlchemy queries and persistence utilities (`determine_next_version`, `replace_columns`, `create_script_version`, cloning helpers) inside `ConfigurationsRepository` so there is a single source of truth for DB writes.
+  * [x] Continue to centralise response shaping with `model_validate` on `ConfigurationRecord`, `ConfigurationColumnOut`, and `ConfigurationScriptVersionOut` to avoid bespoke dict assembly.
+  * _2025-10-17_: `ConfigurationsService` now accepts an optional repository override so tests can inject stubs without mutating private attributes.
+
+* [x] **Domain exceptions & error mapping**
+
+  * [x] Ensure `ade/features/configurations/exceptions.py` exposes explicit exception types for not-found entities, ownership mismatches, duplicate canonical keys, and validation failures.
+  * [x] Map those exceptions to FastAPI `HTTPException` responses with descriptive detail strings so the feature leans on the built-in behaviour while staying easy to read.
+  * [x] Remove any redundant error translation once centralised helpers (e.g. `problem_from_exception`) are in place.
+  * _2025-10-17_: Routers now rely on `str(exc)` for detail content, keeping messages consistent with the exception definitions without extra formatting helpers.
+  * _2025-10-17_: Validation exceptions now format their own detail strings so routers can raise FastAPI `HTTPException` directly without assembling custom payloads.
+
+* [x] **Script validation sandbox**
+
+  * [x] Keep all validation sandbox logic inside `ade/features/configurations/validation.py`, executed in a separate process with restricted builtins/imports, 32 KiB code limits, deterministic timeouts, and network-disabled socket shims documented in `agents/fastapi-best-practices.md`.
+  * [x] Return a single `ScriptValidationOutcome` dataclass/model that captures docstring metadata, checksum, timestamps, and validation errors so services persist everything without recomputing hashes or parsing docstrings twice.
+
+* [x] **Column & binding ergonomics**
+
+  * [x] Offer a single service entry point (e.g. `ConfigurationsService.replace_columns`) that validates canonical keys, enforces script ownership, and persists ordinals in one transaction.
+  * [x] Handle binding adjustments through `ConfigurationColumnBindingUpdate`, normalising `params=None` to `{}` and verifying `script_version_id` ownership before delegating to repository updates.
+  * [x] Drop duplicated schema coercion in the router once the service normalises payloads.
+
+* [x] **ETag & cloning helpers**
+
+  * [x] Compute SHA-256 hashes for script versions inside the service layer, surface them as weak ETags (`W/"{sha256}"`) on create/validate responses, and enforce `If-Match` preconditions in routers just like the documents feature.
+  * [x] Use repository helpers when cloning a configuration so column records, bindings, and script versions copy within the same transaction without bespoke SQL fragments.
+
+* [x] **Tests & fixtures**
+
+  * [x] Mirror other feature suites by adding async tests under `ade/features/configurations/tests/` that exercise happy paths, sandbox failures, ownership checks, and ETag preconditions with `AsyncClient` and the workspace fixture helpers.
+  * [x] Cover service-only behaviour (e.g. cloning, hash computation, validation orchestration) with pure unit tests that stub the repository, keeping contract tests for router-service integration only.
+
+**Exit criteria**
+
+* Routers follow ADE’s FastAPI conventions: workspace prefix, shared guards, thin handlers, and built-in `HTTPException` responses with descriptive detail strings.
+* Services encapsulate business rules (cloning, validation, hashing, ownership checks) while repositories remain the single place that touches SQLAlchemy models.
+* Script validation, column replacement, and binding updates expose consistent responses, enforce security invariants, and are covered by async and service-level tests.
+
+---
+
 ## Reference — Configuration Script Template (verbatim)
 
 A **Configuration Script** is a single Python module for one canonical column key (e.g., `full_name`). The pack can include:
