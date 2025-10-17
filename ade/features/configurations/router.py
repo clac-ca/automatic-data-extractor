@@ -18,7 +18,6 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade.api.errors import ProblemException
 from ade.api.security import require_authenticated, require_csrf, require_workspace
 from ade.core.responses import DefaultResponse
 from ade.db.session import get_session
@@ -120,9 +119,15 @@ async def create_configuration(
             clone_from_active=payload.clone_from_active,
         )
     except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
     except ActiveConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get(
@@ -181,7 +186,10 @@ async def read_configuration(
             configuration_id=configuration_id,
         )
     except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
 
 
 @router.put(
@@ -219,7 +227,10 @@ async def replace_configuration(
             payload=payload.payload,
         )
     except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
 
 
 @router.delete(
@@ -252,7 +263,10 @@ async def delete_configuration(
             configuration_id=configuration_id,
         )
     except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
     return DefaultResponse.success("Configuration deleted")
 
 
@@ -287,7 +301,10 @@ async def activate_configuration(
             configuration_id=configuration_id,
         )
     except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get(
@@ -320,9 +337,8 @@ async def list_configuration_columns(
             configuration_id=configuration_id,
         )
     except ConfigurationNotFoundError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            title="Configuration not found",
             detail=str(exc),
         )
 
@@ -361,28 +377,23 @@ async def replace_configuration_columns(
             columns=columns,
         )
     except ConfigurationNotFoundError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            title="Configuration not found",
             detail=str(exc),
         )
     except ConfigurationColumnValidationError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            title="Invalid configuration column payload",
             detail=str(exc),
-            errors=exc.errors,
-        )
+        ) from exc
     except ConfigurationScriptVersionNotFoundError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            title="Script version not found",
             detail=str(exc),
         )
     except ConfigurationScriptVersionOwnershipError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            title="Script version belongs to another configuration",
             detail=str(exc),
         )
 
@@ -425,34 +436,28 @@ async def update_configuration_column_binding(
             binding=payload,
         )
     except ConfigurationNotFoundError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            title="Configuration not found",
             detail=str(exc),
         )
     except ConfigurationColumnNotFoundError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            title="Configuration column not found",
             detail=str(exc),
         )
     except ConfigurationColumnValidationError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            title="Invalid configuration column payload",
             detail=str(exc),
-            errors=exc.errors,
-        )
+        ) from exc
     except ConfigurationScriptVersionNotFoundError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            title="Script version not found",
             detail=str(exc),
         )
     except ConfigurationScriptVersionOwnershipError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            title="Script version belongs to another configuration",
             detail=str(exc),
         )
 
@@ -497,18 +502,15 @@ async def create_configuration_script_version(
             actor_id=str(_actor.id),
         )
     except ConfigurationNotFoundError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            title="Configuration not found",
             detail=str(exc),
         )
     except ConfigurationScriptValidationError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            title="Invalid configuration script",
             detail=str(exc),
-            errors=exc.errors,
-        )
+        ) from exc
 
     response.headers["ETag"] = f'W/"{etag}"'
     return script
@@ -548,9 +550,8 @@ async def list_configuration_script_versions(
             canonical_key=canonical_key,
         )
     except ConfigurationNotFoundError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            title="Configuration not found",
             detail=str(exc),
         )
 
@@ -596,15 +597,13 @@ async def get_configuration_script_version(
             include_code=include_code,
         )
     except ConfigurationNotFoundError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            title="Configuration not found",
             detail=str(exc),
         )
     except ConfigurationScriptVersionNotFoundError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            title="Script version not found",
             detail=str(exc),
         )
 
@@ -644,7 +643,7 @@ async def validate_configuration_script_version(
 ) -> ConfigurationScriptVersionOut:
     service = ConfigurationsService(session=session)
     try:
-        script, etag = await service.validate_script_version(
+        script_record, etag = await service.validate_script_version(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             canonical_key=canonical_key,
@@ -652,27 +651,28 @@ async def validate_configuration_script_version(
             if_match=if_match,
         )
     except ConfigurationNotFoundError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            title="Configuration not found",
             detail=str(exc),
-        )
+        ) from exc
     except ConfigurationScriptVersionNotFoundError as exc:
-        raise ProblemException(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            title="Script version not found",
             detail=str(exc),
-        )
+        ) from exc
     except ConfigurationScriptValidationError as exc:
-        raise ProblemException(
-            status_code=status.HTTP_412_PRECONDITION_FAILED,
-            title="ETag mismatch",
-            detail=str(exc),
-            errors=exc.errors,
+        status_code = (
+            status.HTTP_428_PRECONDITION_REQUIRED
+            if if_match is None
+            else status.HTTP_412_PRECONDITION_FAILED
         )
+        raise HTTPException(
+            status_code=status_code,
+            detail=str(exc),
+        ) from exc
 
     response.headers["ETag"] = f'W/"{etag}"'
-    return script
+    return script_record
 
 
 __all__ = ["router"]

@@ -590,6 +590,36 @@ async def test_configuration_script_validation_times_out(
     assert payload.get("validated_at") is None
 
 
+async def test_validate_script_version_requires_if_match_header(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Validation should return 428 when the If-Match header is missing."""
+
+    workspace_id = seed_identity["workspace_id"]
+    configuration_id = await _create_configuration(workspace_id=workspace_id)
+
+    admin = seed_identity["admin"]
+    token = await _login(async_client, admin["email"], admin["password"])
+    workspace_base = f"/api/v1/workspaces/{workspace_id}"
+
+    script_id, _ = await _create_script_version(
+        async_client=async_client,
+        workspace_base=workspace_base,
+        configuration_id=configuration_id,
+        token=token,
+    )
+
+    response = await async_client.post(
+        f"{workspace_base}/configurations/{configuration_id}/scripts/sample_column/versions/{script_id}:validate",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 428
+    payload = response.json()
+    assert payload["detail"].startswith("Precondition required")
+    assert "If-Match header" in payload["detail"]
+
+
 async def test_validate_script_version_requires_matching_etag(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
@@ -619,7 +649,8 @@ async def test_validate_script_version_requires_matching_etag(
     )
     assert response.status_code == 412
     payload = response.json()
-    assert payload["title"] == "ETag mismatch"
+    assert payload["detail"].startswith("ETag mismatch")
+    assert "ETag mismatch" in payload["detail"]
 
 
 async def test_update_column_binding_attaches_script(
@@ -685,5 +716,5 @@ async def test_update_column_binding_attaches_script(
     )
     assert mismatch.status_code == 400
     problem = mismatch.json()
-    assert problem["title"] == "Invalid configuration column payload"
+    assert problem["detail"].startswith("Invalid configuration column payload")
 
