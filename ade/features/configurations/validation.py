@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 import ast
 import builtins
+import hashlib
 from multiprocessing import get_context
 from queue import Empty
 import textwrap
@@ -85,6 +86,7 @@ class ScriptValidationOutcome:
     """Structured validation outcome for configuration scripts."""
 
     success: bool
+    code_sha256: str
     doc_name: str | None
     doc_description: str | None
     doc_version: int | None
@@ -239,7 +241,9 @@ def _disable_network_access() -> None:
     socket.socket = _NetworkDisabledSocket  # type: ignore[assignment]
 
 
-def _perform_validation(*, code: str, canonical_key: str) -> ScriptValidationOutcome:
+def _perform_validation(
+    *, code: str, canonical_key: str, code_sha256: str
+) -> ScriptValidationOutcome:
     """Execute validation logic inside an isolated process."""
 
     _disable_network_access()
@@ -249,7 +253,7 @@ def _perform_validation(*, code: str, canonical_key: str) -> ScriptValidationOut
         module = ast.parse(code)
     except SyntaxError as exc:
         errors["code"].append(f"Syntax error: {exc.msg} (line {exc.lineno})")
-        return ScriptValidationOutcome(False, None, None, None, dict(errors), None)
+        return ScriptValidationOutcome(False, code_sha256, None, None, None, dict(errors), None)
 
     doc_name, doc_description, doc_version, metadata_errors = _parse_metadata(
         ast.get_docstring(module, clean=True)
@@ -270,6 +274,7 @@ def _perform_validation(*, code: str, canonical_key: str) -> ScriptValidationOut
         errors["import"].append(str(exc))
         return ScriptValidationOutcome(
             False,
+            code_sha256,
             doc_name,
             doc_description,
             doc_version,
@@ -292,6 +297,7 @@ def _perform_validation(*, code: str, canonical_key: str) -> ScriptValidationOut
     if errors:
         return ScriptValidationOutcome(
             False,
+            code_sha256,
             doc_name,
             doc_description,
             doc_version,
@@ -301,6 +307,7 @@ def _perform_validation(*, code: str, canonical_key: str) -> ScriptValidationOut
 
     return ScriptValidationOutcome(
         True,
+        code_sha256,
         doc_name,
         doc_description,
         doc_version,
@@ -309,14 +316,21 @@ def _perform_validation(*, code: str, canonical_key: str) -> ScriptValidationOut
     )
 
 
-def _validation_worker(code: str, canonical_key: str, queue: Any) -> None:
+def _validation_worker(
+    code: str, canonical_key: str, code_sha256: str, queue: Any
+) -> None:
     """Run validation and communicate the outcome back to the parent process."""
 
     try:
-        outcome = _perform_validation(code=code, canonical_key=canonical_key)
+        outcome = _perform_validation(
+            code=code,
+            canonical_key=canonical_key,
+            code_sha256=code_sha256,
+        )
     except Exception as exc:  # pragma: no cover - defensive safety net
         outcome = ScriptValidationOutcome(
             False,
+            code_sha256,
             None,
             None,
             None,
@@ -326,13 +340,17 @@ def _validation_worker(code: str, canonical_key: str, queue: Any) -> None:
     queue.put(outcome)
 
 
-def validate_configuration_script(*, code: str, canonical_key: str) -> ScriptValidationOutcome:
+def validate_configuration_script(
+    *, code: str, canonical_key: str, code_sha256: str | None = None
+) -> ScriptValidationOutcome:
     """Validate ``code`` for ``canonical_key`` returning structured feedback."""
 
+    sha = code_sha256 or hashlib.sha256(code.encode("utf-8")).hexdigest()
     script_size = len(code.encode("utf-8"))
     if script_size > _MAX_SCRIPT_SIZE_BYTES:
         return ScriptValidationOutcome(
             False,
+            sha,
             None,
             None,
             None,
@@ -349,7 +367,10 @@ def validate_configuration_script(*, code: str, canonical_key: str) -> ScriptVal
 
     ctx = get_context("spawn")
     queue = ctx.Queue(maxsize=1)
-    process = ctx.Process(target=_validation_worker, args=(code, canonical_key, queue))
+    process = ctx.Process(
+        target=_validation_worker,
+        args=(code, canonical_key, sha, queue),
+    )
     process.start()
 
     try:
@@ -361,6 +382,7 @@ def validate_configuration_script(*, code: str, canonical_key: str) -> ScriptVal
             process.join()
             return ScriptValidationOutcome(
                 False,
+                sha,
                 None,
                 None,
                 None,
@@ -377,6 +399,7 @@ def validate_configuration_script(*, code: str, canonical_key: str) -> ScriptVal
         process.join()
         return ScriptValidationOutcome(
             False,
+            sha,
             None,
             None,
             None,

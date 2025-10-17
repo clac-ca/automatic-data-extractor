@@ -64,9 +64,26 @@ class ConfigurationColumnNotFoundError(Exception):
 class ConfigurationColumnValidationError(Exception):
     """Raised when a bulk column update fails validation."""
 
-    def __init__(self, errors: dict[str, list[str]]) -> None:
-        super().__init__("Invalid column definitions")
-        self.errors = errors
+    def __init__(
+        self,
+        errors: dict[str, list[str]] | None,
+        *,
+        message: str | None = None,
+    ) -> None:
+        super().__init__(message or "Invalid configuration column payload")
+        self.errors = errors or {}
+
+    def __str__(self) -> str:
+        base = super().__str__()
+        if not self.errors:
+            return base
+        parts: list[str] = []
+        for field, messages in self.errors.items():
+            for detail in messages:
+                parts.append(f"{field}: {detail}")
+        if not parts:
+            return base
+        return f"{base}: {'; '.join(parts)}"
 
 
 class ConfigurationScriptVersionNotFoundError(Exception):
@@ -80,9 +97,26 @@ class ConfigurationScriptVersionNotFoundError(Exception):
 class ConfigurationScriptValidationError(Exception):
     """Raised when a configuration script fails validation checks."""
 
-    def __init__(self, errors: dict[str, list[str]]) -> None:
-        super().__init__("Configuration script did not pass validation")
-        self.errors = errors
+    def __init__(
+        self,
+        errors: dict[str, list[str]] | None,
+        *,
+        message: str | None = None,
+    ) -> None:
+        super().__init__(message or "Configuration script did not pass validation")
+        self.errors = errors or {}
+
+    def __str__(self) -> str:
+        base = super().__str__()
+        if not self.errors:
+            return base
+        parts: list[str] = []
+        for field, messages in self.errors.items():
+            for detail in messages:
+                parts.append(f"{field}: {detail}")
+        if not parts:
+            return base
+        return f"{base}: {'; '.join(parts)}"
 
 
 class ConfigurationScriptVersionOwnershipError(Exception):
