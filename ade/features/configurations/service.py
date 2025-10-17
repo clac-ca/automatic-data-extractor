@@ -34,9 +34,14 @@ from .validation import validate_configuration_script
 class ConfigurationsService:
     """Expose read-only helpers for configuration metadata."""
 
-    def __init__(self, *, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        *,
+        session: AsyncSession,
+        repository: ConfigurationsRepository | None = None,
+    ) -> None:
         self._session = session
-        self._repository = ConfigurationsRepository(session)
+        self._repository = repository or ConfigurationsRepository(session)
 
     async def list_configurations(
         self,
@@ -338,6 +343,7 @@ class ConfigurationsService:
         outcome = validate_configuration_script(
             code=code,
             canonical_key=canonical_key,
+            code_sha256=sha,
         )
         version = await self._repository.determine_next_script_version(
             configuration_id=str(configuration.id),
@@ -349,7 +355,7 @@ class ConfigurationsService:
             version=version,
             language=payload.language,
             code=code,
-            code_sha256=sha,
+            code_sha256=outcome.code_sha256,
             doc_name=outcome.doc_name,
             doc_description=outcome.doc_description,
             doc_version=outcome.doc_version,
@@ -357,7 +363,7 @@ class ConfigurationsService:
             validation_errors=outcome.errors,
             created_by_user_id=actor_id,
         )
-        return self._serialize_script(script, include_code=False), sha
+        return self._serialize_script(script, include_code=False), outcome.code_sha256
 
     async def list_script_versions(
         self,
@@ -434,19 +440,32 @@ class ConfigurationsService:
         if script is None:
             raise ConfigurationScriptVersionNotFoundError(script_version_id)
 
-        if if_match:
-            expected = {script.code_sha256, f'W/"{script.code_sha256}"'}
-            if if_match not in expected:
-                errors = {
-                    "if-match": [
-                        "ETag mismatch; provide If-Match header for the current script sha256.",
-                    ]
-                }
-                raise ConfigurationScriptValidationError(errors)
+        expected = {script.code_sha256, f'W/"{script.code_sha256}"'}
+        if if_match is None:
+            errors = {
+                "if-match": [
+                    "If-Match header is required when revalidating configuration scripts.",
+                ]
+            }
+            raise ConfigurationScriptValidationError(
+                errors,
+                message="Precondition required",
+            )
+        if if_match not in expected:
+            errors = {
+                "if-match": [
+                    "ETag mismatch; provide If-Match header for the current script sha256.",
+                ]
+            }
+            raise ConfigurationScriptValidationError(
+                errors,
+                message="ETag mismatch",
+            )
 
         outcome = validate_configuration_script(
             code=script.code,
             canonical_key=canonical_key,
+            code_sha256=script.code_sha256,
         )
         script = await self._repository.update_script_validation(
             script,
