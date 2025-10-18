@@ -65,7 +65,7 @@ The tree below describes the desired state of the repo once the restructure is c
 - **`ade/workers/` owns background execution.** Task queues and worker entrypoints live here; they depend on features, not the other way around.
 - **`ade/web/static/` contains built assets only.** Source files for the SPA remain under `frontend/`.
 - **`ade/tests/` provides cross-cutting helpers.** Feature-specific tests should stay co-located under `features/*/tests/`.
-- **Frontend routes live under `frontend/src/app/routes/`.** React Router’s framework mode auto-discovers files—add new URLs by creating route modules there instead of resurrecting `AppRouter.tsx`. Keep the stub `src/app/routes.ts` in sync so the Vite plugin can resolve the tree during builds.
+- **Frontend routes live under `frontend/src/app/routes/`.** React Router’s framework mode auto-discovers files—add new URLs by creating route modules there instead of resurrecting `AppRouter.tsx`. Do not maintain a manual manifest; the file system is the single source of truth.
 - **Workspace chrome lives beside the dynamic workspace route.** Navigation, loader, and top bar components sit under `frontend/src/app/routes/workspaces/$workspaceId/` so every workspace screen shares the same boundary.
 
 ---

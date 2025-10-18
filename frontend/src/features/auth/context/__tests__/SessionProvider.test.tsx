@@ -1,10 +1,10 @@
 import { describe, it, beforeEach, afterEach, vi, expect } from "vitest";
 import { render } from "../../../../test/test-utils";
-import type { SessionEnvelope } from "../../../../shared/types/auth";
+import type { SessionEnvelope } from "@shared/types/auth";
 import { SessionProvider } from "../SessionContext";
-import { refreshSession } from "../../api/client";
+import { refreshSession } from "../../api";
 
-vi.mock("../../api/client", () => ({
+vi.mock("../../api", () => ({
   refreshSession: vi.fn(),
 }));
 

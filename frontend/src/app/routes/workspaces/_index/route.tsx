@@ -1,14 +1,23 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
-import { useWorkspacesQuery } from "../../../../features/workspaces/api/queries";
-import { useSession } from "../../../../features/auth/context/SessionContext";
-import type { WorkspaceProfile } from "../../../../shared/types/workspaces";
-import { Button } from "../../../../ui/button";
-import { WorkspaceDirectoryLayout } from "../WorkspaceDirectoryLayout";
-import { PageState } from "../../../../ui/PageState";
-import { buildWorkspaceSectionPath, defaultWorkspaceSection } from "../$workspaceId/sections";
+import { RequireSession } from "@features/auth/components/RequireSession";
+import { useWorkspacesQuery } from "@features/workspaces/api";
+import { useSession } from "@features/auth/context/SessionContext";
+import type { WorkspaceProfile } from "@shared/types/workspaces";
+import { Button } from "@ui/button";
+import { PageState } from "@ui/PageState";
+import { defaultWorkspaceSection } from "../$workspaceId/sections";
+import { WorkspaceDirectoryLayout } from "./DirectoryLayout";
 
 export default function WorkspacesIndexRoute() {
+  return (
+    <RequireSession>
+      <WorkspacesIndexContent />
+    </RequireSession>
+  );
+}
+
+function WorkspacesIndexContent() {
   const navigate = useNavigate();
   const session = useSession();
   const workspacesQuery = useWorkspacesQuery();
@@ -43,9 +52,7 @@ export default function WorkspacesIndexRoute() {
   const workspaces: WorkspaceProfile[] = workspacesQuery.data ?? [];
 
   const actions = canCreateWorkspace ? (
-    <Button variant="primary" onClick={() => navigate("/workspaces/new")}>
-      Create workspace
-    </Button>
+    <Button variant="primary" onClick={() => navigate("/workspaces/new")}>Create workspace</Button>
   ) : undefined;
 
   const mainContent =
@@ -74,20 +81,15 @@ export default function WorkspacesIndexRoute() {
         </header>
         <section className="grid gap-5 lg:grid-cols-2">
           {workspaces.map((workspace) => (
-            <button
+            <Link
               key={workspace.id}
-              type="button"
-              onClick={() =>
-                navigate(buildWorkspaceSectionPath(workspace.id, defaultWorkspaceSection.id))
-              }
-              className="group rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+              to={`/workspaces/${workspace.id}/${defaultWorkspaceSection.path}`}
+              className="group rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
             >
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-900">{workspace.name}</h2>
                 {workspace.is_default ? (
-                  <span className="rounded-full bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-600">
-                    Default
-                  </span>
+                  <span className="rounded-full bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-600">Default</span>
                 ) : null}
               </div>
               <p className="mt-2 text-sm text-slate-500">Slug: {workspace.slug}</p>
@@ -95,7 +97,7 @@ export default function WorkspacesIndexRoute() {
               <p className="text-sm text-slate-600">
                 {workspace.permissions.length > 0 ? workspace.permissions.join(", ") : "None"}
               </p>
-            </button>
+            </Link>
           ))}
         </section>
       </div>

@@ -1,5 +1,5 @@
-import { get, post } from "../../shared/api/client";
-import type { JobRecord, JobStatus, JobSubmissionPayload } from "../../shared/types/jobs";
+import { get, post } from "@shared/api/client";
+import type { JobRecord, JobStatus, JobSubmissionPayload } from "@shared/types/jobs";
 
 function buildJobsPath(workspaceId: string, suffix: string = "") {
   const trimmed = suffix.startsWith("/") ? suffix : `/${suffix}`;

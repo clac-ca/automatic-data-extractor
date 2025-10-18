@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchProviders } from "../api/client";
-import { sessionKeys } from "../api/keys";
+import { fetchProviders, sessionKeys } from "../api";
 
 export function useAuthProviders(options: { enabled?: boolean } = {}) {
   return useQuery({

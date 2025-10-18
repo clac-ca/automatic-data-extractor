@@ -4,8 +4,8 @@ import { useNavigate } from "react-router-dom";
 
 import { completeSetup } from "../api";
 import { useSessionQuery } from "../../auth/hooks/useSessionQuery";
-import { sessionKeys } from "../../auth/api/keys";
-import type { SetupPayload } from "../../../shared/types/auth";
+import { sessionKeys } from "../../auth/api";
+import type { SetupPayload } from "@shared/types/auth";
 
 export function useCompleteSetupMutation() {
   const navigate = useNavigate();

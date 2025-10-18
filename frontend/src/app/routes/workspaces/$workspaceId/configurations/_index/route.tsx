@@ -1,16 +1,16 @@
 import { useEffect, useMemo, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { Alert } from "../../../../../../ui/alert";
-import { Button } from "../../../../../../ui/button";
-import { useWorkspaceContext } from "../../../../../../features/workspaces/context/WorkspaceContext";
-import { useConfigurationsQuery } from "../../../../../../features/configurations/hooks/useConfigurationsQuery";
-import { useCreateConfigurationMutation } from "../../../../../../features/configurations/hooks/useCreateConfigurationMutation";
-import { useActivateConfigurationMutation } from "../../../../../../features/configurations/hooks/useActivateConfigurationMutation";
-import { ConfigurationSidebar } from "../../../../../../features/configurations/components/ConfigurationSidebar";
-import { ConfigurationColumnsEditor } from "../../../../../../features/configurations/components/ConfigurationColumnsEditor";
-import { ConfigurationScriptPanel } from "../../../../../../features/configurations/components/ConfigurationScriptPanel";
-import type { ConfigurationRecord } from "../../../../../../shared/types/configurations";
+import { Alert } from "@ui/alert";
+import { Button } from "@ui/button";
+import { useWorkspaceContext } from "@features/workspaces/context/WorkspaceContext";
+import { useConfigurationsQuery } from "@features/configurations/hooks/useConfigurationsQuery";
+import { useCreateConfigurationMutation } from "@features/configurations/hooks/useCreateConfigurationMutation";
+import { useActivateConfigurationMutation } from "@features/configurations/hooks/useActivateConfigurationMutation";
+import { ConfigurationSidebar } from "@features/configurations/components/ConfigurationSidebar";
+import { ConfigurationColumnsEditor } from "@features/configurations/components/ConfigurationColumnsEditor";
+import { ConfigurationScriptPanel } from "@features/configurations/components/ConfigurationScriptPanel";
+import type { ConfigurationRecord } from "@shared/types/configurations";
 
 export const handle = { workspaceSectionId: "configurations" } as const;
 

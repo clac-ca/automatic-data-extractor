@@ -1,9 +1,11 @@
-import { del, get, post } from "../../../shared/api/client";
+import type { QueryFunctionContext } from "@tanstack/react-query";
+
+import { del, get, post } from "@shared/api/client";
 import type {
   DocumentListResponse,
   DocumentRecord,
   DocumentStatus,
-} from "../../../shared/types/documents";
+} from "@shared/types/documents";
 
 export type StatusFilterInput = DocumentStatus | readonly DocumentStatus[] | null | undefined;
 
@@ -94,3 +96,50 @@ function extractFilename(header: string | null) {
   }
   return null;
 }
+
+export const documentsKeys = {
+  all: () => ["documents"] as const,
+  workspace: (workspaceId: string) => [...documentsKeys.all(), workspaceId] as const,
+  list: (
+    workspaceId: string,
+    status: readonly DocumentStatus[] | null,
+    search: string | null,
+    sort: string | null,
+  ) => [
+    ...documentsKeys.workspace(workspaceId),
+    "list",
+    { status, search, sort },
+  ] as const,
+};
+
+export type DocumentsStatusFilter = "all" | DocumentStatus | readonly DocumentStatus[];
+
+export interface WorkspaceDocumentsQueryOptions {
+  readonly status?: DocumentsStatusFilter;
+  readonly search?: string | null;
+  readonly sort?: string | null;
+}
+
+export function workspaceDocumentsQueryOptions(
+  workspaceId: string,
+  options: WorkspaceDocumentsQueryOptions = {},
+) {
+  const rawStatus = options.status === "all" ? undefined : (options.status as StatusFilterInput);
+  const resolvedStatus = normaliseStatusFilter(rawStatus) ?? null;
+  const search = options.search?.trim() ?? null;
+  const sort = options.sort?.trim() ?? null;
+
+  return {
+    queryKey: documentsKeys.list(workspaceId, resolvedStatus, search, sort),
+    queryFn: ({ signal }: QueryFunctionContext) =>
+      listWorkspaceDocuments(
+        workspaceId,
+        { status: resolvedStatus ?? undefined, search, sort },
+        signal,
+      ),
+    enabled: workspaceId.length > 0,
+    placeholderData: (previous: DocumentListResponse | undefined) => previous,
+    staleTime: 15_000,
+  };
+}
+

@@ -4,18 +4,19 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { ApiError } from "../../../../shared/api/client";
-import type { WorkspaceProfile } from "../../../../shared/types/workspaces";
-import type { UserSummary } from "../../../../shared/types/users";
-import { useSession } from "../../../../features/auth/context/SessionContext";
-import { useCreateWorkspaceMutation } from "../../../../features/workspaces/hooks/useCreateWorkspaceMutation";
-import { useWorkspacesQuery } from "../../../../features/workspaces/api/queries";
-import { useUsersQuery } from "../../../../features/users/hooks/useUsersQuery";
-import { WorkspaceDirectoryLayout } from "../WorkspaceDirectoryLayout";
-import { Alert } from "../../../../ui/alert";
-import { Button } from "../../../../ui/button";
-import { FormField } from "../../../../ui/form-field";
-import { Input } from "../../../../ui/input";
+import { ApiError } from "@shared/api/client";
+import type { WorkspaceProfile } from "@shared/types/workspaces";
+import type { UserSummary } from "@shared/types/users";
+import { RequireSession } from "@features/auth/components/RequireSession";
+import { useSession } from "@features/auth/context/SessionContext";
+import { useCreateWorkspaceMutation } from "@features/workspaces/hooks/useCreateWorkspaceMutation";
+import { useWorkspacesQuery } from "@features/workspaces/api";
+import { useUsersQuery } from "@features/users/hooks/useUsersQuery";
+import { WorkspaceDirectoryLayout } from "../_index/DirectoryLayout";
+import { Alert } from "@ui/alert";
+import { Button } from "@ui/button";
+import { FormField } from "@ui/form-field";
+import { Input } from "@ui/input";
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -32,6 +33,14 @@ const workspaceSchema = z.object({
 type WorkspaceFormValues = z.infer<typeof workspaceSchema>;
 
 export default function WorkspaceCreateRoute() {
+  return (
+    <RequireSession>
+      <WorkspaceCreateContent />
+    </RequireSession>
+  );
+}
+
+function WorkspaceCreateContent() {
   const navigate = useNavigate();
   const session = useSession();
   const workspacesQuery = useWorkspacesQuery();
