@@ -1,13 +1,13 @@
 import { Navigate } from "react-router-dom";
 
-import { useWorkspacesQuery } from "../api/queries";
-import { readPreferredWorkspaceId } from "../../../shared/lib/workspace";
-import { getDefaultWorkspacePath } from "../../../app/workspaces/loader";
+import { useWorkspacesQuery } from "../../../features/workspaces/api/queries";
+import { useSession } from "../../../features/auth/context/SessionContext";
+import { readPreferredWorkspaceId } from "../../../features/workspaces/lib/workspace";
+import { getDefaultWorkspacePath } from "../workspaces/$workspaceId/loader";
 import { Button } from "../../../ui/button";
-import { PageState } from "../../../app/components/PageState";
-import { useSession } from "../../auth/context/SessionContext";
+import { PageState } from "../../../ui/PageState";
 
-export function HomeRedirectRoute() {
+export default function RootIndexRoute() {
   const session = useSession();
   const workspacesQuery = useWorkspacesQuery();
 

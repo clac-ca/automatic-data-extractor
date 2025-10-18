@@ -1,10 +1,10 @@
 import type { ComponentType, SVGProps } from "react";
 import type { UIMatch } from "react-router-dom";
 
-import type { WorkspaceProfile } from "../../shared/types/workspaces";
+import type { WorkspaceProfile } from "../../../../shared/types/workspaces";
 import { ConfigureIcon, DocumentsIcon, SettingsIcon } from "./icons";
 
-export type WorkspaceSectionId = "documents" | "config" | "settings";
+export type WorkspaceSectionId = "documents" | "configurations" | "settings";
 
 export interface WorkspaceRouteMeta {
   readonly showContextNav?: boolean;
@@ -81,9 +81,9 @@ export const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
     },
   },
   {
-    id: "config",
-    path: "config",
-    label: "Configuration",
+    id: "configurations",
+    path: "configurations",
+    label: "Configurations",
     description: "Author extraction columns, scripts, and deployment snapshots",
     icon: ConfigureIcon,
     meta: { showContextNav: true },
@@ -93,12 +93,12 @@ export const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
         (workspaceId) => ({
           id: "config-columns",
           label: "Columns",
-          href: `/workspaces/${workspaceId}/config?view=columns`,
+          href: `/workspaces/${workspaceId}/configurations?view=columns`,
         }),
         (workspaceId) => ({
           id: "config-scripts",
           label: "Scripts",
-          href: `/workspaces/${workspaceId}/config?view=scripts`,
+          href: `/workspaces/${workspaceId}/configurations?view=scripts`,
         }),
       ],
       emptyLabel: "Define columns and scripts to configure extraction logic.",
@@ -107,7 +107,7 @@ export const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
       title: "Configuration",
       description:
         "Define columns, bind scripts, and activate configurations to control how ADE processes documents.",
-      cta: { href: "../config?view=columns", label: "Open configuration" },
+      cta: { href: "../configurations?view=columns", label: "Open configurations" },
     },
   },
   {

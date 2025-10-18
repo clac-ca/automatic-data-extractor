@@ -8,7 +8,7 @@ import {
   listPermissions,
   listWorkspaceRoles,
   updateWorkspaceRole,
-} from "../api";
+} from "../api/client";
 
 export function useWorkspaceRolesQuery(workspaceId: string) {
   return useQuery({

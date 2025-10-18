@@ -3,7 +3,7 @@ import { useRevalidator } from "react-router-dom";
 
 import { workspacesKeys } from "../api/keys";
 import type { WorkspaceProfile } from "../../../shared/types/workspaces";
-import { updateWorkspace, type WorkspaceUpdatePayload } from "../api";
+import { updateWorkspace, type WorkspaceUpdatePayload } from "../api/client";
 
 export function useUpdateWorkspaceMutation(workspaceId: string) {
   const queryClient = useQueryClient();

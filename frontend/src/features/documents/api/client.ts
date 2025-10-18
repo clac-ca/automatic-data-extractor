@@ -1,9 +1,9 @@
-import { del, get, post } from "../../shared/api/client";
+import { del, get, post } from "../../../shared/api/client";
 import type {
   DocumentListResponse,
   DocumentRecord,
   DocumentStatus,
-} from "../../shared/types/documents";
+} from "../../../shared/types/documents";
 
 export type StatusFilterInput = DocumentStatus | readonly DocumentStatus[] | null | undefined;
 

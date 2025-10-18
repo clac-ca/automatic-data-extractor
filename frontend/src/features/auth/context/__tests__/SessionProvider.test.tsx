@@ -2,9 +2,9 @@ import { describe, it, beforeEach, afterEach, vi, expect } from "vitest";
 import { render } from "../../../../test/test-utils";
 import type { SessionEnvelope } from "../../../../shared/types/auth";
 import { SessionProvider } from "../SessionContext";
-import { refreshSession } from "../../api";
+import { refreshSession } from "../../api/client";
 
-vi.mock("../../api", () => ({
+vi.mock("../../api/client", () => ({
   refreshSession: vi.fn(),
 }));
 

@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { uploadWorkspaceDocument } from "../api";
+import { uploadWorkspaceDocument } from "../api/client";
 import { documentsKeys } from "../api/keys";
 
 interface UploadDocumentsArgs {

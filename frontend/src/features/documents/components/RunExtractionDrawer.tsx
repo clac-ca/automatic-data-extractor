@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import type { DocumentRecord } from "../../../shared/types/documents";
 import type { JobRecord } from "../../../shared/types/jobs";
 import { useConfigurationsQuery } from "../../configurations/hooks/useConfigurationsQuery";
-import { useSubmitJobMutation } from "../../jobs/hooks/useJobs";
+import { useSubmitJobMutation } from "../../jobs/hooks/useJobsQuery";
 import { useDocumentRunPreferences } from "../hooks/useDocumentRunPreferences";
 import { Alert } from "../../../ui/alert";
 import { Button } from "../../../ui/button";

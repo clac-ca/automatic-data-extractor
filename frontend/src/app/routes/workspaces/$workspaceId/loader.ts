@@ -1,7 +1,7 @@
 import { redirect, type LoaderFunctionArgs } from "react-router-dom";
 
-import { fetchWorkspaces } from "../../features/workspaces/api";
-import type { WorkspaceProfile } from "../../shared/types/workspaces";
+import { fetchWorkspaces } from "../../../../features/workspaces/api/client";
+import type { WorkspaceProfile } from "../../../../shared/types/workspaces";
 import { defaultWorkspaceSection } from "./sections";
 
 export interface WorkspaceLoaderData {

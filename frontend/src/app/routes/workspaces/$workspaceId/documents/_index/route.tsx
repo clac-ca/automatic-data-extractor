@@ -1,23 +1,26 @@
-// documents.route.tsx — simple, beautiful, responsive, and stable (no layout shifts)
+// Workspace documents index route — one-file screen with inline helpers.
 
 import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react";
 import type { ChangeEvent } from "react";
 import clsx from "clsx";
 import { useSearchParams } from "react-router-dom";
 
-import { useWorkspaceContext } from "../../workspaces/context/WorkspaceContext";
-import { useWorkspaceDocumentsQuery, type DocumentsStatusFilter } from "../api/queries";
-import { downloadWorkspaceDocument } from "../api";
-import { DocumentsTable } from "../components/DocumentsTable";
-import { RunExtractionDrawer } from "../components/RunExtractionDrawer";
-import { useUploadDocuments } from "../hooks/useUploadDocuments";
-import { useDeleteDocuments } from "../hooks/useDeleteDocuments";
-import { useDocumentJobsQuery } from "../../jobs/hooks/useJobs";
-import type { DocumentRecord, DocumentStatus } from "../../../shared/types/documents";
-import type { JobRecord, JobStatus } from "../../../shared/types/jobs";
-import { Input } from "../../../ui/input";
-import { Select } from "../../../ui/select";
-import { Button } from "../../../ui/button";
+import { useWorkspaceContext } from "../../../../../../features/workspaces/context/WorkspaceContext";
+import { useDocumentsQuery } from "../../../../../../features/documents/hooks/useDocumentsQuery";
+import type { DocumentsStatusFilter } from "../../../../../../features/documents/api/queries";
+import { downloadWorkspaceDocument as downloadDocument } from "../../../../../../features/documents/api/client";
+import { DocumentsTable } from "../../../../../../features/documents/components/DocumentsTable";
+import { RunExtractionDrawer } from "../../../../../../features/documents/components/RunExtractionDrawer";
+import { useUploadDocuments } from "../../../../../../features/documents/hooks/useUploadDocuments";
+import { useDeleteDocuments } from "../../../../../../features/documents/hooks/useDeleteDocuments";
+import { useDocumentJobsQuery } from "../../../../../../features/jobs/hooks/useJobsQuery";
+import type { DocumentRecord, DocumentStatus } from "../../../../../../shared/types/documents";
+import type { JobRecord, JobStatus } from "../../../../../../shared/types/jobs";
+import { Input } from "../../../../../../ui/input";
+import { Select } from "../../../../../../ui/select";
+import { Button } from "../../../../../../ui/button";
+
+export const handle = { workspaceSectionId: "documents" } as const;
 
 /* -------------------------------------------------------------------------------------------------
  * Types & constants
@@ -50,7 +53,7 @@ function parseSort(value: string | null): SortOption {
  * Route
  * -----------------------------------------------------------------------------------------------*/
 
-export function DocumentsRoute() {
+export default function WorkspaceDocumentsRoute() {
   const { workspace } = useWorkspaceContext();
 
   // URL-synced state
@@ -79,7 +82,7 @@ export function DocumentsRoute() {
   const isDeleting = deleteDocuments.isPending;
 
   // Query
-  const documentsQuery = useWorkspaceDocumentsQuery(workspace.id, {
+  const documentsQuery = useDocumentsQuery(workspace.id, {
     status: statusFilter as DocumentsStatusFilter,
     search: debouncedSearch,
     sort: sortOrder,
@@ -236,7 +239,7 @@ export function DocumentsRoute() {
     async (document: DocumentRecord) => {
       try {
         setDownloadingId(document.document_id);
-        const { blob, filename } = await downloadWorkspaceDocument(workspace.id, document.document_id);
+        const { blob, filename } = await downloadDocument(workspace.id, document.document_id);
         triggerBrowserDownload(blob, filename ?? document.name);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to download document.";

@@ -4,10 +4,11 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { useSessionQuery } from "../hooks/useSessionQuery";
-import { useLoginMutation } from "../hooks/useLoginMutation";
-import { useAuthProviders } from "../hooks/useAuthProviders";
-import { useSetupStatusQuery } from "../../setup/hooks/useSetupStatusQuery";
+import { useSessionQuery } from "../../../features/auth/hooks/useSessionQuery";
+import { useLoginMutation } from "../../../features/auth/hooks/useLoginMutation";
+import { useAuthProviders } from "../../../features/auth/hooks/useAuthProviders";
+import { useSetupStatusQuery } from "../../../features/setup/hooks/useSetupStatusQuery";
+import type { AuthProvider } from "../../../shared/types/auth";
 import { Alert } from "../../../ui/alert";
 import { Button } from "../../../ui/button";
 import { FormField } from "../../../ui/form-field";
@@ -23,7 +24,7 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-export function LoginRoute() {
+export default function LoginRoute() {
   const { session } = useSessionQuery({ enabled: false });
   const setupStatusQuery = useSetupStatusQuery({ enabled: !session });
   const providersQuery = useAuthProviders();
@@ -80,7 +81,7 @@ export function LoginRoute() {
 
         {providers.length > 0 ? (
           <div className="mt-6 space-y-3">
-            {providers.map((provider) => (
+            {providers.map((provider: AuthProvider) => (
               <a
                 key={provider.id}
                 href={provider.start_url}
@@ -101,7 +102,7 @@ export function LoginRoute() {
             onSubmit={handleSubmit((values) => {
               clearErrors("root");
               loginMutation.mutate(values, {
-                onError(error) {
+                onError(error: unknown) {
                   setError("root", {
                     type: "server",
                     message: error instanceof Error ? error.message : "Unable to sign in.",

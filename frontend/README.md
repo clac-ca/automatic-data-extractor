@@ -17,18 +17,29 @@ The dev server runs on <http://localhost:5173>. Configure `.env` to point at the
 ```
 src/
 ├─ app/
-│  ├─ AppProviders.tsx        # React Query + router providers
-│  ├─ AppRouter.tsx           # Route configuration
-│  ├─ layouts/                # AppShell and workspace layout chrome
-│  ├─ routes/                 # Top-level route components (documents, configurations, setup, login…)
-│  └─ workspaces/             # Navigation metadata, chrome utilities, context
+│  ├─ AppProviders.tsx        # React Query providers (used by the root route)
+│  ├─ root.tsx                # Root route wrapping the router <Outlet />
+│  ├─ entry.server.tsx        # SSR entry so the plugin can build
+│  └─ routes/                 # File-based route modules (auth, workspaces, documents…)
+│     ├─ app/route.tsx        # Session gate → renders <Outlet /> on success
+│     ├─ workspaces/          # Workspace directory + helpers
+│     │  ├─ route.tsx         # Parent route (<Outlet />)
+│     │  ├─ WorkspaceDirectoryLayout.tsx
+│     │  ├─ new/route.tsx
+│     │  └─ $workspaceId/
+│     │     ├─ route.tsx      # Workspace layout + provider + nav
+│     │     ├─ loader.ts      # Workspace prefetch/redirect logic
+│     │     ├─ GlobalTopBar.tsx / WorkspaceNav.tsx / ProfileDropdown.tsx
+│     │     ├─ configurations/_index/route.tsx
+│     │     ├─ documents/route.tsx + nested index/detail routes
+│     │     └─ settings/_index/route.tsx
 ├─ features/                  # Feature-specific APIs, hooks, models
 ├─ shared/                    # Reusable helpers (API client, telemetry, storage)
 ├─ ui/                        # Headless UI primitives (Button, Input, Alert…)
 └─ test/                      # Vitest helpers and setup
 ```
 
-The workspace layout follows a four-part hierarchy:
+The workspace layout (see `src/app/routes/workspaces/$workspaceId/WorkspaceLayout.tsx`) follows a four-part hierarchy:
 
 1. **Top bar** — global controls (workspace switcher, search, help, profile) plus toggles for the left rail and focus mode.
 2. **Left rail** — primary navigation between workspace sections. Collapsible/overlay and persists state per workspace.
@@ -46,6 +57,23 @@ Focus mode hides both rails so the main surface runs edge-to-edge. Navigation st
 - The top bar becomes sticky with a soft shadow once you scroll, and overlays lock background scrolling to keep the focus on the active surface.
 - A workspace summary card anchors the left rail with badge status and a quick "Manage workspace" action, mirroring established best-in-class admin consoles.
 - Document navigation lives entirely in the left rail (All, Recent, Pinned, Archived), while workspace/admin settings move into the profile menu — a layout similar to SharePoint and other modern hubs.
+
+## Routing
+
+The frontend uses React Router 7 “framework mode” (file-based routing):
+
+- `react-router.config.ts` points the plugin at `src/app` and leaves SSR enabled for builds.
+- `src/app/routes.ts` mirrors the file tree so the React Router Vite plugin can resolve routes during builds (keep it in sync with `src/app/routes/**`).
+- Each file under `src/app/routes/**/route.tsx` is a route module. Folders map to nested segments, `_index/route.tsx` handles default children, and `$param` directories capture dynamic segments.
+- Keep feature logic inside `src/features/**`; route modules stitch features together and host page-level state. The legacy `AppRouter.tsx` has been removed—do not reintroduce it.
+- `src/app/root.tsx` wraps the router `Outlet` with `AppProviders`, and `src/app/entry.server.tsx` satisfies the build-time SSR entry that the plugin expects.
+- Workspace chrome (nav, top bar, loader) lives beside the dynamic route under `src/app/routes/workspaces/$workspaceId/` so every workspace screen shares the same boundary.
+
+When adding a new screen:
+
+1. Create the matching directory structure under `src/app/routes/`.
+2. Compose feature hooks/components inside the new route module.
+3. If the page should appear in the workspace nav, update `src/app/routes/workspaces/$workspaceId/sections.ts`.
 
 ## Scripts
 
