@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { createScopedStorage } from "../../../shared/lib/storage";
+import { createScopedStorage } from "@shared/lib/storage";
 
 export interface DocumentRunPreferences {
   readonly configurationId: string | null;

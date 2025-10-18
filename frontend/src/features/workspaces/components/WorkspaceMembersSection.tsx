@@ -9,11 +9,11 @@ import {
   useWorkspaceMembersQuery,
 } from "../hooks/useWorkspaceMembers";
 import { useWorkspaceRolesQuery } from "../hooks/useWorkspaceRoles";
-import type { WorkspaceMember } from "../../../shared/types/workspace-members";
-import type { RoleDefinition } from "../../../shared/types/roles";
-import type { UserSummary } from "../../../shared/types/users";
-import { Alert } from "../../../ui/alert";
-import { Button } from "../../../ui/button";
+import type { WorkspaceMember } from "@shared/types/workspace-members";
+import type { RoleDefinition } from "@shared/types/roles";
+import type { UserSummary } from "@shared/types/users";
+import { Alert } from "@ui/alert";
+import { Button } from "@ui/button";
 
 export function WorkspaceMembersSection() {
   const { workspace, hasPermission } = useWorkspaceContext();

@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { deleteSession } from "../api/client";
-import { sessionKeys } from "../api/keys";
+import { deleteSession, sessionKeys } from "../api";
 
 export function useLogoutMutation() {
   const queryClient = useQueryClient();

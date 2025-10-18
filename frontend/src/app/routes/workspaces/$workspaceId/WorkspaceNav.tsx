@@ -1,15 +1,13 @@
 import { NavLink } from "react-router-dom";
 import clsx from "clsx";
 
-import type { WorkspaceProfile } from "../../../../shared/types/workspaces";
+import type { WorkspaceProfile } from "@shared/types/workspaces";
 import { getWorkspacePrimaryNavigation } from "./sections";
 
 export interface WorkspaceNavProps {
   readonly workspace: WorkspaceProfile;
   readonly collapsed: boolean;
   readonly onToggleCollapse: () => void;
-  readonly mobileOpen?: boolean;
-  readonly onCloseMobile?: () => void;
 }
 
 export function WorkspaceNav({ workspace, collapsed, onToggleCollapse }: WorkspaceNavProps) {

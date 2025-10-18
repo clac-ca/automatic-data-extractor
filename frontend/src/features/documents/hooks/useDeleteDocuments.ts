@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { deleteWorkspaceDocuments } from "../api/client";
-import { documentsKeys } from "../api/keys";
+import { deleteWorkspaceDocuments, documentsKeys } from "../api";
 
 interface DeleteDocumentsArgs {
   readonly documentIds: readonly string[];
