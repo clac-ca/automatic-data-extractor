@@ -5,21 +5,14 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
+from ade.tests.utils import login
 
-async def _login(client: AsyncClient, email: str, password: str) -> str:
-    response = await client.post(
-        "/api/v1/auth/session", json={"email": email, "password": password}
-    )
-    assert response.status_code == 200, response.text
-    token = client.cookies.get("ade_session")
-    assert token, "Session cookie missing"
-    return token
 
 
 @pytest.mark.asyncio
 async def test_permission_catalog_workspace(async_client: AsyncClient, seed_identity: dict[str, Any]) -> None:
     owner = seed_identity["workspace_owner"]
-    token = await _login(async_client, owner["email"], owner["password"])
+    token, _ = await login(async_client, email=owner["email"], password=owner["password"])
 
     response = await async_client.get(
         "/api/v1/permissions",
@@ -40,7 +33,7 @@ async def test_permission_catalog_workspace_requires_access(
     async_client: AsyncClient, seed_identity: dict[str, Any]
 ) -> None:
     member = seed_identity["member"]
-    token = await _login(async_client, member["email"], member["password"])
+    token, _ = await login(async_client, email=member["email"], password=member["password"])
 
     response = await async_client.get(
         "/api/v1/permissions",
@@ -57,7 +50,7 @@ async def test_permission_catalog_workspace_requires_access(
 @pytest.mark.asyncio
 async def test_permission_catalog_global(async_client: AsyncClient, seed_identity: dict[str, Any]) -> None:
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
 
     response = await async_client.get(
         "/api/v1/permissions",
@@ -75,7 +68,7 @@ async def test_list_global_roles_requires_permission(
     async_client: AsyncClient, seed_identity: dict[str, Any]
 ) -> None:
     member = seed_identity["member"]
-    token = await _login(async_client, member["email"], member["password"])
+    token, _ = await login(async_client, email=member["email"], password=member["password"])
 
     response = await async_client.get(
         "/api/v1/roles",
@@ -91,7 +84,7 @@ async def test_list_global_roles_returns_catalog(
     async_client: AsyncClient, seed_identity: dict[str, Any]
 ) -> None:
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
 
     response = await async_client.get(
         "/api/v1/roles",
@@ -110,7 +103,7 @@ async def test_create_global_role_requires_permission(
     async_client: AsyncClient, seed_identity: dict[str, Any]
 ) -> None:
     member = seed_identity["member"]
-    token = await _login(async_client, member["email"], member["password"])
+    token, _ = await login(async_client, email=member["email"], password=member["password"])
 
     response = await async_client.post(
         "/api/v1/roles",
@@ -130,7 +123,7 @@ async def test_create_update_delete_global_role(
     async_client: AsyncClient, seed_identity: dict[str, Any]
 ) -> None:
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
 
     create_response = await async_client.post(
         "/api/v1/roles",
@@ -182,7 +175,7 @@ async def test_list_global_role_assignments_requires_permission(
     async_client: AsyncClient, seed_identity: dict[str, Any]
 ) -> None:
     member = seed_identity["member"]
-    token = await _login(async_client, member["email"], member["password"])
+    token, _ = await login(async_client, email=member["email"], password=member["password"])
 
     response = await async_client.get(
         "/api/v1/role-assignments",
@@ -198,7 +191,7 @@ async def test_global_role_assignment_flow(
 ) -> None:
     admin = seed_identity["admin"]
     workspace_owner = seed_identity["workspace_owner"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
 
     roles_response = await async_client.get(
         "/api/v1/roles",
@@ -264,7 +257,7 @@ async def test_list_workspace_role_assignments_requires_permission(
     async_client: AsyncClient, seed_identity: dict[str, Any]
 ) -> None:
     member = seed_identity["member"]
-    token = await _login(async_client, member["email"], member["password"])
+    token, _ = await login(async_client, email=member["email"], password=member["password"])
 
     response = await async_client.get(
         f"/api/v1/workspaces/{seed_identity['workspace_id']}/role-assignments",
@@ -281,7 +274,7 @@ async def test_workspace_role_assignment_flow(
     owner = seed_identity["workspace_owner"]
     member_manage = seed_identity["member_with_manage"]
     workspace_id = seed_identity["workspace_id"]
-    token = await _login(async_client, owner["email"], owner["password"])
+    token, _ = await login(async_client, email=owner["email"], password=owner["password"])
 
     roles_response = await async_client.get(
         f"/api/v1/workspaces/{workspace_id}/roles",
@@ -343,7 +336,7 @@ async def test_workspace_role_assignment_flow(
 @pytest.mark.asyncio
 async def test_read_effective_permissions(async_client: AsyncClient, seed_identity: dict[str, Any]) -> None:
     owner = seed_identity["workspace_owner"]
-    token = await _login(async_client, owner["email"], owner["password"])
+    token, _ = await login(async_client, email=owner["email"], password=owner["password"])
 
     response = await async_client.get(
         "/api/v1/me/permissions",
@@ -363,7 +356,7 @@ async def test_check_permissions_requires_workspace_id(
     async_client: AsyncClient, seed_identity: dict[str, Any]
 ) -> None:
     owner = seed_identity["workspace_owner"]
-    token = await _login(async_client, owner["email"], owner["password"])
+    token, _ = await login(async_client, email=owner["email"], password=owner["password"])
 
     response = await async_client.post(
         "/api/v1/me/permissions/check",
@@ -377,7 +370,7 @@ async def test_check_permissions_requires_workspace_id(
 @pytest.mark.asyncio
 async def test_check_permissions_returns_map(async_client: AsyncClient, seed_identity: dict[str, Any]) -> None:
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
 
     response = await async_client.post(
         "/api/v1/me/permissions/check",

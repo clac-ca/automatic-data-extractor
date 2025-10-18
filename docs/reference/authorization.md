@@ -44,7 +44,7 @@ capabilities when reviewing a workspace.【F:ade/features/workspaces/service.py�
 Shared dependencies wrap authentication, CSRF enforcement, and permission checks
 so routers declare their requirements with `Security(...)`. Denials surface the
 missing permission, scope type, and scope identifier in a structured JSON error
-body to simplify debugging and audits.【F:ade/api/security.py†L1-L118】
+body to simplify debugging and audits.【F:ade/features/roles/dependencies.py†L14-L109】
 
 ## Public API
 
@@ -72,7 +72,7 @@ All RBAC administration lives under `/api/v1`:
   coverage exercise the same Graph-style keys the registry declares.【F:conftest.py†L110-L247】
 - The baseline migration (`0001_initial_schema`) mirrors this structure and adds
   indexes/constraints for scope lookups and system role uniqueness in SQLite and
-  Postgres.【F:ade/alembic/versions/0001_initial_schema.py†L1-L310】
+  Postgres.【F:ade/db/migrations/versions/0001_initial_schema.py†L1-L310】
 
 Keep this reference updated whenever the registry, service layer, or router
 contracts evolve so onboarding engineers can rely on the docs instead of reading

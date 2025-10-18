@@ -10,12 +10,12 @@ from fastapi import UploadFile
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import Select, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased, selectinload
+from sqlalchemy.orm import aliased
 
-from ade.settings import Settings
 from ade.db import generate_ulid
-from ade.core.pagination import paginate
+from ade.platform.pagination import paginate
 from ade.features.users.models import User
+from ade.platform.config import Settings
 
 from .exceptions import (
     DocumentFileMissingError,
@@ -30,6 +30,7 @@ from .filtering import (
     DocumentStatus,
 )
 from .models import Document, DocumentTag
+from .repository import DocumentsRepository
 from .schemas import DocumentListResponse, DocumentRecord
 from .storage import DocumentStorage
 
@@ -45,6 +46,7 @@ class DocumentsService:
         if documents_dir is None:
             raise RuntimeError("Document storage directory is not configured")
         self._storage = DocumentStorage(documents_dir)
+        self._repository = DocumentsRepository(session)
 
     async def create_document(
         self,
@@ -92,7 +94,7 @@ class DocumentsService:
         )
         self._session.add(document)
         await self._session.flush()
-        stmt = self._base_query(workspace_id).where(Document.id == document_id)
+        stmt = self._repository.base_query(workspace_id).where(Document.id == document_id)
         result = await self._session.execute(stmt)
         hydrated = result.scalar_one()
 
@@ -114,7 +116,7 @@ class DocumentsService:
         filters = filters or DocumentFilters()
         sort = sort or DocumentSort.parse(None)
 
-        stmt = self._base_query(workspace_id).where(Document.deleted_at.is_(None))
+        stmt = self._repository.base_query(workspace_id).where(Document.deleted_at.is_(None))
         stmt = self._apply_filters(
             stmt,
             filters=filters,
@@ -181,25 +183,13 @@ class DocumentsService:
         await self._storage.delete(document.stored_uri)
 
     async def _get_document(self, workspace_id: str, document_id: str) -> Document:
-        stmt = self._base_query(workspace_id).where(
-            Document.id == document_id,
-            Document.deleted_at.is_(None),
+        document = await self._repository.get_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
         )
-        result = await self._session.execute(stmt)
-        document = result.scalar_one_or_none()
         if document is None:
             raise DocumentNotFoundError(document_id)
         return document
-
-    def _base_query(self, workspace_id: str) -> Select[tuple[Document]]:
-        return (
-            select(Document)
-            .options(
-                selectinload(Document.uploaded_by_user),
-                selectinload(Document.tags),
-            )
-            .where(Document.workspace_id == workspace_id)
-        )
 
     def _apply_filters(
         self,

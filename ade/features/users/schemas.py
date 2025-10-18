@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import Field
 
-from ade.core.schema import BaseSchema
+from ade.platform.schema import BaseSchema
 
 class UserProfile(BaseSchema):
     """Minimal view of the authenticated user."""

@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from ade.core.schema import BaseSchema
+from ade.platform.schema import BaseSchema
 
 
 class HealthComponentStatus(BaseSchema):

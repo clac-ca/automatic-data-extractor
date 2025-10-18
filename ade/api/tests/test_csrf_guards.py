@@ -7,12 +7,12 @@ from collections.abc import Iterable
 
 from fastapi.routing import APIRoute
 
-from ade.api.security import require_csrf
-from ade.main import create_app
+from ade.features.auth.dependencies import require_csrf
+from ade.app import create_app
+
+app = create_app()
 
 MUTATING_METHODS: set[str] = {"POST", "PUT", "PATCH", "DELETE"}
-# Routes that intentionally omit CSRF enforcement because they either run
-# before a session exists or perform safe permission evaluation.
 CSRF_ROUTE_ALLOWLIST: set[tuple[str, str]] = {
     ("/api/v1/setup", "POST"),
     ("/api/v1/auth/session", "POST"),
@@ -40,16 +40,12 @@ def _has_require_csrf(route: APIRoute) -> bool:
 
 
 def test_mutating_routes_require_csrf() -> None:
-    app = create_app()
-    violations: list[str] = []
-    for route in app.routes:
+    """All mutating routes should include the CSRF dependency unless allowlisted."""
+
+    for route in app.router.routes:
         if not isinstance(route, APIRoute):
             continue
-        methods = set(route.methods or []) & MUTATING_METHODS
-        if not methods:
-            continue
-        if all((route.path, method) in CSRF_ROUTE_ALLOWLIST for method in methods):
-            continue
-        if not _has_require_csrf(route):
-            violations.append(f"{route.path} [{', '.join(sorted(methods))}]")
-    assert not violations, "Routes missing require_csrf guard: " + ", ".join(violations)
+        for method in MUTATING_METHODS & set(route.methods or {}):
+            if (route.path, method) in CSRF_ROUTE_ALLOWLIST:
+                continue
+            assert _has_require_csrf(route), f"{route.path} missing CSRF guard"

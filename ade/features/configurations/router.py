@@ -16,11 +16,9 @@ from fastapi import (
     Security,
     status,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from ade.api.security import require_authenticated, require_csrf, require_workspace
-from ade.core.responses import DefaultResponse
-from ade.db.session import get_session
+from ade.features.auth.dependencies import require_authenticated, require_csrf
+from ade.features.roles.dependencies import require_workspace
+from ade.platform.responses import DefaultResponse
 
 from ..users.models import User
 from .exceptions import (
@@ -42,6 +40,7 @@ from .schemas import (
     ConfigurationScriptVersionOut,
     ConfigurationUpdate,
 )
+from .dependencies import get_configurations_service
 from .service import ConfigurationsService
 
 router = APIRouter(
@@ -68,7 +67,7 @@ async def list_configurations(
     workspace_id: Annotated[
         str, Path(min_length=1, description="Workspace identifier")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
@@ -79,7 +78,6 @@ async def list_configurations(
     *,
     is_active: bool | None = Query(None),
 ) -> list[ConfigurationRecord]:
-    service = ConfigurationsService(session=session)
     return await service.list_configurations(
         workspace_id=workspace_id,
         is_active=is_active,
@@ -98,7 +96,7 @@ async def create_configuration(
     workspace_id: Annotated[
         str, Path(min_length=1, description="Workspace identifier")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
@@ -109,7 +107,6 @@ async def create_configuration(
     *,
     payload: ConfigurationCreate = CONFIGURATION_CREATE_BODY,
 ) -> ConfigurationRecord:
-    service = ConfigurationsService(session=session)
     try:
         return await service.create_configuration(
             workspace_id=workspace_id,
@@ -141,7 +138,7 @@ async def list_active_configurations(
     workspace_id: Annotated[
         str, Path(min_length=1, description="Workspace identifier")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
@@ -150,7 +147,6 @@ async def list_active_configurations(
         ),
     ],
 ) -> list[ConfigurationRecord]:
-    service = ConfigurationsService(session=session)
     return await service.list_active_configurations(
         workspace_id=workspace_id,
     )
@@ -170,7 +166,7 @@ async def read_configuration(
     configuration_id: Annotated[
         str, Path(min_length=1, description="Configuration identifier")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
@@ -179,7 +175,6 @@ async def read_configuration(
         ),
     ],
 ) -> ConfigurationRecord:
-    service = ConfigurationsService(session=session)
     try:
         return await service.get_configuration(
             workspace_id=workspace_id,
@@ -207,7 +202,7 @@ async def replace_configuration(
     configuration_id: Annotated[
         str, Path(min_length=1, description="Configuration identifier")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
@@ -218,7 +213,6 @@ async def replace_configuration(
     *,
     payload: ConfigurationUpdate = CONFIGURATION_UPDATE_BODY,
 ) -> ConfigurationRecord:
-    service = ConfigurationsService(session=session)
     try:
         return await service.update_configuration(
             workspace_id=workspace_id,
@@ -247,7 +241,7 @@ async def delete_configuration(
     configuration_id: Annotated[
         str, Path(min_length=1, description="Configuration identifier")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
@@ -256,7 +250,6 @@ async def delete_configuration(
         ),
     ],
 ) -> DefaultResponse:
-    service = ConfigurationsService(session=session)
     try:
         await service.delete_configuration(
             workspace_id=workspace_id,
@@ -285,7 +278,7 @@ async def activate_configuration(
     configuration_id: Annotated[
         str, Path(min_length=1, description="Configuration identifier")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
@@ -294,7 +287,6 @@ async def activate_configuration(
         ),
     ],
 ) -> ConfigurationRecord:
-    service = ConfigurationsService(session=session)
     try:
         return await service.activate_configuration(
             workspace_id=workspace_id,
@@ -321,7 +313,7 @@ async def list_configuration_columns(
     configuration_id: Annotated[
         str, Path(min_length=1, description="Configuration identifier")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
@@ -330,7 +322,6 @@ async def list_configuration_columns(
         ),
     ],
 ) -> list[ConfigurationColumnOut]:
-    service = ConfigurationsService(session=session)
     try:
         return await service.list_columns(
             workspace_id=workspace_id,
@@ -358,7 +349,7 @@ async def replace_configuration_columns(
     configuration_id: Annotated[
         str, Path(min_length=1, description="Configuration identifier")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
@@ -369,7 +360,6 @@ async def replace_configuration_columns(
     *,
     columns: list[ConfigurationColumnIn] = CONFIGURATION_COLUMNS_BODY,
 ) -> list[ConfigurationColumnOut]:
-    service = ConfigurationsService(session=session)
     try:
         return await service.replace_columns(
             workspace_id=workspace_id,
@@ -416,7 +406,7 @@ async def update_configuration_column_binding(
     canonical_key: Annotated[
         str, Path(min_length=1, description="Column canonical key")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
@@ -427,7 +417,6 @@ async def update_configuration_column_binding(
     *,
     payload: ConfigurationColumnBindingUpdate = CONFIGURATION_COLUMN_BINDING_BODY,
 ) -> ConfigurationColumnOut:
-    service = ConfigurationsService(session=session)
     try:
         return await service.update_column_binding(
             workspace_id=workspace_id,
@@ -480,7 +469,7 @@ async def create_configuration_script_version(
     canonical_key: Annotated[
         str, Path(min_length=1, description="Canonical column key")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
@@ -492,7 +481,6 @@ async def create_configuration_script_version(
     *,
     payload: ConfigurationScriptVersionIn = CONFIGURATION_SCRIPT_BODY,
 ) -> ConfigurationScriptVersionOut:
-    service = ConfigurationsService(session=session)
     try:
         script, etag = await service.create_script_version(
             workspace_id=workspace_id,
@@ -533,7 +521,7 @@ async def list_configuration_script_versions(
     canonical_key: Annotated[
         str, Path(min_length=1, description="Canonical column key")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
@@ -542,7 +530,6 @@ async def list_configuration_script_versions(
         ),
     ],
 ) -> list[ConfigurationScriptVersionOut]:
-    service = ConfigurationsService(session=session)
     try:
         return await service.list_script_versions(
             workspace_id=workspace_id,
@@ -576,7 +563,7 @@ async def get_configuration_script_version(
     script_version_id: Annotated[
         str, Path(min_length=1, description="Script version identifier")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
@@ -587,7 +574,6 @@ async def get_configuration_script_version(
     *,
     include_code: bool = Query(False, description="Include script code in the response"),
 ) -> ConfigurationScriptVersionOut:
-    service = ConfigurationsService(session=session)
     try:
         return await service.get_script_version(
             workspace_id=workspace_id,
@@ -629,7 +615,7 @@ async def validate_configuration_script_version(
     script_version_id: Annotated[
         str, Path(min_length=1, description="Script version identifier")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     actor: Annotated[
         User,
         Security(
@@ -641,7 +627,6 @@ async def validate_configuration_script_version(
     *,
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> ConfigurationScriptVersionOut:
-    service = ConfigurationsService(session=session)
     try:
         script_record, etag = await service.validate_script_version(
             workspace_id=workspace_id,

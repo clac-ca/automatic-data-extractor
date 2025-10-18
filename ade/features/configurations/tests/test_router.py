@@ -13,6 +13,7 @@ from sqlalchemy import func, select, update
 
 from ade.db.session import get_sessionmaker
 from ade.features.configurations.models import Configuration
+from ade.tests.utils import login
 
 
 VALID_SCRIPT = textwrap.dedent(
@@ -37,17 +38,6 @@ VALID_SCRIPT = textwrap.dedent(
 
 
 pytestmark = pytest.mark.asyncio
-
-
-async def _login(client: AsyncClient, email: str, password: str) -> str:
-    response = await client.post(
-        "/api/v1/auth/session",
-        json={"email": email, "password": password},
-    )
-    assert response.status_code == 200, response.text
-    token = client.cookies.get("ade_session")
-    assert token, "Session cookie missing"
-    return token
 
 
 async def _create_configuration(*, workspace_id: str, **overrides: Any) -> str:
@@ -119,7 +109,7 @@ async def test_list_configurations_supports_filters(
     )
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
     workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.get(
@@ -154,7 +144,7 @@ async def test_create_configuration_assigns_next_version(
     baseline_version = baseline.version
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
     workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.post(
@@ -190,7 +180,7 @@ async def test_read_configuration_returns_payload(
     configuration_id = await _create_configuration(workspace_id=workspace_id)
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
     workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.get(
@@ -236,7 +226,7 @@ async def test_read_configuration_not_found_returns_404(
     """Unknown configuration identifiers should yield a 404 response."""
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
     workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.get(
@@ -263,7 +253,7 @@ async def test_update_configuration_replaces_fields(
     )
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
     workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.put(
@@ -299,7 +289,7 @@ async def test_delete_configuration_removes_record(
     configuration_id = await _create_configuration(workspace_id=workspace_id)
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
     workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.delete(
@@ -332,7 +322,7 @@ async def test_activate_configuration_toggles_previous_active(
     )
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
     workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.post(
@@ -376,7 +366,7 @@ async def test_list_active_configurations_returns_current(
     )
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
     workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
     response = await async_client.get(
@@ -402,7 +392,7 @@ async def test_replace_columns_round_trip(
     configuration_id = await _create_configuration(workspace_id=workspace_id)
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
     workspace_base = f"/api/v1/workspaces/{workspace_id}"
 
     response = await async_client.put(
@@ -458,7 +448,7 @@ async def test_configuration_script_version_lifecycle(
     configuration_id = await _create_configuration(workspace_id=workspace_id)
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
     workspace_base = f"/api/v1/workspaces/{workspace_id}"
 
     script_id, etag = await _create_script_version(
@@ -510,7 +500,7 @@ async def test_configuration_script_size_limit_is_enforced(
     configuration_id = await _create_configuration(workspace_id=workspace_id)
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
     workspace_base = f"/api/v1/workspaces/{workspace_id}"
 
     oversized_payload = "x" * 40000
@@ -556,7 +546,7 @@ async def test_configuration_script_validation_times_out(
     configuration_id = await _create_configuration(workspace_id=workspace_id)
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
     workspace_base = f"/api/v1/workspaces/{workspace_id}"
 
     hanging_script = textwrap.dedent(
@@ -600,7 +590,7 @@ async def test_validate_script_version_requires_if_match_header(
     configuration_id = await _create_configuration(workspace_id=workspace_id)
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
     workspace_base = f"/api/v1/workspaces/{workspace_id}"
 
     script_id, _ = await _create_script_version(
@@ -630,7 +620,7 @@ async def test_validate_script_version_requires_matching_etag(
     configuration_id = await _create_configuration(workspace_id=workspace_id)
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
     workspace_base = f"/api/v1/workspaces/{workspace_id}"
 
     script_id, _ = await _create_script_version(
@@ -663,7 +653,7 @@ async def test_update_column_binding_attaches_script(
     configuration_id = await _create_configuration(workspace_id=workspace_id)
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
     workspace_base = f"/api/v1/workspaces/{workspace_id}"
 
     columns_response = await async_client.put(
@@ -717,4 +707,3 @@ async def test_update_column_binding_attaches_script(
     assert mismatch.status_code == 400
     problem = mismatch.json()
     assert problem["detail"].startswith("Invalid configuration column payload")
-

@@ -24,8 +24,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Require confidential OIDC clients, retain the `ADE_AUTH_SSO_AUTO_PROVISION` toggle (defaulting to true), and remove the unused domain controls.
 - Simplify SSO discovery by removing in-process metadata and JWKS caches in favour of per-request fetches.
 - Drop configurable provider lists; `/auth/providers` now surfaces the default SSO option whenever OIDC is enabled.
-- Align `ade start` with `uvicorn ade.main:create_app --factory`, make reload opt-in, and fix the Windows exit bug when running without reload.
+- Align `ade start` with `uvicorn ade.app:create_app --factory`, make reload opt-in, and fix the Windows exit bug when running without reload.
+- Relocate Alembic migrations to `ade/db/migrations/` and let the engine manage bootstrap/metadata loading for autogenerate.
+- Introduce per-feature service dependencies and repositories (documents, configurations, jobs, users, health) to keep routers thin, scaffold system-settings helpers for future admin flows, and mount the v1 router from `ade/v1/router.py`.
 - Replace the legacy workspace layout with a four-zone navigation model (top bar, collapsible left rail, main surface, optional inspector) and persist per-workspace chrome state.
+- Simplify router spine: remove remote-mounted AppShell chrome, render workspace nav/top bar inside `WorkspaceLayout`, and gate private routes with a plain session-guarded Outlet.
 - Polish navigation chrome with a workspace summary card, document-focused left rail (All/Recent/Pinned/Archived), settings relocated to the profile menu, a sticky header shadow, body scroll locking for overlays, and accessibility tweaks to the command palette inspired by modern productivity apps.
 - Sort status columns according to the workspace spec and gate destructive/bulk actions with loading states and dismissible feedback banners.
 - Fetch documents via the v1 API with enlarged batch sizes, surface backend download streams with filename parsing, and show inline loading across inspectors and menus while files are retrieved.
@@ -34,12 +37,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Validate configuration scripts inside a sandboxed subprocess with size limits, timeouts, and network isolation.
 
 ### Removed
+- Remove the legacy `ade/main.py` and `ade/settings.py` compatibility shims now that the app and config live under `ade/app.py` and `ade/platform/config.py`.
+- Drop `ade/db/bootstrap.py`; bootstrap now lives inside the engine/session modules.
 - Drop the placeholder “Connect source” affordances from the documents surface to keep the MVP focused on manual uploads.
 
 ### Fixed
 - Ensure document uploads stream to the backend API, clear progress indicators per file, and immediately refresh the workspace list after completion.
 - Fix the upload picker so selected files are processed before the input resets, keeping button and drag-and-drop uploads consistent.
 - Automatically refresh browser sessions before access tokens expire so idle users are not met with unexpected 401 errors.
+- Fix SPA navigation not re-rendering: dedupe React/React Router in Vite and redesign navigation so workspace chrome lives inside the workspace route; sidebar highlights, breadcrumbs, and main panel now update immediately on click.
 
 ## [v0.1.0] - 2025-10-09
 

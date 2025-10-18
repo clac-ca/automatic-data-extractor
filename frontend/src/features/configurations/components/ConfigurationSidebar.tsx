@@ -2,7 +2,7 @@ import clsx from "clsx";
 import { Fragment, useMemo } from "react";
 
 import type { ConfigurationRecord } from "../../../shared/types/configurations";
-import { Button } from "../../../ui";
+import { Button } from "../../../ui/button";
 
 export interface ConfigurationSidebarProps {
   readonly configurations: readonly ConfigurationRecord[] | undefined;

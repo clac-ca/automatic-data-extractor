@@ -6,10 +6,10 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
-from ade.settings import get_settings
-from ade.core.logging import setup_logging
+from ade.platform.config import get_settings
+from ade.platform.logging import setup_logging
 from ade.lifecycles import ensure_runtime_dirs
-from ade.services.task_queue import TaskMessage, TaskQueue
+from .task_queue import TaskMessage, TaskQueue
 
 TaskProcessor = Callable[[TaskMessage], Awaitable[None]]
 

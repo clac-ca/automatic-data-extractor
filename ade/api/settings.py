@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import Request
 
-from ade.settings import Settings, get_settings
+from ade.platform.config import Settings, get_settings
 
 
 def get_app_settings(request: Request) -> Settings:

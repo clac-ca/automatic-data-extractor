@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { deleteWorkspaceDocuments } from "../api";
-import { documentsQueryKeys } from "./useDocuments";
+import { documentsKeys } from "../api/keys";
 
 interface DeleteDocumentsArgs {
   readonly documentIds: readonly string[];
@@ -19,7 +19,7 @@ export function useDeleteDocuments(workspaceId: string) {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: documentsQueryKeys.lists(workspaceId),
+        queryKey: documentsKeys.workspace(workspaceId),
         refetchType: "active",
       });
     },

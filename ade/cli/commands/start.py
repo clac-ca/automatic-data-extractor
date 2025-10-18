@@ -6,8 +6,8 @@ import argparse
 import os
 from pathlib import Path
 
-from ade.main import DEFAULT_FRONTEND_DIR
-from ade.main import start as start_application
+from ade.app import DEFAULT_FRONTEND_DIR
+from ade.app import start as start_application
 
 CLIArgs = argparse.Namespace
 
@@ -109,4 +109,3 @@ __all__ = [
     "register_arguments",
     "start",
 ]
-

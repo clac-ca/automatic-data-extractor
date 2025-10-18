@@ -18,8 +18,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from ade import Settings, get_settings, reload_settings
-from ade.db.bootstrap import ensure_database_ready
-from ade.db.engine import render_sync_url, reset_database_state
+from ade.db.engine import ensure_database_ready, render_sync_url, reset_database_state
 from ade.db.session import get_sessionmaker
 from ade.features.auth.security import hash_password
 from ade.features.roles.models import Role
@@ -32,7 +31,7 @@ from ade.features.roles.service import (
 from ade.features.users.models import User, UserCredential
 from ade.features.workspaces.models import Workspace, WorkspaceMembership
 from ade.lifecycles import ensure_runtime_dirs
-from ade.main import create_app
+from ade.app import create_app
 
 
 @pytest.fixture(scope="session")
@@ -56,6 +55,14 @@ def _configure_database(
     os.environ["ADE_DATABASE_DSN"] = _database_url
     os.environ["ADE_STORAGE_DATA_DIR"] = str(data_dir)
     os.environ["ADE_STORAGE_DOCUMENTS_DIR"] = str(documents_dir)
+    # Ensure tests run with OIDC disabled regardless of local .env values.
+    os.environ["ADE_OIDC_ENABLED"] = "false"
+    # Explicitly override any .env-provided OIDC settings to disable SSO in tests.
+    os.environ["ADE_OIDC_CLIENT_ID"] = ""
+    os.environ["ADE_OIDC_CLIENT_SECRET"] = ""
+    os.environ["ADE_OIDC_ISSUER"] = ""
+    os.environ["ADE_OIDC_REDIRECT_URL"] = ""
+    os.environ["ADE_OIDC_SCOPES"] = ""
     settings = reload_settings()
     assert settings.database_dsn == _database_url
     ensure_runtime_dirs(settings)
@@ -73,6 +80,7 @@ def _configure_database(
         "ADE_DATABASE_DSN",
         "ADE_STORAGE_DATA_DIR",
         "ADE_STORAGE_DOCUMENTS_DIR",
+        "ADE_OIDC_ENABLED",
     ):
         os.environ.pop(env_var, None)
 

@@ -80,7 +80,7 @@ accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
    - run Alembic migrations in order, logging progress to the console, and
    - print a summary of the resolved settings (sourced from `.env` and the environment).
 
-   With `--reload`, uvicorn watches the repository for changes while still serving the compiled SPA from `ade/web/static/`, so <http://localhost:8000/> delivers both the UI and API. Omit `--reload` to run in a single process (the same semantics as `uvicorn ade.main:create_app --factory`). Use `--rebuild-frontend` to run the Vite production build and copy fresh assets before launch. Other helpful flags: `--reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm` (`--no-reload` remains available as a backwards-compatible alias).
+   With `--reload`, uvicorn watches the repository for changes while still serving the compiled SPA from `ade/web/static/`, so <http://localhost:8000/> delivers both the UI and API. Omit `--reload` to run in a single process (the same semantics as `uvicorn ade.app:create_app --factory`). Use `--rebuild-frontend` to run the Vite production build and copy fresh assets before launch. Other helpful flags: `--reload`, `--host`, `--port`, `--frontend-dir`, `--env KEY=VALUE`, and `--npm /path/to/npm` (`--no-reload` remains available as a backwards-compatible alias).
 
 3. Confirm the API is healthy:
 
@@ -95,7 +95,7 @@ All runtime state stays under `data/`. Stop the FastAPI process before deleting 
 
 ```bash
 # Terminal 1
-uvicorn ade.main:create_app --reload --factory
+uvicorn ade.app:create_app --reload --factory
 
 # Terminal 2
 cd frontend
@@ -128,7 +128,7 @@ docker run -d --name ade-backend \
   -p 8000:8000 \
   -v "$(pwd)/data:/ade/data" \
   ade-backend:local \
-  uvicorn ade.main:create_app --host 0.0.0.0 --port 8000 --factory
+  uvicorn ade.app:create_app --host 0.0.0.0 --port 8000 --factory
 ```
 
 The bind mount keeps the SQLite database and documents on the host so they
@@ -250,4 +250,3 @@ administrators confidently using the CLI.
 - **Port conflicts on 8000:** choose another port with `ade start --port 9000` or stop the conflicting process.
 - **Frontend shows a blank page:** rebuild assets with `ade start --rebuild-frontend` (or run `npm run build` and copy `frontend/dist/` into `ade/web/static/`).
 - **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api` prefix.
-

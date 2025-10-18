@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from ade.settings import Settings
-from ade.main import create_app
+from ade.platform.config import Settings
+from ade.app import create_app
 
 
 pytestmark = pytest.mark.asyncio
@@ -42,16 +42,12 @@ async def test_app_startup_bootstraps_database(tmp_path: Path) -> None:
     assert result is True
 
 
-def _table_exists(database: Path, table_name: str) -> bool:
+def _table_exists(database_path: Path, table_name: str) -> bool:
     import sqlite3
 
-    connection = sqlite3.connect(database)
-    try:
-        cursor = connection.execute(
+    with sqlite3.connect(database_path) as conn:
+        cursor = conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
             (table_name,),
         )
-        row = cursor.fetchone()
-    finally:
-        connection.close()
-    return row is not None
+        return cursor.fetchone() is not None

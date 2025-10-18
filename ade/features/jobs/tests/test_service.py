@@ -86,7 +86,7 @@ async def test_submit_job_records_metrics() -> None:
             workspace_id=str(workspace.id),
             input_document_id=document_record.document_id,
             configuration_id=str(configuration.id),
-            actor=actor,
+            actor_id=actor.id,
         )
 
         assert record.status == "succeeded"
@@ -154,7 +154,7 @@ async def test_submit_job_records_failure_and_raises() -> None:
                 workspace_id=str(workspace.id),
                 input_document_id=document_record.document_id,
                 configuration_id=str(configuration.id),
-                actor=actor,
+                actor_id=actor.id,
             )
 
         job_id = excinfo.value.job_id
@@ -232,7 +232,7 @@ async def test_custom_processor_override_returns_typed_payload() -> None:
                 workspace_id=str(workspace.id),
                 input_document_id=document_record.document_id,
                 configuration_id=str(configuration.id),
-                actor=actor,
+                actor_id=actor.id,
             )
         finally:
             set_job_processor(previous_processor)

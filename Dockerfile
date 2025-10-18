@@ -44,4 +44,4 @@ RUN addgroup --system ade \
     && chown -R ade:ade /app /var/lib/ade
 USER ade
 EXPOSE 8000
-CMD ["uvicorn", "ade.main:create_app", "--host", "0.0.0.0", "--port", "8000", "--factory"]
+CMD ["uvicorn", "ade.app:create_app", "--host", "0.0.0.0", "--port", "8000", "--factory"]

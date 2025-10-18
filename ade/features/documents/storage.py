@@ -1,18 +1,17 @@
-"""Filesystem storage helpers for document uploads."""
+"""Document storage helpers built on ADE storage adapters."""
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from hashlib import sha256
 from pathlib import Path
 from typing import BinaryIO
 
-from fastapi.concurrency import run_in_threadpool
+from ade.adapters.storage import FilesystemStorage, StorageLimitError, StoredObject
 
 from .exceptions import DocumentTooLargeError
 
-_CHUNK_SIZE = 1024 * 1024  # 1 MiB default chunk size for streaming
+_DEFAULT_CHUNK_SIZE = 1024 * 1024  # 1 MiB default chunk size for streaming
 
 
 @dataclass(slots=True)
@@ -23,30 +22,34 @@ class StoredDocument:
     sha256: str
     byte_size: int
 
+    @classmethod
+    def from_stored_object(cls, obj: StoredObject) -> StoredDocument:
+        """Convert a storage adapter descriptor into a ``StoredDocument``."""
+
+        return cls(stored_uri=obj.uri, sha256=obj.sha256, byte_size=obj.byte_size)
+
 
 class DocumentStorage:
     """Confine file access to the configured documents directory."""
 
     def __init__(self, base_dir: Path, *, upload_prefix: str = "uploads") -> None:
-        self._base_dir = base_dir.resolve()
-        self._upload_prefix = upload_prefix.strip("/") or "uploads"
-        self._base_dir.mkdir(parents=True, exist_ok=True)
+        self._adapter = FilesystemStorage(base_dir, upload_prefix=upload_prefix)
 
     def make_stored_uri(self, document_id: str) -> str:
         """Return the canonical stored URI for ``document_id`` uploads."""
 
-        return f"{self._upload_prefix}/{document_id}"
+        return self._adapter.make_uri(document_id)
 
     def path_for(self, stored_uri: str) -> Path:
-        """Return the absolute path for ``stored_uri`` within ``base_dir``."""
+        """Return the absolute path for ``stored_uri`` within the documents directory."""
 
-        relative = stored_uri.lstrip("/")
-        candidate = (self._base_dir / relative).resolve()
+        # Normalise adapter-specific errors to ValueError for callers/tests.
         try:
-            candidate.relative_to(self._base_dir)
-        except ValueError as exc:  # pragma: no cover - defensive guard
-            raise ValueError("Stored URI escapes the documents directory") from exc
-        return candidate
+            return self._adapter.path_for(stored_uri)
+        except Exception as exc:  # pragma: no cover - narrow to StorageError at runtime
+            # Keep API surface predictable for higher-level features/tests which
+            # assert ValueError on invalid storage URIs.
+            raise ValueError(str(exc)) from exc
 
     async def write(
         self,
@@ -57,73 +60,28 @@ class DocumentStorage:
     ) -> StoredDocument:
         """Persist ``stream`` to ``stored_uri`` returning metadata about the write."""
 
-        destination = self.path_for(stored_uri)
+        try:
+            stored = await self._adapter.write(stored_uri, stream, max_bytes=max_bytes)
+        except StorageLimitError as exc:
+            raise DocumentTooLargeError(limit=exc.limit, received=exc.received) from exc
 
-        def _write() -> StoredDocument:
-            try:
-                stream.seek(0)
-            except (AttributeError, OSError):  # pragma: no cover - best effort rewind
-                pass
-
-            size = 0
-            digest = sha256()
-            destination.parent.mkdir(parents=True, exist_ok=True)
-
-            try:
-                with destination.open("wb") as target:
-                    while True:
-                        chunk = stream.read(_CHUNK_SIZE)
-                        if not chunk:
-                            break
-                        size += len(chunk)
-                        if max_bytes is not None and size > max_bytes:
-                            raise DocumentTooLargeError(limit=max_bytes, received=size)
-                        target.write(chunk)
-                        digest.update(chunk)
-            except Exception:
-                destination.unlink(missing_ok=True)
-                raise
-
-            return StoredDocument(
-                stored_uri=stored_uri,
-                sha256=digest.hexdigest(),
-                byte_size=size,
-            )
-
-        return await run_in_threadpool(_write)
+        return StoredDocument.from_stored_object(stored)
 
     async def stream(
         self,
         stored_uri: str,
         *,
-        chunk_size: int = _CHUNK_SIZE,
+        chunk_size: int = _DEFAULT_CHUNK_SIZE,
     ) -> AsyncIterator[bytes]:
         """Yield the bytes stored at ``stored_uri`` in ``chunk_size`` chunks."""
 
-        path = self.path_for(stored_uri)
-        exists = await run_in_threadpool(path.exists)
-        if not exists:
-            raise FileNotFoundError(stored_uri)
-
-        with path.open("rb") as source:
-            while True:
-                chunk = await run_in_threadpool(source.read, chunk_size)
-                if not chunk:
-                    break
-                yield chunk
+        async for chunk in self._adapter.stream(stored_uri, chunk_size=chunk_size):
+            yield chunk
 
     async def delete(self, stored_uri: str) -> None:
         """Remove ``stored_uri`` from disk if it exists."""
 
-        path = self.path_for(stored_uri)
-
-        def _remove() -> None:
-            try:
-                path.unlink()
-            except FileNotFoundError:  # pragma: no cover - defensive cleanup
-                return
-
-        await run_in_threadpool(_remove)
+        await self._adapter.delete(stored_uri)
 
 
 __all__ = ["DocumentStorage", "StoredDocument"]

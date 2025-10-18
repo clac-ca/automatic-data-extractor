@@ -7,19 +7,11 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
+from ade.tests.utils import login
+
 
 pytestmark = pytest.mark.asyncio
 
-
-async def _login(client: AsyncClient, email: str, password: str) -> str:
-    response = await client.post(
-        "/api/v1/auth/session",
-        json={"email": email, "password": password},
-    )
-    assert response.status_code == 200, response.text
-    token = client.cookies.get("ade_session")
-    assert token, "Session cookie missing"
-    return token
 
 async def test_list_users_requires_admin(
     async_client: AsyncClient,
@@ -28,7 +20,7 @@ async def test_list_users_requires_admin(
     """Non-admins should receive a 403 when listing users."""
 
     member = seed_identity["member"]
-    token = await _login(async_client, member["email"], member["password"])
+    token, _ = await login(async_client, email=member["email"], password=member["password"])
 
     response = await async_client.get(
         "/api/v1/users",
@@ -43,7 +35,7 @@ async def test_list_users_admin_success(
     """Administrators should see all registered users."""
 
     admin = seed_identity["admin"]
-    token = await _login(async_client, admin["email"], admin["password"])
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
 
     response = await async_client.get(
         "/api/v1/users",

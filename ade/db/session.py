@@ -8,7 +8,7 @@ from typing import Annotated, Any
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ade.settings import Settings, get_settings
+from ade.platform.config import Settings, get_settings
 
 from .engine import engine_cache_key, get_engine
 

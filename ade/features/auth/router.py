@@ -19,11 +19,12 @@ from fastapi import (
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade.api.security import require_authenticated, require_csrf, require_global
 from ade.api.settings import get_app_settings
-from ade.settings import Settings
-from ade.core.schema import ErrorMessage
 from ade.db.session import get_session
+from ade.features.auth.dependencies import require_authenticated, require_csrf
+from ade.features.roles.dependencies import require_global
+from ade.platform.config import Settings
+from ade.platform.schema import ErrorMessage
 
 from ..users.models import User
 from ..users.schemas import UserProfile

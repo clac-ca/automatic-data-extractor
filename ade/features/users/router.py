@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Security, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade.api.security import require_authenticated, require_global
-from ade.db.session import get_session
+from ade.features.auth.dependencies import require_authenticated
+from ade.features.roles.dependencies import require_global
 
+from .dependencies import get_users_service
 from .models import User
 from .schemas import UserProfile, UserSummary
 from .service import UsersService
@@ -26,9 +26,8 @@ router = APIRouter(tags=["users"], dependencies=[Security(require_authenticated)
 )
 async def read_me(
     user: Annotated[User, Security(require_authenticated)],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[UsersService, Depends(get_users_service)],
 ) -> UserProfile:
-    service = UsersService(session=session)
     profile = await service.get_profile(user=user)
     return profile
 
@@ -41,9 +40,8 @@ async def read_me(
 )
 async def list_users(
     _: Annotated[User, Security(require_global("Users.Read.All"))],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[UsersService, Depends(get_users_service)],
 ) -> list[UserSummary]:
-    service = UsersService(session=session)
     users = await service.list_users()
     return users
 

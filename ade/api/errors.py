@@ -5,8 +5,8 @@ from __future__ import annotations
 from fastapi import FastAPI, Request
 from pydantic import Field
 
-from ade.core.responses import DefaultResponse, JSONResponse
-from ade.core.schema import BaseSchema
+from ade.platform.responses import DefaultResponse, JSONResponse
+from ade.platform.schema import BaseSchema
 
 
 class ProblemDetail(BaseSchema):

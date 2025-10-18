@@ -53,8 +53,7 @@ include = ["ade*"]
 ade = [
   "py.typed",
   "web/**/*",
-  "static/README.md",
-  "alembic/**/*",
+  "db/migrations/**/*",
 ]
 
 # ---- Tooling configs ----

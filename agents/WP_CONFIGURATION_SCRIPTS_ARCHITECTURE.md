@@ -39,7 +39,7 @@ The outcome is a stable configuration and authoring layer that the job engine ca
 
 **Checklist**
 
-* [x] **Edit** `ade/alembic/versions/0001_initial_schema.py` to add:
+* [x] **Edit** `ade/db/migrations/versions/0001_initial_schema.py` to add:
 
   * [x] `configuration_script_versions` with:
     - `script_version_id` (ULID, PK), `configuration_id` (FK CASCADE)
@@ -209,7 +209,7 @@ The outcome is a stable configuration and authoring layer that the job engine ca
   * [x] Keep every path operation in `ade/features/configurations/router.py` with `prefix="/workspaces/{workspace_id}"`, mirroring the patterns already used by jobs, documents, and workspaces.
   * [x] Declare shared dependencies through `dependencies=[Security(require_authenticated)]` on the router and prefer `Security(require_workspace(...), scopes=["{workspace_id}"])` per endpoint rather than manual session lookups.
   * [x] Apply `Security(require_csrf)` to mutating routes only, surface `DefaultResponse` for `204` writes, and return FastAPI `HTTPException` responses with clear detail strings instead of custom helpers.
-  * [x] Ensure the router is registered exactly once in `ade/api/v1/router.py` via `include_router(configurations.router)` so the OpenAPI document stays in sync.
+  * [x] Ensure the router is registered exactly once in `ade/v1/router.py` via `include_router(configurations.router)` so the OpenAPI document stays in sync.
 
 * [x] **Service/repository seams**
 

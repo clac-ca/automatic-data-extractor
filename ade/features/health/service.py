@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from ade.settings import Settings
+from ade.platform.config import Settings
 
 from .exceptions import HealthCheckError
 from .schemas import HealthCheckResponse, HealthComponentStatus

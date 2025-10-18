@@ -18,18 +18,19 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade.api.settings import get_app_settings
-from ade.settings import Settings
+from ade.features.pagination.dependencies import get_pagination_params
 from ade.api.errors import ProblemDetail, ProblemException
-from ade.api.deps import PaginationParamsDependency
-from ade.core.schema import ErrorMessage
-from ade.db.session import get_session
+from ade.features.auth.dependencies import require_authenticated, require_csrf
+from ade.features.roles.dependencies import require_workspace
+from ade.platform.schema import ErrorMessage
+from ade.platform.pagination import PaginationParams
+from typing import Annotated
+from fastapi import Depends
 from pydantic import ValidationError
 
-from ade.api.security import require_authenticated, require_csrf, require_workspace
 from ..users.models import User
+from .dependencies import get_documents_service
 from .exceptions import (
     DocumentFileMissingError,
     DocumentNotFoundError,
@@ -171,8 +172,7 @@ async def upload_document(
     workspace_id: Annotated[
         str, Path(min_length=1, description="Workspace identifier")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    service: Annotated[DocumentsService, Depends(get_documents_service)],
     _actor: Annotated[
         User,
         Security(
@@ -185,7 +185,6 @@ async def upload_document(
     metadata: Annotated[str | None, Form()] = None,
     expires_at: Annotated[str | None, Form()] = None,
 ) -> DocumentRecord:
-    service = DocumentsService(session=session, settings=settings)
     payload = _parse_metadata(metadata)
     try:
         return await service.create_document(
@@ -227,9 +226,8 @@ async def list_documents(
         str, Path(min_length=1, description="Workspace identifier")
     ],
     request: Request,
-    session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
-    pagination: PaginationParamsDependency,
+    service: Annotated[DocumentsService, Depends(get_documents_service)],
+    pagination: Annotated[PaginationParams, Depends(get_pagination_params)],
     _actor: Annotated[
         User,
         Security(
@@ -348,7 +346,6 @@ async def list_documents(
         byte_size_max=byte_size_max,
         sort=sort,
     )
-    service = DocumentsService(session=session, settings=settings)
     return await service.list_documents(
         workspace_id=workspace_id,
         page=pagination.page,
@@ -388,8 +385,7 @@ async def read_document(
     document_id: Annotated[
         str, Path(min_length=1, description="Document identifier")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    service: Annotated[DocumentsService, Depends(get_documents_service)],
     _actor: Annotated[
         User,
         Security(
@@ -398,7 +394,6 @@ async def read_document(
         ),
     ],
 ) -> DocumentRecord:
-    service = DocumentsService(session=session, settings=settings)
     try:
         return await service.get_document(
             workspace_id=workspace_id,
@@ -433,8 +428,7 @@ async def download_document(
     document_id: Annotated[
         str, Path(min_length=1, description="Document identifier")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    service: Annotated[DocumentsService, Depends(get_documents_service)],
     _actor: Annotated[
         User,
         Security(
@@ -443,7 +437,6 @@ async def download_document(
         ),
     ],
 ) -> StreamingResponse:
-    service = DocumentsService(session=session, settings=settings)
     try:
         record, stream = await service.stream_document(
             workspace_id=workspace_id,
@@ -488,8 +481,7 @@ async def delete_document(
     document_id: Annotated[
         str, Path(min_length=1, description="Document identifier")
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    service: Annotated[DocumentsService, Depends(get_documents_service)],
     actor: Annotated[
         User,
         Security(
@@ -498,7 +490,6 @@ async def delete_document(
         ),
     ],
 ) -> None:
-    service = DocumentsService(session=session, settings=settings)
     try:
         await service.delete_document(
             workspace_id=workspace_id,
