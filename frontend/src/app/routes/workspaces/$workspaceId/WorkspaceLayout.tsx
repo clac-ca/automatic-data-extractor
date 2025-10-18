@@ -2,18 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLoaderData, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { WorkspaceProvider } from "../../../features/workspaces/context/WorkspaceContext";
-import { workspacesKeys } from "../../../features/workspaces/api/keys";
-import type { WorkspaceLoaderData } from "../../workspaces/loader";
-import type { WorkspaceProfile } from "../../../shared/types/workspaces";
-import { writePreferredWorkspace } from "../../../shared/lib/workspace";
-import { createScopedStorage } from "../../../shared/lib/storage";
-import { useSession } from "../../../features/auth/context/SessionContext";
-import { useLogoutMutation } from "../../../features/auth/hooks/useLogoutMutation";
-import { sessionKeys } from "../../../features/auth/sessionKeys";
-import { GlobalTopBar } from "./components/GlobalTopBar";
-import { ProfileDropdown } from "./components/ProfileDropdown";
-import { WorkspaceNav } from "./components/WorkspaceNav";
+import { WorkspaceProvider } from "../../../../features/workspaces/context/WorkspaceContext";
+import { workspacesKeys } from "../../../../features/workspaces/api/keys";
+import type { WorkspaceLoaderData } from "./loader";
+import type { WorkspaceProfile } from "../../../../shared/types/workspaces";
+import { writePreferredWorkspace } from "../../../../features/workspaces/lib/workspace";
+import { createScopedStorage } from "../../../../shared/lib/storage";
+import { useSession } from "../../../../features/auth/context/SessionContext";
+import { useLogoutMutation } from "../../../../features/auth/hooks/useLogoutMutation";
+import { sessionKeys } from "../../../../features/auth/api/keys";
+import { GlobalTopBar } from "./GlobalTopBar";
+import { ProfileDropdown } from "./ProfileDropdown";
+import { WorkspaceNav } from "./WorkspaceNav";
 
 export function WorkspaceLayout() {
   const { workspace, workspaces } = useLoaderData<WorkspaceLoaderData>();

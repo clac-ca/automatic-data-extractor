@@ -1,13 +1,14 @@
 import { useNavigate } from "react-router-dom";
 
-import { useWorkspacesQuery } from "../api/queries";
-import { useSession } from "../../auth/context/SessionContext";
-import { Button } from "../../../ui/button";
-import { WorkspaceDirectoryLayout } from "../../../app/layouts/workspace/WorkspaceDirectoryLayout";
-import { PageState } from "../../../app/components/PageState";
-import { buildWorkspaceSectionPath, defaultWorkspaceSection } from "../../../app/workspaces/sections";
+import { useWorkspacesQuery } from "../../../../features/workspaces/api/queries";
+import { useSession } from "../../../../features/auth/context/SessionContext";
+import type { WorkspaceProfile } from "../../../../shared/types/workspaces";
+import { Button } from "../../../../ui/button";
+import { WorkspaceDirectoryLayout } from "../WorkspaceDirectoryLayout";
+import { PageState } from "../../../../ui/PageState";
+import { buildWorkspaceSectionPath, defaultWorkspaceSection } from "../$workspaceId/sections";
 
-export function WorkspacesIndexRoute() {
+export default function WorkspacesIndexRoute() {
   const navigate = useNavigate();
   const session = useSession();
   const workspacesQuery = useWorkspacesQuery();
@@ -39,7 +40,7 @@ export function WorkspacesIndexRoute() {
     );
   }
 
-  const workspaces = workspacesQuery.data ?? [];
+  const workspaces: WorkspaceProfile[] = workspacesQuery.data ?? [];
 
   const actions = canCreateWorkspace ? (
     <Button variant="primary" onClick={() => navigate("/workspaces/new")}>

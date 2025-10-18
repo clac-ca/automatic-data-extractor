@@ -4,14 +4,16 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { useWorkspaceContext } from "../../workspaces/context/WorkspaceContext";
-import { useUpdateWorkspaceMutation } from "../hooks/useUpdateWorkspaceMutation";
-import { Alert } from "../../../ui/alert";
-import { Button } from "../../../ui/button";
-import { FormField } from "../../../ui/form-field";
-import { Input } from "../../../ui/input";
-import { WorkspaceMembersSection } from "../components/WorkspaceMembersSection";
-import { WorkspaceRolesSection } from "../components/WorkspaceRolesSection";
+import { useWorkspaceContext } from "../../../../../../features/workspaces/context/WorkspaceContext";
+import { useUpdateWorkspaceMutation } from "../../../../../../features/workspaces/hooks/useUpdateWorkspaceMutation";
+import { Alert } from "../../../../../../ui/alert";
+import { Button } from "../../../../../../ui/button";
+import { FormField } from "../../../../../../ui/form-field";
+import { Input } from "../../../../../../ui/input";
+import { WorkspaceMembersSection } from "../../../../../../features/workspaces/components/WorkspaceMembersSection";
+import { WorkspaceRolesSection } from "../../../../../../features/workspaces/components/WorkspaceRolesSection";
+
+export const handle = { workspaceSectionId: "settings" } as const;
 
 const SETTINGS_VIEWS = [
   { id: "general", label: "General" },
@@ -21,7 +23,7 @@ const SETTINGS_VIEWS = [
 
 type SettingsViewId = typeof SETTINGS_VIEWS[number]["id"];
 
-export function WorkspaceSettingsRoute() {
+export default function WorkspaceSettingsRoute() {
   useWorkspaceContext();
   const [searchParams, setSearchParams] = useSearchParams();
 

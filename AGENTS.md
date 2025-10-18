@@ -38,7 +38,11 @@ The tree below describes the desired state of the repo once the restructure is c
 │  ├─ package.json            # Frontend dependencies/scripts
 │  ├─ public/                 # Static assets copied verbatim into the build
 │  └─ src/
-│     ├─ app/                 # App shell, layouts, routing
+│     ├─ app/                 # App shell, layouts, file-based routing
+│     │  ├─ AppProviders.tsx  # Shared React Query providers
+│     │  ├─ root.tsx          # Root route wrapping the router outlet
+│     │  ├─ entry.server.tsx  # Minimal SSR entry for Vite builds
+│     │  └─ routes/           # File-based route modules (auth, workspaces, documents…)
 │     ├─ features/            # Feature-driven UI modules (documents, jobs, workspaces, etc.)
 │     ├─ shared/              # Cross-feature utilities (clients, hooks, types)
 │     ├─ test/                # Vitest setup and helpers
@@ -61,6 +65,8 @@ The tree below describes the desired state of the repo once the restructure is c
 - **`ade/workers/` owns background execution.** Task queues and worker entrypoints live here; they depend on features, not the other way around.
 - **`ade/web/static/` contains built assets only.** Source files for the SPA remain under `frontend/`.
 - **`ade/tests/` provides cross-cutting helpers.** Feature-specific tests should stay co-located under `features/*/tests/`.
+- **Frontend routes live under `frontend/src/app/routes/`.** React Router’s framework mode auto-discovers files—add new URLs by creating route modules there instead of resurrecting `AppRouter.tsx`. Keep the stub `src/app/routes.ts` in sync so the Vite plugin can resolve the tree during builds.
+- **Workspace chrome lives beside the dynamic workspace route.** Navigation, loader, and top bar components sit under `frontend/src/app/routes/workspaces/$workspaceId/` so every workspace screen shares the same boundary.
 
 ---
 

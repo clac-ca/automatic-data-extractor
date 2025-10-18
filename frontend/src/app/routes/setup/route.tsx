@@ -3,13 +3,13 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { useSetupStatusQuery } from "../hooks/useSetupStatusQuery";
-import { useCompleteSetupMutation } from "../hooks/useCompleteSetupMutation";
+import { useSetupStatusQuery } from "../../../features/setup/hooks/useSetupStatusQuery";
+import { useCompleteSetupMutation } from "../../../features/setup/hooks/useCompleteSetupMutation";
 import { Alert } from "../../../ui/alert";
 import { Button } from "../../../ui/button";
 import { FormField } from "../../../ui/form-field";
 import { Input } from "../../../ui/input";
-import { PageState } from "../../../app/components/PageState";
+import { PageState } from "../../../ui/PageState";
 
 const setupSchema = z
   .object({
@@ -28,7 +28,7 @@ const setupSchema = z
 
 type SetupFormValues = z.infer<typeof setupSchema>;
 
-export function SetupRoute() {
+export default function SetupRoute() {
   const statusQuery = useSetupStatusQuery();
   const completeSetup = useCompleteSetupMutation();
 
@@ -111,7 +111,7 @@ export function SetupRoute() {
                 password: values.password,
               },
               {
-                onError(error) {
+                onError(error: unknown) {
                   setError("root", {
                     type: "server",
                     message: error instanceof Error ? error.message : "Setup failed. Try again.",

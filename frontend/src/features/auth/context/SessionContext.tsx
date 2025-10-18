@@ -2,7 +2,7 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 
 import type { SessionEnvelope } from "../../../shared/types/auth";
-import { refreshSession } from "../api";
+import { refreshSession } from "../api/client";
 
 type RefetchSession = () => Promise<unknown>;
 

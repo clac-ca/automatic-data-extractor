@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 
 import { useSession } from "../../../features/auth/context/SessionContext";
 import { useLogoutMutation } from "../../../features/auth/hooks/useLogoutMutation";
-import { DirectoryIcon } from "../../workspaces/icons";
-import { GlobalTopBar } from "./components/GlobalTopBar";
-import { ProfileDropdown } from "./components/ProfileDropdown";
+import { DirectoryIcon } from "./$workspaceId/icons";
+import { GlobalTopBar } from "./$workspaceId/GlobalTopBar";
+import { ProfileDropdown } from "./$workspaceId/ProfileDropdown";
 
 export interface WorkspaceDirectoryLayoutProps {
   readonly children: ReactNode;

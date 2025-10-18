@@ -4,16 +4,18 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { ApiError } from "../../../shared/api/client";
-import { useSession } from "../../auth/context/SessionContext";
-import { useCreateWorkspaceMutation } from "../hooks/useCreateWorkspaceMutation";
-import { useWorkspacesQuery } from "../api/queries";
-import { useUsersQuery } from "../../users/hooks/useUsersQuery";
-import { WorkspaceDirectoryLayout } from "../../../app/layouts/workspace/WorkspaceDirectoryLayout";
-import { Alert } from "../../../ui/alert";
-import { Button } from "../../../ui/button";
-import { FormField } from "../../../ui/form-field";
-import { Input } from "../../../ui/input";
+import { ApiError } from "../../../../shared/api/client";
+import type { WorkspaceProfile } from "../../../../shared/types/workspaces";
+import type { UserSummary } from "../../../../shared/types/users";
+import { useSession } from "../../../../features/auth/context/SessionContext";
+import { useCreateWorkspaceMutation } from "../../../../features/workspaces/hooks/useCreateWorkspaceMutation";
+import { useWorkspacesQuery } from "../../../../features/workspaces/api/queries";
+import { useUsersQuery } from "../../../../features/users/hooks/useUsersQuery";
+import { WorkspaceDirectoryLayout } from "../WorkspaceDirectoryLayout";
+import { Alert } from "../../../../ui/alert";
+import { Button } from "../../../../ui/button";
+import { FormField } from "../../../../ui/form-field";
+import { Input } from "../../../../ui/input";
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -29,7 +31,7 @@ const workspaceSchema = z.object({
 
 type WorkspaceFormValues = z.infer<typeof workspaceSchema>;
 
-export function WorkspaceCreateRoute() {
+export default function WorkspaceCreateRoute() {
   const navigate = useNavigate();
   const session = useSession();
   const workspacesQuery = useWorkspacesQuery();
@@ -37,7 +39,7 @@ export function WorkspaceCreateRoute() {
 
   const canSelectOwner = session.user.permissions?.includes("Users.Read.All") ?? false;
   const usersQuery = useUsersQuery({ enabled: canSelectOwner });
-  const ownerOptions = useMemo(() => usersQuery.data ?? [], [usersQuery.data]);
+  const ownerOptions = useMemo<UserSummary[]>(() => usersQuery.data ?? [], [usersQuery.data]);
   const filteredOwnerOptions = useMemo(() => {
     if (!session.user.user_id) {
       return ownerOptions;
@@ -103,11 +105,11 @@ export function WorkspaceCreateRoute() {
         owner_user_id: canSelectOwner ? values.ownerUserId || undefined : undefined,
       },
       {
-        onSuccess(workspace) {
+        onSuccess(workspace: WorkspaceProfile) {
           workspacesQuery.refetch();
           navigate(`/workspaces/${workspace.id}`);
         },
-        onError(error) {
+        onError(error: unknown) {
           if (error instanceof ApiError) {
             const detail = error.problem?.detail ?? error.message;
             const fieldErrors = error.problem?.errors ?? {};

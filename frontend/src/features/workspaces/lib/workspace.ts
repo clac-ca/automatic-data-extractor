@@ -1,5 +1,5 @@
-import type { WorkspaceProfile } from "../types/workspaces";
-import { createScopedStorage } from "./storage";
+import type { WorkspaceProfile } from "../../../shared/types/workspaces";
+import { createScopedStorage } from "../../../shared/lib/storage";
 
 const STORAGE_KEY = "ade.active_workspace";
 const storage = createScopedStorage(STORAGE_KEY);

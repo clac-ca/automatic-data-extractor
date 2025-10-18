@@ -4,7 +4,7 @@ import {
   listWorkspaceDocuments,
   normaliseStatusFilter,
   type StatusFilterInput,
-} from "../api";
+} from "./client";
 import type { DocumentListResponse, DocumentStatus } from "../../../shared/types/documents";
 import { documentsKeys } from "./keys";
 

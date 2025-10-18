@@ -1,8 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-import { fetchSession } from "../api";
-import { sessionKeys } from "../sessionKeys";
+import { fetchSession } from "../api/client";
+import { sessionKeys } from "../api/keys";
 
 interface UseSessionOptions {
   readonly enabled?: boolean;
@@ -30,4 +30,3 @@ export function useSessionQuery(options: UseSessionOptions = {}) {
     session,
   };
 }
-

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchWorkspaces } from "../api";
+import { fetchWorkspaces } from "./client";
 import type { WorkspaceProfile } from "../../../shared/types/workspaces";
 import { workspacesKeys } from "./keys";
 

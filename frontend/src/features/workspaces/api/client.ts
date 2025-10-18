@@ -1,12 +1,12 @@
-import { del, get, patch, post, put } from "../../shared/api/client";
-import type { WorkspaceCreatePayload, WorkspaceProfile } from "../../shared/types/workspaces";
-import type { WorkspaceMember } from "../../shared/types/workspace-members";
+import { del, get, patch, post, put } from "../../../shared/api/client";
+import type { WorkspaceCreatePayload, WorkspaceProfile } from "../../../shared/types/workspaces";
+import type { WorkspaceMember } from "../../../shared/types/workspace-members";
 import type {
   RoleCreatePayload,
   RoleDefinition,
   RoleUpdatePayload,
   PermissionDefinition,
-} from "../../shared/types/roles";
+} from "../../../shared/types/roles";
 
 interface WorkspaceApiProfile {
   workspace_id?: string;

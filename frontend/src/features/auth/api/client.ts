@@ -1,10 +1,10 @@
-import { ApiError, del, get, post } from "../../shared/api/client";
+import { ApiError, del, get, post } from "../../../shared/api/client";
 import type {
   AuthProvider,
   LoginPayload,
   SessionEnvelope,
   SessionResponse,
-} from "../../shared/types/auth";
+} from "../../../shared/types/auth";
 
 export async function fetchSession() {
   try {

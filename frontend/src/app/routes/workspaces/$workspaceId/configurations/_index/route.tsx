@@ -1,32 +1,35 @@
 import { useEffect, useMemo, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { Alert } from "../../../ui/alert";
-import { Button } from "../../../ui/button";
-import { useWorkspaceContext } from "../../workspaces/context/WorkspaceContext";
-import { useConfigurationsQuery } from "../hooks/useConfigurationsQuery";
-import { useCreateConfigurationMutation } from "../hooks/useCreateConfigurationMutation";
-import { useActivateConfigurationMutation } from "../hooks/useActivateConfigurationMutation";
-import { ConfigurationSidebar } from "../components/ConfigurationSidebar";
-import { ConfigurationColumnsEditor } from "../components/ConfigurationColumnsEditor";
-import { ConfigurationScriptPanel } from "../components/ConfigurationScriptPanel";
-import type { ConfigurationRecord } from "../../../shared/types/configurations";
+import { Alert } from "../../../../../../ui/alert";
+import { Button } from "../../../../../../ui/button";
+import { useWorkspaceContext } from "../../../../../../features/workspaces/context/WorkspaceContext";
+import { useConfigurationsQuery } from "../../../../../../features/configurations/hooks/useConfigurationsQuery";
+import { useCreateConfigurationMutation } from "../../../../../../features/configurations/hooks/useCreateConfigurationMutation";
+import { useActivateConfigurationMutation } from "../../../../../../features/configurations/hooks/useActivateConfigurationMutation";
+import { ConfigurationSidebar } from "../../../../../../features/configurations/components/ConfigurationSidebar";
+import { ConfigurationColumnsEditor } from "../../../../../../features/configurations/components/ConfigurationColumnsEditor";
+import { ConfigurationScriptPanel } from "../../../../../../features/configurations/components/ConfigurationScriptPanel";
+import type { ConfigurationRecord } from "../../../../../../shared/types/configurations";
+
+export const handle = { workspaceSectionId: "configurations" } as const;
 
 const VIEW_OPTIONS = [
   { id: "columns", label: "Columns" },
   { id: "scripts", label: "Scripts" },
 ] as const;
 
-export function ConfigurationsRoute() {
+export default function WorkspaceConfigurationsRoute() {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     // eslint-disable-next-line no-console
-    console.debug("[ConfigurationsRoute] mount");
+    console.debug("[WorkspaceConfigurationsRoute] mount");
     return () => {
       // eslint-disable-next-line no-console
-      console.debug("[ConfigurationsRoute] unmount");
+      console.debug("[WorkspaceConfigurationsRoute] unmount");
     };
   }, []);
+
   const { workspace } = useWorkspaceContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = (searchParams.get("view") as typeof VIEW_OPTIONS[number]["id"]) ?? "columns";
@@ -44,11 +47,13 @@ export function ConfigurationsRoute() {
     if (!configurations || configurations.length === 0) {
       return null;
     }
-    const byId = configurations.find((config) => config.configuration_id === requestedConfigurationId);
+    const byId = configurations.find(
+      (config: ConfigurationRecord) => config.configuration_id === requestedConfigurationId,
+    );
     if (byId) {
       return byId;
     }
-    const active = configurations.find((config) => config.is_active);
+    const active = configurations.find((config: ConfigurationRecord) => config.is_active);
     return active ?? configurations[0];
   }, [configurations, requestedConfigurationId]);
 

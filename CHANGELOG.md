@@ -29,6 +29,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Introduce per-feature service dependencies and repositories (documents, configurations, jobs, users, health) to keep routers thin, scaffold system-settings helpers for future admin flows, and mount the v1 router from `ade/v1/router.py`.
 - Replace the legacy workspace layout with a four-zone navigation model (top bar, collapsible left rail, main surface, optional inspector) and persist per-workspace chrome state.
 - Simplify router spine: remove remote-mounted AppShell chrome, render workspace nav/top bar inside `WorkspaceLayout`, and gate private routes with a plain session-guarded Outlet.
+- Adopt React Router framework mode with file-based routes, replace the manual `AppRouter` with generated routes, and inline the workspace documents screen under `src/app/routes`.
+- Collapse legacy feature route wrappers into `src/app/routes/**`, keep `/workspaces/:id/configurations` as the canonical path, and hang detail pages off shared layout segments.
+- Move workspace navigation/top-bar/layout helpers into `src/app/routes/workspaces/$workspaceId/` and standardise feature API clients under `features/*/api/client.ts` with barrel re-exports.
 - Polish navigation chrome with a workspace summary card, document-focused left rail (All/Recent/Pinned/Archived), settings relocated to the profile menu, a sticky header shadow, body scroll locking for overlays, and accessibility tweaks to the command palette inspired by modern productivity apps.
 - Sort status columns according to the workspace spec and gate destructive/bulk actions with loading states and dismissible feedback banners.
 - Fetch documents via the v1 API with enlarged batch sizes, surface backend download streams with filename parsing, and show inline loading across inspectors and menus while files are retrieved.

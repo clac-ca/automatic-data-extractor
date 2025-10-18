@@ -8,7 +8,7 @@ import {
   listWorkspaceMembers,
   removeWorkspaceMember,
   updateWorkspaceMemberRoles,
-} from "../api";
+} from "../api/client";
 
 export function useWorkspaceMembersQuery(workspaceId: string) {
   return useQuery({
