@@ -19,12 +19,14 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-hook-form": "^7.65.0",
+    "react-router": "^7.9.4",
     "react-router-dom": "^7.9.4",
     "zod": "^4.1.12"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
     "@react-router/dev": "^7.9.4",
+    "@react-router/fs-routes": "^7.9.4",
     "@react-router/node": "^7.9.4",
     "@tanstack/react-query-devtools": "^5.90.2",
     "@testing-library/jest-dom": "^6.6.3",
@@ -33,7 +35,6 @@
     "@types/node": "^24.6.0",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
-    "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.36.0",
     "eslint-plugin-react-hooks": "^5.2.0",

@@ -4,15 +4,15 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { useSessionQuery } from "../../../features/auth/hooks/useSessionQuery";
-import { useLoginMutation } from "../../../features/auth/hooks/useLoginMutation";
-import { useAuthProviders } from "../../../features/auth/hooks/useAuthProviders";
-import { useSetupStatusQuery } from "../../../features/setup/hooks/useSetupStatusQuery";
-import type { AuthProvider } from "../../../shared/types/auth";
-import { Alert } from "../../../ui/alert";
-import { Button } from "../../../ui/button";
-import { FormField } from "../../../ui/form-field";
-import { Input } from "../../../ui/input";
+import { useSessionQuery } from "@features/auth/hooks/useSessionQuery";
+import { useLoginMutation } from "@features/auth/hooks/useLoginMutation";
+import { useAuthProviders } from "@features/auth/hooks/useAuthProviders";
+import { useSetupStatusQuery } from "@features/setup/hooks/useSetupStatusQuery";
+import type { AuthProvider } from "@shared/types/auth";
+import { Alert } from "@ui/alert";
+import { Button } from "@ui/button";
+import { FormField } from "@ui/form-field";
+import { Input } from "@ui/input";
 
 const loginSchema = z.object({
   email: z

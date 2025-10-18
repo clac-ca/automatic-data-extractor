@@ -1,4 +1,4 @@
-import { del, get, post, put } from "../../shared/api/client";
+import { del, get, post, put } from "@shared/api/client";
 import type {
   ConfigurationColumn,
   ConfigurationColumnBindingUpdate,
@@ -7,7 +7,7 @@ import type {
   ConfigurationRecord,
   ConfigurationScriptVersion,
   ConfigurationScriptVersionInput,
-} from "../../shared/types/configurations";
+} from "@shared/types/configurations";
 
 function buildWorkspacePath(workspaceId: string, path: string) {
   return `/workspaces/${workspaceId}${path}`;

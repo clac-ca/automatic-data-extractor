@@ -11,11 +11,11 @@ import {
   useUpdateWorkspaceRoleMutation,
   useWorkspaceRolesQuery,
 } from "../hooks/useWorkspaceRoles";
-import type { RoleDefinition } from "../../../shared/types/roles";
-import type { PermissionDefinition } from "../../../shared/types/roles";
-import { Alert } from "../../../ui/alert";
-import { Button } from "../../../ui/button";
-import { Input } from "../../../ui/input";
+import type { RoleDefinition } from "@shared/types/roles";
+import type { PermissionDefinition } from "@shared/types/roles";
+import { Alert } from "@ui/alert";
+import { Button } from "@ui/button";
+import { Input } from "@ui/input";
 
 const roleFormSchema = z.object({
   name: z.string().min(1, "Role name is required.").max(150, "Keep the name under 150 characters."),

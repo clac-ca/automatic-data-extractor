@@ -1,9 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { createSession } from "../api/client";
-import { sessionKeys } from "../api/keys";
-import type { LoginPayload, SessionEnvelope } from "../../../shared/types/auth";
+import { createSession, sessionKeys } from "../api";
+import type { LoginPayload, SessionEnvelope } from "@shared/types/auth";
 
 interface UseLoginMutationOptions {
   readonly onSuccess?: (session: SessionEnvelope) => void;

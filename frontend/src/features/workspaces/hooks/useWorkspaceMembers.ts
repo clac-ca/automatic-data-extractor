@@ -1,14 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { workspacesKeys } from "../api/keys";
-import type { WorkspaceMember } from "../../../shared/types/workspace-members";
-import type { UserProfile } from "../../../shared/types/users";
-import {
+import { workspacesKeys,
   addWorkspaceMember,
   listWorkspaceMembers,
   removeWorkspaceMember,
   updateWorkspaceMemberRoles,
-} from "../api/client";
+} from "../api";
+import type { WorkspaceMember } from "@shared/types/workspace-members";
+import type { UserProfile } from "@shared/types/users";
 
 export function useWorkspaceMembersQuery(workspaceId: string) {
   return useQuery({

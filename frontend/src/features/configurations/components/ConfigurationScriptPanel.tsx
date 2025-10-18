@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-import type { ConfigurationScriptVersion } from "../../../shared/types/configurations";
-import { Alert } from "../../../ui/alert";
-import { Button } from "../../../ui/button";
-import { FormField } from "../../../ui/form-field";
-import { Select } from "../../../ui/select";
-import { TextArea } from "../../../ui/input";
+import type { ConfigurationScriptVersion } from "@shared/types/configurations";
+import { Alert } from "@ui/alert";
+import { Button } from "@ui/button";
+import { FormField } from "@ui/form-field";
+import { Select } from "@ui/select";
+import { TextArea } from "@ui/input";
 import { useScriptVersionsQuery } from "../hooks/useScriptVersionsQuery";
 import { useScriptVersionQuery } from "../hooks/useScriptVersionQuery";
 import { useCreateScriptVersionMutation } from "../hooks/useCreateScriptVersionMutation";
