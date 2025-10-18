@@ -104,6 +104,15 @@ The tree below describes the desired state of the repo once the restructure is c
   4. Run all required quality gates (pytest, ruff, mypy, npm test/lint/typecheck, etc.).
   5. Update the referenced work package(s) with status notes. If you complete the active task in `agents/CURRENT_TASK.md`, move it to `agents/PREVIOUS_TASK.md` and draft the next actionable plan.
 
+### Reference Study Ability – Temporary Library Sandbox
+
+- Trigger: The user explicitly asks to vendor or explore an external open-source template or library for inspiration.
+- Playbook:
+  1. Create a throwaway subdirectory inside the repo (for example under `tmp/` or another clearly temporary folder) and scaffold the requested library or template using the official installation command.
+  2. Treat the vendored code as read-only research material: document its location, avoid wiring it into the ADE build, and do not mutate the upstream files unless the user instructs otherwise.
+  3. Analyse the imported project to capture architecture, patterns, and conventions that can inform ADE. Apply relevant lessons in the main codebase through focused follow-up changes.
+  4. Remove the temporary subdirectory once it no longer provides value, or leave clear breadcrumbs in the docs/README so future contributors know why it exists and how to clean it up.
+
 ---
 
 ## Dependencies

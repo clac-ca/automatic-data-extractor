@@ -25,7 +25,7 @@ src/
 │     ├─ login/route.tsx      # Session entry (email/password or SSO redirect)
 │     ├─ setup/route.tsx      # First-run workspace + admin bootstrap
 │     ├─ auth/callback/route.tsx
-│     ├─ not-found/route.tsx
+│     ├─ [...missing]/route.tsx
 │     └─ workspaces/
 │        ├─ _index/route.tsx              # Workspace directory
 │        ├─ _index/DirectoryLayout.tsx    # Shared chrome reused by directory + creation flow
