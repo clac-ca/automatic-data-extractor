@@ -18,14 +18,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade.db.session import get_session
-from ade.api.security import (
-    forbidden_response,
-    require_authenticated,
-    require_csrf,
+from ade.features.auth.dependencies import require_authenticated, require_csrf
+from ade.features.roles.dependencies import (
     require_global,
     require_permissions_catalog_access,
     require_workspace,
 )
+from ade.platform.security import forbidden_response
 
 from ..auth.dependencies import get_current_identity
 from ..auth.service import AuthenticatedIdentity
@@ -970,4 +969,3 @@ async def check_permissions(
 
 
 __all__ = ["router"]
-

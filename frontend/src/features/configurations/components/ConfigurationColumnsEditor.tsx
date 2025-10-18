@@ -6,7 +6,11 @@ import type {
   ConfigurationColumnInput,
   ConfigurationScriptVersion,
 } from "../../../shared/types/configurations";
-import { Alert, Button, FormField, Input, Select, TextArea } from "../../../ui";
+import { Alert } from "../../../ui/alert";
+import { Button } from "../../../ui/button";
+import { FormField } from "../../../ui/form-field";
+import { Input, TextArea } from "../../../ui/input";
+import { Select } from "../../../ui/select";
 import { useConfigurationColumnsQuery } from "../hooks/useConfigurationColumnsQuery";
 import { useReplaceConfigurationColumnsMutation } from "../hooks/useReplaceConfigurationColumnsMutation";
 import { useScriptVersionsQuery } from "../hooks/useScriptVersionsQuery";
@@ -497,7 +501,7 @@ function validateDrafts(drafts: readonly ColumnDraft[]) {
     const trimmedKey = draft.canonicalKey.trim();
     if (!trimmedKey) {
       errors.canonicalKey = "Canonical key is required.";
-    } else if (!/^[a-z0-9_\-]+$/i.test(trimmedKey)) {
+    } else if (!/^[a-z0-9_-]+$/i.test(trimmedKey)) {
       errors.canonicalKey = "Use letters, numbers, underscores, or hyphens.";
     }
 

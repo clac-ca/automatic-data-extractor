@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { uploadWorkspaceDocument } from "../api";
-import { documentsQueryKeys } from "./useDocuments";
+import { documentsKeys } from "../api/keys";
 
 interface UploadDocumentsArgs {
   readonly files: readonly File[];
@@ -19,7 +19,7 @@ export function useUploadDocuments(workspaceId: string) {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: documentsQueryKeys.lists(workspaceId),
+        queryKey: documentsKeys.workspace(workspaceId),
         refetchType: "active",
       });
     },

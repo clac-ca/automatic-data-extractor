@@ -18,7 +18,6 @@ from fastapi import HTTPException, Request, Response, status
 from jwt.algorithms import ECAlgorithm, RSAAlgorithm
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade.settings import Settings
 from ade.features.roles.service import (
     assign_global_role,
     count_users_with_global_role,
@@ -26,6 +25,7 @@ from ade.features.roles.service import (
     get_global_role_by_slug,
     sync_permission_registry,
 )
+from ade.platform.config import Settings
 
 from ..system_settings.repository import SystemSettingsRepository
 from ..users.models import User

@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from ade.main import (
+from ade.app import (
     DEFAULT_FRONTEND_DIR,
     FRONTEND_BUILD_DIRNAME,
     WEB_STATIC_DIR,

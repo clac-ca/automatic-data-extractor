@@ -5,7 +5,7 @@ from urllib.parse import parse_qsl, urlparse
 import pytest
 from fastapi import HTTPException
 
-from ade.settings import reload_settings
+from ade.platform.config import reload_settings
 from ade.db.session import get_sessionmaker
 from ade.features.auth.service import AuthService, OIDCProviderMetadata
 from ade.features.roles.service import sync_permission_registry

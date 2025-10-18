@@ -9,11 +9,11 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.routing import Lifespan
 
-from .settings import Settings, get_settings
-from .db.bootstrap import ensure_database_ready
+from .db.engine import ensure_database_ready
 from .db.session import get_sessionmaker
 from .features.roles.service import sync_permission_registry
-from .services.task_queue import TaskQueue
+from .platform.config import Settings, get_settings
+from .workers.task_queue import TaskQueue
 
 
 def ensure_runtime_dirs(settings: Settings | None = None) -> None:

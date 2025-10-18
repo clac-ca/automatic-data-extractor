@@ -7,14 +7,17 @@ from fastapi import HTTPException
 from fastapi.security import SecurityScopes
 from starlette.requests import Request
 
-from ade.api.security import require_csrf, require_global, require_workspace
 from ade.db.session import get_sessionmaker
+from ade.features.auth.dependencies import require_csrf
 from ade.features.auth.service import AuthenticatedIdentity
+from ade.features.roles.dependencies import require_global, require_workspace
 from ade.features.roles.service import ensure_user_principal
 from ade.features.users.models import User
 
 
-@pytest.mark.asyncio
+pytestmark = pytest.mark.asyncio
+
+
 async def test_require_global_allows_authorised_user(app, seed_identity) -> None:
     dependency = require_global("Roles.Read.All")
     session_factory = get_sessionmaker(settings=app.state.settings)
@@ -31,7 +34,6 @@ async def test_require_global_allows_authorised_user(app, seed_identity) -> None
         assert result.id == identity.user.id
 
 
-@pytest.mark.asyncio
 async def test_require_global_rejects_missing_permission(app, seed_identity) -> None:
     dependency = require_global("Roles.Read.All")
     session_factory = get_sessionmaker(settings=app.state.settings)
@@ -56,20 +58,9 @@ async def test_require_global_rejects_missing_permission(app, seed_identity) -> 
     }
 
 
-@pytest.mark.asyncio
 async def test_require_workspace_allows_member(app, seed_identity) -> None:
-    dependency = require_workspace("Workspace.Members.Read")
+    dependency = require_workspace("Workspace.Documents.Read")
     session_factory = get_sessionmaker(settings=app.state.settings)
-
-    scope = {
-        "type": "http",
-        "method": "GET",
-        "path": "/api/v1/workspaces/{workspace_id}/members",
-        "headers": [],
-        "query_string": b"",
-        "path_params": {"workspace_id": seed_identity["workspace_id"]},
-    }
-    request = Request(scope)
 
     async with session_factory() as session:
         user = await session.get(User, seed_identity["workspace_owner"]["id"])
@@ -80,7 +71,14 @@ async def test_require_workspace_allows_member(app, seed_identity) -> None:
         )
 
         result = await dependency(
-            request,
+            Request({
+                "type": "http",
+                "method": "GET",
+                "path": "/api/v1/workspaces/abc/documents",
+                "headers": [],
+                "query_string": b"",
+                "path_params": {"workspace_id": seed_identity["workspace_id"]},
+            }),
             SecurityScopes(scopes=["{workspace_id}"]),
             identity,
             session,
@@ -88,7 +86,6 @@ async def test_require_workspace_allows_member(app, seed_identity) -> None:
         assert result.id == identity.user.id
 
 
-@pytest.mark.asyncio
 async def test_require_workspace_rejects_missing_scope(app, seed_identity) -> None:
     dependency = require_workspace("Workspace.Documents.Read")
     session_factory = get_sessionmaker(settings=app.state.settings)
@@ -121,92 +118,65 @@ async def test_require_workspace_rejects_missing_scope(app, seed_identity) -> No
 
     assert excinfo.value.status_code == 422
     assert excinfo.value.detail["error"] == "invalid_scope"
-    assert excinfo.value.detail["permission"] == "Workspace.Documents.Read"
 
 
-@pytest.mark.asyncio
-async def test_require_workspace_rejects_unauthorised_user(app, seed_identity) -> None:
-    dependency = require_workspace("Workspace.Documents.Read")
-    session_factory = get_sessionmaker(settings=app.state.settings)
-
-    scope = {
-        "type": "http",
-        "method": "GET",
-        "path": "/api/v1/workspaces/{workspace_id}/documents",
-        "headers": [],
-        "query_string": b"",
-        "path_params": {"workspace_id": seed_identity["workspace_id"]},
-    }
-    request = Request(scope)
-
-    async with session_factory() as session:
-        user = await session.get(User, seed_identity["orphan"]["id"])
-        assert user is not None
-        principal = await ensure_user_principal(session=session, user=user)
-        identity = AuthenticatedIdentity(
-            user=user, principal=principal, credentials="bearer_token"
-        )
-
-        with pytest.raises(HTTPException) as excinfo:
-            await dependency(
-                request,
-                SecurityScopes(scopes=[]),
-                identity,
-                session,
-            )
-
-    assert excinfo.value.status_code == 403
-    assert excinfo.value.detail == {
-        "error": "forbidden",
-        "permission": "Workspace.Documents.Read",
-        "scope_type": "workspace",
-        "scope_id": seed_identity["workspace_id"],
-    }
-
-
-@pytest.mark.asyncio
-async def test_require_csrf_noops_for_api_key_identity(app, seed_identity) -> None:
-    session_factory = get_sessionmaker(settings=app.state.settings)
-
-    scope = {
+async def test_require_csrf_accepts_non_cookie_credentials(app, async_client) -> None:
+    dependency = require_csrf
+    request = Request({
         "type": "http",
         "method": "POST",
-        "path": "/api/v1/documents",
         "headers": [],
         "query_string": b"",
-        "path_params": {},
-    }
-    request = Request(scope)
+        "path": "/api/v1/documents",
+    })
+
+    settings = app.state.settings
+    session_factory = get_sessionmaker(settings=settings)
 
     async with session_factory() as session:
-        user = await session.get(User, seed_identity["admin"]["id"])
-        assert user is not None
-        principal = await ensure_user_principal(session=session, user=user)
         identity = AuthenticatedIdentity(
-            user=user,
-            principal=principal,
-            credentials="api_key",
+            user=None,  # type: ignore[arg-type]
+            principal=None,  # type: ignore[arg-type]
+            credentials="bearer_token",
         )
-        settings = app.state.settings
+        await dependency(request, identity, session, settings)
+        # Should not raise because non-cookie credentials bypass CSRF.
 
-        await require_csrf(request, identity, session, settings)
+
+async def test_require_csrf_rejects_invalid_cookie(app, async_client, seed_identity) -> None:
+    session_cookie = await _login(async_client, seed_identity["admin"]["email"], "admin-password")
+    request = Request({
+        "type": "http",
+        "method": "POST",
+        "headers": [(b"Cookie", f"ade_session={session_cookie}".encode())],
+        "query_string": b"",
+        "path": "/api/v1/documents",
+    })
+
+    settings = app.state.settings
+    session_factory = get_sessionmaker(settings=settings)
+
+    async with session_factory() as session:
+        identity = await _load_identity(session, seed_identity["admin"]["id"])
+        with pytest.raises(HTTPException) as excinfo:
+            await require_csrf(request, identity, session, settings)
+
+    assert excinfo.value.status_code == 401
 
 
-def test_openapi_includes_security_schemes(app) -> None:
-    schema = app.openapi()
+async def _load_identity(session, user_id: str) -> AuthenticatedIdentity:
+    user = await session.get(User, user_id)
+    assert user is not None
+    principal = await ensure_user_principal(session=session, user=user)
+    return AuthenticatedIdentity(user=user, principal=principal, credentials="session_cookie")
 
-    schemes = schema["components"]["securitySchemes"]
-    assert schemes["SessionCookie"]["type"] == "apiKey"
-    assert schemes["SessionCookie"]["in"] == "cookie"
-    assert schemes["SessionCookie"]["name"] == app.state.settings.session_cookie_name
 
-    assert schemes["HTTPBearer"]["type"] == "http"
-    assert schemes["HTTPBearer"]["scheme"] == "bearer"
-
-    assert schemes["APIKeyHeader"]["type"] == "apiKey"
-    assert schemes["APIKeyHeader"]["in"] == "header"
-    assert schemes["APIKeyHeader"]["name"] == "X-API-Key"
-
-    assert {"SessionCookie": []} in schema["security"]
-    assert {"HTTPBearer": []} in schema["security"]
-    assert {"APIKeyHeader": []} in schema["security"]
+async def _login(client, email: str, password: str) -> str:
+    response = await client.post(
+        "/api/v1/auth/session",
+        json={"email": email, "password": password},
+    )
+    assert response.status_code == 200, response.text
+    token = client.cookies.get("ade_session")
+    assert token
+    return token

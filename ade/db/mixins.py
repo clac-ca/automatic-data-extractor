@@ -8,8 +8,8 @@ from typing import ClassVar
 from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
-from ade.core.ids import generate_ulid
-from ade.core.time import utc_now
+from ade.platform.ids import generate_ulid
+from ade.platform.time import utc_now
 
 __all__ = ["generate_ulid", "TimestampMixin", "ULIDPrimaryKeyMixin"]
 

@@ -8,8 +8,8 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade.settings import Settings, get_settings, reload_settings
-from ade.db.bootstrap import ensure_database_ready
+from ade.platform.config import Settings, get_settings, reload_settings
+from ade.db.engine import ensure_database_ready
 from ade.db.session import get_sessionmaker
 from ade.lifecycles import ensure_runtime_dirs
 

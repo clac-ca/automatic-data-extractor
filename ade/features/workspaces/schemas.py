@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import Field
 
-from ade.core.schema import BaseSchema
+from ade.platform.schema import BaseSchema
 
 from ..users.schemas import UserProfile
 

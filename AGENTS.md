@@ -21,125 +21,46 @@ The tree below describes the desired state of the repo once the restructure is c
 
 ```
 .
-├─ AGENTS.md                  # You are here: authoritative agent playbook
-├─ agents/                    # AI-facing work packages, glossaries, process docs
-│  ├─ ADE_GLOSSARY.md
-│  ├─ CURRENT_TASK.md         # Current work package in flight (rotate after completion)
-│  ├─ PREVIOUS_TASK.md        # Archive of the most recently completed task
-│  ├─ fastapi-best-practices.md
-│  ├─ code_review_instructions.md
-│  └─ WP_*.md                 # Long-form work packages coordinating refactors
-├─ ade/                       # Deployable FastAPI package (API + CLI + workers + static web)
-│  ├─ __init__.py
-│  ├─ main.py                 # App factory; mounts v1 router; serves SPA/static files
-│  ├─ lifecycles.py           # Startup/shutdown hooks (SQLite PRAGMAs, health checks, JWKS warmup)
-│  ├─ api/
-│  │  ├─ __init__.py
-│  │  ├─ deps.py              # Shared dependencies (db session, current user/workspace)
-│  │  ├─ errors.py            # Problem+JSON exception handlers
-│  │  └─ v1/router.py         # API version router; includes feature routers
-│  ├─ core/
-│  │  ├─ __init__.py
-│  │  ├─ auth_backends.py     # Entra ID helpers, JWKS cache, token verification
-│  │  ├─ config.py            # Pydantic settings split into focused config objects
-│  │  ├─ logging.py           # Structured logging configuration
-│  │  ├─ security.py          # OAuth/OpenID utilities, password hashing helpers
-│  │  ├─ time.py              # Timezone and UTC helpers
-│  │  └─ utils.py             # Small, pure helpers shared across features
-│  ├─ db/
-│  │  ├─ __init__.py
-│  │  ├─ base.py              # Declarative Base, ID/timestamp/workspace mixins
-│  │  ├─ session.py           # Engine/session factories (SQLite dev, Postgres prod)
-│  │  └─ migrations/          # Alembic environment and versioned migrations
-│  ├─ features/
-│  │  ├─ auth/
-│  │  │  ├─ router.py         # /auth endpoints (login redirect, callback, whoami)
-│  │  │  ├─ schemas.py        # Request/response models for auth flows
-│  │  │  ├─ models.py         # Auth persistence (if needed)
-│  │  │  ├─ repository.py     # DB queries for identities and tokens
-│  │  │  ├─ service.py        # Auth orchestration, provisioning, token validation
-│  │  │  └─ tests/            # Feature-scoped tests (API + service)
-│  │  ├─ users/
-│  │  │  ├─ router.py         # /users CRUD and profile management
-│  │  │  ├─ schemas.py
-│  │  │  ├─ models.py
-│  │  │  ├─ repository.py
-│  │  │  ├─ service.py
-│  │  │  └─ tests/
-│  │  ├─ workspaces/
-│  │  │  ├─ router.py         # Workspace CRUD, membership operations
-│  │  │  ├─ schemas.py
-│  │  │  ├─ models.py
-│  │  │  ├─ repository.py
-│  │  │  ├─ service.py
-│  │  │  └─ tests/
-│  │  ├─ documents/
-│  │  │  ├─ router.py         # Upload/download, metadata endpoints
-│  │  │  ├─ schemas.py
-│  │  │  ├─ models.py
-│  │  │  ├─ repository.py
-│  │  │  ├─ service.py        # Storage orchestration, virus scans, job enqueue
-│  │  │  ├─ workers.py        # Background helpers for extraction jobs
-│  │  │  └─ tests/
-│  │  ├─ configurations/
-│  │  │  ├─ router.py         # Configuration CRUD, validation
-│  │  │  ├─ schemas.py
-│  │  │  ├─ models.py
-│  │  │  ├─ repository.py
-│  │  │  ├─ service.py
-│  │  │  └─ tests/
-│  │  ├─ jobs/
-│  │  │  ├─ router.py         # Job lifecycle endpoints (status, retry, list)
-│  │  │  ├─ schemas.py
-│  │  │  ├─ models.py
-│  │  │  ├─ repository.py
-│  │  │  ├─ service.py        # Processing orchestration logic
-│  │  │  ├─ workers.py        # Worker entry points
-│  │  │  └─ tests/
-│  │  └─ system_settings/
-│  │     ├─ router.py         # System settings CRUD, feature toggles
-│  │     ├─ schemas.py
-│  │     ├─ models.py
-│  │     ├─ repository.py
-│  │     ├─ service.py
-│  │     └─ tests/
-│  ├─ services/
-│  │  ├─ __init__.py
-│  │  ├─ storage.py           # Shared storage adapters (only if truly shared)
-│  │  ├─ mailer.py            # Transactional email integrations (optional)
-│  │  └─ cache.py             # Cache adapter abstraction
-│  ├─ workers/
-│  │  ├─ __init__.py
-│  │  └─ run_jobs.py          # Process-level worker entry point
-│  ├─ cli/
-│  │  ├─ __init__.py
-│  │  ├─ main.py              # `ade` CLI entry point (Typer/Click)
-│  │  ├─ dev.py               # Developer utilities (seed, wipe, fixtures)
-│  │  └─ admin.py             # Operational/administrative commands
-│  └─ web/
-│     ├─ index.html
-│     └─ assets/              # Compiled SPA artefacts served by FastAPI
-├─ tests/
-│  ├─ conftest.py             # Shared fixtures (app, db, auth helpers)
-│  ├─ test_api_health.py
-│  └─ test_security.py
-├─ docs/                      # Human-facing documentation
-├─ frontend/                  # SPA source (React/Vite) prior to build
-├─ scripts/                   # Helper scripts, packaging, build tooling
-├─ alembic.ini
-├─ pyproject.toml
-├─ .env.example
-└─ README.md
+├─ AGENTS.md                  # Authoritative agent playbook
+├─ agents/                    # Work packages & process docs (CURRENT_TASK, PREVIOUS_TASK, WP_*.md, glossary)
+├─ ade/                       # FastAPI backend (API, workers, CLI)
+│  ├─ app.py                  # App factory mounting API + static assets
+│  ├─ lifecycles.py           # Startup/shutdown hooks (DB bootstrap, runtime dirs, queue)
+│  ├─ adapters/               # External connectors (queue + storage)
+│  ├─ api/                    # HTTP shell (errors, settings dependency, v1 router, tests)
+│  ├─ db/                     # SQLAlchemy base/session, Alembic migrations, tests
+│  ├─ features/               # Vertical slices (auth, documents, jobs, users, etc.)
+│  ├─ platform/               # Cross-cutting plumbing (config, logging, middleware, pagination, responses, schema, security)
+│  ├─ tests/                  # Shared backend test helpers (e.g., login utility)
+│  ├─ workers/                # Task queue abstraction + worker entrypoints/tests
+│  └─ web/static/             # Compiled SPA assets served by FastAPI
+├─ frontend/                  # React/Vite SPA source
+│  ├─ package.json            # Frontend dependencies/scripts
+│  ├─ public/                 # Static assets copied verbatim into the build
+│  └─ src/
+│     ├─ app/                 # App shell, layouts, routing
+│     ├─ features/            # Feature-driven UI modules (documents, jobs, workspaces, etc.)
+│     ├─ shared/              # Cross-feature utilities (clients, hooks, types)
+│     ├─ test/                # Vitest setup and helpers
+│     └─ ui/                  # Reusable design system primitives
+├─ docs/                      # Human-facing documentation (auth guide, admin guide, reference)
+├─ scripts/                   # Automation and build tooling
+├─ alembic.ini                # Alembic configuration pointing at ade/db/migrations
+├─ pyproject.toml             # Python packaging + tooling configuration
+├─ README.md                  # Project overview & developer onboarding
+└─ .env.example               # Sample environment configuration
 ```
 
 ### Module Responsibilities (Cheat Sheet)
 
 - **Features own their HTTP contract.** Keep routers, schemas, models, repositories, services, workers, and feature tests together.
+- **`ade/adapters/` wraps external connectors.** Queue and storage adapters live here; features talk to them through thin wrappers.
 - **`ade/api/` is a thin shell.** Limit it to version routing, shared dependencies, and exception mapping. Never move business logic here.
-- **`ade/core/` hosts cross-cutting concerns.** Settings, auth backends, logging, security helpers, and pure utilities belong here.
+- **`ade/platform/` hosts cross-cutting concerns.** Settings, logging, security helpers, and pure utilities belong here.
 - **`ade/db/` centralises persistence glue.** Declarative base, session management, and migrations stay together for easy engine swaps.
+- **`ade/workers/` owns background execution.** Task queues and worker entrypoints live here; they depend on features, not the other way around.
 - **`ade/web/static/` contains built assets only.** Source files for the SPA remain under `frontend/`.
-- **Shared integrations live in `ade/services/` only when two or more features need them.** Otherwise, keep code inside the owning feature to avoid premature abstraction.
+- **`ade/tests/` provides cross-cutting helpers.** Feature-specific tests should stay co-located under `features/*/tests/`.
 
 ---
 
@@ -187,7 +108,7 @@ The tree below describes the desired state of the repo once the restructure is c
 ### Migrations
 
 - **Single baseline migration:** There are no production installations yet, so all schema work happens in
-  `ade/alembic/versions/0001_initial_schema.py`. When the schema evolves, update this file directly instead of adding new
+  `ade/db/migrations/versions/0001_initial_schema.py`. When the schema evolves, update this file directly instead of adding new
   versioned migrations.
 
 ### Dependency Protocol

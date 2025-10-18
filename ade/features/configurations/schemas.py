@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import Field, model_validator
 
-from ade.core.schema import BaseSchema
+from ade.platform.schema import BaseSchema
 
 
 class ConfigurationRecord(BaseSchema):

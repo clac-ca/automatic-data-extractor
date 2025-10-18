@@ -15,10 +15,9 @@ from fastapi.security import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade.api.settings import get_app_settings
-from ade.settings import Settings
 from ade.db.session import get_session
-
 from ade.features.roles.service import ensure_user_principal
+from ade.platform.config import Settings
 
 from ..users.models import User
 from .service import AuthenticatedIdentity, AuthService
@@ -36,6 +35,7 @@ def configure_auth_dependencies(*, settings: Settings) -> None:
     """Configure authentication dependency state for the application lifecycle."""
 
     _session_cookie_scheme.model.name = settings.session_cookie_name
+
 
 async def get_current_identity(
     request: Request,
@@ -96,17 +96,36 @@ async def get_current_user(
     return user
 
 
-async def require_authenticated_user(
+async def require_authenticated(
     user: Annotated[User, Depends(get_current_user)]
 ) -> User:
-    """Dependency alias that ensures the user is authenticated."""
+    """Ensure the request is associated with an authenticated user."""
 
     return user
+
+
+async def require_csrf(
+    request: Request,
+    identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+) -> None:
+    """Enforce CSRF validation for mutating requests."""
+
+    if identity.credentials != "session_cookie":
+        return
+
+    service = AuthService(session=session, settings=settings)
+    access_payload, _ = service.extract_session_payloads(
+        request, include_refresh=False
+    )
+    service.enforce_csrf(request, access_payload)
 
 
 __all__ = [
     "get_current_identity",
     "get_current_user",
     "configure_auth_dependencies",
-    "require_authenticated_user",
+    "require_authenticated",
+    "require_csrf",
 ]

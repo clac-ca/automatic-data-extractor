@@ -10,20 +10,10 @@ from httpx import AsyncClient
 from ade import get_settings
 from ade.db.session import get_sessionmaker
 from ade.features.documents.models import Document
+from ade.tests.utils import login
 
 
 pytestmark = pytest.mark.asyncio
-
-
-async def _login(client: AsyncClient, email: str, password: str) -> str:
-    response = await client.post(
-        "/api/v1/auth/session",
-        json={"email": email, "password": password},
-    )
-    assert response.status_code == 200, response.text
-    token = client.cookies.get("ade_session")
-    assert token, "Session cookie missing"
-    return token
 
 
 async def test_upload_list_download_document(
@@ -33,7 +23,11 @@ async def test_upload_list_download_document(
     """Full upload flow should persist metadata and serve downloads."""
 
     member = seed_identity["member"]
-    token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    token, _ = await login(
+        async_client,
+        email=member["email"],  # type: ignore[index]
+        password=member["password"],  # type: ignore[index]
+    )
     workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -85,7 +79,7 @@ async def test_upload_document_exceeds_limit_returns_413(
     """Uploading a file larger than the configured limit should fail."""
 
     member = seed_identity["member"]
-    token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
     workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -110,7 +104,7 @@ async def test_delete_document_marks_deleted(
     """Soft deletion should flag the record and remove the stored file."""
 
     member = seed_identity["member"]
-    token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
     workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -154,7 +148,7 @@ async def test_download_missing_file_returns_404(
     """Downloading a document with a missing backing file should 404."""
 
     member = seed_identity["member"]
-    token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
     workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -192,7 +186,7 @@ async def test_list_documents_unknown_param_returns_400(
     seed_identity: dict[str, object],
 ) -> None:
     member = seed_identity["member"]
-    token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
     workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -215,7 +209,7 @@ async def test_list_documents_invalid_filter_returns_problem_details(
     seed_identity: dict[str, object],
 ) -> None:
     member = seed_identity["member"]
-    token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
     workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -242,7 +236,7 @@ async def test_list_documents_uploader_me_filters(
     owner = seed_identity["workspace_owner"]
     workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
 
-    member_token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    member_token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
     member_headers = {"Authorization": f"Bearer {member_token}"}
 
     upload_one = await async_client.post(
@@ -252,11 +246,11 @@ async def test_list_documents_uploader_me_filters(
     )
     assert upload_one.status_code == 201, upload_one.text
 
-    owner_token = await _login(
+    owner_token, _ = await login(
         async_client,
-        owner["email"],
-        owner["password"],
-    )  # type: ignore[index]
+        email=owner["email"],  # type: ignore[index]
+        password=owner["password"],  # type: ignore[index]
+    )
     owner_headers = {"Authorization": f"Bearer {owner_token}"}
 
     upload_two = await async_client.post(
@@ -267,7 +261,7 @@ async def test_list_documents_uploader_me_filters(
     assert upload_two.status_code == 201, upload_two.text
 
     # Re-authenticate as the member for filtering assertions.
-    member_token = await _login(async_client, member["email"], member["password"])  # type: ignore[index]
+    member_token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
     member_headers = {"Authorization": f"Bearer {member_token}"}
 
     listing = await async_client.get(

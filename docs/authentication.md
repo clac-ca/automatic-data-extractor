@@ -27,14 +27,14 @@ session identifier and hashed CSRF token so a refresh can rotate everything whil
 * `AuthService.apply_session_cookies` writes the access and refresh cookies with `httponly`, `lax` SameSite, and a refresh path
 tied to `/api/v1/auth/session/refresh`. Secure cookies are used whenever the request is served over HTTPS.【F:ade/features/auth/service.py†L305-L370】【F:ade/features/auth/service.py†L420-L468】
 * `require_csrf` runs on every mutating endpoint. It only enforces CSRF for session-cookie identities and delegates to
-`AuthService.enforce_csrf`, which compares the hashed token in the JWT with the submitted value.【F:ade/api/security.py†L19-L40】
+`AuthService.enforce_csrf`, which compares the hashed token in the JWT with the submitted value.【F:ade/features/auth/dependencies.py†L105-L128】
 
 ## Single Sign-On (OpenID Connect)
 
 ### Configuration
 
 * Provide `ADE_OIDC_CLIENT_ID`, `ADE_OIDC_CLIENT_SECRET`, `ADE_OIDC_ISSUER`, `ADE_OIDC_REDIRECT_URL`, and `ADE_OIDC_SCOPES` to enable the flow. ADE always authenticates as a confidential client, so the secret is required. The redirect URL should point at the SPA callback route (`/auth/callback`), which finalises the login before forwarding the user to their requested destination. Supplement this with `ADE_AUTH_FORCE_SSO` when you are ready to disable password-based logins entirely, and use `ADE_AUTH_SSO_AUTO_PROVISION` if you need to pause automatic account creation.【F:.env.example†L58-L66】【F:frontend/src/features/auth/routes/SsoCallbackRoute.tsx†L1-L74】
-* The settings layer normalises scopes, enforces HTTPS issuers and redirect URLs, and converts relative callbacks against `server_public_url`.【F:ade/settings.py†L410-L437】【F:ade/settings.py†L439-L499】【F:ade/settings.py†L561-L584】
+* The settings layer normalises scopes, enforces HTTPS issuers and redirect URLs, and converts relative callbacks against `server_public_url`.【F:ade/platform/config.py†L408-L435】【F:ade/platform/config.py†L437-L497】【F:ade/platform/config.py†L559-L582】
 * When those settings are present, `/auth/providers` automatically publishes a "Single sign-on" option so the login page advertises SSO alongside the credential form. Leave `ADE_AUTH_FORCE_SSO=false` during rollout so the inaugural administrator can continue signing in with their password, then flip it once the identity provider login is verified.【F:ade/features/auth/service.py†L143-L166】【F:frontend/src/features/auth/components/LoginForm.tsx†L90-L139】
 
 ### Login flow
@@ -53,16 +53,16 @@ tied to `/api/v1/auth/session/refresh`. Secure cookies are used whenever the req
 
 ## Security Dependencies
 
-All feature routers include the shared dependencies from `ade/api/security.py` so that OpenAPI documents the requirements and
-the responses are consistent.【F:ade/api/security.py†L1-L121】
+All feature routers include the shared dependencies from the auth and roles modules so that OpenAPI documents the
+requirements and the responses are consistent.【F:ade/features/auth/dependencies.py†L87-L130】【F:ade/features/roles/dependencies.py†L1-L94】
 
 * `require_authenticated` guarantees a `User` is attached to the request. All routers mount this dependency once so individual
-handlers can assume an authenticated context.【F:ade/api/security.py†L15-L29】
+handlers can assume an authenticated context.【F:ade/features/auth/dependencies.py†L95-L103】
 * `require_global(<permission>)` and `require_workspace(<permission>)` call the principal-aware `authorize` helper to enforce
 RBAC assignments. Workspace guards derive the scope identifier from path or query parameters and emit structured 403 payloads
-when access is denied.【F:ade/api/security.py†L42-L111】
+when access is denied.【F:ade/features/roles/dependencies.py†L14-L68】
 * `require_permissions_catalog_access` protects the permissions catalogue endpoints and handles both global and workspace
-scopes. It reuses the same forbidden payload shape and performs scope validation for workspace requests.【F:ade/api/security.py†L113-L168】
+scopes. It reuses the same forbidden payload shape and performs scope validation for workspace requests.【F:ade/features/roles/dependencies.py†L70-L109】
 * `require_csrf` must wrap every mutating route. A regression test walks the FastAPI routing table to ensure that any POST,
 PUT, PATCH, or DELETE endpoint is guarded, excluding a small allowlist for session bootstrap flows.【F:ade/api/tests/test_csrf_guards.py†L1-L85】
 
@@ -71,7 +71,7 @@ PUT, PATCH, or DELETE endpoint is guarded, excluding a small allowlist for sessi
 After authentication, route-level guards always authorise using the principal identifier attached to the identity. Global and
 workspace permissions are evaluated through the `authorize` facade, which resolves assignments, roles, and permissions using the
 unified RBAC tables. Any failure produces a consistent 403 payload with the permission key and scope metadata to aid debugging
-and client UX.【F:ade/api/security.py†L42-L168】【F:ade/features/roles/authorization.py†L1-L123】
+and client UX.【F:ade/features/roles/dependencies.py†L14-L109】【F:ade/features/roles/authorization.py†L1-L123】
 
 ## Extending the System
 

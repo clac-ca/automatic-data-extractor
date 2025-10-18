@@ -6,7 +6,7 @@ Redesign the documents grid end to end so filtering, sorting, pagination, and UR
 ## Phased delivery plan
 
 ### Phase 1 – Database schema consolidation (SQLite-first, Postgres-ready)
-- Update `ade/alembic/versions/0001_initial_schema.py` directly, then recreate the local database (no data backfill required).
+- Update `ade/db/migrations/versions/0001_initial_schema.py` directly, then recreate the local database (no data backfill required).
 - Apply the following deltas to the `documents` table:
   - `uploaded_by_user_id TEXT NULL` referencing `users(user_id)` with `ON DELETE SET NULL`.
   - `status TEXT NOT NULL CHECK (status IN ('uploaded','processing','processed','failed','archived'))`.
@@ -29,7 +29,7 @@ Redesign the documents grid end to end so filtering, sorting, pagination, and UR
 
 ### Phase 3 – API contract & pagination
 - Define a `FilterParams` Pydantic model injected with `Depends`, using `list[...]` for repeatable params.
-- Add a shared pagination helper (e.g., `ade/core/pagination.py`) that exposes `PaginationParams` (page/per_page validation, optional `include_total`) and `paginate_query(query, params)` to apply SQLAlchemy `offset/limit` and return `{items, page, per_page, has_next}` by default, adding `total` when totals are requested; make it reusable across feature routers.
+- Add a shared pagination helper (e.g., `ade/platform/pagination.py`) that exposes `PaginationParams` (page/per_page validation, optional `include_total`) and `paginate_query(query, params)` to apply SQLAlchemy `offset/limit` and return `{items, page, per_page, has_next}` by default, adding `total` when totals are requested; make it reusable across feature routers.
 - Flatten the query string: `status=processing&status=processed` rather than JSON:API namespaces.
 - Build a query builder that translates `FilterParams` into SQLAlchemy filters (AND across keys, OR within repeatable values).
 - Support the following fields/operators:
@@ -126,7 +126,7 @@ Default responses include `{"items", "page", "per_page", "has_next"}`. When `inc
 - Empty states add “Clear filters” when any filter is active and reuse existing copy otherwise.
 
 ## Acceptance criteria
-1. Database schema matches Phase 1 (including new indexes) by editing `ade/alembic/versions/0001_initial_schema.py`; local databases are recreated with the new structure.
+1. Database schema matches Phase 1 (including new indexes) by editing `ade/db/migrations/versions/0001_initial_schema.py`; local databases are recreated with the new structure.
 2. Backend filters honour the flat query parameters, resolve `uploader=me`, apply tag any-of semantics, and treat date ranges as inclusive.
 3. Sorting accepts only the approved single-field values, maps `name` to `original_filename`, keeps created-date pagination stable via a `created_at DESC, document_id DESC` tie-breaker, and orders `last_run_at` nulls last.
 4. Pagination uses `page`/`per_page`, caps `per_page` at 200, and responds with `{items, page, per_page, has_next}` by default, adding `total` only when `include_total=true`.
@@ -139,7 +139,7 @@ Default responses include `{"items", "page", "per_page", "has_next"}`. When `inc
 - Use `list[...]` annotations for repeatable params (`status`, `source`, `tag`, `uploader_id`).
 - Normalise `uploader=me` inside the dependency by looking up the authenticated user.
 - Build a query builder that converts `FilterParams` into SQLAlchemy filters (AND between categories, OR across repeatables).
-- Implement `ade/core/pagination.py` (or similar) with `PaginationParams`, `Paginated[T]` response model, and a helper that applies `offset/limit`, exposes `has_next`, and optionally performs a `select(func.count())` when `include_total` is true.
+- Implement `ade/platform/pagination.py` (or similar) with `PaginationParams`, `Paginated[T]` response model, and a helper that applies `offset/limit`, exposes `has_next`, and optionally performs a `select(func.count())` when `include_total` is true.
 - Keep response models and enums in `ade/features/documents/schemas.py` for reuse by tests, re-exporting the shared `Paginated[DocumentOut]` type.
 
 ## Decision record

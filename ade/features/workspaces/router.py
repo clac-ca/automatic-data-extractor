@@ -5,10 +5,11 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends, Path, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade.api.security import require_authenticated, require_csrf, require_global, require_workspace
-from ade.core.responses import DefaultResponse
-from ade.core.schema import ErrorMessage
 from ade.db.session import get_session
+from ade.features.auth.dependencies import require_authenticated, require_csrf
+from ade.features.roles.dependencies import require_global, require_workspace
+from ade.platform.responses import DefaultResponse
+from ade.platform.schema import ErrorMessage
 
 from ..roles.models import Role
 from ..roles.schemas import RoleCreate, RoleRead, RoleUpdate

@@ -12,8 +12,8 @@ from sqlalchemy import text
 from ade.cli.commands import settings as settings_command
 from ade.cli.commands import start as start_cmd
 from ade.cli.core.runtime import normalise_email, open_session, read_secret
-from ade.settings import Settings, reload_settings
 from ade.db.engine import reset_database_state
+from ade.platform.config import Settings, reload_settings
 
 
 def test_normalise_email_lowercases_and_strips() -> None:

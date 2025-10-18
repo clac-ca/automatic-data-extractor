@@ -8,11 +8,10 @@ from time import perf_counter
 from typing import Any
 
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import Select, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade.settings import Settings
-from ade.features.users.models import User
+from ade.platform.config import Settings
 
 from ..configurations.exceptions import (
     ConfigurationNotFoundError,
@@ -30,6 +29,7 @@ from .processor import (
     get_job_processor,
 )
 from .schemas import JobRecord
+from .repository import JobsRepository
 
 _VALID_STATUSES = frozenset({"pending", "running", "succeeded", "failed"})
 
@@ -45,6 +45,7 @@ class JobsService:
         self._session = session
         self._storage = DocumentStorage(documents_dir)
         self._configurations = ConfigurationsRepository(session)
+        self._jobs = JobsRepository(session)
 
     async def list_jobs(
         self,
@@ -57,19 +58,16 @@ class JobsService:
     ) -> list[JobRecord]:
         """Return recent jobs filtered by optional criteria."""
 
-        stmt = self._base_query(workspace_id).order_by(
-            Job.created_at.desc(), Job.id.desc()
-        )
         if status:
             if status not in _VALID_STATUSES:
                 raise ValueError(f"Unsupported job status: {status}")
-            stmt = stmt.where(Job.status == status)
-        if input_document_id:
-            stmt = stmt.where(Job.input_document_id == input_document_id)
-
-        stmt = stmt.offset(offset).limit(limit)
-        result = await self._session.execute(stmt)
-        jobs = result.scalars().all()
+        jobs = await self._jobs.list_jobs(
+            workspace_id=workspace_id,
+            limit=limit,
+            offset=offset,
+            status=status,
+            input_document_id=input_document_id,
+        )
         records = [JobRecord.model_validate(row) for row in jobs]
 
         return records
@@ -77,8 +75,8 @@ class JobsService:
     async def get_job(self, *, workspace_id: str, job_id: str) -> JobRecord:
         """Return a single job by identifier."""
 
-        job = await self._session.get(Job, job_id)
-        if job is None or job.workspace_id != workspace_id:
+        job = await self._jobs.get_job(workspace_id=workspace_id, job_id=job_id)
+        if job is None:
             raise JobNotFoundError(job_id)
 
         record = JobRecord.model_validate(job)
@@ -91,7 +89,7 @@ class JobsService:
         input_document_id: str,
         configuration_id: str,
         configuration_version: int | None = None,
-        actor: User | None = None,
+        actor_id: str | None = None,
     ) -> JobRecord:
         """Create a job row, run the processor synchronously, and return the result."""
 
@@ -99,14 +97,13 @@ class JobsService:
         configuration = await self._get_configuration(
             workspace_id, configuration_id, configuration_version
         )
-        actor_identifier = self._resolve_actor_id(actor)
         config_identifier = str(configuration.id)
 
         job = Job(
             workspace_id=workspace_id,
             configuration_id=config_identifier,
             status="pending",
-            created_by_user_id=actor_identifier,
+            created_by_user_id=actor_id,
             input_document_id=document.document_id,
             metrics={},
             logs=[],
@@ -250,14 +247,6 @@ class JobsService:
     def _duration_ms(self, started: float) -> int:
         return int((perf_counter() - started) * 1000)
 
-    def _resolve_actor_id(self, actor: User | None) -> str | None:
-        if actor is None:
-            return None
-        candidate = getattr(actor, "id", None)
-        return str(candidate) if candidate else None
-
-    def _base_query(self, workspace_id: str) -> Select[tuple[Job]]:
-        return select(Job).where(Job.workspace_id == workspace_id)
 
 
 __all__ = ["JobsService"]

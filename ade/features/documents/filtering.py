@@ -8,7 +8,7 @@ from typing import Annotated, Any
 
 from pydantic import Field, ValidationError, field_validator, model_validator
 
-from ade.core.schema import BaseSchema
+from ade.platform.schema import BaseSchema
 
 ULID_PATTERN = r"[0-9A-HJKMNP-TV-Z]{26}"
 ULIDStr = Annotated[

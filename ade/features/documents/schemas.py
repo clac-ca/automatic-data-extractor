@@ -7,8 +7,8 @@ from typing import Any
 
 from pydantic import Field
 
-from ade.core.pagination import PaginationEnvelope
-from ade.core.schema import BaseSchema
+from ade.platform.pagination import PaginationEnvelope
+from ade.platform.schema import BaseSchema
 from .filtering import DocumentSource, DocumentStatus, ULIDStr
 
 

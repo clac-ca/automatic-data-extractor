@@ -1,45 +1,23 @@
 import { Navigate, Outlet, RouterProvider, createBrowserRouter } from "react-router-dom";
 
-import { WorkspaceLayout } from "./layouts/WorkspaceLayout";
-import { HomeRedirectRoute } from "./routes/HomeRedirectRoute";
-import { WorkspacesIndexRoute } from "./routes/WorkspacesIndexRoute";
-import { LoginRoute } from "./routes/LoginRoute";
-import { SetupRoute } from "./routes/SetupRoute";
-import { NotFoundRoute } from "./routes/NotFoundRoute";
+import { WorkspaceLayout } from "./layouts/workspace/WorkspaceLayout";
 import { RequireSession } from "../features/auth/components/RequireSession";
-import { WorkspacePlaceholderRoute } from "./routes/WorkspacePlaceholderRoute";
-import { DocumentsRoute } from "./routes/DocumentsRoute";
-import { ConfigurationsRoute } from "./routes/ConfigurationsRoute";
-import { WorkspaceCreateRoute } from "./routes/WorkspaceCreateRoute";
-import { AuthCallbackRoute } from "./routes/AuthCallbackRoute";
 import { workspaceLoader } from "./workspaces/loader";
-import { workspaceSections, defaultWorkspaceSection } from "./workspaces/sections";
-import type { WorkspaceRouteHandle } from "./workspaces/sections";
-
-const sectionsWithContextNav = new Set(["config", "settings"]);
-
-const workspaceSectionRoutes = workspaceSections.map((section) => ({
-  path: section.path,
-  element:
-    section.id === "documents"
-      ? <DocumentsRoute />
-      : section.id === "config"
-        ? <ConfigurationsRoute />
-        : <WorkspacePlaceholderRoute sectionId={section.id} />,
-  handle: {
-    workspaceSectionId: section.id,
-    meta: { showContextNav: sectionsWithContextNav.has(section.id) },
-  } satisfies WorkspaceRouteHandle,
-}));
+import { HomeRedirectRoute } from "../features/workspaces/routes/home-redirect.route";
+import { WorkspacesIndexRoute } from "../features/workspaces/routes/workspaces-index.route";
+import { LoginRoute } from "../features/auth/routes/login.route";
+import { SetupRoute } from "../features/setup/routes/setup.route";
+import { NotFoundRoute } from "../features/system/routes/not-found.route";
+import { WorkspaceCreateRoute } from "../features/workspaces/routes/workspace-create.route";
+import { AuthCallbackRoute } from "../features/auth/routes/auth-callback.route";
+import { DocumentsRoute } from "../features/documents/routes/documents.route";
+import { ConfigurationsRoute } from "../features/configurations/routes/configurations.route";
+import { WorkspaceSettingsRoute } from "../features/workspaces/routes/workspace-settings.route";
 
 const appRouter = createBrowserRouter([
   {
     path: "/",
-    element: (
-      <RequireSession>
-        <Outlet />
-      </RequireSession>
-    ),
+    element: <AuthenticatedOutletLayout />,
     children: [
       { index: true, element: <HomeRedirectRoute /> },
       {
@@ -51,9 +29,13 @@ const appRouter = createBrowserRouter([
             path: ":workspaceId",
             element: <WorkspaceLayout />,
             loader: workspaceLoader,
+            shouldRevalidate: ({ currentParams, nextParams }) =>
+              currentParams.workspaceId !== nextParams.workspaceId,
             children: [
-              ...workspaceSectionRoutes,
-              { index: true, element: <Navigate to={defaultWorkspaceSection.path} replace /> },
+              { path: "documents", element: <DocumentsRoute /> },
+              { path: "config", element: <ConfigurationsRoute /> },
+              { path: "settings", element: <WorkspaceSettingsRoute /> },
+              { index: true, element: <Navigate to="documents" replace /> },
             ],
           },
         ],
@@ -68,4 +50,12 @@ const appRouter = createBrowserRouter([
 
 export function AppRouter() {
   return <RouterProvider router={appRouter} />;
+}
+
+function AuthenticatedOutletLayout() {
+  return (
+    <RequireSession>
+      <Outlet />
+    </RequireSession>
+  );
 }

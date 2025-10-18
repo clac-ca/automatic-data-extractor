@@ -115,7 +115,7 @@
 - Schedule removal/archive plan for `frontend.old/` once parity is confirmed (outside this work package).
 
 ## Dependencies & Coordination
-- Confirm authentication endpoints, CSRF cookie naming, and SSO callback parameters with backend owners (`ade/core/auth_backends.py`, `docs/authentication.md`).
+- Confirm authentication endpoints, CSRF cookie naming, and SSO callback parameters with backend owners (`ade/features/auth/service.py`, `docs/authentication.md`).
 - Ensure workspace/document/configuration API contracts are available or stubbed in FastAPI before wiring UI hooks.
 - Coordinate telemetry schema with whoever owns observability so event payloads land in an agreed queue.
 
