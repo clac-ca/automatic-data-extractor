@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normaliseStatusFilter } from "../api/client";
+import { normaliseStatusFilter } from "../api";
 
 describe("normaliseStatusFilter", () => {
   it("returns undefined when the status is empty", () => {

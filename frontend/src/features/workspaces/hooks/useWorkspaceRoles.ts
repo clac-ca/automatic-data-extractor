@@ -1,14 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { workspacesKeys } from "../api/keys";
-import type { RoleCreatePayload, RoleDefinition, RoleUpdatePayload } from "../../../shared/types/roles";
 import {
+  workspacesKeys,
   createWorkspaceRole,
   deleteWorkspaceRole,
   listPermissions,
   listWorkspaceRoles,
   updateWorkspaceRole,
-} from "../api/client";
+} from "../api";
+import type { RoleCreatePayload, RoleDefinition, RoleUpdatePayload } from "@shared/types/roles";
 
 export function useWorkspaceRolesQuery(workspaceId: string) {
   return useQuery({

@@ -12,4 +12,3 @@ export default async function handleRequest(
   headers.set("Content-Type", "text/html");
   return new Response(`<!DOCTYPE html>${markup}`, { status, headers });
 }
-

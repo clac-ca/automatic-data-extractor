@@ -1,12 +1,14 @@
-import { del, get, patch, post, put } from "../../../shared/api/client";
-import type { WorkspaceCreatePayload, WorkspaceProfile } from "../../../shared/types/workspaces";
-import type { WorkspaceMember } from "../../../shared/types/workspace-members";
+import { useQuery } from "@tanstack/react-query";
+
+import { del, get, patch, post, put } from "@shared/api/client";
+import type { WorkspaceCreatePayload, WorkspaceProfile } from "@shared/types/workspaces";
+import type { WorkspaceMember } from "@shared/types/workspace-members";
 import type {
   RoleCreatePayload,
   RoleDefinition,
   RoleUpdatePayload,
   PermissionDefinition,
-} from "../../../shared/types/roles";
+} from "@shared/types/roles";
 
 interface WorkspaceApiProfile {
   workspace_id?: string;
@@ -103,4 +105,30 @@ export function deleteWorkspaceRole(workspaceId: string, roleId: string) {
 
 export function listPermissions(signal?: AbortSignal) {
   return get<PermissionDefinition[]>("/permissions", { signal });
+}
+
+export const workspacesKeys = {
+  all: () => ["workspaces"] as const,
+  list: () => [...workspacesKeys.all(), "list"] as const,
+  detail: (workspaceId: string) => [...workspacesKeys.all(), "detail", workspaceId] as const,
+  members: (workspaceId: string) => [...workspacesKeys.detail(workspaceId), "members"] as const,
+  roles: (workspaceId: string) => [...workspacesKeys.detail(workspaceId), "roles"] as const,
+  permissions: () => ["permissions"] as const,
+};
+
+export interface WorkspacesQueryOptions {
+  readonly enabled?: boolean;
+}
+
+export function workspacesListQueryOptions(options: WorkspacesQueryOptions = {}) {
+  return {
+    queryKey: workspacesKeys.list(),
+    queryFn: ({ signal }: { signal?: AbortSignal }) => fetchWorkspaces(signal),
+    staleTime: 60_000,
+    enabled: options.enabled ?? true,
+  };
+}
+
+export function useWorkspacesQuery(options: WorkspacesQueryOptions = {}) {
+  return useQuery<WorkspaceProfile[]>(workspacesListQueryOptions(options));
 }

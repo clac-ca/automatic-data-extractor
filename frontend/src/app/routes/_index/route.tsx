@@ -1,13 +1,22 @@
 import { Navigate } from "react-router-dom";
 
-import { useWorkspacesQuery } from "../../../features/workspaces/api/queries";
-import { useSession } from "../../../features/auth/context/SessionContext";
-import { readPreferredWorkspaceId } from "../../../features/workspaces/lib/workspace";
-import { getDefaultWorkspacePath } from "../workspaces/$workspaceId/loader";
-import { Button } from "../../../ui/button";
-import { PageState } from "../../../ui/PageState";
+import { RequireSession } from "@features/auth/components/RequireSession";
+import { useSession } from "@features/auth/context/SessionContext";
+import { useWorkspacesQuery } from "@features/workspaces/api";
+import { readPreferredWorkspaceId } from "@features/workspaces/lib/workspace";
+import { getDefaultWorkspacePath } from "../workspaces/$workspaceId/route";
+import { Button } from "@ui/button";
+import { PageState } from "@ui/PageState";
 
 export default function RootIndexRoute() {
+  return (
+    <RequireSession>
+      <RootIndexContent />
+    </RequireSession>
+  );
+}
+
+function RootIndexContent() {
   const session = useSession();
   const workspacesQuery = useWorkspacesQuery();
 

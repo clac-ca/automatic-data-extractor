@@ -2,11 +2,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { sessionKeys } from "../../../../features/auth/api/keys";
-import type { SessionEnvelope } from "../../../../shared/types/auth";
-import { ApiError, get } from "../../../../shared/api/client";
-import { Button } from "../../../../ui/button";
-import { PageState } from "../../../../ui/PageState";
+import { sessionKeys } from "@features/auth/api";
+import type { SessionEnvelope } from "@shared/types/auth";
+import { ApiError, get } from "@shared/api/client";
+import { Button } from "@ui/button";
+import { PageState } from "@ui/PageState";
 
 export default function AuthCallbackRoute() {
   const navigate = useNavigate();

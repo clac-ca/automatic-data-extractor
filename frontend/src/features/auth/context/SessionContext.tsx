@@ -1,8 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 
-import type { SessionEnvelope } from "../../../shared/types/auth";
-import { refreshSession } from "../api/client";
+import type { SessionEnvelope } from "@shared/types/auth";
+import { refreshSession } from "../api";
 
 type RefetchSession = () => Promise<unknown>;
 

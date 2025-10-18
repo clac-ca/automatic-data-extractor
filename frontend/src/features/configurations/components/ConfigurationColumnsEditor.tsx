@@ -5,12 +5,12 @@ import type {
   ConfigurationColumn,
   ConfigurationColumnInput,
   ConfigurationScriptVersion,
-} from "../../../shared/types/configurations";
-import { Alert } from "../../../ui/alert";
-import { Button } from "../../../ui/button";
-import { FormField } from "../../../ui/form-field";
-import { Input, TextArea } from "../../../ui/input";
-import { Select } from "../../../ui/select";
+} from "@shared/types/configurations";
+import { Alert } from "@ui/alert";
+import { Button } from "@ui/button";
+import { FormField } from "@ui/form-field";
+import { Input, TextArea } from "@ui/input";
+import { Select } from "@ui/select";
 import { useConfigurationColumnsQuery } from "../hooks/useConfigurationColumnsQuery";
 import { useReplaceConfigurationColumnsMutation } from "../hooks/useReplaceConfigurationColumnsMutation";
 import { useScriptVersionsQuery } from "../hooks/useScriptVersionsQuery";
