@@ -1,15 +1,14 @@
 import { Link } from "react-router-dom";
 
-export default function NotFoundRoute() {
+export function NotFound() {
   return (
     <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 py-16 text-center">
       <div className="space-y-4">
-        <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">
-          404
-        </p>
+        <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">404</p>
         <h1 className="text-3xl font-semibold text-slate-900">Page not found</h1>
         <p className="text-sm text-slate-600">
-          The resource you&apos;re looking for doesn&apos;t exist yet. If this surface should be part of the rebuild, add a route in <code>src/app/routes</code> and connect the relevant feature.
+          The resource you&apos;re looking for doesn&apos;t exist yet. If this surface should be part of the rebuild,
+          add a route in <code>src/app/routes</code> and connect the relevant feature.
         </p>
         <div className="flex justify-center gap-3 text-sm">
           <Link
@@ -29,3 +28,5 @@ export default function NotFoundRoute() {
     </div>
   );
 }
+
+export default NotFound;

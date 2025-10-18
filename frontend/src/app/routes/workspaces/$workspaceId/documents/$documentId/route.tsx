@@ -1,10 +1,12 @@
 export const handle = { workspaceSectionId: "documents" } as const;
 
-interface DocumentRouteParams {
-  readonly documentId?: string;
+interface DocumentDetailRouteProps {
+  readonly params: {
+    readonly documentId?: string;
+  };
 }
 
-export default function DocumentDetailRoute({ params }: { readonly params: DocumentRouteParams }) {
+export default function DocumentDetailRoute({ params }: DocumentDetailRouteProps) {
   return (
     <section>
       <h1 className="text-lg font-semibold">Document {params.documentId}</h1>

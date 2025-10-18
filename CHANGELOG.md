@@ -38,11 +38,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Refine document uploads with drag-and-drop handling, client-side filtering of supported formats, and clearer status messaging during manual uploads.
 - Surface a workspace upload progress tray that lists in-flight files while backend uploads run, keeping drag-and-drop and picker flows transparent.
 - Validate configuration scripts inside a sandboxed subprocess with size limits, timeouts, and network isolation.
+- Align the frontend with the official React Router framework scaffolding by exporting a layout/error boundary from `src/app/root.tsx` and routing unmatched URLs through a `[...missing]` catch-all module.
 
 ### Removed
 - Remove the legacy `ade/main.py` and `ade/settings.py` compatibility shims now that the app and config live under `ade/app.py` and `ade/platform/config.py`.
 - Drop `ade/db/bootstrap.py`; bootstrap now lives inside the engine/session modules.
 - Drop the placeholder “Connect source” affordances from the documents surface to keep the MVP focused on manual uploads.
+- Remove the vendored React Router “minimal” template now that the default scaffold covers our reference needs.
+- Remove the vendored React Router “default” template now that we no longer need the upstream scaffold in-repo.
 
 ### Fixed
 - Ensure document uploads stream to the backend API, clear progress indicators per file, and immediately refresh the workspace list after completion.
