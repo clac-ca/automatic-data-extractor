@@ -1,6 +1,19 @@
 import { createInterface } from "node:readline/promises";
+import { spawn } from "node:child_process";
 import { stdin as input, stdout as output, env } from "node:process";
-import { run } from "./_helpers.mjs";
+
+const run = (command, args = [], options = {}) =>
+  new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: "inherit",
+      shell: false,
+      ...options,
+    });
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${command} ${args.join(" ")} exited with code ${code}`));
+    });
+  });
 
 const lifecycle = env.npm_lifecycle_event ?? "";
 const autoForce = lifecycle === "reset:force";

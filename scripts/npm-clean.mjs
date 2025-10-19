@@ -1,6 +1,6 @@
 import { createInterface } from "node:readline/promises";
+import { rm } from "node:fs/promises";
 import { stdin as input, stdout as output, env } from "node:process";
-import { cleanPaths } from "./_helpers.mjs";
 
 const targets = [
   "backend/.venv",
@@ -45,5 +45,7 @@ if (!force) {
   }
 }
 
-await cleanPaths(targets);
+for (const target of targets) {
+  await rm(target, { recursive: true, force: true });
+}
 console.log("🧹 cleaned");
