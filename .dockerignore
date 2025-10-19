@@ -1,53 +1,25 @@
-# Git metadata and CI caches
+# Git metadata
 .git
 .github
-.gitignore
 
-# Python artefacts
-__pycache__
+# Python artifacts
+__pycache__/
 *.py[cod]
-*.pyo
-*.pyd
-*.pyi
-*.pyw
-*.pya
-.mypy_cache
-.pytest_cache
-.python-version
-.coverage*
-.ruff_cache
-coverage.xml
-htmlcov
+*.egg-info/
+.venv/
 
-# Virtual environments
-.venv
-venv
-ENV
-env
+# Node artifacts
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnpm-store/
 
-# Environment files
+# Build outputs
+dist/
+build/
+frontend/build/
+artifacts/
+
+# Env files
 .env
-.env.*
-!.env.example
-
-# Build artefacts
-build
-dist
-var
-ade/web/*
-
-# Node artefacts
-frontend/node_modules
-frontend/dist
-frontend/coverage
-frontend/.vite
-frontend/.eslintcache
-
-# Editor and OS files
-*.log
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
-.vscode
-.idea
+frontend/.env*
