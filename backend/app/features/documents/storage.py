@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
-from backend.app.adapters.storage import FilesystemStorage, StorageLimitError, StoredObject
+from backend.app.shared.adapters.storage import FilesystemStorage, StorageLimitError, StoredObject
 
 from .exceptions import DocumentTooLargeError
 

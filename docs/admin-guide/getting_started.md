@@ -9,8 +9,8 @@ anywhere without provisioning external infrastructure.
 - **Self-contained storage** – ADE persists all metadata in
   `data/db/backend.app.sqlite`. Documents and other artefacts live alongside it
   under `data/`. No external database service is required.
-- **Deterministic FastAPI backend** – requests are handled by the app in
-  `backend/app/app.py`. Background work stays inside the same process.
+- **Deterministic FastAPI backend** – requests are handled by the factory in
+  `backend/app/main.py`. Background work stays inside the same process.
 - **(TODO)** The forthcoming frontend will guide first-time administrators
   through setup. Until it lands, rely on the API reference and the docs
   included in this guide.
@@ -70,7 +70,7 @@ export environment variables in your shell.
 2. Start the application server:
 
    ```bash
-   uvicorn backend.app.app:create_app --reload --factory --host 0.0.0.0 --port 8000
+   uvicorn backend.app.main:create_app --reload --factory --host 0.0.0.0 --port 8000
    ```
 
    The FastAPI factory performs an idempotent bootstrap before serving requests:
@@ -79,7 +79,7 @@ export environment variables in your shell.
    - run Alembic migrations in order, logging progress to the console, and
    - print a summary of the resolved settings (sourced from `.env` and the environment).
 
-   With `--reload`, uvicorn watches the repository for changes while still serving the compiled SPA from `backend/app/web/static/`, so <http://localhost:8000/> delivers both the UI and API. Omit `--reload` to run in a single process (the same semantics as `uvicorn backend.app.app:create_app --factory`). When you need fresh frontend assets, run `npm run build` from the repository root; the build script compiles the React Router app and copies the output into `backend/app/web/static/`. Root-level scripts such as `npm run start` provide convenience wrappers that automatically locate the virtualenv Python interpreter.
+   With `--reload`, uvicorn watches the repository for changes while still serving the compiled SPA from `backend/app/web/static/`, so <http://localhost:8000/> delivers both the UI and API. Omit `--reload` to run in a single process (the same semantics as `uvicorn backend.app.main:create_app --factory`). When you need fresh frontend assets, run `npm run build` from the repository root; the build script compiles the React Router app and copies the output into `backend/app/web/static/`. Root-level scripts such as `npm run start` provide convenience wrappers that automatically locate the virtualenv Python interpreter.
 
 3. Confirm the API is healthy:
 
@@ -94,7 +94,7 @@ The uvicorn command above serves the prebuilt SPA. For frontend development with
 
 ```bash
 # Terminal 1
-uvicorn backend.app.app:create_app --reload --factory
+uvicorn backend.app.main:create_app --reload --factory
 
 # Terminal 2
 cd frontend
@@ -127,7 +127,7 @@ docker run -d --name ade-backend \
   -p 8000:8000 \
   -v "$(pwd)/data:/backend/app/data" \
   ade-backend:local \
-  uvicorn backend.app.app:create_app --host 0.0.0.0 --port 8000 --factory
+  uvicorn backend.app.main:create_app --host 0.0.0.0 --port 8000 --factory
 ```
 
 The bind mount keeps the SQLite database and documents on the host so they
@@ -166,7 +166,7 @@ With these basics you can run ADE on a laptop, VM, or container host and manage
 administrators through the API while the frontend experience is completed.
 
 ## 8. Troubleshooting
-- **`uvicorn` exits immediately:** ensure the Python dependencies are installed (`pip install -e .[dev]`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn backend.app.app:create_app --factory`).
+- **`uvicorn` exits immediately:** ensure the Python dependencies are installed (`pip install -e .[dev]`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn backend.app.main:create_app --factory`).
 - **Port conflicts on 8000:** choose another port with `uvicorn ... --port 9000` or stop the conflicting process.
 - **Frontend shows a blank page:** rebuild assets with `npm run build` and copy `frontend/build/client/` into `backend/app/web/static/`).
 - **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api` prefix.

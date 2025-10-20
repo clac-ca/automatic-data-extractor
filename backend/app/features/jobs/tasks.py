@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.app.db.session import get_sessionmaker
-from backend.app.platform.config import get_settings
-from backend.app.workers.task_queue import TaskMessage, TaskQueue
+from backend.app.shared.core.config import get_settings
+from backend.app.shared.db.session import get_sessionmaker
+from backend.app.shared.workers.task_queue import TaskMessage, TaskQueue
 
 from .service import JobsService
 

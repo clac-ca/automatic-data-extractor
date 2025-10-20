@@ -19,15 +19,14 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
-from backend.app.features.pagination.dependencies import get_pagination_params
-from backend.app.api.errors import ProblemDetail, ProblemException
-from backend.app.features.auth.dependencies import require_authenticated, require_csrf
-from backend.app.features.roles.dependencies import require_workspace
-from backend.app.platform.schema import ErrorMessage
-from backend.app.platform.pagination import PaginationParams
-from typing import Annotated
-from fastapi import Depends
 from pydantic import ValidationError
+
+from backend.app.features.auth.dependencies import require_authenticated, require_csrf
+from backend.app.features.pagination.dependencies import get_pagination_params
+from backend.app.features.roles.dependencies import require_workspace
+from backend.app.shared.core.errors import ProblemDetail, ProblemException
+from backend.app.shared.core.pagination import PaginationParams
+from backend.app.shared.core.schema import ErrorMessage
 
 from ..users.models import User
 from .dependencies import get_documents_service

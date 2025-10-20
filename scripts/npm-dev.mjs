@@ -26,7 +26,7 @@ const makeUvicornCommand = (extraArgs = []) => {
       ? join(backendDir, ".venv", "Scripts", "uvicorn.exe")
       : join(backendDir, ".venv", "bin", "uvicorn");
   const args = [
-    "backend.app.app:create_app",
+    "backend.app.main:create_app",
     "--factory",
     "--host",
     "0.0.0.0",

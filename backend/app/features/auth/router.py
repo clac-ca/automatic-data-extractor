@@ -19,12 +19,11 @@ from fastapi import (
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.api.settings import get_app_settings
-from backend.app.db.session import get_session
+from backend.app.shared.core.config import Settings, get_app_settings
+from backend.app.shared.db.session import get_session
 from backend.app.features.auth.dependencies import require_authenticated, require_csrf
 from backend.app.features.roles.dependencies import require_global
-from backend.app.platform.config import Settings
-from backend.app.platform.schema import ErrorMessage
+from backend.app.shared.core.schema import ErrorMessage
 
 from ..users.models import User
 from ..users.schemas import UserProfile

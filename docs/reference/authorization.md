@@ -69,7 +69,7 @@ All RBAC administration lives under `/api/v1`:
   coverage exercise the same Graph-style keys the registry declares.【F:conftest.py†L110-L247】
 - The baseline migration (`0001_initial_schema`) mirrors this structure and adds
   indexes/constraints for scope lookups and system role uniqueness in SQLite and
-  Postgres.【F:backend/app/db/migrations/versions/0001_initial_schema.py†L1-L310】
+  Postgres.【F:backend/app/shared/db/migrations/versions/0001_initial_schema.py†L1-L310】
 
 Keep this reference updated whenever the registry, service layer, or router
 contracts evolve so onboarding engineers can rely on the docs instead of reading

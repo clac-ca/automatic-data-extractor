@@ -6,8 +6,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from backend.app.api.settings import get_app_settings
-from backend.app.platform.config import Settings
+from backend.app.shared.core.config import Settings, get_app_settings
 
 from .service import HealthService
 
