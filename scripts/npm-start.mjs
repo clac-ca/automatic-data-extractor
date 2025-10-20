@@ -5,14 +5,21 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, "..");
-const backendDir = join(projectRoot, "backend");
+const backendDir = projectRoot;
 const venvUvicorn =
   process.platform === "win32"
     ? join(backendDir, ".venv", "Scripts", "uvicorn.exe")
     : join(backendDir, ".venv", "bin", "uvicorn");
 
 const command = existsSync(venvUvicorn) ? venvUvicorn : "uvicorn";
-const args = ["app.main:app", "--host", "0.0.0.0", "--port", "8000"];
+const args = [
+  "backend.app.app:create_app",
+  "--factory",
+  "--host",
+  "0.0.0.0",
+  "--port",
+  "8000",
+];
 
 const child = spawn(command, args, {
   cwd: backendDir,

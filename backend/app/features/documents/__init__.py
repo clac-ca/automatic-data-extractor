@@ -1,6 +1,6 @@
-from .repository import InMemoryDocumentsRepository
-from .router import router
-from .schemas import Document
-from .service import list_documents
+"""Documents module scaffolding for the backend rewrite."""
 
-__all__ = ["Document", "InMemoryDocumentsRepository", "list_documents", "router"]
+from . import router
+from .storage import DocumentStorage, StoredDocument
+
+__all__ = ["router", "DocumentStorage", "StoredDocument"]

@@ -1,3 +1,5 @@
-from .main import app, create_app
+"""Public API surface for the ADE application package."""
 
-__all__ = ["app", "create_app"]
+from .platform.config import Settings, get_settings, reload_settings
+
+__all__ = ["Settings", "get_settings", "reload_settings"]

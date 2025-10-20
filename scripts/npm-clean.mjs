@@ -3,7 +3,7 @@ import { rm } from "node:fs/promises";
 import { stdin as input, stdout as output, env } from "node:process";
 
 const targets = [
-  "backend/.venv",
+  ".venv",
   "backend/app/web/static",
   "frontend/node_modules",
   "frontend/build",
