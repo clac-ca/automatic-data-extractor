@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
-from backend.app.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
+from backend.app.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
 
 
 def _normalise_email(value: str) -> str:

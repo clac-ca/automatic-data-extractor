@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Path, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.session import get_session
+from backend.app.shared.db.session import get_session
 
 from ..auth.dependencies import get_current_user
 from ..users.models import User

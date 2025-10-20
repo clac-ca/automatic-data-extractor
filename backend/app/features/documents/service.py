@@ -12,10 +12,10 @@ from sqlalchemy import Select, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from backend.app.db import generate_ulid
-from backend.app.platform.pagination import paginate
+from backend.app.shared.db import generate_ulid
+from backend.app.shared.core.pagination import paginate
 from backend.app.features.users.models import User
-from backend.app.platform.config import Settings
+from backend.app.shared.core.config import Settings
 
 from .exceptions import (
     DocumentFileMissingError,

@@ -7,9 +7,8 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.api.settings import get_app_settings
-from backend.app.db.session import get_session
-from backend.app.platform.config import Settings
+from backend.app.shared.core.config import Settings, get_app_settings
+from backend.app.shared.db.session import get_session
 
 from .service import DocumentsService
 

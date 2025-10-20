@@ -8,7 +8,7 @@ from typing import Literal
 from email_validator import EmailNotValidError, validate_email
 from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
 
-from backend.app.platform.schema import BaseSchema
+from backend.app.shared.core.schema import BaseSchema
 
 from ..users.schemas import UserProfile
 from .utils import normalise_email

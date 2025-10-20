@@ -11,7 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.platform.config import Settings
+from backend.app.shared.core.config import Settings
 
 from ..configurations.exceptions import (
     ConfigurationNotFoundError,

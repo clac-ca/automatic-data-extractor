@@ -18,7 +18,7 @@ from fastapi import (
 )
 from backend.app.features.auth.dependencies import require_authenticated, require_csrf
 from backend.app.features.roles.dependencies import require_workspace
-from backend.app.platform.responses import DefaultResponse
+from backend.app.shared.core.responses import DefaultResponse
 
 from ..users.models import User
 from .exceptions import (

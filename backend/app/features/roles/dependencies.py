@@ -8,12 +8,12 @@ from fastapi import Depends, Request
 from fastapi.security import SecurityScopes
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.session import get_session
+from backend.app.shared.db.session import get_session
 from backend.app.features.auth.dependencies import get_current_identity
 from backend.app.features.auth.service import AuthenticatedIdentity
 from backend.app.features.roles.authorization import authorize
 from backend.app.features.users.models import User
-from backend.app.platform.security import forbidden_response, resolve_workspace_scope
+from backend.app.shared.core.security import forbidden_response, resolve_workspace_scope
 
 
 def require_global(

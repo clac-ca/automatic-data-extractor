@@ -8,7 +8,7 @@ from datetime import datetime
 
 from pydantic import Field
 
-from backend.app.platform.schema import BaseSchema
+from backend.app.shared.core.schema import BaseSchema
 
 
 class JobFailureDetail(BaseSchema):

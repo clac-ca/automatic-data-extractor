@@ -17,14 +17,14 @@ from fastapi import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.session import get_session
+from backend.app.shared.db.session import get_session
 from backend.app.features.auth.dependencies import require_authenticated, require_csrf
 from backend.app.features.roles.dependencies import (
     require_global,
     require_permissions_catalog_access,
     require_workspace,
 )
-from backend.app.platform.security import forbidden_response
+from backend.app.shared.core.security import forbidden_response
 
 from ..auth.dependencies import get_current_identity
 from ..auth.service import AuthenticatedIdentity
