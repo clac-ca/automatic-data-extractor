@@ -27,7 +27,7 @@ if (!validScopes.includes(scope)) {
 const shouldRunBackend = scope === undefined || scope === "backend" || scope === "all";
 const shouldRunFrontend = scope === undefined || scope === "frontend" || scope === "all";
 
-const backendPresent = existsSync("backend") && existsSync(join("backend", "app"));
+const backendPresent = existsSync(join("backend", "app")) && existsSync("pyproject.toml");
 const frontendPresent =
   existsSync("frontend") && existsSync(join("frontend", "package.json"));
 
@@ -43,17 +43,17 @@ const lintBackend = async () => {
   if (!shouldRunBackend || !backendPresent) return;
   const pythonCandidates = process.platform === "win32"
     ? [
-        join(process.cwd(), "backend", ".venv", "Scripts", "python.exe"),
-        join(process.cwd(), "backend", ".venv", "Scripts", "python3.exe"),
+        join(process.cwd(), ".venv", "Scripts", "python.exe"),
+        join(process.cwd(), ".venv", "Scripts", "python3.exe"),
       ]
     : [
-        join(process.cwd(), "backend", ".venv", "bin", "python3"),
-        join(process.cwd(), "backend", ".venv", "bin", "python"),
+        join(process.cwd(), ".venv", "bin", "python3"),
+        join(process.cwd(), ".venv", "bin", "python"),
       ];
   const fallback = process.platform === "win32" ? "python" : "python3";
   const pythonExecutable =
     pythonCandidates.find((candidate) => existsSync(candidate)) || fallback;
-  await run(pythonExecutable, ["-m", "ruff", "check", "backend/app", "backend/tests"]);
+  await run(pythonExecutable, ["-m", "ruff", "check", "backend/app"]);
 };
 
 const frontendHasLintScript = async () => {

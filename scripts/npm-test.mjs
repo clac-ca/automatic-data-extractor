@@ -16,24 +16,24 @@ const run = (command, args = [], options = {}) =>
     });
   });
 
-const backendPresent = existsSync("backend") && existsSync(join("backend", "app"));
+const backendPresent = existsSync(join("backend", "app")) && existsSync("pyproject.toml");
 const frontendPresent =
   existsSync("frontend") && existsSync(join("frontend", "package.json"));
 
 if (backendPresent) {
   const pythonCandidates = process.platform === "win32"
     ? [
-        join(process.cwd(), "backend", ".venv", "Scripts", "python.exe"),
-        join(process.cwd(), "backend", ".venv", "Scripts", "python3.exe"),
+        join(process.cwd(), ".venv", "Scripts", "python.exe"),
+        join(process.cwd(), ".venv", "Scripts", "python3.exe"),
       ]
     : [
-        join(process.cwd(), "backend", ".venv", "bin", "python3"),
-        join(process.cwd(), "backend", ".venv", "bin", "python"),
+        join(process.cwd(), ".venv", "bin", "python3"),
+        join(process.cwd(), ".venv", "bin", "python"),
       ];
   const pythonExecutable =
     pythonCandidates.find((candidate) => existsSync(candidate)) ||
     (process.platform === "win32" ? "python" : "python3");
-  await run(pythonExecutable, ["-m", "pytest", "-q"], { cwd: "backend" });
+  await run(pythonExecutable, ["-m", "pytest", "-q"], { cwd: process.cwd() });
 }
 
 let frontendHasTests = false;

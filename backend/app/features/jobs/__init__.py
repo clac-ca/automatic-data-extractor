@@ -1,6 +1,5 @@
-from .repository import InMemoryJobsRepository
-from .router import router
-from .schemas import Job
-from .service import list_jobs
+"""Jobs module scaffolding for the backend rewrite."""
 
-__all__ = ["InMemoryJobsRepository", "Job", "list_jobs", "router"]
+from . import router
+
+__all__ = ["router"]
