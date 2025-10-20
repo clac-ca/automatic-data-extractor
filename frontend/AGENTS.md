@@ -4,34 +4,47 @@
 
 ```
 frontend/
-├─ src/
-│  ├─ app/
-│  │  ├─ AppProviders.tsx        # shared React Query providers
-│  │  ├─ root.tsx                # <Layout/><Outlet/> shell + providers
-│  │  ├─ routes.ts               # flatRoutes() → file-based discovery
-│  │  └─ routes/
-│  │     ├─ _index.tsx           # /
-│  │     ├─ login.tsx            # /login
-│  │     ├─ auth.callback.tsx    # /auth/callback
-│  │     ├─ setup._index.tsx     # /setup
-│  │     ├─ workspaces._index.tsx
-│  │     ├─ workspaces.new.tsx
-│  │     ├─ workspaces.$workspaceId._index.tsx
-│  │     ├─ workspaces.$workspaceId.configurations._index.tsx
-│  │     ├─ workspaces.$workspaceId.documents._index.tsx
-│  │     ├─ workspaces.$workspaceId.documents.$documentId._index.tsx
-│  │     ├─ workspaces.$workspaceId.jobs._index.tsx
-│  │     ├─ workspaces.$workspaceId.settings._index.tsx
-│  │     └─ $.tsx                # catch-all 404
-│  ├─ features/                  # feature-driven modules (auth, documents, jobs, …)
-│  ├─ shared/                    # cross-feature helpers (api client, config, storage, hooks)
-│  │  └─ types/                  # shared TS types (OpenAPI output lands here)
-│  ├─ test/                      # vitest setup + helpers
-│  └─ ui/                        # reusable presentational components
-├─ react-router.config.ts        # { appDirectory: "src/app", ssr: false } (SPA mode)
-├─ vite.config.ts                # plugin + dev proxy (/api → :8000)
+├─ index.html
 ├─ package.json
-└─ .env.example                  # VITE_* variables only
+├─ tsconfig.json
+├─ vite.config.ts
+├─ react-router.config.ts          # { appDirectory: "src/app", ssr: false } (SPA mode)
+└─ src/
+   ├─ app/
+   │  ├─ AppProviders.tsx          # shared React Query providers
+   │  ├─ root.tsx                  # <Layout/><Outlet/> shell + providers
+   │  └─ routes/                   # file-based routes (folders = segments)
+   │     ├─ _index.tsx             # /
+   │     ├─ login.tsx              # /login
+   │     ├─ auth.callback.tsx      # /auth/callback
+   │     ├─ setup._index.tsx       # /setup
+   │     ├─ workspaces/            # /workspaces/*
+   │     │  ├─ route.tsx           # parent layout → must render <Outlet/>
+   │     │  ├─ _index.tsx          # /workspaces
+   │     │  ├─ new.tsx             # /workspaces/new
+   │     │  └─ $workspaceId/       # /workspaces/:workspaceId/*
+   │     │     ├─ route.tsx        # child layout
+   │     │     ├─ _index.tsx       # /workspaces/:workspaceId
+   │     │     ├─ configurations/
+   │     │     │  ├─ route.tsx
+   │     │     │  └─ _index.tsx
+   │     │     ├─ documents/
+   │     │     │  ├─ route.tsx
+   │     │     │  ├─ _index.tsx    # /workspaces/:id/documents
+   │     │     │  └─ $documentId/
+   │     │     │     └─ route.tsx  # /workspaces/:id/documents/:documentId
+   │     │     ├─ jobs/
+   │     │     │  ├─ route.tsx
+   │     │     │  └─ _index.tsx
+   │     │     └─ settings/
+   │     │        ├─ route.tsx
+   │     │        └─ _index.tsx
+   │     └─ $.tsx                   # catch-all 404
+   ├─ features/                     # feature-driven modules (auth, documents, jobs, …)
+   ├─ shared/                       # cross-feature helpers (api client, config, storage, hooks)
+   │  └─ types/                     # shared TS types (OpenAPI output lands here)
+   ├─ test/                         # vitest setup + helpers
+   └─ ui/                           # reusable presentational components
 ```
 
 ### Commands
@@ -46,9 +59,10 @@ npm run openapi-typescript   # refresh backend schema + regenerate src/shared/ty
 
 ### Routing & naming rules (framework mode)
 
+* **Folders as segments:** if a folder has children, include a `route.tsx` file that renders an `<Outlet/>`.
 * **Index route:** `_index.tsx` → `/segment` index.
 * **Dynamic params:** `$id` → `:id` in URL.
-* **Nested segments:** `parent.child.tsx` → `/parent/child`.
+* **Nested segments:** `parent.child.tsx` → `/parent/child` (or prefer folders + `route.tsx`).
 * **Pathless layout:** leading `_` segment is layout-only.
 * **Catch-all:** `$.tsx`.
 * Use `clientLoader` / `clientAction` in SPA mode for data/mutations.
