@@ -6,8 +6,8 @@ import { useSession } from "@features/auth/context/SessionContext";
 import type { WorkspaceProfile } from "@types/workspaces";
 import { Button } from "@ui/button";
 import { PageState } from "@ui/PageState";
-import { defaultWorkspaceSection } from "./workspaces/$workspaceId/sections";
-import { WorkspaceDirectoryLayout } from "./workspaces/_index/DirectoryLayout";
+import { defaultWorkspaceSection } from "@features/workspaces/lib/navigation";
+import { WorkspaceDirectoryLayout } from "@features/workspaces/components/WorkspaceDirectoryLayout";
 
 export default function WorkspacesIndexRoute() {
   return (
