@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach, vi, expect } from "vitest";
 import { render } from "@test/test-utils";
-import type { SessionEnvelope } from "@types/auth";
+import type { SessionEnvelope } from "@schema/auth";
 import { SessionProvider } from "../SessionContext";
 import { refreshSession } from "../../api";
 

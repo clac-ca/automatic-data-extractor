@@ -1,5 +1,5 @@
 import { get, post } from "@shared/api";
-import type { UserProfile, UserSummary } from "@types/users";
+import type { UserProfile, UserSummary } from "@schema/users";
 
 export function fetchUsers() {
   return get<UserSummary[]>("/users");

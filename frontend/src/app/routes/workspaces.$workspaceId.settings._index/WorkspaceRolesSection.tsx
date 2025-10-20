@@ -3,16 +3,16 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { useWorkspaceContext } from "../context/WorkspaceContext";
+import { useWorkspaceContext } from "../workspaces.$workspaceId/WorkspaceContext";
 import {
   useCreateWorkspaceRoleMutation,
   useDeleteWorkspaceRoleMutation,
   usePermissionsQuery,
   useUpdateWorkspaceRoleMutation,
   useWorkspaceRolesQuery,
-} from "../hooks/useWorkspaceRoles";
-import type { RoleDefinition } from "@types/roles";
-import type { PermissionDefinition } from "@types/roles";
+} from "./useWorkspaceRoles";
+import type { RoleDefinition } from "@schema/roles";
+import type { PermissionDefinition } from "@schema/roles";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { Input } from "@ui/input";

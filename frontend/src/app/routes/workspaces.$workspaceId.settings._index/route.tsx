@@ -4,14 +4,14 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { useWorkspaceContext } from "@features/workspaces/context/WorkspaceContext";
-import { useUpdateWorkspaceMutation } from "@features/workspaces/hooks/useUpdateWorkspaceMutation";
+import { useWorkspaceContext } from "../workspaces.$workspaceId/WorkspaceContext";
+import { useUpdateWorkspaceMutation } from "./useUpdateWorkspaceMutation";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { FormField } from "@ui/form-field";
 import { Input } from "@ui/input";
-import { WorkspaceMembersSection } from "@features/workspaces/components/WorkspaceMembersSection";
-import { WorkspaceRolesSection } from "@features/workspaces/components/WorkspaceRolesSection";
+import { WorkspaceMembersSection } from "./WorkspaceMembersSection";
+import { WorkspaceRolesSection } from "./WorkspaceRolesSection";
 
 export const handle = { workspaceSectionId: "settings" } as const;
 

@@ -1,6 +1,6 @@
 import type { ComponentType, SVGProps } from "react";
 
-import type { WorkspaceProfile } from "@types/workspaces";
+import type { WorkspaceProfile } from "@schema/workspaces";
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   readonly title?: string;

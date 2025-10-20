@@ -1,26 +1,7 @@
 import type { QueryFunctionContext } from "@tanstack/react-query";
 
-import { del, get, post } from "@shared/api";
-import type {
-  DocumentListResponse,
-  DocumentRecord,
-  DocumentStatus,
-} from "@types/documents";
-
-export type StatusFilterInput = DocumentStatus | readonly DocumentStatus[] | null | undefined;
-
-export function normaliseStatusFilter(status: StatusFilterInput) {
-  if (status == null) {
-    return undefined;
-  }
-  if (Array.isArray(status)) {
-    const filtered = (status as readonly DocumentStatus[]).filter(
-      (value): value is DocumentStatus => Boolean(value),
-    );
-    return filtered.length > 0 ? filtered : undefined;
-  }
-  return [status as DocumentStatus];
-}
+import { client } from "@shared/api/client";
+import type { components, paths } from "@api-types";
 
 export interface ListWorkspaceDocumentsOptions {
   readonly status?: StatusFilterInput;
@@ -33,49 +14,94 @@ export async function listWorkspaceDocuments(
   options: ListWorkspaceDocumentsOptions = {},
   signal?: AbortSignal,
 ) {
-  const search = new URLSearchParams();
+  const query: ListDocumentsQuery = {};
   const statuses = normaliseStatusFilter(options.status);
-
-  for (const value of statuses ?? []) {
-    search.append("status", value);
+  if (statuses) {
+    query.status = Array.from(statuses);
+  }
+  const search = options.search?.trim();
+  if (search) {
+    query.q = search;
+  }
+  const sort = options.sort?.trim();
+  if (sort) {
+    query.sort = sort;
   }
 
-  if (options.search && options.search.trim().length > 0) {
-    search.set("q", options.search.trim());
+  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents", {
+    params: {
+      path: { workspace_id: workspaceId },
+      query,
+    },
+    signal,
+  });
+
+  if (!data) {
+    throw new Error("Expected workspace documents response.");
   }
 
-  if (options.sort && options.sort.trim().length > 0) {
-    search.set("sort", options.sort.trim());
-  }
-
-  const query = search.toString();
-  const path =
-    query.length > 0 ? `/workspaces/${workspaceId}/documents?${query}` : `/workspaces/${workspaceId}/documents`;
-
-  return get<DocumentListResponse>(path, { signal });
+  return data;
 }
 
 export async function uploadWorkspaceDocument(workspaceId: string, file: File) {
-  const formData = new FormData();
-  formData.append("file", file);
-  return post<DocumentRecord>(`/workspaces/${workspaceId}/documents`, formData);
+  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/documents", {
+    params: {
+      path: { workspace_id: workspaceId },
+    },
+    body: {
+      file: "",
+    },
+    bodySerializer: () => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return formData;
+    },
+  });
+
+  if (!data) {
+    throw new Error("Expected uploaded document response.");
+  }
+
+  return data;
 }
 
 export async function deleteWorkspaceDocuments(workspaceId: string, documentIds: readonly string[]) {
-  for (const documentId of documentIds) {
-    await del(`/workspaces/${workspaceId}/documents/${documentId}`, { parseJson: false });
-  }
+  await Promise.all(
+    documentIds.map((documentId) =>
+      client.DELETE("/api/v1/workspaces/{workspace_id}/documents/{document_id}", {
+        params: {
+          path: {
+            workspace_id: workspaceId,
+            document_id: documentId,
+          },
+        },
+      }),
+    ),
+  );
 }
 
 export async function downloadWorkspaceDocument(workspaceId: string, documentId: string) {
-  const response = await get<Response>(`/workspaces/${workspaceId}/documents/${documentId}/download`, {
-    parseJson: false,
-    returnRawResponse: true,
-  });
-  const blob = await response.blob();
+  const { data, response } = await client.GET(
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/download",
+    {
+      params: {
+        path: {
+          workspace_id: workspaceId,
+          document_id: documentId,
+        },
+      },
+      parseAs: "blob",
+    },
+  );
+
+  if (!data) {
+    throw new Error("Expected document download payload.");
+  }
+
   const filename =
     extractFilename(response.headers.get("content-disposition")) ?? `document-${documentId}`;
-  return { blob, filename };
+
+  return { blob: data, filename };
 }
 
 function extractFilename(header: string | null) {
@@ -143,3 +169,27 @@ export function workspaceDocumentsQueryOptions(
   };
 }
 
+export type DocumentListResponse = components["schemas"]["DocumentListResponse"];
+export type DocumentRecord = components["schemas"]["DocumentRecord"];
+export type DocumentStatus = components["schemas"]["DocumentStatus"];
+
+type RawListDocumentsQuery =
+  paths["/api/v1/workspaces/{workspace_id}/documents"]["get"]["parameters"]["query"];
+type ListDocumentsQuery = RawListDocumentsQuery extends undefined
+  ? Record<string, never>
+  : RawListDocumentsQuery;
+
+export type StatusFilterInput = DocumentStatus | readonly DocumentStatus[] | null | undefined;
+
+export function normaliseStatusFilter(status: StatusFilterInput) {
+  if (status == null) {
+    return undefined;
+  }
+  if (Array.isArray(status)) {
+    const filtered = (status as readonly DocumentStatus[]).filter(
+      (value): value is DocumentStatus => Boolean(value),
+    );
+    return filtered.length > 0 ? filtered : undefined;
+  }
+  return [status as DocumentStatus];
+}

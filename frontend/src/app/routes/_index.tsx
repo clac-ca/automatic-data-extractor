@@ -2,9 +2,9 @@ import { Navigate } from "react-router-dom";
 
 import { RequireSession } from "@features/auth/components/RequireSession";
 import { useSession } from "@features/auth/context/SessionContext";
-import { useWorkspacesQuery } from "@features/workspaces/api";
-import { readPreferredWorkspaceId } from "@features/workspaces/lib/workspace";
-import { getDefaultWorkspacePath } from "./workspaces.$workspaceId";
+import { useWorkspacesQuery } from "./workspaces/workspaces-api";
+import { readPreferredWorkspaceId } from "./workspaces/workspace-preferences";
+import { getDefaultWorkspacePath } from "./workspaces.$workspaceId/route";
 import { Button } from "@ui/button";
 import { PageState } from "@ui/PageState";
 

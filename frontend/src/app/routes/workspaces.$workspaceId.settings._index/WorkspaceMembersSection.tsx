@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import { useWorkspaceContext } from "../context/WorkspaceContext";
-import { useUsersQuery } from "../../users/hooks/useUsersQuery";
-import { useInviteUserMutation } from "../../users/hooks/useInviteUserMutation";
+import { useWorkspaceContext } from "../workspaces.$workspaceId/WorkspaceContext";
+import { useUsersQuery } from "@features/users/hooks/useUsersQuery";
+import { useInviteUserMutation } from "@features/users/hooks/useInviteUserMutation";
 import {
   useAddWorkspaceMemberMutation,
   useRemoveWorkspaceMemberMutation,
   useUpdateWorkspaceMemberRolesMutation,
   useWorkspaceMembersQuery,
-} from "../hooks/useWorkspaceMembers";
-import { useWorkspaceRolesQuery } from "../hooks/useWorkspaceRoles";
-import type { WorkspaceMember } from "@types/workspace-members";
-import type { RoleDefinition } from "@types/roles";
-import type { UserSummary } from "@types/users";
+} from "./useWorkspaceMembers";
+import { useWorkspaceRolesQuery } from "./useWorkspaceRoles";
+import type { WorkspaceMember } from "@schema/workspace-members";
+import type { RoleDefinition } from "@schema/roles";
+import type { UserSummary } from "@schema/users";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { FormField } from "@ui/form-field";

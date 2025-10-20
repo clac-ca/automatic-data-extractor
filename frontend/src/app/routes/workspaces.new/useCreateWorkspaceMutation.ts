@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { createWorkspace, workspacesKeys } from "../api";
+import { createWorkspace, workspacesKeys } from "../workspaces/workspaces-api";
 
 export function useCreateWorkspaceMutation() {
   const queryClient = useQueryClient();

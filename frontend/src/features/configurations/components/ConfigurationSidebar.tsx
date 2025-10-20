@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { Fragment, useMemo } from "react";
 
-import type { ConfigurationRecord } from "@types/configurations";
+import type { ConfigurationRecord } from "@schema/configurations";
 import { Button } from "@ui/button";
 
 export interface ConfigurationSidebarProps {
