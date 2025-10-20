@@ -1,18 +1,22 @@
 import { ApiError } from "@shared/api";
 import { client } from "@shared/api/client";
 import type { AuthProvider, LoginPayload, SessionEnvelope, SessionResponse } from "@schema/auth";
+import type { components } from "@api-types";
 
-export async function fetchSession() {
+export async function fetchSession(): Promise<SessionResponse> {
   try {
     const { data } = await client.GET("/api/v1/auth/session");
-    const envelope = data ?? null;
+    const payload = data ?? null;
 
-    if (isSessionResponse(envelope)) {
-      return envelope;
+    if (isSessionResponse(payload)) {
+      return {
+        ...payload,
+        session: payload.session ? normalizeSessionEnvelope(payload.session) : null,
+      } satisfies SessionResponse;
     }
 
     return {
-      session: envelope,
+      session: payload ? normalizeSessionEnvelope(payload) : null,
       providers: [],
       force_sso: false,
     };
@@ -28,7 +32,7 @@ export async function fetchSession() {
   }
 }
 
-export async function fetchProviders() {
+export async function fetchProviders(): Promise<{ providers: AuthProvider[]; force_sso: boolean }> {
   try {
     const { data } = await client.GET("/api/v1/auth/providers");
     if (!data) {
@@ -43,7 +47,7 @@ export async function fetchProviders() {
   }
 }
 
-export async function createSession(payload: LoginPayload) {
+export async function createSession(payload: LoginPayload): Promise<SessionEnvelope> {
   const { data } = await client.POST("/api/v1/auth/session", {
     body: payload,
   });
@@ -52,19 +56,19 @@ export async function createSession(payload: LoginPayload) {
     throw new Error("Expected session payload.");
   }
 
-  return data;
+  return normalizeSessionEnvelope(data);
 }
 
-export async function deleteSession() {
+export async function deleteSession(): Promise<void> {
   await client.DELETE("/api/v1/auth/session");
 }
 
-export async function refreshSession() {
+export async function refreshSession(): Promise<SessionEnvelope> {
   const { data } = await client.POST("/api/v1/auth/session/refresh");
   if (!data) {
     throw new Error("Expected session payload.");
   }
-  return data;
+  return normalizeSessionEnvelope(data);
 }
 
 function isSessionResponse(payload: unknown): payload is SessionResponse {
@@ -78,6 +82,20 @@ function isSessionResponse(payload: unknown): payload is SessionResponse {
     Array.isArray(candidate.providers) &&
     "force_sso" in candidate
   );
+}
+
+type SessionEnvelopeWire = components["schemas"]["SessionEnvelope"];
+
+function normalizeSessionEnvelope(envelope: SessionEnvelopeWire): SessionEnvelope {
+  if (!envelope.expires_at || !envelope.refresh_expires_at) {
+    throw new Error("Session envelope missing expiry metadata.");
+  }
+
+  return {
+    ...envelope,
+    expires_at: envelope.expires_at,
+    refresh_expires_at: envelope.refresh_expires_at,
+  } as SessionEnvelope;
 }
 
 export const sessionKeys = {
