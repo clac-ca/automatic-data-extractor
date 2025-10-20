@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "automatic-data-extractor-backend"
+version = "0.1.0"
+description = "Backend service for Automatic Data Extractor"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.111",
+  "uvicorn[standard]>=0.29",
+  "pydantic-settings>=2.6",
+  "python-multipart>=0.0.9",
+  "email-validator>=2.1",
+  "httpx>=0.27",
+  "pytest>=8.3",
+]
