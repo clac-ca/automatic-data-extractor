@@ -8,45 +8,61 @@ backend/
 │  ├─ main.py                  # FastAPI app, CORS, health, static mount
 │  ├─ api/
 │  │  └─ v1/
+│  │     └─ __init__.py        # composes feature routers
+│  ├─ features/                # vertical slices (router + domain logic)
+│  │  ├─ auth/
+│  │  │  ├─ __init__.py
+│  │  │  ├─ router.py          # /api/v1/auth
+│  │  │  ├─ schemas.py
+│  │  │  └─ service.py
+│  │  ├─ users/
+│  │  │  ├─ __init__.py
+│  │  │  ├─ router.py
+│  │  │  ├─ schemas.py
+│  │  │  ├─ service.py
+│  │  │  └─ repository.py
+│  │  ├─ documents/
+│  │  │  ├─ __init__.py
+│  │  │  ├─ router.py
+│  │  │  ├─ schemas.py
+│  │  │  ├─ service.py
+│  │  │  └─ repository.py
+│  │  ├─ jobs/
+│  │  │  ├─ __init__.py
+│  │  │  ├─ router.py
+│  │  │  ├─ schemas.py
+│  │  │  ├─ service.py
+│  │  │  └─ repository.py
+│  │  ├─ workspaces/
+│  │  │  ├─ __init__.py
+│  │  │  ├─ router.py
+│  │  │  ├─ schemas.py
+│  │  │  └─ service.py
+│  │  └─ health/
 │  │     ├─ __init__.py
-│  │     ├─ health.py          # /api/health, /api/ready (or /api/v1/healthz)
-│  │     ├─ auth.py
-│  │     ├─ users.py
-│  │     ├─ documents.py
-│  │     ├─ jobs.py
-│  │     └─ workspaces.py
-│  ├─ services/                # business logic (pure python)
-│  │  ├─ auth_service.py
-│  │  ├─ users_service.py
-│  │  ├─ documents_service.py
-│  │  ├─ jobs_service.py
-│  │  └─ workspaces_service.py
-│  ├─ repositories/            # DB/data access (add when DB exists)
-│  │  ├─ base.py
-│  │  ├─ users_repo.py
-│  │  ├─ documents_repo.py
-│  │  └─ jobs_repo.py
-│  ├─ schemas/                 # Pydantic request/response DTOs
-│  │  ├─ auth.py
-│  │  ├─ users.py
-│  │  ├─ documents.py
-│  │  ├─ jobs.py
-│  │  └─ workspaces.py
-│  ├─ core/                    # cross‑cutting concerns
-│  │  ├─ config.py             # settings/env
-│  │  ├─ security.py           # auth/JWT/permissions
-│  │  ├─ errors.py             # error envelope handlers
-│  │  └─ logging.py
-│  ├─ db/                      # database wiring (optional until used)
-│  │  ├─ session.py            # engine/session factory
-│  │  └─ models/               # ORM models
+│  │     └─ router.py          # /api/health, /api/ready, /api/v1/healthz
+│  ├─ shared/                  # cross-cutting utilities
+│  │  ├─ core/
+│  │  │  ├─ config.py          # settings/env
+│  │  │  ├─ errors.py          # error envelope handlers
+│  │  │  ├─ logging.py
+│  │  │  └─ security.py
+│  │  ├─ db/                   # database wiring (optional until used)
+│  │  │  ├─ __init__.py
+│  │  │  ├─ session.py         # engine/session factory
+│  │  │  └─ models/            # ORM models
+│  │  └─ repositories/
+│  │     ├─ __init__.py
+│  │     └─ base.py            # generic repository abstraction
 │  └─ static/                  # built frontend copied here by build step
 ├─ tests/
 │  ├─ api/                     # route/contract tests
 │  └─ services/                # business logic tests
-├─ requirements.txt
+├─ pyproject.toml
 └─ .env.example
 ```
+
+Dependencies are defined in `pyproject.toml`; install them via `pip install -e .` from `backend/` or run `npm run setup` at the repo root.
 
 ### Commands
 
@@ -55,6 +71,7 @@ backend/
 npm run dev       # runs FastAPI on :8000 with reload (and frontend if present)
 npm run test      # runs backend pytest (and frontend tests if present)
 npm run start     # run FastAPI in local prod
+npm run openapi-typescript   # dump schema + regenerate frontend TS types
 ```
 
 ### API conventions
@@ -69,11 +86,11 @@ npm run start     # run FastAPI in local prod
 
 ### Module boundaries
 
-* **Routers** (`app/api/v1/*.py`) = HTTP I/O only (validation, HTTP codes).
+* **Feature packages** (`app/features/<feature>`) own router/service/schemas/repository for that slice.
+* **Routers** = HTTP I/O only (validation, HTTP codes).
 * **Services** = business logic; no HTTP dependencies.
-* **Repositories** = DB access; no business logic.
-* **Schemas** = Pydantic models for request/response.
-* **core/** = config/security/errors/logging.
+* **Repositories** = DB access; no business logic; import shared repository base.
+* **Shared** (`app/shared/*`) = cross-cutting config, logging, security, db helpers.
 
 ### Env & config
 
