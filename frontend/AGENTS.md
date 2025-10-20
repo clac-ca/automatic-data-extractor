@@ -40,7 +40,7 @@ frontend/
 # from repo root
 npm run dev       # runs React Router dev (:5173) and backend if present
 npm run test      # runs frontend tests if present
-npm run build     # react-router build → copied into backend/app/static by root build
+npm run build     # react-router build → copied into backend/app/web/static by root build
 npm run openapi-typescript   # refresh backend schema + regenerate app/types/api.d.ts
 ```
 

@@ -4,7 +4,7 @@ import { stdin as input, stdout as output, env } from "node:process";
 
 const targets = [
   "backend/.venv",
-  "backend/app/static",
+  "backend/app/web/static",
   "frontend/node_modules",
   "frontend/build",
   "frontend/dist",

@@ -31,10 +31,10 @@ if (hasFrontend) {
   if (hasBackend) {
     const copied = await copyIfExists(
       join("frontend", "build", "client"),
-      join("backend", "app", "static"),
+      join("backend", "app", "web", "static"),
     );
     if (copied) {
-      console.log("📦 copied frontend/build/client → backend/app/static");
+      console.log("📦 copied frontend/build/client → backend/app/web/static");
     }
   }
 }

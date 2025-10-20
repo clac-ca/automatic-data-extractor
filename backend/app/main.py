@@ -3,10 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 
 from .api.v1 import api_router as api_v1_router
-from .api.v1.health import router as health_router
-from .core.config import settings
-from .core.errors import register_exception_handlers
-from .core.logging import configure_logging
+from .features.health import router as health_router
+from .shared.core.config import settings
+from .shared.core.errors import register_exception_handlers
+from .shared.core.logging import configure_logging
 
 
 def create_app() -> FastAPI:

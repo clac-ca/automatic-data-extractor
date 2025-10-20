@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from . import auth, documents, jobs, users, workspaces
+from ...features import auth, documents, jobs, users, workspaces
 
 api_router = APIRouter()
 
