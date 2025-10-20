@@ -20,6 +20,9 @@ const STATUSES = new Set([
   "cancelled",
 ]);
 const INACTIVE_STATUSES = new Set(["done", "dropped", "cancelled"]);
+const ATTACHMENTS_DIRNAME = "attachments";
+const ATTACHMENTS_GUIDANCE =
+  "If you need to capture support documentation or a working plan, drop it into the attachments directory so it stays with this workpackage.";
 
 const nowIso = () => new Date().toISOString();
 const pad4 = (value) => String(value).padStart(4, "0");
@@ -193,6 +196,7 @@ const lookupIndex = (index, ref) => {
     wpPath: join(dir, "workpackage.json"),
     logPath: join(dir, "log.ndjson"),
     notesPath: join(dir, "notes.md"),
+    attachmentsPath: getAttachmentsDir(dir),
     entry,
   };
 };
@@ -399,6 +403,69 @@ const describePaths = (entries) =>
     ]),
   );
 
+const getAttachmentsDir = (dir) => join(dir, ATTACHMENTS_DIRNAME);
+
+const ensureAttachmentsDir = async (dir) => {
+  if (!dir) return undefined;
+  await fs.mkdir(dir, { recursive: true });
+  return dir;
+};
+
+const describeAttachments = async (dir) => {
+  const ensuredDir = await ensureAttachmentsDir(dir);
+  const items = [];
+  if (ensuredDir) {
+    try {
+      const entries = await fs.readdir(ensuredDir, { withFileTypes: true });
+      const detailed = await Promise.all(
+        entries.map(async (entry) => {
+          const entryPath = join(ensuredDir, entry.name);
+          let stats = null;
+          try {
+            stats = await fs.stat(entryPath);
+          } catch {
+            // ignore stat failures; entry metadata best-effort
+          }
+          const type = entry.isDirectory()
+            ? "directory"
+            : entry.isSymbolicLink()
+              ? "symlink"
+              : entry.isFile()
+                ? "file"
+                : "other";
+          return {
+            name: entry.name,
+            type,
+            path: {
+              absolute: entryPath,
+              relative: relative(ROOT, entryPath),
+            },
+            ...(stats
+              ? {
+                  size: stats.size,
+                  modifiedAt: stats.mtime.toISOString(),
+                }
+              : {}),
+          };
+        }),
+      );
+      detailed.sort((a, b) => a.name.localeCompare(b.name));
+      items.push(...detailed);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+  return {
+    path: {
+      absolute: ensuredDir,
+      relative: ensuredDir ? relative(ROOT, ensuredDir) : null,
+    },
+    count: items.length,
+    items,
+    instructions: ATTACHMENTS_GUIDANCE,
+  };
+};
+
 const applyInlineGlobalOptions = (argv, cliOptions) => {
   if (!Array.isArray(argv) || argv.length === 0) {
     return { args: argv ?? [] };
@@ -549,7 +616,8 @@ const cmdCreate = async (argv) =>
       return fail("ERR_CREATE_EXISTS", `directory already exists: ${folder}`, { folder });
     }
 
-    await fs.mkdir(join(dir, "attachments"), { recursive: true });
+    const attachmentsDir = getAttachmentsDir(dir);
+    await ensureAttachmentsDir(attachmentsDir);
 
     const timestamp = nowIso();
     const workpackage = {
@@ -596,16 +664,28 @@ const cmdCreate = async (argv) =>
     });
     await saveIndex(index);
 
+    const attachments = await describeAttachments(attachmentsDir);
+    const attachmentsHintPath =
+      attachments?.path?.relative && attachments.path.relative.length > 0
+        ? attachments.path.relative
+        : attachments?.path?.absolute;
+    const attachmentsMessage = attachmentsHintPath
+      ? `${ATTACHMENTS_GUIDANCE} Attachments live at: ${attachmentsHintPath}`
+      : ATTACHMENTS_GUIDANCE;
+
     return {
       ok: true,
       number,
       slug,
       status,
+      attachments,
+      message: attachmentsMessage,
       paths: describePaths({
         dir,
         workpackage: workpackagePath,
         notes: notesPath,
         log: logPath,
+        attachments: attachmentsDir,
       }),
     };
   });
@@ -618,14 +698,25 @@ const cmdShow = async (ref) => {
   if (!validation.valid) {
     return validationFail(validation.errors, "workpackage");
   }
+  const attachments = await describeAttachments(resolved.attachmentsPath);
+  const attachmentsHintPath =
+    attachments?.path?.relative && attachments.path.relative.length > 0
+      ? attachments.path.relative
+      : attachments?.path?.absolute;
+  const attachmentsMessage = attachmentsHintPath
+    ? `${ATTACHMENTS_GUIDANCE} Attachments live at: ${attachmentsHintPath}`
+    : ATTACHMENTS_GUIDANCE;
   return {
     ok: true,
     workpackage,
+    attachments,
+    message: attachmentsMessage,
     paths: describePaths({
       dir: resolved.dir,
       workpackage: resolved.wpPath,
       notes: resolved.notesPath,
       log: resolved.logPath,
+      attachments: resolved.attachmentsPath,
     }),
   };
 };
@@ -634,6 +725,7 @@ const cmdStatus = async (ref, argv) =>
   withLock(async () => {
     const target = await resolveRef(ref);
     if (!target) return fail("ERR_LOOKUP_NOT_FOUND", `workpackage not found: ${ref}`, { ref });
+    await ensureAttachmentsDir(target.attachmentsPath);
     const status = parseStatus(getArg(argv, "--to"));
     if (!status) {
       return fail(
@@ -677,6 +769,7 @@ const cmdStatus = async (ref, argv) =>
         workpackage: target.wpPath,
         notes: target.notesPath,
         log: target.logPath,
+        attachments: target.attachmentsPath,
       }),
     };
   });
@@ -744,6 +837,7 @@ const cmdDelete = async (ref, argv) =>
         workpackage: target.wpPath,
         notes: target.notesPath,
         log: target.logPath,
+        attachments: target.attachmentsPath,
       }),
     };
   });
@@ -752,6 +846,7 @@ const cmdNote = async (ref, argv) =>
   withLock(async () => {
     const target = await resolveRef(ref);
     if (!target) return fail("ERR_LOOKUP_NOT_FOUND", `workpackage not found: ${ref}`, { ref });
+    await ensureAttachmentsDir(target.attachmentsPath);
     const text = getArg(argv, "--text") || getArg(argv, "-m");
     if (!text) return fail("ERR_NOTE_TEXT_REQUIRED", "--text is required");
 
@@ -764,6 +859,7 @@ const cmdNote = async (ref, argv) =>
         dir: target.dir,
         notes: target.notesPath,
         log: target.logPath,
+        attachments: target.attachmentsPath,
       }),
     };
   });
