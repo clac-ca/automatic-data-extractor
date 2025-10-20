@@ -1,3 +1,6 @@
-from . import auth, documents, health, jobs, users, workspaces
+"""Namespace for feature verticals.
 
-__all__ = ["auth", "documents", "health", "jobs", "users", "workspaces"]
+Routers, schemas, services, repositories, and models for each domain now live
+under this package, grouped by feature to keep APIs and supporting logic
+cohesive.
+"""
