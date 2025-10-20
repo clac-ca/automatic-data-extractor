@@ -1,29 +1,27 @@
-from datetime import datetime, timezone
+"""API routes for the health module."""
 
-from fastapi import APIRouter
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, status
+
+from .dependencies import get_health_service
+from .schemas import HealthCheckResponse
+from .service import HealthService
 
 router = APIRouter()
 
 
-@router.get("/health", tags=["health"])
-async def health() -> dict[str, str]:
-    return {
-        "ok": "true",
-        "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-
-
-@router.get("/ready", tags=["health"])
-async def ready() -> dict[str, str]:
-    # In the future check downstream dependencies (DB, message bus, etc.).
-    return {
-        "ok": "true",
-        "status": "ready",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-
-
-@router.get("/v1/healthz", tags=["health"])
-async def versioned_health() -> dict[str, str]:
-    return {"ok": "true", "status": "healthy", "version": "v1"}
+@router.get(
+    "",
+    response_model=HealthCheckResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Service health status",
+    response_model_exclude_none=True,
+)
+async def read_health(
+    service: Annotated[HealthService, Depends(get_health_service)]
+) -> HealthCheckResponse:
+    """Return the current health information for ADE."""
+    return await service.status()

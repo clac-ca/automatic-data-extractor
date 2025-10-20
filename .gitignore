@@ -15,8 +15,16 @@ yarn-error.log*
 dist/
 build/
 frontend/build/
-backend/openapi.json
-frontend/app/types/api.d.ts
+backend/app/openapi.json
+frontend/src/shared/types/api.d.ts
+backend/app/web/*
+!backend/app/web/README.md
+!backend/app/web/static/
+backend/app/web/static/*
+!backend/app/web/static/.gitkeep
+
+# Backend runtime artefacts
+data/db/backend.app.sqlite
 
 # Frontend env files
 frontend/.env*

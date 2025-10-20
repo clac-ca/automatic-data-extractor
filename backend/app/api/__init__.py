@@ -1,3 +1,6 @@
-from .v1 import api_router as v1_router
+"""ADE API shell exposing error handlers and settings dependency."""
 
-__all__ = ["v1_router"]
+from .errors import register_exception_handlers
+from .settings import get_app_settings
+
+__all__ = ["register_exception_handlers", "get_app_settings"]
