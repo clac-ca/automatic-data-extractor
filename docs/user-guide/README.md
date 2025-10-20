@@ -30,16 +30,16 @@ The upload flow is designed to be friendly for non-technical users:
 3. Optionally label the document with tags (such as reporting period or client name) so that it is easier to find later.
 4. Confirm the workspace destination and submit.
 
-ADE immediately checks that the file type is supported and queues an extraction job. Large files may take a few minutes to process, but you can continue working in the app while the job runs.
+ADE immediately checks that the file type is supported and starts the extraction run right away. Most documents finish in seconds, and the interface streams progress so you can keep working while ADE processes the file.
 
 ## Monitoring extraction jobs
 
 Every upload creates a job card that shows live status updates:
 
-- **Queued** – ADE is preparing the extraction run.
-- **Processing** – the parsing logic is running. You can open the card to view progress checkpoints.
-- **Completed** – processing finished successfully and metrics are available.
-- **Needs attention** – ADE detected an issue (for example, an unreadable table) and needs your input.
+- **Pending** – ADE is preparing the extraction run.
+- **Running** – the parsing logic is executing. Open the card to view live progress checkpoints.
+- **Succeeded** – processing finished successfully and metrics are available.
+- **Failed** – ADE detected an issue (for example, an unreadable table) and needs your input to resolve it.
 
 Notification settings let you choose whether to receive email alerts when jobs finish or require attention.
 
