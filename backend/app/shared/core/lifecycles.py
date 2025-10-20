@@ -13,7 +13,6 @@ from ..db.engine import ensure_database_ready
 from ..db.session import get_sessionmaker
 from ...features.roles.service import sync_permission_registry
 from .config import Settings, get_settings
-from ..workers.task_queue import TaskQueue
 
 
 def ensure_runtime_dirs(settings: Settings | None = None) -> None:
@@ -35,7 +34,6 @@ def ensure_runtime_dirs(settings: Settings | None = None) -> None:
 def create_application_lifespan(
     *,
     settings: Settings,
-    task_queue: TaskQueue,
 ) -> Lifespan[FastAPI]:
     """Return the FastAPI lifespan handler used by the app factory."""
 
@@ -43,16 +41,11 @@ def create_application_lifespan(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         ensure_runtime_dirs(settings)
         app.state.settings = settings
-        app.state.task_queue = task_queue
         await ensure_database_ready(settings)
         session_factory = get_sessionmaker(settings=settings)
         async with session_factory() as session:
             await sync_permission_registry(session=session)
-        try:
-            yield
-        finally:
-            await task_queue.clear()
-            task_queue.clear_subscribers()
+        yield
 
     return lifespan
 

@@ -1,7 +1,6 @@
 """ADE FastAPI application entry point."""
 
 from __future__ import annotations
-
 from pathlib import Path
 from typing import Any
 
@@ -13,12 +12,10 @@ from fastapi.staticfiles import StaticFiles
 from .api import register_exception_handlers
 from .api.v1 import router as api_router
 from .features.auth.dependencies import configure_auth_dependencies
-from .features.jobs.tasks import register_job_tasks
 from .shared.core.config import Settings, get_settings
 from .shared.core.lifecycles import create_application_lifespan
 from .shared.core.logging import setup_logging
 from .shared.core.middleware import register_middleware
-from .shared.workers.task_queue import TaskQueue
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 WEB_STATIC_DIR = WEB_DIR / "static"
@@ -36,11 +33,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     redoc_url = settings.redoc_url if settings.api_docs_enabled else None
     openapi_url = settings.openapi_url if settings.api_docs_enabled else None
 
-    task_queue = TaskQueue()
-    register_job_tasks(task_queue)
     lifespan = create_application_lifespan(
         settings=settings,
-        task_queue=task_queue,
     )
 
     app = FastAPI(
@@ -54,7 +48,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     app.state.settings = settings
-    app.state.task_queue = task_queue
     configure_auth_dependencies(settings=settings)
 
     register_middleware(app)
