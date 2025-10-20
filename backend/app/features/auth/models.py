@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
+from backend.app.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
 
 from ..users.models import User
 

@@ -25,7 +25,7 @@ from backend.app.features.roles.service import (
     get_global_role_by_slug,
     sync_permission_registry,
 )
-from backend.app.platform.config import Settings
+from backend.app.shared.core.config import Settings
 
 from ..system_settings.repository import SystemSettingsRepository
 from ..users.models import User

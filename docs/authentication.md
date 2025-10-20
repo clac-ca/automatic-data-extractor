@@ -34,7 +34,7 @@ tied to `/api/v1/auth/session/refresh`. Secure cookies are used whenever the req
 ### Configuration
 
 * Provide `ADE_OIDC_CLIENT_ID`, `ADE_OIDC_CLIENT_SECRET`, `ADE_OIDC_ISSUER`, `ADE_OIDC_REDIRECT_URL`, and `ADE_OIDC_SCOPES` to enable the flow. ADE always authenticates as a confidential client, so the secret is required. The redirect URL should point at the SPA callback route (`/auth/callback`), which finalises the login before forwarding the user to their requested destination. Supplement this with `ADE_AUTH_FORCE_SSO` when you are ready to disable password-based logins entirely, and use `ADE_AUTH_SSO_AUTO_PROVISION` if you need to pause automatic account creation.【F:.env.example†L58-L66】【F:frontend/src/app/routes/auth.callback.tsx†L1-L74】
-* The settings layer normalises scopes, enforces HTTPS issuers and redirect URLs, and converts relative callbacks against `server_public_url`.【F:backend/app/platform/config.py†L408-L435】【F:backend/app/platform/config.py†L437-L497】【F:backend/app/platform/config.py†L559-L582】
+* The settings layer normalises scopes, enforces HTTPS issuers and redirect URLs, and converts relative callbacks against `server_public_url`.【F:backend/app/shared/core/config.py†L331-L399】【F:backend/app/shared/core/config.py†L436-L459】
 * When those settings are present, `/auth/providers` automatically publishes a "Single sign-on" option so the login page advertises SSO alongside the credential form. Leave `ADE_AUTH_FORCE_SSO=false` during rollout so the inaugural administrator can continue signing in with their password, then flip it once the identity provider login is verified.【F:backend/app/features/auth/service.py†L143-L166】【F:frontend/src/app/routes/login.tsx†L1-L74】
 
 ### Login flow
@@ -64,7 +64,7 @@ when access is denied.【F:backend/app/features/roles/dependencies.py†L14-L68�
 * `require_permissions_catalog_access` protects the permissions catalogue endpoints and handles both global and workspace
 scopes. It reuses the same forbidden payload shape and performs scope validation for workspace requests.【F:backend/app/features/roles/dependencies.py†L70-L109】
 * `require_csrf` must wrap every mutating route. A regression test walks the FastAPI routing table to ensure that any POST,
-PUT, PATCH, or DELETE endpoint is guarded, excluding a small allowlist for session bootstrap flows.【F:backend/app/api/tests/test_csrf_guards.py†L1-L85】
+PUT, PATCH, or DELETE endpoint is guarded, excluding a small allowlist for session bootstrap flows.【F:backend/tests/api/test_csrf_guards.py†L1-L51】
 
 ## RBAC Integration
 

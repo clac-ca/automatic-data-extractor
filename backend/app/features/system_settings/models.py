@@ -8,7 +8,7 @@ from sqlalchemy import JSON, String
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.db import Base, TimestampMixin
+from backend.app.shared.db import Base, TimestampMixin
 
 
 class SystemSetting(TimestampMixin, Base):

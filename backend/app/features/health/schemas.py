@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from backend.app.platform.schema import BaseSchema
+from backend.app.shared.core.schema import BaseSchema
 
 
 class HealthComponentStatus(BaseSchema):
