@@ -17,9 +17,9 @@ from alembic.config import Config
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from backend.app import Settings, get_settings, reload_settings
-from backend.app.db.engine import ensure_database_ready, render_sync_url, reset_database_state
-from backend.app.db.session import get_sessionmaker
+from backend.app.shared.core.config import Settings, get_settings, reload_settings
+from backend.app.shared.db.engine import ensure_database_ready, render_sync_url, reset_database_state
+from backend.app.shared.db.session import get_sessionmaker
 from backend.app.features.auth.security import hash_password
 from backend.app.features.roles.models import Role
 from backend.app.features.roles.service import (
@@ -30,8 +30,8 @@ from backend.app.features.roles.service import (
 )
 from backend.app.features.users.models import User, UserCredential
 from backend.app.features.workspaces.models import Workspace, WorkspaceMembership
-from backend.app.lifecycles import ensure_runtime_dirs
-from backend.app.app import create_app
+from backend.app.shared.core.lifecycles import ensure_runtime_dirs
+from backend.app.main import create_app
 
 
 @pytest.fixture(scope="session")

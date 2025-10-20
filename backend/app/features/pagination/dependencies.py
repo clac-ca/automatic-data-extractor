@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import Depends, Query
 
-from backend.app.platform.pagination import PaginationParams
+from backend.app.shared.core.pagination import PaginationParams
 
 
 def get_pagination_params(

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Securi
 
 from backend.app.features.auth.dependencies import require_authenticated, require_csrf
 from backend.app.features.roles.dependencies import require_workspace
-from backend.app.platform.schema import ErrorMessage
+from backend.app.shared.core.schema import ErrorMessage
 
 from .dependencies import get_jobs_service
 from ..configurations.exceptions import (

@@ -20,7 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
+from backend.app.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
 
 from ..workspaces.models import Workspace
 from ..users.models import User

@@ -56,7 +56,7 @@ await run(
     [
       "import json",
       "from pathlib import Path",
-      "from backend.app.app import create_app",
+      "from backend.app.main import create_app",
       "app = create_app()",
       "schema = app.openapi()",
       `Path(r"${openapiRelativePath}").write_text(json.dumps(schema, indent=2))`,

@@ -5,11 +5,11 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends, Path, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.session import get_session
+from backend.app.shared.db.session import get_session
 from backend.app.features.auth.dependencies import require_authenticated, require_csrf
 from backend.app.features.roles.dependencies import require_global, require_workspace
-from backend.app.platform.responses import DefaultResponse
-from backend.app.platform.schema import ErrorMessage
+from backend.app.shared.core.responses import DefaultResponse
+from backend.app.shared.core.schema import ErrorMessage
 
 from ..roles.models import Role
 from ..roles.schemas import RoleCreate, RoleRead, RoleUpdate

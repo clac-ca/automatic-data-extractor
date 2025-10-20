@@ -8,7 +8,7 @@ from sqlalchemy import JSON, ForeignKey, Index, String
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
+from backend.app.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
 
 from ..workspaces.models import Workspace
 

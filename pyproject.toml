@@ -57,7 +57,7 @@ include = ["backend.app*"]
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = [
-  "backend/app",
+  "backend/tests",
 ]
 asyncio_mode = "auto"
 addopts = "-ra"
