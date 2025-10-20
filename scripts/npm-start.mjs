@@ -1,8 +1,11 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const backendDir = "backend";
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const projectRoot = join(__dirname, "..");
+const backendDir = join(projectRoot, "backend");
 const venvUvicorn =
   process.platform === "win32"
     ? join(backendDir, ".venv", "Scripts", "uvicorn.exe")

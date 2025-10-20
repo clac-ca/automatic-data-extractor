@@ -84,20 +84,42 @@ const record = (name) => {
   return entry;
 };
 
+const formatStepLabel = (name) => name.replace(/[-_]/g, " ").toUpperCase();
+
+const logStepStart = (name) => {
+  console.log(`\n=== ${formatStepLabel(name)} :: START ===`);
+};
+
+const logStepSuccess = (name) => {
+  console.log(`=== ${formatStepLabel(name)} :: OK ===`);
+};
+
+const logStepFailure = (name, error) => {
+  console.error(`=== ${formatStepLabel(name)} :: FAILED ===`);
+
+  if (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+  }
+};
+
 const runStep = async (name, task) => {
   const entry = record(name);
+  logStepStart(name);
   try {
     await task();
     entry.status = "ok";
+    logStepSuccess(name);
   } catch (error) {
     entry.status = "failed";
     entry.error = error instanceof Error ? error.message : String(error);
+    logStepFailure(name, error);
     throw error;
   }
 };
 
 await runStep("setup", () => run("npm", ["run", "setup"]));
 await runStep("openapi-typescript", () => run("npm", ["run", "openapi-typescript"]));
+await runStep("lint", () => run("npm", ["run", "lint"]));
 await runStep("test", () => run("npm", ["run", "test"]));
 await runStep("build", () => run("npm", ["run", "build"]));
 
@@ -116,6 +138,18 @@ steps.push(routesStep);
 const okSteps = steps.every(
   (step) => step.status === "ok" || step.status === "skipped",
 );
+
+console.log("\n=== CI SUMMARY ===");
+for (const step of steps) {
+  const statusText = step.status.toUpperCase();
+  if (step.status === "failed") {
+    console.log(`- ${step.name}: ${statusText} (${step.error ?? "see logs"})`);
+  } else if (step.status === "skipped") {
+    console.log(`- ${step.name}: ${statusText}${step.reason ? ` (${step.reason})` : ""}`);
+  } else {
+    console.log(`- ${step.name}: ${statusText}`);
+  }
+}
 
 const summary = {
   ok: okSteps && routesResult.status !== "failed",

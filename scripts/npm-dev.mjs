@@ -42,17 +42,46 @@ const makeUvicornCommand = (extraArgs = []) => {
   return `uvicorn ${args.join(" ")}`;
 };
 
-const commands = [];
+const validModes = new Set(["backend", "frontend"]);
+const [mode, ...rest] = process.argv.slice(2).filter(Boolean);
 
-if (hasBackend) {
-  commands.push(makeUvicornCommand(["--reload"]));
+if (rest.length > 0) {
+  console.error(`Unexpected arguments: ${rest.join(", ")}`);
+  process.exit(1);
 }
 
-if (hasFrontend) {
-  commands.push("npm --prefix frontend run dev");
+if (mode && !validModes.has(mode)) {
+  console.error(`Unknown mode "${mode}". Use "backend" or "frontend".`);
+  process.exit(1);
 }
 
-if (commands.length === 0) {
+if (mode === "backend" && !hasBackend) {
+  console.error("Backend not found. Create backend/ before running backend mode.");
+  process.exit(1);
+}
+
+if (mode === "frontend" && !hasFrontend) {
+  console.error("Frontend not found. Create frontend/ before running frontend mode.");
+  process.exit(1);
+}
+
+const tasks = [];
+
+if (hasBackend && (!mode || mode === "backend")) {
+  tasks.push({
+    name: "api",
+    command: makeUvicornCommand(["--reload"]),
+  });
+}
+
+if (hasFrontend && (!mode || mode === "frontend")) {
+  tasks.push({
+    name: "web",
+    command: "npm --prefix frontend run dev",
+  });
+}
+
+if (tasks.length === 0) {
   console.log("Nothing to run yet. Add backend/ and/or frontend/ first.");
   process.exit(0);
 }
@@ -60,9 +89,9 @@ if (commands.length === 0) {
 await run("npx", [
   "concurrently",
   "-k",
-  "-n",
-  "api,web",
   "-c",
   "auto",
-  ...commands,
+  "-n",
+  tasks.map(({ name }) => name).join(","),
+  ...tasks.map(({ command }) => command),
 ]);

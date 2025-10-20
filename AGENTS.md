@@ -14,6 +14,8 @@ repo/
 
 ## ⚡ Available Tools
 
+You may use `ade <script>` as a shortcut for any `npm run <script>` command; both forms stay in sync.
+
 ```bash
 npm run setup   # Install deps
 npm run dev     # FastAPI + React Router

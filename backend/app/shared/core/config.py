@@ -36,7 +36,12 @@ class Settings(BaseSettings):
 
     @computed_field(return_type=Path)
     def static_dir(self) -> Path:
-        return Path(self.static_directory).resolve()
+        static_path = Path(self.static_directory)
+        if static_path.is_absolute():
+            return static_path
+
+        project_root = Path(__file__).resolve().parents[4]
+        return (project_root / static_path).resolve()
 
 
 @lru_cache
