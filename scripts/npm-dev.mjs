@@ -69,14 +69,14 @@ const tasks = [];
 
 if (hasBackend && (!mode || mode === "backend")) {
   tasks.push({
-    name: "api",
+    name: "backend",
     command: makeUvicornCommand(["--reload"]),
   });
 }
 
 if (hasFrontend && (!mode || mode === "frontend")) {
   tasks.push({
-    name: "web",
+    name: "frontend",
     command: "npm --prefix frontend run dev",
   });
 }

@@ -78,7 +78,7 @@ npm run ci      # Full CI pipeline
 - Snapshot the board: `npm run workpackage board`.
 - Delete a single package: `npm run workpackage delete <ref> -- --yes` (explicit confirmation keeps accidents at bay).
 - Listings include a short description from summaries for quick scanning.
-- Every package lives in `.workpackage/packages/<id>-<slug>/` with `workpackage.json`, `notes.md`, and `log.ndjson`.
+- Every package lives in `.workpackage/packages/<id>-<slug>/` with `workpackage.json`, `notes.md`, `log.ndjson`, and an `attachments/` folder for supporting docs or plans.
 - Need to wipe everything? Run `npm run workpackage clear` and type `yes` when prompted (no force flag by design).
 
 ### Debug a Failing Build
