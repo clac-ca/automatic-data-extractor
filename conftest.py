@@ -121,18 +121,6 @@ async def async_client(app: FastAPI) -> AsyncIterator[AsyncClient]:
         yield client
 
 
-@pytest_asyncio.fixture(autouse=True)
-async def _reset_task_queue(app: FastAPI) -> AsyncIterator[None]:
-    """Ensure the in-memory task queue is empty between tests."""
-
-    queue = getattr(app.state, "task_queue", None)
-    if queue is not None:
-        await queue.clear()
-    yield
-    if queue is not None:
-        await queue.clear()
-
-
 @pytest_asyncio.fixture()
 async def seed_identity(app: FastAPI) -> dict[str, Any]:
     """Create baseline users and workspace records for identity tests."""

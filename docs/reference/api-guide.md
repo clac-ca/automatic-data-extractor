@@ -36,8 +36,8 @@ Upload source files for extraction. All document routes are nested under the wor
 
 Trigger and monitor extraction runs.
 
-- `POST /workspaces/{workspace_id}/jobs` – start an extraction by referencing an existing `document_id` or by including a file upload in the request.
-- `GET /workspaces/{workspace_id}/jobs/{job_id}` – retrieve status (`queued`, `processing`, `succeeded`, `failed`) and progress metrics.
+- `POST /workspaces/{workspace_id}/jobs` – start an extraction by referencing an existing `document_id` or by including a file upload in the request. Jobs run inline, so the API returns once processing completes or fails.
+- `GET /workspaces/{workspace_id}/jobs/{job_id}` – retrieve status (`pending`, `running`, `succeeded`, `failed`) and progress metrics.
 - `GET /workspaces/{workspace_id}/jobs` – list recent jobs, filterable by status, document, or submitter using query parameters.
 
 ## Error handling

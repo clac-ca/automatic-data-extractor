@@ -10,7 +10,7 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 - The API entry point calls the shared database bootstrap helper before opening sessions. It creates the SQLite directory, runs Alembic migrations, and surfaces progress in the logs before mirroring the manual fallback documented in the [admin getting started guide](getting_started.md#manual-migrations-and-recovery).
 
 ## Configuration snapshot
-- Settings are loaded once at startup through `get_settings()` and cached on `app.state.settings`. Routes and background workers read from this state rather than reloading environment variables on every request.
+- Settings are loaded once at startup through `get_settings()` and cached on `app.state.settings`. Routes read from this state rather than reloading environment variables on every request.
 - Environment variables use the `ADE_` prefix (for example `ADE_DATABASE_DSN`, `ADE_STORAGE_UPLOAD_MAX_BYTES`). A local `.env` file is respected during development.
 - Host and port configuration splits into `ADE_SERVER_HOST` / `ADE_SERVER_PORT` for the uvicorn listener and `ADE_SERVER_PUBLIC_URL` for the externally reachable origin. When ADE sits behind HTTPS on a domain such as `https://ade.example.com`, set the public URL and provide a JSON array in `ADE_SERVER_CORS_ORIGINS` so browsers can connect (for example `["https://ade.example.com"]`).
 - Documentation endpoints (`/docs`, `/redoc`, `/openapi.json`) default on for the `local` and `staging` environments and can be
@@ -21,7 +21,6 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 
 ## Operational building blocks
 - Database connections are created via the async SQLAlchemy engine in [`backend/app/shared/db/engine.py`](../../backend/app/shared/db/engine.py) and scoped sessions from [`backend/app/shared/db/session.py`](../../backend/app/shared/db/session.py).
-- Background work is handled by the in-process task queue defined in [`backend/app/shared/workers/task_queue.py`](../../backend/app/shared/workers/task_queue.py).
 - Structured logging and correlation IDs are configured through [`backend/app/shared/core/logging.py`](../../backend/app/shared/core/logging.py) and middleware in [`backend/app/shared/core/middleware.py`](../../backend/app/shared/core/middleware.py).
 
 Future sections will expand on security hardening, backup procedures, and frontend onboarding once those pieces land. The components listed above are already in place and unlikely to change dramatically.
