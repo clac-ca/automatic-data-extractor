@@ -55,10 +55,11 @@ const collectFrontendRoutes = async () => {
 
   const binary = process.platform === "win32" ? "react-router.cmd" : "react-router";
   const localBin = join(nodeModulesDir, ".bin", binary);
+  const localBinAbsolute = join(process.cwd(), localBin);
 
   try {
     const { stdout } = existsSync(localBin)
-      ? await runCapture(localBin, ["routes", "--json"], {
+      ? await runCapture(localBinAbsolute, ["routes", "--json"], {
           cwd: "frontend",
           shell: process.platform === "win32",
         })
@@ -96,6 +97,7 @@ const runStep = async (name, task) => {
 };
 
 await runStep("setup", () => run("npm", ["run", "setup"]));
+await runStep("openapi-typescript", () => run("npm", ["run", "openapi-typescript"]));
 await runStep("test", () => run("npm", ["run", "test"]));
 await runStep("build", () => run("npm", ["run", "build"]));
 

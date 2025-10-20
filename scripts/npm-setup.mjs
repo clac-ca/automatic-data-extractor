@@ -40,17 +40,26 @@ if (hasBackend) {
 
   const pythonPath =
     process.platform === "win32"
-      ? join(venvDir, "Scripts", "python.exe")
-      : join(venvDir, "bin", "python3");
+      ? join(process.cwd(), "backend", ".venv", "Scripts", "python.exe")
+      : join(process.cwd(), "backend", ".venv", "bin", "python3");
+  const pythonFallback =
+    process.platform === "win32"
+      ? join(process.cwd(), "backend", ".venv", "Scripts", "python.exe")
+      : join(process.cwd(), "backend", ".venv", "bin", "python");
+  const pythonExecutable = existsSync(pythonPath)
+    ? pythonPath
+    : existsSync(pythonFallback)
+      ? pythonFallback
+      : pythonPath;
   const uvLockExists = existsSync("backend/uv.lock");
   const uvAvailable = await commandExists("uv");
 
   if (uvAvailable && uvLockExists) {
-    await run("uv", ["pip", "sync", "--python", pythonPath, "--from", "backend/uv.lock"]);
+    await run("uv", ["pip", "sync", "--python", pythonExecutable, "--from", "backend/uv.lock"]);
   } else {
-    await run(pythonPath, ["-m", "pip", "install", "--upgrade", "pip"]);
-    await run(pythonPath, ["-m", "pip", "install", "--upgrade", "setuptools", "wheel"]);
-    await run(pythonPath, ["-m", "pip", "install", "-e", "."], { cwd: "backend" });
+    await run(pythonExecutable, ["-m", "pip", "install", "--upgrade", "pip"]);
+    await run(pythonExecutable, ["-m", "pip", "install", "--upgrade", "setuptools", "wheel"]);
+    await run(pythonExecutable, ["-m", "pip", "install", "-e", "."], { cwd: "backend" });
     const extractDevDeps = `
 import subprocess
 import sys
@@ -69,12 +78,12 @@ dev_deps = data.get("tool", {}).get("uv", {}).get("dev-dependencies", [])
 if dev_deps:
     subprocess.check_call([sys.executable, "-m", "pip", "install", *dev_deps])
 `;
-    await run(pythonPath, ["-c", extractDevDeps], { cwd: "backend" });
+    await run(pythonExecutable, ["-c", extractDevDeps], { cwd: "backend" });
   }
 }
 
 if (hasFrontend) {
-  await run("npm", ["--prefix", "frontend", "ci"]);
+  await run("npm", ["ci"], { cwd: "frontend" });
 }
 
 console.log("✅ setup complete");

@@ -41,6 +41,7 @@ frontend/
 npm run dev       # runs React Router dev (:5173) and backend if present
 npm run test      # runs frontend tests if present
 npm run build     # react-router build → copied into backend/app/static by root build
+npm run openapi-typescript   # refresh backend schema + regenerate app/types/api.d.ts
 ```
 
 ### Routing & naming rules (framework mode)
@@ -56,7 +57,7 @@ npm run build     # react-router build → copied into backend/app/static by roo
 
 * Use **relative** paths (`/api/v1/...`); dev proxy forwards to backend.
 * Centralize fetch logic in `app/lib/api.ts`.
-* Later, generate types from `/openapi.json` into `app/types` or `app/lib/api.d.ts`.
+* Regenerate backend client types with `npm run openapi-typescript` → writes `app/types/api.d.ts`.
 
 ### Tests
 

@@ -3,20 +3,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "setup": "node scripts/setup.mjs",
-    "dev": "node scripts/dev.mjs",
-    "build": "node scripts/build.mjs",
-    "start": "node scripts/start.mjs",
-    "test": "node scripts/test.mjs",
-    "routes": "node scripts/routes.mjs",
-    "clean": "node scripts/clean.mjs",
-    "clean:force": "node scripts/clean.mjs",
-    "reset": "node scripts/reset.mjs",
-    "reset:force": "node scripts/reset.mjs",
-    "ci": "node scripts/ci.mjs"
+    "setup": "node scripts/npm-setup.mjs",
+    "dev": "node scripts/npm-dev.mjs",
+    "build": "node scripts/npm-build.mjs",
+    "start": "node scripts/npm-start.mjs",
+    "test": "node scripts/npm-test.mjs",
+    "openapi-typescript": "node scripts/npm-openapi-typescript.mjs",
+    "routes": "node scripts/npm-routes.mjs",
+    "clean": "node scripts/npm-clean.mjs",
+    "clean:force": "node scripts/npm-clean.mjs",
+    "reset": "node scripts/npm-reset.mjs",
+    "reset:force": "node scripts/npm-reset.mjs",
+    "ci": "node scripts/npm-ci.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.0.0",
+    "openapi-typescript": "^7.4.3",
     "rimraf": "^6.0.0"
   }
 }

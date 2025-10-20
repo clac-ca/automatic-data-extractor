@@ -21,11 +21,19 @@ const frontendPresent =
   existsSync("frontend") && existsSync(join("frontend", "package.json"));
 
 if (backendPresent) {
-  const pythonPath =
-    process.platform === "win32"
-      ? join("backend", ".venv", "Scripts", "python.exe")
-      : join("backend", ".venv", "bin", "python3");
-  await run(pythonPath, ["-m", "pytest", "-q"], { cwd: "backend" });
+  const pythonCandidates = process.platform === "win32"
+    ? [
+        join(process.cwd(), "backend", ".venv", "Scripts", "python.exe"),
+        join(process.cwd(), "backend", ".venv", "Scripts", "python3.exe"),
+      ]
+    : [
+        join(process.cwd(), "backend", ".venv", "bin", "python3"),
+        join(process.cwd(), "backend", ".venv", "bin", "python"),
+      ];
+  const pythonExecutable =
+    pythonCandidates.find((candidate) => existsSync(candidate)) ||
+    (process.platform === "win32" ? "python" : "python3");
+  await run(pythonExecutable, ["-m", "pytest", "-q"], { cwd: "backend" });
 }
 
 let frontendHasTests = false;
@@ -39,7 +47,7 @@ if (frontendPresent) {
 }
 
 if (frontendPresent && frontendHasTests) {
-  await run("npm", ["--prefix", "frontend", "run", "test"]);
+  await run("npm", ["run", "test"], { cwd: "frontend" });
 }
 
 console.log("✅ test complete");
