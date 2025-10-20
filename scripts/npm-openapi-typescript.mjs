@@ -15,7 +15,7 @@ const run = (command, args = [], options = {}) =>
     });
   });
 
-const hasBackend = existsSync("backend") && existsSync(join("backend", "app"));
+const hasBackend = existsSync(join("backend", "app")) && existsSync("pyproject.toml");
 const hasFrontend =
   existsSync("frontend") && existsSync(join("frontend", "package.json"));
 
@@ -26,13 +26,12 @@ if (!hasBackend) {
 
 const pythonPathCandidates = process.platform === "win32"
   ? [
-      join(process.cwd(), "backend", ".venv", "Scripts", "python.exe"),
-      join(process.cwd(), "backend", ".venv", "Scripts", "python3.exe"),
-      join(process.cwd(), "backend", ".venv", "Scripts", "python.exe"),
+      join(process.cwd(), ".venv", "Scripts", "python.exe"),
+      join(process.cwd(), ".venv", "Scripts", "python3.exe"),
     ]
   : [
-      join(process.cwd(), "backend", ".venv", "bin", "python3"),
-      join(process.cwd(), "backend", ".venv", "bin", "python"),
+      join(process.cwd(), ".venv", "bin", "python3"),
+      join(process.cwd(), ".venv", "bin", "python"),
     ];
 
 const pythonExecutable =
@@ -46,9 +45,9 @@ if (!pythonExecutable) {
   process.exit(1);
 }
 
-const openapiRelativePath = "openapi.json";
-const openapiPath = join("backend", openapiRelativePath);
-const outputPath = join("frontend", "app", "types", "api.d.ts");
+const openapiRelativePath = join("backend", "app", "openapi.json");
+const openapiPath = openapiRelativePath;
+const outputPath = join("frontend", "src", "shared", "types", "api.d.ts");
 
 await run(
   pythonExecutable,
@@ -57,13 +56,14 @@ await run(
     [
       "import json",
       "from pathlib import Path",
-      "from app.main import app",
+      "from backend.app.app import create_app",
+      "app = create_app()",
       "schema = app.openapi()",
-      "Path('openapi.json').write_text(json.dumps(schema, indent=2))",
-      "print('📝 wrote backend/openapi.json')",
+      `Path(r"${openapiRelativePath}").write_text(json.dumps(schema, indent=2))`,
+      `print('📝 wrote ${openapiRelativePath}')`,
     ].join("; "),
   ],
-  { cwd: "backend" },
+  { cwd: process.cwd() },
 );
 
 if (!hasFrontend) {
@@ -71,7 +71,7 @@ if (!hasFrontend) {
   process.exit(0);
 }
 
-const typesDir = join("frontend", "app", "types");
+const typesDir = join("frontend", "src", "shared", "types");
 if (!existsSync(typesDir)) {
   mkdirSync(typesDir, { recursive: true });
 }
@@ -80,4 +80,4 @@ const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
 
 await run(npxCommand, ["openapi-typescript", openapiPath, "--output", outputPath, "--export-type"]);
 
-console.log("✅ generated frontend/app/types/api.d.ts");
+console.log("✅ generated frontend/src/shared/types/api.d.ts");

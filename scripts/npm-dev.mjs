@@ -15,18 +15,19 @@ const run = (command, args = [], options = {}) =>
     });
   });
 
-const hasBackend = existsSync("backend") && existsSync(join("backend", "app"));
+const backendDir = ".";
+const hasBackend = existsSync(join("backend", "app")) && existsSync("pyproject.toml");
 const hasFrontend =
   existsSync("frontend") && existsSync(join("frontend", "package.json"));
 
 const makeUvicornCommand = (extraArgs = []) => {
-  const backendDir = "backend";
   const venvUvicorn =
     process.platform === "win32"
       ? join(backendDir, ".venv", "Scripts", "uvicorn.exe")
       : join(backendDir, ".venv", "bin", "uvicorn");
   const args = [
-    "app.main:app",
+    "backend.app.app:create_app",
+    "--factory",
     "--host",
     "0.0.0.0",
     "--port",
@@ -56,7 +57,7 @@ if (mode && !validModes.has(mode)) {
 }
 
 if (mode === "backend" && !hasBackend) {
-  console.error("Backend not found. Create backend/ before running backend mode.");
+  console.error("Backend not found. Ensure backend/app/ and pyproject.toml exist before running backend mode.");
   process.exit(1);
 }
 
@@ -82,7 +83,7 @@ if (hasFrontend && (!mode || mode === "frontend")) {
 }
 
 if (tasks.length === 0) {
-  console.log("Nothing to run yet. Add backend/ and/or frontend/ first.");
+  console.log("Nothing to run yet. Add backend/app/ and/or frontend/ first.");
   process.exit(0);
 }
 
