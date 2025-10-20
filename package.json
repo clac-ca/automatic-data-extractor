@@ -2,6 +2,9 @@
   "name": "automatic-data-extractor",
   "private": true,
   "type": "module",
+  "bin": {
+    "ade": "./scripts/npm-ade.mjs"
+  },
   "scripts": {
     "setup": "node scripts/npm-setup.mjs",
     "dev": "node scripts/npm-dev.mjs",
@@ -10,6 +13,7 @@
     "test": "node scripts/npm-test.mjs",
     "openapi-typescript": "node scripts/npm-openapi-typescript.mjs",
     "routes": "node scripts/npm-routes.mjs",
+    "workpackage": "node scripts/npm-workpackage.mjs",
     "clean": "node scripts/npm-clean.mjs",
     "clean:force": "node scripts/npm-clean.mjs",
     "reset": "node scripts/npm-reset.mjs",

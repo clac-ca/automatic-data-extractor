@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "lastNumber": 3,
+  "packages": [
+    {
+      "number": 1,
+      "slug": "hardening-workpackage-operations",
+      "title": "Hardening workpackage operations",
+      "status": "done",
+      "summary": "Add atomic writes, locking, validation, and ergonomic commands for agents.",
+      "createdAt": "2025-10-20T01:35:32.489Z",
+      "updatedAt": "2025-10-20T01:43:03.792Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0001-hardening-workpackage-operations"
+    },
+    {
+      "number": 2,
+      "slug": "backend-feature-first-refactor",
+      "title": "Backend feature-first refactor",
+      "status": "done",
+      "summary": "Convert FastAPI backend folders to by-feature structure.",
+      "createdAt": "2025-10-20T01:48:45.677Z",
+      "updatedAt": "2025-10-20T02:18:46.032Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0002-backend-feature-first-refactor"
+    },
+    {
+      "number": 3,
+      "slug": "add-ade-cli-wrapper",
+      "title": "Add ade CLI wrapper",
+      "status": "done",
+      "summary": "Expose npm scripts through ade command wrapper",
+      "createdAt": "2025-10-20T02:00:14.280Z",
+      "updatedAt": "2025-10-20T02:19:13.373Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0003-add-ade-cli-wrapper"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
-from app.schemas.auth import LoginRequest
-from app.services import auth_service
+from app.features.auth import service as auth_service
+from app.features.auth.schemas import LoginRequest
 
 
 def test_login_success() -> None:

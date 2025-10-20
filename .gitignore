@@ -20,3 +20,7 @@ frontend/app/types/api.d.ts
 
 # Frontend env files
 frontend/.env*
+
+# Workpackage runtime artifacts
+.workpackage/packages/*/log.ndjson
+.workpackage/.lock
