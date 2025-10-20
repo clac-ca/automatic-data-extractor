@@ -1,10 +1,22 @@
-import { get, post } from "@shared/api";
-import type { SessionEnvelope, SetupPayload, SetupStatus } from "@types/auth";
+import { client } from "@shared/api/client";
+import type { SessionEnvelope, SetupPayload, SetupStatus } from "@schema/auth";
 
 export async function fetchSetupStatus() {
-  return get<SetupStatus>("/setup/status");
+  const { data } = await client.GET("/api/v1/setup/status");
+  if (!data) {
+    throw new Error("Expected setup status payload.");
+  }
+  return data as SetupStatus;
 }
 
 export async function completeSetup(payload: SetupPayload) {
-  return post<SessionEnvelope>("/setup", payload);
+  const { data } = await client.POST("/api/v1/setup", {
+    body: payload,
+  });
+
+  if (!data) {
+    throw new Error("Expected session payload.");
+  }
+
+  return data as SessionEnvelope;
 }

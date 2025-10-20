@@ -1,13 +1,13 @@
 import { Link, useNavigate } from "react-router-dom";
 
 import { RequireSession } from "@features/auth/components/RequireSession";
-import { useWorkspacesQuery } from "@features/workspaces/api";
 import { useSession } from "@features/auth/context/SessionContext";
-import type { WorkspaceProfile } from "@types/workspaces";
+import { useWorkspacesQuery } from "../workspaces/workspaces-api";
+import type { WorkspaceProfile } from "@schema/workspaces";
 import { Button } from "@ui/button";
 import { PageState } from "@ui/PageState";
-import { defaultWorkspaceSection } from "@features/workspaces/lib/navigation";
-import { WorkspaceDirectoryLayout } from "@features/workspaces/components/WorkspaceDirectoryLayout";
+import { defaultWorkspaceSection } from "../workspaces/workspace-navigation";
+import { WorkspaceDirectoryLayout } from "../workspaces/WorkspaceDirectoryLayout";
 
 export default function WorkspacesIndexRoute() {
   return (

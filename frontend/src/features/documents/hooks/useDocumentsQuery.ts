@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 
-import type { WorkspaceDocumentsQueryOptions } from "../api";
-import { workspaceDocumentsQueryOptions } from "../api";
-import type { DocumentListResponse } from "@types/documents";
+import {
+  workspaceDocumentsQueryOptions,
+  type DocumentListResponse,
+  type WorkspaceDocumentsQueryOptions,
+} from "../api";
 
 export function useDocumentsQuery(
   workspaceId: string,
@@ -10,4 +12,3 @@ export function useDocumentsQuery(
 ) {
   return useQuery<DocumentListResponse>(workspaceDocumentsQueryOptions(workspaceId, options));
 }
-

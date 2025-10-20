@@ -1,8 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { jobsKeys } from "../api/keys";
-import { getJob, listJobs, submitJob, type ListJobsOptions } from "../api";
-import type { JobRecord, JobSubmissionPayload } from "@types/jobs";
+import {
+  getJob,
+  listJobs,
+  submitJob,
+  type JobRecord,
+  type JobSubmissionPayload,
+  type ListJobsOptions,
+} from "../api";
 
 export function useDocumentJobsQuery(
   workspaceId: string,

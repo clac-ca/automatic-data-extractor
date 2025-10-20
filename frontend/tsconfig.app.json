@@ -12,7 +12,8 @@
       "@app/*": ["app/*"],
       "@features/*": ["features/*"],
       "@shared/*": ["shared/*"],
-      "@types/*": ["shared/types/*"],
+      "@api-types": ["shared/types/api.d.ts"],
+      "@schema/*": ["shared/types/types/*"],
       "@ui/*": ["ui/*"],
       "@test/*": ["test/*"]
     },

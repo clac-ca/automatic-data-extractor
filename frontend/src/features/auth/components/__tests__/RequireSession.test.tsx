@@ -3,7 +3,7 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { describe, expect, it, beforeEach, vi } from "vitest";
 
 import { render, screen } from "@test/test-utils";
-import type { SessionEnvelope } from "@types/auth";
+import type { SessionEnvelope } from "@schema/auth";
 import { useSession } from "../../context/SessionContext";
 import { RequireSession } from "../RequireSession";
 

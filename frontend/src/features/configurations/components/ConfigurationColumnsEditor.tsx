@@ -5,7 +5,7 @@ import type {
   ConfigurationColumn,
   ConfigurationColumnInput,
   ConfigurationScriptVersion,
-} from "@types/configurations";
+} from "@schema/configurations";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { FormField } from "@ui/form-field";

@@ -7,7 +7,7 @@ import type {
   ConfigurationRecord,
   ConfigurationScriptVersion,
   ConfigurationScriptVersionInput,
-} from "@types/configurations";
+} from "@schema/configurations";
 
 function buildWorkspacePath(workspaceId: string, path: string) {
   return `/workspaces/${workspaceId}${path}`;

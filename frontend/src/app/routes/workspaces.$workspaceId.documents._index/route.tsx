@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { useSearchParams } from "react-router-dom";
 
-import { useWorkspaceContext } from "@features/workspaces/context/WorkspaceContext";
+import { useWorkspaceContext } from "../workspaces.$workspaceId/WorkspaceContext";
 import { useDocumentsQuery } from "@features/documents/hooks/useDocumentsQuery";
 import type { DocumentsStatusFilter } from "@features/documents/api";
 import { downloadWorkspaceDocument as downloadDocument } from "@features/documents/api";
@@ -15,8 +15,8 @@ import { useDeleteDocuments } from "@features/documents/hooks/useDeleteDocuments
 import { useDocumentRunPreferences } from "@features/documents/hooks/useDocumentRunPreferences";
 import { useConfigurationsQuery } from "@features/configurations/hooks/useConfigurationsQuery";
 import { useDocumentJobsQuery, useSubmitJobMutation } from "@features/jobs/hooks/useJobsQuery";
-import type { DocumentRecord, DocumentStatus } from "@types/documents";
-import type { JobRecord, JobStatus } from "@types/jobs";
+import type { DocumentRecord, DocumentStatus } from "@features/documents/api";
+import type { JobRecord, JobStatus } from "@features/jobs/api";
 import { Alert } from "@ui/alert";
 import { Input } from "@ui/input";
 import { Select } from "@ui/select";

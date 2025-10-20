@@ -8,7 +8,7 @@ import { useSessionQuery } from "@features/auth/hooks/useSessionQuery";
 import { useLoginMutation } from "@features/auth/hooks/useLoginMutation";
 import { useAuthProviders } from "@features/auth/hooks/useAuthProviders";
 import { useSetupStatusQuery } from "@features/setup/hooks/useSetupStatusQuery";
-import type { AuthProvider } from "@types/auth";
+import type { AuthProvider } from "@schema/auth";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { FormField } from "@ui/form-field";

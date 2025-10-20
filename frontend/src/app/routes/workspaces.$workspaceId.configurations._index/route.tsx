@@ -3,14 +3,14 @@ import { useSearchParams } from "react-router-dom";
 
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
-import { useWorkspaceContext } from "@features/workspaces/context/WorkspaceContext";
+import { useWorkspaceContext } from "../workspaces.$workspaceId/WorkspaceContext";
 import { useConfigurationsQuery } from "@features/configurations/hooks/useConfigurationsQuery";
 import { useCreateConfigurationMutation } from "@features/configurations/hooks/useCreateConfigurationMutation";
 import { useActivateConfigurationMutation } from "@features/configurations/hooks/useActivateConfigurationMutation";
 import { ConfigurationSidebar } from "@features/configurations/components/ConfigurationSidebar";
 import { ConfigurationColumnsEditor } from "@features/configurations/components/ConfigurationColumnsEditor";
 import { ConfigurationScriptPanel } from "@features/configurations/components/ConfigurationScriptPanel";
-import type { ConfigurationRecord } from "@types/configurations";
+import type { ConfigurationRecord } from "@schema/configurations";
 
 export const handle = { workspaceSectionId: "configurations" } as const;
 
@@ -136,6 +136,7 @@ export default function WorkspaceConfigurationsRoute() {
     try {
       const result = await createMutation.mutateAsync({
         title,
+        clone_from_active: false,
         payload: {},
       });
       handleSelectConfiguration(result.configuration_id);

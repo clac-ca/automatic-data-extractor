@@ -2,7 +2,7 @@
 import { createContext, useContext, useMemo } from "react";
 import type { ReactNode } from "react";
 
-import type { WorkspaceProfile } from "@types/workspaces";
+import type { WorkspaceProfile } from "@schema/workspaces";
 
 export interface WorkspaceContextValue {
   readonly workspace: WorkspaceProfile;

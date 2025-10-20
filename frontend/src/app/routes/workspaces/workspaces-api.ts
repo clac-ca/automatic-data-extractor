@@ -6,14 +6,14 @@ import type {
   WorkspaceCreatePayload,
   WorkspaceProfile,
   WorkspaceUpdatePayload,
-} from "@types/workspaces";
-import type { WorkspaceMember } from "@types/workspace-members";
+} from "@schema/workspaces";
+import type { WorkspaceMember } from "@schema/workspace-members";
 import type {
   RoleCreatePayload,
   RoleDefinition,
   RoleUpdatePayload,
   PermissionDefinition,
-} from "@types/roles";
+} from "@schema/roles";
 
 function normalizeWorkspaceProfile(api: WorkspaceApiProfile): WorkspaceProfile {
   return {
@@ -69,7 +69,7 @@ export function updateWorkspaceMemberRoles(
 }
 
 export function removeWorkspaceMember(workspaceId: string, membershipId: string) {
-  return del(`/workspaces/${workspaceId}/members/${membershipId}`);
+  return del(`/workspaces/${workspaceId}/members/${membershipId}`).then(() => undefined);
 }
 
 export function listWorkspaceRoles(workspaceId: string, signal?: AbortSignal) {
@@ -89,7 +89,7 @@ export function updateWorkspaceRole(
 }
 
 export function deleteWorkspaceRole(workspaceId: string, roleId: string) {
-  return del(`/workspaces/${workspaceId}/roles/${roleId}`);
+  return del(`/workspaces/${workspaceId}/roles/${roleId}`).then(() => undefined);
 }
 
 export function listPermissions(signal?: AbortSignal) {

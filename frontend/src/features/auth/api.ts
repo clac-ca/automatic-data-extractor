@@ -1,24 +1,21 @@
-import { ApiError, del, get, post } from "@shared/api";
-import type {
-  AuthProvider,
-  LoginPayload,
-  SessionEnvelope,
-  SessionResponse,
-} from "@types/auth";
+import { ApiError } from "@shared/api";
+import { client } from "@shared/api/client";
+import type { AuthProvider, LoginPayload, SessionEnvelope, SessionResponse } from "@schema/auth";
 
 export async function fetchSession() {
   try {
-    const response = await get<SessionResponse | SessionEnvelope>("/auth/session");
+    const { data } = await client.GET("/api/v1/auth/session");
+    const envelope = data ?? null;
 
-    if (isSessionEnvelope(response)) {
-      return {
-        session: response,
-        providers: [],
-        force_sso: false,
-      };
+    if (isSessionResponse(envelope)) {
+      return envelope;
     }
 
-    return response;
+    return {
+      session: envelope,
+      providers: [],
+      force_sso: false,
+    };
   } catch (error) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
       return {
@@ -33,7 +30,11 @@ export async function fetchSession() {
 
 export async function fetchProviders() {
   try {
-    return await get<{ providers: AuthProvider[]; force_sso: boolean }>("/auth/providers");
+    const { data } = await client.GET("/api/v1/auth/providers");
+    if (!data) {
+      return { providers: [], force_sso: false };
+    }
+    return data;
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       return { providers: [], force_sso: false };
@@ -43,23 +44,39 @@ export async function fetchProviders() {
 }
 
 export async function createSession(payload: LoginPayload) {
-  return post<SessionEnvelope>("/auth/session", payload);
+  const { data } = await client.POST("/api/v1/auth/session", {
+    body: payload,
+  });
+
+  if (!data) {
+    throw new Error("Expected session payload.");
+  }
+
+  return data;
 }
 
 export async function deleteSession() {
-  await del("/auth/session", { parseJson: false });
+  await client.DELETE("/api/v1/auth/session");
 }
 
 export async function refreshSession() {
-  return post<SessionEnvelope>("/auth/session/refresh");
+  const { data } = await client.POST("/api/v1/auth/session/refresh");
+  if (!data) {
+    throw new Error("Expected session payload.");
+  }
+  return data;
 }
 
-function isSessionEnvelope(payload: unknown): payload is SessionEnvelope {
+function isSessionResponse(payload: unknown): payload is SessionResponse {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+  const candidate = payload as Partial<SessionResponse>;
   return (
-    typeof payload === "object" &&
-    payload !== null &&
-    "user" in payload &&
-    "expires_at" in payload
+    "session" in candidate &&
+    "providers" in candidate &&
+    Array.isArray(candidate.providers) &&
+    "force_sso" in candidate
   );
 }
 

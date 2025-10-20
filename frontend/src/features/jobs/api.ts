@@ -1,10 +1,5 @@
-import { get, post } from "@shared/api";
-import type { JobRecord, JobStatus, JobSubmissionPayload } from "@types/jobs";
-
-function buildJobsPath(workspaceId: string, suffix: string = "") {
-  const trimmed = suffix.startsWith("/") ? suffix : `/${suffix}`;
-  return `/workspaces/${workspaceId}/jobs${trimmed === "/" ? "" : trimmed}`;
-}
+import { client } from "@shared/api/client";
+import type { components, paths } from "@api-types";
 
 export interface ListJobsOptions {
   readonly status?: JobStatus | "all" | null;
@@ -15,29 +10,86 @@ export interface ListJobsOptions {
 }
 
 export async function listJobs(workspaceId: string, options: ListJobsOptions = {}) {
-  const params = new URLSearchParams();
+  const query: ListJobsQuery = {};
+
   if (options.status && options.status !== "all") {
-    params.set("status", options.status);
+    query.status = options.status;
   }
   if (options.inputDocumentId) {
-    params.set("input_document_id", options.inputDocumentId);
+    query.input_document_id = options.inputDocumentId;
   }
   if (typeof options.limit === "number") {
-    params.set("limit", String(options.limit));
+    query.limit = options.limit;
   }
-  if (typeof options.offset === "number" && options.offset > 0) {
-    params.set("offset", String(options.offset));
+  if (typeof options.offset === "number") {
+    query.offset = options.offset;
   }
 
-  const search = params.toString();
-  const path = search.length > 0 ? `${buildJobsPath(workspaceId)}?${search}` : buildJobsPath(workspaceId);
-  return get<JobRecord[]>(path, { signal: options.signal });
+  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/jobs", {
+    params: {
+      path: { workspace_id: workspaceId },
+      query,
+    },
+    signal: options.signal,
+  });
+
+  if (!data) {
+    throw new Error("Expected jobs response.");
+  }
+
+  return data.map(normaliseJobRecord);
 }
 
 export function submitJob(workspaceId: string, payload: JobSubmissionPayload) {
-  return post<JobRecord>(buildJobsPath(workspaceId), payload);
+  return client
+    .POST("/api/v1/workspaces/{workspace_id}/jobs", {
+      params: { path: { workspace_id: workspaceId } },
+      body: payload,
+    })
+    .then((result) => {
+      if (!result.data) {
+        throw new Error("Expected submitted job response.");
+      }
+      return normaliseJobRecord(result.data);
+    });
 }
 
 export function getJob(workspaceId: string, jobId: string, signal?: AbortSignal) {
-  return get<JobRecord>(buildJobsPath(workspaceId, `/${jobId}`), { signal });
+  return client
+    .GET("/api/v1/workspaces/{workspace_id}/jobs/{job_id}", {
+      params: {
+        path: {
+          workspace_id: workspaceId,
+          job_id: jobId,
+        },
+      },
+      signal,
+    })
+    .then((result) => {
+      if (!result.data) {
+        throw new Error("Expected job response.");
+      }
+      return normaliseJobRecord(result.data);
+    });
 }
+
+function normaliseJobRecord(record: components["schemas"]["JobRecord"]): JobRecord {
+  return {
+    ...record,
+    status: record.status as JobStatus,
+  };
+}
+
+type ListJobsQuery =
+  paths["/api/v1/workspaces/{workspace_id}/jobs"]["get"]["parameters"]["query"] extends undefined
+    ? Record<string, never>
+    : paths["/api/v1/workspaces/{workspace_id}/jobs"]["get"]["parameters"]["query"];
+
+export type JobSubmissionPayload = components["schemas"]["JobSubmissionRequest"];
+export type JobRecord = Readonly<
+  Omit<components["schemas"]["JobRecord"], "status"> & {
+    status: JobStatus;
+  }
+>;
+
+export type JobStatus = "pending" | "running" | "succeeded" | "failed";

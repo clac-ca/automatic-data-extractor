@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type {
-  ClientLoaderFunctionArgs,
-  ClientShouldRevalidateFunctionArgs,
-} from "react-router";
+import type { ClientLoaderFunctionArgs, ShouldRevalidateFunctionArgs } from "react-router";
 import { Outlet, redirect, useLoaderData, useLocation, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -11,15 +8,15 @@ import { useSession } from "@features/auth/context/SessionContext";
 import { useLogoutMutation } from "@features/auth/hooks/useLogoutMutation";
 import { ApiError } from "@shared/api";
 import { sessionKeys } from "@features/auth/api";
-import { fetchWorkspaces, workspacesKeys } from "@features/workspaces/api";
-import { WorkspaceProvider } from "@features/workspaces/context/WorkspaceContext";
-import type { WorkspaceProfile } from "@types/workspaces";
+import { fetchWorkspaces, workspacesKeys } from "../workspaces/workspaces-api";
+import { WorkspaceProvider } from "./WorkspaceContext";
+import type { WorkspaceProfile } from "@schema/workspaces";
 import { createScopedStorage } from "@shared/storage";
-import { writePreferredWorkspace } from "@features/workspaces/lib/workspace";
-import { GlobalTopBar } from "@features/workspaces/components/GlobalTopBar";
-import { ProfileDropdown } from "@features/workspaces/components/ProfileDropdown";
-import { WorkspaceNav } from "@features/workspaces/components/WorkspaceNav";
-import { defaultWorkspaceSection } from "@features/workspaces/lib/navigation";
+import { writePreferredWorkspace } from "../workspaces/workspace-preferences";
+import { GlobalTopBar } from "../workspaces/GlobalTopBar";
+import { ProfileDropdown } from "../workspaces/ProfileDropdown";
+import { WorkspaceNav } from "./WorkspaceNav";
+import { defaultWorkspaceSection } from "../workspaces/workspace-navigation";
 
 export interface WorkspaceLoaderData {
   readonly workspace: WorkspaceProfile;
@@ -62,7 +59,7 @@ export async function clientLoader({
 export function clientShouldRevalidate({
   currentParams,
   nextParams,
-}: ClientShouldRevalidateFunctionArgs) {
+}: ShouldRevalidateFunctionArgs) {
   return currentParams.workspaceId !== nextParams.workspaceId;
 }
 

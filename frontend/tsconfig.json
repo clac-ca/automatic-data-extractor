@@ -19,7 +19,8 @@
       "@app/*": ["./src/app/*"],
       "@features/*": ["./src/features/*"],
       "@shared/*": ["./src/shared/*"],
-      "@types/*": ["./src/shared/types/*"],
+      "@api-types": ["./src/shared/types/api.d.ts"],
+      "@schema/*": ["./src/shared/types/types/*"],
       "@ui/*": ["./src/ui/*"],
       "@test/*": ["./src/test/*"]
     },

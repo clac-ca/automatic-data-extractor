@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-import type { ConfigurationScriptVersion } from "@types/configurations";
+import type { ConfigurationScriptVersion } from "@schema/configurations";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { FormField } from "@ui/form-field";

@@ -5,7 +5,7 @@ import { useSession } from "@features/auth/context/SessionContext";
 import { useLogoutMutation } from "@features/auth/hooks/useLogoutMutation";
 import { GlobalTopBar } from "./GlobalTopBar";
 import { ProfileDropdown } from "./ProfileDropdown";
-import { DirectoryIcon } from "@features/workspaces/lib/navigation";
+import { DirectoryIcon } from "./workspace-navigation";
 
 export interface WorkspaceDirectoryLayoutProps {
   readonly children: ReactNode;

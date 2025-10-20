@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { sessionKeys } from "@features/auth/api";
-import type { SessionEnvelope } from "@types/auth";
+import type { SessionEnvelope } from "@schema/auth";
 import { ApiError, get } from "@shared/api";
 import { Button } from "@ui/button";
 import { PageState } from "@ui/PageState";
