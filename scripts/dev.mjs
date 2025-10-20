@@ -19,7 +19,7 @@ await run("npx", [
   "concurrently",
   "-k",
   "-n",
-  "api,web",
+  "backend,frontend",
   "-c",
   "auto",
   ...commands,

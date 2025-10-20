@@ -58,16 +58,16 @@ export const cleanPaths = async (paths) => {
 };
 
 export const backendVenvPath = (subpath) => {
-  if (process.platform === "win32") {
-    return join("backend", ".venv", "Scripts", subpath);
-  }
-  return join("backend", ".venv", "bin", subpath);
+  const base = process.platform === "win32" ? ["backend", ".venv", "Scripts"] : ["backend", ".venv", "bin"];
+  return join(process.cwd(), ...base, subpath);
 };
 
 export const backendPythonPath = () =>
   process.platform === "win32"
     ? backendVenvPath("python.exe")
-    : backendVenvPath("python3");
+    : existsSync(backendVenvPath("python3"))
+      ? backendVenvPath("python3")
+      : backendVenvPath("python");
 
 export const collectFrontendRoutes = async () => {
   if (!hasFrontend()) {
