@@ -1,0 +1,14 @@
+{
+  "version": "1",
+  "number": 6,
+  "slug": "mirror-backend-feature-tests",
+  "title": "Mirror backend feature tests",
+  "summary": "Restructure backend tests to mirror app/features layout.",
+  "status": "done",
+  "createdAt": "2025-10-20T02:49:10.091Z",
+  "updatedAt": "2025-10-20T02:50:24.942Z",
+  "owner": "jkropp",
+  "tags": [],
+  "links": [],
+  "context": {}
+}
