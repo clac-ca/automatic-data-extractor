@@ -12,7 +12,7 @@ import { useSession } from "@features/auth/context/SessionContext";
 import { useCreateWorkspaceMutation } from "@features/workspaces/hooks/useCreateWorkspaceMutation";
 import { useWorkspacesQuery } from "@features/workspaces/api";
 import { useUsersQuery } from "@features/users/hooks/useUsersQuery";
-import { WorkspaceDirectoryLayout } from "./workspaces/_index/DirectoryLayout";
+import { WorkspaceDirectoryLayout } from "@features/workspaces/components/WorkspaceDirectoryLayout";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { FormField } from "@ui/form-field";
