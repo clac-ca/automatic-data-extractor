@@ -1,7 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { del, get, patch, post, put } from "@shared/api";
-import type { WorkspaceCreatePayload, WorkspaceProfile } from "@types/workspaces";
+import type {
+  WorkspaceApiProfile,
+  WorkspaceCreatePayload,
+  WorkspaceProfile,
+  WorkspaceUpdatePayload,
+} from "@types/workspaces";
 import type { WorkspaceMember } from "@types/workspace-members";
 import type {
   RoleCreatePayload,
@@ -10,19 +15,9 @@ import type {
   PermissionDefinition,
 } from "@types/roles";
 
-interface WorkspaceApiProfile {
-  workspace_id?: string;
-  id?: string;
-  name: string;
-  slug: string;
-  roles: string[];
-  permissions: string[];
-  is_default: boolean;
-}
-
 function normalizeWorkspaceProfile(api: WorkspaceApiProfile): WorkspaceProfile {
   return {
-    id: api.workspace_id ?? api.id ?? "",
+    id: api.workspace_id,
     name: api.name,
     slug: api.slug,
     roles: api.roles,
@@ -41,12 +36,6 @@ export async function fetchWorkspaces(signal?: AbortSignal) {
 export async function createWorkspace(payload: WorkspaceCreatePayload) {
   const workspace = await post<WorkspaceApiProfile>("/workspaces", payload);
   return normalizeWorkspaceProfile(workspace);
-}
-
-export interface WorkspaceUpdatePayload {
-  readonly name?: string | null;
-  readonly slug?: string | null;
-  readonly settings?: Record<string, unknown> | null;
 }
 
 export function updateWorkspace(workspaceId: string, payload: WorkspaceUpdatePayload) {

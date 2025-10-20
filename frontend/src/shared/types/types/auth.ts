@@ -1,47 +1,44 @@
-export interface SessionUser {
-  user_id: string;
-  email: string;
-  is_active: boolean;
-  is_service_account: boolean;
-  display_name?: string | null;
-  preferred_workspace_id?: string | null;
-  roles?: string[];
-  permissions?: string[];
-}
+import type { components } from "@types/api";
 
-export interface SessionEnvelope {
-  user: SessionUser;
-  expires_at: string;
-  refresh_expires_at: string;
-  return_to?: string | null;
-}
+type Schemas = components["schemas"];
 
-export interface SessionResponse {
-  session: SessionEnvelope | null;
-  providers: AuthProvider[];
-  force_sso: boolean;
-}
+type Schema<T extends keyof Schemas> = Readonly<Schemas[T]>;
 
-export interface AuthProvider {
-  id: string;
-  label: string;
-  icon_url?: string | null;
-  start_url: string;
-}
+export type SessionUser = Schema<"UserProfile">;
 
-export interface LoginPayload {
-  email: string;
-  password: string;
-}
+type SessionEnvelopeSchema = Schemas["SessionEnvelope"];
 
-export interface SetupPayload {
-  display_name: string;
-  email: string;
-  password: string;
-}
+export type SessionEnvelope = Readonly<
+  SessionEnvelopeSchema & {
+    expires_at: string;
+    refresh_expires_at: string;
+  }
+>;
 
-export interface SetupStatus {
-  requires_setup: boolean;
-  completed_at: string | null;
-  force_sso: boolean;
-}
+type ProviderDiscoveryResponse = Schema<"ProviderDiscoveryResponse">;
+
+export type AuthProvider = Schema<"AuthProvider">;
+
+export type SessionResponse = Readonly<
+  {
+    session: SessionEnvelope | null;
+  } & ProviderDiscoveryResponse
+>;
+
+type LoginRequest = Schemas["LoginRequest"];
+
+export type LoginPayload = Readonly<
+  Omit<LoginRequest, "email"> & {
+    email: string;
+  }
+>;
+
+type SetupRequest = Schemas["SetupRequest"];
+
+export type SetupPayload = Readonly<
+  Omit<SetupRequest, "email"> & {
+    email: string;
+  }
+>;
+
+export type SetupStatus = Schema<"SetupStatus">;

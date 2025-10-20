@@ -1,10 +1,7 @@
-import type { UserProfile } from "./users";
+import type { components } from "@types/api";
 
-export interface WorkspaceMember {
-  workspace_membership_id: string;
-  workspace_id: string;
-  roles: string[];
-  permissions: string[];
-  is_default: boolean;
-  user: UserProfile;
-}
+type Schemas = components["schemas"];
+
+type Schema<T extends keyof Schemas> = Readonly<Schemas[T]>;
+
+export type WorkspaceMember = Schema<"WorkspaceMember">;
