@@ -44,9 +44,11 @@ backend/
 ├─ tests/
 │  ├─ api/                     # route/contract tests
 │  └─ services/                # business logic tests
-├─ requirements.txt
+├─ pyproject.toml
 └─ .env.example
 ```
+
+Dependencies are defined in `pyproject.toml`; install them via `pip install -e .` from `backend/` or run `npm run setup` at the repo root.
 
 ### Commands
 
@@ -55,6 +57,7 @@ backend/
 npm run dev       # runs FastAPI on :8000 with reload (and frontend if present)
 npm run test      # runs backend pytest (and frontend tests if present)
 npm run start     # run FastAPI in local prod
+npm run openapi-typescript   # dump schema + regenerate frontend TS types
 ```
 
 ### API conventions

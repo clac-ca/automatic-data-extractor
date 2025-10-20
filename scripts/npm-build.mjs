@@ -27,7 +27,7 @@ const copyIfExists = async (from, to) => {
 };
 
 if (hasFrontend) {
-  await run("npm", ["--prefix", "frontend", "run", "build"]);
+  await run("npm", ["run", "build"], { cwd: "frontend" });
   if (hasBackend) {
     const copied = await copyIfExists(
       join("frontend", "build", "client"),

@@ -41,10 +41,11 @@ const collectFrontendRoutes = async () => {
 
   const binary = process.platform === "win32" ? "react-router.cmd" : "react-router";
   const localBin = join(nodeModulesDir, ".bin", binary);
+  const localBinAbsolute = join(process.cwd(), localBin);
 
   try {
     const { stdout } = existsSync(localBin)
-      ? await runCapture(localBin, ["routes", "--json"], {
+      ? await runCapture(localBinAbsolute, ["routes", "--json"], {
           cwd: "frontend",
           shell: process.platform === "win32",
         })
