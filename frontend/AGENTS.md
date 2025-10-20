@@ -4,7 +4,7 @@
 
 ```
 frontend/
-├─ src/
+├─ app/
 │  ├─ root.tsx                 # <Layout/><Outlet/> shell
 │  ├─ entry.client.tsx         # HydratedRouter entry
 │  ├─ routes.ts                # flatRoutes() → file-based discovery
@@ -28,7 +28,7 @@ frontend/
 │  │  └─ telemetry.ts
 │  ├─ components/              # reusable presentational components
 │  └─ types/                   # shared TS types (including OpenAPI‑generated later)
-├─ react-router.config.ts      # { appDirectory: "src", ssr: false }
+├─ react-router.config.ts      # { appDirectory: "app", ssr: false }
 ├─ vite.config.ts              # plugin + dev proxy (/api → :8000)
 ├─ package.json
 └─ .env.example                # VITE_* variables only
@@ -55,8 +55,8 @@ npm run build     # react-router build → copied into backend/app/static by roo
 ### Data & API calls
 
 * Use **relative** paths (`/api/v1/...`); dev proxy forwards to backend.
-* Centralize fetch logic in `src/lib/api.ts`.
-* Later, generate types from `/openapi.json` into `src/types` or `src/lib/api.d.ts`.
+* Centralize fetch logic in `app/lib/api.ts`.
+* Later, generate types from `/openapi.json` into `app/types` or `app/lib/api.d.ts`.
 
 ### Tests
 
@@ -65,7 +65,7 @@ npm run build     # react-router build → copied into backend/app/static by roo
 
 ### Do / Don’t
 
-* **Do** keep page UI in `src/routes/**`; extract shared UI to `src/components/**`.
-* **Do** keep cross‑route logic in `src/features/**` or `src/lib/**`.
+* **Do** keep page UI in `app/routes/**`; extract shared UI to `app/components/**`.
+* **Do** keep cross-route logic in `app/features/**` or `app/lib/**`.
 * **Don’t** hand‑roll route discovery—use `react-router routes --json`.
 * **Don’t** hardcode absolute API origins; use relative `/api` paths.
