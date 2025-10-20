@@ -1,33 +1,13 @@
-export interface PermissionDefinition {
-  key: string;
-  resource: string;
-  action: string;
-  scope_type: "global" | "workspace";
-  label: string;
-  description: string;
-}
+import type { components } from "@types/api";
 
-export interface RoleDefinition {
-  role_id: string;
-  slug: string;
-  name: string;
-  description: string | null;
-  scope_type: "global" | "workspace";
-  scope_id: string | null;
-  permissions: string[];
-  built_in: boolean;
-  editable: boolean;
-}
+type Schemas = components["schemas"];
 
-export interface RoleCreatePayload {
-  name: string;
-  slug?: string | null;
-  description?: string | null;
-  permissions: string[];
-}
+type Schema<T extends keyof Schemas> = Readonly<Schemas[T]>;
 
-export interface RoleUpdatePayload {
-  name: string;
-  description?: string | null;
-  permissions: string[];
-}
+export type PermissionDefinition = Schema<"PermissionRead">;
+
+export type RoleDefinition = Schema<"RoleRead">;
+
+export type RoleCreatePayload = Schema<"RoleCreate">;
+
+export type RoleUpdatePayload = Schema<"RoleUpdate">;

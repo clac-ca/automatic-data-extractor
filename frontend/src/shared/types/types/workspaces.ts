@@ -1,3 +1,17 @@
+import type { components } from "@types/api";
+
+type Schemas = components["schemas"];
+
+type Schema<T extends keyof Schemas> = Readonly<Schemas[T]>;
+
+export type WorkspaceApiProfile = Schema<"WorkspaceProfile">;
+
+export type WorkspaceCreatePayload = Schema<"WorkspaceCreate">;
+
+export type WorkspaceUpdatePayload = Schema<"WorkspaceUpdate">;
+
+export type WorkspaceDefaultSelection = Schema<"WorkspaceDefaultSelection">;
+
 export interface WorkspaceProfile {
   id: string;
   name: string;
@@ -5,17 +19,4 @@ export interface WorkspaceProfile {
   roles: string[];
   permissions: string[];
   is_default: boolean;
-}
-
-export interface WorkspaceSummary {
-  workspace_id: string;
-  name: string;
-  slug: string;
-}
-
-export interface WorkspaceCreatePayload {
-  name: string;
-  slug?: string | null;
-  owner_user_id?: string | null;
-  settings?: Record<string, unknown> | null;
 }

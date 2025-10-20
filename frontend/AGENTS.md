@@ -7,9 +7,7 @@ frontend/
 ├─ src/
 │  ├─ app/
 │  │  ├─ AppProviders.tsx        # shared React Query providers
-│  │  ├─ root.tsx                # <Layout/><Outlet/> shell
-│  │  ├─ entry.client.tsx        # HydratedRouter entry
-│  │  ├─ entry.server.tsx        # SSR entry (disabled in SPA mode but kept for parity)
+│  │  ├─ root.tsx                # <Layout/><Outlet/> shell + providers
 │  │  ├─ routes.ts               # flatRoutes() → file-based discovery
 │  │  └─ routes/
 │  │     ├─ _index.tsx           # /
@@ -30,7 +28,7 @@ frontend/
 │  │  └─ types/                  # shared TS types (OpenAPI output lands here)
 │  ├─ test/                      # vitest setup + helpers
 │  └─ ui/                        # reusable presentational components
-├─ react-router.config.ts        # { appDirectory: "src/app", ssr: false }
+├─ react-router.config.ts        # { appDirectory: "src/app", ssr: false } (SPA mode)
 ├─ vite.config.ts                # plugin + dev proxy (/api → :8000)
 ├─ package.json
 └─ .env.example                  # VITE_* variables only
@@ -59,7 +57,7 @@ npm run openapi-typescript   # refresh backend schema + regenerate src/shared/ty
 
 * Use **relative** paths (`/api/v1/...`); dev proxy forwards to backend.
 * Centralize fetch logic in `src/shared/api.ts`.
-* Regenerate backend client types with `npm run openapi-typescript` → writes `src/shared/types/api.d.ts`.
+* Regenerate backend client types with `npm run openapi-typescript` → writes `src/shared/types/api.d.ts` (eager typings in `src/shared/types/types/*.ts` are aliases to that schema).
 
 ### Tests
 

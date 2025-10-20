@@ -1,15 +1,9 @@
-export interface UserProfile {
-  user_id: string;
-  email: string;
-  is_active: boolean;
-  is_service_account: boolean;
-  display_name?: string | null;
-  preferred_workspace_id?: string | null;
-  roles: string[];
-  permissions: string[];
-}
+import type { components } from "@types/api";
 
-export interface UserSummary extends UserProfile {
-  created_at: string;
-  updated_at: string;
-}
+type Schemas = components["schemas"];
+
+type Schema<T extends keyof Schemas> = Readonly<Schemas[T]>;
+
+export type UserProfile = Schema<"UserProfile">;
+
+export type UserSummary = Schema<"UserSummary">;
