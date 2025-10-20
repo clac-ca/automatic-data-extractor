@@ -16,10 +16,10 @@ import { WorkspaceProvider } from "@features/workspaces/context/WorkspaceContext
 import type { WorkspaceProfile } from "@types/workspaces";
 import { createScopedStorage } from "@shared/storage";
 import { writePreferredWorkspace } from "@features/workspaces/lib/workspace";
-import { GlobalTopBar } from "./workspaces/$workspaceId/GlobalTopBar";
-import { ProfileDropdown } from "./workspaces/$workspaceId/ProfileDropdown";
-import { WorkspaceNav } from "./workspaces/$workspaceId/WorkspaceNav";
-import { defaultWorkspaceSection } from "./workspaces/$workspaceId/sections";
+import { GlobalTopBar } from "@features/workspaces/components/GlobalTopBar";
+import { ProfileDropdown } from "@features/workspaces/components/ProfileDropdown";
+import { WorkspaceNav } from "@features/workspaces/components/WorkspaceNav";
+import { defaultWorkspaceSection } from "@features/workspaces/lib/navigation";
 
 export interface WorkspaceLoaderData {
   readonly workspace: WorkspaceProfile;
