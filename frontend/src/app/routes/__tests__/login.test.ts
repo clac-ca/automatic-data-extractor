@@ -82,6 +82,17 @@ describe("login route loader", () => {
     expect(response.headers.get("Location")).toBe("/setup");
   });
 
+  it("preserves redirect intent when setup is required", async () => {
+    fetchSessionMock.mockResolvedValue(null);
+    fetchSetupStatusMock.mockResolvedValue({ requires_setup: true });
+
+    const request = new Request("http://localhost/login?redirectTo=/workspaces/alpha");
+    const response = await readRedirect(clientLoader({ request } as ClientLoaderFunctionArgs));
+
+    expect(fetchSetupStatusMock).toHaveBeenCalled();
+    expect(response.headers.get("Location")).toBe("/setup?redirectTo=%2Fworkspaces%2Falpha");
+  });
+
   it("returns sanitized redirect data when no redirects are needed", async () => {
     fetchSessionMock.mockResolvedValue(null);
     fetchSetupStatusMock.mockResolvedValue({ requires_setup: false });
