@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Form, useNavigation } from "react-router";
+import { useNavigate } from "react-router";
 import clsx from "clsx";
 
 interface ProfileDropdownAction {
@@ -22,9 +22,10 @@ export function ProfileDropdown({
   actions = [],
 }: ProfileDropdownProps) {
   const [open, setOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const navigation = useNavigation();
+  const navigate = useNavigate();
 
   const initials = useMemo(() => deriveInitials(displayName || email), [displayName, email]);
 
@@ -78,7 +79,14 @@ export function ProfileDropdown({
     [closeMenu],
   );
 
-  const isSigningOut = navigation.state === "submitting" && navigation.formAction === "/logout";
+  const handleSignOut = useCallback(async () => {
+    if (isSigningOut) {
+      return;
+    }
+    closeMenu();
+    setIsSigningOut(true);
+    navigate("/logout", { replace: true });
+  }, [closeMenu, isSigningOut, navigate]);
 
   return (
     <div className="relative">
@@ -134,25 +142,17 @@ export function ProfileDropdown({
             ))}
           </ul>
           <div className="mt-2 border-t border-slate-200 pt-2">
-            <Form
-              method="post"
-              action="/logout"
-              replace
-              onSubmit={() => {
-                closeMenu();
-              }}
+            <button
+              type="button"
+              role="menuitem"
+              data-menu-item
+              className="focus-ring flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={handleSignOut}
+              disabled={isSigningOut}
             >
-              <button
-                type="submit"
-                role="menuitem"
-                data-menu-item
-                className="focus-ring flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-700"
-                disabled={isSigningOut}
-              >
-                <span>Sign out</span>
-                {isSigningOut ? <Spinner /> : null}
-              </button>
-            </Form>
+              <span>Sign out</span>
+              {isSigningOut ? <Spinner /> : null}
+            </button>
           </div>
         </div>
       ) : null}

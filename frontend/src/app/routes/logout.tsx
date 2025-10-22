@@ -1,45 +1,21 @@
-import { Form, redirect, useNavigation } from "react-router";
-import type { ClientActionFunctionArgs } from "react-router";
-import { useEffect, useRef } from "react";
+import { redirect } from "react-router";
+import type { ClientActionFunctionArgs, ClientLoaderFunctionArgs } from "react-router";
 
-import { ApiError } from "@shared/api";
-import { client } from "@shared/api/client";
+import { performLogout } from "@shared/auth/api/logout";
 
-export async function clientAction({ request }: ClientActionFunctionArgs) {
-  try {
-    await client.DELETE("/api/v1/auth/session", { signal: request.signal });
-  } catch (error) {
-    if (!(error instanceof ApiError && (error.status === 401 || error.status === 403))) {
-      if (import.meta.env.DEV) {
-        console.warn("Failed to terminate session", error);
-      }
-    }
-  }
-
+async function logoutAndRedirect(signal: AbortSignal) {
+  await performLogout({ signal });
   throw redirect("/login");
 }
 
+export function clientLoader({ request }: ClientLoaderFunctionArgs) {
+  return logoutAndRedirect(request.signal);
+}
+
+export function clientAction({ request }: ClientActionFunctionArgs) {
+  return logoutAndRedirect(request.signal);
+}
+
 export default function LogoutRoute() {
-  const navigation = useNavigation();
-  const formRef = useRef<HTMLFormElement | null>(null);
-
-  useEffect(() => {
-    formRef.current?.submit();
-  }, []);
-
-  const isSubmitting = navigation.state === "submitting";
-
-  return (
-    <Form
-      method="post"
-      replace
-      ref={formRef}
-      className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-600"
-    >
-      <noscript>
-        <button type="submit">Sign out</button>
-      </noscript>
-      {isSubmitting ? "Signing you out…" : "Signed out"}
-    </Form>
-  );
+  return null;
 }
