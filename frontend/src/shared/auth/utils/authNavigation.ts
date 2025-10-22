@@ -57,14 +57,26 @@ export function sanitizeNextPath(value: string | null | undefined): string | nul
   return trimmed;
 }
 
+export function resolveRedirectParam(value: string | null | undefined): string {
+  return sanitizeNextPath(value) ?? DEFAULT_APP_HOME;
+}
+
 export function buildLoginRedirect(next: string): string {
-  const safeNext = sanitizeNextPath(next) ?? DEFAULT_APP_HOME;
+  return buildRedirectUrl("/login", next);
+}
+
+export function buildSetupRedirect(next: string): string {
+  return buildRedirectUrl("/setup", next);
+}
+
+export function buildRedirectUrl(basePath: string, next: string): string {
+  const safeNext = resolveRedirectParam(next);
   const params = new URLSearchParams();
   if (safeNext !== DEFAULT_APP_HOME) {
     params.set("redirectTo", safeNext);
   }
   const query = params.toString();
-  return query ? `/login?${query}` : "/login";
+  return query ? `${basePath}?${query}` : basePath;
 }
 
 export function chooseDestination(
