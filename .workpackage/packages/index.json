@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "lastNumber": 10,
+  "packages": [
+    {
+      "number": 1,
+      "slug": "hardening-workpackage-operations",
+      "title": "Hardening workpackage operations",
+      "status": "done",
+      "summary": "Add atomic writes, locking, validation, and ergonomic commands for agents.",
+      "createdAt": "2025-10-20T01:35:32.489Z",
+      "updatedAt": "2025-10-20T01:43:03.792Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0001-hardening-workpackage-operations"
+    },
+    {
+      "number": 2,
+      "slug": "backend-feature-first-refactor",
+      "title": "Backend feature-first refactor",
+      "status": "done",
+      "summary": "Convert FastAPI backend folders to by-feature structure.",
+      "createdAt": "2025-10-20T01:48:45.677Z",
+      "updatedAt": "2025-10-20T02:18:46.032Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0002-backend-feature-first-refactor"
+    },
+    {
+      "number": 3,
+      "slug": "add-ade-cli-wrapper",
+      "title": "Add ade CLI wrapper",
+      "status": "done",
+      "summary": "Expose npm scripts through ade command wrapper",
+      "createdAt": "2025-10-20T02:00:14.280Z",
+      "updatedAt": "2025-10-20T02:19:13.373Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0003-add-ade-cli-wrapper"
+    },
+    {
+      "number": 4,
+      "slug": "add-lint-scripts",
+      "title": "Add lint scripts",
+      "status": "done",
+      "summary": "Configure backend/frontend lint commands and aggregate root lint",
+      "createdAt": "2025-10-20T02:22:18.541Z",
+      "updatedAt": "2025-10-20T02:27:45.732Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0004-add-lint-scripts"
+    },
+    {
+      "number": 5,
+      "slug": "split-dev-scripts",
+      "title": "Split dev scripts",
+      "status": "done",
+      "summary": "Add dev:backend and dev:frontend and update dev aggregator",
+      "createdAt": "2025-10-20T02:24:28.968Z",
+      "updatedAt": "2025-10-20T02:29:20.005Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0005-split-dev-scripts"
+    },
+    {
+      "number": 6,
+      "slug": "mirror-backend-feature-tests",
+      "title": "Mirror backend feature tests",
+      "status": "done",
+      "summary": "Restructure backend tests to mirror app/features layout.",
+      "createdAt": "2025-10-20T02:49:10.091Z",
+      "updatedAt": "2025-10-20T02:50:24.942Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0006-mirror-backend-feature-tests"
+    },
+    {
+      "number": 7,
+      "slug": "enforce-backend-app-layout",
+      "title": "Enforce backend app layout",
+      "status": "done",
+      "summary": "Rewrite structure test to validate backend app directory layout.",
+      "createdAt": "2025-10-20T02:56:49.603Z",
+      "updatedAt": "2025-10-20T02:57:55.735Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0007-enforce-backend-app-layout"
+    },
+    {
+      "number": 8,
+      "slug": "port-ade-backend-features",
+      "title": "Port ADE backend features",
+      "status": "active",
+      "summary": "Incrementally migrate required backend capabilities from .old-codebase/ade into backend/app following backend/docs/backend_porting_guardrails.md.",
+      "createdAt": "2025-10-20T03:14:38.973Z",
+      "updatedAt": "2025-10-20T03:14:44.335Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0008-port-ade-backend-features"
+    },
+    {
+      "number": 9,
+      "slug": "fix-document-download-header-injection",
+      "title": "Fix document download header injection",
+      "status": "done",
+      "summary": "Prevent response header injection via malicious document filenames.",
+      "createdAt": "2025-10-22T04:50:01.152Z",
+      "updatedAt": "2025-10-22T05:00:59.737Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0009-fix-document-download-header-injection"
+    },
+    {
+      "number": 10,
+      "slug": "harden-session-cookie-secure-detection",
+      "title": "Harden session cookie secure detection",
+      "status": "done",
+      "summary": "Ensure session cookies are always issued with Secure flag despite spoofed X-Forwarded-Proto headers.",
+      "createdAt": "2025-10-22T04:50:21.161Z",
+      "updatedAt": "2025-10-22T05:01:06.483Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0010-harden-session-cookie-secure-detection"
+    }
+  ]
+}

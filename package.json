@@ -1,0 +1,41 @@
+{
+  "name": "automatic-data-extractor",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ade": "./scripts/npm-ade.mjs"
+  },
+  "scripts": {
+    "setup": "node scripts/npm-setup.mjs",
+    "dev": "node scripts/npm-dev.mjs",
+    "dev:backend": "node scripts/npm-dev.mjs backend",
+    "dev:frontend": "node scripts/npm-dev.mjs frontend",
+    "build": "node scripts/npm-build.mjs",
+    "start": "node scripts/npm-start.mjs",
+    "test": "node scripts/npm-test.mjs",
+    "lint": "node scripts/npm-lint.mjs",
+    "lint:backend": "node scripts/npm-lint.mjs backend",
+    "lint:frontend": "node scripts/npm-lint.mjs frontend",
+    "openapi-typescript": "node scripts/npm-openapi-typescript.mjs",
+    "routes": "node scripts/npm-routes.mjs",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:test": "docker compose run --rm ade python -c \"import importlib; importlib.import_module('backend.app.main')\"",
+    "workpackage": "node scripts/npm-workpackage.mjs",
+    "clean": "node scripts/npm-clean.mjs",
+    "clean:force": "node scripts/npm-clean.mjs",
+    "reset": "node scripts/npm-reset.mjs",
+    "reset:force": "node scripts/npm-reset.mjs",
+    "ci": "node scripts/npm-ci.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "openapi-typescript": "^7.4.3",
+    "rimraf": "^6.0.0"
+  },
+  "dependencies": {
+    "react-router": "^7.9.4"
+  }
+}

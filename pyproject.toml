@@ -8,9 +8,9 @@ version = "0.1.0"
 description = "Internal tooling for deterministic data extraction."
 readme = "README.md"
 requires-python = ">=3.12"
-authors = [{ name = "ADE Team" }]
+authors = [{ name = "CLAC IT Team" }]
 license = { text = "Proprietary" }
-urls = { "Repository" = "https://github.com/your-org/automatic-data-extractor" }
+urls = { "Repository" = "https://github.com/clac-ca/automatic-data-extractor" }
 
 # Runtime deps — pinned for reproducible builds
 dependencies = [
@@ -38,30 +38,26 @@ dev = [
   "openapi-spec-validator==0.7.2",
 ]
 
-[project.scripts]
-ade = "ade.cli.__main__:main"
-
 # ---- Packaging (auto-discover all backend* packages) ----
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["ade*"]
+include = ["backend.app*"]
 
 # Keep type marker; add other assets here only if needed at runtime
 [tool.setuptools.package-data]
-ade = [
+"backend.app" = [
   "py.typed",
   "web/**/*",
-  "static/README.md",
-  "alembic/**/*",
+  "db/migrations/**/*",
 ]
 
 # ---- Tooling configs ----
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = [
-  "ade",
+  "backend/tests",
 ]
 asyncio_mode = "auto"
 addopts = "-ra"
@@ -85,12 +81,12 @@ no_implicit_optional = true
 pretty = true
 
 [[tool.mypy.overrides]]
-module = "ade.*.tests.*"
+module = "backend.app.*.tests.*"
 disallow_untyped_defs = false
 
 [tool.coverage.run]
 branch = true
-source = ["ade"]
+source = ["backend.app"]
 
 [tool.coverage.report]
 skip_empty = true

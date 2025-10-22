@@ -1,45 +1,35 @@
-# Python
+# Python artifacts
 __pycache__/
 *.py[cod]
-*.pyo
-*.so
-.venv/
-.eggs/
 *.egg-info/
-dist/
-build/
-
-# env files
+.venv/
 .env
 
-# pytest
-.pytest_cache/
+# Node artifacts
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnpm-store/
+.react-router/
 
-# SQLite and documents
-var/
+# Build outputs
+dist/
+build/
+frontend/build/
+backend/app/openapi.json
+frontend/src/generated/openapi.d.ts
+backend/app/web/*
+!backend/app/web/README.md
+!backend/app/web/static/
+backend/app/web/static/*
+!backend/app/web/static/.gitkeep
 
-# IDE
-.vscode/
-.idea/
-
-# Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/coverage/
-frontend/.vite/
-
-# Backend static artefacts
-ade/web/*
-!ade/web/.gitkeep
-!ade/web/README.md
-
-
-# Static analysis and tooling
-.mypy_cache/
-.ruff_cache/
-.coverage
-coverage.xml
-htmlcov/
 # Backend runtime artefacts
-# (covered by var/ entry above)
-data/db/ade.sqlite
+data/db/backend.app.sqlite
+
+# Frontend env files
+frontend/.env*
+
+# Workpackage runtime artifacts
+.workpackage/packages/*/log.ndjson
+.workpackage/.lock

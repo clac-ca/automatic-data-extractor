@@ -17,29 +17,28 @@ from alembic.config import Config
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from ade import Settings, get_settings, reload_settings
-from ade.db.bootstrap import ensure_database_ready
-from ade.db.engine import render_sync_url, reset_database_state
-from ade.db.session import get_sessionmaker
-from ade.features.auth.security import hash_password
-from ade.features.roles.models import Role
-from ade.features.roles.service import (
+from backend.app.shared.core.config import Settings, get_settings, reload_settings
+from backend.app.shared.db.engine import ensure_database_ready, render_sync_url, reset_database_state
+from backend.app.shared.db.session import get_sessionmaker
+from backend.app.features.auth.security import hash_password
+from backend.app.features.roles.models import Role
+from backend.app.features.roles.service import (
     assign_global_role,
     assign_role,
     ensure_user_principal,
     sync_permission_registry,
 )
-from ade.features.users.models import User, UserCredential
-from ade.features.workspaces.models import Workspace, WorkspaceMembership
-from ade.lifecycles import ensure_runtime_dirs
-from ade.main import create_app
+from backend.app.features.users.models import User, UserCredential
+from backend.app.features.workspaces.models import Workspace, WorkspaceMembership
+from backend.app.shared.core.lifecycles import ensure_runtime_dirs
+from backend.app.main import create_app
 
 
 @pytest.fixture(scope="session")
 def _database_url(tmp_path_factory: pytest.TempPathFactory) -> str:
     """Provide a file-backed SQLite database URL for the test session."""
 
-    db_path = tmp_path_factory.mktemp("ade-db") / "ade.sqlite"
+    db_path = tmp_path_factory.mktemp("backend-app-db") / "backend_app.sqlite"
     return f"sqlite+aiosqlite:///{db_path}"
 
 
@@ -50,12 +49,20 @@ def _configure_database(
 ) -> AsyncIterator[None]:
     """Apply Alembic migrations against the ephemeral test database."""
 
-    data_dir = tmp_path_factory.mktemp("ade-data")
+    data_dir = tmp_path_factory.mktemp("backend-app-data")
     documents_dir = data_dir / "documents"
 
     os.environ["ADE_DATABASE_DSN"] = _database_url
     os.environ["ADE_STORAGE_DATA_DIR"] = str(data_dir)
     os.environ["ADE_STORAGE_DOCUMENTS_DIR"] = str(documents_dir)
+    # Ensure tests run with OIDC disabled regardless of local .env values.
+    os.environ["ADE_OIDC_ENABLED"] = "false"
+    # Explicitly override any .env-provided OIDC settings to disable SSO in tests.
+    os.environ["ADE_OIDC_CLIENT_ID"] = ""
+    os.environ["ADE_OIDC_CLIENT_SECRET"] = ""
+    os.environ["ADE_OIDC_ISSUER"] = ""
+    os.environ["ADE_OIDC_REDIRECT_URL"] = ""
+    os.environ["ADE_OIDC_SCOPES"] = ""
     settings = reload_settings()
     assert settings.database_dsn == _database_url
     ensure_runtime_dirs(settings)
@@ -73,6 +80,7 @@ def _configure_database(
         "ADE_DATABASE_DSN",
         "ADE_STORAGE_DATA_DIR",
         "ADE_STORAGE_DOCUMENTS_DIR",
+        "ADE_OIDC_ENABLED",
     ):
         os.environ.pop(env_var, None)
 
@@ -111,18 +119,6 @@ async def async_client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
-
-
-@pytest_asyncio.fixture(autouse=True)
-async def _reset_task_queue(app: FastAPI) -> AsyncIterator[None]:
-    """Ensure the in-memory task queue is empty between tests."""
-
-    queue = getattr(app.state, "task_queue", None)
-    if queue is not None:
-        await queue.clear()
-    yield
-    if queue is not None:
-        await queue.clear()
 
 
 @pytest_asyncio.fixture()
