@@ -3,12 +3,7 @@ import type { ClientActionFunctionArgs, ClientLoaderFunctionArgs } from "react-r
 import { z } from "zod";
 
 import { ApiError } from "@shared/api";
-import {
-  DEFAULT_APP_HOME,
-  buildLoginRedirect,
-  chooseDestination,
-  sanitizeNextPath,
-} from "@shared/auth/utils/authNavigation";
+import { buildLoginRedirect, chooseDestination, resolveRedirectParam } from "@shared/auth/utils/authNavigation";
 import { completeSetup, fetchSetupStatus, type SetupStatus } from "@shared/setup/api";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
@@ -43,8 +38,7 @@ export async function clientLoader({
   request,
 }: ClientLoaderFunctionArgs): Promise<SetupLoaderData> {
   const url = new URL(request.url);
-  const redirectTo =
-    sanitizeNextPath(url.searchParams.get("redirectTo")) ?? DEFAULT_APP_HOME;
+  const redirectTo = resolveRedirectParam(url.searchParams.get("redirectTo"));
   const status = await fetchSetupStatus({ signal: request.signal });
 
   if (!status?.requires_setup) {
@@ -64,8 +58,8 @@ export async function clientAction({ request }: ClientActionFunctionArgs) {
     return { error: message };
   }
 
-  const redirectTo =
-    sanitizeNextPath(typeof raw.redirectTo === "string" ? raw.redirectTo : null) ?? DEFAULT_APP_HOME;
+  const redirectValue = typeof raw.redirectTo === "string" ? raw.redirectTo : null;
+  const redirectTo = resolveRedirectParam(redirectValue);
   const { displayName, email, password } = parsed.data;
 
   try {

@@ -4,10 +4,13 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_APP_HOME,
   buildLoginRedirect,
+  buildSetupRedirect,
+  buildRedirectUrl,
   chooseDestination,
   isPublicPath,
   joinPath,
   normalizeNextFromLocation,
+  resolveRedirectParam,
   sanitizeNextPath,
 } from "../authNavigation";
 
@@ -69,5 +72,28 @@ describe("authNavigation utils", () => {
       "/login?redirectTo=%2Fworkspaces%2F123%3Ftab%3Dsettings",
     );
     expect(buildLoginRedirect("//evil")).toBe("/login");
+  });
+
+  it("builds setup redirect URLs", () => {
+    expect(buildSetupRedirect("/workspaces")).toBe("/setup");
+    expect(buildSetupRedirect("/workspaces/xyz")).toBe("/setup?redirectTo=%2Fworkspaces%2Fxyz");
+    expect(buildSetupRedirect("/workspaces/xyz?tab=settings")).toBe(
+      "/setup?redirectTo=%2Fworkspaces%2Fxyz%3Ftab%3Dsettings",
+    );
+    expect(buildSetupRedirect("//evil")).toBe("/setup");
+  });
+
+  it("builds redirect URLs for arbitrary paths", () => {
+    expect(buildRedirectUrl("/login", "/workspaces/team")).toBe(
+      "/login?redirectTo=%2Fworkspaces%2Fteam",
+    );
+    expect(buildRedirectUrl("/login", DEFAULT_APP_HOME)).toBe("/login");
+  });
+
+  it("resolves redirect parameters", () => {
+    expect(resolveRedirectParam("/workspaces/alpha")).toBe("/workspaces/alpha");
+    expect(resolveRedirectParam("//bad")).toBe(DEFAULT_APP_HOME);
+    expect(resolveRedirectParam("")).toBe(DEFAULT_APP_HOME);
+    expect(resolveRedirectParam(null)).toBe(DEFAULT_APP_HOME);
   });
 });

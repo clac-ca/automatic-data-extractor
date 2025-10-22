@@ -11,8 +11,9 @@ import { createSession, fetchSession } from "@shared/auth/api";
 import { useAuthProvidersQuery } from "@shared/auth/hooks/useAuthProvidersQuery";
 import {
   DEFAULT_APP_HOME,
+  buildSetupRedirect,
   chooseDestination,
-  sanitizeNextPath,
+  resolveRedirectParam,
 } from "@shared/auth/utils/authNavigation";
 import { fetchSetupStatus } from "@shared/setup/api";
 import { Alert } from "@ui/alert";
@@ -31,7 +32,7 @@ const loginSchema = z.object({
 
 export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   const url = new URL(request.url);
-  const redirectTo = sanitizeNextPath(url.searchParams.get("redirectTo")) ?? DEFAULT_APP_HOME;
+  const redirectTo = resolveRedirectParam(url.searchParams.get("redirectTo"));
 
   const session = await fetchSession({ signal: request.signal });
   if (session) {
@@ -40,12 +41,7 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
 
   const status = await fetchSetupStatus({ signal: request.signal });
   if (status.requires_setup) {
-    const params = new URLSearchParams();
-    if (redirectTo !== DEFAULT_APP_HOME) {
-      params.set("redirectTo", redirectTo);
-    }
-    const query = params.toString();
-    throw redirect(query ? `/setup?${query}` : "/setup");
+    throw redirect(buildSetupRedirect(redirectTo));
   }
 
   return { redirectTo };
@@ -62,8 +58,8 @@ export async function clientAction({ request }: ClientActionFunctionArgs) {
   }
 
   const { email, password } = parsed.data;
-  const redirectTo =
-    sanitizeNextPath(typeof raw.redirectTo === "string" ? raw.redirectTo : null) ?? DEFAULT_APP_HOME;
+  const redirectValue = typeof raw.redirectTo === "string" ? raw.redirectTo : null;
+  const redirectTo = resolveRedirectParam(redirectValue);
 
   try {
     const session = await createSession({ email, password }, { signal: request.signal });
