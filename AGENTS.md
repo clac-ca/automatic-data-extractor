@@ -93,7 +93,6 @@ npm run ci      # Full CI pipeline
 ## 🔧 TODO IN FUTURE WHEN POSSIBLE
 
 * Add linting/formatting: `ruff`/`black` (Python), `eslint`/`prettier` (JS).
-* Add a single Dockerfile to serve API + SPA.
 
 ---
 

@@ -117,7 +117,9 @@ Registry soon.
 git clone https://github.com/your-org/automatic-data-extractor.git
 cd automatic-data-extractor
 cp .env.example .env
-docker build -t ade-backend:local -f docker/backend/Dockerfile .
+docker build -t ade:local .
+# or use the helper script
+# npm run docker:build
 ```
 
 ### 5.2 Run the container
@@ -125,9 +127,10 @@ docker build -t ade-backend:local -f docker/backend/Dockerfile .
 docker run -d --name ade-backend \
   --env-file .env \
   -p 8000:8000 \
-  -v "$(pwd)/data:/backend/app/data" \
-  ade-backend:local \
-  uvicorn backend.app.main:create_app --host 0.0.0.0 --port 8000 --factory
+  -v "$(pwd)/data:/app/data" \
+  ade:local
+# or run interactively with
+# npm run docker:run
 ```
 
 The bind mount keeps the SQLite database and documents on the host so they
@@ -136,6 +139,8 @@ survive container restarts. Check health the same way:
 ```bash
 curl http://localhost:8000/health
 ```
+
+The bundled FastAPI server serves both the API and the compiled React frontend from the same container, so reverse proxies only need to forward requests to port 8000.
 
 When you deploy the frontend in production, compile it once (`npm run build` followed by copying `frontend/build/client/` into `backend/app/web/static/`). FastAPI serves those files directly, so your reverse proxy only needs to forward requests to the backend.
 
