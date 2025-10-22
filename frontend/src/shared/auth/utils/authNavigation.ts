@@ -2,7 +2,7 @@ import type { Location } from "react-router";
 
 export const DEFAULT_APP_HOME = "/workspaces";
 
-const PUBLIC_PATHS = new Set<string>(["/", "/login", "/setup"]);
+const PUBLIC_PATHS = new Set<string>(["/", "/login", "/setup", "/logout"]);
 
 export function isPublicPath(path: string): boolean {
   if (!path) {
