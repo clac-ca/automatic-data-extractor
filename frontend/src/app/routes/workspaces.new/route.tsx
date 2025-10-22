@@ -1,17 +1,16 @@
 import { useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { ApiError } from "@shared/api";
-import type { WorkspaceProfile } from "@schema/workspaces";
-import type { UserSummary } from "@schema/users";
-import { RequireSession } from "@features/auth/components/RequireSession";
-import { useSession } from "@features/auth/context/SessionContext";
+import type { components } from "@openapi";
+import { RequireSession } from "@shared/auth/components/RequireSession";
+import { useSession } from "@shared/auth/context/SessionContext";
 import { useCreateWorkspaceMutation } from "./useCreateWorkspaceMutation";
-import { useWorkspacesQuery } from "../workspaces/workspaces-api";
-import { useUsersQuery } from "@features/users/hooks/useUsersQuery";
+import { useWorkspacesQuery, type WorkspaceProfile } from "../workspaces/workspaces-api";
+import { useUsersQuery } from "@shared/users/hooks/useUsersQuery";
 import { WorkspaceDirectoryLayout } from "../workspaces/WorkspaceDirectoryLayout";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
@@ -228,6 +227,8 @@ function WorkspaceCreateContent() {
     </WorkspaceDirectoryLayout>
   );
 }
+
+type UserSummary = components["schemas"]["UserSummary"];
 
 function slugify(value: string) {
   return value

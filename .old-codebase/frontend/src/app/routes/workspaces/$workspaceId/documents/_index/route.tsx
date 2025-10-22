@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react"
 import type { ChangeEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 
 import { useWorkspaceContext } from "@features/workspaces/context/WorkspaceContext";
 import { useDocumentsQuery } from "@features/documents/hooks/useDocumentsQuery";

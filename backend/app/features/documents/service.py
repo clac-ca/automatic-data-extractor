@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Mapping
 from datetime import UTC, datetime
+import unicodedata
 from typing import Any, cast
 
 from fastapi import UploadFile
@@ -33,6 +34,9 @@ from .models import Document, DocumentTag
 from .repository import DocumentsRepository
 from .schemas import DocumentListResponse, DocumentRecord
 from .storage import DocumentStorage
+
+_FALLBACK_FILENAME = "upload"
+_MAX_FILENAME_LENGTH = 255
 
 
 class DocumentsService:
@@ -315,10 +319,28 @@ class DocumentsService:
         return parsed
 
     def _normalise_filename(self, name: str | None) -> str:
+        """Return a safe, display-friendly filename for stored documents."""
+
         if name is None:
-            return "upload"
+            return _FALLBACK_FILENAME
+
         candidate = name.strip()
-        return candidate or "upload"
+        if not candidate:
+            return _FALLBACK_FILENAME
+
+        # Strip control characters (including newlines) to avoid header injection and
+        # other control sequence issues when the filename is rendered in responses.
+        filtered = "".join(
+            ch for ch in candidate if unicodedata.category(ch)[0] != "C"
+        ).strip()
+
+        if not filtered:
+            return _FALLBACK_FILENAME
+
+        if len(filtered) > _MAX_FILENAME_LENGTH:
+            filtered = filtered[:_MAX_FILENAME_LENGTH].rstrip()
+
+        return filtered or _FALLBACK_FILENAME
 
     def _normalise_content_type(self, content_type: str | None) -> str | None:
         if content_type is None:

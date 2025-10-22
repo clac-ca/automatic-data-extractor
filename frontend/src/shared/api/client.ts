@@ -1,7 +1,7 @@
 import createClient, { type Middleware } from "openapi-fetch";
 
 import { ApiError } from "../api";
-import type { paths } from "@api-types";
+import type { paths } from "@openapi";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 
@@ -49,7 +49,11 @@ function readCsrfToken() {
   if (typeof document === "undefined") {
     return null;
   }
-  const cookies = document.cookie.split(";");
+  const rawCookies = document.cookie;
+  if (!rawCookies) {
+    return null;
+  }
+  const cookies = rawCookies.split(";");
   for (const cookie of cookies) {
     const [rawName, ...valueParts] = cookie.trim().split("=");
     if (rawName === name) {

@@ -1,18 +1,20 @@
 import { useEffect, useMemo, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { useWorkspaceContext } from "../workspaces.$workspaceId/WorkspaceContext";
-import { useConfigurationsQuery } from "@features/configurations/hooks/useConfigurationsQuery";
-import { useCreateConfigurationMutation } from "@features/configurations/hooks/useCreateConfigurationMutation";
-import { useActivateConfigurationMutation } from "@features/configurations/hooks/useActivateConfigurationMutation";
-import { ConfigurationSidebar } from "@features/configurations/components/ConfigurationSidebar";
-import { ConfigurationColumnsEditor } from "@features/configurations/components/ConfigurationColumnsEditor";
-import { ConfigurationScriptPanel } from "@features/configurations/components/ConfigurationScriptPanel";
-import type { ConfigurationRecord } from "@schema/configurations";
+import { useConfigurationsQuery } from "@shared/configurations/hooks/useConfigurationsQuery";
+import { useCreateConfigurationMutation } from "@shared/configurations/hooks/useCreateConfigurationMutation";
+import { useActivateConfigurationMutation } from "@shared/configurations/hooks/useActivateConfigurationMutation";
+import { ConfigurationSidebar } from "@shared/configurations/components/ConfigurationSidebar";
+import { ConfigurationColumnsEditor } from "@shared/configurations/components/ConfigurationColumnsEditor";
+import { ConfigurationScriptPanel } from "@shared/configurations/components/ConfigurationScriptPanel";
+import type { components } from "@openapi";
 
 export const handle = { workspaceSectionId: "configurations" } as const;
+
+type ConfigurationRecord = components["schemas"]["ConfigurationRecord"];
 
 const VIEW_OPTIONS = [
   { id: "columns", label: "Columns" },

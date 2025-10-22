@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Form, useNavigation } from "react-router";
 import clsx from "clsx";
 
-export interface ProfileDropdownAction {
+interface ProfileDropdownAction {
   readonly id: string;
   readonly label: string;
   readonly description?: string;
@@ -9,24 +10,21 @@ export interface ProfileDropdownAction {
   readonly onSelect: () => void;
 }
 
-export interface ProfileDropdownProps {
+interface ProfileDropdownProps {
   readonly displayName: string;
   readonly email: string;
   readonly actions?: readonly ProfileDropdownAction[];
-  readonly onSignOut: () => void;
-  readonly signingOut?: boolean;
 }
 
 export function ProfileDropdown({
   displayName,
   email,
   actions = [],
-  onSignOut,
-  signingOut = false,
 }: ProfileDropdownProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const navigation = useNavigation();
 
   const initials = useMemo(() => deriveInitials(displayName || email), [displayName, email]);
 
@@ -80,13 +78,7 @@ export function ProfileDropdown({
     [closeMenu],
   );
 
-  const handleSignOut = useCallback(() => {
-    if (signingOut) {
-      return;
-    }
-    closeMenu();
-    onSignOut();
-  }, [closeMenu, onSignOut, signingOut]);
+  const isSigningOut = navigation.state === "submitting" && navigation.formAction === "/logout";
 
   return (
     <div className="relative">
@@ -142,17 +134,25 @@ export function ProfileDropdown({
             ))}
           </ul>
           <div className="mt-2 border-t border-slate-200 pt-2">
-            <button
-              type="button"
-              role="menuitem"
-              data-menu-item
-              className="focus-ring flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-700"
-              onClick={handleSignOut}
-              disabled={signingOut}
+            <Form
+              method="post"
+              action="/logout"
+              replace
+              onSubmit={() => {
+                closeMenu();
+              }}
             >
-              <span>Sign out</span>
-              {signingOut ? <Spinner /> : null}
-            </button>
+              <button
+                type="submit"
+                role="menuitem"
+                data-menu-item
+                className="focus-ring flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-700"
+                disabled={isSigningOut}
+              >
+                <span>Sign out</span>
+                {isSigningOut ? <Spinner /> : null}
+              </button>
+            </Form>
           </div>
         </div>
       ) : null}

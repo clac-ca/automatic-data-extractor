@@ -9,7 +9,7 @@ const SIZE_STYLES = {
 
 type AvatarSize = keyof typeof SIZE_STYLES;
 
-export interface AvatarProps {
+interface AvatarProps {
   readonly name?: string | null;
   readonly email?: string | null;
   readonly size?: AvatarSize;

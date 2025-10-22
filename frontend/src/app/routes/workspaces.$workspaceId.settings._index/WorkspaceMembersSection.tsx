@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useWorkspaceContext } from "../workspaces.$workspaceId/WorkspaceContext";
-import { useUsersQuery } from "@features/users/hooks/useUsersQuery";
-import { useInviteUserMutation } from "@features/users/hooks/useInviteUserMutation";
+import { useUsersQuery } from "@shared/users/hooks/useUsersQuery";
+import { useInviteUserMutation } from "@shared/users/hooks/useInviteUserMutation";
 import {
   useAddWorkspaceMemberMutation,
   useRemoveWorkspaceMemberMutation,
@@ -10,9 +10,7 @@ import {
   useWorkspaceMembersQuery,
 } from "./useWorkspaceMembers";
 import { useWorkspaceRolesQuery } from "./useWorkspaceRoles";
-import type { WorkspaceMember } from "@schema/workspace-members";
-import type { RoleDefinition } from "@schema/roles";
-import type { UserSummary } from "@schema/users";
+import type { components } from "@openapi";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { FormField } from "@ui/form-field";
@@ -636,3 +634,7 @@ export function WorkspaceMembersSection() {
     </div>
   );
 }
+
+type WorkspaceMember = components["schemas"]["WorkspaceMember"];
+type RoleDefinition = components["schemas"]["RoleRead"];
+type UserSummary = components["schemas"]["UserSummary"];

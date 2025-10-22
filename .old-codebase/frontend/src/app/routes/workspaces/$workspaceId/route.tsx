@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import type { LoaderFunctionArgs, ShouldRevalidateFunctionArgs } from "react-router-dom";
-import { Outlet, redirect, useLoaderData, useLocation, useNavigate } from "react-router-dom";
+import type { LoaderFunctionArgs, ShouldRevalidateFunctionArgs } from "react-router";
+import { Outlet, redirect, useLoaderData, useLocation, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { RequireSession } from "@features/auth/components/RequireSession";

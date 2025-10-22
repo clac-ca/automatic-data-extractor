@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 type PageStateVariant = "loading" | "empty" | "error";
 
-export interface PageStateProps {
+interface PageStateProps {
   readonly title: string;
   readonly description?: ReactNode;
   readonly action?: ReactNode;

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.features.roles.service import (
     assign_global_role,
-    count_users_with_global_role,
+    has_users_with_global_role,
     ensure_user_principal,
     get_global_role_by_slug,
     sync_permission_registry,
@@ -235,11 +235,13 @@ class AuthService:
                     completed_at = datetime.fromisoformat(str(raw_completed))
                 except ValueError:
                     completed_at = None
+        if completed_at is not None:
+            return False, completed_at
 
-        admin_count = await count_users_with_global_role(
+        has_admin = await has_users_with_global_role(
             session=self._session, slug=_GLOBAL_ADMIN_ROLE_SLUG
         )
-        requires_setup = completed_at is None and admin_count == 0
+        requires_setup = not has_admin
         return requires_setup, completed_at
 
     async def complete_initial_setup(
@@ -274,10 +276,15 @@ class AuthService:
 
             raw_value = setting.value or {}
             completed_at = raw_value.get("completed_at")
-            admin_count = await count_users_with_global_role(
+            if completed_at:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    detail="Initial setup already completed",
+                )
+            has_admin = await has_users_with_global_role(
                 session=session, slug=_GLOBAL_ADMIN_ROLE_SLUG
             )
-            if completed_at or admin_count > 0:
+            if has_admin:
                 raise HTTPException(
                     status.HTTP_409_CONFLICT,
                     detail="Initial setup already completed",
@@ -333,9 +340,13 @@ class AuthService:
 
         forwarded_proto = request.headers.get("x-forwarded-proto")
         if forwarded_proto:
-            candidate = forwarded_proto.split(",", 1)[0].strip().lower()
-            if candidate:
-                return candidate == "https"
+            for candidate in forwarded_proto.split(","):
+                if candidate.strip().lower() == "https":
+                    return True
+
+        if request.scope.get("scheme"):
+            return str(request.scope["scheme"]).lower() == "https"
+
         return request.url.scheme == "https"
 
     def _issue_session_tokens(

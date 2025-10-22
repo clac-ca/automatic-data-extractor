@@ -11,7 +11,7 @@ type ControlProps = {
 
 type ControlElement = ReactElement<ControlProps>;
 
-export interface FormFieldProps {
+interface FormFieldProps {
   readonly label?: ReactNode;
   readonly hint?: ReactNode;
   readonly error?: ReactNode;

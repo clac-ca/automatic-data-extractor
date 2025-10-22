@@ -8,7 +8,7 @@ import {
   listWorkspaceRoles,
   updateWorkspaceRole,
 } from "@app/routes/workspaces/workspaces-api";
-import type { RoleCreatePayload, RoleDefinition, RoleUpdatePayload, PermissionDefinition } from "@schema/roles";
+import type { components } from "@openapi";
 
 export function useWorkspaceRolesQuery(workspaceId: string) {
   return useQuery<RoleDefinition[]>({
@@ -147,3 +147,8 @@ export function useDeleteWorkspaceRoleMutation(workspaceId: string) {
     },
   });
 }
+
+type RoleDefinition = components["schemas"]["RoleRead"];
+type RoleCreatePayload = components["schemas"]["RoleCreate"];
+type RoleUpdatePayload = components["schemas"]["RoleUpdate"];
+type PermissionDefinition = components["schemas"]["PermissionRead"];

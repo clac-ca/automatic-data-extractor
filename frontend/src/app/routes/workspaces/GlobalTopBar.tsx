@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import clsx from "clsx";
 
-export interface GlobalTopBarProps {
+interface GlobalTopBarProps {
   readonly leading?: ReactNode;
   readonly center?: ReactNode;
   readonly trailing?: ReactNode;
