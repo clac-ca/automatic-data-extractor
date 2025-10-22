@@ -40,7 +40,12 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
 
   const status = await fetchSetupStatus({ signal: request.signal });
   if (status.requires_setup) {
-    throw redirect("/setup");
+    const params = new URLSearchParams();
+    if (redirectTo !== DEFAULT_APP_HOME) {
+      params.set("redirectTo", redirectTo);
+    }
+    const query = params.toString();
+    throw redirect(query ? `/setup?${query}` : "/setup");
   }
 
   return { redirectTo };

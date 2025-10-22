@@ -3,7 +3,12 @@ import type { ClientActionFunctionArgs, ClientLoaderFunctionArgs } from "react-r
 import { z } from "zod";
 
 import { ApiError } from "@shared/api";
-import { chooseDestination } from "@shared/auth/utils/authNavigation";
+import {
+  DEFAULT_APP_HOME,
+  buildLoginRedirect,
+  chooseDestination,
+  sanitizeNextPath,
+} from "@shared/auth/utils/authNavigation";
 import { completeSetup, fetchSetupStatus, type SetupStatus } from "@shared/setup/api";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
@@ -27,6 +32,7 @@ const setupSchema = z
 
 interface SetupLoaderData {
   readonly forceSso: boolean;
+  readonly redirectTo: string;
 }
 
 interface SetupActionError {
@@ -36,13 +42,16 @@ interface SetupActionError {
 export async function clientLoader({
   request,
 }: ClientLoaderFunctionArgs): Promise<SetupLoaderData> {
+  const url = new URL(request.url);
+  const redirectTo =
+    sanitizeNextPath(url.searchParams.get("redirectTo")) ?? DEFAULT_APP_HOME;
   const status = await fetchSetupStatus({ signal: request.signal });
 
   if (!status?.requires_setup) {
-    throw redirect("/login");
+    throw redirect(buildLoginRedirect(redirectTo));
   }
 
-  return { forceSso: Boolean(status.force_sso) };
+  return { forceSso: Boolean(status.force_sso), redirectTo };
 }
 
 export async function clientAction({ request }: ClientActionFunctionArgs) {
@@ -55,6 +64,8 @@ export async function clientAction({ request }: ClientActionFunctionArgs) {
     return { error: message };
   }
 
+  const redirectTo =
+    sanitizeNextPath(typeof raw.redirectTo === "string" ? raw.redirectTo : null) ?? DEFAULT_APP_HOME;
   const { displayName, email, password } = parsed.data;
 
   try {
@@ -63,8 +74,11 @@ export async function clientAction({ request }: ClientActionFunctionArgs) {
       email,
       password,
     });
-    throw redirect(chooseDestination(session.return_to, null));
+    throw redirect(chooseDestination(session.return_to, redirectTo));
   } catch (error: unknown) {
+    if (error instanceof Response) {
+      throw error;
+    }
     if (error instanceof ApiError) {
       const message = error.problem?.detail ?? error.message ?? "Setup failed. Try again.";
       return { error: message };
@@ -77,7 +91,7 @@ export async function clientAction({ request }: ClientActionFunctionArgs) {
 }
 
 export default function SetupRoute() {
-  const { forceSso } = useLoaderData<SetupLoaderData>();
+  const { forceSso, redirectTo } = useLoaderData<SetupLoaderData>();
   const actionData = useActionData<SetupActionError | undefined>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
@@ -103,6 +117,7 @@ export default function SetupRoute() {
         ) : null}
 
         <Form method="post" className="mt-8 space-y-6" replace>
+          <input type="hidden" name="redirectTo" value={redirectTo} />
           <div className="grid gap-6 md:grid-cols-2">
             <FormField label="Display name" required>
               <Input
