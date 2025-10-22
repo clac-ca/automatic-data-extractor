@@ -17,7 +17,7 @@ export function useSessionQuery(options: UseSessionQueryOptions = {}) {
     staleTime: 60_000,
     gcTime: 600_000,
     refetchOnWindowFocus: false,
-    refetchOnMount: "always",
+    refetchOnMount: true,
   });
 
   const session = query.data ?? null;
