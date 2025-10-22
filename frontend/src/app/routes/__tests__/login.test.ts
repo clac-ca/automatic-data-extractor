@@ -116,6 +116,18 @@ describe("login route loader", () => {
 
     expect(result).toEqual({ redirectTo: "/workspaces/alpha" });
   });
+
+  it("clears the redirect when it points to logout", async () => {
+    fetchSessionMock.mockResolvedValue(null);
+    fetchSetupStatusMock.mockResolvedValue({ requires_setup: false });
+
+    const request = new Request("http://localhost/login?redirectTo=/logout");
+    const result = (await clientLoader({ request } as ClientLoaderFunctionArgs)) as {
+      redirectTo: string;
+    };
+
+    expect(result).toEqual({ redirectTo: "/workspaces" });
+  });
 });
 
 describe("login route action", () => {
