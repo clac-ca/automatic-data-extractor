@@ -1,47 +1,34 @@
-# syntax=docker/dockerfile:1
-
-FROM node:20.18.0-bookworm AS frontend-builder
+FROM node:20-alpine AS frontend-build
 WORKDIR /frontend
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
-COPY frontend/. ./
+COPY frontend/package*.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ .
 RUN npm run build
 
-FROM python:3.12.7-slim-bookworm AS python-builder
+FROM python:3.12-slim AS backend-build
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    VIRTUAL_ENV=/opt/venv \
-    PATH="/opt/venv/bin:$PATH"
+    PIP_DISABLE_PIP_VERSION_CHECK=on
 WORKDIR /app
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y build-essential python3-dev \
-    && rm -rf /var/lib/apt/lists/*
-COPY pyproject.toml README.md alembic.ini ./
-COPY ade/ ./ade/
-RUN python -m venv "$VIRTUAL_ENV"
-RUN pip install --upgrade pip \
-    && pip install --no-cache-dir .
+ && apt-get install -y --no-install-recommends build-essential \
+ && rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml README.md ./
+COPY backend ./backend
+RUN python -m pip install -U pip \
+ && pip install --no-cache-dir --prefix=/install .
 
-FROM python:3.12.7-slim-bookworm AS runtime
+FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    VIRTUAL_ENV=/opt/venv \
-    PATH="/opt/venv/bin:$PATH" \
-    ADE_SERVER_HOST=0.0.0.0 \
-    ADE_STORAGE_DATA_DIR=/var/lib/ade
+    PYTHONPATH=/app
 WORKDIR /app
-RUN apt-get update \
-    && apt-get install --no-install-recommends -y libpq5 \
-    && rm -rf /var/lib/apt/lists/*
-COPY --from=python-builder /opt/venv /opt/venv
-COPY --from=python-builder /app/alembic.ini ./
-COPY --from=python-builder /app/ade ./ade
-COPY --from=frontend-builder /frontend/dist ./ade/web/static
-RUN addgroup --system ade \
-    && adduser --system --ingroup ade --home /home/ade ade \
-    && mkdir -p /var/lib/ade/documents \
-    && chown -R ade:ade /app /var/lib/ade
-USER ade
+COPY --from=backend-build /install /usr/local
+COPY backend ./backend
+COPY alembic.ini .
+COPY --from=frontend-build /frontend/build/client ./backend/app/web/static
+RUN mkdir -p /app/data/db /app/data/documents
+VOLUME ["/app/data"]
 EXPOSE 8000
-CMD ["uvicorn", "ade.main:create_app", "--host", "0.0.0.0", "--port", "8000", "--factory"]
+ENV ADE_SERVER_HOST=0.0.0.0 ADE_SERVER_PORT=8000
+CMD ["uvicorn","backend.app.main:create_app","--factory","--host","0.0.0.0","--port","8000"]

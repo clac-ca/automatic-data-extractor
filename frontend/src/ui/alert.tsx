@@ -10,7 +10,7 @@ const TONE_STYLE: Record<AlertTone, string> = {
   danger: "bg-danger-50 text-danger-700 ring-danger-100",
 };
 
-export interface AlertProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
+interface AlertProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   readonly tone?: AlertTone;
   readonly heading?: ReactNode;
   readonly icon?: ReactNode;

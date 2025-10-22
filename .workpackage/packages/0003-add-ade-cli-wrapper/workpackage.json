@@ -1,0 +1,14 @@
+{
+  "version": "1",
+  "number": 3,
+  "slug": "add-ade-cli-wrapper",
+  "title": "Add ade CLI wrapper",
+  "summary": "Expose npm scripts through ade command wrapper",
+  "status": "done",
+  "createdAt": "2025-10-20T02:00:14.280Z",
+  "updatedAt": "2025-10-20T02:19:13.373Z",
+  "owner": "jkropp",
+  "tags": [],
+  "links": [],
+  "context": {}
+}

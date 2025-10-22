@@ -1,0 +1,14 @@
+{
+  "version": "1",
+  "number": 4,
+  "slug": "add-lint-scripts",
+  "title": "Add lint scripts",
+  "summary": "Configure backend/frontend lint commands and aggregate root lint",
+  "status": "done",
+  "createdAt": "2025-10-20T02:22:18.541Z",
+  "updatedAt": "2025-10-20T02:27:45.732Z",
+  "owner": "jkropp",
+  "tags": [],
+  "links": [],
+  "context": {}
+}

@@ -1,0 +1,14 @@
+{
+  "version": "1",
+  "number": 7,
+  "slug": "enforce-backend-app-layout",
+  "title": "Enforce backend app layout",
+  "summary": "Rewrite structure test to validate backend app directory layout.",
+  "status": "done",
+  "createdAt": "2025-10-20T02:56:49.603Z",
+  "updatedAt": "2025-10-20T02:57:55.735Z",
+  "owner": "jkropp",
+  "tags": [],
+  "links": [],
+  "context": {}
+}

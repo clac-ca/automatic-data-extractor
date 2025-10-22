@@ -7,10 +7,20 @@
     "module": "ESNext",
     "types": ["vite/client"],
     "skipLibCheck": true,
+    "baseUrl": "./src",
+    "paths": {
+      "@app/*": ["app/*"],
+      "@shared/*": ["shared/*"],
+      "@openapi": ["generated/openapi.d.ts"],
+      "@ui/*": ["ui/*"],
+      "@test/*": ["test/*"]
+    },
 
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
+    "rootDirs": ["./", "./.react-router/types"],
+    "moduleSuffixes": [".tsx", ".ts", ".jsx", ".js", ""],
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,
@@ -24,5 +34,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src"]
+  "include": ["src", ".react-router/types"]
 }
