@@ -8,9 +8,10 @@ frontend/
 ├─ react-router.config.ts                # { appDirectory: "src/app", ssr: false } (SPA)
 └─ src/
    ├─ ui/                                # shared presentational components
+   ├─ generated/                         # OpenAPI-generated types (openapi.d.ts)
+   │  └─ openapi.d.ts
    ├─ shared/                            # cross-route libs/types
-   │  ├─ api.ts
-   │  └─ types/                          # OpenAPI-generated types live here
+   │  └─ api.ts
    └─ app/
       ├─ AppProviders.tsx                # global providers (QueryClient, etc.)
       ├─ root.tsx                        # document shell + <Outlet/> + <Scripts/>
@@ -112,6 +113,12 @@ npx react-router routes --json  # print discovered route tree
 * **Don't** hand-register routes in `routes.ts`; rely on `flatRoutes()`.
 * **Don't** place child route files inside the parent directory unless the directory name encodes the full dotted path.
 * **Don't** hardcode absolute API origins; use relative `/api/...`.
+
+## API Client & Types
+
+- Run `npm run openapi-typescript` (root package script) to refresh `src/generated/openapi.d.ts`. A checked-in copy keeps typecheck working without the backend.
+- Use the shared `src/shared/api/client.ts` instance (built on `openapi-fetch`) for all HTTP calls; pass typed `params`/`body` based on the generated `paths` definitions.
+- Import schema types directly from the alias `@openapi` (e.g. `components["schemas"]["DocumentRecord"]`) instead of hand-rolled wrappers. Keep any request/response helpers colocated with the route that owns them.
 
 ## Key Docs
 

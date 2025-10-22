@@ -1,8 +1,7 @@
 import { type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 
-import { useSession } from "@features/auth/context/SessionContext";
-import { useLogoutMutation } from "@features/auth/hooks/useLogoutMutation";
+import { useSession } from "@shared/auth/context/SessionContext";
 import { GlobalTopBar } from "./GlobalTopBar";
 import { ProfileDropdown } from "./ProfileDropdown";
 import { DirectoryIcon } from "./workspace-navigation";
@@ -15,7 +14,6 @@ export interface WorkspaceDirectoryLayoutProps {
 
 export function WorkspaceDirectoryLayout({ children, sidePanel, actions }: WorkspaceDirectoryLayoutProps) {
   const session = useSession();
-  const logoutMutation = useLogoutMutation();
   const navigate = useNavigate();
   const displayName = session.user.display_name || session.user.email || "Signed in";
   const email = session.user.email ?? "";
@@ -42,12 +40,7 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions }: Works
         trailing={
           <div className="flex items-center gap-2">
             {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
-            <ProfileDropdown
-              displayName={displayName}
-              email={email}
-              onSignOut={() => logoutMutation.mutate()}
-              signingOut={logoutMutation.isPending}
-            />
+            <ProfileDropdown displayName={displayName} email={email} />
           </div>
         }
         maxWidthClassName="max-w-6xl"

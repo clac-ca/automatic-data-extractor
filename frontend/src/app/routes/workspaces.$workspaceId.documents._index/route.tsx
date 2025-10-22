@@ -1,30 +1,51 @@
-// Workspace documents index route — one-file screen with inline helpers.
+// route.tsx — Workspace Documents (polished, compact UI)
 
-import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react";
-import type { ChangeEvent, ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useId,
+  type ChangeEvent,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useWorkspaceContext } from "../workspaces.$workspaceId/WorkspaceContext";
-import { useDocumentsQuery } from "@features/documents/hooks/useDocumentsQuery";
-import type { DocumentsStatusFilter } from "@features/documents/api";
-import { downloadWorkspaceDocument as downloadDocument } from "@features/documents/api";
-import { useUploadDocuments } from "@features/documents/hooks/useUploadDocuments";
-import { useDeleteDocuments } from "@features/documents/hooks/useDeleteDocuments";
-import { useDocumentRunPreferences } from "@features/documents/hooks/useDocumentRunPreferences";
-import { useConfigurationsQuery } from "@features/configurations/hooks/useConfigurationsQuery";
-import { useDocumentJobsQuery, useSubmitJobMutation } from "@features/jobs/hooks/useJobsQuery";
-import type { DocumentRecord, DocumentStatus } from "@features/documents/api";
-import type { JobRecord, JobStatus } from "@features/jobs/api";
+import { useConfigurationsQuery } from "@shared/configurations/hooks/useConfigurationsQuery";
+import { client } from "@shared/api/client";
+import { createScopedStorage } from "@shared/storage";
+import type { components, paths } from "@openapi";
+
 import { Alert } from "@ui/alert";
 import { Input } from "@ui/input";
 import { Select } from "@ui/select";
 import { Button } from "@ui/button";
 
-/* -------------------------------------------------------------------------------------------------
- * Types & constants
- * -----------------------------------------------------------------------------------------------*/
+/* -------------------------------- Types & constants ------------------------------- */
+
+type DocumentListResponse = components["schemas"]["DocumentListResponse"];
+type DocumentStatus = components["schemas"]["DocumentStatus"];
+type DocumentRecord = components["schemas"]["DocumentRecord"];
+type JobRecord = components["schemas"]["JobRecord"];
+type JobSubmissionPayload = components["schemas"]["JobSubmissionRequest"];
+
+type ListDocumentsParameters = paths["/api/v1/workspaces/{workspace_id}/documents"]["get"]["parameters"];
+type ListDocumentsQuery = ListDocumentsParameters extends { query?: infer Q }
+  ? (Q extends undefined ? Record<string, never> : Q)
+  : Record<string, never>;
+
+type ListJobsParameters = paths["/api/v1/workspaces/{workspace_id}/jobs"]["get"]["parameters"];
+type ListJobsQuery = ListJobsParameters extends { query?: infer Q }
+  ? (Q extends undefined ? Record<string, never> : Q)
+  : Record<string, never>;
+
+type JobStatus = JobRecord["status"];
+type StatusFilterInput = DocumentStatus | DocumentStatus[] | null | undefined;
 
 type StatusOptionValue = "all" | DocumentStatus;
 
@@ -40,8 +61,17 @@ const SORT_OPTIONS = ["-created_at", "created_at", "name", "-name", "status"] as
 type SortOption = (typeof SORT_OPTIONS)[number];
 
 function parseStatus(value: string | null): StatusOptionValue {
-  const allowed = new Set<StatusOptionValue>(["all", "uploaded", "processing", "processed", "failed", "archived"]);
-  return allowed.has((value as StatusOptionValue) ?? "all") ? ((value as StatusOptionValue) ?? "all") : "all";
+  const allowed = new Set<StatusOptionValue>([
+    "all",
+    "uploaded",
+    "processing",
+    "processed",
+    "failed",
+    "archived",
+  ]);
+  return allowed.has((value as StatusOptionValue) ?? "all")
+    ? ((value as StatusOptionValue) ?? "all")
+    : "all";
 }
 
 function parseSort(value: string | null): SortOption {
@@ -49,9 +79,24 @@ function parseSort(value: string | null): SortOption {
   return (allowed.has(value ?? "") ? (value as SortOption) : "-created_at") as SortOption;
 }
 
-/* -------------------------------------------------------------------------------------------------
- * Route
- * -----------------------------------------------------------------------------------------------*/
+const uploadedFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+const documentsKeys = {
+  all: () => ["documents"] as const,
+  workspace: (workspaceId: string) => [...documentsKeys.all(), workspaceId] as const,
+  list: (workspaceId: string, status: DocumentStatus[] | null, search: string | null, sort: string | null) =>
+    [...documentsKeys.workspace(workspaceId), "list", { status, search, sort }] as const,
+};
+
+const jobsKeys = {
+  root: (workspaceId: string) => ["jobs", workspaceId] as const,
+  document: (workspaceId: string, documentId: string, limit: number) =>
+    [...jobsKeys.root(workspaceId), "document", documentId, limit] as const,
+};
+/* -------------------------------- Route component -------------------------------- */
 
 export default function WorkspaceDocumentsRoute() {
   const { workspace } = useWorkspaceContext();
@@ -71,8 +116,8 @@ export default function WorkspaceDocumentsRoute() {
   const selectedCount = selectedIdsSet.size;
 
   // Operations
-  const uploadDocuments = useUploadDocuments(workspace.id);
-  const deleteDocuments = useDeleteDocuments(workspace.id);
+  const uploadDocuments = useUploadWorkspaceDocuments(workspace.id);
+  const deleteDocuments = useDeleteWorkspaceDocuments(workspace.id);
 
   const [banner, setBanner] = useState<{ tone: "error"; message: string } | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -82,16 +127,15 @@ export default function WorkspaceDocumentsRoute() {
   const isDeleting = deleteDocuments.isPending;
 
   // Query
-  const documentsQuery = useDocumentsQuery(workspace.id, {
-    status: statusFilter as DocumentsStatusFilter,
+  const documentsQuery = useWorkspaceDocuments(workspace.id, {
+    status: statusFilter,
     search: debouncedSearch,
     sort: sortOrder,
   });
   const { refetch: refetchDocuments } = documentsQuery;
   const documents = documentsQuery.data?.items ?? [];
 
-  /* -------------------------------- URL sync -------------------------------- */
-
+  /* ----------------------------- URL sync ----------------------------- */
   useEffect(() => {
     const s = new URLSearchParams();
     if (statusFilter !== "all") s.set("status", statusFilter);
@@ -100,15 +144,13 @@ export default function WorkspaceDocumentsRoute() {
     setSearchParams(s, { replace: true });
   }, [statusFilter, sortOrder, debouncedSearch, setSearchParams]);
 
-  /* -------------------------------- Search debounce -------------------------------- */
-
+  /* --------------------------- Search debounce --------------------------- */
   useEffect(() => {
     const h = window.setTimeout(() => setDebouncedSearch(searchTerm.trim()), 250);
     return () => window.clearTimeout(h);
   }, [searchTerm]);
 
-  /* -------------------------------- Selection integrity -------------------------------- */
-
+  /* ------------------------- Selection integrity ------------------------- */
   useEffect(() => {
     setSelectedIds((current) => {
       if (current.size === 0) return current;
@@ -128,8 +170,7 @@ export default function WorkspaceDocumentsRoute() {
     return null;
   }, [documents, selectedIdsSet]);
 
-  /* -------------------------------- Keyboard shortcuts -------------------------------- */
-
+  /* --------------------------- Keyboard shortcuts --------------------------- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // Upload
@@ -146,9 +187,10 @@ export default function WorkspaceDocumentsRoute() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedCount]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCount]);
 
-  /* -------------------------------- Helpers -------------------------------- */
+  /* ------------------------------- Helpers ------------------------------- */
 
   const statusFormatter = useCallback(
     (status: DocumentStatus) => DOCUMENT_STATUS_LABELS[status] ?? status,
@@ -272,9 +314,9 @@ export default function WorkspaceDocumentsRoute() {
     setSortOrder("-created_at");
   };
 
-  /* -------------------------------- Render -------------------------------- */
-
   const isDefaultFilters = statusFilter === "all" && sortOrder === "-created_at" && !debouncedSearch;
+
+  /* -------------------------------- Render -------------------------------- */
 
   return (
     <>
@@ -288,15 +330,7 @@ export default function WorkspaceDocumentsRoute() {
       />
 
       <div className="space-y-4">
-        {/* Page header — balanced + calm */}
-        <header className="rounded-xl border border-slate-200 bg-white/95 px-4 py-4 sm:px-5">
-          <h1 className="text-lg font-semibold text-slate-900 sm:text-xl">Documents</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Manage uploads and runs across {workspace.name ?? "this workspace"}.
-          </p>
-        </header>
-
-        {/* Hidden file input (paired with toolbar Upload) */}
+        {/* Hidden file input (paired with Upload) */}
         <input
           ref={fileInputRef}
           type="file"
@@ -306,8 +340,10 @@ export default function WorkspaceDocumentsRoute() {
           onChange={handleFileChange}
         />
 
-        {/* Toolbar — minimal, elegant, responsive, and stable */}
+        {/* Compact Page Bar (title + filters + Upload) */}
         <DocumentsToolbar
+          title="Documents"
+          subtitle={`Manage uploads and runs across ${workspace.name ?? "this workspace"}.`}
           search={searchTerm}
           onSearch={setSearchTerm}
           status={statusFilter}
@@ -321,14 +357,14 @@ export default function WorkspaceDocumentsRoute() {
           uploadDisabled={isUploading}
         />
 
-        {/* Inline error banner (non-blocking) */}
+        {/* Inline error banner */}
         {banner ? (
           <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">
             {banner.message}
           </div>
         ) : null}
 
-        {/* Content panel; allow horizontal scroll on tiny screens */}
+        {/* Content panel */}
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700 sm:p-4">
           {documentsQuery.isLoading ? (
             <SkeletonList />
@@ -378,15 +414,396 @@ export default function WorkspaceDocumentsRoute() {
     </>
   );
 }
+/* ------------------------------- Data hooks ------------------------------- */
 
-/* -------------------------------------------------------------------------------------------------
- * UI pieces
- * -----------------------------------------------------------------------------------------------*/
+interface WorkspaceDocumentsOptions {
+  readonly status: StatusOptionValue;
+  readonly search: string;
+  readonly sort: SortOption;
+}
 
-const uploadedFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
+function useWorkspaceDocuments(workspaceId: string, options: WorkspaceDocumentsOptions) {
+  const statusFilter = options.status === "all" ? undefined : options.status;
+  const normalizedStatus = normaliseStatusFilter(statusFilter) ?? null;
+  const search = options.search.trim() || null;
+  const sort = options.sort.trim() || null;
+
+  return useQuery<DocumentListResponse>({
+    queryKey: documentsKeys.list(workspaceId, normalizedStatus, search, sort),
+    queryFn: ({ signal }) =>
+      fetchWorkspaceDocuments(
+        workspaceId,
+        { status: normalizedStatus, search, sort },
+        signal
+      ),
+    enabled: workspaceId.length > 0,
+    placeholderData: (previous) => previous,
+    staleTime: 15_000,
+  });
+}
+
+function useUploadWorkspaceDocuments(workspaceId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, { files: readonly File[] }>({
+    mutationFn: async ({ files }) => {
+      const uploads = Array.from(files);
+      for (const file of uploads) {
+        await client.POST("/api/v1/workspaces/{workspace_id}/documents", {
+          params: { path: { workspace_id: workspaceId } },
+          body: { file: "" },
+          bodySerializer: () => {
+            const formData = new FormData();
+            formData.append("file", file);
+            return formData;
+          },
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
+    },
+  });
+}
+
+function useDeleteWorkspaceDocuments(workspaceId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, { documentIds: readonly string[] }>({
+    mutationFn: async ({ documentIds }) => {
+      await Promise.all(
+        documentIds.map((documentId) =>
+          client.DELETE("/api/v1/workspaces/{workspace_id}/documents/{document_id}", {
+            params: { path: { workspace_id: workspaceId, document_id: documentId } },
+          })
+        )
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
+    },
+  });
+}
+
+function useSubmitJob(workspaceId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation<JobRecord, Error, JobSubmissionPayload>({
+    mutationFn: async (payload) => {
+      const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/jobs", {
+        params: { path: { workspace_id: workspaceId } },
+        body: payload,
+      });
+      if (!data) throw new Error("Expected job payload.");
+      return data as JobRecord;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: jobsKeys.root(workspaceId) });
+      queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
+    },
+  });
+}
+
+function useDocumentJobs(workspaceId: string, documentId: string, options?: { limit?: number; enabled?: boolean }) {
+  const { limit = 3, enabled = true } = options ?? {};
+
+  return useQuery<JobRecord[]>({
+    queryKey: jobsKeys.document(workspaceId, documentId, limit),
+    queryFn: ({ signal }) => listWorkspaceJobs(workspaceId, { inputDocumentId: documentId, limit }, signal),
+    enabled: enabled && workspaceId.length > 0 && documentId.length > 0,
+    staleTime: 10_000,
+    placeholderData: (previous) => previous ?? [],
+  });
+}
+
+function useDocumentRunPreferences(workspaceId: string, documentId: string) {
+  const storage = useMemo(
+    () => createScopedStorage(`ade.workspace.${workspaceId}.document_runs`),
+    [workspaceId],
+  );
+
+  const [preferences, setPreferencesState] = useState<DocumentRunPreferences>(() =>
+    readRunPreferences(storage, documentId),
+  );
+
+  useEffect(() => {
+    setPreferencesState(readRunPreferences(storage, documentId));
+  }, [storage, documentId]);
+
+  const setPreferences = useCallback(
+    (next: DocumentRunPreferences) => {
+      setPreferencesState(next);
+      const all = storage.get<Record<string, DocumentRunPreferences>>() ?? {};
+      storage.set({
+        ...all,
+        [documentId]: {
+          configurationId: next.configurationId,
+          configurationVersion: next.configurationVersion,
+        },
+      });
+    },
+    [storage, documentId],
+  );
+
+  return { preferences, setPreferences } as const;
+}
+
+type DocumentRunPreferences = {
+  readonly configurationId: string | null;
+  readonly configurationVersion: number | null;
+};
+/* ------------------------ API helpers & small utilities ------------------------ */
+
+async function fetchWorkspaceDocuments(
+  workspaceId: string,
+  options: { status: DocumentStatus[] | null; search: string | null; sort: string | null },
+  signal?: AbortSignal,
+): Promise<DocumentListResponse> {
+  const query: ListDocumentsQuery = {};
+  if (options.status && options.status.length > 0) query.status = Array.from(options.status);
+  if (options.search) query.q = options.search;
+  if (options.sort) query.sort = options.sort;
+
+  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents", {
+    params: { path: { workspace_id: workspaceId }, query },
+    signal,
+  });
+
+  return (
+    data ?? { items: [], page: 1, per_page: 0, has_next: false, total: 0 }
+  );
+}
+
+async function listWorkspaceJobs(
+  workspaceId: string,
+  options: { status?: JobStatus | "all" | null; inputDocumentId?: string | null; limit?: number | null; offset?: number | null },
+  signal?: AbortSignal,
+): Promise<JobRecord[]> {
+  const query: ListJobsQuery = {};
+  if (options.status && options.status !== "all") query.status = options.status;
+  if (options.inputDocumentId) query.input_document_id = options.inputDocumentId;
+  if (typeof options.limit === "number") query.limit = options.limit;
+  if (typeof options.offset === "number") query.offset = options.offset;
+
+  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/jobs", {
+    params: { path: { workspace_id: workspaceId }, query },
+    signal,
+  });
+
+  return (data ?? []) as JobRecord[];
+}
+
+async function downloadDocument(workspaceId: string, documentId: string) {
+  const { data, response } = await client.GET(
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/download",
+    {
+      params: { path: { workspace_id: workspaceId, document_id: documentId } },
+      parseAs: "blob",
+    },
+  );
+  if (!data) throw new Error("Expected document download payload.");
+  const filename = extractFilename(response.headers.get("content-disposition")) ?? `document-${documentId}`;
+  return { blob: data, filename };
+}
+
+function extractFilename(header: string | null) {
+  if (!header) return null;
+  const filenameStarMatch = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (filenameStarMatch?.[1]) {
+    try {
+      return decodeURIComponent(filenameStarMatch[1]);
+    } catch {
+      return filenameStarMatch[1];
+    }
+  }
+  const filenameMatch = header.match(/filename="?([^";]+)"?/i);
+  return filenameMatch?.[1] ?? null;
+}
+
+function normaliseStatusFilter(status: StatusFilterInput) {
+  if (status == null) return undefined;
+  if (Array.isArray(status)) {
+    const filtered = status.filter((value): value is DocumentStatus => Boolean(value));
+    return filtered.length > 0 ? filtered : undefined;
+  }
+  return [status];
+}
+
+function readRunPreferences(
+  storage: ReturnType<typeof createScopedStorage>,
+  documentId: string,
+): DocumentRunPreferences {
+  const all = storage.get<Record<string, DocumentRunPreferences>>();
+  if (all && typeof all === "object" && documentId in all) {
+    const entry = all[documentId];
+    if (entry && typeof entry === "object") {
+      return {
+        configurationId: entry.configurationId ?? null,
+        configurationVersion: entry.configurationVersion ?? null,
+      };
+    }
+  }
+  return { configurationId: null, configurationVersion: null };
+}
+/* ------------------------- Compact Page Bar / Toolbar ------------------------- */
+
+function DocumentsToolbar({
+  title,
+  subtitle,
+  search,
+  onSearch,
+  status,
+  onStatus,
+  sort,
+  onSort,
+  onReset,
+  isFetching,
+  isDefault,
+  onUploadClick,
+  uploadDisabled,
+}: {
+  title?: string;
+  subtitle?: string;
+  search: string;
+  onSearch: (v: string) => void;
+  status: StatusOptionValue;
+  onStatus: (v: StatusOptionValue) => void;
+  sort: SortOption;
+  onSort: (v: SortOption) => void;
+  onReset: () => void;
+  isFetching?: boolean;
+  isDefault: boolean;
+  onUploadClick: () => void;
+  uploadDisabled?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const searchId = useId();
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if ((key === "/" || ((e.metaKey || e.ctrlKey) && key === "k")) && document.activeElement !== inputRef.current) {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+      if (key === "escape" && document.activeElement === inputRef.current && search) onSearch("");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [search, onSearch]);
+
+  return (
+    <section
+      className="rounded-xl border border-slate-200 bg-white/95 p-3 sm:p-4"
+      role="region"
+      aria-label="Documents header and filters"
+    >
+      {/* Top row: title on the left, Upload on the right */}
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-semibold text-slate-900 sm:text-xl">
+            {title ?? "Documents"}
+          </h1>
+          {subtitle ? (
+            <p className="mt-0.5 hidden truncate text-xs text-slate-600 sm:block">{subtitle}</p>
+          ) : null}
+        </div>
+        <Button
+          className="shrink-0"
+          onClick={onUploadClick}
+          disabled={uploadDisabled}
+          isLoading={uploadDisabled}
+          aria-label="Upload documents"
+        >
+          Upload
+        </Button>
+      </div>
+
+      {/* Filters row */}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr,auto,auto,auto] sm:items-center sm:gap-3">
+        <div className="relative">
+          <Input
+            id={searchId}
+            ref={inputRef as any}
+            type="search"
+            placeholder="Search (⌘K or /)"
+            value={search}
+            onChange={(e) => onSearch(e.target.value)}
+            className="w-full"
+            aria-label="Search documents"
+          />
+          {search ? (
+            <button
+              type="button"
+              onClick={() => onSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1 text-xs text-slate-500 hover:text-slate-800"
+              title="Clear (Esc)"
+              aria-label="Clear search"
+            >
+              ×
+            </button>
+          ) : null}
+        </div>
+
+        <Select
+          value={status}
+          onChange={(e) => onStatus(e.target.value as StatusOptionValue)}
+          className="w-full sm:w-[170px]"
+          aria-label="Filter by status"
+        >
+          <option value="all">All statuses</option>
+          <option value="processing">{DOCUMENT_STATUS_LABELS.processing}</option>
+          <option value="failed">{DOCUMENT_STATUS_LABELS.failed}</option>
+          <option value="uploaded">{DOCUMENT_STATUS_LABELS.uploaded}</option>
+          <option value="processed">{DOCUMENT_STATUS_LABELS.processed}</option>
+          <option value="archived">{DOCUMENT_STATUS_LABELS.archived}</option>
+        </Select>
+
+        <Select
+          value={sort}
+          onChange={(e) => onSort(e.target.value as SortOption)}
+          className="w-full sm:w-[170px]"
+          aria-label="Sort documents"
+        >
+          <option value="-created_at">Newest first</option>
+          <option value="created_at">Oldest first</option>
+          <option value="name">Name A–Z</option>
+          <option value="-name">Name Z–A</option>
+          <option value="status">Status</option>
+        </Select>
+
+        <div className="flex items-center gap-3 sm:justify-end">
+          <button
+            type="button"
+            onClick={onReset}
+            disabled={isDefault}
+            className={clsx(
+              "rounded text-sm",
+              isDefault
+                ? "cursor-default text-slate-300"
+                : "text-slate-600 underline underline-offset-4 hover:text-slate-900"
+            )}
+            title="Reset filters"
+          >
+            Reset
+          </button>
+          <span
+            className={clsx(
+              "inline-flex items-center justify-end gap-1 text-xs text-slate-500",
+              isFetching ? "opacity-100" : "opacity-0"
+            )}
+            role="status"
+            aria-live="polite"
+          >
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
+            Updating…
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+/* ----------------------------- Documents table ----------------------------- */
 
 interface DocumentsTableProps {
   readonly documents: readonly DocumentRecord[];
@@ -420,52 +837,37 @@ function DocumentsTable({
   const headerCheckboxRef = useRef<HTMLInputElement | null>(null);
 
   const { allSelected, someSelected } = useMemo(() => {
-    if (documents.length === 0) {
-      return { allSelected: false, someSelected: false };
-    }
+    if (documents.length === 0) return { allSelected: false, someSelected: false };
     const selectedCount = documents.reduce(
-      (count, document) => (selectedIds.has(document.document_id) ? count + 1 : count),
+      (count, d) => (selectedIds.has(d.document_id) ? count + 1 : count),
       0,
     );
-    return {
-      allSelected: selectedCount === documents.length,
-      someSelected: selectedCount > 0 && selectedCount < documents.length,
-    };
+    return { allSelected: selectedCount === documents.length, someSelected: selectedCount > 0 && selectedCount < documents.length };
   }, [documents, selectedIds]);
 
   useEffect(() => {
-    if (headerCheckboxRef.current) {
-      headerCheckboxRef.current.indeterminate = someSelected;
-    }
+    if (headerCheckboxRef.current) headerCheckboxRef.current.indeterminate = someSelected;
   }, [someSelected]);
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200">
-      <table className="min-w-full table-auto border-separate border-spacing-0 text-sm text-slate-700">
-        <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm">
-          <tr>
-            <th scope="col" className="w-10 px-3 py-2">
+    <div className="overflow-x-auto">
+      <table className="min-w-full table-fixed border-separate border-spacing-0 text-sm text-slate-700">
+        <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm text-[11px] font-medium text-slate-500">
+          <tr className="border-b border-slate-200">
+            <th scope="col" className="w-10 px-2.5 py-2">
               <input
                 ref={headerCheckboxRef}
                 type="checkbox"
-                className="h-4 w-4 rounded border border-slate-300 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                className="h-4 w-4 rounded border border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 checked={allSelected}
                 onChange={onToggleAll}
                 disabled={disableSelection || documents.length === 0}
               />
             </th>
-            <th scope="col" className="px-3 py-2 text-left">
-              Name
-            </th>
-            <th scope="col" className="px-3 py-2 text-left">
-              Status
-            </th>
-            <th scope="col" className="px-3 py-2 text-left">
-              Uploaded
-            </th>
-            <th scope="col" className="px-3 py-2 text-right">
-              Actions
-            </th>
+            <th scope="col" className="px-2.5 py-2 text-left">Name</th>
+            <th scope="col" className="px-2.5 py-2 text-left">Status</th>
+            <th scope="col" className="px-2.5 py-2 text-left">Uploaded</th>
+            <th scope="col" className="px-2.5 py-2 text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -475,38 +877,37 @@ function DocumentsTable({
               <tr
                 key={document.document_id}
                 className={clsx(
-                  "border-b border-slate-200 last:border-b-0 transition hover:bg-slate-50",
-                  isSelected ? "bg-brand-50" : "bg-white",
+                  "border-b border-slate-200 last:border-b-0 transition-colors hover:bg-slate-50",
+                  isSelected ? "bg-brand-50/50" : "bg-white"
                 )}
               >
-                <td className="px-3 py-2 align-middle">
+                <td className="px-2.5 py-2 align-middle">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border border-slate-300 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    className="h-4 w-4 rounded border border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     checked={isSelected}
                     onChange={() => onToggleDocument(document.document_id)}
                     disabled={disableSelection}
                   />
                 </td>
-                <td className="px-3 py-2 align-middle">
-                  <div className="flex flex-col gap-1">
-                    <span className="truncate font-semibold text-slate-900" title={document.name}>
-                      {document.name}
-                    </span>
-                    <span className="flex items-center gap-2 text-xs text-slate-500">
-                      {formatFileDescription(document)}
-                    </span>
-                    {renderJobStatus ? (
-                      <div className="text-xs text-slate-500">{renderJobStatus(document)}</div>
-                    ) : null}
+                <td className="px-2.5 py-2 align-middle">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-slate-900" title={document.name}>{document.name}</div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                      <span className="truncate">{formatFileDescription(document)}</span>
+                      {renderJobStatus ? <span className="truncate">{renderJobStatus(document)}</span> : null}
+                    </div>
                   </div>
                 </td>
-                <td className="px-3 py-2 align-middle">
-                  <span className={clsx("rounded-full px-2 py-1 text-[11px] font-semibold uppercase", statusBadgeClass(document.status))}>
+                <td className="px-2.5 py-2 align-middle">
+                  <span className={clsx(
+                    "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
+                    statusBadgeClass(document.status)
+                  )}>
                     {formatStatusLabel ? formatStatusLabel(document.status) : document.status}
                   </span>
                 </td>
-                <td className="px-3 py-2 align-middle">
+                <td className="px-2.5 py-2 align-middle">
                   <time
                     dateTime={document.created_at}
                     className="block truncate text-xs text-slate-600"
@@ -515,7 +916,7 @@ function DocumentsTable({
                     {formatUploadedAt(document)}
                   </time>
                 </td>
-                <td className="px-3 py-2 align-middle text-right">
+                <td className="px-2.5 py-2 align-middle text-right">
                   <DocumentActionsMenu
                     document={document}
                     onDownload={onDownloadDocument}
@@ -534,14 +935,67 @@ function DocumentsTable({
   );
 }
 
+/* ------------------------------- Row actions ------------------------------- */
+
+interface DocumentActionsMenuProps {
+  readonly document: DocumentRecord;
+  readonly onDownload?: (document: DocumentRecord) => void;
+  readonly onDelete?: (document: DocumentRecord) => void;
+  readonly onRun?: (document: DocumentRecord) => void;
+  readonly disabled?: boolean;
+  readonly downloading?: boolean;
+}
+
+function DocumentActionsMenu({
+  document,
+  onDownload,
+  onDelete,
+  onRun,
+  disabled = false,
+  downloading = false,
+}: DocumentActionsMenuProps) {
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      <Button
+        type="button"
+        size="sm"
+        variant="primary"
+        onClick={() => onRun?.(document)}
+        disabled={disabled || !onRun}
+      >
+        Run
+      </Button>
+
+      <button
+        type="button"
+        onClick={() => onDownload?.(document)}
+        className={clsx(
+          "px-2 py-1 text-xs font-medium text-slate-600 underline underline-offset-4 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+          downloading && "opacity-60"
+        )}
+        disabled={disabled || downloading}
+      >
+        {downloading ? "Downloading…" : "Download"}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => onDelete?.(document)}
+        className="px-2 py-1 text-xs font-semibold text-danger-600 hover:text-danger-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger-500"
+        disabled={disabled}
+      >
+        Delete
+      </button>
+    </div>
+  );
+}
+
+/* --------------------------- Formatting helpers --------------------------- */
+
 function formatFileDescription(document: DocumentRecord) {
   const parts: string[] = [];
-  if (document.content_type) {
-    parts.push(humanizeContentType(document.content_type));
-  }
-  if (typeof document.byte_size === "number" && document.byte_size >= 0) {
-    parts.push(formatFileSize(document.byte_size));
-  }
+  if (document.content_type) parts.push(humanizeContentType(document.content_type));
+  if (typeof document.byte_size === "number" && document.byte_size >= 0) parts.push(formatFileSize(document.byte_size));
   return parts.join(" • ") || "Unknown type";
 }
 
@@ -558,9 +1012,7 @@ function humanizeContentType(contentType: string) {
 }
 
 function formatFileSize(bytes: number) {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
+  if (bytes < 1024) return `${bytes} B`;
   const units = ["KB", "MB", "GB", "TB"];
   let value = bytes / 1024;
   let unitIndex = 0;
@@ -590,60 +1042,7 @@ function statusBadgeClass(status: DocumentRecord["status"]) {
 function formatUploadedAt(document: DocumentRecord) {
   return uploadedFormatter.format(new Date(document.created_at));
 }
-
-interface DocumentActionsMenuProps {
-  readonly document: DocumentRecord;
-  readonly onDownload?: (document: DocumentRecord) => void;
-  readonly onDelete?: (document: DocumentRecord) => void;
-  readonly onRun?: (document: DocumentRecord) => void;
-  readonly disabled?: boolean;
-  readonly downloading?: boolean;
-}
-
-function DocumentActionsMenu({
-  document,
-  onDownload,
-  onDelete,
-  onRun,
-  disabled = false,
-  downloading = false,
-}: DocumentActionsMenuProps) {
-  return (
-    <div className="inline-flex items-center gap-2">
-      <Button
-        type="button"
-        size="sm"
-        variant="primary"
-        onClick={() => onRun?.(document)}
-        disabled={disabled || !onRun}
-      >
-        Run
-      </Button>
-      <button
-        type="button"
-        onClick={() => onDownload?.(document)}
-        className={clsx(
-          "flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand-200 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
-          downloading && "opacity-60",
-        )}
-        disabled={disabled || downloading}
-      >
-        Download
-        {downloading ? (
-          <span className="inline-flex h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-transparent" />
-        ) : null}
-      </button>
-      <button
-        type="button"
-        onClick={() => onDelete?.(document)}
-        className="flex items-center gap-1 rounded-lg border border-danger-200 px-3 py-1.5 text-xs font-semibold text-danger-600 transition hover:border-danger-300 hover:text-danger-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-        disabled={disabled}
-      >
-        Delete
-      </button>
-    </div>
-  );
-}
+/* --------------------------------- Run Drawer --------------------------------- */
 
 interface RunExtractionDrawerProps {
   readonly open: boolean;
@@ -665,9 +1064,7 @@ function RunExtractionDrawer({
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
+    if (typeof window === "undefined") return;
     if (open) {
       previouslyFocusedElementRef.current =
         window.document.activeElement instanceof HTMLElement ? window.document.activeElement : null;
@@ -678,9 +1075,7 @@ function RunExtractionDrawer({
   }, [open]);
 
   useEffect(() => {
-    if (!open || typeof window === "undefined") {
-      return;
-    }
+    if (!open || typeof window === "undefined") return;
     const originalOverflow = window.document.body.style.overflow;
     window.document.body.style.overflow = "hidden";
     return () => {
@@ -688,9 +1083,7 @@ function RunExtractionDrawer({
     };
   }, [open]);
 
-  if (typeof window === "undefined" || !open || !documentRecord) {
-    return null;
-  }
+  if (typeof window === "undefined" || !open || !documentRecord) return null;
 
   return createPortal(
     <RunExtractionDrawerContent
@@ -723,7 +1116,7 @@ function RunExtractionDrawerContent({
   const titleId = useId();
   const descriptionId = useId();
   const configurationsQuery = useConfigurationsQuery(workspaceId);
-  const submitJob = useSubmitJobMutation(workspaceId);
+  const submitJob = useSubmitJob(workspaceId);
   const { preferences, setPreferences } = useDocumentRunPreferences(
     workspaceId,
     documentRecord.document_id,
@@ -731,7 +1124,7 @@ function RunExtractionDrawerContent({
 
   const configurations = configurationsQuery.data ?? [];
   const activeConfiguration = useMemo(
-    () => configurations.find((configuration) => configuration.is_active) ?? null,
+    () => configurations.find((c) => c.is_active) ?? null,
     [configurations],
   );
 
@@ -746,16 +1139,15 @@ function RunExtractionDrawerContent({
   }, [preferences.configurationId, activeConfiguration?.configuration_id]);
 
   const selectedConfiguration = configurations.find(
-    (configuration) => configuration.configuration_id === selectedConfigurationId,
+    (c) => c.configuration_id === selectedConfigurationId,
   );
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const dialog = dialogRef.current;
-    if (!dialog) {
-      return;
-    }
+    if (!dialog) return;
+
     const focusable = getFocusableElements(dialog);
     (focusable[0] ?? dialog).focus();
 
@@ -765,9 +1157,8 @@ function RunExtractionDrawerContent({
         onClose();
         return;
       }
-      if (event.key !== "Tab") {
-        return;
-      }
+      if (event.key !== "Tab") return;
+
       const focusableElements = getFocusableElements(dialog);
       if (focusableElements.length === 0) {
         event.preventDefault();
@@ -792,9 +1183,7 @@ function RunExtractionDrawerContent({
     };
 
     dialog.addEventListener("keydown", handleKeyDown);
-    return () => {
-      dialog.removeEventListener("keydown", handleKeyDown);
-    };
+    return () => dialog.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
   const hasConfigurations = configurations.length > 0;
@@ -821,9 +1210,7 @@ function RunExtractionDrawerContent({
           onClose();
         },
         onError: (error) => {
-          const message = (
-            error instanceof Error ? error.message : "Unable to submit extraction job."
-          );
+          const message = error instanceof Error ? error.message : "Unable to submit extraction job.";
           setErrorMessage(message);
           onRunError?.(message);
         },
@@ -861,36 +1248,28 @@ function RunExtractionDrawerContent({
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 text-sm text-slate-600">
           <section className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Document
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Document</p>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-              <p className="font-semibold text-slate-800" title={documentRecord.name}>
-                {documentRecord.name}
-              </p>
+              <p className="font-semibold text-slate-800" title={documentRecord.name}>{documentRecord.name}</p>
               <p className="text-xs text-slate-500">Uploaded {new Date(documentRecord.created_at).toLocaleString()}</p>
-              {documentRecord.last_run_at ? (
+              {(documentRecord as any).last_run_at ? (
                 <p className="text-xs text-slate-500">
-                  Last run {new Date(documentRecord.last_run_at).toLocaleString()}
+                  Last run {new Date((documentRecord as any).last_run_at).toLocaleString()}
                 </p>
               ) : null}
             </div>
           </section>
 
           <section className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Configuration
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Configuration</p>
             {configurationsQuery.isLoading ? (
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
                 Loading configurations…
               </div>
             ) : configurationsQuery.isError ? (
               <Alert tone="danger">
-                Unable to load configurations. {" "}
-                {configurationsQuery.error instanceof Error
-                  ? configurationsQuery.error.message
-                  : "Try again later."}
+                Unable to load configurations.{" "}
+                {configurationsQuery.error instanceof Error ? configurationsQuery.error.message : "Try again later."}
               </Alert>
             ) : hasConfigurations ? (
               <Select
@@ -899,24 +1278,18 @@ function RunExtractionDrawerContent({
                   const value = event.target.value;
                   setSelectedConfigurationId(value);
                   if (value) {
-                    const target = configurations.find(
-                      (configuration) => configuration.configuration_id === value,
-                    );
+                    const target = configurations.find((c) => c.configuration_id === value);
                     if (target) {
-                      setPreferences({
-                        configurationId: target.configuration_id,
-                        configurationVersion: target.version,
-                      });
+                      setPreferences({ configurationId: target.configuration_id, configurationVersion: target.version });
                     }
                   }
                 }}
                 disabled={submitJob.isPending}
               >
                 <option value="">Select configuration</option>
-                {configurations.map((configuration) => (
-                  <option key={configuration.configuration_id} value={configuration.configuration_id}>
-                    {configuration.title} (v{configuration.version})
-                    {configuration.is_active ? " • Active" : ""}
+                {configurations.map((c) => (
+                  <option key={c.configuration_id} value={c.configuration_id}>
+                    {c.title} (v{c.version}){c.is_active ? " • Active" : ""}
                   </option>
                 ))}
               </Select>
@@ -926,9 +1299,7 @@ function RunExtractionDrawerContent({
           </section>
 
           <section className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Advanced options
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Advanced options</p>
             <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
               Sheet selection and advanced flags will appear here once the processor supports them.
             </p>
@@ -945,7 +1316,7 @@ function RunExtractionDrawerContent({
             type="button"
             onClick={handleSubmit}
             isLoading={submitJob.isPending}
-            disabled={!hasConfigurations || submitJob.isPending}
+            disabled={submitJob.isPending || !hasConfigurations}
           >
             Run extraction
           </Button>
@@ -954,9 +1325,8 @@ function RunExtractionDrawerContent({
     </div>
   );
 }
+/* ------------------------ Global drag & drop overlay ------------------------ */
 
-
-/** Global drag & drop overlay (appears only during drag) */
 function DropAnywhereOverlay({
   onFiles,
   disabled,
@@ -979,7 +1349,7 @@ function DropAnywhereOverlay({
     };
     const onDragOver = (e: DragEvent) => {
       if (!active) return;
-      e.preventDefault(); // allow drop
+      e.preventDefault();
     };
     const onDragLeave = () => {
       counterRef.current = Math.max(0, counterRef.current - 1);
@@ -1037,167 +1407,8 @@ function DropAnywhereOverlay({
   );
 }
 
-/** Toolbar — clean & compact (search, status, sort, reset, indicator, upload). 
-    Mobile stacks; ≥sm uses fixed footprints to avoid shifts. */
-function DocumentsToolbar({
-  search,
-  onSearch,
-  status,
-  onStatus,
-  sort,
-  onSort,
-  onReset,
-  isFetching,
-  isDefault,
-  onUploadClick,
-  uploadDisabled,
-}: {
-  search: string;
-  onSearch: (v: string) => void;
-  status: StatusOptionValue;
-  onStatus: (v: StatusOptionValue) => void;
-  sort: SortOption;
-  onSort: (v: SortOption) => void;
-  onReset: () => void;
-  isFetching?: boolean;
-  isDefault: boolean;
-  onUploadClick: () => void;
-  uploadDisabled?: boolean;
-}) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const searchId = useId();
+/* -------------------------------- UI helpers -------------------------------- */
 
-  // Quick shortcuts: "/" or Cmd/Ctrl+K to focus search; Esc to clear
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const key = e.key.toLowerCase();
-      if (key === "/" && document.activeElement !== inputRef.current) {
-        e.preventDefault();
-        inputRef.current?.focus();
-        return;
-      }
-      if ((e.metaKey || e.ctrlKey) && key === "k") {
-        e.preventDefault();
-        inputRef.current?.focus();
-        return;
-      }
-      if (key === "escape" && document.activeElement === inputRef.current && search) {
-        onSearch("");
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [search, onSearch]);
-
-  return (
-    <div
-      className="rounded-xl border border-slate-200 bg-white/95 px-3 py-3 sm:px-4"
-      role="region"
-      aria-label="Documents filters"
-    >
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr,auto,auto,auto] sm:items-center sm:gap-3">
-        {/* Search */}
-        <div className="relative">
-          <Input
-            id={searchId}
-            ref={inputRef as any}
-            type="search"
-            placeholder="Search documents (⌘K or /)"
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-            className="w-full"
-            aria-label="Search documents"
-          />
-          {search ? (
-            <button
-              type="button"
-              onClick={() => onSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1 text-xs text-slate-500 hover:text-slate-800"
-              title="Clear (Esc)"
-              aria-label="Clear search"
-            >
-              ×
-            </button>
-          ) : null}
-        </div>
-
-        {/* Status (clean dropdown to keep UI minimal) */}
-        <Select
-          value={status}
-          onChange={(e) => onStatus(e.target.value as StatusOptionValue)}
-          className="w-full sm:w-[170px]"
-          aria-label="Filter by status"
-        >
-          <option value="all">All statuses</option>
-          <option value="processing">{DOCUMENT_STATUS_LABELS.processing}</option>
-          <option value="failed">{DOCUMENT_STATUS_LABELS.failed}</option>
-          <option value="uploaded">{DOCUMENT_STATUS_LABELS.uploaded}</option>
-          <option value="processed">{DOCUMENT_STATUS_LABELS.processed}</option>
-          <option value="archived">{DOCUMENT_STATUS_LABELS.archived}</option>
-        </Select>
-
-        {/* Sort */}
-        <Select
-          value={sort}
-          onChange={(e) => onSort(e.target.value as SortOption)}
-          className="w-full sm:w-[170px]"
-          aria-label="Sort documents"
-        >
-          <option value="-created_at">Newest first</option>
-          <option value="created_at">Oldest first</option>
-          <option value="name">Name A–Z</option>
-          <option value="-name">Name Z–A</option>
-          <option value="status">Status</option>
-        </Select>
-
-        {/* Actions cluster (fixed footprints ≥sm) */}
-        <div className="flex items-center gap-2 sm:justify-end">
-          <button
-            type="button"
-            onClick={onReset}
-            disabled={isDefault}
-            className={clsx(
-              "rounded text-sm",
-              isDefault ? "cursor-default text-slate-300" : "text-slate-600 underline underline-offset-4 hover:text-slate-900"
-            )}
-            title="Reset filters"
-          >
-            Reset
-          </button>
-
-          {/* Reserved indicator slot on ≥sm to avoid shifts */}
-          <div className="hidden sm:block sm:w-[86px]">
-            <SyncIndicator isFetching={Boolean(isFetching)} />
-          </div>
-
-          {/* Upload fills width on mobile; fixed on ≥sm */}
-          <Button className="w-full sm:w-[104px]" onClick={onUploadClick} disabled={uploadDisabled} isLoading={uploadDisabled}>
-            Upload
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Tiny "Updating…" indicator (uses opacity so width never changes) */
-function SyncIndicator({ isFetching }: { isFetching: boolean }) {
-  return (
-    <span
-      className={clsx(
-        "inline-flex items-center justify-end gap-1 text-xs text-slate-500",
-        isFetching ? "opacity-100" : "opacity-0"
-      )}
-      role="status"
-      aria-live="polite"
-    >
-      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
-      Updating…
-    </span>
-  );
-}
-
-/** Simple skeleton placeholder while loading */
 function SkeletonList() {
   return (
     <div className="space-y-3" aria-hidden>
@@ -1214,7 +1425,6 @@ function SkeletonList() {
   );
 }
 
-/** Bottom bulk action bar (appears only when there is a selection) */
 function BulkBar({
   count,
   onClear,
@@ -1241,7 +1451,6 @@ function BulkBar({
   );
 }
 
-/** Empty state for when there are no documents */
 function EmptyState({ onUploadClick }: { onUploadClick: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
@@ -1259,15 +1468,12 @@ function EmptyState({ onUploadClick }: { onUploadClick: () => void }) {
   );
 }
 
-/* -------------------------------------------------------------------------------------------------
- * Status / formatting helpers
- * -----------------------------------------------------------------------------------------------*/
+/* ------------------------------ Job status chip ------------------------------ */
 
 function DocumentJobStatus({ workspaceId, documentId }: { workspaceId: string; documentId: string }) {
-  const jobsQuery = useDocumentJobsQuery(workspaceId, documentId, { limit: 3 });
+  const jobsQuery = useDocumentJobs(workspaceId, documentId, { limit: 3 });
 
   if (jobsQuery.isLoading) return <span className="text-xs text-slate-400">Loading runs…</span>;
-
   if (jobsQuery.isError) {
     return (
       <span className="text-xs text-rose-600">
@@ -1285,7 +1491,7 @@ function DocumentJobStatus({ workspaceId, documentId }: { workspaceId: string; d
     <div className="flex flex-wrap items-center gap-2">
       <span
         className={clsx(
-          "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+          "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
           jobStatusBadgeClass(latestJob.status),
         )}
       >
@@ -1355,6 +1561,6 @@ function getFocusableElements(container: HTMLElement) {
     '[tabindex]:not([tabindex="-1"])',
   ];
   return Array.from(container.querySelectorAll<HTMLElement>(selectors.join(','))).filter(
-    (element) => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true',
+    (el) => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true',
   );
 }

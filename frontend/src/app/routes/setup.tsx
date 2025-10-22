@@ -1,15 +1,14 @@
-import { Navigate } from "react-router-dom";
-import { useForm } from "react-hook-form";
+import { Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
+import type { ClientActionFunctionArgs, ClientLoaderFunctionArgs } from "react-router";
 import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
 
-import { useSetupStatusQuery } from "@features/setup/hooks/useSetupStatusQuery";
-import { useCompleteSetupMutation } from "@features/setup/hooks/useCompleteSetupMutation";
+import { ApiError } from "@shared/api";
+import { chooseDestination } from "@shared/auth/utils/authNavigation";
+import { completeSetup, fetchSetupStatus, type SetupStatus } from "@shared/setup/api";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { FormField } from "@ui/form-field";
 import { Input } from "@ui/input";
-import { PageState } from "@ui/PageState";
 
 const setupSchema = z
   .object({
@@ -26,58 +25,62 @@ const setupSchema = z
     message: "Passwords do not match.",
   });
 
-type SetupFormValues = z.infer<typeof setupSchema>;
+interface SetupLoaderData {
+  readonly forceSso: boolean;
+}
+
+interface SetupActionError {
+  readonly error: string;
+}
+
+export async function clientLoader({
+  request,
+}: ClientLoaderFunctionArgs): Promise<SetupLoaderData> {
+  const status = await fetchSetupStatus({ signal: request.signal });
+
+  if (!status?.requires_setup) {
+    throw redirect("/login");
+  }
+
+  return { forceSso: Boolean(status.force_sso) };
+}
+
+export async function clientAction({ request }: ClientActionFunctionArgs) {
+  const formData = await request.formData();
+  const raw = Object.fromEntries(formData);
+  const parsed = setupSchema.safeParse(raw);
+
+  if (!parsed.success) {
+    const message = parsed.error.issues[0]?.message ?? "Invalid input.";
+    return { error: message };
+  }
+
+  const { displayName, email, password } = parsed.data;
+
+  try {
+    const session = await completeSetup({
+      display_name: displayName,
+      email,
+      password,
+    });
+    throw redirect(chooseDestination(session.return_to, null));
+  } catch (error: unknown) {
+    if (error instanceof ApiError) {
+      const message = error.problem?.detail ?? error.message ?? "Setup failed. Try again.";
+      return { error: message };
+    }
+    if (error instanceof Error) {
+      return { error: error.message };
+    }
+    return { error: "Setup failed. Try again." };
+  }
+}
 
 export default function SetupRoute() {
-  const statusQuery = useSetupStatusQuery();
-  const completeSetup = useCompleteSetupMutation();
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    setError,
-    clearErrors,
-  } = useForm<SetupFormValues>({
-    resolver: zodResolver(setupSchema),
-    defaultValues: {
-      displayName: "",
-      email: "",
-      password: "",
-      confirmPassword: "",
-    },
-  });
-
-  if (statusQuery.isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <PageState title="Checking setup status" variant="loading" />
-      </div>
-    );
-  }
-
-  if (statusQuery.isError) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <PageState
-          title="Unable to determine setup status"
-          description="Refresh the page or contact support if the issue persists."
-          variant="error"
-          action={
-            <Button variant="secondary" onClick={() => statusQuery.refetch()}>
-              Try again
-            </Button>
-          }
-        />
-      </div>
-    );
-  }
-
-  const status = statusQuery.data;
-
-  if (!status || !status.requires_setup) {
-    return <Navigate to="/login" replace />;
-  }
+  const { forceSso } = useLoaderData<SetupLoaderData>();
+  const actionData = useActionData<SetupActionError | undefined>();
+  const navigation = useNavigation();
+  const isSubmitting = navigation.state === "submitting";
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center bg-slate-50 px-6 py-16">
@@ -88,94 +91,68 @@ export default function SetupRoute() {
           </p>
           <h1 className="text-3xl font-semibold text-slate-900">Create the first administrator</h1>
           <p className="text-sm text-slate-600">
-            Provide the details for the inaugural administrator account. After completion you&apos;ll
-            be redirected to the console.
+            Provide credentials for the inaugural administrator account. We'll redirect after
+            completion.
           </p>
         </header>
 
-        {status.force_sso ? (
+        {forceSso ? (
           <Alert tone="info" className="mt-6">
-            This deployment requires single sign-on after the initial administrator is created.
-            We&apos;ll prompt you to use your identity provider on the next screen.
+            This deployment enforces single sign-on after the initial administrator is created.
           </Alert>
         ) : null}
 
-        <form
-          className="mt-8 space-y-6"
-          onSubmit={handleSubmit((values) => {
-            clearErrors("root");
-            completeSetup.mutate(
-              {
-                display_name: values.displayName,
-                email: values.email,
-                password: values.password,
-              },
-              {
-                onError(error: unknown) {
-                  setError("root", {
-                    type: "server",
-                    message: error instanceof Error ? error.message : "Setup failed. Try again.",
-                  });
-                },
-              },
-            );
-          })}
-        >
+        <Form method="post" className="mt-8 space-y-6" replace>
           <div className="grid gap-6 md:grid-cols-2">
-            <FormField label="Display name" required error={errors.displayName?.message}>
+            <FormField label="Display name" required>
               <Input
                 id="displayName"
+                name="displayName"
                 placeholder="Casey Operator"
-                {...register("displayName")}
-                invalid={Boolean(errors.displayName)}
+                required
               />
             </FormField>
-            <FormField label="Email" required error={errors.email?.message}>
+            <FormField label="Email" required>
               <Input
                 id="email"
+                name="email"
                 type="email"
                 placeholder="casey@example.com"
-                {...register("email")}
-                invalid={Boolean(errors.email)}
+                required
               />
             </FormField>
           </div>
 
-          <FormField
-            label="Password"
-            hint="Use at least 12 characters."
-            required
-            error={errors.password?.message}
-          >
+          <FormField label="Password" hint="Use at least 12 characters." required>
             <Input
               id="password"
+              name="password"
               type="password"
               minLength={12}
               placeholder="••••••••••••"
-              {...register("password")}
-              invalid={Boolean(errors.password)}
+              required
             />
           </FormField>
 
-          <FormField label="Confirm password" required error={errors.confirmPassword?.message}>
+          <FormField label="Confirm password" required>
             <Input
               id="confirmPassword"
+              name="confirmPassword"
               type="password"
               minLength={12}
               placeholder="Re-enter your password"
-              {...register("confirmPassword")}
-              invalid={Boolean(errors.confirmPassword)}
+              required
             />
           </FormField>
 
-          {errors.root ? <Alert tone="danger">{errors.root.message}</Alert> : null}
+          {actionData?.error ? <Alert tone="danger">{actionData.error}</Alert> : null}
 
           <div className="flex justify-end">
-            <Button type="submit" isLoading={completeSetup.isPending}>
-              {completeSetup.isPending ? "Creating administrator…" : "Create administrator"}
+            <Button type="submit" isLoading={isSubmitting}>
+              {isSubmitting ? "Creating administrator…" : "Create administrator"}
             </Button>
           </div>
-        </form>
+        </Form>
       </div>
     </div>
   );

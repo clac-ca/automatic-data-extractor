@@ -10,10 +10,8 @@
     "baseUrl": "./src",
     "paths": {
       "@app/*": ["app/*"],
-      "@features/*": ["features/*"],
       "@shared/*": ["shared/*"],
-      "@api-types": ["shared/types/api.d.ts"],
-      "@schema/*": ["shared/types/types/*"],
+      "@openapi": ["generated/openapi.d.ts"],
       "@ui/*": ["ui/*"],
       "@test/*": ["test/*"]
     },

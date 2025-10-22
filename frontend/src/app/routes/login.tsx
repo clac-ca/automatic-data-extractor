@@ -1,64 +1,49 @@
-import { Form, redirect, useActionData, useNavigation } from "react-router";
-import type { ClientActionFunctionArgs, ClientLoaderFunctionArgs, ShouldRevalidateFunctionArgs } from "react-router";
+import { Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
+import type {
+  ClientActionFunctionArgs,
+  ClientLoaderFunctionArgs,
+  ShouldRevalidateFunctionArgs,
+} from "react-router";
 import { z } from "zod";
 
 import { ApiError } from "@shared/api";
-import { client } from "@shared/api/client";
+import { createSession, fetchSession } from "@shared/auth/api";
+import { useAuthProvidersQuery } from "@shared/auth/hooks/useAuthProvidersQuery";
+import {
+  DEFAULT_APP_HOME,
+  chooseDestination,
+  sanitizeNextPath,
+} from "@shared/auth/utils/authNavigation";
+import { fetchSetupStatus } from "@shared/setup/api";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { FormField } from "@ui/form-field";
 import { Input } from "@ui/input";
-import { useAuthProvidersQuery } from "@shared/auth/hooks/useAuthProvidersQuery";
-import type { components } from "@openapi";
 
 const loginSchema = z.object({
   email: z
     .string()
+    .trim()
     .min(1, "Enter your email address.")
     .email("Enter a valid email address."),
   password: z.string().min(1, "Enter your password."),
 });
 
-type SessionEnvelope = components["schemas"]["SessionEnvelope"];
-type SetupStatus = components["schemas"]["SetupStatus"];
-
-interface LoginActionError {
-  readonly error: string;
-}
-
-export async function clientLoader({ request }: ClientLoaderFunctionArgs): Promise<null> {
+export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   const url = new URL(request.url);
-  const skipSessionCheck = url.searchParams.get("skip_session_check") === "1";
-  const skipSetupCheck = url.searchParams.get("skip_setup_check") === "1";
-  const requestedNext = url.searchParams.get("next") ?? "/";
+  const redirectTo = sanitizeNextPath(url.searchParams.get("redirectTo")) ?? DEFAULT_APP_HOME;
 
-  if (!skipSessionCheck) {
-    try {
-      const sessionResponse = await client.GET("/api/v1/auth/session", { signal: request.signal });
-      const session = (sessionResponse.data as SessionEnvelope | null | undefined) ?? null;
-      if (session) {
-        const destination = session.return_to ?? requestedNext;
-        throw redirect(destination);
-      }
-    } catch (error) {
-      if (!(error instanceof ApiError && (error.status === 401 || error.status === 403))) {
-        throw error;
-      }
-    }
+  const session = await fetchSession({ signal: request.signal });
+  if (session) {
+    throw redirect(chooseDestination(session.return_to, redirectTo));
   }
 
-  let setupStatus: SetupStatus | null = null;
-
-  if (!skipSetupCheck) {
-    const setupResponse = await client.GET("/api/v1/setup/status", { signal: request.signal });
-    setupStatus = (setupResponse.data as SetupStatus | null | undefined) ?? null;
-
-    if (setupStatus?.requires_setup) {
-      throw redirect("/setup");
-    }
+  const status = await fetchSetupStatus({ signal: request.signal });
+  if (status.requires_setup) {
+    throw redirect("/setup");
   }
 
-  return null;
+  return { redirectTo };
 }
 
 export async function clientAction({ request }: ClientActionFunctionArgs) {
@@ -72,18 +57,16 @@ export async function clientAction({ request }: ClientActionFunctionArgs) {
   }
 
   const { email, password } = parsed.data;
-  const url = new URL(request.url);
-  const next = url.searchParams.get("next") ?? "/";
+  const redirectTo =
+    sanitizeNextPath(typeof raw.redirectTo === "string" ? raw.redirectTo : null) ?? DEFAULT_APP_HOME;
 
   try {
-    const response = await client.POST("/api/v1/auth/session", {
-      body: { email, password },
-    });
-
-    const session = (response.data as SessionEnvelope | null | undefined) ?? null;
-    const destination = session?.return_to ?? next;
-    throw redirect(destination);
-  } catch (error) {
+    const session = await createSession({ email, password }, { signal: request.signal });
+    throw redirect(chooseDestination(session.return_to, redirectTo));
+  } catch (error: unknown) {
+    if (error instanceof Response) {
+      throw error;
+    }
     if (error instanceof ApiError) {
       const message = error.problem?.detail ?? error.message ?? "Unable to sign in.";
       return { error: message };
@@ -95,6 +78,8 @@ export async function clientAction({ request }: ClientActionFunctionArgs) {
 }
 
 export default function LoginRoute() {
+  const loaderData = useLoaderData<typeof clientLoader>();
+  const redirectTo = loaderData?.redirectTo ?? DEFAULT_APP_HOME;
   const providersQuery = useAuthProvidersQuery();
   const providers = providersQuery.data?.providers ?? [];
   const forceSso = providersQuery.data?.force_sso ?? false;
@@ -142,6 +127,7 @@ export default function LoginRoute() {
 
         {!forceSso ? (
           <Form method="post" className="mt-8 space-y-6" replace>
+            <input type="hidden" name="redirectTo" value={redirectTo} />
             <FormField label="Email address" required>
               <Input
                 id="email"
@@ -180,4 +166,8 @@ export default function LoginRoute() {
 
 export function clientShouldRevalidate(_: ShouldRevalidateFunctionArgs) {
   return false;
+}
+
+interface LoginActionError {
+  readonly error: string;
 }

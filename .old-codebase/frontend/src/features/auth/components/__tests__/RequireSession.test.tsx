@@ -1,5 +1,5 @@
 import userEvent from "@testing-library/user-event";
-import { createMemoryRouter, RouterProvider } from "react-router-dom";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it, beforeEach, vi } from "vitest";
 
 import { render, screen } from "../../../../test/test-utils";
