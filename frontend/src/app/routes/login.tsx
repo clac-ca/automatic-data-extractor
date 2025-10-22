@@ -1,18 +1,15 @@
-import clsx from "clsx";
-import { Navigate } from "react-router-dom";
-import { useForm } from "react-hook-form";
+import { Form, redirect, useActionData, useNavigation } from "react-router";
+import type { ClientActionFunctionArgs, ClientLoaderFunctionArgs, ShouldRevalidateFunctionArgs } from "react-router";
 import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
 
-import { useSessionQuery } from "@features/auth/hooks/useSessionQuery";
-import { useLoginMutation } from "@features/auth/hooks/useLoginMutation";
-import { useAuthProviders } from "@features/auth/hooks/useAuthProviders";
-import { useSetupStatusQuery } from "@features/setup/hooks/useSetupStatusQuery";
-import type { AuthProvider } from "@schema/auth";
+import { ApiError } from "@shared/api";
+import { client } from "@shared/api/client";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { FormField } from "@ui/form-field";
 import { Input } from "@ui/input";
+import { useAuthProvidersQuery } from "@shared/auth/hooks/useAuthProvidersQuery";
+import type { components } from "@openapi";
 
 const loginSchema = z.object({
   email: z
@@ -22,73 +19,120 @@ const loginSchema = z.object({
   password: z.string().min(1, "Enter your password."),
 });
 
-type LoginFormValues = z.infer<typeof loginSchema>;
+type SessionEnvelope = components["schemas"]["SessionEnvelope"];
+type SetupStatus = components["schemas"]["SetupStatus"];
+
+interface LoginActionError {
+  readonly error: string;
+}
+
+export async function clientLoader({ request }: ClientLoaderFunctionArgs): Promise<null> {
+  const url = new URL(request.url);
+  const skipSessionCheck = url.searchParams.get("skip_session_check") === "1";
+  const skipSetupCheck = url.searchParams.get("skip_setup_check") === "1";
+  const requestedNext = url.searchParams.get("next") ?? "/";
+
+  if (!skipSessionCheck) {
+    try {
+      const sessionResponse = await client.GET("/api/v1/auth/session", { signal: request.signal });
+      const session = (sessionResponse.data as SessionEnvelope | null | undefined) ?? null;
+      if (session) {
+        const destination = session.return_to ?? requestedNext;
+        throw redirect(destination);
+      }
+    } catch (error) {
+      if (!(error instanceof ApiError && (error.status === 401 || error.status === 403))) {
+        throw error;
+      }
+    }
+  }
+
+  let setupStatus: SetupStatus | null = null;
+
+  if (!skipSetupCheck) {
+    const setupResponse = await client.GET("/api/v1/setup/status", { signal: request.signal });
+    setupStatus = (setupResponse.data as SetupStatus | null | undefined) ?? null;
+
+    if (setupStatus?.requires_setup) {
+      throw redirect("/setup");
+    }
+  }
+
+  return null;
+}
+
+export async function clientAction({ request }: ClientActionFunctionArgs) {
+  const formData = await request.formData();
+  const raw = Object.fromEntries(formData);
+  const parsed = loginSchema.safeParse(raw);
+
+  if (!parsed.success) {
+    const message = parsed.error.issues[0]?.message ?? "Invalid input.";
+    return { error: message };
+  }
+
+  const { email, password } = parsed.data;
+  const url = new URL(request.url);
+  const next = url.searchParams.get("next") ?? "/";
+
+  try {
+    const response = await client.POST("/api/v1/auth/session", {
+      body: { email, password },
+    });
+
+    const session = (response.data as SessionEnvelope | null | undefined) ?? null;
+    const destination = session?.return_to ?? next;
+    throw redirect(destination);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      const message = error.problem?.detail ?? error.message ?? "Unable to sign in.";
+      return { error: message };
+    }
+    return {
+      error: error instanceof Error ? error.message : "Unable to sign in.",
+    };
+  }
+}
 
 export default function LoginRoute() {
-  const { session } = useSessionQuery({ enabled: false });
-  const setupStatusQuery = useSetupStatusQuery({ enabled: !session });
-  const providersQuery = useAuthProviders();
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    setError,
-    clearErrors,
-  } = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
-  });
-
-  const loginMutation = useLoginMutation({
-    onSuccess() {
-      clearErrors("root");
-    },
-  });
-
-  if (session) {
-    return <Navigate to="/" replace />;
-  }
-
-  if (setupStatusQuery.data?.requires_setup) {
-    return <Navigate to="/setup" replace />;
-  }
-
+  const providersQuery = useAuthProvidersQuery();
   const providers = providersQuery.data?.providers ?? [];
   const forceSso = providersQuery.data?.force_sso ?? false;
+  const providersError =
+    providersQuery.isError && !providersQuery.isFetching
+      ? "We couldn't load the list of providers. Refresh the page or continue with email."
+      : null;
+  const actionData = useActionData<LoginActionError>();
+  const navigation = useNavigation();
+  const isSubmitting = navigation.state === "submitting";
+  const isProvidersLoading = providersQuery.isLoading || providersQuery.isFetching;
+  const shouldShowActionError = actionData?.error && navigation.state === "idle";
 
   return (
     <div className="mx-auto flex min-h-screen flex-col justify-center bg-slate-50 px-6 py-16">
       <div className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-10 shadow-soft">
         <header className="space-y-2 text-center">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-            Welcome back
-          </p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Welcome back</p>
           <h1 className="text-3xl font-semibold text-slate-900">Sign in to ADE</h1>
           <p className="text-sm text-slate-600">
             Enter your email and password or continue with a connected provider.
           </p>
         </header>
 
-        {providersQuery.isError ? (
-          <Alert tone="warning" className="mt-6">
-            We couldn&apos;t load the list of providers. Refresh the page or continue with email.
-          </Alert>
-        ) : null}
+        {providersError ? <Alert tone="warning" className="mt-6">{providersError}</Alert> : null}
 
-        {providers.length > 0 ? (
+        {isProvidersLoading ? (
           <div className="mt-6 space-y-3">
-            {providers.map((provider: AuthProvider) => (
+            <div className="h-10 animate-pulse rounded-lg bg-slate-100" />
+            <div className="h-10 animate-pulse rounded-lg bg-slate-100" />
+          </div>
+        ) : providers.length > 0 ? (
+          <div className="mt-6 space-y-3">
+            {providers.map((provider) => (
               <a
                 key={provider.id}
                 href={provider.start_url}
-                className={clsx(
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
-                  "flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50",
-                )}
+                className="flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
               >
                 Continue with {provider.label}
               </a>
@@ -97,48 +141,33 @@ export default function LoginRoute() {
         ) : null}
 
         {!forceSso ? (
-          <form
-            className="mt-8 space-y-6"
-            onSubmit={handleSubmit((values) => {
-              clearErrors("root");
-              loginMutation.mutate(values, {
-                onError(error: unknown) {
-                  setError("root", {
-                    type: "server",
-                    message: error instanceof Error ? error.message : "Unable to sign in.",
-                  });
-                },
-              });
-            })}
-          >
-            <FormField label="Email address" required error={errors.email?.message}>
+          <Form method="post" className="mt-8 space-y-6" replace>
+            <FormField label="Email address" required>
               <Input
                 id="email"
                 type="email"
                 autoComplete="email"
                 placeholder="you@example.com"
-                {...register("email")}
-                invalid={Boolean(errors.email)}
+                name="email"
               />
             </FormField>
 
-            <FormField label="Password" required error={errors.password?.message}>
+            <FormField label="Password" required>
               <Input
                 id="password"
                 type="password"
                 autoComplete="current-password"
                 placeholder="••••••••"
-                {...register("password")}
-                invalid={Boolean(errors.password)}
+                name="password"
               />
             </FormField>
 
-            {errors.root ? <Alert tone="danger">{errors.root.message}</Alert> : null}
+            {shouldShowActionError ? <Alert tone="danger">{actionData.error}</Alert> : null}
 
-            <Button type="submit" className="w-full justify-center" isLoading={loginMutation.isPending}>
-              {loginMutation.isPending ? "Signing in…" : "Continue"}
+            <Button type="submit" className="w-full justify-center" isLoading={isSubmitting}>
+              {isSubmitting ? "Signing in…" : "Continue"}
             </Button>
-          </form>
+          </Form>
         ) : (
           <Alert tone="info" className="mt-8">
             Password sign-in is disabled for this deployment. Use one of the configured providers above.
@@ -147,4 +176,8 @@ export default function LoginRoute() {
       </div>
     </div>
   );
+}
+
+export function clientShouldRevalidate(_: ShouldRevalidateFunctionArgs) {
+  return false;
 }
