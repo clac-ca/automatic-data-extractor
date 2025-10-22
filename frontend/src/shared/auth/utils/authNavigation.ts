@@ -97,10 +97,20 @@ export function chooseDestination(
 }
 
 function normalizePathname(path: string): string {
-  const withoutHash = path.split("#", 1)[0] ?? path;
-  const withoutQuery = withoutHash.split("?", 1)[0] ?? withoutHash;
-  if (!withoutQuery.startsWith("/")) {
-    return `/${withoutQuery}`;
+  let truncated = path;
+  const hashIndex = truncated.indexOf("#");
+  if (hashIndex >= 0) {
+    truncated = truncated.slice(0, hashIndex);
   }
-  return withoutQuery;
+  const queryIndex = truncated.indexOf("?");
+  if (queryIndex >= 0) {
+    truncated = truncated.slice(0, queryIndex);
+  }
+  if (!truncated) {
+    return "/";
+  }
+  if (!truncated.startsWith("/")) {
+    return `/${truncated}`;
+  }
+  return truncated;
 }

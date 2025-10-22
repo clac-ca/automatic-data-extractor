@@ -5,14 +5,14 @@ import { refreshSession, type SessionEnvelope } from "../api";
 
 type RefetchSession = () => Promise<unknown>;
 
-export interface SessionContextValue {
+interface SessionContextValue {
   readonly session: SessionEnvelope;
   readonly refetch: RefetchSession;
 }
 
 const SessionContext = createContext<SessionContextValue | undefined>(undefined);
 
-export interface SessionProviderProps {
+interface SessionProviderProps {
   readonly session: SessionEnvelope;
   readonly refetch: RefetchSession;
   readonly children: ReactNode;
@@ -28,7 +28,7 @@ export function SessionProvider({ session, refetch, children }: SessionProviderP
   );
 }
 
-export function useSessionContext(): SessionContextValue {
+function useSessionContext(): SessionContextValue {
   const context = useContext(SessionContext);
   if (!context) {
     throw new Error("useSessionContext must be used within a SessionProvider");
@@ -38,10 +38,6 @@ export function useSessionContext(): SessionContextValue {
 
 export function useSession() {
   return useSessionContext().session;
-}
-
-export function useSessionRefetch() {
-  return useSessionContext().refetch;
 }
 
 const REFRESH_BUFFER_MS = 60_000;

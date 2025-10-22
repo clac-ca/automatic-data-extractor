@@ -6,7 +6,7 @@ import { GlobalTopBar } from "./GlobalTopBar";
 import { ProfileDropdown } from "./ProfileDropdown";
 import { DirectoryIcon } from "./workspace-navigation";
 
-export interface WorkspaceDirectoryLayoutProps {
+interface WorkspaceDirectoryLayoutProps {
   readonly children: ReactNode;
   readonly sidePanel?: ReactNode;
   readonly actions?: ReactNode;

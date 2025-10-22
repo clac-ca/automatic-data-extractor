@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 from datetime import datetime
 from typing import Annotated, Any
+from urllib.parse import quote
 
 from fastapi import (
     APIRouter,
@@ -63,6 +65,32 @@ def _parse_metadata(metadata: str | None) -> dict[str, Any]:
             detail="metadata must be a JSON object",
         )
     return decoded
+
+
+def _build_download_disposition(filename: str) -> str:
+    """Return a safe Content-Disposition header value for ``filename``."""
+
+    stripped = filename.strip()
+    cleaned = "".join(
+        ch for ch in stripped if unicodedata.category(ch)[0] != "C"
+    ).strip()
+    candidate = cleaned or "download"
+
+    fallback_chars: list[str] = []
+    for char in candidate:
+        code_point = ord(char)
+        if 32 <= code_point < 127 and char not in {'"', "\\", ";", ":"}:
+            fallback_chars.append(char)
+        else:
+            fallback_chars.append("_")
+    fallback = "".join(fallback_chars).strip("_ ") or "download"
+    fallback = fallback[:255]
+
+    encoded = quote(candidate, safe="")
+    if fallback == candidate:
+        return f'attachment; filename="{fallback}"'
+
+    return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{encoded}'
 
 
 def _parse_document_filters(
@@ -447,9 +475,8 @@ async def download_document(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     media_type = record.content_type or "application/octet-stream"
-    filename = record.original_filename.replace('"', "")
     response = StreamingResponse(stream, media_type=media_type)
-    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response.headers["Content-Disposition"] = _build_download_disposition(record.original_filename)
     return response
 
 

@@ -3,7 +3,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import type { ReactNode } from "react";
 import { useState } from "react";
 
-export interface AppProvidersProps {
+interface AppProvidersProps {
   readonly children: ReactNode;
 }
 

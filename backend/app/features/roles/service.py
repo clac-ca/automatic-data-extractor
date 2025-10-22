@@ -451,6 +451,26 @@ async def count_users_with_global_role(
     return int(result.scalar_one() or 0)
 
 
+async def has_users_with_global_role(
+    *, session: AsyncSession, slug: str
+) -> bool:
+    """Return ``True`` when at least one user has the global role ``slug``."""
+
+    stmt = (
+        select(RoleAssignment.id)
+        .join(Role, Role.id == RoleAssignment.role_id)
+        .join(Principal, Principal.id == RoleAssignment.principal_id)
+        .where(
+            RoleAssignment.scope_type == "global",
+            Role.slug == slug,
+            Principal.principal_type == "user",
+        )
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none() is not None
+
+
 async def list_roles(
     *, session: AsyncSession, scope_type: str, scope_id: str | None = None
 ) -> list[Role]:
@@ -958,6 +978,7 @@ __all__ = [
     "collect_permission_keys",
     "create_global_role",
     "count_users_with_global_role",
+    "has_users_with_global_role",
     "delete_global_role",
     "ensure_user_principal",
     "get_global_permissions_for_principal",
@@ -985,4 +1006,3 @@ __all__ = [
     "update_global_role",
     "WorkspaceNotFoundError",
 ]
-

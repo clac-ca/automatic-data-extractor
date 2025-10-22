@@ -35,7 +35,7 @@ export function updateWorkspace(workspaceId: string, payload: WorkspaceUpdatePay
     });
 }
 
-export interface AddWorkspaceMemberPayload {
+interface AddWorkspaceMemberPayload {
   readonly user_id: string;
   readonly role_ids?: readonly string[];
 }
@@ -168,11 +168,11 @@ export const workspacesKeys = {
   permissions: () => ["permissions"] as const,
 };
 
-export interface WorkspacesQueryOptions {
+interface WorkspacesQueryOptions {
   readonly enabled?: boolean;
 }
 
-export function workspacesListQueryOptions(options: WorkspacesQueryOptions = {}) {
+function workspacesListQueryOptions(options: WorkspacesQueryOptions = {}) {
   return {
     queryKey: workspacesKeys.list(),
     queryFn: ({ signal }: { signal?: AbortSignal }) => fetchWorkspaces(signal),
@@ -197,11 +197,11 @@ type PermissionDefinitionSchema = components["schemas"]["PermissionRead"];
 export type WorkspaceProfile = WorkspaceModel;
 export type WorkspaceCreatePayload = WorkspaceCreatePayloadSchema;
 export type WorkspaceUpdatePayload = WorkspaceUpdatePayloadSchema;
-export type WorkspaceMember = WorkspaceMemberSchema;
-export type RoleDefinition = RoleDefinitionSchema;
-export type RoleCreatePayload = RoleCreatePayloadSchema;
-export type RoleUpdatePayload = RoleUpdatePayloadSchema;
-export type PermissionDefinition = PermissionDefinitionSchema;
+type WorkspaceMember = WorkspaceMemberSchema;
+type RoleDefinition = RoleDefinitionSchema;
+type RoleCreatePayload = RoleCreatePayloadSchema;
+type RoleUpdatePayload = RoleUpdatePayloadSchema;
+type PermissionDefinition = PermissionDefinitionSchema;
 
 interface WorkspaceModel {
   id: string;

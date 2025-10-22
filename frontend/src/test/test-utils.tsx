@@ -1,13 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import type { ReactElement, ReactNode } from "react";
 import { AppProviders } from "../app/AppProviders";
-import {
-  render as rtlRender,
-  renderHook as rtlRenderHook,
-  type RenderHookOptions,
-  type RenderHookResult,
-  type RenderOptions,
-} from "@testing-library/react";
+import { render as rtlRender, type RenderOptions } from "@testing-library/react";
 
 interface AllProvidersProps {
   readonly children: ReactNode;
@@ -19,13 +13,6 @@ function AllProviders({ children }: AllProvidersProps) {
 
 export function render(ui: ReactElement, options?: Omit<RenderOptions, "wrapper">) {
   return rtlRender(ui, { wrapper: AllProviders, ...options });
-}
-
-export function renderHook<Result, Props>(
-  hook: (initialProps: Props) => Result,
-  options?: RenderHookOptions<Props>,
-): RenderHookResult<Result, Props> {
-  return rtlRenderHook(hook, { wrapper: AllProviders, ...options });
 }
 
 export * from "@testing-library/react";

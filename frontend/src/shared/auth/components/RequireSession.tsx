@@ -6,7 +6,7 @@ import { useSessionQuery } from "../hooks/useSessionQuery";
 import { useSetupStatusQuery } from "../hooks/useSetupStatusQuery";
 import { buildLoginRedirect, normalizeNextFromLocation } from "../utils/authNavigation";
 
-export interface RequireSessionProps {
+interface RequireSessionProps {
   readonly children?: ReactNode;
 }
 

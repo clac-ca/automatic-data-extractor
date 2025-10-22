@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Form, useNavigation } from "react-router";
 import clsx from "clsx";
 
-export interface ProfileDropdownAction {
+interface ProfileDropdownAction {
   readonly id: string;
   readonly label: string;
   readonly description?: string;
@@ -10,7 +10,7 @@ export interface ProfileDropdownAction {
   readonly onSelect: () => void;
 }
 
-export interface ProfileDropdownProps {
+interface ProfileDropdownProps {
   readonly displayName: string;
   readonly email: string;
   readonly actions?: readonly ProfileDropdownAction[];
