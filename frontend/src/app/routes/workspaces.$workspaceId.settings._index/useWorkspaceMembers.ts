@@ -7,8 +7,7 @@ import {
   removeWorkspaceMember,
   updateWorkspaceMemberRoles,
 } from "@app/routes/workspaces/workspaces-api";
-import type { WorkspaceMember } from "@schema/workspace-members";
-import type { UserProfile } from "@schema/users";
+import type { components } from "@openapi";
 
 export function useWorkspaceMembersQuery(workspaceId: string) {
   return useQuery<WorkspaceMember[]>({
@@ -145,3 +144,6 @@ export function useRemoveWorkspaceMemberMutation(workspaceId: string) {
     },
   });
 }
+
+type WorkspaceMember = components["schemas"]["WorkspaceMember"];
+type UserProfile = components["schemas"]["UserProfile"];

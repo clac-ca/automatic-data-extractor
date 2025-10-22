@@ -11,8 +11,7 @@ import {
   useUpdateWorkspaceRoleMutation,
   useWorkspaceRolesQuery,
 } from "./useWorkspaceRoles";
-import type { RoleDefinition } from "@schema/roles";
-import type { PermissionDefinition } from "@schema/roles";
+import type { components } from "@openapi";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { Input } from "@ui/input";
@@ -301,6 +300,9 @@ export function WorkspaceRolesSection() {
     </div>
   );
 }
+
+type RoleDefinition = components["schemas"]["RoleRead"];
+type PermissionDefinition = components["schemas"]["PermissionRead"];
 
 interface WorkspaceRoleFormProps {
   readonly availablePermissions: readonly PermissionDefinition[];

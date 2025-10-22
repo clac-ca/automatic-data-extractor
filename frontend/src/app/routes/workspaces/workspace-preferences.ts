@@ -1,4 +1,4 @@
-import type { WorkspaceProfile } from "@schema/workspaces";
+import type { WorkspaceProfile } from "./workspaces-api";
 import { createScopedStorage } from "@shared/storage";
 
 const STORAGE_KEY = "backend.app.active_workspace";

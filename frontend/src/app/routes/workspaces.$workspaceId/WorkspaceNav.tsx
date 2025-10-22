@@ -1,8 +1,8 @@
-import { NavLink } from "react-router-dom";
+import { NavLink } from "react-router";
 import clsx from "clsx";
 
-import type { WorkspaceProfile } from "@schema/workspaces";
 import { getWorkspacePrimaryNavigation } from "../workspaces/workspace-navigation";
+import type { WorkspaceProfile } from "../workspaces/workspaces-api";
 
 export interface WorkspaceNavProps {
   readonly workspace: WorkspaceProfile;

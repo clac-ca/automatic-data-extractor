@@ -6,7 +6,7 @@ import {
   isRouteErrorResponse,
 } from "react-router";
 import type { Route } from "./+types/root";
-import { Outlet } from "react-router-dom";
+import { Outlet } from "react-router";
 
 import { AppProviders } from "./AppProviders";
 import "./app.css";

@@ -1,9 +1,8 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router";
 
-import { RequireSession } from "@features/auth/components/RequireSession";
-import { useSession } from "@features/auth/context/SessionContext";
-import { useWorkspacesQuery } from "../workspaces/workspaces-api";
-import type { WorkspaceProfile } from "@schema/workspaces";
+import { RequireSession } from "@shared/auth/components/RequireSession";
+import { useSession } from "@shared/auth/context/SessionContext";
+import { useWorkspacesQuery, type WorkspaceProfile } from "../workspaces/workspaces-api";
 import { Button } from "@ui/button";
 import { PageState } from "@ui/PageState";
 import { defaultWorkspaceSection } from "../workspaces/workspace-navigation";
@@ -145,6 +144,7 @@ function DirectorySidebar({ canCreate, onCreate }: { canCreate: boolean; onCreat
     </div>
   );
 }
+
 
 function EmptyStateCreate({ onCreate }: { onCreate: () => void }) {
   return (

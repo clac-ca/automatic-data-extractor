@@ -17,10 +17,8 @@
     "paths": {
       "~/*": ["./src/app/*"],
       "@app/*": ["./src/app/*"],
-      "@features/*": ["./src/features/*"],
       "@shared/*": ["./src/shared/*"],
-      "@api-types": ["./src/shared/types/api.d.ts"],
-      "@schema/*": ["./src/shared/types/types/*"],
+      "@openapi": ["./src/generated/openapi.d.ts"],
       "@ui/*": ["./src/ui/*"],
       "@test/*": ["./src/test/*"]
     },

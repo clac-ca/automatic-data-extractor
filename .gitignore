@@ -17,7 +17,7 @@ dist/
 build/
 frontend/build/
 backend/app/openapi.json
-frontend/src/shared/types/api.d.ts
+frontend/src/generated/openapi.d.ts
 backend/app/web/*
 !backend/app/web/README.md
 !backend/app/web/static/

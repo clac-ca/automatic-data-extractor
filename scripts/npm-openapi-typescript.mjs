@@ -47,7 +47,7 @@ if (!pythonExecutable) {
 
 const openapiRelativePath = join("backend", "app", "openapi.json");
 const openapiPath = openapiRelativePath;
-const outputPath = join("frontend", "src", "shared", "types", "api.d.ts");
+const outputPath = join("frontend", "src", "generated", "openapi.d.ts");
 
 await run(
   pythonExecutable,
@@ -71,13 +71,13 @@ if (!hasFrontend) {
   process.exit(0);
 }
 
-const typesDir = join("frontend", "src", "shared", "types");
-if (!existsSync(typesDir)) {
-  mkdirSync(typesDir, { recursive: true });
+const generatedDir = join("frontend", "src", "generated");
+if (!existsSync(generatedDir)) {
+  mkdirSync(generatedDir, { recursive: true });
 }
 
 const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
 
 await run(npxCommand, ["openapi-typescript", openapiPath, "--output", outputPath, "--export-type"]);
 
-console.log("✅ generated frontend/src/shared/types/api.d.ts");
+console.log("✅ generated frontend/src/generated/openapi.d.ts");

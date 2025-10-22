@@ -29,5 +29,8 @@
     "concurrently": "^9.0.0",
     "openapi-typescript": "^7.4.3",
     "rimraf": "^6.0.0"
+  },
+  "dependencies": {
+    "react-router": "^7.9.4"
   }
 }

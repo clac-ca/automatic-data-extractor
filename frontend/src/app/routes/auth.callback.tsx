@@ -1,10 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router";
 
-import { sessionKeys } from "@features/auth/api";
-import type { SessionEnvelope } from "@schema/auth";
+import { normalizeSessionEnvelope, sessionKeys } from "@shared/auth/api";
+import { chooseDestination } from "@shared/auth/utils/authNavigation";
 import { ApiError, get } from "@shared/api";
+import type { components } from "@openapi";
 import { Button } from "@ui/button";
 import { PageState } from "@ui/PageState";
 
@@ -33,16 +34,10 @@ export default function AuthCallbackRoute() {
           return;
         }
 
-        queryClient.setQueryData(sessionKeys.detail(), {
-          session: envelope,
-          providers: [],
-          force_sso: false,
-        });
+        const normalized = normalizeSessionEnvelope(envelope);
+        queryClient.setQueryData(sessionKeys.detail(), normalized);
 
-        const next =
-          envelope.return_to ??
-          params.get("next") ??
-          "/";
+        const next = chooseDestination(normalized.return_to, params.get("next"));
 
         navigate(next, { replace: true });
       } catch (error: unknown) {
@@ -89,3 +84,5 @@ export default function AuthCallbackRoute() {
     </div>
   );
 }
+
+type SessionEnvelope = components["schemas"]["SessionEnvelope"];

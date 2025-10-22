@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Navigate } from "react-router";
 
 import { RequireSession } from "@features/auth/components/RequireSession";
 import { useSession } from "@features/auth/context/SessionContext";

@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 
 import { useSession } from "@features/auth/context/SessionContext";
 import { useLogoutMutation } from "@features/auth/hooks/useLogoutMutation";

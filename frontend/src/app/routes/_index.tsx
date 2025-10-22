@@ -1,7 +1,7 @@
-import { Navigate } from "react-router-dom";
+import { Navigate } from "react-router";
 
-import { RequireSession } from "@features/auth/components/RequireSession";
-import { useSession } from "@features/auth/context/SessionContext";
+import { RequireSession } from "@shared/auth/components/RequireSession";
+import { useSession } from "@shared/auth/context/SessionContext";
 import { useWorkspacesQuery } from "./workspaces/workspaces-api";
 import { readPreferredWorkspaceId } from "./workspaces/workspace-preferences";
 import { getDefaultWorkspacePath } from "./workspaces.$workspaceId/route";
