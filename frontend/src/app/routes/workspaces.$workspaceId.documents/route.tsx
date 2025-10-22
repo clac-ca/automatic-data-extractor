@@ -1,6 +1,5 @@
-import { Outlet } from "react-router-dom";
+import { Outlet } from "react-router";
 
-export default function WorkspaceDocumentsLayoutRoute() {
+export default function DocumentsLayout() {
   return <Outlet />;
 }
-

@@ -2,9 +2,9 @@
 import { createContext, useContext, useMemo } from "react";
 import type { ReactNode } from "react";
 
-import type { WorkspaceProfile } from "@schema/workspaces";
+import type { WorkspaceProfile } from "../workspaces/workspaces-api";
 
-export interface WorkspaceContextValue {
+interface WorkspaceContextValue {
   readonly workspace: WorkspaceProfile;
   readonly workspaces: WorkspaceProfile[];
   readonly permissions: readonly string[];
@@ -13,7 +13,7 @@ export interface WorkspaceContextValue {
 
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
 
-export interface WorkspaceProviderProps {
+interface WorkspaceProviderProps {
   readonly workspace: WorkspaceProfile;
   readonly workspaces: WorkspaceProfile[];
   readonly children: ReactNode;

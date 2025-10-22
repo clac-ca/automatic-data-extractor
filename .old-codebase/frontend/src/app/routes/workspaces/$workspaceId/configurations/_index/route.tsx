@@ -1,5 +1,5 @@
 import { useEffect, useMemo, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";

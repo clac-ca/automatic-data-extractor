@@ -3,14 +3,12 @@ import type { ClientLoaderFunctionArgs, ShouldRevalidateFunctionArgs } from "rea
 import { Outlet, redirect, useLoaderData, useLocation, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { RequireSession } from "@features/auth/components/RequireSession";
-import { useSession } from "@features/auth/context/SessionContext";
-import { useLogoutMutation } from "@features/auth/hooks/useLogoutMutation";
+import { RequireSession } from "@shared/auth/components/RequireSession";
+import { useSession } from "@shared/auth/context/SessionContext";
 import { ApiError } from "@shared/api";
-import { sessionKeys } from "@features/auth/api";
-import { fetchWorkspaces, workspacesKeys } from "../workspaces/workspaces-api";
+import { buildLoginRedirect } from "@shared/auth/utils/authNavigation";
+import { fetchWorkspaces, workspacesKeys, type WorkspaceProfile } from "../workspaces/workspaces-api";
 import { WorkspaceProvider } from "./WorkspaceContext";
-import type { WorkspaceProfile } from "@schema/workspaces";
 import { createScopedStorage } from "@shared/storage";
 import { writePreferredWorkspace } from "../workspaces/workspace-preferences";
 import { GlobalTopBar } from "../workspaces/GlobalTopBar";
@@ -49,8 +47,8 @@ export async function clientLoader({
   } catch (error) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
       const url = new URL(request.url);
-      const next = `${url.pathname}${url.search}`;
-      throw redirect(`/login?next=${encodeURIComponent(next)}`);
+      const loginRedirect = buildLoginRedirect(`${url.pathname}${url.search}${url.hash}`);
+      throw redirect(loginRedirect);
     }
     throw error;
   }
@@ -103,8 +101,6 @@ interface WorkspaceShellProps {
 
 function WorkspaceShell({ workspace }: WorkspaceShellProps) {
   const session = useSession();
-  const logoutMutation = useLogoutMutation();
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -125,16 +121,6 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
   useEffect(() => {
     navStorage.set(isNavCollapsed);
   }, [isNavCollapsed, navStorage]);
-
-  const handleSignOut = () => {
-    if (logoutMutation.isPending) {
-      return;
-    }
-    queryClient.removeQueries({ queryKey: sessionKeys.providers(), exact: false });
-    queryClient.setQueryData(sessionKeys.detail(), null);
-    navigate("/login", { replace: true });
-    logoutMutation.mutate();
-  };
 
   const topBarLeading = (
     <button
@@ -157,12 +143,7 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
 
   const topBarTrailing = (
     <div className="flex items-center gap-2">
-      <ProfileDropdown
-        displayName={displayName}
-        email={email}
-        onSignOut={handleSignOut}
-        signingOut={logoutMutation.isPending}
-      />
+      <ProfileDropdown displayName={displayName} email={email} />
     </div>
   );
 

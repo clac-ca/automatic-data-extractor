@@ -1,11 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRevalidator } from "react-router-dom";
+import { useRevalidator } from "react-router";
 
 import {
   workspacesKeys,
   updateWorkspace,
+  type WorkspaceProfile,
+  type WorkspaceUpdatePayload,
 } from "@app/routes/workspaces/workspaces-api";
-import type { WorkspaceProfile, WorkspaceUpdatePayload } from "@schema/workspaces";
 
 export function useUpdateWorkspaceMutation(workspaceId: string) {
   const queryClient = useQueryClient();
