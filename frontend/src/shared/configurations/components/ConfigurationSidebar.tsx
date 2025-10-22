@@ -4,7 +4,7 @@ import { Fragment, useMemo } from "react";
 import type { components } from "@openapi";
 import { Button } from "@ui/button";
 
-export interface ConfigurationSidebarProps {
+interface ConfigurationSidebarProps {
   readonly configurations: readonly ConfigurationRecord[] | undefined;
   readonly selectedId: string | null;
   readonly onSelect: (configurationId: string) => void;

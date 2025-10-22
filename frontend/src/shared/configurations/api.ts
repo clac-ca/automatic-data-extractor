@@ -1,4 +1,4 @@
-import { del, get, post, put } from "@shared/api";
+import { get, post, put } from "@shared/api";
 import type { components } from "@openapi";
 
 function buildWorkspacePath(workspaceId: string, path: string) {
@@ -42,28 +42,6 @@ export async function replaceConfigurationColumns(
     buildWorkspacePath(workspaceId, `/configurations/${configurationId}/columns`),
     columns,
   );
-}
-
-export async function updateConfigurationColumnBinding(
-  workspaceId: string,
-  configurationId: string,
-  canonicalKey: string,
-  payload: ConfigurationColumnBindingUpdate,
-) {
-  return put<ConfigurationColumn>(
-    buildWorkspacePath(
-      workspaceId,
-      `/configurations/${configurationId}/columns/${encodeURIComponent(canonicalKey)}/binding`,
-    ),
-    payload,
-  );
-}
-
-export async function deleteConfiguration(
-  workspaceId: string,
-  configurationId: string,
-) {
-  return del(buildWorkspacePath(workspaceId, `/configurations/${configurationId}`));
 }
 
 export async function createScriptVersion(
@@ -143,7 +121,6 @@ type ConfigurationRecord = components["schemas"]["ConfigurationRecord"];
 type ConfigurationCreatePayload = components["schemas"]["ConfigurationCreate"];
 type ConfigurationColumn = components["schemas"]["ConfigurationColumnOut"];
 type ConfigurationColumnInput = components["schemas"]["ConfigurationColumnIn"];
-type ConfigurationColumnBindingUpdate = components["schemas"]["ConfigurationColumnBindingUpdate"];
 type ConfigurationScriptVersion = components["schemas"]["ConfigurationScriptVersionOut"];
 type ConfigurationScriptVersionInput = components["schemas"]["ConfigurationScriptVersionIn"];
 

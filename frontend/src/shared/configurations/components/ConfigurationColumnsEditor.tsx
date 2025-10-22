@@ -11,7 +11,7 @@ import { useConfigurationColumnsQuery } from "../hooks/useConfigurationColumnsQu
 import { useReplaceConfigurationColumnsMutation } from "../hooks/useReplaceConfigurationColumnsMutation";
 import { useScriptVersionsQuery } from "../hooks/useScriptVersionsQuery";
 
-export interface ConfigurationColumnsEditorProps {
+interface ConfigurationColumnsEditorProps {
   readonly workspaceId: string;
   readonly configurationId: string | null;
   readonly onManageScript: (canonicalKey: string) => void;

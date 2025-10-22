@@ -12,7 +12,7 @@ import { useScriptVersionQuery } from "../hooks/useScriptVersionQuery";
 import { useCreateScriptVersionMutation } from "../hooks/useCreateScriptVersionMutation";
 import { useValidateScriptVersionMutation } from "../hooks/useValidateScriptVersionMutation";
 
-export interface ConfigurationScriptPanelProps {
+interface ConfigurationScriptPanelProps {
   readonly workspaceId: string;
   readonly configurationId: string | null;
   readonly canonicalKey: string | null;

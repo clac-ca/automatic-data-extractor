@@ -33,7 +33,7 @@ export async function completeSetup(payload: SetupPayload): Promise<SessionEnvel
 }
 
 export type SetupStatus = components["schemas"]["SetupStatus"];
-export type SetupPayload = components["schemas"]["SetupRequest"];
+type SetupPayload = components["schemas"]["SetupRequest"];
 
 interface RequestOptions {
   readonly signal?: AbortSignal;

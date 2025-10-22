@@ -51,12 +51,6 @@ export async function createSession(payload: LoginPayload, options: RequestOptio
   return normalizeSessionEnvelope(data);
 }
 
-export async function deleteSession(options: RequestOptions = {}): Promise<void> {
-  await client.DELETE("/api/v1/auth/session", {
-    signal: options.signal,
-  });
-}
-
 export async function refreshSession(options: RequestOptions = {}): Promise<SessionEnvelope> {
   const { data } = await client.POST("/api/v1/auth/session/refresh", {
     signal: options.signal,
@@ -113,12 +107,12 @@ type SessionResponse = Readonly<
 >;
 type LoginRequestSchema = components["schemas"]["LoginRequest"];
 
-export type AuthProvider = components["schemas"]["AuthProvider"];
+type AuthProvider = components["schemas"]["AuthProvider"];
 export type AuthProviderResponse = Readonly<{
   providers: AuthProvider[];
   force_sso: boolean;
 }>;
-export type LoginPayload = Readonly<Omit<LoginRequestSchema, "email"> & { email: string }>;
+type LoginPayload = Readonly<Omit<LoginRequestSchema, "email"> & { email: string }>;
 export type SessionEnvelope = Readonly<
   SessionEnvelopeWire & {
     expires_at: string | null;
