@@ -16,14 +16,18 @@ Guides now live under the [`docs/`](docs/README.md) directory:
 
 ## Versioning, releases, and Docker images
 
-ADE's published container images are built from `main` and hosted on GitHub Container Registry (GHCR) under `ghcr.io/<org>/automatic-data-extractor`.
+ADE ships a single container defined in the root [`Dockerfile`](Dockerfile). A lightweight GitHub Actions workflow (`.github/workflows/docker-build.yml`) builds that image whenever changes land on `main` so we keep the production path healthy. Publishing to a registry will come later once the distribution story is finalised.
 
 - The FastAPI application version is defined once in [`pyproject.toml`](pyproject.toml) and must follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-- Pull requests trigger the Docker build to ensure the image continues to compile.
-- Merges to `main` authenticate to GHCR, reuse the build cache, and push three tags:
-  - `main` – the latest successful build from the default branch.
-  - `sha-<short>` – the short commit SHA for traceability.
-  - `vX.Y.Z` – emitted only when `project.version` is a valid semantic version.
+- The `main` branch build acts as a smoke test for the container, covering the frontend compilation and backend packaging steps in one run.
+
+### Docker helpers
+
+Use the root npm scripts as convenience wrappers around common Docker flows (they auto-build if the image is missing and surface a friendly error when Docker is unavailable):
+
+- `npm run docker:build` – build `ade:local` from the root `Dockerfile`.
+- `npm run docker:run` – launch the container on port 8000, wiring `.env` and persisting `./data` on Unix hosts (append `-- <docker flags>` to forward additional options).
+- `npm run docker:test` – run a quick smoke check inside the image to ensure backend/frontend dependencies resolve.
 
 ### Cutting a release
 
@@ -31,7 +35,7 @@ ADE's published container images are built from `main` and hosted on GitHub Cont
 2. Add notes beneath the `## [Unreleased]` heading in [`CHANGELOG.md`](CHANGELOG.md).
 3. Run `python scripts/finalize_changelog.py` to promote the unreleased section to the new `vX.Y.Z` entry. The script resets the "Unreleased" stub for the next iteration.
 4. Commit the version, changelog, and related code changes using [Conventional Commits](CONTRIBUTING.md#commit-messages).
-5. Open a pull request. Once it merges, the container workflow will publish the updated image to GHCR.
+5. Open a pull request. Once it merges, the container workflow will rebuild the image as a smoke test for the production Dockerfile.
 
 ## Quickstart (local)
 
@@ -137,7 +141,7 @@ Shared infrastructure lives under [`backend/app/shared`](backend/app/shared) –
 Uploaded files and the SQLite database are stored beneath the [`data/`](data) directory by default. Override locations with the `ADE_STORAGE_DATA_DIR`, `ADE_DATABASE_DSN`, or `ADE_STORAGE_DOCUMENTS_DIR` environment variables when deploying to production systems.
 
 > **Note**
-> Automated GHCR publishing now runs from the `main` branch. Update the admin guide with downstream deployment steps once the frontend onboarding flow ships.
+> The container build currently runs as a smoke test on `main`. Update the admin guide with downstream deployment steps once registry publishing is enabled.
 
 ## Frontend readiness
 

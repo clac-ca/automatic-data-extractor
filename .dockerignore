@@ -19,6 +19,9 @@ dist/
 build/
 frontend/build/
 artifacts/
+data/
+.workpackage/
+.old-codebase/
 
 # Env files
 .env

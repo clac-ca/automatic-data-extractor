@@ -8,9 +8,9 @@ version = "0.1.0"
 description = "Internal tooling for deterministic data extraction."
 readme = "README.md"
 requires-python = ">=3.12"
-authors = [{ name = "ADE Team" }]
+authors = [{ name = "CLAC IT Team" }]
 license = { text = "Proprietary" }
-urls = { "Repository" = "https://github.com/your-org/automatic-data-extractor" }
+urls = { "Repository" = "https://github.com/clac-ca/automatic-data-extractor" }
 
 # Runtime deps — pinned for reproducible builds
 dependencies = [
