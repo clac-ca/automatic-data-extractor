@@ -25,7 +25,7 @@ backend/app/web/static/*
 !backend/app/web/static/.gitkeep
 
 # Backend runtime artefacts
-data/db/backend.app.sqlite
+data/
 
 # Frontend env files
 frontend/.env*
