@@ -106,10 +106,10 @@
       "number": 11,
       "slug": "backend-configurations-jobs-redesign",
       "title": "Backend configurations/jobs redesign",
-      "status": "draft",
-      "summary": "Placeholder for upcoming redesign of configuration and job processing backends.",
+      "status": "active",
+      "summary": "Define version-snapshot core: configs/config_versions/config_files with per-version manifest; draft→publish flow; jobs reference config_version_id.",
       "createdAt": "2025-10-27T18:44:08.305Z",
-      "updatedAt": "2025-10-27T18:44:08.305Z",
+      "updatedAt": "2025-10-27T19:02:18.152Z",
       "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0011-backend-configurations-jobs-redesign"
     }
   ]

@@ -3,12 +3,32 @@
   "number": 11,
   "slug": "backend-configurations-jobs-redesign",
   "title": "Backend configurations/jobs redesign",
-  "summary": "Placeholder for upcoming redesign of configuration and job processing backends.",
-  "status": "draft",
+  "summary": "Introduce a version-snapshot core for configurations: configs/config_versions/config_files with a per-version manifest, a draft→publish flow, and jobs referencing config_version_id. Replace legacy /configurations APIs and schema.",
+  "status": "active",
   "createdAt": "2025-10-27T18:44:08.305Z",
-  "updatedAt": "2025-10-27T18:44:08.305Z",
+  "updatedAt": "2025-10-27T22:30:00.000Z",
   "owner": "jkropp",
-  "tags": [],
+  "tags": ["backend", "frontend", "configurations", "jobs", "versioning"],
   "links": [],
-  "context": {}
+  "context": {
+    "initialScopePaths": [
+      "backend/app/features/configs",
+      "backend/app/features/jobs",
+      "backend/app/api/v1",
+      "backend/app/shared/db/migrations/versions/0001_initial_schema.py",
+      "frontend/src/app/routes/workspaces.$workspaceId.configs"
+    ],
+    "nonGoals": [
+      "Persisted artifacts from startup.py",
+      "LLM detectors or remote resources by default",
+      "Per-file versioning/branching"
+    ],
+    "acceptanceCriteria": [
+      "Jobs submit and execute using config_version_id only.",
+      "One draft and at most one published per config enforced by DB indexes.",
+      "Editor can create/edit files in a draft, dry-run, and publish.",
+      "Legacy /configurations APIs removed; new /configs APIs live.",
+      "ETag protection for draft file saves; stale writes rejected."
+    ]
+  }
 }
