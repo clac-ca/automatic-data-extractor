@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 
 from backend.app.features.auth.router import router as auth_router, setup_router
-from backend.app.features.configurations.router import router as configurations_router
+from backend.app.features.configs.router import router as configs_router
 from backend.app.features.documents.router import router as documents_router
 from backend.app.features.health.router import router as health_router
 from backend.app.features.jobs.router import router as jobs_router
@@ -19,7 +19,7 @@ router.include_router(auth_router)
 router.include_router(users_router)
 router.include_router(roles_router)
 router.include_router(workspaces_router)
-router.include_router(configurations_router)
+router.include_router(configs_router)
 router.include_router(documents_router)
 router.include_router(jobs_router)
 

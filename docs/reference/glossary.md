@@ -9,7 +9,7 @@ A file uploaded through the documents API. Metadata and lifecycle operations are
 An extraction request that consumes an input document and configuration revision. Job submission and monitoring routes are defined in [`backend/app/features/jobs`](../../backend/app/features/jobs). Execution happens inline through the pluggable processor contract exposed by [`backend/app/features/jobs/processor.py`](../../backend/app/features/jobs/processor.py).
 
 ## Configuration
-Versioned extraction logic referenced by jobs. Configuration CRUD endpoints sit in [`backend/app/features/configurations`](../../backend/app/features/configurations), while the active revision is resolved during job submission.
+Workspace-scoped packages containing draft files, manifests, and published snapshots. Configuration APIs live in [`backend/app/features/configs`](../../backend/app/features/configs), while jobs reference a concrete `config_version_id`.
 
 ## Workspace
 A logical tenant boundary enforced by [`backend/app/features/workspaces`](../../backend/app/features/workspaces). Workspace identifiers are part of the URL path (for example `/workspaces/{workspace_id}/documents`) so dependencies can scope database queries appropriately.

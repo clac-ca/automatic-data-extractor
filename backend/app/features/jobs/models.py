@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
 
+from ..configs.models import ConfigVersion
 from ..workspaces.models import Workspace
 
 
@@ -25,9 +26,12 @@ class Job(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     workspace: Mapped[Workspace] = relationship("Workspace", lazy="joined")
-    configuration_id: Mapped[str] = mapped_column(
-        String(26), ForeignKey("configurations.configuration_id", ondelete="RESTRICT"), nullable=False
+    config_version_id: Mapped[str] = mapped_column(
+        String(26),
+        ForeignKey("config_versions.config_version_id", ondelete="RESTRICT"),
+        nullable=False,
     )
+    config_version: Mapped[ConfigVersion] = relationship("ConfigVersion", lazy="joined")
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     created_by_user_id: Mapped[str | None] = mapped_column(
         String(26), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
@@ -35,6 +39,7 @@ class Job(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     input_document_id: Mapped[str] = mapped_column(
         String(26), ForeignKey("documents.document_id", ondelete="RESTRICT"), nullable=False
     )
+    run_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     metrics: Mapped[dict[str, object]] = mapped_column(
         MutableDict.as_mutable(JSON), default=dict, nullable=False
     )

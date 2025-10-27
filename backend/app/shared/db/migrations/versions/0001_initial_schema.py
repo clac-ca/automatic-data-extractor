@@ -39,9 +39,9 @@ def upgrade() -> None:
     _create_role_permissions()
     _create_principals()
     _create_role_assignments()
-    _create_configurations()
-    _create_configuration_script_versions()
-    _create_configuration_columns()
+    _create_configs()
+    _create_config_versions()
+    _create_config_files()
     _create_documents()
     _create_document_tags()
     _create_jobs(bind)
@@ -326,37 +326,68 @@ def _create_role_assignments() -> None:
         ["principal_id", "role_id"],
         unique=False,
     )
-def _create_configurations() -> None:
+def _create_configs() -> None:
     op.create_table(
-        "configurations",
-        sa.Column("configuration_id", sa.String(length=26), primary_key=True),
+        "configs",
+        sa.Column("config_id", sa.String(length=26), primary_key=True),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
+        sa.Column("slug", sa.String(length=120), nullable=False),
         sa.Column("title", sa.String(length=255), nullable=False),
-        sa.Column("version", sa.Integer(), nullable=False),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.false()),
-        sa.Column("activated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("payload", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
+        sa.Column("created_by", sa.String(length=26), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.workspace_id"], ondelete="CASCADE"),
-        sa.UniqueConstraint("workspace_id", "version"),
+        sa.ForeignKeyConstraint(["created_by"], ["users.user_id"], ondelete="SET NULL"),
+        sa.UniqueConstraint("workspace_id", "slug"),
+    )
+
+
+def _create_config_versions() -> None:
+    op.create_table(
+        "config_versions",
+        sa.Column("config_version_id", sa.String(length=26), primary_key=True),
+        sa.Column("config_id", sa.String(length=26), nullable=False),
+        sa.Column("semver", sa.String(length=32), nullable=False),
+        sa.Column("status", sa.String(length=12), nullable=False),
+        sa.Column("message", sa.Text(), nullable=True),
+        sa.Column("manifest_json", sa.Text(), nullable=False),
+        sa.Column("files_hash", sa.String(length=64), nullable=False),
+        sa.Column("created_by", sa.String(length=26), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(["config_id"], ["configs.config_id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["created_by"], ["users.user_id"], ondelete="SET NULL"),
+        sa.UniqueConstraint("config_id", "semver"),
+        sa.CheckConstraint(
+            "status IN ('draft','published','deprecated')",
+            name="config_versions_status_ck",
+        ),
     )
     op.create_index(
-        "configurations_workspace_active_idx",
-        "configurations",
-        ["workspace_id"],
+        "config_versions_draft_unique_idx",
+        "config_versions",
+        ["config_id"],
         unique=True,
-        sqlite_where=sa.text("is_active = 1"),
+        sqlite_where=sa.text("status = 'draft'"),
+        postgresql_where=sa.text("status = 'draft'"),
+    )
+    op.create_index(
+        "config_versions_published_unique_idx",
+        "config_versions",
+        ["config_id"],
+        unique=True,
+        sqlite_where=sa.text("status = 'published'"),
+        postgresql_where=sa.text("status = 'published'"),
     )
 
 
-def _create_configuration_script_versions() -> None:
+def _create_config_files() -> None:
     op.create_table(
-        "configuration_script_versions",
-        sa.Column("script_version_id", sa.String(length=26), primary_key=True),
-        sa.Column("configuration_id", sa.String(length=26), nullable=False),
-        sa.Column("canonical_key", sa.String(length=255), nullable=False),
-        sa.Column("version", sa.Integer(), nullable=False),
+        "config_files",
+        sa.Column("config_file_id", sa.String(length=26), primary_key=True),
+        sa.Column("config_version_id", sa.String(length=26), nullable=False),
+        sa.Column("path", sa.String(length=512), nullable=False),
         sa.Column(
             "language",
             sa.String(length=50),
@@ -364,83 +395,15 @@ def _create_configuration_script_versions() -> None:
             server_default=sa.text("'python'"),
         ),
         sa.Column("code", sa.Text(), nullable=False),
-        sa.Column("code_sha256", sa.String(length=64), nullable=False),
-        sa.Column("doc_name", sa.String(length=255), nullable=False),
-        sa.Column("doc_description", sa.Text(), nullable=True),
-        sa.Column("doc_declared_version", sa.Integer(), nullable=True),
-        sa.Column("validated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("validation_errors", sa.JSON(), nullable=True),
-        sa.Column("created_by_user_id", sa.String(length=26), nullable=True),
+        sa.Column("sha256", sa.String(length=64), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
-            ["configuration_id"],
-            ["configurations.configuration_id"],
+            ["config_version_id"],
+            ["config_versions.config_version_id"],
             ondelete="CASCADE",
         ),
-        sa.ForeignKeyConstraint(
-            ["created_by_user_id"],
-            ["users.user_id"],
-            ondelete="SET NULL",
-        ),
-        sa.UniqueConstraint("configuration_id", "canonical_key", "version"),
-    )
-    op.create_index(
-        "configuration_script_versions_config_canonical_idx",
-        "configuration_script_versions",
-        ["configuration_id", "canonical_key"],
-        unique=False,
-    )
-
-
-def _create_configuration_columns() -> None:
-    op.create_table(
-        "configuration_columns",
-        sa.Column("configuration_id", sa.String(length=26), nullable=False),
-        sa.Column("canonical_key", sa.String(length=255), nullable=False),
-        sa.Column("ordinal", sa.Integer(), nullable=False),
-        sa.Column("display_label", sa.String(length=255), nullable=False),
-        sa.Column("header_color", sa.String(length=20), nullable=True),
-        sa.Column("width", sa.Integer(), nullable=True),
-        sa.Column(
-            "required",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.false(),
-        ),
-        sa.Column(
-            "enabled",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.true(),
-        ),
-        sa.Column("script_version_id", sa.String(length=26), nullable=True),
-        sa.Column(
-            "params",
-            sa.JSON(),
-            nullable=False,
-            server_default=sa.text("'{}'"),
-        ),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["configuration_id"],
-            ["configurations.configuration_id"],
-            ondelete="CASCADE",
-        ),
-        sa.ForeignKeyConstraint(
-            ["script_version_id"],
-            ["configuration_script_versions.script_version_id"],
-            ondelete="RESTRICT",
-        ),
-        sa.PrimaryKeyConstraint("configuration_id", "canonical_key"),
-        sa.UniqueConstraint("configuration_id", "ordinal"),
-    )
-    op.create_index(
-        "configuration_columns_config_ordinal_idx",
-        "configuration_columns",
-        ["configuration_id", "ordinal"],
-        unique=False,
+        sa.UniqueConstraint("config_version_id", "path"),
     )
 
 
@@ -554,17 +517,20 @@ def _create_jobs(bind: sa.engine.Connection) -> None:
         "jobs",
         sa.Column("job_id", sa.String(length=26), primary_key=True),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
-        sa.Column("configuration_id", sa.String(length=26), nullable=False),
+        sa.Column("config_version_id", sa.String(length=26), nullable=False),
         sa.Column("status", sa.String(length=20), nullable=False),
         sa.Column("created_by_user_id", sa.String(length=26), nullable=True),
         sa.Column("input_document_id", sa.String(length=26), nullable=False),
+        sa.Column("run_key", sa.String(length=64), nullable=True),
         sa.Column("metrics", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("logs", sa.JSON(), nullable=False, server_default=sa.text("'[]'")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.workspace_id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
-            ["configuration_id"], ["configurations.configuration_id"], ondelete="RESTRICT"
+            ["config_version_id"],
+            ["config_versions.config_version_id"],
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(["created_by_user_id"], ["users.user_id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["input_document_id"], ["documents.document_id"], ondelete="RESTRICT"),

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import hashlib
+import json
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any
@@ -10,14 +12,12 @@ from typing import Any
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from backend.app.shared.core.config import Settings
 
-from ..configurations.exceptions import (
-    ConfigurationNotFoundError,
-    ConfigurationVersionMismatchError,
-)
-from ..configurations.repository import ConfigurationsRepository
+from ..configs.exceptions import ConfigVersionNotFoundError
+from ..configs.models import Config, ConfigFile, ConfigVersion
 from ..documents.models import Document
 from ..documents.storage import DocumentStorage
 from .exceptions import InputDocumentNotFoundError, JobExecutionError, JobNotFoundError
@@ -44,7 +44,6 @@ class JobsService:
 
         self._session = session
         self._storage = DocumentStorage(documents_dir)
-        self._configurations = ConfigurationsRepository(session)
         self._jobs = JobsRepository(session)
 
     async def list_jobs(
@@ -87,24 +86,25 @@ class JobsService:
         *,
         workspace_id: str,
         input_document_id: str,
-        configuration_id: str,
-        configuration_version: int | None = None,
+        config_version_id: str,
         actor_id: str | None = None,
     ) -> JobRecord:
         """Create a job row, run the processor synchronously, and return the result."""
 
         document = await self._get_document(workspace_id, input_document_id)
-        configuration = await self._get_configuration(
-            workspace_id, configuration_id, configuration_version
+        config_version = await self._get_config_version(
+            workspace_id=workspace_id,
+            config_version_id=config_version_id,
         )
-        config_identifier = str(configuration.id)
+        run_key = self._compute_run_key(document, config_version)
 
         job = Job(
             workspace_id=workspace_id,
-            configuration_id=config_identifier,
+            config_version_id=str(config_version.id),
             status="pending",
             created_by_user_id=actor_id,
             input_document_id=document.document_id,
+            run_key=run_key,
             metrics={},
             logs=[],
         )
@@ -116,7 +116,7 @@ class JobsService:
         started = perf_counter()
         try:
             result = await self._execute_job(
-                job, document, configuration, workspace_id=workspace_id
+                job, document, config_version, workspace_id=workspace_id
             )
         except ProcessorError as exc:
             duration_ms = self._duration_ms(started)
@@ -142,20 +142,18 @@ class JobsService:
         self,
         job: Job,
         document: Document,
-        configuration: Any,
+        config_version: ConfigVersion,
         *,
         workspace_id: str,
     ) -> JobProcessorResult:
         processor = get_job_processor()
 
         document_path = self._storage.path_for(document.stored_uri)
-        config_identifier = str(configuration.id)
-        configuration_payload = dict(configuration.payload or {})
-        processor_configuration: dict[str, Any] = {
-            "configuration_id": config_identifier,
-            "version": configuration.version,
-        }
-        processor_configuration.update(configuration_payload)
+        manifest = self._load_manifest(config_version)
+        processor_configuration: dict[str, Any] = dict(manifest)
+        processor_configuration.setdefault("config_version_id", str(config_version.id))
+        processor_configuration["files_hash"] = config_version.files_hash
+        processor_configuration["files"] = self._files_map(config_version.files or [])
 
         request = JobProcessorRequest(
             job_id=job.job_id,
@@ -164,6 +162,7 @@ class JobsService:
             metadata={
                 "document_id": document.document_id,
                 "workspace_id": workspace_id,
+                "config_id": config_version.config_id,
             },
         )
 
@@ -186,25 +185,47 @@ class JobsService:
             raise InputDocumentNotFoundError(document_id)
         return document
 
-    async def _get_configuration(
+    async def _get_config_version(
         self,
+        *,
         workspace_id: str,
-        configuration_id: str,
-        version: int | None,
-    ) -> Any:
-        configuration = await self._configurations.get_configuration(
-            configuration_id,
-            workspace_id=workspace_id,
-        )
-        if configuration is None:
-            raise ConfigurationNotFoundError(configuration_id)
-        if version is not None and configuration.version != version:
-            raise ConfigurationVersionMismatchError(
-                configuration_id,
-                expected_version=version,
-                actual_version=configuration.version,
+        config_version_id: str,
+    ) -> ConfigVersion:
+        stmt = (
+            select(ConfigVersion)
+            .join(Config, Config.id == ConfigVersion.config_id)
+            .options(selectinload(ConfigVersion.files))
+            .where(
+                ConfigVersion.id == config_version_id,
+                Config.workspace_id == workspace_id,
             )
-        return configuration
+            .limit(1)
+        )
+        result = await self._session.execute(stmt)
+        version = result.scalar_one_or_none()
+        if version is None or version.status != "published":
+            raise ConfigVersionNotFoundError(config_version_id)
+        return version
+
+    def _load_manifest(self, config_version: ConfigVersion) -> dict[str, Any]:
+        raw = config_version.manifest_json or "{}"
+        try:
+            manifest = json.loads(raw)
+        except json.JSONDecodeError:
+            manifest = {}
+        manifest.setdefault("files_hash", config_version.files_hash)
+        return manifest
+
+    def _files_map(self, files: Sequence[ConfigFile]) -> dict[str, str]:
+        return {file.path: file.code for file in files}
+
+    def _compute_run_key(self, document: Document, config_version: ConfigVersion) -> str:
+        doc_hash = document.sha256 or ""
+        files_hash = config_version.files_hash or ""
+        flags = ""
+        resource_versions = ""
+        payload = "|".join([doc_hash, files_hash, flags, resource_versions])
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     async def _transition_status(self, job: Job, status: str) -> None:
         if status not in _VALID_STATUSES:
