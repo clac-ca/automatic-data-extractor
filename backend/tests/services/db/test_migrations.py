@@ -31,13 +31,15 @@ async def test_alembic_upgrbackend_app_head(tmp_path: Path, monkeypatch: pytest.
     try:
         engine = get_engine()
         async with engine.connect() as connection:
+            required_tables = {"configs", "config_versions", "config_files"}
             result = await connection.execute(
                 text(
-                    "SELECT COUNT(1) FROM sqlite_master "
-                    "WHERE type='table' AND name='configurations'"
+                    "SELECT name FROM sqlite_master WHERE type='table' "
+                    "AND name IN ('configs','config_versions','config_files')"
                 )
             )
-            assert result.scalar_one() == 1
+            existing = {row[0] for row in result.fetchall()}
+            assert required_tables.issubset(existing)
     finally:
         with pytest.raises(NotImplementedError):
             command.downgrade(config, "base")

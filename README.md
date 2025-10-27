@@ -132,7 +132,7 @@ ADE follows a feature-first layout inside the `backend/app/` package:
 - [`backend/app/features/documents`](backend/app/features/documents) – multipart uploads, metadata, downloads, and deletions.
 - [`backend/app/features/jobs`](backend/app/features/jobs) – submission, status tracking, and synchronous execution via the pluggable processor contract.
 - [`backend/app/features/workspaces`](backend/app/features/workspaces) – routing helpers and dependencies that enforce workspace-scoped URLs.
-- [`backend/app/features/configurations`](backend/app/features/configurations) – feature flags and per-workspace configuration records.
+- [`backend/app/features/configs`](backend/app/features/configs) – configuration packages, version snapshots, and draft file management.
 - [`backend/app/features/users`](backend/app/features/users) – identity management, roles, and repositories shared across features.
 - [`backend/app/features/system_settings`](backend/app/features/system_settings) – repository and models for instance-wide configuration toggles.
 

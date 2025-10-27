@@ -1,0 +1,38 @@
+"""FastAPI dependency factories for config services."""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.app.shared.db.session import get_session
+
+from .service import ConfigFileService, ConfigService, ManifestService
+
+
+def get_config_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ConfigService:
+    return ConfigService(session=session)
+
+
+def get_config_file_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ConfigFileService:
+    return ConfigFileService(session=session)
+
+
+def get_manifest_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ManifestService:
+    return ManifestService(session=session)
+
+
+__all__ = [
+    "get_config_file_service",
+    "get_config_service",
+    "get_manifest_service",
+]
+

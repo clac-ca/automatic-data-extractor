@@ -24,26 +24,28 @@ async def test_session_dependency_commits_and_populates_context(
 ):
     """The session dependency should attach to the request and commit writes."""
 
-    route_path = "/__tests__/configurations"
+    route_path = "/__tests__/configs"
     workspace_id = seed_identity["workspace_id"]
 
     if not any(route.path == route_path for route in app.router.routes):
 
         @app.post(route_path)
-        async def _create_configuration(
+        async def _create_config(
             request: Request,
             session: Annotated[AsyncSession, Depends(get_session)],
         ) -> dict[str, bool | str]:
             assert isinstance(session, AsyncSession)
             assert request.state.db_session is session
 
-            configuration_id = generate_ulid()
+            config_id = generate_ulid()
+            config_version_id = generate_ulid()
             payload = {
-                "configuration_id": configuration_id,
-                "title": "Test Configuration",
-                "version": 1,
-                "is_active": False,
-                "payload": json.dumps({}),
+                "config_id": config_id,
+                "config_version_id": config_version_id,
+                "manifest_json": json.dumps({"files_hash": ""}),
+                "files_hash": "",
+                "slug": "session-check",
+                "title": "Session Config",
                 "created_at": datetime.now(UTC).isoformat(),
                 "updated_at": datetime.now(UTC).isoformat(),
                 "workspace_id": workspace_id,
@@ -51,43 +53,73 @@ async def test_session_dependency_commits_and_populates_context(
             await session.execute(
                 text(
                     """
-                    INSERT INTO configurations (
-                        configuration_id,
+                    INSERT INTO configs (
+                        config_id,
+                        workspace_id,
+                        slug,
                         title,
-                        version,
-                        is_active,
-                        payload,
                         created_at,
                         updated_at,
-                        workspace_id
+                        created_by
                     ) VALUES (
-                        :configuration_id,
+                        :config_id,
+                        :workspace_id,
+                        :slug,
                         :title,
-                        :version,
-                        :is_active,
-                        :payload,
                         :created_at,
                         :updated_at,
-                        :workspace_id
+                        NULL
                     )
                     """
                 ),
                 payload,
             )
-            return {"session_attached": True, "configuration_id": configuration_id}
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO config_versions (
+                        config_version_id,
+                        config_id,
+                        semver,
+                        status,
+                        message,
+                        manifest_json,
+                        files_hash,
+                        created_at,
+                        updated_at,
+                        created_by,
+                        published_at
+                    ) VALUES (
+                        :config_version_id,
+                        :config_id,
+                        'draft',
+                        'draft',
+                        NULL,
+                        :manifest_json,
+                        :files_hash,
+                        :created_at,
+                        :updated_at,
+                        NULL,
+                        NULL
+                    )
+                    """
+                ),
+                payload,
+            )
+            return {"session_attached": True, "config_id": config_id}
 
     response = await async_client.post(route_path)
     response.raise_for_status()
     data = response.json()
-    configuration_id = data["configuration_id"]
+    config_id = data["config_id"]
     assert data["session_attached"] is True
 
     engine = get_engine()
     async with engine.connect() as connection:
         result = await connection.execute(
             text(
-                "SELECT COUNT(1) FROM configurations WHERE configuration_id = :configuration_id"
+                "SELECT COUNT(1) FROM configs WHERE config_id = :config_id"
             ),
-            {"configuration_id": configuration_id},
+            {"config_id": config_id},
         )
         assert result.scalar_one() == 1
