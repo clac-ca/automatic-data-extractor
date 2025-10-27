@@ -23,7 +23,8 @@ npm run test    # Run all tests
 npm run build   # Build SPA → backend/app/web/static
 npm run start   # Serve API + SPA
 npm run openapi-typescript # Export backend schema + generate TS types
-npm run routes  # Show routes JSON
+npm run routes:frontend  # List frontend (React Router) routes as JSON
+npm run routes:backend   # Summarize backend FastAPI API routes
 npm run workpackage # Manage work packages (JSON CLI)
 npm run clean:force  # Remove build/installs without confirmation
 npm run reset:force  # Clean + setup without confirmation
@@ -44,7 +45,7 @@ npm run ci      # Full CI pipeline
    * Frontend → `frontend/src/app/routes/...`
 4. Run `npm run test`.
 5. Build & verify → `npm run build && npm run start`.
-6. Optional: check routes → `npm run routes`.
+6. Optional: check frontend routes → `npm run routes:frontend`.
 7. Regenerate API types if backend surfaces change → `npm run openapi-typescript`.
 8. Commit → `feat(api): add /api/v1/hello`.
 9. Open PR → `main`.
