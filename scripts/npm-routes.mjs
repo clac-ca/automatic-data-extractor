@@ -54,7 +54,14 @@ const collectFrontendRoutes = async () => {
           shell: process.platform === "win32",
         });
     const parsed = JSON.parse(stdout);
-    const routes = Array.isArray(parsed?.routes) ? parsed.routes : [];
+    let routes;
+    if (Array.isArray(parsed)) {
+      routes = parsed;
+    } else if (Array.isArray(parsed?.routes)) {
+      routes = parsed.routes;
+    } else {
+      routes = [];
+    }
     return { status: "ok", routes, raw: parsed };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
