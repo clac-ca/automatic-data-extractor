@@ -72,7 +72,7 @@ const collectFrontendRoutes = async () => {
 const result = await collectFrontendRoutes();
 
 if (result.status === "ok") {
-  console.log(JSON.stringify({ ok: true, routes: result.routes }, null, 2));
+  console.log(JSON.stringify({ ok: true, routes: result.routes }));
   process.exit(0);
 }
 
