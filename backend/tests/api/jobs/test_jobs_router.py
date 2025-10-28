@@ -8,9 +8,14 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
+from backend.app.shared.db import generate_ulid
 from backend.app.shared.db.session import get_sessionmaker
-from backend.app.features.configs.service import ConfigFileService, ConfigService, ManifestService
-from backend.app.features.configs.schemas import ManifestPatchRequest
+from backend.app.features.configs.schemas import (
+    ConfigScriptCreateRequest,
+    ConfigVersionCreateRequest,
+    ManifestPatchRequest,
+)
+from backend.app.features.configs.service import ConfigService
 from backend.tests.utils import login
 
 
@@ -28,8 +33,6 @@ async def _publish_config_version(
     session_factory = get_sessionmaker()
     async with session_factory() as session:
         config_service = ConfigService(session=session)
-        file_service = ConfigFileService(session=session)
-        manifest_service = ManifestService(session=session)
 
         config = await config_service.create_config(
             workspace_id=workspace_id,
@@ -37,28 +40,41 @@ async def _publish_config_version(
             title="Job Config",
             actor_id=author_id,
         )
-
-        await file_service.create_draft_file(
+        version = await config_service.create_version(
             workspace_id=workspace_id,
             config_id=config.config_id,
-            path="columns/value.py",
-            code="def transform(value):\n    return value\n",
-            language="python",
+            payload=ConfigVersionCreateRequest(semver="1.0.0", seed_defaults=True),
+            actor_id=author_id or generate_ulid(),
         )
 
-        manifest_update = {
-            "columns": [
-                {
-                    "key": "value",
-                    "label": "Value",
-                    "path": "columns/value.py",
-                    "ordinal": 1,
-                    "required": True,
-                    "enabled": True,
-                    "depends_on": [],
-                }
-            ],
-        }
+        await config_service.create_script(
+            workspace_id=workspace_id,
+            config_id=config.config_id,
+            config_version_id=version.config_version_id,
+            payload=ConfigScriptCreateRequest(
+                path="columns/value.py",
+                template="def transform(value):\n    return value\n",
+                language="python",
+            ),
+        )
+
+        manifest_response, etag = await config_service.get_manifest(
+            workspace_id=workspace_id,
+            config_id=config.config_id,
+            config_version_id=version.config_version_id,
+        )
+        manifest_update = manifest_response.manifest
+        manifest_update.setdefault("columns", []).append(
+            {
+                "key": "value",
+                "label": "Value",
+                "path": "columns/value.py",
+                "ordinal": 1,
+                "required": True,
+                "enabled": True,
+                "depends_on": [],
+            }
+        )
         if tables is not None:
             manifest_update["tables"] = tables
         if metrics is not None:
@@ -66,22 +82,23 @@ async def _publish_config_version(
         if logs is not None:
             manifest_update["logs"] = logs
 
-        await manifest_service.patch_manifest(
+        await config_service.update_manifest(
             workspace_id=workspace_id,
             config_id=config.config_id,
+            config_version_id=version.config_version_id,
             payload=ManifestPatchRequest(manifest=manifest_update),
+            expected_etag=etag,
         )
 
-        published = await config_service.publish_draft(
+        activated = await config_service.activate_version(
             workspace_id=workspace_id,
             config_id=config.config_id,
-            semver="1.0.0",
-            message="Initial",
+            config_version_id=version.config_version_id,
             actor_id=author_id,
         )
 
         await session.commit()
-        return published.config_version_id
+        return activated.config_version_id
 
 
 async def _auth_headers(async_client: AsyncClient, identity: dict[str, Any]) -> tuple[dict[str, str], str, str]:

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.shared.db.session import get_session
 
-from .service import ConfigFileService, ConfigService, ManifestService
+from .service import ConfigService
 
 
 def get_config_service(
@@ -18,21 +18,6 @@ def get_config_service(
     return ConfigService(session=session)
 
 
-def get_config_file_service(
-    session: Annotated[AsyncSession, Depends(get_session)],
-) -> ConfigFileService:
-    return ConfigFileService(session=session)
-
-
-def get_manifest_service(
-    session: Annotated[AsyncSession, Depends(get_session)],
-) -> ManifestService:
-    return ManifestService(session=session)
-
-
 __all__ = [
-    "get_config_file_service",
     "get_config_service",
-    "get_manifest_service",
 ]
-

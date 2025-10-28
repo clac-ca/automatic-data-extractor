@@ -13,8 +13,12 @@ from starlette.datastructures import Headers
 from backend.app.shared.core.config import get_settings
 from backend.app.shared.db import generate_ulid
 from backend.app.shared.db.session import get_sessionmaker
-from backend.app.features.configs.service import ConfigFileService, ConfigService, ManifestService
-from backend.app.features.configs.schemas import ManifestPatchRequest
+from backend.app.features.configs.schemas import (
+    ConfigScriptCreateRequest,
+    ConfigVersionCreateRequest,
+    ManifestPatchRequest,
+)
+from backend.app.features.configs.service import ConfigService
 from backend.app.features.documents.service import DocumentsService
 from backend.app.features.jobs.exceptions import JobExecutionError
 from backend.app.features.jobs.models import Job
@@ -34,8 +38,6 @@ async def _create_published_config_version(
     manifest_extras: dict[str, object] | None = None,
 ) -> str:
     config_service = ConfigService(session=session)
-    file_service = ConfigFileService(session=session)
-    manifest_service = ManifestService(session=session)
 
     config = await config_service.create_config(
         workspace_id=workspace_id,
@@ -43,46 +45,60 @@ async def _create_published_config_version(
         title="Jobs Config",
         actor_id=actor_id,
     )
-
-    await file_service.create_draft_file(
+    version = await config_service.create_version(
         workspace_id=workspace_id,
         config_id=config.config_id,
-        path="columns/value.py",
-        code="def transform(value):\n    return value\n",
-        language="python",
-    )
-
-    manifest_update: dict[str, object] = {
-        "columns": [
-            {
-                "key": "value",
-                "label": "Value",
-                "path": "columns/value.py",
-                "ordinal": 1,
-                "required": True,
-                "enabled": True,
-                "depends_on": [],
-            }
-        ],
-    }
-    if manifest_extras:
-        manifest_update.update(manifest_extras)
-
-    await manifest_service.patch_manifest(
-        workspace_id=workspace_id,
-        config_id=config.config_id,
-        payload=ManifestPatchRequest(manifest=manifest_update),
-    )
-
-    published = await config_service.publish_draft(
-        workspace_id=workspace_id,
-        config_id=config.config_id,
-        semver="1.0.0",
-        message="Initial",
+        payload=ConfigVersionCreateRequest(semver="1.0.0", seed_defaults=True),
         actor_id=actor_id,
     )
 
-    return published.config_version_id
+    await config_service.create_script(
+        workspace_id=workspace_id,
+        config_id=config.config_id,
+        config_version_id=version.config_version_id,
+        payload=ConfigScriptCreateRequest(
+            path="columns/value.py",
+            template="def transform(value):\n    return value\n",
+            language="python",
+        ),
+    )
+
+    manifest_response, etag = await config_service.get_manifest(
+        workspace_id=workspace_id,
+        config_id=config.config_id,
+        config_version_id=version.config_version_id,
+    )
+    manifest_update: dict[str, object] = manifest_response.manifest
+    manifest_update.setdefault("columns", []).append(
+        {
+            "key": "value",
+            "label": "Value",
+            "path": "columns/value.py",
+            "ordinal": 1,
+            "required": True,
+            "enabled": True,
+            "depends_on": [],
+        }
+    )
+    if manifest_extras:
+        manifest_update.update(manifest_extras)
+
+    await config_service.update_manifest(
+        workspace_id=workspace_id,
+        config_id=config.config_id,
+        config_version_id=version.config_version_id,
+        payload=ManifestPatchRequest(manifest=manifest_update),
+        expected_etag=etag,
+    )
+
+    activated = await config_service.activate_version(
+        workspace_id=workspace_id,
+        config_id=config.config_id,
+        config_version_id=version.config_version_id,
+        actor_id=actor_id,
+    )
+
+    return activated.config_version_id
 
 
 async def test_submit_job_records_metrics() -> None:

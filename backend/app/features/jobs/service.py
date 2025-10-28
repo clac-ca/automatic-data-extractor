@@ -198,12 +198,14 @@ class JobsService:
             .where(
                 ConfigVersion.id == config_version_id,
                 Config.workspace_id == workspace_id,
+                Config.deleted_at.is_(None),
+                ConfigVersion.deleted_at.is_(None),
             )
             .limit(1)
         )
         result = await self._session.execute(stmt)
         version = result.scalar_one_or_none()
-        if version is None or version.status != "published":
+        if version is None or version.status != "active":
             raise ConfigVersionNotFoundError(config_version_id)
         return version
 
