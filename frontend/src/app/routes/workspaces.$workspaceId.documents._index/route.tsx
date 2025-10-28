@@ -16,7 +16,7 @@ import { useSearchParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useWorkspaceContext } from "../workspaces.$workspaceId/WorkspaceContext";
-import { useConfigurationsQuery } from "@shared/configurations/hooks/useConfigurationsQuery";
+import { useConfigsQuery } from "@shared/configs";
 import { client } from "@shared/api/client";
 import { createScopedStorage } from "@shared/storage";
 import type { components, paths } from "@openapi";
@@ -537,8 +537,8 @@ function useDocumentRunPreferences(workspaceId: string, documentId: string) {
       storage.set({
         ...all,
         [documentId]: {
-          configurationId: next.configurationId,
-          configurationVersion: next.configurationVersion,
+          configId: next.configId,
+          configVersionId: next.configVersionId,
         },
       });
     },
@@ -549,8 +549,8 @@ function useDocumentRunPreferences(workspaceId: string, documentId: string) {
 }
 
 type DocumentRunPreferences = {
-  readonly configurationId: string | null;
-  readonly configurationVersion: number | null;
+  readonly configId: string | null;
+  readonly configVersionId: string | null;
 };
 /* ------------------------ API helpers & small utilities ------------------------ */
 
@@ -638,12 +638,12 @@ function readRunPreferences(
     const entry = all[documentId];
     if (entry && typeof entry === "object") {
       return {
-        configurationId: entry.configurationId ?? null,
-        configurationVersion: entry.configurationVersion ?? null,
+        configId: entry.configId ?? null,
+        configVersionId: entry.configVersionId ?? null,
       };
     }
   }
-  return { configurationId: null, configurationVersion: null };
+  return { configId: null, configVersionId: null };
 }
 /* ------------------------- Compact Page Bar / Toolbar ------------------------- */
 
@@ -1115,32 +1115,49 @@ function RunExtractionDrawerContent({
   const dialogRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
-  const configurationsQuery = useConfigurationsQuery(workspaceId);
+  const configsQuery = useConfigsQuery({ workspaceId });
   const submitJob = useSubmitJob(workspaceId);
   const { preferences, setPreferences } = useDocumentRunPreferences(
     workspaceId,
     documentRecord.document_id,
   );
 
-  const configurations = configurationsQuery.data ?? [];
-  const activeConfiguration = useMemo(
-    () => configurations.find((c) => c.is_active) ?? null,
-    [configurations],
+  const allConfigs = configsQuery.data ?? [];
+  const selectableConfigs = useMemo(
+    () => allConfigs.filter((config) => !config.deleted_at && config.active_version),
+    [allConfigs],
   );
 
-  const [selectedConfigurationId, setSelectedConfigurationId] = useState<string | "">(
-    preferences.configurationId ?? activeConfiguration?.configuration_id ?? "",
-  );
+  const preferredSelection = useMemo(() => {
+    if (preferences.configId) {
+      const match = selectableConfigs.find((config) => config.config_id === preferences.configId);
+      if (match) {
+        return {
+          configId: match.config_id,
+          versionId: preferences.configVersionId ?? match.active_version?.config_version_id ?? null,
+        } as const;
+      }
+    }
+    const fallback = selectableConfigs[0];
+    return {
+      configId: fallback?.config_id ?? "",
+      versionId: fallback?.active_version?.config_version_id ?? null,
+    } as const;
+  }, [preferences.configId, preferences.configVersionId, selectableConfigs]);
+
+  const [selectedConfigId, setSelectedConfigId] = useState<string>(preferredSelection.configId);
+  const [selectedVersionId, setSelectedVersionId] = useState<string>(preferredSelection.versionId ?? "");
 
   useEffect(() => {
-    setSelectedConfigurationId(
-      preferences.configurationId ?? activeConfiguration?.configuration_id ?? "",
-    );
-  }, [preferences.configurationId, activeConfiguration?.configuration_id]);
+    setSelectedConfigId(preferredSelection.configId);
+    setSelectedVersionId(preferredSelection.versionId ?? "");
+  }, [preferredSelection]);
 
-  const selectedConfiguration = configurations.find(
-    (c) => c.configuration_id === selectedConfigurationId,
+  const selectedConfig = useMemo(
+    () => selectableConfigs.find((config) => config.config_id === selectedConfigId) ?? null,
+    [selectableConfigs, selectedConfigId],
   );
+  const selectedActiveVersion = selectedConfig?.active_version ?? null;
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -1186,10 +1203,10 @@ function RunExtractionDrawerContent({
     return () => dialog.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const hasConfigurations = configurations.length > 0;
+  const hasConfigurations = selectableConfigs.length > 0;
 
   const handleSubmit = () => {
-    if (!selectedConfiguration) {
+    if (!selectedConfig || !selectedActiveVersion || !selectedVersionId) {
       setErrorMessage("Select a configuration before running the extractor.");
       return;
     }
@@ -1197,15 +1214,11 @@ function RunExtractionDrawerContent({
     submitJob.mutate(
       {
         input_document_id: documentRecord.document_id,
-        configuration_id: selectedConfiguration.configuration_id,
-        configuration_version: selectedConfiguration.version,
+        config_version_id: selectedVersionId,
       },
       {
         onSuccess: (job) => {
-          setPreferences({
-            configurationId: selectedConfiguration.configuration_id,
-            configurationVersion: selectedConfiguration.version,
-          });
+          setPreferences({ configId: selectedConfig.config_id, configVersionId: selectedVersionId });
           onRunSuccess?.(job);
           onClose();
         },
@@ -1262,34 +1275,34 @@ function RunExtractionDrawerContent({
 
           <section className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Configuration</p>
-            {configurationsQuery.isLoading ? (
+            {configsQuery.isLoading ? (
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
                 Loading configurations…
               </div>
-            ) : configurationsQuery.isError ? (
+            ) : configsQuery.isError ? (
               <Alert tone="danger">
                 Unable to load configurations.{" "}
-                {configurationsQuery.error instanceof Error ? configurationsQuery.error.message : "Try again later."}
+                {configsQuery.error instanceof Error ? configsQuery.error.message : "Try again later."}
               </Alert>
             ) : hasConfigurations ? (
               <Select
-                value={selectedConfigurationId}
+                value={selectedConfigId}
                 onChange={(event) => {
                   const value = event.target.value;
-                  setSelectedConfigurationId(value);
-                  if (value) {
-                    const target = configurations.find((c) => c.configuration_id === value);
-                    if (target) {
-                      setPreferences({ configurationId: target.configuration_id, configurationVersion: target.version });
-                    }
+                  setSelectedConfigId(value);
+                  const target = selectableConfigs.find((config) => config.config_id === value) ?? null;
+                  const versionId = target?.active_version?.config_version_id ?? "";
+                  setSelectedVersionId(versionId);
+                  if (target && versionId) {
+                    setPreferences({ configId: target.config_id, configVersionId: versionId });
                   }
                 }}
                 disabled={submitJob.isPending}
               >
                 <option value="">Select configuration</option>
-                {configurations.map((c) => (
-                  <option key={c.configuration_id} value={c.configuration_id}>
-                    {c.title} (v{c.version}){c.is_active ? " • Active" : ""}
+                {selectableConfigs.map((config) => (
+                  <option key={config.config_id} value={config.config_id}>
+                    {config.title} (Active v{config.active_version?.semver ?? "–"})
                   </option>
                 ))}
               </Select>
@@ -1316,7 +1329,7 @@ function RunExtractionDrawerContent({
             type="button"
             onClick={handleSubmit}
             isLoading={submitJob.isPending}
-            disabled={submitJob.isPending || !hasConfigurations}
+            disabled={submitJob.isPending || !hasConfigurations || !selectedVersionId}
           >
             Run extraction
           </Button>
