@@ -43,7 +43,24 @@ class Config(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("users.user_id", ondelete="SET NULL"),
         nullable=True,
     )
-    creator: Mapped[User | None] = relationship("User", lazy="joined")
+    creator: Mapped[User | None] = relationship(
+        "User",
+        foreign_keys="Config.created_by",
+        lazy="joined",
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    deleted_by: Mapped[str | None] = mapped_column(
+        String(26),
+        ForeignKey("users.user_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    deleter: Mapped[User | None] = relationship(
+        "User",
+        foreign_keys="Config.deleted_by",
+    )
 
     versions: Mapped[list["ConfigVersion"]] = relationship(
         "ConfigVersion",
@@ -79,9 +96,25 @@ class ConfigVersion(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("users.user_id", ondelete="SET NULL"),
         nullable=True,
     )
-    creator: Mapped[User | None] = relationship("User")
+    creator: Mapped[User | None] = relationship(
+        "User",
+        foreign_keys="ConfigVersion.created_by",
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    deleted_by: Mapped[str | None] = mapped_column(
+        String(26),
+        ForeignKey("users.user_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    deleter: Mapped[User | None] = relationship(
+        "User",
+        foreign_keys="ConfigVersion.deleted_by",
+    )
 
-    published_at: Mapped[datetime | None] = mapped_column(
+    activated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -93,24 +126,16 @@ class ConfigVersion(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("config_id", "semver"),
         CheckConstraint(
-            "status IN ('draft','published','deprecated')",
+            "status IN ('active','inactive')",
             name="config_versions_status_ck",
         ),
         Index(
-            "config_versions_draft_unique_idx",
+            "config_versions_active_unique_idx",
             "config_id",
             unique=True,
-            sqlite_where=text("status = 'draft'"),
-            postgresql_where=text("status = 'draft'"),
-        ),
-        Index(
-            "config_versions_published_unique_idx",
-            "config_id",
-            unique=True,
-            sqlite_where=text("status = 'published'"),
-            postgresql_where=text("status = 'published'"),
+            sqlite_where=text("status = 'active' AND deleted_at IS NULL"),
+            postgresql_where=text("status = 'active' AND deleted_at IS NULL"),
         ),
     )
 
@@ -137,4 +162,3 @@ class ConfigFile(ULIDPrimaryKeyMixin, TimestampMixin, Base):
 
 
 __all__ = ["Config", "ConfigVersion", "ConfigFile"]
-

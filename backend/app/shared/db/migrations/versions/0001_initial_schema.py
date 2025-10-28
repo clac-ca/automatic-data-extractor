@@ -334,10 +334,13 @@ def _create_configs() -> None:
         sa.Column("slug", sa.String(length=120), nullable=False),
         sa.Column("title", sa.String(length=255), nullable=False),
         sa.Column("created_by", sa.String(length=26), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("deleted_by", sa.String(length=26), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.workspace_id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["created_by"], ["users.user_id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["deleted_by"], ["users.user_id"], ondelete="SET NULL"),
         sa.UniqueConstraint("workspace_id", "slug"),
     )
 
@@ -353,32 +356,26 @@ def _create_config_versions() -> None:
         sa.Column("manifest_json", sa.Text(), nullable=False),
         sa.Column("files_hash", sa.String(length=64), nullable=False),
         sa.Column("created_by", sa.String(length=26), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("deleted_by", sa.String(length=26), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("activated_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["config_id"], ["configs.config_id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["created_by"], ["users.user_id"], ondelete="SET NULL"),
-        sa.UniqueConstraint("config_id", "semver"),
+        sa.ForeignKeyConstraint(["deleted_by"], ["users.user_id"], ondelete="SET NULL"),
         sa.CheckConstraint(
-            "status IN ('draft','published','deprecated')",
+            "status IN ('active','inactive')",
             name="config_versions_status_ck",
         ),
     )
     op.create_index(
-        "config_versions_draft_unique_idx",
+        "config_versions_active_unique_idx",
         "config_versions",
         ["config_id"],
         unique=True,
-        sqlite_where=sa.text("status = 'draft'"),
-        postgresql_where=sa.text("status = 'draft'"),
-    )
-    op.create_index(
-        "config_versions_published_unique_idx",
-        "config_versions",
-        ["config_id"],
-        unique=True,
-        sqlite_where=sa.text("status = 'published'"),
-        postgresql_where=sa.text("status = 'published'"),
+        sqlite_where=sa.text("status = 'active' AND deleted_at IS NULL"),
+        postgresql_where=sa.text("status = 'active' AND deleted_at IS NULL"),
     )
 
 

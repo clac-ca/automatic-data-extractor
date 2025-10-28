@@ -44,10 +44,13 @@ async def test_session_dependency_commits_and_populates_context(
                 "config_version_id": config_version_id,
                 "manifest_json": json.dumps({"files_hash": ""}),
                 "files_hash": "",
+                "semver": "v1",
+                "status": "active",
                 "slug": "session-check",
                 "title": "Session Config",
                 "created_at": datetime.now(UTC).isoformat(),
                 "updated_at": datetime.now(UTC).isoformat(),
+                "activated_at": datetime.now(UTC).isoformat(),
                 "workspace_id": workspace_id,
             }
             await session.execute(
@@ -85,22 +88,26 @@ async def test_session_dependency_commits_and_populates_context(
                         message,
                         manifest_json,
                         files_hash,
+                        created_by,
+                        deleted_at,
+                        deleted_by,
                         created_at,
                         updated_at,
-                        created_by,
-                        published_at
+                        activated_at
                     ) VALUES (
                         :config_version_id,
                         :config_id,
-                        'draft',
-                        'draft',
+                        :semver,
+                        :status,
                         NULL,
                         :manifest_json,
                         :files_hash,
+                        NULL,
+                        NULL,
+                        NULL,
                         :created_at,
                         :updated_at,
-                        NULL,
-                        NULL
+                        :activated_at
                     )
                     """
                 ),

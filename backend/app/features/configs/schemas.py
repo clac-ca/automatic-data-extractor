@@ -18,7 +18,7 @@ class ConfigCreateRequest(BaseSchema):
 
 
 class ConfigRecord(BaseSchema):
-    """Configuration package with draft/published summaries."""
+    """Configuration package summary with active version pointer."""
 
     config_id: str
     workspace_id: str
@@ -27,8 +27,10 @@ class ConfigRecord(BaseSchema):
     created_at: datetime
     updated_at: datetime
     created_by: str | None = None
-    draft: "ConfigVersionRecord | None" = None
-    published: "ConfigVersionRecord | None" = None
+    deleted_at: datetime | None = None
+    deleted_by: str | None = None
+    active_version: "ConfigVersionRecord | None" = None
+    versions_count: int
 
 
 class ConfigVersionRecord(BaseSchema):
@@ -43,14 +45,49 @@ class ConfigVersionRecord(BaseSchema):
     created_at: datetime
     updated_at: datetime
     created_by: str | None = None
-    published_at: datetime | None = None
+    deleted_at: datetime | None = None
+    deleted_by: str | None = None
+    activated_at: datetime | None = None
     manifest: dict[str, Any] = Field(default_factory=dict)
 
 
-class ConfigFileSummary(BaseSchema):
-    """Metadata about a draft file."""
+class ConfigVersionCreateRequest(BaseSchema):
+    """Payload used to create a new configuration version."""
 
-    config_file_id: str
+    semver: str = Field(min_length=1, max_length=64)
+    message: str | None = Field(default=None, max_length=1000)
+    source_version_id: str | None = None
+    seed_defaults: bool = False
+
+
+class ConfigVersionValidateResponse(BaseSchema):
+    """Result of a version validation pass."""
+
+    files_hash: str
+    ready: bool
+    problems: list[str]
+
+
+class ConfigVersionTestRequest(BaseSchema):
+    """Request body when executing a version test."""
+
+    document_id: str
+    notes: str | None = Field(default=None, max_length=1000)
+
+
+class ConfigVersionTestResponse(BaseSchema):
+    """Result envelope for a version test execution."""
+
+    files_hash: str
+    document_id: str
+    findings: list[str]
+    summary: str | None = None
+
+
+class ConfigScriptSummary(BaseSchema):
+    """Metadata about a configuration version script."""
+
+    config_script_id: str
     config_version_id: str
     path: str
     language: str
@@ -59,35 +96,22 @@ class ConfigFileSummary(BaseSchema):
     updated_at: datetime
 
 
-class ConfigFileContent(ConfigFileSummary):
-    """Full draft file payload including source code."""
+class ConfigScriptContent(ConfigScriptSummary):
+    """Full script payload including source code."""
 
     code: str
 
 
-class ConfigPublishRequest(BaseSchema):
-    """Request payload when publishing the current draft."""
-
-    semver: str = Field(min_length=1, max_length=64)
-    message: str | None = Field(default=None, max_length=1000)
-
-
-class ConfigRevertRequest(BaseSchema):
-    """Request payload to revert to the most recent previous version."""
-
-    message: str | None = Field(default=None, max_length=1000)
-
-
-class ConfigFileCreateRequest(BaseSchema):
-    """Request payload to create a new draft file."""
+class ConfigScriptCreateRequest(BaseSchema):
+    """Request payload to create a new version script."""
 
     path: str = Field(min_length=1, max_length=512)
     template: str | None = None
     language: str | None = Field(default=None, max_length=50)
 
 
-class ConfigFileUpdateRequest(BaseSchema):
-    """Request payload to update an existing draft file."""
+class ConfigScriptUpdateRequest(BaseSchema):
+    """Request payload to update an existing version script."""
 
     code: str
 
@@ -109,15 +133,16 @@ ConfigRecord.model_rebuild()
 
 __all__ = [
     "ConfigCreateRequest",
-    "ConfigFileContent",
-    "ConfigFileCreateRequest",
-    "ConfigFileSummary",
-    "ConfigFileUpdateRequest",
-    "ConfigPublishRequest",
-    "ConfigRecord",
-    "ConfigRevertRequest",
+    "ConfigVersionCreateRequest",
+    "ConfigVersionTestRequest",
+    "ConfigVersionTestResponse",
+    "ConfigVersionValidateResponse",
+    "ConfigScriptContent",
+    "ConfigScriptCreateRequest",
+    "ConfigScriptSummary",
+    "ConfigScriptUpdateRequest",
     "ConfigVersionRecord",
+    "ConfigRecord",
     "ManifestPatchRequest",
     "ManifestResponse",
 ]
-
