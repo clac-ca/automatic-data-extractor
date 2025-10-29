@@ -1,8 +1,8 @@
-"""Lightweight ORM models kept during the jobs module rewrite."""
+"""Lightweight ORM models for the jobs feature."""
 
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import JSON, ForeignKey, Index, String
 from sqlalchemy.ext.mutable import MutableDict, MutableList
@@ -10,8 +10,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
 
-from ..configs.models import ConfigVersion
 from ..workspaces.models import Workspace
+
+if TYPE_CHECKING:  # pragma: no cover - typing aid
+    from ..configs.models import Config
 
 
 class Job(ULIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -26,12 +28,14 @@ class Job(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     workspace: Mapped[Workspace] = relationship("Workspace", lazy="joined")
-    config_version_id: Mapped[str] = mapped_column(
+    config_id: Mapped[str] = mapped_column(
         String(26),
-        ForeignKey("config_versions.config_version_id", ondelete="RESTRICT"),
+        ForeignKey("configs.config_id", ondelete="RESTRICT"),
         nullable=False,
     )
-    config_version: Mapped[ConfigVersion] = relationship("ConfigVersion", lazy="joined")
+    config: Mapped["Config"] = relationship("Config", lazy="joined")
+    config_files_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    config_package_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     created_by_user_id: Mapped[str | None] = mapped_column(
         String(26), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True

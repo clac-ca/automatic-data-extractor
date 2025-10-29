@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 from collections.abc import MutableMapping
@@ -24,6 +25,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_DATA_DIR = (PROJECT_ROOT / "data").resolve()
 DEFAULT_DOCUMENTS_SUBDIR = "documents"
+DEFAULT_CONFIGS_SUBDIR = "configs"
 DEFAULT_DATABASE_SUBDIR = "db"
 DEFAULT_DATABASE_FILENAME = "backend.app.sqlite"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
@@ -174,8 +176,12 @@ class Settings(BaseSettings):
     # Storage --------------------------------------------------------------------
     storage_data_dir: Path = Field(default=DEFAULT_DATA_DIR)
     storage_documents_dir: Path | None = None
+    storage_configs_dir: Path | None = None
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
+    secret_key: SecretStr = Field(
+        default=SecretStr("ZGV2ZWxvcG1lbnQtY29uZmlnLXNlY3JldC1rZXktMzI=")
+    )
 
     # Database -------------------------------------------------------------------
     database_dsn: str | None = None
@@ -272,6 +278,15 @@ class Settings(BaseSettings):
             return value
         return Path(str(value).strip())
 
+    @field_validator("storage_configs_dir", mode="before")
+    @classmethod
+    def _coerce_configs_dir(cls, value: Any) -> Path | None:
+        if value in (None, ""):
+            return None
+        if isinstance(value, Path):
+            return value
+        return Path(str(value).strip())
+
     @field_validator("database_dsn", mode="before")
     @classmethod
     def _clean_database_dsn(cls, value: Any) -> str | None:
@@ -347,6 +362,23 @@ class Settings(BaseSettings):
             return None
         return SecretStr(secret)
 
+    @field_validator("secret_key", mode="before")
+    @classmethod
+    def _validate_secret_key(cls, value: Any) -> SecretStr:
+        if value is None:
+            raise ValueError("secret_key must be provided")
+        secret = value.get_secret_value() if isinstance(value, SecretStr) else str(value)
+        secret = secret.strip()
+        if not secret:
+            raise ValueError("secret_key must not be blank")
+        try:
+            decoded = base64.b64decode(secret, validate=True)
+        except Exception as exc:  # pragma: no cover - defensive
+            raise ValueError("secret_key must be base64 encoded") from exc
+        if len(decoded) != 32:
+            raise ValueError("secret_key must decode to exactly 32 bytes")
+        return SecretStr(secret)
+
     @field_validator("oidc_issuer", mode="before")
     @classmethod
     def _validate_oidc_issuer(cls, value: Any) -> str | None:
@@ -414,6 +446,12 @@ class Settings(BaseSettings):
         documents_dir = _normalise_path(documents_dir, base=data_dir)
         self.storage_documents_dir = documents_dir
 
+        configs_dir = self.storage_configs_dir
+        if configs_dir is None:
+            configs_dir = data_dir / DEFAULT_CONFIGS_SUBDIR
+        configs_dir = _normalise_path(configs_dir, base=data_dir)
+        self.storage_configs_dir = configs_dir
+
         if not self.database_dsn:
             sqlite_path = (data_dir / DEFAULT_DATABASE_SUBDIR / DEFAULT_DATABASE_FILENAME).resolve()
             self.database_dsn = f"sqlite+aiosqlite:///{sqlite_path.as_posix()}"
@@ -468,6 +506,11 @@ class Settings(BaseSettings):
     def jwt_secret_value(self) -> str:
         return self.jwt_secret.get_secret_value()
 
+    @property
+    def secret_key_bytes(self) -> bytes:
+        encoded = self.secret_key.get_secret_value()
+        return base64.b64decode(encoded, validate=True)
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
@@ -501,6 +544,7 @@ __all__ = [
     "DEFAULT_DATA_DIR",
     "DEFAULT_DATABASE_FILENAME",
     "DEFAULT_DATABASE_SUBDIR",
+    "DEFAULT_CONFIGS_SUBDIR",
     "DEFAULT_PUBLIC_URL",
     "PROJECT_ROOT",
     "Settings",
