@@ -1,6 +1,5 @@
-"""Configuration versioning feature package."""
+"""Configuration engine v0.4 package."""
 
-from __future__ import annotations
+from .models import Config, ConfigStatus
 
-__all__ = []
-
+__all__ = ["Config", "ConfigStatus"]
