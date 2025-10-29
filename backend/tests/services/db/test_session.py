@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -38,20 +37,18 @@ async def test_session_dependency_commits_and_populates_context(
             assert request.state.db_session is session
 
             config_id = generate_ulid()
-            config_version_id = generate_ulid()
+            now_iso = datetime.now(UTC).isoformat()
             payload = {
                 "config_id": config_id,
-                "config_version_id": config_version_id,
-                "manifest_json": json.dumps({"files_hash": ""}),
-                "files_hash": "",
-                "semver": "v1",
-                "status": "active",
-                "slug": "session-check",
-                "title": "Session Config",
-                "created_at": datetime.now(UTC).isoformat(),
-                "updated_at": datetime.now(UTC).isoformat(),
-                "activated_at": datetime.now(UTC).isoformat(),
                 "workspace_id": workspace_id,
+                "title": "Session Config",
+                "note": None,
+                "status": "inactive",
+                "version": "v1",
+                "files_hash": "",
+                "package_sha256": None,
+                "created_at": now_iso,
+                "updated_at": now_iso,
             }
             await session.execute(
                 text(
@@ -59,55 +56,34 @@ async def test_session_dependency_commits_and_populates_context(
                     INSERT INTO configs (
                         config_id,
                         workspace_id,
-                        slug,
                         title,
+                        note,
+                        status,
+                        version,
+                        files_hash,
+                        package_sha256,
                         created_at,
                         updated_at,
-                        created_by
+                        created_by,
+                        activated_at,
+                        activated_by,
+                        archived_at,
+                        archived_by
                     ) VALUES (
                         :config_id,
                         :workspace_id,
-                        :slug,
                         :title,
-                        :created_at,
-                        :updated_at,
-                        NULL
-                    )
-                    """
-                ),
-                payload,
-            )
-            await session.execute(
-                text(
-                    """
-                    INSERT INTO config_versions (
-                        config_version_id,
-                        config_id,
-                        semver,
-                        status,
-                        message,
-                        manifest_json,
-                        files_hash,
-                        created_by,
-                        deleted_at,
-                        deleted_by,
-                        created_at,
-                        updated_at,
-                        activated_at
-                    ) VALUES (
-                        :config_version_id,
-                        :config_id,
-                        :semver,
+                        :note,
                         :status,
-                        NULL,
-                        :manifest_json,
+                        :version,
                         :files_hash,
-                        NULL,
-                        NULL,
-                        NULL,
+                        :package_sha256,
                         :created_at,
                         :updated_at,
-                        :activated_at
+                        NULL,
+                        NULL,
+                        NULL,
+                        NULL
                     )
                     """
                 ),

@@ -2,33 +2,31 @@
   "version": "1",
   "number": 11,
   "slug": "backend-configurations-jobs-redesign",
-  "title": "Backend configurations/jobs redesign",
-  "summary": "Introduce a version-snapshot core for configurations: configs/config_versions/config_files with a per-version manifest, a draft→publish flow, and jobs referencing config_version_id. Replace legacy /configurations APIs and schema.",
+  "title": "Backend Config Engine v0.4",
+  "summary": "Flatten config management to file-backed packages (manifest + hooks + column modules), enforce a single active config per workspace, and expose a streamlined FastAPI surface with validation the jobs feature can consume.",
   "status": "active",
   "createdAt": "2025-10-27T18:44:08.305Z",
-  "updatedAt": "2025-10-27T22:30:00.000Z",
+  "updatedAt": "2025-10-28T23:49:19.469Z",
   "owner": "jkropp",
-  "tags": ["backend", "frontend", "configurations", "jobs", "versioning"],
+  "tags": ["backend", "configs", "jobs", "sqlite", "fastapi"],
   "links": [],
   "context": {
     "initialScopePaths": [
       "backend/app/features/configs",
       "backend/app/features/jobs",
-      "backend/app/api/v1",
-      "backend/app/shared/db/migrations/versions/0001_initial_schema.py",
-      "frontend/src/app/routes/workspaces.$workspaceId.configs"
+      "backend/app/api/v1"
     ],
     "nonGoals": [
-      "Persisted artifacts from startup.py",
-      "LLM detectors or remote resources by default",
-      "Per-file versioning/branching"
+      "Object storage or remote blobs (local filesystem only in v1).",
+      "Per-file collaborative editor (bundle/files endpoints are sufficient).",
+      "Automatic parallelisation of detector/transform execution in v1."
     ],
     "acceptanceCriteria": [
-      "Jobs submit and execute using config_version_id only.",
-      "One draft and at most one published per config enforced by DB indexes.",
-      "Editor can create/edit files in a draft, dry-run, and publish.",
-      "Legacy /configurations APIs removed; new /configs APIs live.",
-      "ETag protection for draft file saves; stale writes rejected."
+      "Configs live on disk under data/configs/<id> with manifest v0.4 plus hook and column modules matching detector/transform signatures.",
+      "Validation endpoint enforces structure, manifest schema, detector/transform signatures, and rejects plaintext secrets; diagnostics are returned for UI use.",
+      "Exactly one active config per workspace enforced; only inactive configs editable; archived configs immutable.",
+      "FastAPI endpoints cover create/clone/import/export, manifest/files editing, validation, activation, archive/unarchive, and secrets management; legacy /configurations routes removed.",
+      "Jobs feature consumes config packages to run detect→assign→transform in sandboxed subprocesses with manifest env + decrypted secrets injected, producing mapping + warnings for audit."
     ]
   }
 }

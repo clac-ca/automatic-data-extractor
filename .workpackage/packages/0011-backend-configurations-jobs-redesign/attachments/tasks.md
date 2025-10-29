@@ -1,169 +1,74 @@
-### `.workpackage/packages/0011-backend-configurations-jobs-redesign/attachments/tasks.md`
+# Implementation Checklist — Config Engine v0.4
 
-# Implementation checklist
-
-Status: `[ ]` todo • `[~]` in progress • `[x]` done
+Status legend: `[ ]` todo • `[~]` in progress • `[x]` done
 
 ---
 
-## Phase 1 — Schema rewrite (blocking)
+## Phase 0 — Archive & prep
+- [ ] Create branch `feat/configs-filesystem-simplify`.
+- [ ] `git mv backend/app/features/configurations backend/app/features/_legacy_configurations`.
+- [ ] Verify Alembic/env imports no longer pull the legacy package.
+- [ ] Commit archive snapshot (`chore(configs): archive legacy configurations feature`).
+- [ ] Capture current workspace→active configuration mapping for optional migration script.
 
-- [ ] Overwrite `backend/app/shared/db/migrations/versions/0001_initial_schema.py`:
-  - [ ] Add tables: `configs`, `config_versions`, `config_files`.
-  - [ ] Add columns on `jobs`: `config_version_id` (FK), `run_key`.
-  - [ ] Drop legacy tables: `configurations`, `configuration_script_versions`, `configuration_columns`.
-  - [ ] Add partial unique indexes:
-        - one draft per config: `status='draft'`
-        - one published per config: `status='published'`
-  - [ ] Add CHECK constraint on `config_versions.status` in `{'draft','published','deprecated'}`.
-- [ ] Run migrations locally; verify SQLite partial unique indexes compile.
+## Phase 1 — Schema & migration
+- [ ] Add SQLAlchemy model `Config` + `ConfigStatus` enum in `backend/app/features/configs/models.py`.
+- [ ] Add `configs` table (ULID PK, status, created_by, timestamps, archived_at).
+- [ ] Add `workspaces.active_config_id` FK.
+- [ ] Create partial unique index enforcing one `active` per workspace.
+- [ ] Drop legacy configuration/version/script tables.
+- [ ] Update Alembic env to import new models.
+- [ ] Implement Alembic revision `configs: flatten to file-backed design` (create tables/columns, optional data migration, drop legacy tables).
 
-**Acceptance:** `ade routes:backend` still works; DB boots with new schema; old tables are gone.
+## Phase 2 — Storage & settings
+- [ ] Add settings for `ADE_STORAGE_CONFIGS_DIR` and `ADE_SECRET_KEY`; document defaults in `.env.example`.
+- [ ] Implement filesystem adapter rooted at the configs directory (list/write/delete/copy, fsync-safe).
+- [ ] Compute deterministic folder hashes (sorted file SHA-256 concat → overall SHA-256).
 
----
+## Phase 3 — Template & helpers
+- [ ] Add `backend/app/features/configs/templates/default_config/` scaffold (manifest, hooks, two column modules, README).
+- [ ] Implement `files.py` helpers (resolve paths, load/save manifest, list relative files, safe rename, import/export zip).
+- [ ] Provide clone/import/export utilities that reuse helper logic.
 
-## Phase 2 — Models & services
+## Phase 4 — Manifest, secrets, validation
+- [ ] Define Pydantic schemas (`ConfigRecord`, `ConfigCreate/Update`, `Manifest`, `ValidationIssue`, `FileItem`).
+- [ ] Implement AES-GCM helpers (`encrypt_secret`, `decrypt_secret`) using `ADE_SECRET_KEY`.
+- [ ] Build `validation.py`: structure checks, manifest schema enforcement, module introspection (detect_* + transform), forbidden import lint, diagnostics formatting.
+- [ ] Add CLI hook or management command to run validation locally (optional).
 
-- [ ] Create `backend/app/features/configs/models.py` with SQLAlchemy models for `configs`, `config_versions`, `config_files`.
-- [ ] Implement `ConfigService`:
-  - [ ] create package, get package, list packages
-  - [ ] ensure single draft per config (create if absent)
-  - [ ] list versions (with statuses)
-  - [ ] publish `{semver, message}`: copy draft → new version; compute `files_hash`
-  - [ ] revert: swap `published`/`deprecated` safely
-- [ ] Implement `ConfigFileService`:
-  - [ ] list/read draft files
-  - [ ] create file (scaffold from template)
-  - [ ] update file with ETag (`If-Match` sha256 of code)
-  - [ ] delete file
-  - [ ] recalc `files_hash` after any mutation
-- [ ] Implement `ManifestService`:
-  - [ ] read/patch manifest JSON (validate paths/ordinals)
-  - [ ] update `files_hash` on changes
+## Phase 5 — Service layer
+- [ ] Implement `service.py` orchestration:
+  - [ ] `create_config`, `clone_config`, `import_config`, `delete_config`, `archive_config`, `activate_config`, `list_configs`, `get_config`, `update_config`.
+  - [ ] `get_manifest`, `put_manifest`, `list_files`, `read_file`, `write_file`, `delete_file`, `rename_column`, `export_config`.
+  - [ ] `validate_config` (wraps validation module or delegates to jobs validation hook).
+- [ ] Ensure services keep `workspaces.active_config_id` and `configs.status` consistent and handle hook failures (rollback activation).
+- [ ] Expose diagnostics and hash metadata for API responses.
 
-**Tests:** `backend/tests/services/configs/` covering lifecycle, uniqueness, ETag, manifest validation.
+## Phase 6 — API & exceptions
+- [ ] Define domain exceptions (not found, conflict, bad request, activation failure, manifest invalid, file errors).
+- [ ] Implement FastAPI router (`router.py`) with endpoints:
+  - [ ] CRUD + activation.
+  - [ ] Manifest GET/PUT.
+  - [ ] Files list/read/write/delete + rename.
+  - [ ] Import/export.
+  - [ ] Validate.
+- [ ] Register router in `backend/app/api/v1/__init__.py`; remove legacy `/configurations/**` routes.
+- [ ] Map exceptions to HTTP responses (404, 409, 400, 412, 500).
 
----
+## Phase 7 — Jobs integration touchpoints
+- [ ] Update job submission to resolve `workspaces.active_config_id` by default (allow override later).
+- [ ] Ensure the jobs feature loads config folder paths from the storage adapter and owns sandbox execution.
+- [ ] Surface any validation hooks needed so jobs can refuse malformed configs before activation.
+- [ ] Guard against executing archived configs (enforce in jobs service).
 
-## Phase 3 — API (replace legacy /configurations/**)
+## Phase 8 — Tests & QA
+- [ ] Unit tests for storage helpers, manifest parser, crypto utilities, validation rules.
+- [ ] API tests covering CRUD, activation, manifest/file mutations, import/export, validation errors.
+- [ ] End-to-end smoke: create from template → write detector → validate → activate (run `on_activate`) → ensure active pointer updated.
+- [ ] Regression checks that secrets remain encrypted at rest and never logged.
 
-- [ ] New router: `backend/app/features/configs/router.py`
-  - [ ] Packages: `GET/POST /workspaces/:ws/configs`, `GET/DELETE /.../:configId`
-  - [ ] Versions: `GET /.../:configId/versions`, `POST /.../:configId/publish`, `POST /.../:configId/revert`
-  - [ ] Draft files: `GET/GET by path/POST/PUT/DELETE`
-  - [ ] Draft manifest: `GET/PATCH`
-  - [ ] Plan & Dry-run: `POST /.../:configId/draft:plan`, `POST /.../:configId/draft:dry-run`
-- [ ] Mount router in `backend/app/api/v1/__init__.py`.
-- [ ] Remove legacy configurations router; delete dead code.
-- [ ] Error mapping:
-  - `412` on ETag mismatch
-  - `409` on duplicate draft/published
-  - `400` on manifest errors
-
-**Tests:** API happy-path + error-path (ETag, manifest validation, conflict).
-
----
-
-## Phase 4 — Jobs integration
-
-- [ ] Update `JobsService` to **require** `config_version_id` on submit.
-- [ ] Compute `run_key = sha256(doc_sha | files_hash | flags | resource_versions)` (resource_versions empty in v1).
-- [ ] Ensure job read APIs expose `config_version_id` and `run_key`.
-- [ ] Delete legacy references to `configuration_id`.
-
-**Tests:** submit job → runs with chosen version; re-run same doc hits same `run_key`.
-
----
-
-## Phase 5 — Runner skeleton
-
-- [ ] Add runner module (e.g., `backend/app/features/jobs/runner_v2.py`):
-  - [ ] `Extract` XLSX → tables
-  - [ ] `run_start` / `run_end` (in-memory session clients if needed)
-  - [ ] `Prepare` (per column), `Detect` (score deltas)
-  - [ ] `Map` (Hungarian O(n^3), integer-scaled scores)
-  - [ ] `Transform` (column → table), `Validate`
-  - [ ] Metrics: sheets_scanned, rows_processed, elapsed_ms
-- [ ] Wire Dry-run endpoint to runner (uses **draft** files).
-- [ ] Wire Jobs execution to runner (uses **published** version files).
-
-**Tests:** small XLSX fixture → stable mapping and transform; tie-break behavior verified.
-
----
-
-## Phase 6 — Frontend editor
-
-- [ ] New route: `/workspaces/:workspaceId/configs/:configId/editor`
-- [ ] Left nav file tree (Startup, Run, Columns [+Add], Table [Transform/Validators], Plan, History)
-- [ ] Monaco editor; Save (PUT) with ETag; stale save -> surface 412
-- [ ] Add Column wizard: creates file + updates manifest
-- [ ] Dry-run view: mapping preview (scores & winners) + logs
-- [ ] Publish modal: `{semver, message}`; Revert action
-- [ ] Remove legacy configuration screens
-
-**Tests:** basic unit tests + manual QA script (cURL sequence provided below).
-
----
-
-## Phase 7 — Docs & polish
-
-- [ ] Update README/ADR with new schema & API.
-- [ ] Snapshot routes: `ade routes:backend` and frontend routes.
-- [ ] CHANGELOG entry.
-- [ ] Cleanup dead code/strings.
-
----
-
-## Quick cURL script (manual sanity)
-
-```bash
-# Create config
-curl -X POST /api/v1/workspaces/$WS/configs -d '{"slug":"optima","title":"Optima Roster"}' -H 'Content-Type: application/json'
-
-# List draft files
-curl /api/v1/workspaces/$WS/configs/$CFG/draft/files
-
-# Create a column
-curl -X POST /api/v1/workspaces/$WS/configs/$CFG/draft/files -d '{"path":"columns/postal_code.py"}' -H 'Content-Type: application/json'
-
-# Save file with ETag
-ETAG=$(curl /api/v1/workspaces/$WS/configs/$CFG/draft/files/columns/postal_code.py | jq -r .sha256)
-curl -X PUT /api/v1/workspaces/$WS/configs/$CFG/draft/files/columns/postal_code.py \
-  -H "If-Match: $ETAG" -d '{"code":"# new code here"}' -H 'Content-Type: application/json'
-
-# Dry-run
-curl -X POST /api/v1/workspaces/$WS/configs/$CFG/draft:dry-run -d '{"documentId":"DOCID"}' -H 'Content-Type: application/json'
-
-# Publish
-curl -X POST /api/v1/workspaces/$WS/configs/$CFG/publish -d '{"semver":"1.0.0","message":"Initial"}' -H 'Content-Type: application/json'
-
-# Submit job with config_version_id
-curl -X POST /api/v1/workspaces/$WS/jobs -d '{"config_version_id":"VERID","input_document_id":"DOCID"}' -H 'Content-Type: application/json'
-````
-
----
-
-## Test matrix (minimum)
-
-* **Schema:** partial unique index enforcement (draft/published), status CHECK.
-* **Services:** prevent second draft; publish copies files; revert safe.
-* **Manifest:** path existence, unique ordinals, required columns honored.
-* **Files:** ETag mismatch → 412; hash recalculation updates `files_hash`.
-* **Runner:** mapping determinism; Hungarian tie-break; min_score threshold respected.
-* **API:** 400 on bad manifest; 409 on duplicate states; 404 on missing file.
-
----
-
-## Risks & mitigations
-
-* *Risk:* stale write stomping → **ETag required** on PUT.
-* *Risk:* accidental dual published versions → **partial unique index** and service guard.
-* *Risk:* schema churn → manifest holds UI metadata (no per-column tables).
-
----
-
-## Parking lot (post-v1)
-
-* Artifact persistence keyed by `files_hash`.
-* Resource factories (http/llm) and caching.
-* Version diffs; export/import.
+## Phase 9 — Documentation & cleanup
+- [ ] Update README/AGENTS/developer docs with new workflow, settings, and API references.
+- [ ] Add ADR summarizing the file-backed design and deprecation of legacy versions.
+- [ ] Remove remaining references to `_legacy_configurations` once frontend migrates.
+- [ ] Communicate cutover plan + rollback steps to stakeholders.
