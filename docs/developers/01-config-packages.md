@@ -1,16 +1,13 @@
 # Config Packages — Rules Live in Files
 
-**Audience:** Contributors creating or editing configuration packages  
-**Goal:** Create, edit, and ship file‑based configs (manifest v0.5 + scripts)
+## Concept
+A [config](./glossary.md) is a portable, reviewable folder that tells ADE how to interpret and clean spreadsheets. Each config pairs a versioned manifest (canonical columns, engine limits, hooks) with small Python modules that detect, transform, and optionally validate columns. Because configs are just folders, you can version, share, and move them between environments; every job records the exact config it used for determinism. Secrets are stored encrypted in the manifest and only decrypted inside sandboxed child processes at runtime. A workspace can hold many configs, but exactly one is active at a time; drafts are editable, active and archived are read‑only.
 
 > **At a glance**
 >
-> - A [config](./02-glossary.md) is a folder (manifest + scripts); no data inside.
-> - Exactly one active config per workspace; only `draft` configs are editable.
-> - Column modules expose detectors (`detect_*`) and a transformer (`transform`).
-
-## Concept
-A config is portable, reviewable code that describes how the system should interpret and clean spreadsheets. The manifest defines canonical columns and execution settings; small Python scripts implement detection, transformation, and optional validation. Because configs are just folders, you can zip, export, import, and version them easily. Secrets live encrypted in the manifest and are only decrypted inside child processes at runtime.
+> - A config is a folder (manifest + scripts); no data inside
+> - Exactly one active config per workspace; only `draft` configs are editable
+> - Column modules expose detectors (`detect_*`) and a transformer (`transform`)
 
 ## Why it matters
 - Keep behavior as code you can test and review.
@@ -20,12 +17,12 @@ A config is portable, reviewable code that describes how the system should inter
 ## Before you begin
 - Location: configs live under `data/configs/<config_id>/`.
 - Start from the folder layout below; copy it and fill in your scripts and manifest.
-- Terms: review [Glossary](./02-glossary.md) for columns, mapping, and hooks.
+- Terms: review [Glossary](./glossary.md) for columns, mapping, and hooks.
 
 ## Lifecycle
 
 - Status: `draft | active | archived`.
-- Exactly one config is active per [workspace](./02-glossary.md); only `draft` configs are editable.
+- Exactly one config is active per [workspace](./glossary.md); only `draft` configs are editable.
 - Typical flow: create → edit/validate as a draft → activate (publish) → archive.
 - The database records activation/archival events so jobs can reference immutable snapshots.
 
@@ -100,7 +97,7 @@ curl -sS -X POST \
   /api/v1/workspaces/<WS_ID>/configs/$NEW_ID/activate
 ```
 
-Read more in Backend API — Configs: 07-backend-api.md
+Read more in [Backend API — Configs](./05-backend-api.md).
 
 ---
 
@@ -125,11 +122,11 @@ my-config/
 
 ## Manifest (schema v0.5)
 
-The manifest is versioned JSON that describes the [config](./02-glossary.md).
+The manifest is versioned JSON that describes the [config](./glossary.md).
 
 - `info` — schema, title, version, description.
 - `env` — environment variables available to scripts.
-- `secrets` — encrypted values; decrypted only inside child processes (see [secrets](./02-glossary.md)).
+- `secrets` — encrypted values; decrypted only inside child processes (see [secrets](./glossary.md)).
 - `engine.defaults` — execution limits like `timeout_ms`, `memory_mb`, `allow_net`.
 - `hooks` — optional scripts that run at specific points (job start, after detection/transformation/validation, job end if defined).
 - `columns.order` — canonical column order in the normalized output.
@@ -172,7 +169,7 @@ Manifest (excerpt):
 
 ## Script contracts
 
-- Hooks — export `run(**kwargs)` with keyword‑only args (ids, env, paths, and a small context per hook). See `06-runtime-model.md`.
+- Hooks — export `run(**kwargs)` with keyword‑only args (ids, env, paths, and a small context per hook). See the [runtime model](./04-runtime-model.md).
 - Column modules — export one or more detectors (`detect_*`) and exactly one transformer (`transform`). Detectors run on small samples and return scores; the transformer runs over the entire assigned raw column and returns normalized values and warnings.
 
 Detector signature (typical):
@@ -218,12 +215,12 @@ def validate(*, values: list, **_):
 - Use `engine.defaults.allow_net` sparingly; prefer offline logic in detectors/transforms.
 
 ## What’s next
-- See the multi‑pass flow in [04-jobs-pipeline.md](./04-jobs-pipeline.md)
-- Learn how scripts are invoked in [06-runtime-model.md](./06-runtime-model.md)
-- Validate configs and read error shapes in [08-validation-and-diagnostics.md](./08-validation-and-diagnostics.md)
+- See the multi‑pass flow in [02-jobs-pipeline.md](./02-jobs-pipeline.md)
+- Learn how scripts are invoked in [04-runtime-model.md](./04-runtime-model.md)
+- Validate configs and read error shapes in [06-validation-and-diagnostics.md](./06-validation-and-diagnostics.md)
 - Explore the starter files in `backend/app/features/configs/templates/default_config/`
 
 ---
 
-Previous: [01-overview.md](./01-overview.md)  
-Next: [04-jobs-pipeline.md](./04-jobs-pipeline.md)
+Previous: [README.md](./README.md)  
+Next: [02-jobs-pipeline.md](./02-jobs-pipeline.md)

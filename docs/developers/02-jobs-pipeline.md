@@ -1,16 +1,13 @@
 # Jobs — Multi‑Pass Pipeline
 
-**Audience:** Engineers implementing or debugging extraction runs  
-**Goal:** Understand the four passes and the artifacts a job produces
+A [job](./glossary.md) turns an input file into a normalized spreadsheet using the active [config](./glossary.md). The flow is simple and explainable: decide what each [raw column](./glossary.md) means (mapping), apply column‑wise transforms, and validate the result. You can pause after mapping if a user needs to adjust assignments.
 
 > **At a glance**
 >
-> - Pass 1: find tables (structure only).
-> - Pass 2: detect and map raw → canonical using small samples.
-> - Pass 3: transform column‑wise over full data; assemble normalized rows.
-> - Pass 4: validate; optional final hook can adjust after seeing the whole table.
-
-A [job](./02-glossary.md) turns an input file into a normalized spreadsheet using the active [config](./02-glossary.md). The flow is simple and explainable: decide what each [raw column](./02-glossary.md) means (mapping), apply column‑wise transforms, and validate the result. You can pause after mapping if a user needs to adjust assignments.
+> - Pass 1: find tables (structure only)
+> - Pass 2: detect and map raw → canonical using small samples
+> - Pass 3: transform column‑wise over full data; assemble normalized rows
+> - Pass 4: validate; optional final hook can adjust after seeing the whole table
 
 ```
 Input file
@@ -24,8 +21,8 @@ Input file
 
 ## Before you begin
 
-- Ensure exactly one active [config](./02-glossary.md) is set for the target [workspace](./02-glossary.md).
-- Skim the [Glossary](./02-glossary.md) for raw vs. canonical columns and mapping.
+- Ensure exactly one active [config](./glossary.md) is set for the target [workspace](./glossary.md).
+- Skim the [Glossary](./glossary.md) for raw vs. canonical columns and mapping.
 - Large files are fine: jobs operate column‑wise and avoid loading full sheets in memory.
 
 ---
@@ -76,7 +73,7 @@ first_name    0.2        1.2        0.0
 sin_number    0.9        0.0        0.0
 ```
 
-ADE writes a [mapping](./02-glossary.md) with semantic assignments:
+ADE writes a [mapping](./glossary.md) with semantic assignments:
 
 ```json
 {
@@ -99,7 +96,7 @@ Optionally, present this to a user for manual fixes before transformation.
 
 ## Pass 3 — transformation (column by column)
 
-Transforms run once per [canonical column](./02-glossary.md) over the entire assigned raw column:
+Transforms run once per [canonical column](./glossary.md) over the entire assigned raw column:
 
 - If a `transform` exists, ADE calls it with the full column’s values.
 - Scripts clean or normalize values (for example, uppercase IDs or parse dates).
@@ -168,15 +165,15 @@ Small mapping excerpt with assignments and scores.
 - Keep detectors pure and cheap; never scan full sheets during detection.
 - Column‑wise transforms keep contracts simple and fast.
 - One active config per workspace; jobs record the config used.
- - The “final hook” runs after validation (see `after_validation` in manifests).
+- The “final hook” runs after validation (see `after_validation` in manifests).
 
 ## What’s next
 
-- See the mapping schema in [05-mapping-format.md](./05-mapping-format.md)
-- Review script invocation details in [06-runtime-model.md](./06-runtime-model.md)
-- Troubleshoot validations in [08-validation-and-diagnostics.md](./08-validation-and-diagnostics.md)
+- See the mapping schema in [03-mapping-format.md](./03-mapping-format.md)
+- Review script invocation details in [04-runtime-model.md](./04-runtime-model.md)
+- Troubleshoot validations in [06-validation-and-diagnostics.md](./06-validation-and-diagnostics.md)
 
 ---
 
-Previous: [03-config-packages.md](./03-config-packages.md)  
-Next: [05-mapping-format.md](./05-mapping-format.md)
+Previous: [01-config-packages.md](./01-config-packages.md)  
+Next: [03-mapping-format.md](./03-mapping-format.md)

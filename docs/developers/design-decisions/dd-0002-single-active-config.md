@@ -8,7 +8,7 @@ Deterministic behavior requires a single source of rules for jobs.
 
 ## Decision
 
-Exactly one active config per workspace. Others are `inactive` or `archived`.
+Exactly one active config per workspace. Others are `draft` or `archived`.
 
 ## Consequences
 
@@ -21,4 +21,4 @@ Exactly one active config per workspace. Others are `inactive` or `archived`.
 
 ## Links
 
-- See: `../02-glossary.md`
+- See: `../glossary.md`

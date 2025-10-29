@@ -6,11 +6,11 @@
 > **At a glance**
 >
 > - Base: `/api/v1/workspaces/{workspace_id}/configs`
-> - Only `inactive` configs are editable; exactly one `active` per workspace
+> - Only `draft` configs are editable; exactly one `active` per workspace
 > - Supports create/clone/import/export, manifest/files, validate, activate, secrets
 
 ## Conventions
-Keep routes RESTful and predictable. Use nouns in paths, verbs in HTTP. Responses are JSON. Only `inactive` configs are editable.
+Keep routes RESTful and predictable. Use nouns in paths, verbs in HTTP. Responses are JSON. Only `draft` configs are editable.
 
 ## Base prefix
 
@@ -18,15 +18,15 @@ Keep routes RESTful and predictable. Use nouns in paths, verbs in HTTP. Response
 
 ## Workspace‑scoped
 
-- `GET    /` — list configs (`?status=active|inactive|archived|all`)
-- `POST   /` — create inactive config `{title?, note?, from_config_id?}` → `{id}`
+- `GET    /` — list configs (`?status=draft|active|archived|all`)
+- `POST   /` — create draft config `{title?, note?, from_config_id?}` → `{id}`
 - `GET    /active` — current active config (404 if none)
-- `POST   /import` — upload zip → new inactive config `{id}`
+- `POST   /import` — upload zip → new draft config `{id}`
 
 ## Config‑scoped
 
 - `GET    /{config_id}` — metadata
-- `PATCH  /{config_id}` — update `{title|note|version}`; set `status` to `archived|inactive`
+- `PATCH  /{config_id}` — update `{title|note|version}` for drafts; optionally set `status` to `archived`
 - `DELETE /{config_id}` — delete if not active
 - `POST   /{config_id}/activate` — atomically switch active
 
@@ -44,7 +44,7 @@ Keep routes RESTful and predictable. Use nouns in paths, verbs in HTTP. Response
 ### Import / export / validate / clone
 - `GET  /{config_id}/export` — stream zip
 - `POST /{config_id}/validate` — run structure + dry‑run checks
-- `POST /{config_id}/clone` — deep copy folder → new inactive config
+- `POST /{config_id}/clone` — deep copy folder → new draft config
 
 ### Secrets (plaintext never returned)
 - `GET    /{config_id}/secrets` — list `{name, key_id, created_at}[]`
@@ -54,7 +54,7 @@ Keep routes RESTful and predictable. Use nouns in paths, verbs in HTTP. Response
 ## Minimal examples
 
 ```bash
-# Create an inactive config
+# Create a draft config
 curl -sS -X POST \
   -H 'Content-Type: application/json' \
   -d '{"title":"Starter","note":"Baseline config"}' \
@@ -85,10 +85,21 @@ curl -sS -X POST /api/v1/workspaces/ws_001/configs/cfg_A/validate
 
 > Inventory live routes with `npm run routes:backend`.
 
+## Roll back to a previous config
+
+Clone the archived config to create a new draft, then activate it:
+
+```bash
+NEW_ID=$(curl -sS -X POST \
+  /api/v1/workspaces/ws_001/configs/cfg_OLD/clone | jq -r '.id')
+
+curl -sS -X POST /api/v1/workspaces/ws_001/configs/$NEW_ID/activate
+```
+
 ## Jobs
 Jobs endpoints will be added in a later iteration.
 
 ---
 
-Previous: [06-runtime-model.md](./06-runtime-model.md)  
-Next: [08-validation-and-diagnostics.md](./08-validation-and-diagnostics.md)
+Previous: [04-runtime-model.md](./04-runtime-model.md)  
+Next: [06-validation-and-diagnostics.md](./06-validation-and-diagnostics.md)

@@ -1,88 +1,90 @@
 # Developer Documentation Style Guide
 
-This guide defines the voice, tone, and formatting conventions for all our developer documentation. Adhering to a consistent style ensures that readers have a clear, friendly, and helpful experience across all docs. The guidelines below align with widely accepted technical writing practices (for example, Google’s developer documentation style), adapted to our project's needs.
+This guide defines the voice, tone, and formatting conventions for all developer documentation in this repository. Adhering to a consistent style gives readers a clear, friendly, and helpful experience across every page. These guidelines align with widely adopted technical-writing practices (including Google’s developer documentation style), adapted for our project’s needs.
 
 ---
 
-## Voice and Tone
+## Voice and tone
 
-Write in a conversational, friendly tone without being frivolous. Aim to sound like a knowledgeable friend advising the reader, not a formal thesis or a sales pitch. Use second person ("you") to address the reader directly, and imperative mood for instructions. For example, instead of saying "we will now do X," instruct "do X." Writing in second person and active voice makes it clear who should do what. Always prefer active constructions ("The system sends an email" rather than "An email is sent by the system").
+Write in a conversational, friendly tone without being frivolous. Sound like a knowledgeable peer guiding the reader through a task. Use **second person (“you”)** to address the reader directly, and rely on the **imperative mood** for instructions. For example, say “Configure the environment for your app” rather than “We will now configure the environment.” Active voice keeps ownership clear: “The system sends an email,” not “An email is sent by the system.”
 
-Maintain a respectful and inclusive voice. Avoid slang, colloquialisms, or jargon that might not be universally understood. Jargon or buzzwords should be used only when they are standard terms in the technical domain—otherwise, explain them or choose simpler words. Steer clear of humor, pop-culture references, or idioms that could confuse or exclude international readers. For example, don’t assume the reader knows a phrase like "hit it out of the park"—replace idioms with clear, literal descriptions. Likewise, avoid ableist or sexist terms; use neutral alternatives (for instance, "give a final check" instead of "give a final sanity check"). Write with a global audience in mind by using clear, straightforward language and explaining context when needed.
+Keep the voice respectful and inclusive. Avoid slang, colloquialisms, and humor that might not translate globally. Use jargon or buzzwords only when they are standard in the domain; otherwise explain them or choose simpler language. Skip idioms such as “hit it out of the park,” and use neutral phrasing instead. Likewise, avoid ableist or sexist terms—write “give a final check” instead of “give a final sanity check.” Write with a global audience in mind by providing context and choosing clear words.
 
-Tone should be encouraging and matter-of-fact. It’s good to be positive and empowering, but do not overuse words like "simple" or "easy," as what’s "simple" for one user may not be for another. Similarly, avoid phrases that could be seen as condescending (for example, "just do X," "obviously," "simply"). Be polite but don’t overuse "please" in instructional steps (for example, "Click **Submit**," not "Please click **Submit**"). It’s fine to say "please" in explanatory text when appropriate to maintain a courteous tone, but in step-by-step instructions it usually adds unnecessary formality.
+Keep the tone encouraging and matter-of-fact. It is fine to sound positive, but do not label tasks as “simple” or “easy,” and avoid condescending fillers such as “just,” “obviously,” or “simply.” Use “please” sparingly in instructions (“Click **Submit**,” not “Please click **Submit**”). Reserve “please” for rare cases where it adds clarity or courtesy to narrative text.
 
-Avoid common pitfalls: overly cutesy language, unnecessary exclamation marks, repetitive sentence starts (for example, every sentence beginning with "You can …"), and filler phrases like "Note that …" or "At this time." Also avoid writing as "let’s …" or "we will …" when giving instructions—it’s clearer and more direct to address the reader as "you" or to use imperatives. Do not refer to the documentation or product as "we"; the focus is on the user’s actions and the software’s behavior.
+Avoid common tone pitfalls: overly cutesy language, unnecessary exclamation marks, repetitive sentence starts (“You can…”), and filler phrases like “Note that…” or “At this time.” Do not use “let’s…” or “we will…” when giving instructions; it is clearer to use “you” or straight imperatives. Do not refer to the docs or product as “we”; focus on the reader’s actions and the software’s behavior.
 
-> Not recommended: “Let’s now configure the environment for our app.”
->
-> Recommended: “Configure the environment for your app.”
+> **Not recommended:** “Let’s now configure the environment for our app.”  
+> **Recommended:** “Configure the environment for your app.”
 
-> Not recommended: “Just hit the **Submit** button and you’re good to go!”
->
-> Recommended: “Click **Submit** to send the form.”
+> **Not recommended:** “Just hit the **Submit** button and you’re good to go!”  
+> **Recommended:** “Click **Submit** to send the form.”
 
----
-
-## Language and Grammar
-
-- Use standard American English spelling and grammar throughout.
-- Write in present tense for general statements and procedural steps. For example, write "This API returns the data …" rather than "This API will return the data …" Use future tense only when describing something that truly happens later or is conditional. Past tense is rarely needed except in historical references or release notes.
-- Keep sentences concise and clear. Break down long, complex sentences into shorter ones to improve readability (and translatability). Each sentence should convey one idea. Avoid run-on sentences or excessive subclauses that could confuse readers. Avoid double negatives or overly complex phrasing; say "X is allowed" rather than "it is not disallowed to do X."
-- Use active voice consistently. Passive voice can obscure who is responsible for an action. For example, "The configuration is initialized by the script" is weaker than "The script initializes the configuration." There may be rare cases to use passive (if the actor is unknown or unimportant), but generally prefer active constructions for clarity.
-- Put conditions before instructions. If a step is conditional, lead with the condition: "If you have not installed the CLI, install it now." rather than "Install the CLI if you have not already done so."
-- Use second person pronouns ("you") to refer to the reader, and prefer neutral/gender-inclusive language. For example, instead of "the admin should update his configuration," say "you should update the configuration" or "the administrator should update the configuration."
-- When using abbreviations or acronyms, spell them out on first use with the abbreviation in parentheses, unless they are very common (like HTTP or JSON). For example: "Use the Cloud Execution Manager (CEM) to orchestrate tasks …" On subsequent references, just CEM is fine.
-- If a term is defined in our glossary, link the first occurrence of that term on a page to the glossary entry (for example, `docs/developers/02-glossary.md#widget-engine`). Be consistent in terminology: use the same term or phrase for the same concept throughout the documentation.
+Review drafts for tone and clarity. Remove colloquial fillers, pick precise verbs (“click” instead of “hit”), and keep sentences direct.
 
 ---
 
-## Structure and Formatting
+## Language and grammar
+
+- Use **standard American English** spelling and grammar.
+- Prefer **present tense** for factual statements and procedural steps. Use future tense only for real future events, and past tense only for historical context or release notes.
+- Keep sentences concise. Break up long constructions to improve readability and translation. Each sentence should communicate one idea when possible.
+- Use **active voice** so the actor is explicit. Choose passive voice only when the actor is unknown or irrelevant.
+- **Put conditions before instructions.** For example, write “If you have not installed the CLI, install it now” instead of “Install the CLI if you have not already done so.”
+- Address the reader with **second person pronouns** (“you”). Avoid gendered language (“administrator updates the configuration” instead of “admin updates his configuration”). Use “we” only when the docs must speak for the team or product, and do so sparingly to avoid confusion.
+- Spell out abbreviations and acronyms on first use unless they are universally known (for example, HTTP or JSON). Example: “Use the Cloud Execution Manager (CEM) to orchestrate tasks…” Then use the acronym for subsequent mentions.
+- If a term appears in the glossary, link its first mention on a page to `docs/developers/glossary.md`. Maintain consistent terminology—do not switch between synonyms for the same concept.
+
+---
+
+## Structure and formatting
 
 ### Titles and headings
 
-- Start each page with a single level‑1 heading (H1) as the page title.
-- Use Title Case for the page title (capitalize major words) and sentence case for section headings (H2 and below).
-- Ensure each page has exactly one H1; organize subheadings hierarchically without skipping levels.
-- Prefer imperative headings for task‑oriented sections (for example, "Create an instance" → "Create an instance"). Use noun phrases for conceptual sections (for example, "Architecture overview"). Avoid gerunds (“-ing”) in headings when possible.
-- Begin each major section with a brief introductory paragraph. Aim for 3–5 sentence paragraphs.
+- Begin every page with a single level-1 heading (H1) that serves as the page title.
+- Write page titles in **Title Case**, and write section headings (H2 and below) in **sentence case**.
+- Organize headings hierarchically without skipping levels. Ensure each heading reflects its section content.
+- Use imperative verbs for task-oriented sections (for example, “Create an instance”). Use noun phrases for conceptual sections (for example, “Architecture overview”).
+- Open each major section with a short introductory paragraph so readers know what follows. Aim for paragraphs of roughly three to five sentences to avoid dense walls of text.
 
 ### Lists
 
-- Use bulleted lists for unordered items; use numbered lists for sequences or procedures.
-- Keep items parallel in structure (all start with a verb, or all are noun phrases).
-- Capitalize list items consistently. If any item is a full sentence, punctuate all items; otherwise, omit terminal punctuation.
-- Use the Oxford comma in any series of three or more items (for example, "Windows, Linux, and macOS").
+- Use bulleted lists for items that have no required order, and numbered lists for sequential steps.
+- Maintain parallel structure in list items (all verbs, all noun phrases, etc.).
+- Capitalize list items consistently. Add end punctuation if any item is a full sentence; otherwise leave punctuation off for fragments.
+- Use the **Oxford comma** in any series of three or more items (“Windows, Linux, and macOS”).
+- When presenting paired data, consider tables or definition lists.
 
 ### Emphasis and formatting
 
-- Use bold for UI elements (buttons, menu items, field names), for example, "Click **Deploy**."
-- Use `code font` (backticks) for filenames, code identifiers, commands, endpoints, config keys, and literal values.
-- Reserve italics for introducing terms or rare emphasis.
-- Use unambiguous dates (for example, "February 10, 2025"). Include time zones for times (for example, "5:00 PM UTC"). Avoid time‑relative phrases ("today," "currently"); prefer versioned or timeless phrasing.
+- Use **bold text** for UI elements such as button labels, menu items, and field names (for example, “Click **Deploy**”).
+- Use `code font` (backticks) for filenames, commands, API endpoints, config keys, and literal values.
+- Reserve *italics* for introducing terms or for rare emphasis.
+- When referencing dates, write them in an unambiguous format such as “February 10, 2025.” Include time zones when specifying times (“5:00 PM UTC”).
+- Avoid time-sensitive phrases like “today” or “currently.” Write in a timeless style (“In version 3.2 the feature is deprecated”).
 
 ---
 
-## Links and Cross‑References
+## Links and cross-references
 
-- Use descriptive link text (avoid "click here" or bare URLs).
-- Use relative links for internal pages (for example, `[Overview](./README.md)`).
-- Link the first mention of defined terms to their glossary or reference entry; one link per page is usually sufficient.
-- For external resources, link the official title (for example, "See the **TensorFlow documentation**"). Periodically verify links.
+- Use descriptive link text that explains the destination—avoid “click here” or bare URLs.
+- Use relative links for internal references (for example, `[Overview](./README.md)`).
+- Link the first mention of defined terms to their glossary or reference page. One link per page is usually sufficient.
+- When referencing external resources, use the official name or title as the link text (for example, “See the **TensorFlow documentation**”).
+- Periodically verify both internal and external links, especially after restructures or when external resources move.
 
 ---
 
-## Code Samples and Snippets
+## Code samples and snippets
 
-See `docs/developers/00-templates/snippet-conventions.md` for full details. Core principles:
+We maintain detailed snippet guidance in [`docs/developers/templates/snippet-conventions.md`](./templates/snippet-conventions.md). Follow these core principles:
 
-- Introduce code examples with a brief sentence stating what they show. End with a colon when leading directly into a block.
-- Use fenced code blocks with language hints (`bash`, `python`, `json`, and so on). Keep lines near 80 characters when practical.
-- Show realistic but minimal code (typically ≤ 30 lines). Omit boilerplate and indicate omissions with a language‑appropriate comment (`# ...`, `// ...`). Avoid the Unicode ellipsis character.
-- Use clear placeholders for user‑specific values (for example, `<PROJECT_ID>`, `YOUR_API_KEY`). Never include secrets or private data.
-- If a snippet is particularly important, label it in prose (for example, "Minimal example:").
-
-Example (YAML with an elided section):
+- Introduce each code example with a brief sentence that states what it demonstrates. End the sentence with a colon when it leads directly into the code block.
+- Use fenced code blocks with language hints (` ```python `, ` ```bash `, etc.) for syntax highlighting. Keep lines near 80 characters when practical.
+- Provide realistic, minimal examples—typically no more than 30 lines, excluding comments.
+- Omit irrelevant boilerplate. Use comments that match the language syntax to indicate removed sections (`# ...`, `// ...`). Avoid the Unicode ellipsis character.
+- Use clear placeholders for user-specific values, such as `<PROJECT_ID>` or `YOUR_API_KEY`. Never include actual secrets or private data.
+- If you need to label an important snippet, introduce it in prose (for example, “**Minimal example:**”).
 
 ```yaml
 apiVersion: v1
@@ -96,28 +98,27 @@ spec:
 
 ---
 
-## Figures and Media
+## Figures and media
 
-Use diagrams and images only when they aid understanding. Prefer text‑based diagrams (ASCII art) or tables for maintainability and accessibility. Keep ASCII diagrams ≤ 80 characters wide and explain them in surrounding text.
+Use diagrams and images only when they genuinely aid understanding. Prefer text-based diagrams (ASCII art) or tables because they are easy to maintain and accessible to screen readers. Keep ASCII diagrams at or below 80 characters in width, and explain them in the surrounding text.
 
-When images are necessary (for example, screenshots or complex architecture diagrams), provide concise alt text. Use high‑quality assets and optimize for size. Prefer SVG for diagrams and PNG/JPEG for screenshots. Introduce images in the text; include captions if additional context helps.
+When you must include an image (for example, a UI screenshot or complex architecture diagram), provide concise, meaningful alt text. Use high-quality assets that balance clarity with reasonable file size. Favor SVG for diagrams and PNG for UI screenshots. Introduce images in the prose so readers know to look at them, and add captions when additional context is helpful.
 
-Always protect privacy and security: scrub identifying data and use representative placeholders (for example, "ACME Corp," "Alice," "Bob").
-
----
-
-## Document Structure and Navigation
-
-Clearly state the audience and goal at the top of a page, so readers know who the page is for and what outcome to expect. In longer guides or tutorials, include "Next steps" at the end with logical follow‑ups or related links. Conclude with a quick summary of what was accomplished.
+Ensure every media asset respects privacy and security requirements. Scrub identifying data, redact sensitive information, and use representative sample names (for example, “ACME Corp,” “Alice,” “Bob”).
 
 ---
 
-## Additional Guidelines
+## Accessibility and inclusivity
 
-- Consistency: Keep terminology and structure consistent across pages.
-- Accessibility and inclusion: Use inclusive language and accessible patterns (heading order, alt text, no information conveyed by color alone).
-- Evergreen phrasing: Prefer versioned or timeless phrasing (for example, "In version 4.2, Feature X is deprecated"). Avoid short‑lived words like "currently."
-- Review: Proofread or request a peer review for clarity and adherence to this guide.
+Accessibility is a core requirement. Provide alt text for images, ensure headings form a logical outline, and structure content with proper Markdown syntax so assistive technologies can parse it. Keep contrast requirements in mind when you reference colors or UI states. Avoid describing information solely with color or position; provide textual explanations.
+
+Inclusive language matters. Choose gender-neutral terms, avoid idioms that do not translate well, and ensure examples reflect diverse, respectful scenarios. When in doubt, err on the side of clarity and empathy.
+
+---
+
+## Keep refining
+
+Treat documentation reviews with the same care as code reviews. Read drafts aloud to spot awkward phrasing, confirm that instructions follow the page template in `docs/developers/templates/page-template.md`, and double-check links, examples, and placeholders. Consistent application of this style guide keeps the docs welcoming, precise, and dependable.
 
 ---
 

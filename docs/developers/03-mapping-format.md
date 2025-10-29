@@ -43,7 +43,7 @@
 ---
 
 ## Schema
-See `01-schemas/mapping.v1.schema.json` for the authoritative definition.
+See `schemas/mapping.v1.schema.json` for the authoritative definition.
 
 ## Notes
 - Keep the mapping free of full data. Include only samples and decisions.
@@ -52,10 +52,10 @@ See `01-schemas/mapping.v1.schema.json` for the authoritative definition.
 
 ## What’s next
 
-- Learn how scripts run in [06-runtime-model.md](./06-runtime-model.md)
-- See how mappings are produced in [04-jobs-pipeline.md](./04-jobs-pipeline.md)
+- Learn how scripts run in [04-runtime-model.md](./04-runtime-model.md)
+- See how mappings are produced in [02-jobs-pipeline.md](./02-jobs-pipeline.md)
 
 ---
 
-Previous: [04-jobs-pipeline.md](./04-jobs-pipeline.md)  
-Next: [06-runtime-model.md](./06-runtime-model.md)
+Previous: [02-jobs-pipeline.md](./02-jobs-pipeline.md)  
+Next: [04-runtime-model.md](./04-runtime-model.md)

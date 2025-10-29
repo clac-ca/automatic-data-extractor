@@ -71,7 +71,7 @@
 ## Security and lifecycle
 
 - Secrets — Encrypted at rest in the manifest; decrypted only inside sandboxed child processes.
-- Status — `active | inactive | archived`; only inactive configs are editable.
+- Status — `draft | active | archived`; only draft configs are editable.
 - Active config — Exactly one active config per workspace at a time.
 - Sandbox — Restricted subprocess (`python -I -B`) with rlimits and no network unless enabled.
 
@@ -101,10 +101,10 @@ def transform(*, values: list, **_):
 
 ## What’s next
 
-- See structure and scripts in [03-config-packages.md](./03-config-packages.md)
-- Read the pass‑by‑pass flow in [04-jobs-pipeline.md](./04-jobs-pipeline.md)
+- See structure and scripts in [01-config-packages.md](./01-config-packages.md)
+- Read the pass‑by‑pass flow in [02-jobs-pipeline.md](./02-jobs-pipeline.md)
 
 ---
 
-Previous: [01-overview.md](./01-overview.md)  
-Next: [03-config-packages.md](./03-config-packages.md)
+Previous: [README.md](./README.md)  
+Next: [01-config-packages.md](./01-config-packages.md)
