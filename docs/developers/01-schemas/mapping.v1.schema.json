@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mapping.v1.schema.json",
+  "title": "Mapping v1",
+  "type": "object",
+  "required": ["version", "sheets"],
+  "properties": {
+    "version": { "const": "mapping.v1" },
+    "job": { "type": "object", "additionalProperties": true },
+    "config": { "type": "object", "additionalProperties": true },
+    "sheets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "tables"],
+        "properties": {
+          "name": { "type": "string" },
+          "index": { "type": "integer", "minimum": 0 },
+          "tables": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["bounds", "mapping"],
+              "properties": {
+                "id": { "type": "string" },
+                "bounds": {
+                  "type": "object",
+                  "required": ["top", "left", "height", "width", "a1"],
+                  "properties": {
+                    "top": { "type": "integer", "minimum": 0 },
+                    "left": { "type": "integer", "minimum": 0 },
+                    "height": { "type": "integer", "minimum": 1 },
+                    "width": { "type": "integer", "minimum": 1 },
+                    "a1": { "type": "string" }
+                  }
+                },
+                "headers": { "type": "object", "additionalProperties": true },
+                "raw_columns": { "type": "array", "items": { "type": "object" } },
+                "mapping": {
+                  "type": "object",
+                  "required": ["assignments"],
+                  "properties": {
+                    "assignments": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": ["raw", "score"],
+                        "properties": {
+                          "raw": { "type": "string" },
+                          "score": { "type": "number" }
+                        }
+                      }
+                    },
+                    "unassigned": { "type": "array", "items": { "type": "string" } },
+                    "extras": { "type": "array", "items": { "type": "string" } }
+                  }
+                },
+                "warnings": { "type": "array", "items": { "type": "object" } }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

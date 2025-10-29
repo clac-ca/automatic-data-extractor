@@ -82,9 +82,6 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     deleted_by_user_id: Mapped[str | None] = mapped_column(
         String(26), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
     )
-    produced_by_job_id: Mapped[str | None] = mapped_column(
-        String(26), ForeignKey("jobs.job_id", ondelete="SET NULL"), nullable=True
-    )
     tags: Mapped[list["DocumentTag"]] = relationship(
         "DocumentTag",
         back_populates="document",
@@ -121,7 +118,6 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         Index(
             "documents_workspace_uploader_idx", "workspace_id", "uploaded_by_user_id"
         ),
-        Index("documents_produced_by_job_id_idx", "produced_by_job_id"),
     )
 
     @property

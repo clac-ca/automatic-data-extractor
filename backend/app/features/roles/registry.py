@@ -149,18 +149,6 @@ PERMISSIONS: tuple[PermissionDefinition, ...] = (
         description="Upload, update, delete, or restore workspace documents.",
     ),
     _definition(
-        key="Workspace.Configs.Read",
-        scope="workspace",
-        label="Read configs",
-        description="Inspect configuration packages and versions for the workspace.",
-    ),
-    _definition(
-        key="Workspace.Configs.ReadWrite",
-        scope="workspace",
-        label="Manage configs",
-        description="Create, edit, publish, or delete configuration packages and versions.",
-    ),
-    _definition(
         key="Workspace.Roles.Read",
         scope="workspace",
         label="Read workspace roles",
@@ -171,18 +159,6 @@ PERMISSIONS: tuple[PermissionDefinition, ...] = (
         scope="workspace",
         label="Manage workspace roles",
         description="Create, edit, delete, and assign roles within the workspace.",
-    ),
-    _definition(
-        key="Workspace.Jobs.Read",
-        scope="workspace",
-        label="Read jobs",
-        description="Inspect job history and run details within the workspace.",
-    ),
-    _definition(
-        key="Workspace.Jobs.ReadWrite",
-        scope="workspace",
-        label="Manage jobs",
-        description="Submit, cancel, retry, or reprioritise jobs within the workspace.",
     ),
 )
 
@@ -221,12 +197,8 @@ SYSTEM_ROLES: tuple[SystemRoleDefinition, ...] = (
             "Workspace.Members.ReadWrite",
             "Workspace.Documents.Read",
             "Workspace.Documents.ReadWrite",
-            "Workspace.Configs.Read",
-            "Workspace.Configs.ReadWrite",
             "Workspace.Roles.Read",
             "Workspace.Roles.ReadWrite",
-            "Workspace.Jobs.Read",
-            "Workspace.Jobs.ReadWrite",
         ),
     ),
     SystemRoleDefinition(
@@ -238,8 +210,6 @@ SYSTEM_ROLES: tuple[SystemRoleDefinition, ...] = (
             "Workspace.Read",
             "Workspace.Documents.Read",
             "Workspace.Documents.ReadWrite",
-            "Workspace.Configs.Read",
-            "Workspace.Jobs.Read",
         ),
     ),
 )

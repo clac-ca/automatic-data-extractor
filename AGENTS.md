@@ -103,4 +103,62 @@ npm run ci      # Full CI pipeline
 
 ---
 
+## 📚 Developer Docs
+
+- Read and follow `docs/developers/AGENTS.md` before adding or updating developer documentation.
+- Structure lives under `docs/developers/`:
+  - `00-templates/` — page and snippet templates (use these).
+  - `01-schemas/` — JSON Schemas referenced from docs.
+  - `02-design-decisions/` — Design Decisions (DD).
+  - Numbered pages (e.g., `01-overview.md`, `05-mapping-format.md`). Keep numbers stable.
+
+When to update docs (triggers)
+
+- API surface changes (routes, params, response shapes)
+  - Update: `docs/developers/07-backend-api.md` (+ request/response snippets).
+- Manifest or mapping schema shape changes
+  - Update: `docs/developers/01-schemas/*`, `05-mapping-format.md`, and `03-config-packages.md` if contracts changed.
+- Script contracts (hooks/detectors/transforms) or kwargs change
+  - Update: `03-config-packages.md` and `06-runtime-model.md`.
+- Pipeline behavior or pass boundaries change
+  - Update: `04-jobs-pipeline.md`; consider a DD (see below).
+- Validation or diagnostics shape change
+  - Update: `08-validation-and-diagnostics.md`.
+- Security/secrets behavior change
+  - Update: `11-security-and-secrets.md`; consider a DD.
+- New common authoring pattern or best practice
+  - Update: `09-examples-and-recipes.md` (add a small copy‑pasteable example).
+
+Navigation conventions
+
+- Each page ends with “Next” and “Previous” relative links.
+- First use of a defined term links to `docs/developers/02-glossary.md`.
+
+---
+
+## 📌 Design Decisions (DD)
+
+Use a DD when the change is:
+
+- Cross‑cutting or repo‑level (affects multiple components or workflows), or
+- Establishes a long‑lived invariant or security stance, or
+- Defines an external contract or versioned data shape, or
+- Introduces a new execution model or lifecycle step, or
+- Trades off performance/complexity with lasting impact.
+
+Do not create a DD for:
+
+- Local refactors, implementation details, or temporary experiments.
+
+Where and how
+
+- Location: `docs/developers/02-design-decisions/`.
+- Naming: `dd-####-slug.md` (zero‑padded; next available number; do not renumber).
+- Format: Date → Context → Decision → Consequences → Alternatives considered → Links.
+- Superseding: add “Supersedes: dd‑####” or “Superseded by: dd‑####” in both files.
+
+Link DDs from relevant pages (overview, runtime, mapping, security) so readers see the “why,” not just the “what.”
+
+---
+
 **End of AGENTS.md**

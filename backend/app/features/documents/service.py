@@ -59,7 +59,6 @@ class DocumentsService:
         upload: UploadFile,
         metadata: Mapping[str, Any] | None = None,
         expires_at: str | None = None,
-        produced_by_job_id: str | None = None,
         actor: User | None = None,
     ) -> DocumentRecord:
         """Persist ``upload`` to storage and return the resulting metadata record."""
@@ -94,7 +93,6 @@ class DocumentsService:
             source=DocumentSource.MANUAL_UPLOAD.value,
             expires_at=expiration,
             last_run_at=None,
-            produced_by_job_id=produced_by_job_id,
         )
         self._session.add(document)
         await self._session.flush()

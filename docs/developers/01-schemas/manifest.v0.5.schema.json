@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "manifest.v0.5.schema.json",
+  "title": "Manifest v0.5",
+  "type": "object",
+  "required": ["version", "info", "columns"],
+  "properties": {
+    "version": { "const": "manifest.v0.5" },
+    "info": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "env": { "type": "object", "additionalProperties": { "type": "string" } },
+    "secrets": { "type": "object", "additionalProperties": { "type": "string" } },
+    "engine": {
+      "type": "object",
+      "properties": {
+        "defaults": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "detect": {
+      "type": "object",
+      "properties": {
+        "sample": {
+          "type": "object",
+          "properties": { "rows": { "type": "integer", "minimum": 1 } },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "hooks": { "type": "object", "additionalProperties": { "type": "string" } },
+    "columns": {
+      "type": "object",
+      "required": ["order", "meta"],
+      "properties": {
+        "order": { "type": "array", "items": { "type": "string" } },
+        "meta": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": { "script": { "type": "string" } },
+            "required": ["script"],
+            "additionalProperties": true
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
