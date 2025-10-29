@@ -1,6 +1,6 @@
-# ADE — Multi‑Pass Overview (Artifact‑First, Simplified)
+# ADE — Multi‑Pass Overview (Artifact‑First)
 
-ADE converts messy spreadsheets into a consistent **normalized** Excel output using a streaming, multi‑pass pipeline. It reads **rows** to find tables and header rows, scores **columns** to map them to **target fields**, and then **writes rows** to a new workbook, applying transforms and validations inline.
+ADE converts messy spreadsheets into a consistent **normalized** Excel output using a streaming, multi‑pass pipeline. It reads **rows** to find tables and header rows, scores **columns** to map them to **target fields**, and then **writes rows** to a new workbook, applying transforms and validations inline (row‑streaming writer).
 
 * **One artifact JSON** is created at job start and **enriched in place** by each pass.
 * We use **Excel A1 notation** for cells and ranges (e.g., `"B4"`, `"B4:G159"`).
@@ -17,7 +17,7 @@ ADE converts messy spreadsheets into a consistent **normalized** Excel output us
 * **mapping** – assignment from a raw column to a target field with a score.
 * **append unmapped** – if true (default), raw columns that didn’t map are appended to the far right as `raw_<sanitized_header>`.
 
-**IDs (stable within a job):**
+**IDs (stable within a job):**  
 `sheets: sheet_1…`, `tables (per sheet): table_1…`, `columns (per table): col_1…`, `rows: 1‑based`.
 
 ---
@@ -39,35 +39,37 @@ The artifact is the single source of truth. It stores **decisions and traces**, 
 
 ```json
 {
-  "artifact_version": "1.0",
+  "artifact_version": "1.1",
   "job": {
     "job_id": "job_2025-10-29T12-45-00Z_001",
     "source_file": "employees.xlsx",
-    "config_id": "cfg_acme_v12",
+    "config_id": "cfg_acme_v13",
     "created_at": "2025-10-29T12:45:00Z"
   },
   "engine": {
-    "writer_mode": "row_streaming",
-    "append_unmapped_columns": true,
-    "unmapped_prefix": "raw_"
+    "writer": {
+      "mode": "row_streaming",
+      "append_unmapped_columns": true,
+      "unmapped_prefix": "raw_"
+    }
   },
   "rules": {
-    "row_detect": {
-      "row.text_density":       { "impl": "columns/_row_rules.py:text_density",      "version": "a1f39d" },
-      "row.synonym_hits":       { "impl": "columns/_row_rules.py:synonym_hits",      "version": "a1f39d" },
-      "row.identifier_format":  { "impl": "columns/_row_rules.py:identifier_format", "version": "a1f39d" }
+    "row_types": {
+      "row.header.text_density":   { "impl": "row_types/header.py:detect_text_density",   "version": "a1f39d" },
+      "row.header.synonym_hits":   { "impl": "row_types/header.py:detect_synonym_hits",   "version": "a1f39d" },
+      "row.data.numeric_density":  { "impl": "row_types/data.py:detect_numeric_density",  "version": "b1130d" },
+      "row.separator.blank_ratio": { "impl": "row_types/separator.py:detect_blank_ratio", "version": "c22f01" }
     },
     "column_detect": {
-      "col.member_id.pattern":  { "impl": "columns/member_id.py:detect_pattern",     "version": "b77bf2" },
-      "col.member_id.synonyms": { "impl": "columns/member_id.py:detect_synonyms",    "version": "b77bf2" },
-      "col.department.synonyms":{ "impl": "columns/department.py:detect_synonyms",   "version": "c1d004" }
+      "col.member_id.pattern":     { "impl": "columns/member_id.py:detect_pattern",       "version": "b77bf2" },
+      "col.department.synonyms":   { "impl": "columns/department.py:detect_synonyms",     "version": "c1d004" }
     },
     "transform": {
-      "transform.member_id":    { "impl": "columns/member_id.py:transform",          "version": "d93210" }
+      "transform.member_id":       { "impl": "columns/member_id.py:transform_value",      "version": "d93210" }
     },
     "validate": {
-      "validate.member_id.pattern": { "impl": "columns/member_id.py:validate_pattern", "version": "ee12c3" },
-      "validate.required":          { "impl": "columns/_shared.py:validate_required",  "version": "0aa921" }
+      "validate.member_id.value":  { "impl": "columns/member_id.py:validate_value",       "version": "ee12c3" },
+      "validate.required":         { "impl": "columns/_shared.py:validate_required",      "version": "0aa921" }
     }
   },
   "sheets": [],
@@ -86,16 +88,16 @@ The artifact is the single source of truth. It stores **decisions and traces**, 
 
 ## The same artifact, enriched per pass
 
-Below, each pass **reads** from earlier sections and **appends** to the same artifact. To keep this light, I’ll include **placeholders** like `"…"` where content is unchanged.
+Each pass **reads** from earlier sections and **appends** to the same artifact. To keep this light, we include **placeholders** where content is unchanged.
 
 ### Pass 1 — Structure (row detection; **row streaming**)
 
-**Reads:** `job`, `engine`, `rules.row_detect`
+**Reads:** `job`, `engine`, `rules.row_types`
 **Appends:** `sheets[].row_classification`, `sheets[].tables[]` with ranges and header
 
 ```json
 {
-  "artifact_version": "1.0",
+  "artifact_version": "1.1",
   "job": { "..." : "..." },
   "engine": { "..." : "..." },
   "rules": { "..." : "..." },
@@ -110,11 +112,11 @@ Below, each pass **reads** from earlier sections and **appends** to the same art
           "row_index": 4,
           "label": "header",
           "confidence": 0.91,
-          "scores": { "header": 1.24, "data": 0.11, "separator": -0.10 },
+          "scores_by_type": { "header": 1.24, "data": 0.11, "separator": -0.10 },
           "rule_traces": [
-            { "rule": "row.text_density",      "delta": { "header": 0.62 } },
-            { "rule": "row.synonym_hits",      "delta": { "header": 0.28 } },
-            { "rule": "row.identifier_format", "delta": { "data": 0.05 } }
+            { "rule": "row.header.text_density",  "delta": 0.62 },
+            { "rule": "row.header.synonym_hits",  "delta": 0.28 },
+            { "rule": "row.data.numeric_density", "delta": -0.05 }
           ]
         }
       ],
@@ -122,12 +124,11 @@ Below, each pass **reads** from earlier sections and **appends** to the same art
       "tables": [
         {
           "id": "table_1",
-
           "range": "B4:G159",
           "data_range": "B5:G159",
 
           "header": {
-            "kind": "raw",                // "raw" | "synthetic"
+            "kind": "raw",  // "raw" | "synthetic"
             "row_index": 4,
             "source_header": ["Employee ID", "Name", "Department", "Start Date"]
           },
@@ -157,11 +158,11 @@ Below, each pass **reads** from earlier sections and **appends** to the same art
 ### Pass 2 — Mapping (column detection; **column‑aware via row scans**)
 
 **Reads:** `sheets[].tables[].range/header/columns`, `rules.column_detect`
-**Appends:** `sheets[].tables[].mapping[]` and a clear list of target fields for the output
+**Appends:** `sheets[].tables[].mapping[]` and a list of target fields for the output
 
 ```json
 {
-  "artifact_version": "1.0",
+  "artifact_version": "1.1",
   "job": { "..." : "..." },
   "engine": { "..." : "..." },
   "rules": { "..." : "..." },
@@ -186,8 +187,7 @@ Below, each pass **reads** from earlier sections and **appends** to the same art
               "target_field": "member_id",
               "score": 1.8,
               "contributors": [
-                { "rule": "col.member_id.pattern",  "delta": 0.90 },
-                { "rule": "col.member_id.synonyms", "delta": 0.50 }
+                { "rule": "col.member_id.pattern",  "delta": 0.90 }
               ]
             },
             {
@@ -235,7 +235,6 @@ Below, each pass **reads** from earlier sections and **appends** to the same art
       "tables": [
         {
           "id": "table_1",
-
           "analyze": {
             "member_id":  { "distinct": 155, "empty": 0, "mostly_alnum": true },
             "first_name": { "distinct": 142, "empty": 4, "mostly_lower": true }
@@ -282,7 +281,7 @@ Below, each pass **reads** from earlier sections and **appends** to the same art
                 "code": "pattern_mismatch",
                 "severity": "error",
                 "message": "Does not match expected pattern",
-                "rule": "validate.member_id.pattern"
+                "rule": "validate.member_id.value"
               }
             ],
             "summary_by_field": {
@@ -299,6 +298,8 @@ Below, each pass **reads** from earlier sections and **appends** to the same art
   ]
 }
 ```
+
+> Implementation detail: both steps occur as cells are written by the **row‑streaming writer**; we still record separate pass markers for clarity.
 
 ---
 
@@ -342,10 +343,10 @@ Below, each pass **reads** from earlier sections and **appends** to the same art
 
 ```json
 {
-  "artifact_version": "1.0",
+  "artifact_version": "1.1",
   "job": { "job_id": "...", "source_file": "...", "config_id": "...", "created_at": "..." },
-  "engine": { "writer_mode": "row_streaming", "append_unmapped_columns": true, "unmapped_prefix": "raw_" },
-  "rules": { "row_detect": { }, "column_detect": { }, "transform": { }, "validate": { } },
+  "engine": { "writer": { "mode": "row_streaming", "append_unmapped_columns": true, "unmapped_prefix": "raw_" } },
+  "rules": { "row_types": { }, "column_detect": { }, "transform": { }, "validate": { } },
 
   "sheets": [
     {
@@ -369,7 +370,7 @@ Below, each pass **reads** from earlier sections and **appends** to the same art
 
           "analyze": { /* Pass 2.5 optional tiny stats */ },
 
-          "transforms": [ /* Pass 3 per-field transform summaries */ ],
+          "transforms": [ /* Pass 3 per-field summaries */ ],
 
           "validation": { "issues": [/* cell-level */], "summary_by_field": { /* … */ } }
         }
@@ -387,14 +388,10 @@ Below, each pass **reads** from earlier sections and **appends** to the same art
 }
 ```
 
----
-
-## Why this structure is easy to reason about
+**Why this structure is easy to reason about**
 
 * **Familiar Excel ranges** (`"B4:G159"`) and **simple IDs** (`sheet_1/table_1/col_1`) make locations obvious.
 * **Source → Target → Output** mirrors what we do: detect what’s there, map to target fields, write normalized output headers.
-* **One registry of rules** at the root; everything else references **short `rule` IDs** with numeric `delta`s when they actually contributed.
-* **Each pass appends** to the same nodes it will later read from (e.g., mapping feeds generation’s `column_plan`).
+* **One registry of rules** at the root; everything else references **short `rule` IDs** with numeric `delta`s only when they contributed.
+* **Each pass appends** to the same nodes it later reads from (e.g., mapping feeds generation’s `column_plan`).
 * **No raw cell data** in the artifact; issues state **where** and **what**, not the value—safer and smaller.
-
----

@@ -59,7 +59,7 @@ my-config/
 │  └─ after_validate.py
 └─ resources/            # (optional) dictionaries, patterns, etc.
    └─ synonyms.csv
-````
+```
 
 > **Default templates**: Most deployments won’t need to modify `row_types/` often. Ship sane defaults and allow local tweaks by adding or disabling files.
 
@@ -297,8 +297,6 @@ def validate_value(v, *, row_index: int, **_):
 * Runtime model (invocation & contexts): [04-runtime-model.md](./04-runtime-model.md)
 * Validation & diagnostics: [06-validation-and-diagnostics.md](./06-validation-and-diagnostics.md)
 
-````
-
 ---
 
 ## Updated artifact JSON (v1.1) — skeleton with row types
@@ -460,11 +458,4 @@ Below is the **minimal skeleton** showing how the new `row_types/` registry and 
     { "pass": 5,   "name": "generate",  "completed_at": "2025-10-29T12:45:29Z" }
   ]
 }
-````
-
-### What changed vs v1.0
-
-* **Row rules now live under `row_types/`**, and their registry namespace is `rules.row_types` with IDs like `row.header.text_density`.
-* **Per‑row traces** reference those IDs with a single numeric `delta`.
-* **Row labels** are open‑ended (`header`, `data`, `separator`, `group_header`, …) and listed under `manifest.row_types.order` for deterministic tiebreaks.
-* Everything else (column mapping, transforms, validations, output plan) stays the same—and still no raw cell data is stored in the artifact.
+```
