@@ -15,4 +15,4 @@ Use package hashing (for example, `package_sha256`) for auditing and provenance.
 Network access is off unless explicitly enabled for a call.
 
 ## What to read next
-Read `02-design-decisions/dd-0001-file-backed-configs.md` for the rationale behind file‑backed configs.
+Read `design-decisions/dd-0001-file-backed-configs.md` for the rationale behind file‑backed configs.

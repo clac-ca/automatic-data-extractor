@@ -1,6 +1,6 @@
 # Examples & Recipes
 
-Short, copy‑pasteable patterns you can adapt in column modules. Keep examples under 30 lines, prefer realistic values, and add warnings where helpful. Review `03-config-packages.md` for detector and transform contracts.
+Short, copy‑pasteable patterns you can adapt in column modules. Keep examples under 30 lines, prefer realistic values, and add warnings where helpful. Review `01-config-packages.md` for detector and transform contracts.
 
 ## Member ID
 
@@ -47,4 +47,4 @@ def transform(*, column: list[str], **_):
 Normalize case and whitespace early inside transforms. Prefer explicit parsing and error handling for numeric fields.
 
 ## What to read next
-Read `10-scaling-and-performance.md` for guidance on throughput and memory.
+Read `08-scaling-and-performance.md` for guidance on throughput and memory.

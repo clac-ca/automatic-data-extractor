@@ -15,4 +15,4 @@ Operate on vectors of values; optionally chunk when huge. Chunking can be added 
 Only as a last resort; document trade‑offs (throughput vs. simplicity) before adopting.
 
 ## What to read next
-Read `11-security-and-secrets.md` for guidance on handling secrets safely.
+Read `09-security-and-secrets.md` for guidance on handling secrets safely.

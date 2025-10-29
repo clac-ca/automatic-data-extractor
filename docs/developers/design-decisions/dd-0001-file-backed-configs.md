@@ -21,4 +21,4 @@ One folder per config; export/import by zipping the folder. Database stores meta
 
 ## Links
 
-- See: `../03-config-packages.md`
+- See: `../01-config-packages.md`

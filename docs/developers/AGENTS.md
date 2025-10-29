@@ -11,13 +11,13 @@ Audience: Humans and agents contributing developer‑focused documentation.
 
 ## Directory Layout & Naming
 
-- 00-templates/ — reusable page and snippet templates (do not publish content here).
-- 01-schemas/ — JSON Schemas used by docs; add examples that validate against them.
-- 02-design-decisions/ — permanent “DD” files capturing major decisions.
-- Top‑level numbered pages (e.g., `01-overview.md`, `05-mapping-format.md`).
+- templates/ — reusable page and snippet templates (do not publish content here).
+- schemas/ — JSON Schemas used by docs; add examples that validate against them.
+- design-decisions/ — permanent “DD” files capturing major decisions.
+- Top‑level numbered pages (e.g., `01-config-packages.md`, `03-mapping-format.md`).
 - Use two‑digit numeric prefixes to control order; keep existing numbers stable.
 
-## Page Structure (use 00-templates/page-template.md)
+## Page Structure (use templates/page-template.md)
 
 Every page should follow this order:
 
@@ -38,7 +38,7 @@ Optional: include the “Pipeline at a glance” block where relevant.
 - Diagrams: ASCII only, ≤ 80 chars wide, with a short title.
 - Code blocks: ≤ 30 lines. Indicate omissions with language‑appropriate comments (for example, `# ...` for Python/YAML/Bash and `// ...` for JS/JSON).
 - Do/Don’t boxes: use blockquotes with “Do:” and “Don’t:”.
-- Terminology: define in `02-glossary.md` once; link the first occurrence on a page.
+- Terminology: define in `glossary.md` once; link the first occurrence on a page.
 - Navigation: every page ends with “Next” and “Previous”.
 
 ## Snippet Conventions
@@ -49,9 +49,9 @@ Optional: include the “Pipeline at a glance” block where relevant.
 
 ## Cross‑Linking
 
-- Use relative links only (no absolute URLs). Example: `../02-glossary.md`.
-- When schemas are relevant, link into `01-schemas/…`.
-- Link to DDs under `02-design-decisions/` from the relevant pages.
+- Use relative links only (no absolute URLs). Example: `../glossary.md`.
+- When schemas are relevant, link into `schemas/…`.
+- Link to DDs under `design-decisions/` from the relevant pages.
 
 ## Design Decisions (DDs)
 
@@ -61,18 +61,13 @@ Optional: include the “Pipeline at a glance” block where relevant.
 
 ## Schemas
 
-- Keep JSON Schemas in `01-schemas/` and update references (e.g., `05-mapping-format.md`).
+- Keep JSON Schemas in `schemas/` and update references (e.g., `03-mapping-format.md`).
 - Provide small validating examples alongside narrative pages where useful.
 
 ## Review Checklist (PRs)
 
 - Page follows the template with Audience/Goal and Next/Previous links.
 - Examples ≤ 30 lines, use elisions where needed, and match snippet conventions.
-- First use of glossary terms links to `02-glossary.md`.
-- References to schemas point to `01-schemas/`.
+- First use of glossary terms links to `glossary.md`.
+- References to schemas point to `schemas/`.
 - If introducing/altering a big concept, add or update a DD.
-
-## Coordination
-
-- If work may overlap, use the repo’s work package flow to avoid collisions.
-- Keep commits scoped to a single page/topic when possible.

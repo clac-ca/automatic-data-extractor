@@ -22,4 +22,4 @@ Validation checks the shape of a config and the presence of expected functions b
 Validate, fix, and validate again. Run validation via the CLI or API.
 
 ## What to read next
-Read `09-examples-and-recipes.md` for small, copy‑pasteable patterns.
+Read `07-examples-and-recipes.md` for small, copy‑pasteable patterns.
