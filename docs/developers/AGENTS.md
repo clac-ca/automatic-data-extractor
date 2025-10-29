@@ -1,7 +1,5 @@
 # AGENTS.md — Developer Docs Authoring Guide
-
 Scope: This file governs all content under `docs/developers/`.
-Audience: Humans and agents contributing developer‑focused documentation.
 
 ## Goals
 

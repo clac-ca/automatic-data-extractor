@@ -1,0 +1,333 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact.v1.schema.json",
+  "title": "Artifact v1",
+  "type": "object",
+  "required": ["artifact_version", "job", "engine", "rules", "sheets", "pass_history"],
+  "properties": {
+    "artifact_version": { "const": "1.0" },
+    "job": {
+      "type": "object",
+      "required": ["job_id", "source_file", "config_id", "created_at"],
+      "properties": {
+        "job_id": { "type": "string", "minLength": 1 },
+        "source_file": { "type": "string", "minLength": 1 },
+        "config_id": { "type": "string", "minLength": 1 },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": true
+    },
+    "engine": {
+      "type": "object",
+      "required": ["writer_mode", "append_unmapped_columns", "unmapped_prefix"],
+      "properties": {
+        "writer_mode": { "type": "string", "minLength": 1 },
+        "append_unmapped_columns": { "type": "boolean" },
+        "unmapped_prefix": { "type": "string", "minLength": 0 }
+      },
+      "additionalProperties": true
+    },
+    "rules": {
+      "type": "object",
+      "required": ["row_detect", "column_detect", "transform", "validate"],
+      "properties": {
+        "row_detect": { "$ref": "#/$defs/ruleRegistry" },
+        "column_detect": { "$ref": "#/$defs/ruleRegistry" },
+        "transform": { "$ref": "#/$defs/ruleRegistry" },
+        "validate": { "$ref": "#/$defs/ruleRegistry" }
+      },
+      "additionalProperties": true
+    },
+    "sheets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/sheet" }
+    },
+    "output": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["format", "sheet", "path", "column_plan"],
+          "properties": {
+            "format": { "type": "string", "minLength": 1 },
+            "sheet": { "type": "string", "minLength": 1 },
+            "path": { "type": "string", "minLength": 1 },
+            "column_plan": { "$ref": "#/$defs/columnPlan" }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "summary": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["rows_written", "columns_written", "issues_found"],
+          "properties": {
+            "rows_written": { "type": "integer", "minimum": 0 },
+            "columns_written": { "type": "integer", "minimum": 0 },
+            "issues_found": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "pass_history": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/passRecord" }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "ruleRegistry": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/ruleDefinition" }
+    },
+    "ruleDefinition": {
+      "type": "object",
+      "required": ["impl", "version"],
+      "properties": {
+        "impl": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "sheet": {
+      "type": "object",
+      "required": ["id", "name", "tables"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "row_classification": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/rowClassificationEntry" }
+        },
+        "tables": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/table" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "rowClassificationEntry": {
+      "type": "object",
+      "required": ["row_index", "label", "confidence"],
+      "properties": {
+        "row_index": { "type": "integer", "minimum": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number" },
+        "scores": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "rule_traces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["rule", "delta"],
+            "properties": {
+              "rule": { "type": "string", "minLength": 1 },
+              "delta": {
+                "type": "object",
+                "additionalProperties": { "type": "number" }
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "table": {
+      "type": "object",
+      "required": ["id", "range", "data_range", "header", "columns"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "range": { "type": "string", "minLength": 1 },
+        "data_range": { "type": "string", "minLength": 1 },
+        "header": { "$ref": "#/$defs/header" },
+        "columns": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/column" }
+        },
+        "mapping": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/mappingEntry" }
+        },
+        "target_fields": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "analyze": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/analyzeStats" }
+        },
+        "transforms": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/transformEntry" }
+        },
+        "validation": { "$ref": "#/$defs/validation" }
+      },
+      "additionalProperties": true
+    },
+    "header": {
+      "type": "object",
+      "required": ["kind", "source_header"],
+      "properties": {
+        "kind": { "enum": ["raw", "synthetic"] },
+        "row_index": { "type": "integer", "minimum": 1 },
+        "source_header": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "column": {
+      "type": "object",
+      "required": ["column_id", "source_header"],
+      "properties": {
+        "column_id": { "type": "string", "minLength": 1 },
+        "source_header": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "mappingEntry": {
+      "type": "object",
+      "required": ["raw", "target_field", "score"],
+      "properties": {
+        "raw": {
+          "type": "object",
+          "required": ["column"],
+          "properties": {
+            "column": { "type": "string", "minLength": 1 },
+            "header": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "target_field": { "type": "string", "minLength": 1 },
+        "score": { "type": "number" },
+        "contributors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/contributor" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "contributor": {
+      "type": "object",
+      "required": ["rule", "delta"],
+      "properties": {
+        "rule": { "type": "string", "minLength": 1 },
+        "delta": { "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "analyzeStats": {
+      "type": "object",
+      "properties": {
+        "distinct": { "type": "integer", "minimum": 0 },
+        "empty": { "type": "integer", "minimum": 0 },
+        "mostly_alnum": { "type": "boolean" },
+        "mostly_lower": { "type": "boolean" },
+        "mostly_upper": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "transformEntry": {
+      "type": "object",
+      "required": ["target_field", "transform", "changed", "total"],
+      "properties": {
+        "target_field": { "type": "string", "minLength": 1 },
+        "transform": { "type": ["string", "null"] },
+        "changed": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "issues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/validationIssue" }
+        },
+        "summary_by_field": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "errors": { "type": "integer", "minimum": 0 },
+              "warnings": { "type": "integer", "minimum": 0 },
+              "missing": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "validationIssue": {
+      "type": "object",
+      "required": ["a1", "row_index", "target_field", "code", "severity", "message", "rule"],
+      "properties": {
+        "a1": { "type": "string", "minLength": 1 },
+        "row_index": { "type": "integer", "minimum": 1 },
+        "target_field": { "type": "string", "minLength": 1 },
+        "code": { "type": "string", "minLength": 1 },
+        "severity": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "rule": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "columnPlan": {
+      "type": "object",
+      "required": ["target"],
+      "properties": {
+        "target": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/targetColumnPlanEntry" }
+        },
+        "appended_unmapped": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/appendedColumnPlanEntry" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "targetColumnPlanEntry": {
+      "type": "object",
+      "required": ["field", "output_header", "order"],
+      "properties": {
+        "field": { "type": "string", "minLength": 1 },
+        "output_header": { "type": "string", "minLength": 1 },
+        "order": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "appendedColumnPlanEntry": {
+      "type": "object",
+      "required": ["source_header", "output_header", "order"],
+      "properties": {
+        "source_header": { "type": "string", "minLength": 1 },
+        "output_header": { "type": "string", "minLength": 1 },
+        "order": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "passRecord": {
+      "type": "object",
+      "required": ["pass", "name", "completed_at"],
+      "properties": {
+        "pass": { "type": "number" },
+        "name": { "type": "string", "minLength": 1 },
+        "completed_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": true
+    }
+  }
+}
