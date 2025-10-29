@@ -21,9 +21,7 @@ if config.config_file_name is not None:
 
 def _import_feature_models() -> None:
     import backend.app.features.auth.models  # noqa: F401
-    import backend.app.features.configs.models  # noqa: F401
     import backend.app.features.documents.models  # noqa: F401
-    import backend.app.features.jobs.models  # noqa: F401
     import backend.app.features.roles.models  # noqa: F401
     import backend.app.features.system_settings.models  # noqa: F401
     import backend.app.features.users.models  # noqa: F401

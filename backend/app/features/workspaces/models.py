@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from sqlalchemy import Boolean, ForeignKey, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -11,12 +11,9 @@ from backend.app.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
 
 from ..users.models import User
 
-if TYPE_CHECKING:  # pragma: no cover - typing aid
-    from ..configs.models import Config
-
 
 class Workspace(ULIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Container grouping documents, configuration, and members."""
+    """Container grouping documents and workspace members."""
 
     __tablename__ = "workspaces"
     __ulid_field__ = "workspace_id"
@@ -24,22 +21,6 @@ class Workspace(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     settings: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    active_config_id: Mapped[str | None] = mapped_column(
-        String(26),
-        ForeignKey("configs.config_id", ondelete="SET NULL"),
-        nullable=True,
-    )
-    active_config: Mapped["Config | None"] = relationship(
-        "Config",
-        foreign_keys="Workspace.active_config_id",
-        lazy="joined",
-    )
-    configs: Mapped[list["Config"]] = relationship(
-        "Config",
-        back_populates="workspace",
-        cascade="all, delete-orphan",
-    )
-
     memberships: Mapped[list[WorkspaceMembership]] = relationship(
         "WorkspaceMembership",
         back_populates="workspace",

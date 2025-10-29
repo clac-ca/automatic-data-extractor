@@ -1,5 +1,7 @@
-"""Configuration engine v0.4 package."""
+"""Placeholder package for future configuration features."""
 
-from .models import Config, ConfigStatus
+from __future__ import annotations
 
-__all__ = ["Config", "ConfigStatus"]
+from .router import router
+
+__all__ = ["router"]

@@ -39,12 +39,8 @@ def upgrade() -> None:
     _create_role_permissions()
     _create_principals()
     _create_role_assignments()
-    _create_configs()
-    _create_config_versions()
-    _create_config_files()
     _create_documents()
     _create_document_tags()
-    _create_jobs(bind)
     _create_api_keys()
     _create_system_settings()
 
@@ -320,90 +316,6 @@ def _create_role_assignments() -> None:
         ["role_id", "scope_type", "scope_id"],
         unique=False,
     )
-    op.create_index(
-        "role_assignments_principal_role_idx",
-        "role_assignments",
-        ["principal_id", "role_id"],
-        unique=False,
-    )
-def _create_configs() -> None:
-    op.create_table(
-        "configs",
-        sa.Column("config_id", sa.String(length=26), primary_key=True),
-        sa.Column("workspace_id", sa.String(length=26), nullable=False),
-        sa.Column("slug", sa.String(length=120), nullable=False),
-        sa.Column("title", sa.String(length=255), nullable=False),
-        sa.Column("created_by", sa.String(length=26), nullable=True),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("deleted_by", sa.String(length=26), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.workspace_id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["created_by"], ["users.user_id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["deleted_by"], ["users.user_id"], ondelete="SET NULL"),
-        sa.UniqueConstraint("workspace_id", "slug"),
-    )
-
-
-def _create_config_versions() -> None:
-    op.create_table(
-        "config_versions",
-        sa.Column("config_version_id", sa.String(length=26), primary_key=True),
-        sa.Column("config_id", sa.String(length=26), nullable=False),
-        sa.Column("semver", sa.String(length=32), nullable=False),
-        sa.Column("status", sa.String(length=12), nullable=False),
-        sa.Column("message", sa.Text(), nullable=True),
-        sa.Column("manifest_json", sa.Text(), nullable=False),
-        sa.Column("files_hash", sa.String(length=64), nullable=False),
-        sa.Column("created_by", sa.String(length=26), nullable=True),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("deleted_by", sa.String(length=26), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("activated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["config_id"], ["configs.config_id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["created_by"], ["users.user_id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["deleted_by"], ["users.user_id"], ondelete="SET NULL"),
-        sa.CheckConstraint(
-            "status IN ('active','inactive')",
-            name="config_versions_status_ck",
-        ),
-    )
-    op.create_index(
-        "config_versions_active_unique_idx",
-        "config_versions",
-        ["config_id"],
-        unique=True,
-        sqlite_where=sa.text("status = 'active' AND deleted_at IS NULL"),
-        postgresql_where=sa.text("status = 'active' AND deleted_at IS NULL"),
-    )
-
-
-def _create_config_files() -> None:
-    op.create_table(
-        "config_files",
-        sa.Column("config_file_id", sa.String(length=26), primary_key=True),
-        sa.Column("config_version_id", sa.String(length=26), nullable=False),
-        sa.Column("path", sa.String(length=512), nullable=False),
-        sa.Column(
-            "language",
-            sa.String(length=50),
-            nullable=False,
-            server_default=sa.text("'python'"),
-        ),
-        sa.Column("code", sa.Text(), nullable=False),
-        sa.Column("sha256", sa.String(length=64), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["config_version_id"],
-            ["config_versions.config_version_id"],
-            ondelete="CASCADE",
-        ),
-        sa.UniqueConstraint("config_version_id", "path"),
-    )
-
-
 def _create_documents() -> None:
     op.create_table(
         "documents",
@@ -434,7 +346,6 @@ def _create_documents() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("deleted_by_user_id", sa.String(length=26), nullable=True),
-        sa.Column("produced_by_job_id", sa.String(length=26), nullable=True),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.workspace_id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["deleted_by_user_id"], ["users.user_id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(
@@ -479,12 +390,6 @@ def _create_documents() -> None:
         ["workspace_id", "uploaded_by_user_id"],
         unique=False,
     )
-    op.create_index(
-        "documents_produced_by_job_id_idx",
-        "documents",
-        ["produced_by_job_id"],
-        unique=False,
-    )
 
 
 def _create_document_tags() -> None:
@@ -507,53 +412,6 @@ def _create_document_tags() -> None:
         ["tag"],
         unique=False,
     )
-
-
-def _create_jobs(bind: sa.engine.Connection) -> None:
-    op.create_table(
-        "jobs",
-        sa.Column("job_id", sa.String(length=26), primary_key=True),
-        sa.Column("workspace_id", sa.String(length=26), nullable=False),
-        sa.Column("config_version_id", sa.String(length=26), nullable=False),
-        sa.Column("status", sa.String(length=20), nullable=False),
-        sa.Column("created_by_user_id", sa.String(length=26), nullable=True),
-        sa.Column("input_document_id", sa.String(length=26), nullable=False),
-        sa.Column("run_key", sa.String(length=64), nullable=True),
-        sa.Column("metrics", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
-        sa.Column("logs", sa.JSON(), nullable=False, server_default=sa.text("'[]'")),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.workspace_id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["config_version_id"],
-            ["config_versions.config_version_id"],
-            ondelete="RESTRICT",
-        ),
-        sa.ForeignKeyConstraint(["created_by_user_id"], ["users.user_id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["input_document_id"], ["documents.document_id"], ondelete="RESTRICT"),
-    )
-    op.create_index("jobs_workspace_id_idx", "jobs", ["workspace_id"], unique=False)
-    op.create_index("jobs_input_document_id_idx", "jobs", ["input_document_id"], unique=False)
-    if bind.dialect.name == "sqlite":
-        with op.batch_alter_table("documents") as batch_op:
-            batch_op.create_foreign_key(
-                "documents_produced_by_job_id_fkey",
-                "jobs",
-                ["produced_by_job_id"],
-                ["job_id"],
-                ondelete="SET NULL",
-            )
-    else:
-        op.create_foreign_key(
-            "documents_produced_by_job_id_fkey",
-            "documents",
-            "jobs",
-            ["produced_by_job_id"],
-            ["job_id"],
-            ondelete="SET NULL",
-        )
-
-
 def _create_api_keys() -> None:
     op.create_table(
         "api_keys",
