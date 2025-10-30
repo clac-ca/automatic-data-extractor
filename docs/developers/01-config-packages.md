@@ -26,7 +26,6 @@ A config is just a folder (or zip). You can export and store it under version co
 │  ├─ after_mapping.py
 │  ├─ after_transform.py
 │  └─ after_validate.py
-└─ 📁 resources/          # Optional lookups/dictionaries for your rules (no secrets)
 ```
 
 **How the parts line up with the passes**
@@ -221,7 +220,6 @@ Your `manifest.json` defines engine defaults, output behavior, and the **target 
 * `columns.order` is the **output order** of target fields.
 * `label` values become **output headers** in the normalized sheet.
 * Keep `columns.order` and `columns.meta` **in sync** (same field keys).
-* Prefer dictionaries/files under `resources/` over network calls ( `allow_net` is off by default).
 
 ---
 
