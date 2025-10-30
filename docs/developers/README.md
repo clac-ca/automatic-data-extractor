@@ -57,30 +57,10 @@ By the end, the artifact becomes a complete, transparent record of *how* ADE int
 
 ---
 
-## A few terms (plain language first)
-
-These names appear throughout the docs and in the artifact.
-
-- **source header** — the header text ADE finds in your input (cleaned/flattened)
-- **target field** — the field name your config defines (what you want in the normalized output)
-- **output header** — the label written to the normalized file for that target field
-- **raw column** — a physical column in an input table (`col_1`, `col_2`, …)
-- **mapping** — a decision: “raw column X **is** target field Y (score Z)”
-- **append unmapped** — if on (default), any raw columns that didn’t map are appended at the right as `raw_<sanitized_header>`
-
-**Stable IDs within a job**  
-`sheets: sheet_1…` · `tables (per sheet): table_1…` · `columns (per table): col_1…` · `rows: 1‑based`
-
-*Why this matters:* consistent names make the artifact readable and let you cross‑reference logs, screenshots, and code with ease.
-
----
-
 ## How ADE points to places in a sheet (A1 ranges)
 
-**What is this section?**  
 ADE uses **Excel A1 notation** to identify cells and ranges (e.g., `"B4"`, `"B4:G159"`). This is the same notation you see in Excel’s name box, so it’s immediately recognizable.
 
-**Why it matters:**  
 When ADE reports validation issues or table bounds, you can jump to the exact spot in the original file.
 
 - **Cell:** `"B4"`  
@@ -90,12 +70,10 @@ When ADE reports validation issues or table bounds, you can jump to the exact sp
 
 ---
 
-## The artifact JSON — the story of a job
+## The artifact JSON
 
-**What is it?**  
 A compact, append‑only JSON file that records how ADE read, mapped, transformed, validated, and wrote your data.
 
-**Why it matters:**  
 It’s your **audit trail** and **API** in one place: every pass reads from it and writes back to it. It stores **decisions and traces**, not raw cell data.
 
 **Root (minimal shape)**
@@ -151,9 +129,9 @@ Each subsection starts by explaining the *why*, then shows a **small** JSON slic
 
 ### Pass 1 — Find structure (row detection)
 
-**Plain language:** ADE scans rows to decide which row is the **header** and where each **table** begins and ends.
+ADE scans rows to decide which row is the **header** and where each **table** begins and ends.
 
-**Why this matters:** later phases rely on good bounds and header text to make correct mappings.
+Later phases rely on good bounds and header text to make correct mappings.
 
 **Appends:** `sheets[].row_classification`, `sheets[].tables[]`
 
@@ -342,9 +320,7 @@ Each subsection starts by explaining the *why*, then shows a **small** JSON slic
 
 ---
 
-## Minimal artifact skeleton (bookmark this)
-
-When in doubt, this shows **where** each pass writes:
+## Minimal artifact skeleton
 
 ```json
 {
