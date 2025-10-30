@@ -22,16 +22,16 @@ This streaming approach keeps it fast and efficient, even for very large files.
 
 ADE processes files through several small, logical steps — each one building on the last:
 
+```mermaid
+flowchart TD
+    A[📂 Input File] --> B[Pass 1: Find tables<br/>(rows → structure)]
+    B --> C[Pass 2: Name columns<br/>(columns → mapping)]
+    C --> D[Pass 3: Transform while writing rows<br/>(→ transforms summary)]
+    D --> E[Pass 4: Validate while writing rows<br/>(→ validation issues)]
+    E --> F[Pass 5: Finish normalized workbook<br/>(→ output + summary)]
+    F --> G[📘 Clean, structured output]
 ```
 
-Input file
-├─ Pass 1: Find tables (rows)              → structure
-├─ Pass 2: Name columns (columns)          → mapping
-├─ Pass 3: Transform while writing rows    → transforms summary
-├─ Pass 4: Validate while writing rows     → validation issues
-└─ Pass 5: Finish normalized workbook      → output + summary
-
-```
 
 ### **3. Configs**
 
@@ -384,7 +384,7 @@ When in doubt, this shows **where** each pass writes:
 * A **config package** defines your rules (detectors, transforms, validations) and column order/labels. Start here to customize behavior.
   See **[Config Packages](./01-config-packages.md)** for folder layout, manifest schema, and script contracts.
 * A **job** applies one active config to one file, building the artifact as it runs.
-  See **[Jobs — Multi‑Pass Pipeline](./02-jobs-pipeline.md)** for execution details and streaming behavior.
+See **[Job Orchestration](./02-job-orchestration.md)** for execution details and streaming behavior.
 
 ---
 
@@ -401,5 +401,5 @@ When in doubt, this shows **where** each pass writes:
 ### Where to go next
 
 * Configure rules and structure: **[01‑config‑packages.md](./01-config-packages.md)**
-* Understand the engine passes: **[02‑jobs‑pipeline.md](./02-jobs-pipeline.md)**
-* Browse definitions quickly: **[glossary.md](./glossary.md)**
+* Understand the engine passes: **[02-job-orchestration.md](./02-job-orchestration.md)**
+* Browse definitions quickly: **[12-glossary.md](./12-glossary.md)**

@@ -102,9 +102,9 @@ def transform(*, values: list, **_):
 ## What’s next
 
 - See structure and scripts in [01-config-packages.md](./01-config-packages.md)
-- Read the pass‑by‑pass flow in [02-jobs-pipeline.md](./02-jobs-pipeline.md)
+- Read the pass-by-pass flow in [02-job-orchestration.md](./02-job-orchestration.md)
 
 ---
 
-Previous: [README.md](./README.md)  
-Next: [01-config-packages.md](./01-config-packages.md)
+Previous: [11-troubleshooting.md](./11-troubleshooting.md)  
+Next: [13-design-decisions.md](./13-design-decisions.md)

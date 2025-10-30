@@ -21,4 +21,4 @@ Four passes: (1) row analysis & headers, (2) detection & mapping (sample‑based
 
 ## Links
 
-- See: `../02-jobs-pipeline.md`
+- See: `../02-job-orchestration.md`

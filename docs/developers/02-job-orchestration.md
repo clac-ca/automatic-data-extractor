@@ -1,6 +1,6 @@
 # Jobs — Multi‑Pass Pipeline (Artifact v1.1)
 
-A [job](./glossary.md) turns an input file into a normalized spreadsheet using the active [config](./glossary.md). The flow is simple and explainable: detect tables (rows), map **raw columns → target fields** (columns), and generate a normalized workbook while applying **transform** and **validate** inline. One **artifact JSON** is created at job start and enriched across passes.
+A [job](./12-glossary.md) turns an input file into a normalized spreadsheet using the active [config](./12-glossary.md). The flow is simple and explainable: detect tables (rows), map **raw columns → target fields** (columns), and generate a normalized workbook while applying **transform** and **validate** inline. One **artifact JSON** is created at job start and enriched across passes.
 
 > **At a glance**
 >
@@ -24,8 +24,8 @@ Input file
 
 ## Before you begin
 
-- Ensure exactly one **active** [config](./glossary.md) is set for the target [workspace](./glossary.md).
-- Skim the [Glossary](./glossary.md) for **source header**, **target field**, **output header**, and **mapping**.
+- Ensure exactly one **active** [config](./12-glossary.md) is set for the target [workspace](./12-glossary.md).
+- Skim the [Glossary](./12-glossary.md) for **source header**, **target field**, **output header**, and **mapping**.
 - Large files are fine: the writer streams **row by row**; transforms/validations run on each value as it is written.
 
 ---
@@ -242,5 +242,10 @@ jobs/<job_id>/
 ## What’s next
 
 * See config anatomy in [01-config-packages.md](./01-config-packages.md)
-* Review script invocation details in [04-runtime-model.md](./04-runtime-model.md)
-* Troubleshoot validations in [06-validation-and-diagnostics.md](./06-validation-and-diagnostics.md)
+* Review script invocation details in [05-pass-transform-values.md](./05-pass-transform-values.md)
+* Troubleshoot validations in [06-pass-validate-values.md](./06-pass-validate-values.md)
+
+---
+
+Previous: [01-config-packages.md](./01-config-packages.md)  
+Next: [03-pass-find-tables-and-headers.md](./03-pass-find-tables-and-headers.md)
