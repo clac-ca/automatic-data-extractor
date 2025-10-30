@@ -16,11 +16,11 @@ ADE writes a new sheet with stable headers and column ordering derived from the 
 This pass produces the durable deliverable that downstream systems consume. By streaming rows while writing, ADE keeps memory usage low but still produces a repeatable, auditable output.
 
 ## See also
-- [04-pass-map-columns-to-target-fields.md](./04-pass-map-columns-to-target-fields.md)
-- [05-pass-transform-values.md](./05-pass-transform-values.md)
-- [06-pass-validate-values.md](./06-pass-validate-values.md)
+- [Pass 2 — Map columns](./04-pass-map-columns-to-target-fields.md)
+- [Pass 3 — Transform values](./05-pass-transform-values.md)
+- [Pass 4 — Validate values](./06-pass-validate-values.md)
 
 ---
 
-Previous: [06-pass-validate-values.md](./06-pass-validate-values.md)  
-Next: [10-examples-and-recipes.md](./10-examples-and-recipes.md)
+Previous: [Pass 4 — Validate values](./06-pass-validate-values.md)  
+Next: [Examples & recipes](./10-examples-and-recipes.md)

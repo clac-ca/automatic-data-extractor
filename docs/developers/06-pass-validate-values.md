@@ -26,9 +26,9 @@ Validation traces follow the standard `{ "path": "...", "level": "warning|error"
 3. ADE attaches diagnostics to `tables[].validate[]` and increments counters.
 
 ## What to read next
-Generate the final workbook in [07-pass-generate-normalized-workbook.md](./07-pass-generate-normalized-workbook.md).
+Generate the final workbook in the [Pass 5 guide](./07-pass-generate-normalized-workbook.md).
 
 ---
 
-Previous: [05-pass-transform-values.md](./05-pass-transform-values.md)  
-Next: [07-pass-generate-normalized-workbook.md](./07-pass-generate-normalized-workbook.md)
+Previous: [Pass 3 — Transform values](./05-pass-transform-values.md)  
+Next: [Pass 5 — Generate normalized workbook](./07-pass-generate-normalized-workbook.md)

@@ -15,10 +15,10 @@ ADE scans each sheet row by row to decide where tabular data begins and ends and
 Accurate table bounds and header text feed directly into column mapping in the next pass. Without a confident header row, downstream passes cannot map columns to target fields or write a stable normalized workbook.
 
 ## See also
-- [02-job-orchestration.md](./02-job-orchestration.md)
-- [04-pass-map-columns-to-target-fields.md](./04-pass-map-columns-to-target-fields.md)
+- [Job orchestration guide](./02-job-orchestration.md)
+- [Pass 2 — Map columns](./04-pass-map-columns-to-target-fields.md)
 
 ---
 
-Previous: [02-job-orchestration.md](./02-job-orchestration.md)  
-Next: [04-pass-map-columns-to-target-fields.md](./04-pass-map-columns-to-target-fields.md)
+Previous: [Job orchestration guide](./02-job-orchestration.md)  
+Next: [Pass 2 — Map columns](./04-pass-map-columns-to-target-fields.md)

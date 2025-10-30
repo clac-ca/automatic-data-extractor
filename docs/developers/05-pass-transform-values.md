@@ -27,9 +27,9 @@ Secrets are never returned. They are only injected into the child process enviro
 - `pass_history[]` entry recording transformed rows and warnings
 
 ## What’s next
-- Validate results in [06-pass-validate-values.md](./06-pass-validate-values.md).
+- Validate results in the [validation guide](./06-pass-validate-values.md).
 
 ---
 
-Previous: [04-pass-map-columns-to-target-fields.md](./04-pass-map-columns-to-target-fields.md)  
-Next: [06-pass-validate-values.md](./06-pass-validate-values.md)
+Previous: [Pass 2 — Map columns](./04-pass-map-columns-to-target-fields.md)  
+Next: [Pass 4 — Validate values](./06-pass-validate-values.md)

@@ -24,18 +24,18 @@ Input workbook
 * **Explainable**: rule scores and contributors show why a decision was made.
 * **Safe**: the artifact stores locations and decisions, **not raw cell data**.
 
-Deep dive: **[02‑Job Orchestration](./02-job-orchestration.md)**
+Deep dive: see **[job orchestration](./02-job-orchestration.md)**
 
 ---
 
 ## Core concepts (quick glossary)
 
-* **Config package** — a portable folder that tells ADE how to find tables, map columns, transform, and validate. You create/edit configs in the **web UI** and can export/import them as a **.zip**. ADE versions configs automatically.
+* **Config package** — a portable folder that tells ADE how to find tables, map columns, transform, and validate. You create/edit configs in the **web UI** and can export/import them as a **.zip**. ADE versions configs automatically. See the **[config package guide](./01-config-packages.md)** for the structure and lifecycle.
 * **Target field** — a normalized column you want in the output (e.g., `member_id`, `sin`, `start_date`).
-* **Artifact JSON** — a single file ADE builds as it runs; it records structure, mappings, transforms, validations, and output info. Use it for **audit and troubleshooting**.
+* **Artifact JSON** — a single file ADE builds as it runs; it records structure, mappings, transforms, validations, and output info. Use it for **audit and troubleshooting** (see the **[artifact reference](./14-job_artifact_json.md)**).
 * **A1 ranges** — ADE uses Excel A1 notation to reference places (e.g., `"B4"`, `"B4:G159"`).
 
-Reference: **[Glossary](./glossary.md)**
+Reference: **[glossary](./12-glossary.md)**
 
 ---
 
@@ -61,11 +61,11 @@ A config package is a **folder (or zip)** you manage in the UI:
 │  └─ after_validate.py
 ```
 
-* **Row rules** (`row_types/*.py`) help ADE **find tables & headers**.
-* **Column rules** (`columns/<field>.py`) **map**, then optionally **transform** and **validate** one **target field** each.
-* **Hooks** let you run custom logic around stages (all receive a **read‑only artifact**).
+* **Row rules** (`row_types/*.py`) help ADE **find tables & headers**. Learn how they score rows in the **[Pass 1 guide](./03-pass-find-tables-and-headers.md)**.
+* **Column rules** (`columns/<field>.py`) **map**, then optionally **transform** and **validate** one **target field** each. Runtime behavior is detailed across the **[mapping](./04-pass-map-columns-to-target-fields.md)**, **[transform](./05-pass-transform-values.md)**, and **[validation](./06-pass-validate-values.md)** pass guides.
+* **Hooks** let you run custom logic around stages. Hook timing is described in the **[job orchestration guide](./02-job-orchestration.md)**.
 
-Details & contracts: **[01‑Config Packages — Behavior as Code](./01-config-packages.md)**
+Details & contracts: see the **[config package guide](./01-config-packages.md)**
 
 ---
 
@@ -106,14 +106,14 @@ Minimal example snippet:
 }
 ```
 
-Full example, schema, and Pydantic models: **[14‑Job Artifact JSON](./14-job_artifact_json.md)**
+Full example, schema, and Pydantic models: see the **[artifact reference](./14-job_artifact_json.md)**
 
 ---
 
 ## Development workflow (UI‑first, versioned)
 
-1. **Create a draft config** in the UI (the UI scaffolds your package).
-2. **Edit scripts** and `manifest.json` (tests and sample runs encouraged).
+1. **Create a draft config** in the UI (the UI scaffolds your package). The layout mirrors the **[config package guide](./01-config-packages.md#whats-inside-a-config-package)**.
+2. **Edit scripts** and `manifest.json` (tests and sample runs encouraged). Borrow patterns from **[examples & recipes](./10-examples-and-recipes.md)** or consult **[troubleshooting tips](./11-troubleshooting.md)** while iterating.
 3. **Activate** when ready (ADE archives the previously active config).
 4. **Export/import** as a `.zip` to share across workspaces.
 5. **Roll back** by cloning an archived config to a new draft and re‑activating.
@@ -124,22 +124,22 @@ Validation layers:
 * **L2 (client)**: Static Python checks (syntax & signatures)
 * **L3 (server)**: Sandboxed import + tiny dry‑runs; builds the **rule registry** stored in the artifact
 
-Details: **[01‑Config Packages](./01-config-packages.md)**
+Details: **[config package guide](./01-config-packages.md)**
 
 ---
 
 ## Performance & safety
 
-* Detectors run on **samples**, not full columns; keep them light and deterministic.  You can adjust the number of samples that are evaluated in the manifest.json (inside the GUI).
-* Transforms/validators operate column‑wise while ADE writes rows (streaming writer).
-* Runtime is sandboxed with time/memory limits; network is **off** by default (`allow_net: false` in manifest.json).
+* Detectors run on **samples**, not full columns; keep them light and deterministic. You can adjust the sample count in the manifest (see the **[mapping pass guide](./04-pass-map-columns-to-target-fields.md#shape-high-level)**).
+* Transforms/validators operate column-wise while ADE writes rows (streaming writer); passes 3–4 are described in the **[transform guide](./05-pass-transform-values.md)** and **[validation guide](./06-pass-validate-values.md)**.
+* Runtime is sandboxed with time/memory limits; network is **off** by default (`allow_net: false` in manifest.json). Lifecycle hooks and limits live in the **[job orchestration guide](./02-job-orchestration.md)**.
 
 ---
 
 ## Where to go next
 
-* **Config anatomy & contracts** → **[01‑Config Packages](./01-config-packages.md)**
-* **Pass‑by‑pass execution** → **[02‑Job Orchestration](./02-job-orchestration.md)**
-* **Artifact spec, schema, and models** → **[14‑Job Artifact JSON](./14-job_artifact_json.md)**
-* **Glossary** → **[Shared terminology](./glossary.md)**
-* **Snippet conventions** → **[templates/snippet-conventions.md](./templates/snippet-conventions.md)**
+* **Config anatomy & contracts** → **[Config package guide](./01-config-packages.md)**
+* **Pass-by-pass execution** → **[Job orchestration guide](./02-job-orchestration.md)**
+* **Artifact spec, schema, and models** → **[Artifact reference](./14-job_artifact_json.md)**
+* **Glossary** → **[Shared terminology](./12-glossary.md)**
+* **Snippet conventions** → **[Snippet conventions](./templates/snippet-conventions.md)**

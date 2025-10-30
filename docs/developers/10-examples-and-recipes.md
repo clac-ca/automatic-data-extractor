@@ -1,6 +1,6 @@
 # Examples & Recipes
 
-Short, copy‑pasteable patterns you can adapt in column modules. Keep examples under 30 lines, prefer realistic values, and add warnings where helpful. Review `01-config-packages.md` for detector and transform contracts.
+Short, copy‑pasteable patterns you can adapt in column modules. Keep examples under 30 lines, prefer realistic values, and add warnings where helpful. Review the [config package guide](./01-config-packages.md) for detector and transform contracts.
 
 ## Member ID
 
@@ -135,15 +135,15 @@ def validate(*, values: list, field_meta: dict, **_):
 Activate the config if needed, upload a workbook, and run the job. ADE streams rows, applies your rules, and writes `normalized.xlsx`.
 
 4. **Inspect the artifact (`artifact.json`)**  
-Confirm mapping scores, see transform warnings, and review validation issues with A1 locations. Full artifact reference: [14-Job Artifact JSON](./14-job_artifact_json.md).
+Confirm mapping scores, see transform warnings, and review validation issues with A1 locations. For deeper detail, see the [artifact reference](./14-job_artifact_json.md).
 
 ## Notes
 Normalize case and whitespace early inside transforms. Prefer explicit parsing and error handling for numeric fields.
 
 ## What to read next
-Jump to [11-troubleshooting.md](./11-troubleshooting.md) for common failure modes and fixes.
+Jump to the [troubleshooting tips](./11-troubleshooting.md) for common failure modes and fixes.
 
 ---
 
-Previous: [07-pass-generate-normalized-workbook.md](./07-pass-generate-normalized-workbook.md)  
-Next: [11-troubleshooting.md](./11-troubleshooting.md)
+Previous: [Pass 5 — Generate normalized workbook](./07-pass-generate-normalized-workbook.md)  
+Next: [Troubleshooting tips](./11-troubleshooting.md)

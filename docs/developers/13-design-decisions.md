@@ -25,5 +25,5 @@ If you are unsure, err on the side of drafting one. The DD template keeps them s
 
 ---
 
-Previous: [12-glossary.md](./12-glossary.md)  
-Next: [README.md](./README.md)
+Previous: [Shared terminology](./12-glossary.md)  
+Next: [Developer overview](./README.md)

@@ -52,10 +52,10 @@ See `schemas/artifact.v1.1.schema.json` (tables → `mapping`) for the authorita
 
 ## What’s next
 
-- Learn how transforms run in [05-pass-transform-values.md](./05-pass-transform-values.md).
-- See how mappings are produced in [02-job-orchestration.md](./02-job-orchestration.md).
+- Learn how transforms run in the [transform guide](./05-pass-transform-values.md).
+- See how mappings play into the full flow in the [job orchestration guide](./02-job-orchestration.md).
 
 ---
 
-Previous: [03-pass-find-tables-and-headers.md](./03-pass-find-tables-and-headers.md)  
-Next: [05-pass-transform-values.md](./05-pass-transform-values.md)
+Previous: [Pass 1 — Find tables & headers](./03-pass-find-tables-and-headers.md)  
+Next: [Pass 3 — Transform values](./05-pass-transform-values.md)
