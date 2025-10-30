@@ -1,4 +1,4 @@
-# ADE — Multi-Pass Overview (Artifact-First, Beginner-Friendly)
+# ADE — Developer Guide
 
 ## What is ADE?
 
