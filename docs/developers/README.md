@@ -9,40 +9,59 @@ In short, ADE helps you go from *unstructured input* to *reliable output* withou
 
 ---
 
-## Key concepts
+## Key Concepts
 
-Let’s break down what makes ADE work:
+Let’s break down what makes ADE work.
 
-### **1. Streaming I/O**
+#### **1. Streaming I/O — ADE reads files as a stream, not all at once.**
 
-ADE reads spreadsheets *piece by piece* rather than loading the whole file into memory.
-This streaming approach keeps it fast and efficient, even for very large files.
+Instead of loading entire spreadsheets into memory, ADE reads them *row by row*.
+This streaming approach keeps processing fast and memory-efficient, even for huge files.
+It also enables early detection of structure — ADE can begin identifying headers and tables before the full file has been read.
 
-### **2. Passes**
+---
 
-ADE processes files through several small, logical steps — each one building on the last:
+#### **2. Passes — ADE cleans data step-by-step through a simple pipeline.**
+
+ADE processes files through several small, logical passes — each one building on the last:
 
 ```mermaid
 flowchart LR
     A["**Input File**"] --> B["**Pass 1 – Find Tables**<br/>(rows → structure)"]
     B --> C["**Pass 2 – Name Columns**<br/>(columns → mapping)"]
-    C --> D["**Pass 3 – Transform Rows**<br/>(→ transform summary)"]
-    D --> E["**Pass 4 – Validate Rows**<br/>(→ validation issues)"]
+    C --> D["**Pass 3 – Transform Values**<br/>(optional per column)"]
+    D --> E["**Pass 4 – Validate Values**<br/>(optional per column)"]
     E --> F["**Pass 5 – Finalize Workbook**<br/>(→ output + summary)"]
     F --> G["**Clean Structured Output**"]
 ```
 
+Each pass has a clear, focused purpose:
 
-### **3. Configs**
+* **Pass 1 — Find Tables:** Scans the spreadsheet row-by-row to identify table boundaries and headers.
+* **Pass 2 — Name Columns:** Matches each column to a known field (like *Employee ID* or *Start Date*) using detection rules from the config.
+* **Pass 3 — Transform Values (optional):**
+  If a column defines a `transform` function, ADE calls it for each cell to clean or standardize the value (e.g., trim spaces, fix date formats).
+  The transformed value replaces the original in memory — nothing is deleted or lost.
+* **Pass 4 — Validate Values (optional):**
+  If the column defines a `validate` rule, ADE checks each value (e.g., must match `YYYY-MM-DD`, must be numeric).
+  Validation results are recorded for reporting but never alter the data itself.
+* **Pass 5 — Finalize Workbook:** Writes the cleaned and validated data into a normalized output file, with summaries of transformations and issues.
 
-All the rules that tell ADE *how* to process a file live inside a **config package** — a portable folder of small Python scripts.
-When you run a **job**, ADE uses one config for one file, ensuring the process is deterministic and fully reproducible.
+---
 
-### **4. Artifact JSON**
+#### **3. Config Packages — Rules live in portable, versioned folders.**
 
-Behind the scenes, ADE creates and updates a single **artifact JSON** file during each run.
-Think of this as a detailed journal — it records every table found, every mapping made, every rule applied, and every issue detected.
-This artifact isn’t just a log — it’s a complete data model that shows *how* your messy spreadsheet became clean.
+All processing logic comes from a **config package**: a small folder of Python scripts that describe how to detect rows, name columns, and (optionally) transform or validate values.
+Because configs are just files, you can version-control them, share them between environments, and activate them per workspace.
+This makes ADE’s behavior fully deterministic and reproducible.
+
+---
+
+#### **4. Artifact JSON — One evolving object carries context through every pass.**
+
+During a job, ADE maintains a single **artifact JSON** file that holds the current state of processing.
+It begins with basic structure (sheets, bounds, headers) and accumulates mappings, transformations, and validation results as passes run.
+By the end, the artifact becomes a complete, transparent record of *how* ADE interpreted and cleaned the input file — perfect for audits, debugging, and reproducibility.
 
 ---
 
