@@ -1,36 +1,32 @@
 # Config Packages — Behavior as Code
 
-A **config package** tells ADE how to **find tables**, **identify columns**, **transform values**, and **flag issues** — all with small, testable Python scripts. Workspace owners create and manage configs in the ADE front end, making ADE a configurable platform rather than a fixed parser. Each config is a self‑contained, versioned unit that ADE can execute safely and repeatably.
+A **config package** is a versioned folder of Python scripts and a manifest that defines how ADE interprets, transforms, and validates spreadsheets.
 
-> **Why this matters**
->
-> * You edit behavior without touching backend code.
-> * Rules live alongside a versioned manifest you can review and test.
-> * Jobs record the exact config (and rule hashes) they used for deterministic, auditable runs.
+Config packages are created and managed through the ADE GUI but can be exported or imported across workspaces. ADE automatically versions each change, allowing you to test configs safely, restore older versions, or promote a validated config to production.
 
 ---
 
 ## What’s inside a config package
 
-A config is just a folder (or zip). You can put it under version control and move it between environments.
+A config is just a folder (or zip). You can export and store it under version control or export/import between environments.
 
 ```text
 📁 my-config/
-├─ manifest.json                      # Central manifest: engine settings, target fields, script paths
-├─ 📁 columns/                        # Column rules: detect → transform (opt) → validate (opt)
-│  ├─ member_id.py
-│  ├─ first_name.py
-│  └─ department.py
-├─ 📁 row_types/                      # Row rules used in Pass 1: Find Tables & Headers
+├─ manifest.json          # Central manifest: engine settings, target fields, script paths
+├─ 📁 columns/            # Column rules: detect → transform (opt) → validate (opt)
+│  ├─ <field>.py          # One file per target field you want in the output
+│  ├─ member_id.py        # Example
+│  ├─ first_name.py       # Example
+│  └─ department.py       # Example
+├─ 📁 row_types/          # Row rules for Pass 1: Find Tables & Headers
 │  ├─ header.py
 │  └─ data.py
-├─ 📁 hooks/                          # Optional extension points around job stages
-│  ├─ on_job_start.py                 # Runs once at job start
-│  ├─ after_mapping.py                # After Pass 2: Map Columns to Target Fields
-│  ├─ after_transform.py              # After Pass 3: Transform Values
-│  └─ after_validate.py               # After Pass 4: Validate Values
-└─ 📁 resources/                      # Optional lookups, dictionaries, etc. (no secrets)
-   └─ vendor_aliases.csv
+├─ 📁 hooks/              # Optional extension points around job stages
+│  ├─ on_job_start.py
+│  ├─ after_mapping.py
+│  ├─ after_transform.py
+│  └─ after_validate.py
+└─ 📁 resources/          # Optional lookups/dictionaries for your rules (no secrets)
 ```
 
 **How the parts line up with the passes**
@@ -39,335 +35,122 @@ A config is just a folder (or zip). You can put it under version control and mov
 * **Pass 2 — Map Columns to Target Fields** → `columns/<field>.py: detect_*`
 * **Pass 3 — Transform Values (Optional)** → `columns/<field>.py: transform`
 * **Pass 4 — Validate Values (Optional)** → `columns/<field>.py: validate`
-* **Pass 5 — Generate Normalized Workbook** → uses your manifest’s output order/labels
-
-Every script receives a **read‑only view of the artifact JSON** (`artifact`) so it can consult earlier decisions without mutating state.
+* **Pass 5 — Generate Normalized Workbook** → ADE writes the final sheet using your order/labels
 
 ---
 
-## Lifecycle
+## Row detection scripts (Pass 1) — find tables & headers
 
-A workspace can hold many configs, but only one is **active**. All others are **draft** (editable) or **archived** (read‑only).
+ADE first needs to locate each table and its header row. Your row‑type rules help it score each row as **header** or **data**.
 
-| Status   | Meaning                               | Editable? | Transitions                      |
-| -------- | ------------------------------------- | --------- | -------------------------------- |
-| draft    | Being authored; not used by jobs      | Yes       | → `active`, → `archived`         |
-| active   | The configuration jobs will use       | No        | → `archived` (on replace/retire) |
-| archived | Locked record of a past configuration | No        | (clone to create a new draft)    |
+ADE streams a sheet **row‑by‑row**, calls every `detect_*` function in `row_types/header.py` and `row_types/data.py`, sums the score deltas, and labels the row. From those labels it infers table ranges (e.g., `"B4:G159"`) and the header row.
 
-**Typical flow**: create draft → edit/validate → activate → archive previous active.
-**Roll back**: clone an archived config to a new draft and activate it.
-
----
-
-## The manifest (`manifest.json`, schema v0.6)
-
-The manifest declares config metadata, engine defaults, and **target fields** (the normalized output columns) with their labels and scripts. It also sets writer behavior (e.g., whether to append unmapped columns).
-
-> **Schema:** see `docs/developers/schemas/manifest.v0.6.schema.json` (authoritative).
-
-**Illustrative excerpt**
-
-```json
-{
-  "info": {
-    "schema": "ade.manifest/v0.6",
-    "title": "Membership Rules",
-    "version": "1.2.0",
-    "description": "Detectors and transforms for member data."
-  },
-  "engine": {
-    "defaults": {
-      "timeout_ms": 120000,
-      "memory_mb": 256,
-      "allow_net": false
-    },
-    "writer": {
-      "mode": "row_streaming",
-      "append_unmapped_columns": true,
-      "unmapped_prefix": "raw_"
-    }
-  },
-  "env": { "LOCALE": "en-CA" },
-  "secrets": {},
-  "hooks": {
-    "on_job_start":   [{ "script": "hooks/on_job_start.py" }],
-    "after_mapping":  [{ "script": "hooks/after_mapping.py" }],
-    "after_transform":[{ "script": "hooks/after_transform.py" }],
-    "after_validate": [{ "script": "hooks/after_validate.py" }]
-  },
-  "columns": {
-    "order": ["member_id", "first_name", "department"],
-    "meta": {
-      "member_id": {
-        "label": "Member ID",
-        "required": true,
-        "enabled": true,
-        "script": "columns/member_id.py",
-        "synonyms": ["member id", "member#", "id (member)"]
-      },
-      "first_name": {
-        "label": "First Name",
-        "required": true,
-        "enabled": true,
-        "script": "columns/first_name.py",
-        "synonyms": ["first name", "given name"]
-      },
-      "department": {
-        "label": "Department",
-        "required": false,
-        "enabled": true,
-        "script": "columns/department.py",
-        "synonyms": ["dept", "division"]
-      }
-    }
-  }
-}
-```
-
-**Key fields to know**
-
-* `engine.defaults` — caps for sandboxed execution (time, memory, network).
-* `engine.writer` — normalized output settings (streaming mode, handling unmapped columns).
-* `columns.order` — the **output order** of target fields in the normalized sheet.
-* `columns.meta` — per **target field**: output label, whether required, script path, and useful synonyms for detection.
-
----
-
-## Row‑type modules (`row_types/`) — Find Tables & Headers
-
-**What they do**
-Classify rows during **Pass 1** (e.g., `header`, `data`). Each module can expose multiple `detect_*` rules; each returns **score deltas** for its class. ADE aggregates deltas to assign the row’s label and infer table ranges.
-
-**Contract (row detector)**
+**Minimal example — header by text density**
 
 ```python
 # row_types/header.py
-def detect_text_density(*, row_values_sample: list, row_index: int, sheet_name: str,
-                        table_hint: dict | None, manifest: dict, artifact: dict,
-                        env: dict | None = None, **_) -> dict:
-    """
-    Return score adjustments for row classes. 'artifact' is read-only.
-    """
-    # ... compute ratios, etc.
-    return {"scores": {"header": +0.6}}  # only non-zero deltas need be returned
+def detect_text_density(
+    *,
+    row_values_sample: list,
+    manifest: dict,
+    artifact: dict,
+    **_
+):
+    non_blank = [c for c in row_values_sample if c not in (None, "")]
+    textish   = sum(1 for c in non_blank if isinstance(c, str))
+    ratio     = textish / max(1, len(non_blank))
+    return {"scores": {"header": +0.6 if ratio >= 0.7 else 0.0}}
 ```
 
-**Common parameters**
-
-* `row_values_sample` — a small sample from the row (never the full sheet).
-* `row_index`, `sheet_name` — location context.
-* `table_hint` — optional current bounds guess.
-* `manifest` — parsed manifest JSON.
-* `artifact` — **read‑only** current artifact state (consult, don’t mutate).
-* `env` — small key/value context from the manifest.
-
-**Return shape**
-`{"scores": {"header": float, "data": float, ...}}` (omit zeros). If a strong `data` signal appears before a header, ADE may promote the **previous** row as header; if none exists, it synthesizes **“Column 1…N”** headers so mapping can proceed.
-
-> You can add new row types later (e.g., `total_row.py`) as patterns mature.
+> **No clear header?** If convincing data appears before any header, ADE may promote the previous row. If there’s none, it creates a synthetic header (`"Column 1"...`) so the next pass can continue.
 
 ---
 
-## Column modules (`columns/`) — Map → Transform (opt) → Validate (opt)
+## Column scripts (Pass 2–4) — map → transform (opt) → validate (opt)
 
-**What they do**
-Column modules attach to **target fields** and provide:
+After ADE knows where the table is, it turns to **columns**. Each file in `columns/` represents a **target field** you want in the normalized output (e.g., `member_id`, `first_name`).
 
-* One or more `detect_*` functions (**Pass 2 — Map Columns to Target Fields**).
-* An optional `transform(values)` (**Pass 3 — Transform Values**).
-* An optional `validate(values)` (**Pass 4 — Validate Values**).
+### Pass 2 — Map Columns to Target Fields
 
-**Detector example**
+Detectors answer: “Does this raw column look like **this** field?” ADE runs your `detect_*` functions and totals their scores. Highest total wins.
+
+**Minimal detector — match header synonyms**
+This detector checks whether the spreadsheet’s header contains any of the known synonyms defined in your config manifest.
 
 ```python
-# columns/member_id.py
-def detect_synonyms(*, header: str | None, values_sample: list, column_index: int,
-                    sheet_name: str, table_id: str, manifest: dict, artifact: dict,
-                    env: dict | None = None, **_) -> dict:
+# columns/<field>.py
+def detect_synonyms(
+    *,
+    header: str | None,
+    values_sample: list,
+    manifest: dict,
+    artifact: dict,
+    field_name: str,
+    field_meta: dict,
+    **_
+):
     """
-    Score how likely this raw column is the 'member_id' target field.
+    Compare the column header against this field’s known synonyms
+    from the config manifest. Each match boosts the score.
     """
     score = 0.0
     if header:
         h = header.lower()
-        for syn in manifest["columns"]["meta"]["member_id"].get("synonyms", []):
-            if syn in h:
+        for word in field_meta.get("synonyms", []):
+            if word in h:
                 score += 0.6
-    return {"scores": {"member_id": score}}
+    return {"scores": {field_name: score}}
 ```
 
-**Transform example (optional)**
+**Detector using values — quick email pattern**
 
 ```python
-def transform(*, values: list, header: str | None, column_index: int,
-              manifest: dict, artifact: dict, env: dict | None = None, **_) -> dict:
+import re
+EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[a-z]{2,}$", re.I)
+
+def detect_email_shape(
+    *,
+    header: str | None,
+    values_sample: list,
+    manifest: dict,
+    artifact: dict,
+    field_name: str,
+    field_meta: dict,
+    **_
+):
+    hits  = sum(bool(EMAIL.match(str(v))) for v in values_sample if v)
+    ratio = hits / max(1, len(values_sample))
+    return {"scores": {field_name: round(ratio, 2)}}
+```
+
+> **Ties/unmapped:** If two fields tie or confidence is too low, ADE can leave the column **unmapped** for later review. Unmapped columns can be appended to the right of the output (`raw_<header>`) depending on your manifest setting.
+
+### Pass 3 — Transform Values (optional)
+
+Clean or reshape values for a mapped field (e.g., strip symbols, parse dates). Transforms run column‑wise under the hood while ADE writes rows.
+
+**Minimal transform — normalize IDs**
+
+```python
+def transform(*, values: list, **_):
     def clean(v):
         if v is None: return None
-        v = "".join(ch for ch in str(v) if ch.isalnum())
-        return v.upper()
-    out = [clean(v) for v in values]
-    return {"values": out, "warnings": []}  # per-column summary warnings
+        s = "".join(ch for ch in str(v) if ch.isalnum()).upper()
+        return s or None
+    return {"values": [clean(v) for v in values], "warnings": []}
 ```
 
-**Validate example (optional)**
+### Pass 4 — Validate Values (optional)
+
+Flag problems without changing data (e.g., required missing, pattern mismatch). ADE records issues with precise locations in the artifact.
+
+**Minimal validate — required field**
 
 ```python
-def validate(*, values: list, header: str | None, column_index: int,
-             manifest: dict, artifact: dict, env: dict | None = None, **_) -> dict:
+def validate(*, values: list, manifest: dict, **_):
     issues = []
     required = manifest["columns"]["meta"]["member_id"].get("required", False)
-    for i, v in enumerate(values, start=1):
-        if required and not v:
-            issues.append({
-                "row_index": i,
-                "code": "required_missing",
-                "severity": "error",
-                "message": "Member ID is required."
-            })
-    return {"issues": issues}
-```
-
-**Notes**
-
-* Detectors operate on **samples**; transforms/validators receive **full column values** (streamed internally, not all columns at once).
-* All functions receive `artifact` **read‑only** so rules can consult earlier decisions (e.g., found headers, current mapping).
-* The engine appends traces/metrics to the artifact; your functions return only small, deterministic payloads.
-
----
-
-## Hooks (optional)
-
-Hooks are extension points with a minimal, structured context (including read‑only `artifact`). Export a `run(**kwargs)` in each file.
-
-| Hook file            | When it runs                                    | Common use cases                                 |
-| -------------------- | ----------------------------------------------- | ------------------------------------------------ |
-| `on_job_start.py`    | Before ADE begins processing a job              | Warm caches from `resources/`, record metadata   |
-| `after_mapping.py`   | After **Pass 2 — Map Columns to Target Fields** | Inspect or adjust mapping decisions              |
-| `after_transform.py` | After **Pass 3 — Transform Values**             | Summarize changes, trigger downstream automation |
-| `after_validate.py`  | After **Pass 4 — Validate Values**              | Aggregate issues, add job‑level metrics          |
-
-> Hooks let you add domain‑specific behavior without modifying the engine. Keep them pure and quick.
-
----
-
-## Rule IDs & tracing (how matches appear in the artifact)
-
-ADE builds a **rule registry** at job start and stores it in the artifact. Examples:
-
-* **Row rules** → `row.header.detect_text_density` → `row_types/header.py:detect_text_density`
-* **Column rules** → `col.member_id.detect_synonyms` → `columns/member_id.py:detect_synonyms`
-* **Transform** → `transform.member_id` → `columns/member_id.py:transform`
-* **Validate** → `validate.member_id` → `columns/member_id.py:validate`
-
-Elsewhere in the artifact, ADE records **only the rule ID and its numeric effect** (e.g., `delta` for scores), plus short content hashes in the registry, keeping the artifact compact and auditable.
-
----
-
-## Local‑first editing & validation (developer UX)
-
-You can author configs entirely in the browser, then **commit a zip** as a draft or activate it.
-
-* **L1 (client):** JSON Schema checks for `manifest.json`, folder shape, path rules.
-* **L2 (client):** static Python checks (syntax, required functions, signatures) via Pyodide/Tree‑sitter.
-* **L3 (server, authoritative):** sandboxed import + signature checks + tiny dry‑runs; builds the **rule registry** that goes into the artifact.
-
-“Export” downloads the same zip. “Commit” uploads for L3 acceptance and activation.
-
----
-
-## Contracts (full signatures)
-
-All public functions use **keyword‑only** parameters and must tolerate extra `**_` keys for forward compatibility.
-
-**Row detector**
-
-```python
-def detect_*(*, row_values_sample: list, row_index: int, sheet_name: str,
-             table_hint: dict | None, manifest: dict, artifact: dict,
-             env: dict | None = None, **_) -> dict
-# -> {"scores": {"header": float, "data": float, "...": float}}
-```
-
-**Column detector**
-
-```python
-def detect_*(*, header: str | None, values_sample: list, column_index: int,
-             sheet_name: str, table_id: str, manifest: dict, artifact: dict,
-             env: dict | None = None, **_) -> dict
-# -> {"scores": {"<target_field>": float}}
-```
-
-**Transform**
-
-```python
-def transform(*, values: list, header: str | None, column_index: int,
-              manifest: dict, artifact: dict, env: dict | None = None, **_) -> dict
-# -> {"values": list, "warnings": list[str]}
-```
-
-**Validate**
-
-```python
-def validate(*, values: list, header: str | None, column_index: int,
-             manifest: dict, artifact: dict, env: dict | None = None, **_) -> dict
-# -> {"issues": [{"row_index": int, "code": str, "severity": "error"|"warning", "message": str}]}
-```
-
-> **Do not mutate `artifact`** inside rules. The engine updates the artifact and attaches traces automatically.
-
----
-
-## Performance & safety guidelines
-
-* **Keep detectors cheap** — operate on samples; avoid full scans and heavy backtracking.
-* **Be pure** — no I/O unless `engine.defaults.allow_net` (prefer `resources/` lookups).
-* **Bounded complexity** — aim for O(n) per column; prefer vectorization.
-* **Sandboxed** — the runtime enforces memory/time limits and blocks disallowed imports.
-
----
-
-## Minimal examples (≤30 lines)
-
-**`row_types/header.py`**
-
-```python
-def detect_text_density(*, row_values_sample, **_):
-    non_blank = [c for c in row_values_sample if c not in (None, "")]
-    textish = sum(1 for c in non_blank if isinstance(c, str))
-    ratio = textish / max(1, len(non_blank))
-    return {"scores": {"header": +0.6 if ratio >= 0.7 else 0.0}}
-
-def detect_synonyms(*, row_values_sample, manifest, **_):
-    syns = set()
-    for meta in manifest["columns"]["meta"].values():
-        syns |= set(meta.get("synonyms", []))
-    blob = " ".join(str(c).lower() for c in row_values_sample if isinstance(c, str))
-    return {"scores": {"header": +0.4 if any(s in blob for s in syns) else 0.0}}
-```
-
-**`columns/member_id.py`**
-
-```python
-def detect_pattern(*, values_sample, **_):
-    import re
-    pat = re.compile(r"^[A-Za-z0-9]{6,32}$")
-    hits = sum(1 for v in values_sample if v and pat.match(str(v)))
-    score = min(1.0, hits / max(1, len(values_sample)))  # 0..1
-    return {"scores": {"member_id": score}}
-
-def transform(*, values, **_):
-    cleaned = []
-    for v in values:
-        if v is None:
-            cleaned.append(None); continue
-        s = "".join(ch for ch in str(v) if ch.isalnum()).upper()
-        cleaned.append(s or None)
-    return {"values": cleaned, "warnings": []}
-
-def validate(*, values, manifest, **_):
-    issues = []
-    if manifest["columns"]["meta"]["member_id"].get("required", False):
+    if required:
         for i, v in enumerate(values, start=1):
             if not v:
                 issues.append({
@@ -381,28 +164,276 @@ def validate(*, values, manifest, **_):
 
 ---
 
-## Notes & pitfalls
+## How scripts receive inputs (so you never touch files)
 
-> **Tip:** Keep `columns.order` and `columns.meta` keys **in sync** — mismatches confuse mapping and the UI.
-> **Tip:** Choose clear, inclusive `label`s — they become your **output headers**.
-> **Pitfall:** Don’t store secrets in code or resources; use the manifest’s `secrets` (decrypted only in sandboxed child processes).
-> **Versioning:** Bump `info.version` when behavior changes; the job artifact records rule hashes and file versions.
+ADE does the reading and state‑tracking. Your functions get **only what they need** and return a small result. They **do not** open files or mutate state.
+
+**What ADE passes in (common kwargs):**
+
+* **Data** — `header`, `values_sample` (detectors) or full `values` (transform/validate)
+* **Context** — `sheet_name`, `table_id`, `column_index`
+* **Config** — `manifest`, `env`, and the field’s own `field_name`, `field_meta`
+* **Artifact (read‑only)** — a snapshot of ADE’s running journal (`artifact`) you can consult but not change
+
+**Tiny pattern — use kwargs, ignore the rest safely**
+
+```python
+def detect_numeric_hint(*, values_sample: list, field_name: str, **_):
+    ratio = sum(str(v).isdigit()) / max(1, len(values_sample))
+    return {"scores": {field_name: 0.4 if ratio > 0.8 else -0.2}}
+```
+
+> **Read‑only artifact**: treat `artifact` like a reference book (e.g., to check which row was marked as the header). ADE appends traces and results for you.
 
 ---
 
-## What’s next
+## The manifest (the essentials)
 
-* Learn the end‑to‑end flow in **[02‑job‑orchestration.md](./02-job-orchestration.md)**.
-* See how rules are traced in the **artifact JSON** in the **README — Multi‑Pass Overview**.
-* Deep‑dive the passes in:
+Your `manifest.json` defines engine defaults, output behavior, and the **target fields** (normalized columns) with their labels and scripts.
+
+```json
+{
+  "info":   { "schema": "ade.manifest/v0.6", "title": "Membership Rules", "version": "1.2.0" },
+  "engine": {
+    "defaults": { "timeout_ms": 120000, "memory_mb": 256, "allow_net": false },
+    "writer":   { "mode": "row_streaming", "append_unmapped_columns": true, "unmapped_prefix": "raw_" }
+  },
+  "env": { "LOCALE": "en-CA" },
+  "hooks": {
+    "on_job_start":   [{ "script": "hooks/on_job_start.py" }],
+    "after_mapping":  [{ "script": "hooks/after_mapping.py" }],
+    "after_transform":[{ "script": "hooks/after_transform.py" }],
+    "after_validate": [{ "script": "hooks/after_validate.py" }]
+  },
+  "columns": {
+    "order": ["member_id", "first_name", "department"],
+    "meta": {
+      "member_id":  { "label": "Member ID",  "required": true,  "script": "columns/member_id.py",  "synonyms": ["member id","member#","id (member)"] },
+      "first_name": { "label": "First Name", "required": true,  "script": "columns/first_name.py", "synonyms": ["first name","given name"] },
+      "department": { "label": "Department", "required": false, "script": "columns/department.py", "synonyms": ["dept","division"] }
+    }
+  }
+}
+```
+
+**A few rules of thumb**
+
+* `columns.order` is the **output order** of target fields.
+* `label` values become **output headers** in the normalized sheet.
+* Keep `columns.order` and `columns.meta` **in sync** (same field keys).
+* Prefer dictionaries/files under `resources/` over network calls ( `allow_net` is off by default).
+
+---
+
+## Hooks (optional extensions)
+
+Hooks are small scripts that run at predictable points with the same structured context (including read‑only `artifact`).
+
+| Hook file            | When it runs                    | Good for…                        |
+| -------------------- | ------------------------------- | -------------------------------- |
+| `on_job_start.py`    | Before ADE begins processing    | Warming caches, logging metadata |
+| `after_mapping.py`   | After Pass 2 (Map Columns)      | Inspecting or adjusting mapping  |
+| `after_transform.py` | After Pass 3 (Transform Values) | Summaries, downstream triggers   |
+| `after_validate.py`  | After Pass 4 (Validate Values)  | Aggregating issues, dashboards   |
+
+**Minimal hook**
+
+```python
+# hooks/after_validate.py
+def run(*, artifact: dict, **_):
+    errors = sum(
+        len(t.get("validation", {}).get("issues", []))
+        for s in artifact.get("sheets", [])
+        for t in s.get("tables", [])
+    )
+    return {"notes": f"Total issues: {errors}"}
+```
+
+---
+
+## Lifecycle & versioning (UI‑first)
+
+Each workspace can keep many configs, but only **one is active**. Others are editable **drafts** or read‑only **archives**.
+
+| Status   | Meaning                          | Editable? | Transition               |
+| -------- | -------------------------------- | --------- | ------------------------ |
+| draft    | Being authored; not used by jobs | Yes       | → `active`, → `archived` |
+| active   | Used by jobs                     | No        | → `archived`             |
+| archived | Locked history                   | No        | (clone → new `draft`)    |
+
+**Typical flow**
+
+1. Create a **draft** in the UI.
+2. Edit scripts + manifest; test on sample files.
+3. **Activate** (becomes read‑only; previous active is archived).
+4. Export/import as needed (zip) — ADE versions automatically.
+5. To roll back, **clone** an archived config, tweak, and activate.
+
+---
+
+## Contracts (full signatures)
+
+**Conventions (apply to every function):**
+
+* All public functions are **keyword‑only** (use `*`) and **must tolerate extra kwargs** via `**_` for forward compatibility.
+* ADE passes a **read‑only `artifact`** (consult it, don’t mutate it) plus `manifest` and `env`.
+* Your function should **never open files** or read spreadsheets directly; ADE streams data for you.
+* Return the **small shapes** shown below; ADE records traces and updates the artifact.
+
+---
+
+### Row detectors (Pass 1 — Find Tables & Headers)
+
+Classify the current row (e.g., header/data) by returning **score deltas** per row type. ADE aggregates deltas across all row rules to decide the label and infer table ranges.
+
+```python
+def detect_*(
+    *,
+    row_values_sample: list,          # sample of cell values in this row (strings/numbers/None)
+    row_index: int,                   # 1-based row index in the sheet
+    sheet_name: str,                  # human-friendly sheet name
+    table_hint: dict | None,          # optional { "range": "B4:G159", ... } if ADE has a current guess
+    manifest: dict,                   # parsed manifest.json
+    artifact: dict,                   # read-only job artifact (decisions so far)
+    env: dict | None = None,          # config-provided environment values
+    **_
+) -> dict:
+    """
+    Return shape:
+      {"scores": {"header": float, "data": float, "total_row": float, ...}}
+    Only include non-zero entries. Positive = push toward this type; negative = push away.
+    """
+```
+
+---
+
+### Column detectors (Pass 2 — Map Columns to Target Fields)
+
+Score how likely the **current raw column** belongs to **this target field**. ADE sums scores from all `detect_*` in this file and compares totals across fields; highest wins.
+
+```python
+def detect_*(
+    *,
+    header: str | None,               # cleaned source header text for this column, if present
+    values_sample: list,              # small sample of values from this column (strings/numbers/None)
+    column_index: int,                # 1-based column index within the table
+    sheet_name: str,                  # sheet name
+    table_id: str,                    # e.g., "table_1"
+    field_name: str,                  # target field this module owns (e.g., "member_id")
+    field_meta: dict,                 # meta for this field from manifest.columns.meta[field_name]
+    manifest: dict,                   # parsed manifest.json
+    artifact: dict,                   # read-only job artifact (decisions so far)
+    env: dict | None = None,          # config-provided environment values
+    **_
+) -> dict:
+    """
+    Return shape:
+      {"scores": {field_name: float}}
+    Only include a key for THIS field. Positive increases confidence; negative decreases it.
+    """
+```
+
+---
+
+### Transform (Pass 3 — Transform Values, optional)
+
+Normalize/clean values for this mapped target field. ADE will write your returned list to the normalized workbook (row‑streaming writer under the hood).
+
+```python
+def transform(
+    *,
+    values: list,                     # full list of values for this mapped column (in row order)
+    header: str | None,               # original source header text
+    column_index: int,                # 1-based column index within the table
+    sheet_name: str,                  # sheet name
+    table_id: str,                    # e.g., "table_1"
+    field_name: str,                  # target field name (e.g., "member_id")
+    field_meta: dict,                 # manifest meta for this field
+    manifest: dict,                   # parsed manifest.json
+    artifact: dict,                   # read-only job artifact
+    env: dict | None = None,          # environment values from manifest
+    **_
+) -> dict:
+    """
+    Return shape:
+      {"values": list, "warnings": list[str]}
+    - 'values' must be the same length as the input 'values'.
+    - 'warnings' is an optional per-column summary (not per-row).
+    """
+```
+
+---
+
+### Validate (Pass 4 — Validate Values, optional)
+
+Check values without changing them. Report problems; ADE records exact locations in the artifact. Keep checks deterministic and bounded.
+
+```python
+def validate(
+    *,
+    values: list,                     # full list of values for this mapped column (after transform)
+    header: str | None,               # original source header text
+    column_index: int,                # 1-based column index within the table
+    sheet_name: str,                  # sheet name
+    table_id: str,                    # e.g., "table_1"
+    field_name: str,                  # target field name
+    field_meta: dict,                 # manifest meta for this field
+    manifest: dict,                   # parsed manifest.json
+    artifact: dict,                   # read-only job artifact
+    env: dict | None = None,          # environment values from manifest
+    **_
+) -> dict:
+    """
+    Return shape:
+      {"issues": [
+        {
+          "row_index": int,                    # 1-based row index in the table
+          "code": "str",                       # stable machine-readable code
+          "severity": "error" | "warning" | "info",
+          "message": "human-readable message"
+        },
+        ...
+      ]}
+    """
+```
+
+> **Note:** You return `row_index`; ADE will attach A1 coordinates and rule ids in the artifact.
+
+---
+
+### Hooks (optional extension points)
+
+Hooks run with the same structured context (including read‑only `artifact`). Return `None` or a small dict (e.g., `{"notes": "text"}`) to annotate the artifact history.
+
+```python
+# runs once before the job starts
+def run(
+    *,
+    artifact: dict,                   # read-only artifact (empty or near-empty at this point)
+    manifest: dict,                   # parsed manifest.json
+    env: dict | None = None,          # environment values from manifest
+    job_id: str,                      # job identifier
+    source_file: str,                 # original file path/name
+    **_
+) -> dict | None:
+    """
+    Hook return shape (optional):
+      {"notes": "short message for audit trail"}
+    """
+```
+
+The same signature applies to `after_mapping.py`, `after_transform.py`, and `after_validate.py` hooks; the only difference is **when** they run and what’s already present in `artifact` when they do.
+
+---
+
+## What to read next
+
+* How a job runs your config: **[02‑job‑orchestration.md](./02-job-orchestration.md)**
+* Big‑picture, pass‑by‑pass story with artifact snippets: **README — Multi‑Pass Overview**
+* Deep dives (one page per pass):
 
   * **[03‑pass‑find‑tables‑and‑headers.md](./03-pass-find-tables-and-headers.md)**
   * **[04‑pass‑map‑columns-to-target-fields.md](./04-pass-map-columns-to-target-fields.md)**
-  * **[05‑pass‑transform‑values.md](./05-pass-transform-values.md)**
-  * **[06‑pass‑validate‑values.md](./06-pass-validate-values.md)**
+  * **[05‑pass‑transform-values.md](./05-pass-transform-values.md)**
+  * **[06‑pass‑validate-values.md](./06-pass-validate-values.md)**
   * **[07‑pass‑generate-normalized-workbook.md](./07-pass-generate-normalized-workbook.md)**
-
----
-
-Previous: [README.md](./README.md)
-Next: [02‑job‑orchestration.md](./02-job-orchestration.md)
