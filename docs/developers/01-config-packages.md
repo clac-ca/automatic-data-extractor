@@ -30,11 +30,11 @@ A config is just a folder (or zip). You can export and store it under version co
 
 **How the parts line up with the passes**
 
-* **Pass 1 — Find Tables & Headers (Row Detection)** → `row_types/*.py`
-* **Pass 2 — Map Columns to Target Fields** → `columns/<field>.py: detect_*`
-* **Pass 3 — Transform Values (Optional)** → `columns/<field>.py: transform`
-* **Pass 4 — Validate Values (Optional)** → `columns/<field>.py: validate`
-* **Pass 5 — Generate Normalized Workbook** → ADE writes the final sheet using your order/labels
+* **Pass 1 — Find Tables & Headers (Row Detection)** → `row_types/*.py` (see the [Pass 1 guide](./03-pass-find-tables-and-headers.md)).
+* **Pass 2 — Map Columns to Target Fields** → `columns/<field>.py: detect_*` (see the [mapping guide](./04-pass-map-columns-to-target-fields.md)).
+* **Pass 3 — Transform Values (Optional)** → `columns/<field>.py: transform` (see the [transform guide](./05-pass-transform-values.md)).
+* **Pass 4 — Validate Values (Optional)** → `columns/<field>.py: validate` (see the [validation guide](./06-pass-validate-values.md)).
+* **Pass 5 — Generate Normalized Workbook** → ADE writes the final sheet using your order/labels (see the [workbook guide](./07-pass-generate-normalized-workbook.md)).
 
 ---
 
@@ -426,12 +426,12 @@ The same signature applies to `after_mapping.py`, `after_transform.py`, and `aft
 
 ## What to read next
 
-* How a job runs your config: **[02‑job‑orchestration.md](./02-job-orchestration.md)**
-* Big‑picture, pass‑by‑pass story with artifact snippets: **README — Multi‑Pass Overview**
+* How a job runs your config: read **[job orchestration](./02-job-orchestration.md)**
+* Big-picture, pass-by-pass story with artifact snippets: return to the **[developer overview](./README.md)**
 * Deep dives (one page per pass):
 
-  * **[03‑pass‑find‑tables‑and‑headers.md](./03-pass-find-tables-and-headers.md)**
-  * **[04‑pass‑map‑columns-to-target-fields.md](./04-pass-map-columns-to-target-fields.md)**
-  * **[05‑pass‑transform-values.md](./05-pass-transform-values.md)**
-  * **[06‑pass‑validate-values.md](./06-pass-validate-values.md)**
-  * **[07‑pass‑generate-normalized-workbook.md](./07-pass-generate-normalized-workbook.md)**
+  * **[Pass 1 — Find tables & headers](./03-pass-find-tables-and-headers.md)**
+  * **[Pass 2 — Map columns](./04-pass-map-columns-to-target-fields.md)**
+  * **[Pass 3 — Transform values](./05-pass-transform-values.md)**
+  * **[Pass 4 — Validate values](./06-pass-validate-values.md)**
+  * **[Pass 5 — Generate normalized workbook](./07-pass-generate-normalized-workbook.md)**

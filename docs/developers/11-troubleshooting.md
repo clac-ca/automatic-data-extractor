@@ -9,7 +9,7 @@ Quick fixes for the issues we see most often when running ADE. Start here before
 ## Symptoms & fixes
 
 ### Job fails before writing output
-- **Check config wiring:** Ensure `manifest.json` points to the right module paths. See [01-config-packages.md](./01-config-packages.md#manifestjson).
+- **Check config wiring:** Ensure `manifest.json` points to the right module paths. See the [config package guide](./01-config-packages.md#manifestjson).
 - **Missing transforms:** Confirm every mapped column exports `transform(**kwargs)` in its module.
 - **Secrets unavailable:** Verify secrets are declared under `manifest.secrets` and stored via the CLI; never hardcode them.
 
@@ -22,7 +22,7 @@ Quick fixes for the issues we see most often when running ADE. Start here before
 - **Severity tuning:** Downgrade noisy checks to `warning` in the returned `issues` list, but keep truly blocking problems as `error`.
 
 ### Workbook missing unmapped columns
-- Confirm `append_unmapped_columns` is `true` in the config writer settings (default). See [07-pass-generate-normalized-workbook.md](./07-pass-generate-normalized-workbook.md#what-it-reads).
+- Confirm `append_unmapped_columns` is `true` in the config writer settings (default). See the [Pass 5 guide](./07-pass-generate-normalized-workbook.md#what-it-reads).
 
 ## How to debug deeper
 1. Re-run with `ADE_LOG_LEVEL=debug` to surface detector details.
@@ -31,5 +31,5 @@ Quick fixes for the issues we see most often when running ADE. Start here before
 
 ---
 
-Previous: [10-examples-and-recipes.md](./10-examples-and-recipes.md)  
-Next: [12-glossary.md](./12-glossary.md)
+Previous: [Examples & recipes](./10-examples-and-recipes.md)  
+Next: [Shared terminology](./12-glossary.md)

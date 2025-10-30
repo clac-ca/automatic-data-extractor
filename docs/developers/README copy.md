@@ -368,10 +368,8 @@ Later phases rely on good bounds and header text to make correct mappings.
 
 ## How configs and jobs fit into this story
 
-* A **config package** defines your rules (detectors, transforms, validations) and column order/labels. Start here to customize behavior.
-  See **[Config Packages](./01-config-packages.md)** for folder layout, manifest schema, and script contracts.
-* A **job** applies one active config to one file, building the artifact as it runs.
-See **[Job Orchestration](./02-job-orchestration.md)** for execution details and streaming behavior.
+* A **config package** defines your rules (detectors, transforms, validations) and column order/labels. Start here to customize behavior. See the **[config package guide](./01-config-packages.md)** for folder layout, manifest schema, and script contracts.
+* A **job** applies one active config to one file, building the artifact as it runs. See the **[job orchestration guide](./02-job-orchestration.md)** for execution details and streaming behavior.
 
 ---
 
@@ -387,6 +385,6 @@ See **[Job Orchestration](./02-job-orchestration.md)** for execution details and
 
 ### Where to go next
 
-* Configure rules and structure: **[01‑config‑packages.md](./01-config-packages.md)**
-* Understand the engine passes: **[02-job-orchestration.md](./02-job-orchestration.md)**
-* Browse definitions quickly: **[12-glossary.md](./12-glossary.md)**
+* Configure rules and structure: **[Config package guide](./01-config-packages.md)**
+* Understand the engine passes: **[Job orchestration guide](./02-job-orchestration.md)**
+* Browse definitions quickly: **[Shared terminology](./12-glossary.md)**

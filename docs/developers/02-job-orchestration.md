@@ -241,11 +241,11 @@ jobs/<job_id>/
 
 ## What’s next
 
-* See config anatomy in [01-config-packages.md](./01-config-packages.md)
-* Review script invocation details in [05-pass-transform-values.md](./05-pass-transform-values.md)
-* Troubleshoot validations in [06-pass-validate-values.md](./06-pass-validate-values.md)
+* See config anatomy in the [config package guide](./01-config-packages.md)
+* Review script invocation details in the [transform guide](./05-pass-transform-values.md)
+* Troubleshoot validations in the [validation guide](./06-pass-validate-values.md)
 
 ---
 
-Previous: [01-config-packages.md](./01-config-packages.md)  
-Next: [03-pass-find-tables-and-headers.md](./03-pass-find-tables-and-headers.md)
+Previous: [Config package guide](./01-config-packages.md)  
+Next: [Pass 1 — Find tables & headers](./03-pass-find-tables-and-headers.md)
