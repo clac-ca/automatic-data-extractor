@@ -56,20 +56,20 @@ A config package is a **folder (or zip)** you manage in the UI:
 
 ```text
 📁 my-config/
-├─ manifest.json                  # engine settings, target fields, script paths
-├─ columns/                       # column rules: detect → transform (opt) → validate (opt)
-│  ├─ member_id.py
-│  ├─ first_name.py
-│  └─ sin.py                      # (you add this)
-├─ row_types/                     # row rules for Pass 1: find tables & headers
+├─ manifest.json          # Central manifest: engine settings, target fields, script paths
+├─ 📁 columns/            # Column rules: detect → transform (opt) → validate (opt)
+│  ├─ <field>.py          # One file per target field you want in the output
+│  ├─ member_id.py        # Example
+│  ├─ first_name.py       # Example
+│  └─ department.py       # Example
+├─ 📁 row_types/          # Row rules for Pass 1: Find Tables & Headers
 │  ├─ header.py
 │  └─ data.py
-├─ hooks/                         # optional: run around job stages
+├─ 📁 hooks/              # Optional extension points around job stages
 │  ├─ on_job_start.py
 │  ├─ after_mapping.py
 │  ├─ after_transform.py
 │  └─ after_validate.py
-└─ resources/                     # optional lookups for your rules (no secrets)
 ```
 
 * **Row rules** (`row_types/*.py`) help ADE **find tables & headers**.
@@ -77,108 +77,6 @@ A config package is a **folder (or zip)** you manage in the UI:
 * **Hooks** let you run custom logic around stages (all receive a **read‑only artifact**).
 
 Details & contracts: **[01‑Config Packages — Behavior as Code](./01-config-packages.md)**
-
----
-
-## Quick start: add a SIN field (detect → transform → validate)
-
-Goal: teach ADE to recognize a **SIN** column, normalize values, and flag invalid ones.
-
-### 1) Add `columns/sin.py`
-
-```python
-# columns/sin.py
-import re
-
-_DIGITS = re.compile(r"\d+")
-def _only_digits(s): return "".join(_DIGITS.findall(str(s))) if s is not None else ""
-def _luhn_ok(d):
-    if len(d) != 9 or not d.isdigit(): return False
-    total = 0
-    for i, ch in enumerate(d):         # positions 1..9
-        n = ord(ch) - 48
-        if (i + 1) % 2 == 0:           # double even positions
-            n = n * 2 - 9 if n > 4 else n * 2
-        total += n
-    return total % 10 == 0
-
-# --- Pass 2: detection ---------------------------------------------------------
-def detect_synonyms(*, header: str | None, field_name: str, field_meta: dict, **_):
-    score = 0.0
-    if header:
-        h = header.lower()
-        for syn in field_meta.get("synonyms", []):
-            if syn.lower() in h:
-                score += 0.6
-    return {"scores": {field_name: round(score, 2)}}
-
-def detect_value_shape(*, values_sample: list, field_name: str, **_):
-    if not values_sample: return {"scores": {field_name: 0.0}}
-    total = valid = 0
-    for v in values_sample:
-        if v in (None, ""): continue
-        total += 1
-        d = _only_digits(v)
-        if len(d) == 9 and _luhn_ok(d): valid += 1
-    if total == 0: return {"scores": {field_name: 0.0}}
-    ratio = valid / total
-    return {"scores": {field_name: 0.9 if ratio >= 0.8 else round(0.5 * ratio, 2)}}
-
-# --- Pass 3: transform (optional) ---------------------------------------------
-def transform(*, values: list, **_):
-    def fmt(d): return f"{d[:3]}-{d[3:6]}-{d[6:]}"
-    out, normalized = [], 0
-    for v in values:
-        if v in (None, ""): out.append(None); continue
-        d = _only_digits(v)
-        if len(d) == 9: out.append(fmt(d)); normalized += 1
-        else: out.append(v)
-    return {"values": out, "warnings": [f"normalized: {normalized}/{len(values)}"]}
-
-# --- Pass 4: validate (optional) ----------------------------------------------
-def validate(*, values: list, field_meta: dict, **_):
-    issues, required = [], bool(field_meta.get("required"))
-    for i, v in enumerate(values, start=1):
-        d = _only_digits(v)
-        blankish = (v is None) or (str(v).strip() == "")
-        if required and blankish:
-            issues.append({"row_index": i, "code": "required_missing",
-                           "severity": "error", "message": "SIN is required."})
-        elif not blankish and (len(d) != 9 or not _luhn_ok(d)):
-            issues.append({"row_index": i, "code": "sin_invalid",
-                           "severity": "error", "message": "Invalid SIN."})
-    return {"issues": issues}
-```
-
-### 2) Add it to `manifest.json`
-
-```json
-{
-  "columns": {
-    "order": ["sin", "first_name", "department"],
-    "meta": {
-      "sin": {
-        "label": "SIN",
-        "required": true,
-        "script": "columns/sin.py",
-        "synonyms": ["sin", "social insurance number", "sin number", "social-insurance-number"]
-      }
-    }
-  }
-}
-```
-
-### 3) Run a job from the UI
-
-* Pick your config (activate a draft if needed).
-* Upload a workbook and run. ADE streams the file, applies your rules, then writes `normalized.xlsx`.
-
-### 4) Inspect the artifact (`artifact.json`)
-
-* See **mapping** (which column mapped to `sin` and why)
-* See **transform** summary and **validation** issues with **A1** locations
-
-Full artifact reference: **[14‑Job Artifact JSON](./14-job_artifact_json.md)**
 
 ---
 
@@ -241,22 +139,11 @@ Details: **[01‑Config Packages](./01-config-packages.md)**
 
 ---
 
-## Troubleshooting with the artifact
-
-* **A column mapped incorrectly** → check `mapping[].contributors[]` to see which rule pushed it.
-* **Too many unmapped columns** → add synonyms for missing headers or create new detectors.
-* **Transform didn’t run** → verify the module exposes a `transform` function and the field is actually mapped.
-* **Validation is noisy** → tune thresholds, split checks into warnings vs. errors, or add a transform first.
-* **Header not found** → see `row_classification[]` scores; ADE may synthesize headers if none are clear.
-
----
-
 ## Performance & safety
 
-* Detectors run on **samples**, not full columns; keep them light and deterministic.
+* Detectors run on **samples**, not full columns; keep them light and deterministic.  You can adjust the number of samples that are evaluated in the manifest.json (inside the GUI).
 * Transforms/validators operate column‑wise while ADE writes rows (streaming writer).
-* Runtime is sandboxed with time/memory limits; network is **off** by default (`allow_net: false`).
-* Prefer `resources/` lookups to external calls; never embed secrets in code.
+* Runtime is sandboxed with time/memory limits; network is **off** by default (`allow_net: false` in manifest.json).
 
 ---
 
