@@ -1,521 +1,508 @@
 # 02 — Job Orchestration (Deep Dive)
 
-This page explains **how a job runs**—from the very first artifact JSON created at job start to the last row written to the normalized workbook. It does **not** assume prior knowledge. We’ll walk pass‑by‑pass with clear pseudocode showing what each step **reads**, **writes**, and **records** in the artifact.
+## 0) Start with the Artifact JSON (the backbone)
 
----
+**Artifact JSON** is both:
 
-## Why start with the Artifact JSON?
+1. **Audit record** — a full narrative of the run (what ADE saw, decided, and wrote).
+2. **Shared state** — the *only* object passed between passes (append‑only during the run).
 
-**Artifact JSON** is the backbone of orchestration. It is both:
+**Design guarantees**
 
-1. **Audit record** — what ADE saw and decided (tables, mappings, transforms, validations, output).
-2. **Shared state** — the *only* structured object that flows between passes.
+* **Append-only during execution:** passes add facts; they don’t rewrite history.
+* **No raw cell values:** the artifact records *locations* (A1), *decisions*, *contributors*, and *summaries*—never the underlying data.
+* **Reproducibility:** a **rule registry** logs the exact code identifiers + content hashes for all callables.
 
-A job begins by constructing an **initial artifact**, then each pass **reads** it and **appends** new facts. No raw cell data is stored—only coordinates (A1), decisions, contributors, and summaries.
-
-→ Full schema: see **Artifact Reference** (`./14-job_artifact_json.md`)
-
----
-
-## Job lifecycle at a glance
-
-```
-Start
-  │
-  ├─ Build initial artifact (config, rule registry, metadata)
-  │
-  ├─ Pass 1: Structure
-  │   Find tables & header rows (row detectors) → write tables + A1 ranges
-  │
-  ├─ Pass 2: Mapping
-  │   Sample raw columns → score per target field → choose / leave unmapped
-  │
-  ├─ Pass 3–5: Generate
-  │   For each row: Transform → Validate → Write
-  │   Summaries + issues recorded in artifact
-  │
-  └─ Finish (normalized.xlsx + artifact.json)
-```
-
----
-
-## Pass 0 — Create the initial artifact
-
-**Inputs:** active config, source file, job id, timestamps
-**Outputs:** artifact with top‑level metadata, an empty structure for later passes, and a **rule registry** (which exact code is in play).
-
-### Initial shape
+### Initial artifact shape (created before Pass 1)
 
 ```json
 {
   "version": "artifact.v1.1",
-  "job": {
-    "id": "<job_id>",
-    "source_file": "input.xlsx",
-    "started_at": "2025-10-30T12:34:56Z"
-  },
-  "config": {
-    "workspace_id": "<ws>",
-    "config_id": "<active-config-id>",
-    "title": "Your Config Title",
-    "version": "1.2.0"
-  },
-  "rules": {},                  // filled below (impl path + content hash)
-  "sheets": [],                 // filled in Pass 1
-  "output": {},                 // filled in Pass 3–5
-  "summary": {},                // filled at end
-  "pass_history": []            // appended after each pass completes
+  "job":     { "id": "<job_id>", "source_file": "input.xlsx", "started_at": "2025-10-30T12:34:56Z" },
+  "config":  { "workspace_id": "<ws>", "config_id": "<active-config-id>", "title": "Membership Rules", "version": "1.2.0" },
+  "rules":   {},          // rule registry (filled immediately after init)
+  "sheets":  [],          // filled by Pass 1 (structure)
+  "output":  {},          // filled by Pass 3–5 (generate)
+  "summary": {},          // filled at end
+  "pass_history": []      // appended after each pass completes
 }
 ```
 
-### Build the rule registry
-
-Each callable used during the job gets a stable id and a short content hash for reproducibility.
+### Building the rule registry (what code ran?)
 
 ```python
-def build_rule_registry(active_config) -> dict:
+def build_rule_registry(config_pkg) -> dict:
     registry = {}
-    for rule in _discover_rules(active_config):  # row detectors, column detectors, transforms, validators, hooks
-        impl = f"{rule.module_path}:{rule.func_name}"     # "columns/member_id.py:detect_synonyms"
-        version = _sha1_of_source(rule.module_path, rule.func_name)[:6]
-        registry[rule.rule_id] = {"impl": impl, "version": version}
+    for rule in discover_rules(config_pkg):  # row detectors, column detectors, transforms, validators, hooks
+        impl = f"{rule.module}:{rule.func}"  # e.g., "columns/member_id.py:detect_synonyms"
+        src  = read_source(rule.module, rule.func)
+        ver  = sha1(src)[:6]                 # short content hash
+        registry[rule.rule_id] = {"impl": impl, "version": ver}
     return registry
-
-def make_initial_artifact(active_config, source_file, job_id):
-    a = {
-      "version": "artifact.v1.1",
-      "job": {"id": job_id, "source_file": source_file, "started_at": _now()},
-      "config": _config_header(active_config),
-      "rules": build_rule_registry(active_config),
-      "sheets": [],
-      "output": {},
-      "summary": {},
-      "pass_history": []
-    }
-    return a
 ```
 
-> **Design note:** The artifact is **append‑only** for the duration of the job. Mutations are “adds,” not destructive rewrites. Persist with atomic writes (temp file → move) to withstand crashes.
+> See **Artifact Reference** (`./14-job_artifact_json.md`) for the full schema.
 
 ---
 
-## Shared conventions used in all passes
+## 1) Orchestration at a glance
 
-* **Detectors** return *score deltas* (`{"scores": {...}}`). ADE sums deltas and chooses the max; ties break by manifest order.
-* **Transforms** return `{"values": [...], "warnings": [...]}`.
-* **Validators** return `{"issues": [...]}` (no data changes).
-* **Hooks** return `None` or `{"notes": "..."}` to annotate the artifact.
-* **No raw cell values** enter the artifact; only A1 coordinates, rule ids, and counts.
-
-Utility helpers referenced below:
-
-```python
-def mark_pass_done(artifact, n, name):
-    artifact["pass_history"].append({"pass": n, "name": name, "completed_at": _now()})
-
-def safe_call(rule_id, fn, **kwargs):
-    try:
-        out = fn(**kwargs)
-        return out or {}
-    except Exception as e:
-        _append_rule_error(artifact=kwargs.get("artifact"), rule_id=rule_id, message=str(e))
-        return {}  # neutral on failure
-
-def choose_best_label(scores: dict, order: list[str]) -> str:
-    # Highest score; tie broken by 'order' index
-    labels = sorted(scores.items(), key=lambda kv: (kv[1], -order.index(kv[0])), reverse=True)
-    return labels[0][0] if labels else order[0]
 ```
+Start
+  │
+  ├─ Build initial artifact
+  │   └─ attach rule registry (impl + hash)
+  │
+  ├─ Pass 1: Structure
+  │   └─ stream rows → label (header/data/separator) → infer tables + A1 ranges
+  │
+  ├─ Pass 2: Mapping
+  │   └─ sample raw columns → score per target field → pick / leave unmapped
+  │
+  ├─ (Pass 2.5: Analyze)  ← optional tiny stats for sanity checks
+  │
+  ├─ Pass 3–5: Generate
+  │   └─ for each row: Transform → Validate → Write → record summaries/issues
+  │
+  └─ Finish
+      ├─ normalized.xlsx
+      └─ artifact.json (full narrative)
+```
+
+**Streaming I/O:** ADE never requires full‑sheet loads. Row scanning and writing are streaming; column work can use samples or chunked scans.
 
 ---
 
-## Pass 1 — Structure (find tables & headers)
+## 2) Contracts your code must follow (tiny shapes)
 
-**Goal:** Walk each sheet **row‑by‑row**, label rows (header/data/separator), and infer **tables with A1 ranges** and **header rows**.
+* **Row/column detectors:** return **score deltas** (additive hints).
+  `{"scores": {"header": +0.6}}` or `{"scores": {field_name: +0.4}}`
+* **Transforms:** return new values for the column + optional warnings.
+  `{"values": [...], "warnings": [...]}`
+* **Validators:** return issues (no data changes).
+  `{"issues": [{"row_index": 12, "code": "required_missing", ...}]}`
+* **Hooks:** may return `{"notes": "..."}` to annotate history.
 
-**Reads:** initial artifact, manifest row rules
-**Writes:** `artifact.sheets[].row_classification[]`, `artifact.sheets[].tables[]` (with `range`, `data_range`, `header`)
+All public functions are **keyword‑only** and must tolerate extra kwargs via `**_`.
 
-### Pseudocode
+---
+
+## 3) Pseudocode — the orchestrator
+
+> The following pseudocode is faithful to ADE’s control flow but simplified for clarity.
 
 ```python
-def run_pass1_structure(xls_reader, active_config, artifact):
-    row_rules = _load_row_rules(active_config)   # [("row.header.text_density", func), ...]
+def run_job(source_file, active_config):
+    artifact = make_initial_artifact(source_file, active_config)
+    artifact["rules"] = build_rule_registry(active_config)
+    save_artifact_atomic(artifact)
 
-    for sheet in xls_reader.stream_sheets():     # streaming; no full-sheet load
-        s_entry = {"id": _id(), "name": sheet.name,
-                   "row_classification": [], "tables": []}
+    # Pass 1: Structure (find tables & headers)
+    pass1_structure(source_file, active_config, artifact)
+    save_artifact_atomic(artifact)
+
+    # Pass 2: Mapping (raw columns → target fields)
+    pass2_mapping(source_file, active_config, artifact)
+    save_artifact_atomic(artifact)
+
+    # Optional tiny stats
+    if analyze_enabled(active_config):
+        pass2_5_analyze(source_file, active_config, artifact)
+        save_artifact_atomic(artifact)
+
+    # Pass 3–5: Generate (transform → validate → write)
+    pass3_to_5_generate(source_file, active_config, artifact)
+    save_artifact_atomic(artifact, finalize=True)
+
+    return artifact
+```
+
+`save_artifact_atomic` writes to a temp file and renames, so crashes don’t corrupt the narrative.
+
+---
+
+## 4) Pass 1 — Structure (find tables & headers)
+
+**Goal:** Identify table regions and header rows by **streaming** each sheet and labeling each row.
+
+**Reads:** initial artifact, row detector functions, manifest ordering for ties
+**Writes:** `sheets[].row_classification[]`, `sheets[].tables[]` (with `range`, `data_range`, `header`, `columns[]`)
+
+```python
+def pass1_structure(source_file, config, artifact):
+    row_rules = load_row_rules(config)  # [("row.header.text_density", func), ...]
+    for sheet in stream_sheets(source_file):
+        s_entry = {"id": gen_id(), "name": sheet.name, "row_classification": [], "tables": []}
         artifact["sheets"].append(s_entry)
 
-        # 1) Label each row
-        for row_idx, row_values_sample in sheet.stream_rows():  # sample of this row's cells
+        # 1) Label rows
+        for row_idx, row_sample in sheet.stream_rows():  # row_sample is a small list of cell values
             totals, traces = {}, []
             for rule_id, fn in row_rules:
                 out = safe_call(rule_id, fn,
-                                row_values_sample=row_values_sample,
+                                row_values_sample=row_sample,
                                 row_index=row_idx, sheet_name=sheet.name,
-                                manifest=active_config.manifest,
-                                artifact=artifact)
+                                manifest=config.manifest, artifact=artifact)
                 for label, delta in out.get("scores", {}).items():
                     if delta:
                         totals[label] = totals.get(label, 0.0) + float(delta)
                         traces.append({"rule": rule_id, "delta": float(delta)})
 
-            label = choose_best_label(totals, order=_row_order(active_config))  # e.g., ["header","data","separator"]
+            label = choose_best_label(totals, order=row_label_order(config))  # e.g., ["header","data","separator"]
             s_entry["row_classification"].append({
                 "row_index": row_idx,
                 "label": label,
                 "scores_by_type": totals,
                 "rule_traces": traces,
-                "confidence": _confidence_from_totals(totals, label)
+                "confidence": softmax_confidence(totals, label)
             })
 
         # 2) Infer tables from labeled rows
-        for table in _infer_tables(s_entry["row_classification"], sheet):
-            # Table includes A1 ranges and the captured header row
+        for tbl in infer_tables(s_entry["row_classification"], sheet):
             s_entry["tables"].append({
-                "id": _id("table"),
-                "range": table.a1_total,                 # e.g., "B4:G159"
-                "data_range": table.a1_data,             # e.g., "B5:G159"
-                "header": table.header_descriptor,       # {kind:"raw|synthetic|promoted", row_index:4, source_header:[...]}
-                "columns": _enumerate_source_columns(table.header_descriptor)
+                "id": gen_id("table"),
+                "range": tbl.a1_total,            # e.g., "B4:G159"
+                "data_range": tbl.a1_data,        # e.g., "B5:G159"
+                "header": tbl.header_descriptor,  # {kind:"raw|synthetic|promoted", row_index, source_header:[...]}
+                "columns": enumerate_source_columns(tbl.header_descriptor)  # [{column_id, source_header}, ...]
             })
 
     mark_pass_done(artifact, 1, "structure")
 ```
 
-**Edge cases handled:**
+**Edge behavior**
 
-* **No header row found:** synthesize headers `["Column 1", ...]` and record `header.kind = "synthetic"`.
-* **Data before header:** “promote” the preceding row if signals strongly indicate a header.
-* **Multiple tables per sheet:** `_infer_tables` emits multiple non‑overlapping ranges.
+* **No usable header found:** synthesize headers (`"Column 1", ...`) and mark `header.kind="synthetic"`.
+* **Data appears before header:** “promote” the best candidate row just above the data; record `header.kind="promoted"`.
 
 ---
 
-## Pass 2 — Mapping (raw columns → target fields)
+## 5) Pass 2 — Mapping (raw columns → target fields)
 
-**Goal:** For each table, map each **raw column** (`col_1...`) to a **target field** (`member_id`, `first_name`, …) using small, cheap detectors. Uncertain columns remain **unmapped**.
+**Goal:** For each table, decide which raw column becomes which **target field** using additive scores from small detectors. Uncertain cases remain **unmapped**.
 
-**Reads:** artifact tables, manifest column rules & `columns.order/meta`
-**Writes:** `artifact.sheets[].tables[].mapping[]` (+ per‑decision contributors)
-
-### Pseudocode
+**Reads:** tables from Pass 1, column detectors in `columns/<field>.py`, manifest (`columns.order`, `columns.meta`, thresholds)
+**Writes:** `tables[].mapping[]` with score + contributors
 
 ```python
-def run_pass2_mapping(xls_reader, active_config, artifact):
-    field_modules = _load_field_modules(active_config)  # {"member_id": mod, ...}
+def pass2_mapping(source_file, config, artifact):
+    fields = load_field_modules(config)  # {"member_id": module, ...}
 
     for s in artifact["sheets"]:
         for t in s["tables"]:
             t["mapping"] = []
-            table_reader = xls_reader.bind_range(s["name"], t["range"])
+            reader = bind_range(source_file, sheet=s["name"], a1=t["range"])
 
-            for raw_col in table_reader.iter_columns():    # yields {"column_id":"col_1","header":"Employee ID", "index":1}
-                sample = table_reader.sample_values(raw_col, n=_sample_size(active_config))
-                scores_for_field, contribs = {}, {}
+            for raw in reader.iter_columns():  # {"column_id":"col_1","header":"Employee ID","index":1}
+                sample = reader.sample_values(raw, n=sample_size(config))
+                scores, contrib = {}, {}
 
-                for field_name, mod in field_modules.items():
+                for field, mod in fields.items():
                     total = 0.0
-                    for rule_id, fn in mod.detect_rules:   # detect_* in columns/<field>.py
+                    for rule_id, fn in mod.detect_rules:  # detect_* inside columns/<field>.py
                         out = safe_call(rule_id, fn,
-                                        header=raw_col["header"],
+                                        header=raw["header"],
                                         values_sample=sample,
-                                        column_index=raw_col["index"],
-                                        sheet_name=s["name"],
-                                        table_id=t["id"],
-                                        field_name=field_name,
-                                        field_meta=_field_meta(active_config, field_name),
-                                        manifest=active_config.manifest,
-                                        artifact=artifact)
-                        delta = float(out.get("scores", {}).get(field_name, 0.0))
+                                        column_index=raw["index"],
+                                        sheet_name=s["name"], table_id=t["id"],
+                                        field_name=field, field_meta=field_meta(config, field),
+                                        manifest=config.manifest, artifact=artifact)
+                        delta = float(out.get("scores", {}).get(field, 0.0))
                         if delta:
                             total += delta
-                            contribs.setdefault(field_name, []).append({"rule": rule_id, "delta": delta})
-                    scores_for_field[field_name] = total
+                            contrib.setdefault(field, []).append({"rule": rule_id, "delta": delta})
+                    scores[field] = total
 
-                best_field, best_score = _pick_field(scores_for_field, active_config)
-                if best_field is None:
-                    _record_unmapped_raw(t, raw_col)  # visible in output plan later (optional 'append_unmapped')
+                field, score = pick_field(scores, min_score=config.manifest.get("mapping", {}).get("min_score"))
+                if field is None:
+                    record_unmapped(t, raw)  # visible later; may be appended as raw_* if enabled
                     continue
 
-                decision = {
-                    "raw": {"column": raw_col["column_id"], "header": raw_col["header"]},
-                    "target_field": best_field,
-                    "score": best_score,
-                    "contributors": contribs.get(best_field, [])
-                }
-                t["mapping"].append(decision)
+                t["mapping"].append({
+                    "raw": {"column": raw["column_id"], "header": raw["header"]},
+                    "target_field": field,
+                    "score": score,
+                    "contributors": contrib.get(field, [])
+                })
 
     mark_pass_done(artifact, 2, "mapping")
 ```
 
-**Choosing a field (tie/threshold logic):**
+**Picking a field (tie & threshold)**
 
 ```python
-def _pick_field(scores: dict[str, float], cfg):
-    items = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
-    if not items: return None, 0.0
-    top_field, top = items[0]
+def pick_field(scores: dict[str, float], min_score: float | None):
+    top = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+    if not top: return None, 0.0
+    best_field, best = top[0]
     # tie → unmapped
-    if len(items) > 1 and items[1][1] == top: return None, top
-    # threshold (optional)
-    min_score = cfg.manifest.get("mapping", {}).get("min_score")
-    if min_score is not None and top < float(min_score): return None, top
-    return top_field, top
+    if len(top) > 1 and top[1][1] == best: return None, best
+    # low confidence → unmapped
+    if min_score is not None and best < float(min_score): return None, best
+    return best_field, best
 ```
 
-> **Design note:** Detectors are tiny and composable. Header clues (synonyms/tokens) and value clues (shapes/patterns) *add up*. Negatives are allowed to push away from a field.
+> **Detector style:** Prefer several small, cheap, deterministic hints (header synonyms, value shape, locale nudges) over a single heavyweight detector. Negatives are allowed to push *away* from a field.
 
 ---
 
-## Pass 3–5 — Generate (Transform → Validate → Write)
+## 6) (Optional) Pass 2.5 — Analyze
 
-These steps run together while ADE writes the normalized workbook with a **row‑streaming writer**.
-
-**Goal:** Produce the final sheet in the order defined by `manifest.columns.order`. For each row in the source table, read the mapped cell → transform → validate → write.
-
-**Reads:** mapping, manifest (order/labels/flags), field modules
-**Writes:** `output` (path, plan), `sheets[].tables[].transforms[]`, `sheets[].tables[].validation.*`, and final `summary`
-
-### Output plan
+**Goal:** Compute small, cheap stats for sanity checks (e.g., distinct counts, empties).
+**Writes:** `artifact.analyze[table_id][field] = { "distinct": n, "empty": m }`
 
 ```python
-def _build_output_plan(active_config, t):
-    order = active_config.manifest["columns"]["order"]   # target field order
-    plan = []
-    for i, field in enumerate(order, start=1):
-        mapped = next((m for m in t["mapping"] if m["target_field"] == field), None)
-        plan.append({
-            "order": i,
-            "field": field,
-            "output_header": _label_for_field(active_config, field),
-            "source": mapped["raw"] if mapped else None
-        })
-    return plan
+def pass2_5_analyze(source_file, config, artifact):
+    if not analyze_enabled(config): return
+    artifact.setdefault("analyze", {})
+    for s in artifact["sheets"]:
+        for t in s["tables"]:
+            slot = artifact["analyze"].setdefault(t["id"], {})
+            for m in t.get("mapping", []):
+                vals = fetch_column(source_file, sheet=s["name"], a1=t["range"], column_id=m["raw"]["column"])
+                slot[m["target_field"]] = {"distinct": distinct_count(vals), "empty": count_empty(vals)}
 ```
 
-### Pseudocode (simple, readable version)
+---
 
-> This version materializes per‑column arrays for clarity. Real implementations may **chunk** or **iterator‑ize** to reduce memory while preserving the same contract.
+## 7) Pass 3–5 — Generate (Transform → Validate → Write)
+
+**Goal:** Produce the normalized workbook by streaming rows. For each target field (ordered by `manifest.columns.order`), ADE reads the mapped source cell, **transforms** it (optional), **validates** it (optional), and **writes** it.
+
+**Reads:** mapping, manifest (order/labels/flags), field modules
+**Writes:**
+
+* `output`: format, sheet, path, and an output **column plan**
+* `tables[].transforms[]`: per-field change counts
+* `tables[].validation.*`: per-cell issues with A1 coordinates + summaries
+* `summary`: rows/columns written, issues found
 
 ```python
-def run_pass3_to_5_generate(xls_reader, writer, active_config, artifact):
-    artifact["output"] = {
-      "format": "xlsx",
-      "sheet": "Normalized",
-      "path": f"jobs/{artifact['job']['id']}/normalized.xlsx",
-      "column_plan": {}
-    }
+def pass3_to_5_generate(source_file, config, artifact):
+    writer = open_writer(path=f"jobs/{artifact['job']['id']}/normalized.xlsx", sheet="Normalized")
+    manifest = config.manifest
+    fields = load_field_modules(config)
 
     for s in artifact["sheets"]:
         for t in s["tables"]:
-            plan = _build_output_plan(active_config, t)
-            artifact["output"]["column_plan"]["target"] = [
-              {"field": p["field"], "output_header": p["output_header"], "order": p["order"]}
-              for p in plan
-            ]
+            plan = build_output_plan(manifest, t)  # [{field, output_header, order, source:{column,header}|None}, ...]
 
-            # 1) Fetch raw columns and prepare processors per field
-            processors = {}   # field -> iterator of transformed values
+            # headers
+            writer.set_headers([p["output_header"] for p in plan] + maybe_unmapped_headers(manifest, t))
+
+            # prepare per-field iterators (keeps writing row-streaming)
+            processors = {}
             for p in plan:
                 field, src = p["field"], p["source"]
-                mod = _load_field_module(active_config, field)
-                values = []
-                if src:   # mapped
-                    values = xls_reader.fetch_column(s["name"], t["range"], src["column"])
+                values = fetch_column(source_file, sheet=s["name"], a1=t["range"], column_id=src["column"]) if src else repeat_none(row_count(t))
 
-                # Transform
-                if hasattr(mod, "transform"):
-                    tout = safe_call(f"transform.{field}", mod.transform,
-                                     values=values, header=(src or {}).get("header"),
-                                     column_index=_col_index(src),
-                                     sheet_name=s["name"], table_id=t["id"],
-                                     field_name=field, field_meta=_field_meta(active_config, field),
-                                     manifest=active_config.manifest, artifact=artifact)
-                    values2 = tout.get("values", values)
-                    _record_transform_summary(artifact, t, field, changed=_count_changes(values, values2), total=len(values2))
-                    values = values2
+                # transform
+                if has_transform(fields[field]):
+                    out = call_transform(fields[field],
+                                         values=values,
+                                         header=src["header"] if src else None,
+                                         column_index=src_index(src), sheet_name=s["name"], table_id=t["id"],
+                                         field_name=field, field_meta=field_meta(config, field),
+                                         manifest=manifest, artifact=artifact)
+                    new_vals = out.get("values", values)
+                    record_transform_summary(artifact, table=t, field=field,
+                                             changed=count_changes(values, new_vals), total=len(new_vals))
+                    values = new_vals
 
-                # Validate
-                if hasattr(mod, "validate") and values:
-                    vout = safe_call(f"validate.{field}", mod.validate,
-                                     values=values, header=(src or {}).get("header"),
-                                     column_index=_col_index(src),
-                                     sheet_name=s["name"], table_id=t["id"],
-                                     field_name=field, field_meta=_field_meta(active_config, field),
-                                     manifest=active_config.manifest, artifact=artifact)
-                    _record_issues_with_a1(artifact, s, t, field, vout.get("issues", []))  # adds A1 coords
+                # validate
+                if has_validate(fields[field]):
+                    vout = call_validate(fields[field],
+                                         values=values,
+                                         header=src["header"] if src else None,
+                                         column_index=src_index(src), sheet_name=s["name"], table_id=t["id"],
+                                         field_name=field, field_meta=field_meta(config, field),
+                                         manifest=manifest, artifact=artifact)
+                    attach_issues_with_a1(artifact, sheet=s, table=t, field=field, issues=vout.get("issues", []))
 
-                processors[field] = iter(values) if values else _repeat_none(_row_count(t))
+                processors[field] = iter(values)
 
-            # 2) Write rows in order, appending unmapped if configured
-            writer.start_sheet("Normalized", headers=[p["output_header"] for p in plan] + _maybe_unmapped_headers(active_config, t))
-            for _row_idx in range(_row_count(t)):
+            # stream rows
+            for r in range(row_count(t)):
                 out_row = [next(processors[p["field"]], None) for p in plan]
-                if _append_unmapped(active_config):
-                    out_row += _unmapped_values_at_row(xls_reader, s["name"], t, _row_idx)
+                if append_unmapped(manifest): out_row += unmapped_values_at_row(source_file, s["name"], t, r)
                 writer.write_row(out_row)
 
     writer.close()
 
-    # Final summaries
+    artifact["output"] = {
+      "format": "xlsx", "sheet": "Normalized",
+      "path": f"jobs/{artifact['job']['id']}/normalized.xlsx",
+      "column_plan": {
+        "target": [{"field": p["field"], "output_header": p["output_header"], "order": p["order"]} for p in plan]
+      }
+    }
     artifact["summary"] = {
       "rows_written": writer.rows_written,
       "columns_written": writer.columns_written,
-      "issues_found": _count_all_issues(artifact)
+      "issues_found": count_all_issues(artifact)
     }
     mark_pass_done(artifact, 3, "transform")
     mark_pass_done(artifact, 4, "validate")
     mark_pass_done(artifact, 5, "generate")
 ```
 
-### How A1 coordinates are attached to issues
+**Attaching A1 coordinates to issues**
 
 ```python
-def _record_issues_with_a1(artifact, s, t, field, issues):
-    # Each issue contains row_index (1-based within table) → convert to A1 using table.data_range and mapped column
+def attach_issues_with_a1(artifact, sheet, table, field, issues):
+    # Each issue has row_index (1-based within the table's data_range)
+    col_a1 = a1_for_mapped_target(table, field)   # derive column letter(s) from mapping/plan
     for issue in issues:
-        a1 = _a1_for(t["data_range"], issue["row_index"], _output_col_of_field(field, artifact))
-        artifact_issue = {
-          "a1": a1,
-          "row_index": issue["row_index"],
-          "target_field": field,
-          "code": issue["code"],
-          "severity": issue["severity"],
-          "message": issue["message"],
+        a1 = a1_from_row_col(table["data_range"], issue["row_index"], col_a1)
+        record_issue(artifact, sheet, table, {
+          "a1": a1, "row_index": issue["row_index"], "target_field": field,
+          "code": issue["code"], "severity": issue["severity"], "message": issue["message"],
           "rule": f"validate.{field}"
-        }
-        _append_issue(artifact, s, t, artifact_issue)
+        })
 ```
 
-> **Design note:** Even though transforms/validators are *specified* as column‑wise, the writer keeps overall execution **row‑streaming**. Engines commonly implement this by chunking columns or precomputing lightweight iterators so memory stays bounded.
+> **Implementation note:** The column contracts (transform/validate) are expressed over *vectors* (`values: list`), but engines can realize them with buffers/iterators so overall execution stays **row‑streaming**.
 
 ---
 
-## Hooks — where they run in the timeline
+## 8) Hooks — when and why
 
-Hooks are **optional**; they see the same structured context and may return `{"notes": "..."}` to annotate the artifact.
+Hooks are optional; they receive the same structured context and may annotate the artifact with `{"notes": "..."}`. Typical placements:
+
+| Hook file            | When it runs  | Good for…                        |
+| -------------------- | ------------- | -------------------------------- |
+| `on_job_start.py`    | Before Pass 1 | Logging metadata, warming caches |
+| `after_mapping.py`   | After Pass 2  | Alerting on unmapped columns     |
+| `after_transform.py` | After Pass 3  | Summaries/metrics                |
+| `after_validate.py`  | After Pass 4  | Aggregating issues, dashboards   |
 
 ```python
-def run_job(source_file, active_config):
-    artifact = make_initial_artifact(active_config, source_file, job_id=_new_job_id())
-    _run_hook("on_job_start", active_config, artifact)
-
-    run_pass1_structure(xls_reader=_open(source_file), active_config=active_config, artifact=artifact)
-
-    run_pass2_mapping(xls_reader=_open(source_file), active_config=active_config, artifact=artifact)
-    _maybe_run_analyze = active_config.manifest.get("analyze", {}).get("enabled", False)
-    if _maybe_run_analyze: run_pass2_5_analyze(_open(source_file), active_config, artifact)
-    _run_hook("after_mapping", active_config, artifact)
-
-    writer = _open_writer(path=f"jobs/{artifact['job']['id']}/normalized.xlsx")
-    run_pass3_to_5_generate(xls_reader=_open(source_file), writer=writer, active_config=active_config, artifact=artifact)
-    _run_hook("after_transform", active_config, artifact)
-    _run_hook("after_validate", active_config, artifact)
-
-    _finalize_artifact(artifact)
-    return artifact
+def run_hook(name, config, artifact):
+    mod = load_hook_module(config, name)          # if present
+    if not mod: return
+    out = safe_call(f"hook.{name}", mod.run, artifact=artifact, manifest=config.manifest, env=config.env, job_id=artifact["job"]["id"], source_file=artifact["job"]["source_file"])
+    if out: artifact.setdefault("hooks", {}).setdefault(name, []).append(out)
 ```
 
 ---
 
-## What each pass **reads** and **writes** (cheat‑sheet)
+## 9) Error handling & determinism
 
-| Pass                   | Reads from artifact                      | Writes to artifact                                                                        |
-| ---------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------- |
-| 0 — Init               | (none)                                   | `rules`, `job`, empty `sheets`, empty `output`, `pass_history[]`                          |
-| 1 — Structure          | `rules`, `config`                        | `sheets[].row_classification[]`, `sheets[].tables[]` with A1 ranges & headers             |
-| 2 — Mapping            | `sheets[].tables[]`                      | `tables[].mapping[]` (raw→target decisions, scores, contributors)                         |
-| 3–5 — Generate         | `mapping`, manifest `columns.order/meta` | `output` (path, column plan), `tables[].transforms[]`, `tables[].validation.*`, `summary` |
+* **Rule failures are contained:** If a detector/transform/validator raises, ADE records a neutral result and appends a rule‑error entry to the artifact, then continues.
+
+```python
+def safe_call(rule_id, fn, **kwargs):
+    try:
+        return fn(**kwargs) or {}
+    except Exception as e:
+        artifact = kwargs.get("artifact")
+        if artifact is not None:
+            artifact.setdefault("rule_errors", []).append({"rule": rule_id, "message": str(e), "at": now_iso()})
+        return {}  # neutral
+```
+
+* **Determinism:** Keep rules pure and bounded (no global state, no unseeded randomness).
+* **Security:** Runtime is sandboxed with time/memory limits; **network is off** by default (`allow_net: false`).
 
 ---
 
-## Determinism, safety, and errors
+## 10) Resumability & atomic writes
 
-* **Determinism:** Detectors, transforms, validators must be **pure** and **bounded**. Avoid global state and nondeterministic inputs.
-* **Safety:** Network is **off** by default (`allow_net: false`). Artifact stores **locations and decisions**, **not** raw values.
-* **Error containment:** If a rule throws, ADE records a neutral result and logs a rule‑level error trace in the artifact. The job continues.
+Because the artifact is saved atomically **after each pass**, jobs can resume safely:
 
 ```python
-def _append_rule_error(artifact, rule_id, message):
-    artifact.setdefault("rule_errors", []).append({
-       "rule": rule_id, "message": message, "at": _now()
-    })
+def resume_if_needed(artifact):
+    done = {p["pass"] for p in artifact.get("pass_history", [])}
+    if 1 not in done: pass1_structure(...)
+    if 2 not in done: pass2_mapping(...)
+    if 3 not in done or 4 not in done or 5 not in done:
+        pass3_to_5_generate(...)
 ```
 
 ---
 
-## Practical debugging with the artifact
+## 11) Practical debugging (reading the artifact)
 
-**Why did a column map that way?**
+**Explain a mapping decision**
 
 ```python
-def explain(artifact, table_id, raw_col):
+def explain_mapping(artifact, table_id, raw_column_id):
     for s in artifact["sheets"]:
         for t in s["tables"]:
-            if t["id"] != table_id: continue
-            for m in t.get("mapping", []):
-                if m["raw"]["column"] == raw_col:
-                    return {"target_field": m["target_field"], "score": m["score"], "contributors": m.get("contributors", [])}
+            if t["id"] == table_id:
+                for m in t.get("mapping", []):
+                    if m["raw"]["column"] == raw_column_id:
+                        return {"target_field": m["target_field"], "score": m["score"], "contributors": m.get("contributors", [])}
 ```
 
-**Where are the validation errors?**
+**List validation errors with coordinates**
 
 ```python
-def list_issues(artifact):
-    out = []
+def list_errors(artifact):
+    items = []
     for s in artifact["sheets"]:
         for t in s["tables"]:
             for issue in t.get("validation", {}).get("issues", []):
-                out.append((s.get("name"), t["id"], issue["a1"], issue["message"]))
-    return out
+                items.append((s.get("name"), t["id"], issue["a1"], issue["message"]))
+    return items
 ```
 
 ---
 
-## Appendix A — Minimal detector/transform/validator contracts (for reference)
+## 12) Reference: helper utilities used above
+
+```python
+def mark_pass_done(artifact, n, name):
+    artifact["pass_history"].append({"pass": n, "name": name, "completed_at": now_iso()})
+
+def choose_best_label(totals: dict, order: list[str]) -> str:
+    # highest score; tie broken by manifest-defined order
+    if not totals: return order[0]
+    top = max(order, key=lambda k: (totals.get(k, 0.0), -order.index(k)))
+    return top
+```
+
+---
+
+## 13) What to read next
+
+* **Artifact spec & schema** → `./14-job_artifact_json.md`
+* **Pass‑specific deep dives** →
+  `./03-pass-find-tables-and-headers.md` (row detection)
+  `./04-pass-map-columns-to-target-fields.md` (mapping)
+  `./05-pass-transform-values.md` (transform)
+  `./06-pass-validate-values.md` (validate)
+  `./07-pass-generate-normalized-workbook.md` (writer)
+
+---
+
+### Appendix A — Minimal detector, transform, validator signatures
 
 ```python
 # Row detector (Pass 1)
-def detect_*(*,
-    row_values_sample: list, row_index: int, sheet_name: str,
-    table_hint: dict | None = None, manifest: dict = {}, artifact: dict = {}, **_
-) -> dict:
-    # return {"scores": {"header": float, "data": float, "separator": float}}
+def detect_*(*, row_values_sample: list, row_index: int, sheet_name: str,
+             table_hint: dict | None = None, manifest: dict = {}, artifact: dict = {}, **_) -> dict:
+    # -> {"scores": {"header": float, "data": float, "separator": float}}
 
 # Column detector (Pass 2)
-def detect_*(*,
-    header: str | None, values_sample: list, column_index: int,
-    sheet_name: str, table_id: str, field_name: str, field_meta: dict,
-    manifest: dict = {}, artifact: dict = {}, **_
-) -> dict:
-    # return {"scores": {field_name: float}}
+def detect_*(*, header: str | None, values_sample: list, column_index: int,
+             sheet_name: str, table_id: str, field_name: str, field_meta: dict,
+             manifest: dict = {}, artifact: dict = {}, **_) -> dict:
+    # -> {"scores": {field_name: float}}
 
 # Transform (Pass 3)
-def transform(*,
-    values: list, header: str | None, column_index: int,
-    sheet_name: str, table_id: str, field_name: str, field_meta: dict,
-    manifest: dict = {}, artifact: dict = {}, **_
-) -> dict:
-    # return {"values": list, "warnings": list[str]}
+def transform(*, values: list, header: str | None, column_index: int,
+              sheet_name: str, table_id: str, field_name: str, field_meta: dict,
+              manifest: dict = {}, artifact: dict = {}, **_) -> dict:
+    # -> {"values": list, "warnings": list[str]}
 
 # Validate (Pass 4)
-def validate(*,
-    values: list, header: str | None, column_index: int,
-    sheet_name: str, table_id: str, field_name: str, field_meta: dict,
-    manifest: dict = {}, artifact: dict = {}, **_
-) -> dict:
-    # return {"issues": [{"row_index": int, "code": str, "severity": "error"|"warning"|"info", "message": str}]}
+def validate(*, values: list, header: str | None, column_index: int,
+             sheet_name: str, table_id: str, field_name: str, field_meta: dict,
+             manifest: dict = {}, artifact: dict = {}, **_) -> dict:
+    # -> {"issues": [{"row_index": int, "code": str, "severity": "error"|"warning"|"info", "message": str}]}
 ```
 
 ---
 
-## Appendix B — Design choices summarized
-
-* **Artifact‑first:** Every decision is recorded as data.
-* **Streaming:** Sheets are processed without full in‑memory loads.
-* **Small, testable rules:** Behavior is code; each rule is easy to unit‑test.
-* **Explainable scoring:** Multiple small deltas beat one opaque classifier.
-* **Unmapped is OK:** Ties and low‑confidence results remain unmapped (visible in artifact and, optionally, appended to output as `raw_*`).
-
-With this map, you can follow a job from the first byte read to the last cell written—and you’ll know exactly **what** each pass does, **when** it runs, **what** it reads and writes, and **where** to look in the artifact to explain the outcome.
+By putting the **artifact** at the center and keeping passes narrowly scoped, ADE achieves explainable, resumable, and safe processing. The pseudocode above is the roadmap: create the initial artifact, stream rows to **structure**, sample columns to **map**, then **generate** the normalized workbook while recording everything you—and your auditors—need to understand the run.
