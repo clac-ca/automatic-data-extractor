@@ -10,24 +10,6 @@ A [job](./12-glossary.md) turns an input file into a normalized spreadsheet usin
 > - **Pass 3–4 (inline)**: transform & validate as rows are written
 > - **Pass 5**: generate normalized workbook + summary
 
-````
-
-Input file
-├─ Pass 1: Row detection (find tables, capture source header)
-├─ Pass 2: Column detection & mapping (sample values; raw → target)
-├─ Pass 2.5: Analyze (tiny stats; optional)
-└─ Pass 3–5: Generate (row-streaming) = transform + validate + write
-
-````
-
----
-
-## Before you begin
-
-- Ensure exactly one **active** [config](./12-glossary.md) is set for the target [workspace](./12-glossary.md).
-- Skim the [Glossary](./12-glossary.md) for **source header**, **target field**, **output header**, and **mapping**.
-- Large files are fine: the writer streams **row by row**; transforms/validations run on each value as it is written.
-
 ---
 
 ## Pass 1 — Row detection (finding tables)
