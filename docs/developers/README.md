@@ -7,17 +7,6 @@ ADE turns messy spreadsheets into a clean, **normalized** workbook through a few
 
 ---
 
-## What you’ll learn
-
-* The big picture: **how ADE processes a file** from start to finish
-* How to **configure behavior** with a portable **config package**
-* How the **artifact JSON** explains every decision
-* Where to start to **add a new field** (e.g., detect/clean/validate **SIN**)
-
-> If you’re brand new, read this page top‑to‑bottom. Each section introduces an idea in plain language, then shows a minimal example you can copy.
-
----
-
 ## The big picture (how ADE runs a file)
 
 ADE processes a spreadsheet in small, ordered passes. Each pass **reads** from and **appends** to the same **artifact JSON** (your audit trail).
