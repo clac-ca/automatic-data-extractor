@@ -83,7 +83,7 @@ ADE streams rows one by one and applies **row‑type rules** from `row_types/*.p
     { "pass": 1, "name": "structure", "completed_at": "..." }
   ]
 }
-````
+```
 
 > **No header?** Promote the preceding row if data is seen first; otherwise synthesize `["Column 1", ...]` and mark `header.kind = "synthetic"`.
 
