@@ -20,20 +20,45 @@ Input workbook
 └─ Pass 5: Generate normalized workbook (row‑streaming writer)
 ```
 
-* **Streaming I/O**: reads rows/columns without loading entire sheets.
-* **Explainable**: rule scores and contributors show why a decision was made.
-* **Safe**: the artifact stores locations and decisions, **not raw cell data**.
-
 Deep dive: see **[job orchestration](./02-job-orchestration.md)**
 
 ---
 
 ## Core concepts (quick glossary)
+Here’s a cleaner, more visual and readable version of your glossary section — designed to look nice in Markdown docs and be skimmable at a glance.
+It uses indentation, light formatting, and visual rhythm to make each term stand out while keeping the tone consistent with your developer guide.
 
-* **Config package** — a portable folder that tells ADE how to find tables, map columns, transform, and validate. You create/edit configs in the **web UI** and can export/import them as a **.zip**. ADE versions configs automatically. See the **[config package guide](./01-config-packages.md)** for the structure and lifecycle.
-* **Target field** — a normalized column you want in the output (e.g., `member_id`, `sin`, `start_date`).
-* **Artifact JSON** — a single file ADE builds as it runs; it records structure, mappings, transforms, validations, and output info. Use it for **audit and troubleshooting** (see the **[artifact reference](./14-job_artifact_json.md)**).
-* **A1 ranges** — ADE uses Excel A1 notation to reference places (e.g., `"B4"`, `"B4:G159"`).
+---
+
+## 🧭 **Core Concepts**
+
+### 🧩 **Config package**
+
+A portable folder of Python scripts that tells ADE how to **find tables**, **map columns**, and optionally **transform or validate** values.
+You can create and edit configs directly in the **web UI**, then export or import them as a `.zip`.
+ADE automatically versions configs so you can track changes over time.
+→ Learn more in the [Config Package Guide](./01-config-packages.md).
+
+Perfect — here’s how you can fold that idea into the glossary entry for **Artifact JSON**, keeping the language crisp and readable while clearly explaining its role as both a *log* and a *shared state object*:
+
+### 📜 **Artifact JSON**
+
+A single JSON file that ADE builds and updates as it runs.
+It serves **two purposes**:
+
+1. **Audit record** – captures every decision ADE makes: which tables were found, how columns were mapped, how values were transformed or validated, and what the final output looks like.
+2. **Shared state** – acts as the **central data structure** passed between backend passes during job orchestration.
+
+When a job starts, ADE creates an initial artifact and hands it to **Pass 1**. Each pass reads, updates, and returns it — building up structure, mappings, and results as the pipeline moves forward.
+By the end, the artifact contains the full story of how raw input became clean, structured output.
+
+→ See the [Artifact Reference](./14-job_artifact_json.md) for a detailed breakdown.
+
+### 📏 **A1 ranges**
+
+ADE uses familiar Excel-style **A1 notation** to pinpoint cells and ranges (for example: `"B4"` or `"B4:G159"`).
+All issues, headers, and table locations use this format, so they’re easy to trace in the original spreadsheet.
+
 
 Reference: **[glossary](./12-glossary.md)**
 
@@ -66,65 +91,6 @@ A config package is a **folder (or zip)** you manage in the UI:
 * **Hooks** let you run custom logic around stages. Hook timing is described in the **[job orchestration guide](./02-job-orchestration.md)**.
 
 Details & contracts: see the **[config package guide](./01-config-packages.md)**
-
----
-
-## The artifact JSON (why you should care)
-
-**During** a run, the artifact lets rules **consult prior decisions** (read‑only).
-**After** a run, it is your **audit log** and **debugging tool**.
-
-What you’ll find inside:
-
-* **`rules` registry** — short IDs → `impl` path + content hash
-* **`sheets[].tables[]`** — A1 ranges, header descriptor, source headers
-* **`mapping[]`** — raw→target assignments, scores, and rule contributors
-* **`transforms[]` / `validation`** — change counts, issues with cell locations
-* **`output` + `summary`** — where the normalized file was written and basic stats
-
-Minimal example snippet:
-
-```json
-{
-  "rules": {
-    "col.sin.detect_value_shape": { "impl": "columns/sin.py:detect_value_shape", "version": "af31bc" }
-  },
-  "sheets": [{
-    "id": "sheet_1",
-    "tables": [{
-      "id": "table_1",
-      "mapping": [
-        {
-          "raw": { "column": "col_3", "header": "SIN Number" },
-          "target_field": "sin",
-          "score": 1.7,
-          "contributors": [{ "rule": "col.sin.detect_value_shape", "delta": 0.9 }]
-        }
-      ]
-    }]
-  }]
-}
-```
-
-Full example, schema, and Pydantic models: see the **[artifact reference](./14-job_artifact_json.md)**
-
----
-
-## Development workflow (UI‑first, versioned)
-
-1. **Create a draft config** in the UI (the UI scaffolds your package). The layout mirrors the **[config package guide](./01-config-packages.md#whats-inside-a-config-package)**.
-2. **Edit scripts** and `manifest.json` (tests and sample runs encouraged). Borrow patterns from **[examples & recipes](./10-examples-and-recipes.md)** or consult **[troubleshooting tips](./11-troubleshooting.md)** while iterating.
-3. **Activate** when ready (ADE archives the previously active config).
-4. **Export/import** as a `.zip` to share across workspaces.
-5. **Roll back** by cloning an archived config to a new draft and re‑activating.
-
-Validation layers:
-
-* **L1 (client)**: Schema + structure checks for the package and manifest
-* **L2 (client)**: Static Python checks (syntax & signatures)
-* **L3 (server)**: Sandboxed import + tiny dry‑runs; builds the **rule registry** stored in the artifact
-
-Details: **[config package guide](./01-config-packages.md)**
 
 ---
 
