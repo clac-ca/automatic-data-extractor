@@ -24,12 +24,12 @@ ADE processes files through several small, logical steps — each one building o
 
 ```mermaid
 flowchart TD
-    A[📂 Input File] --> B[Pass 1: Find tables<br/>(rows → structure)]
-    B --> C[Pass 2: Name columns<br/>(columns → mapping)]
-    C --> D[Pass 3: Transform while writing rows<br/>(→ transforms summary)]
-    D --> E[Pass 4: Validate while writing rows<br/>(→ validation issues)]
-    E --> F[Pass 5: Finish normalized workbook<br/>(→ output + summary)]
-    F --> G[📘 Clean, structured output]
+    A["Input File"] --> B["Pass 1: Find tables (rows → structure)"]
+    B --> C["Pass 2: Name columns (columns → mapping)"]
+    C --> D["Pass 3: Transform while writing rows (→ transform summary)"]
+    D --> E["Pass 4: Validate while writing rows (→ validation issues)"]
+    E --> F["Pass 5: Finish normalized workbook (→ output + summary)"]
+    F --> G["Clean, structured output"]
 ```
 
 
