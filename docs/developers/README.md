@@ -11,15 +11,11 @@ In short, ADE helps you go from *unstructured input* to *reliable output* withou
 
 ## Key Concepts
 
-Let’s break down what makes ADE work.
-
 #### **1. Streaming I/O — ADE reads files as a stream, not all at once.**
 
 Instead of loading entire spreadsheets into memory, ADE reads them *row by row*.
 This streaming approach keeps processing fast and memory-efficient, even for huge files.
 It also enables early detection of structure — ADE can begin identifying headers and tables before the full file has been read.
-
----
 
 #### **2. Passes — ADE cleans data step-by-step through a simple pipeline.**
 
@@ -47,15 +43,11 @@ Each pass has a clear, focused purpose:
   Validation results are recorded for reporting but never alter the data itself.
 * **Pass 5 — Finalize Workbook:** Writes the cleaned and validated data into a normalized output file, with summaries of transformations and issues.
 
----
-
 #### **3. Config Packages — Rules live in portable, versioned folders.**
 
 All processing logic comes from a **config package**: a small folder of Python scripts that describe how to detect rows, name columns, and (optionally) transform or validate values.
 Because configs are just files, you can version-control them, share them between environments, and activate them per workspace.
 This makes ADE’s behavior fully deterministic and reproducible.
-
----
 
 #### **4. Artifact JSON — One evolving object carries context through every pass.**
 
