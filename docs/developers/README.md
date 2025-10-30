@@ -30,9 +30,9 @@ It uses indentation, light formatting, and visual rhythm to make each term stand
 
 ---
 
-## 🧭 **Core Concepts**
+## **Core Concepts**
 
-### 🧩 **Config package**
+### **Config package**
 
 A portable folder of Python scripts that tells ADE how to **find tables**, **map columns**, and optionally **transform or validate** values.
 You can create and edit configs directly in the **web UI**, then export or import them as a `.zip`.
@@ -41,7 +41,7 @@ ADE automatically versions configs so you can track changes over time.
 
 Perfect — here’s how you can fold that idea into the glossary entry for **Artifact JSON**, keeping the language crisp and readable while clearly explaining its role as both a *log* and a *shared state object*:
 
-### 📜 **Artifact JSON**
+### **Artifact JSON**
 
 A single JSON file that ADE builds and updates as it runs.
 It serves **two purposes**:
@@ -54,7 +54,7 @@ By the end, the artifact contains the full story of how raw input became clean, 
 
 → See the [Artifact Reference](./14-job_artifact_json.md) for a detailed breakdown.
 
-### 📏 **A1 ranges**
+### **A1 ranges**
 
 ADE uses familiar Excel-style **A1 notation** to pinpoint cells and ranges (for example: `"B4"` or `"B4:G159"`).
 All issues, headers, and table locations use this format, so they’re easy to trace in the original spreadsheet.
