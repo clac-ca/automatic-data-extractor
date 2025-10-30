@@ -93,7 +93,7 @@ print(normalized)  # ['A123', 'A124', None, 'A125']
 - Voice: second person, imperative, active, present tense
 - Avoids “simple,” “easy,” “just,” “obviously,” and similar fillers
 - Headings: Title Case (H1) and sentence case (H2+); list items parallel
-- First occurrence of defined terms links to `../glossary.md`
+- First occurrence of defined terms links to `../12-glossary.md`
 - Minimal example ≤ 30 lines; placeholders are clear; snippet conventions applied
 - Links are descriptive and relative; no secrets in code or text
 - Accessibility: heading order, alt text for images if any, tables/code render well

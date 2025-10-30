@@ -21,4 +21,4 @@ Secrets are stored encrypted in the manifest. They are decrypted only inside the
 
 ## Links
 
-- See: `../09-security-and-secrets.md`
+- See: `../13-design-decisions.md`

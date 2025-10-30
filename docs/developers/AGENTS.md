@@ -12,7 +12,7 @@ Scope: This file governs all content under `docs/developers/`.
 - templates/ — reusable page and snippet templates (do not publish content here).
 - schemas/ — JSON Schemas used by docs; add examples that validate against them.
 - design-decisions/ — permanent “DD” files capturing major decisions.
-- Top‑level numbered pages (e.g., `01-config-packages.md`, `03-mapping-format.md`).
+- Top-level numbered pages (e.g., `01-config-packages.md`, `04-pass-map-columns-to-target-fields.md`).
 - Use two‑digit numeric prefixes to control order; keep existing numbers stable.
 
 ## Page Structure (use templates/page-template.md)
@@ -36,7 +36,7 @@ Optional: include the “Pipeline at a glance” block where relevant.
 - Diagrams: ASCII only, ≤ 80 chars wide, with a short title.
 - Code blocks: ≤ 30 lines. Indicate omissions with language‑appropriate comments (for example, `# ...` for Python/YAML/Bash and `// ...` for JS/JSON).
 - Do/Don’t boxes: use blockquotes with “Do:” and “Don’t:”.
-- Terminology: define in `glossary.md` once; link the first occurrence on a page.
+- Terminology: define in `12-glossary.md` once; link the first occurrence on a page.
 - Navigation: every page ends with “Next” and “Previous”.
 
 ## Snippet Conventions
@@ -47,7 +47,7 @@ Optional: include the “Pipeline at a glance” block where relevant.
 
 ## Cross‑Linking
 
-- Use relative links only (no absolute URLs). Example: `../glossary.md`.
+- Use relative links only (no absolute URLs). Example: `../12-glossary.md`.
 - When schemas are relevant, link into `schemas/…`.
 - Link to DDs under `design-decisions/` from the relevant pages.
 
@@ -59,13 +59,13 @@ Optional: include the “Pipeline at a glance” block where relevant.
 
 ## Schemas
 
-- Keep JSON Schemas in `schemas/` and update references (e.g., `03-mapping-format.md`).
+- Keep JSON Schemas in `schemas/` and update references (e.g., `04-pass-map-columns-to-target-fields.md`).
 - Provide small validating examples alongside narrative pages where useful.
 
 ## Review Checklist (PRs)
 
 - Page follows the template with Audience/Goal and Next/Previous links.
 - Examples ≤ 30 lines, use elisions where needed, and match snippet conventions.
-- First use of glossary terms links to `glossary.md`.
+- First use of glossary terms links to `12-glossary.md`.
 - References to schemas point to `schemas/`.
 - If introducing/altering a big concept, add or update a DD.

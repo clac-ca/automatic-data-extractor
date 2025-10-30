@@ -33,7 +33,7 @@ Review drafts for tone and clarity. Remove colloquial fillers, pick precise verb
 - **Put conditions before instructions.** For example, write “If you have not installed the CLI, install it now” instead of “Install the CLI if you have not already done so.”
 - Address the reader with **second person pronouns** (“you”). Avoid gendered language (“administrator updates the configuration” instead of “admin updates his configuration”). Use “we” only when the docs must speak for the team or product, and do so sparingly to avoid confusion.
 - Spell out abbreviations and acronyms on first use unless they are universally known (for example, HTTP or JSON). Example: “Use the Cloud Execution Manager (CEM) to orchestrate tasks…” Then use the acronym for subsequent mentions.
-- If a term appears in the glossary, link its first mention on a page to `docs/developers/glossary.md`. Maintain consistent terminology—do not switch between synonyms for the same concept.
+- If a term appears in the glossary, link its first mention on a page to `docs/developers/12-glossary.md`. Maintain consistent terminology—do not switch between synonyms for the same concept.
 
 ---
 

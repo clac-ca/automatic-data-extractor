@@ -21,4 +21,4 @@ Exactly one active config per workspace. Others are `draft` or `archived`.
 
 ## Links
 
-- See: `../glossary.md`
+- See: `../12-glossary.md`

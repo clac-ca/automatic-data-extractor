@@ -1,7 +1,7 @@
-# Mapping Format — Reference
+# Pass 2 — Map Columns to Target Fields
 
-**Audience:** Engineers and integrators consuming or inspecting mappings  
-**Goal:** Understand the shape of `mapping.v1` and how to use it for review and downstream integrations
+**Audience:** Engineers reviewing pass 2 output (column mapping) and downstream integrators  
+**Goal:** Understand how pass 2 records assignments in the artifact so you can audit and reuse them.
 
 > **At a glance**
 >
@@ -43,7 +43,7 @@
 ---
 
 ## Schema
-See `schemas/mapping.v1.schema.json` for the authoritative definition.
+See `schemas/artifact.v1.1.schema.json` (tables → `mapping`) for the authoritative definition.
 
 ## Notes
 - Keep the mapping free of full data. Include only samples and decisions.
@@ -52,10 +52,10 @@ See `schemas/mapping.v1.schema.json` for the authoritative definition.
 
 ## What’s next
 
-- Learn how scripts run in [04-runtime-model.md](./04-runtime-model.md)
-- See how mappings are produced in [02-jobs-pipeline.md](./02-jobs-pipeline.md)
+- Learn how transforms run in [05-pass-transform-values.md](./05-pass-transform-values.md).
+- See how mappings are produced in [02-job-orchestration.md](./02-job-orchestration.md).
 
 ---
 
-Previous: [02-jobs-pipeline.md](./02-jobs-pipeline.md)  
-Next: [04-runtime-model.md](./04-runtime-model.md)
+Previous: [03-pass-find-tables-and-headers.md](./03-pass-find-tables-and-headers.md)  
+Next: [05-pass-transform-values.md](./05-pass-transform-values.md)

@@ -47,4 +47,9 @@ def transform(*, column: list[str], **_):
 Normalize case and whitespace early inside transforms. Prefer explicit parsing and error handling for numeric fields.
 
 ## What to read next
-Read `08-scaling-and-performance.md` for guidance on throughput and memory.
+Jump to [11-troubleshooting.md](./11-troubleshooting.md) for common failure modes and fixes.
+
+---
+
+Previous: [07-pass-generate-normalized-workbook.md](./07-pass-generate-normalized-workbook.md)  
+Next: [11-troubleshooting.md](./11-troubleshooting.md)

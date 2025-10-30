@@ -110,29 +110,29 @@ npm run ci      # Full CI pipeline
   - `templates/` — page and snippet templates (use these).
   - `schemas/` — JSON Schemas referenced from docs.
   - `design-decisions/` — Design Decisions (DD).
-  - Numbered pages (e.g., `01-config-packages.md`, `03-mapping-format.md`). Keep numbers stable.
+  - Numbered pages (e.g., `01-config-packages.md`, `04-pass-map-columns-to-target-fields.md`). Keep numbers stable.
 
 When to update docs (triggers)
 
 - API surface changes (routes, params, response shapes)
-  - Update: `docs/developers/05-backend-api.md` (+ request/response snippets).
+  - Record the change under `13-design-decisions.md` and link the relevant DD.
 - Manifest or mapping schema shape changes
-  - Update: `docs/developers/schemas/*`, `03-mapping-format.md`, and `01-config-packages.md` if contracts changed.
+  - Update: `docs/developers/schemas/*`, `04-pass-map-columns-to-target-fields.md`, and `01-config-packages.md` if contracts changed.
 - Script contracts (hooks/detectors/transforms) or kwargs change
-  - Update: `01-config-packages.md` and `04-runtime-model.md`.
+  - Update: `01-config-packages.md` and `05-pass-transform-values.md`.
 - Pipeline behavior or pass boundaries change
-  - Update: `02-jobs-pipeline.md`; consider a DD (see below).
+  - Update: `02-job-orchestration.md`; consider a DD (see below).
 - Validation or diagnostics shape change
-  - Update: `06-validation-and-diagnostics.md`.
+  - Update: `06-pass-validate-values.md`.
 - Security/secrets behavior change
-  - Update: `09-security-and-secrets.md`; consider a DD.
+  - Record updates in `13-design-decisions.md`; add or revise a DD as needed.
 - New common authoring pattern or best practice
-  - Update: `07-examples-and-recipes.md` (add a small copy‑pasteable example).
+  - Update: `10-examples-and-recipes.md` (add a small copy‑pasteable example).
 
 Navigation conventions
 
 - Each page ends with “Next” and “Previous” relative links.
-- First use of a defined term links to `docs/developers/glossary.md`.
+- First use of a defined term links to `docs/developers/12-glossary.md`.
 
 ---
 
