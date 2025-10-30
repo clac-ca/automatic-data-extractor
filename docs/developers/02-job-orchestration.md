@@ -59,8 +59,6 @@ Start
   ├─ Pass 2: Mapping
   │   └─ sample raw columns → score per target field → pick / leave unmapped
   │
-  ├─ (Pass 2.5: Analyze)  ← optional tiny stats for sanity checks
-  │
   ├─ Pass 3–5: Generate
   │   └─ for each row: Transform → Validate → Write → record summaries/issues
   │
