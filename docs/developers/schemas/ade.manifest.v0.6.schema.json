@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ade:manifest.v0.6",
+  "title": "ADE Config Manifest v0.6",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["info", "engine", "hooks", "columns", "row_types"],
+  "properties": {
+    "info": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "title", "version"],
+      "properties": {
+        "schema": { "type": "string", "const": "ade.manifest/v0.6" },
+        "title": { "type": "string", "minLength": 1 },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+        },
+        "description": { "type": "string" }
+      }
+    },
+
+    "env": {
+      "type": "object",
+      "description": "Environment variables exposed to scripts",
+      "additionalProperties": { "type": "string" }
+    },
+
+    "secrets": {
+      "type": "object",
+      "description": "Encrypted secrets resolved at runtime in sandbox",
+      "additionalProperties": { "type": "string" }
+    },
+
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["defaults", "writer"],
+      "properties": {
+        "defaults": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout_ms": { "type": "integer", "minimum": 100 },
+            "memory_mb": { "type": "integer", "minimum": 64 },
+            "allow_net": { "type": "boolean", "default": false }
+          }
+        },
+        "writer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "append_unmapped_columns", "unmapped_prefix", "output_sheet"],
+          "properties": {
+            "mode": { "type": "string", "enum": ["row_streaming", "in_memory"], "default": "row_streaming" },
+            "append_unmapped_columns": { "type": "boolean", "default": true },
+            "unmapped_prefix": { "type": "string", "default": "raw_" },
+            "output_sheet": { "type": "string", "default": "Normalized" }
+          }
+        }
+      }
+    },
+
+    "hooks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "on_job_start":       { "$ref": "#/$defs/HookList" },
+        "after_detection":    { "$ref": "#/$defs/HookList" },
+        "after_transformation": { "$ref": "#/$defs/HookList" },
+        "after_validation":   { "$ref": "#/$defs/HookList" },
+        "on_job_end":         { "$ref": "#/$defs/HookList" }
+      }
+    },
+
+    "columns": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["order", "meta"],
+      "properties": {
+        "order": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TargetFieldId" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "meta": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/ColumnMeta" }
+        }
+      }
+    },
+
+    "row_types": {
+      "type": "object",
+      "description": "Row-type detectors grouped by row kind; scripts under row_types/",
+      "additionalProperties": { "$ref": "#/$defs/RowTypeMeta" },
+      "properties": {
+        "header": { "$ref": "#/$defs/RowTypeMeta" },
+        "data": { "$ref": "#/$defs/RowTypeMeta" },
+        "separator": { "$ref": "#/$defs/RowTypeMeta" }
+      },
+      "minProperties": 1
+    },
+
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "labels": {
+          "type": "object",
+          "description": "Override output headers per target field",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "ScriptRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["script"],
+      "properties": {
+        "script": {
+          "type": "string",
+          "pattern": "^(hooks\\/)?[A-Za-z0-9_.\\-\\/]+\\.py$"
+        },
+        "enabled": { "type": "boolean", "default": true }
+      }
+    },
+
+    "HookList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ScriptRef" }
+    },
+
+    "TargetFieldId": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+
+    "ColumnMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "script"],
+      "properties": {
+        "label": { "type": "string" },
+        "required": { "type": "boolean", "default": false },
+        "enabled": { "type": "boolean", "default": true },
+        "script": {
+          "type": "string",
+          "pattern": "^columns\\/[A-Za-z0-9_.\\-\\/]+\\.py$"
+        },
+        "synonyms": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "output_label": { "type": "string" }
+      }
+    },
+
+    "RowTypeMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["script"],
+      "properties": {
+        "label": { "type": "string" },
+        "enabled": { "type": "boolean", "default": true },
+        "script": {
+          "type": "string",
+          "pattern": "^row_types\\/[A-Za-z0-9_.\\-\\/]+\\.py$"
+        }
+      }
+    }
+  }
+}
