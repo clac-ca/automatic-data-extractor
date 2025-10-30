@@ -39,8 +39,6 @@ You can create and edit configs directly in the **web UI**, then export or impor
 ADE automatically versions configs so you can track changes over time.
 → Learn more in the [Config Package Guide](./01-config-packages.md).
 
-Perfect — here’s how you can fold that idea into the glossary entry for **Artifact JSON**, keeping the language crisp and readable while clearly explaining its role as both a *log* and a *shared state object*:
-
 ### **Artifact JSON**
 
 A single JSON file that ADE builds and updates as it runs.
