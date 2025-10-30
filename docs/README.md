@@ -1,13 +1,13 @@
 # ADE Documentation Hub
 
-Welcome to the Automatic Data Extractor (ADE) documentation. The guides are organised by persona so that readers can focus on the tasks that matter to them.
+Welcome to the Automatic Data Extractor (ADE) documentation. We are publishing the guides incrementally, starting with the developer experience.
 
-- [User Guide](user-guide/README.md) – conceptual walkthrough of the upcoming frontend experience, from uploading documents to tracking job runs.
-- [Admin Guide](admin-guide/README.md) – installation, configuration, security, and operational runbooks for the ADE backend.
-- [API Guide](reference/api-guide.md) – developer reference for integrating with the ADE HTTP API.
-- [Glossary](reference/glossary.md) – shared terminology covering API entities and identifiers.
+- [Developer Docs](developers/README.md) – deep dive into how ADE processes spreadsheets, the artifact model, and how to reason about jobs.
 
-Each guide keeps jargon to a minimum and links to additional resources where needed so you can adopt ADE at your own pace.
+Planned sections (coming soon):
+- User Guide – walkthrough of the frontend experience, from uploading documents to tracking job runs.
+- Admin Guide – installation, configuration, security, and operational runbooks for the ADE backend.
+- API Guide – developer reference for integrating with the ADE HTTP API.
+- Glossary – shared terminology covering API entities and identifiers.
 
-> **Tip**
-> Start with the User Guide to understand the job lifecycle from a user’s perspective, then dive into the API Guide or Admin Guide when you are ready to automate or operate the platform.
+Check back as we expand each persona-focused guide, and reach out if you spot gaps or need a topic prioritised.

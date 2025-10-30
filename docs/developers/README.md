@@ -1,42 +1,93 @@
-# ADE — Multi‑Pass Overview (Artifact‑First)
+# ADE — Multi-Pass Overview (Artifact-First, Beginner-Friendly)
 
-ADE converts messy spreadsheets into a consistent **normalized** Excel output using a streaming, multi‑pass pipeline. It reads **rows** to find tables and header rows, scores **columns** to map them to **target fields**, and then **writes rows** to a new workbook, applying transforms and validations inline (row‑streaming writer).
+## What is ADE?
 
-* **One artifact JSON** is created at job start and **enriched in place** by each pass.
-* We use **Excel A1 notation** for cells and ranges (e.g., `"B4"`, `"B4:G159"`).
-* Behavior lives in a portable [config](./glossary.md); a [job](./glossary.md) applies one config to one file and records lineage.
+ADE is a lightweight engine that takes messy Excel files and turns them into clean, consistent spreadsheets.
+It does this automatically through a few simple “passes.” Each pass performs a clear task: first finding tables, then understanding what each column represents, and finally writing a new, standardized workbook — transforming and validating values along the way.
 
----
-
-## Terms (kept obvious and consistent)
-
-* **source header** – the header text found in the input (cleaned/flattened).
-* **target field** – the field name defined by the config (formerly “canonical”).
-* **output header** – the label written to the normalized output for a target field.
-* **raw column** – a physical column in the input table (`col_1`, `col_2`, …).
-* **mapping** – assignment from a raw column to a target field with a score.
-* **append unmapped** – if true (default), raw columns that didn’t map are appended to the far right as `raw_<sanitized_header>`.
-
-**IDs (stable within a job):**  
-`sheets: sheet_1…`, `tables (per sheet): table_1…`, `columns (per table): col_1…`, `rows: 1‑based`.
+In short, ADE helps you go from *unstructured input* to *reliable output* without manual cleanup.
 
 ---
 
-## Excel ranges (A1 notation)
+## Key concepts
 
-* **Cell**: `"B4"`
-* **Range**: `"B4:G159"`
-* **Header row index** is numeric (easier for code); **table bounds** keep both A1 and numeric.
-* **Data range** is the table range **without** the header row (e.g., `"B5:G159"`).
+Let’s break down what makes ADE work:
+
+### **1. Streaming I/O**
+
+ADE reads spreadsheets *piece by piece* rather than loading the whole file into memory.
+This streaming approach keeps it fast and efficient, even for very large files.
+
+### **2. Passes**
+
+ADE processes files through several small, logical steps — each one building on the last:
+
+```
+
+Input file
+├─ Pass 1: Find tables (rows)              → structure
+├─ Pass 2: Name columns (columns)          → mapping
+├─ Pass 3: Transform while writing rows    → transforms summary
+├─ Pass 4: Validate while writing rows     → validation issues
+└─ Pass 5: Finish normalized workbook      → output + summary
+
+```
+
+### **3. Configs**
+
+All the rules that tell ADE *how* to process a file live inside a **config package** — a portable folder of small Python scripts.
+When you run a **job**, ADE uses one config for one file, ensuring the process is deterministic and fully reproducible.
+
+### **4. Artifact JSON**
+
+Behind the scenes, ADE creates and updates a single **artifact JSON** file during each run.
+Think of this as a detailed journal — it records every table found, every mapping made, every rule applied, and every issue detected.
+This artifact isn’t just a log — it’s a complete data model that shows *how* your messy spreadsheet became clean.
 
 ---
 
-## Artifact JSON — minimal, intuitive shape
+## A few terms (plain language first)
 
-The artifact is the single source of truth. It stores **decisions and traces**, not raw cell data.
+These names appear throughout the docs and in the artifact.
 
-### Root
+- **source header** — the header text ADE finds in your input (cleaned/flattened)
+- **target field** — the field name your config defines (what you want in the normalized output)
+- **output header** — the label written to the normalized file for that target field
+- **raw column** — a physical column in an input table (`col_1`, `col_2`, …)
+- **mapping** — a decision: “raw column X **is** target field Y (score Z)”
+- **append unmapped** — if on (default), any raw columns that didn’t map are appended at the right as `raw_<sanitized_header>`
 
+**Stable IDs within a job**  
+`sheets: sheet_1…` · `tables (per sheet): table_1…` · `columns (per table): col_1…` · `rows: 1‑based`
+
+*Why this matters:* consistent names make the artifact readable and let you cross‑reference logs, screenshots, and code with ease.
+
+---
+
+## How ADE points to places in a sheet (A1 ranges)
+
+**What is this section?**  
+ADE uses **Excel A1 notation** to identify cells and ranges (e.g., `"B4"`, `"B4:G159"`). This is the same notation you see in Excel’s name box, so it’s immediately recognizable.
+
+**Why it matters:**  
+When ADE reports validation issues or table bounds, you can jump to the exact spot in the original file.
+
+- **Cell:** `"B4"`  
+- **Range:** `"B4:G159"`  
+- **Header row index:** numeric (easier for code)  
+- **Data range:** table range **without** the header row (e.g., `"B5:G159"`)
+
+---
+
+## The artifact JSON — the story of a job
+
+**What is it?**  
+A compact, append‑only JSON file that records how ADE read, mapped, transformed, validated, and wrote your data.
+
+**Why it matters:**  
+It’s your **audit trail** and **API** in one place: every pass reads from it and writes back to it. It stores **decisions and traces**, not raw cell data.
+
+**Root (minimal shape)**
 ```json
 {
   "artifact_version": "1.1",
@@ -55,21 +106,20 @@ The artifact is the single source of truth. It stores **decisions and traces**, 
   },
   "rules": {
     "row_types": {
-      "row.header.text_density":   { "impl": "row_types/header.py:detect_text_density",   "version": "a1f39d" },
-      "row.header.synonym_hits":   { "impl": "row_types/header.py:detect_synonym_hits",   "version": "a1f39d" },
-      "row.data.numeric_density":  { "impl": "row_types/data.py:detect_numeric_density",  "version": "b1130d" },
-      "row.separator.blank_ratio": { "impl": "row_types/separator.py:detect_blank_ratio", "version": "c22f01" }
+      "row.header.text_density":  { "impl": "row_types/header.py:detect_text_density",  "version": "a1f39d" },
+      "row.header.synonym_hits":  { "impl": "row_types/header.py:detect_synonym_hits",  "version": "a1f39d" },
+      "row.data.numeric_density": { "impl": "row_types/data.py:detect_numeric_density", "version": "b1130d" }
     },
     "column_detect": {
-      "col.member_id.pattern":     { "impl": "columns/member_id.py:detect_pattern",       "version": "b77bf2" },
-      "col.department.synonyms":   { "impl": "columns/department.py:detect_synonyms",     "version": "c1d004" }
+      "col.member_id.pattern":   { "impl": "columns/member_id.py:detect_pattern",      "version": "b77bf2" },
+      "col.department.synonyms": { "impl": "columns/department.py:detect_synonyms",    "version": "c1d004" }
     },
     "transform": {
-      "transform.member_id":       { "impl": "columns/member_id.py:transform_value",      "version": "d93210" }
+      "transform.member_id":     { "impl": "columns/member_id.py:transform",           "version": "d93210" }
     },
     "validate": {
-      "validate.member_id.value":  { "impl": "columns/member_id.py:validate_value",       "version": "ee12c3" },
-      "validate.required":         { "impl": "columns/_shared.py:validate_required",      "version": "0aa921" }
+      "validate.member_id":      { "impl": "columns/member_id.py:validate",            "version": "ee12c3" },
+      "validate.required":       { "impl": "columns/_shared.py:validate_required",     "version": "0aa921" }
     }
   },
   "sheets": [],
@@ -79,40 +129,35 @@ The artifact is the single source of truth. It stores **decisions and traces**, 
 }
 ```
 
-**Why this is simple:**
-
-* A **rule registry** at the root (`rules.*`) means traces elsewhere reference **only `rule` IDs** (no duplicate function names).
-* The rest is `sheets → tables` with **ranges**, **headers**, **columns**, **mapping**, **transforms**, **validation**.
+**How rule tracing stays readable**
+The `rules` section acts as a **registry**. Everywhere else we reference rules by short IDs (like `"col.member_id.pattern"`). That keeps the artifact small, consistent, and fully auditable.
 
 ---
 
-## The same artifact, enriched per pass
+## Pass‑by‑pass: how the artifact grows
 
-Each pass **reads** from earlier sections and **appends** to the same artifact. To keep this light, we include **placeholders** where content is unchanged.
+Each subsection starts by explaining the *why*, then shows a **small** JSON slice for the *how*. Ellipses (`"..."`) mean “unchanged content.”
 
-### Pass 1 — Structure (row detection; **row streaming**)
+### Pass 1 — Find structure (row detection)
 
-**Reads:** `job`, `engine`, `rules.row_types`
-**Appends:** `sheets[].row_classification`, `sheets[].tables[]` with ranges and header
+**Plain language:** ADE scans rows to decide which row is the **header** and where each **table** begins and ends.
+
+**Why this matters:** later phases rely on good bounds and header text to make correct mappings.
+
+**Appends:** `sheets[].row_classification`, `sheets[].tables[]`
 
 ```json
 {
-  "artifact_version": "1.1",
-  "job": { "..." : "..." },
-  "engine": { "..." : "..." },
-  "rules": { "..." : "..." },
-
   "sheets": [
     {
       "id": "sheet_1",
       "name": "Employees",
-
       "row_classification": [
         {
           "row_index": 4,
           "label": "header",
           "confidence": 0.91,
-          "scores_by_type": { "header": 1.24, "data": 0.11, "separator": -0.10 },
+          "scores_by_type": { "header": 1.24, "data": 0.11 },
           "rule_traces": [
             { "rule": "row.header.text_density",  "delta": 0.62 },
             { "rule": "row.header.synonym_hits",  "delta": 0.28 },
@@ -120,19 +165,16 @@ Each pass **reads** from earlier sections and **appends** to the same artifact. 
           ]
         }
       ],
-
       "tables": [
         {
           "id": "table_1",
           "range": "B4:G159",
           "data_range": "B5:G159",
-
           "header": {
-            "kind": "raw",  // "raw" | "synthetic"
+            "kind": "raw",  // or "synthetic" if no header found
             "row_index": 4,
             "source_header": ["Employee ID", "Name", "Department", "Start Date"]
           },
-
           "columns": [
             { "column_id": "col_1", "source_header": "Employee ID" },
             { "column_id": "col_2", "source_header": "Name" },
@@ -142,59 +184,42 @@ Each pass **reads** from earlier sections and **appends** to the same artifact. 
       ]
     }
   ],
-
-  "output": null,
-  "summary": null,
   "pass_history": [
     { "pass": 1, "name": "structure", "completed_at": "2025-10-29T12:45:07Z" }
   ]
 }
 ```
 
-> **If no header is found:** set `"header.kind": "synthetic"` and use `["Column 1", "Column 2", ...]`.
+> **No obvious header?** ADE sets `"header.kind": "synthetic"` and uses `["Column 1", "Column 2", …]` so mapping can still proceed.
 
 ---
 
-### Pass 2 — Mapping (column detection; **column‑aware via row scans**)
+### Pass 2 — Map raw columns to target fields
 
-**Reads:** `sheets[].tables[].range/header/columns`, `rules.column_detect`
-**Appends:** `sheets[].tables[].mapping[]` and a list of target fields for the output
+**Plain language:** For each table, ADE checks every raw column and asks, “Which **target field** is this?” Detectors add score deltas; top score wins.
+
+**Why this matters:** Mapping defines how we’ll build the normalized output.
+
+**Appends:** `tables[].mapping[]`, `tables[].target_fields`
 
 ```json
 {
-  "artifact_version": "1.1",
-  "job": { "..." : "..." },
-  "engine": { "..." : "..." },
-  "rules": { "..." : "..." },
-
   "sheets": [
     {
       "id": "sheet_1",
-      "name": "Employees",
-
-      "row_classification": [ "..." ],
       "tables": [
         {
           "id": "table_1",
-          "range": "B4:G159",
-          "data_range": "B5:G159",
-          "header": { "..." : "..." },
-          "columns": [ "..." ],
-
           "mapping": [
             {
               "raw": { "column": "col_1", "header": "Employee ID" },
               "target_field": "member_id",
               "score": 1.8,
               "contributors": [
-                { "rule": "col.member_id.pattern",  "delta": 0.90 }
+                { "rule": "col.member_id.pattern", "delta": 0.90 }
               ]
             },
-            {
-              "raw": { "column": "col_2", "header": "Name" },
-              "target_field": "first_name",
-              "score": 1.2
-            },
+            { "raw": { "column": "col_2", "header": "Name" }, "target_field": "first_name", "score": 1.2 },
             {
               "raw": { "column": "col_3", "header": "Department" },
               "target_field": "department",
@@ -204,28 +229,26 @@ Each pass **reads** from earlier sections and **appends** to the same artifact. 
               ]
             }
           ],
-
           "target_fields": ["member_id", "first_name", "department"]
         }
       ]
     }
   ],
-
-  "output": null,
-  "summary": null,
   "pass_history": [
-    { "pass": 1, "name": "structure", "completed_at": "2025-10-29T12:45:07Z" },
-    { "pass": 2, "name": "mapping",   "completed_at": "2025-10-29T12:45:12Z" }
+    { "pass": 2, "name": "mapping", "completed_at": "2025-10-29T12:45:12Z" }
   ]
 }
 ```
 
 ---
 
-### Pass 2.5 — Analyze (optional tiny stats per field)
+### Passes 3 & 4 — Transform and validate (while writing)
 
-**Reads:** `mapping`
-**Appends:** `tables[].analyze.{target_field: tiny_stats}`
+**Plain language:** ADE writes the normalized sheet **row by row**. For each cell, it applies the configured **transform** (if any) and then runs **validate** rules.
+
+**Why this matters:** you get a clean output and an actionable issues list with exact locations, without keeping the whole sheet in memory.
+
+**Appends:** `tables[].transforms[]`, `tables[].validation.*`
 
 ```json
 {
@@ -235,43 +258,10 @@ Each pass **reads** from earlier sections and **appends** to the same artifact. 
       "tables": [
         {
           "id": "table_1",
-          "analyze": {
-            "member_id":  { "distinct": 155, "empty": 0, "mostly_alnum": true },
-            "first_name": { "distinct": 142, "empty": 4, "mostly_lower": true }
-          }
-        }
-      ]
-    }
-  ],
-  "pass_history": [
-    { "pass": 2.5, "name": "analyze", "completed_at": "2025-10-29T12:45:15Z" }
-  ]
-}
-```
-
-(If not needed, skip this pass.)
-
----
-
-### Pass 3 & 4 — Transform and Validate (**inline during generation**)
-
-**Reads:** `mapping`, optional `analyze`, `rules.transform`, `rules.validate`, `engine`
-**Appends:** `tables[].transforms[]` and `tables[].validation.*` (no raw data)
-
-```json
-{
-  "sheets": [
-    {
-      "id": "sheet_1",
-      "tables": [
-        {
-          "id": "table_1",
-
           "transforms": [
             { "target_field": "member_id",  "transform": "transform.member_id", "changed": 120, "total": 155, "notes": "uppercased + stripped non-alnum" },
             { "target_field": "first_name", "transform": null,                   "changed": 0,   "total": 155 }
           ],
-
           "validation": {
             "issues": [
               {
@@ -281,7 +271,7 @@ Each pass **reads** from earlier sections and **appends** to the same artifact. 
                 "code": "pattern_mismatch",
                 "severity": "error",
                 "message": "Does not match expected pattern",
-                "rule": "validate.member_id.value"
+                "rule": "validate.member_id"
               }
             ],
             "summary_by_field": {
@@ -299,14 +289,17 @@ Each pass **reads** from earlier sections and **appends** to the same artifact. 
 }
 ```
 
-> Implementation detail: both steps occur as cells are written by the **row‑streaming writer**; we still record separate pass markers for clarity.
+> Even though transform and validate happen **inline** with writing, we record them as separate passes so the timeline is easy to read.
 
 ---
 
-### Pass 5 — Generate (writer‑friendly **row streaming**)
+### Pass 5 — Finish the normalized workbook
 
-**Reads:** `mapping`, `engine`, optional `analyze`; plus config for output labels/order
-**Appends:** `output` (path + plan) and `summary`
+**Plain language:** ADE finalizes the **Normalized** sheet, using the mapping and your manifest’s order/labels. It can **append unmapped** columns at the right if you want.
+
+**Why this matters:** you get the same headers and order every time, and you don’t lose context from leftovers.
+
+**Appends:** `output`, `summary`
 
 ```json
 {
@@ -314,7 +307,6 @@ Each pass **reads** from earlier sections and **appends** to the same artifact. 
     "format": "xlsx",
     "sheet": "Normalized",
     "path": "jobs/2025-10-29/normalized.xlsx",
-
     "column_plan": {
       "target": [
         { "field": "member_id",  "output_header": "Member ID",  "order": 1 },
@@ -339,7 +331,9 @@ Each pass **reads** from earlier sections and **appends** to the same artifact. 
 
 ---
 
-## Minimal artifact skeleton (quick reference)
+## Minimal artifact skeleton (bookmark this)
+
+When in doubt, this shows **where** each pass writes:
 
 ```json
 {
@@ -353,34 +347,29 @@ Each pass **reads** from earlier sections and **appends** to the same artifact. 
       "id": "sheet_1",
       "name": "Employees",
 
-      "row_classification": [ /* Pass 1 traces */ ],
+      "row_classification": [ /* Pass 1 traces (row scores + rule deltas) */ ],
 
       "tables": [
         {
           "id": "table_1",
-
           "range": "B4:G159",
           "data_range": "B5:G159",
-
           "header": { "kind": "raw", "row_index": 4, "source_header": [ "..." ] },
-
           "columns": [ { "column_id": "col_1", "source_header": "..." } /* … */ ],
 
-          "mapping": [ /* Pass 2 raw→target with contributors */ ],
-
-          "analyze": { /* Pass 2.5 optional tiny stats */ },
-
+          "mapping":    [ /* Pass 2 raw→target with contributors */ ],
           "transforms": [ /* Pass 3 per-field summaries */ ],
-
-          "validation": { "issues": [/* cell-level */], "summary_by_field": { /* … */ } }
+          "validation": {
+            "issues": [ /* Pass 4 cell-level issues with A1 + rule id */ ],
+            "summary_by_field": { /* counts by target field */ }
+          }
         }
       ]
     }
   ],
 
-  "output": { "format": "xlsx", "sheet": "Normalized", "path": "...", "column_plan": { /* headers+order */ } },
+  "output":  { "format": "xlsx", "sheet": "Normalized", "path": "...", "column_plan": { /* headers + order */ } },
   "summary": { "rows_written": 0, "columns_written": 0, "issues_found": 0 },
-
   "pass_history": [
     { "pass": 1, "name": "structure", "completed_at": "..." }
     /* passes 2..5 appended over time */
@@ -388,10 +377,29 @@ Each pass **reads** from earlier sections and **appends** to the same artifact. 
 }
 ```
 
-**Why this structure is easy to reason about**
+---
 
-* **Familiar Excel ranges** (`"B4:G159"`) and **simple IDs** (`sheet_1/table_1/col_1`) make locations obvious.
-* **Source → Target → Output** mirrors what we do: detect what’s there, map to target fields, write normalized output headers.
-* **One registry of rules** at the root; everything else references **short `rule` IDs** with numeric `delta`s only when they contributed.
-* **Each pass appends** to the same nodes it later reads from (e.g., mapping feeds generation’s `column_plan`).
-* **No raw cell data** in the artifact; issues state **where** and **what**, not the value—safer and smaller.
+## How configs and jobs fit into this story
+
+* A **config package** defines your rules (detectors, transforms, validations) and column order/labels. Start here to customize behavior.
+  See **[Config Packages](./01-config-packages.md)** for folder layout, manifest schema, and script contracts.
+* A **job** applies one active config to one file, building the artifact as it runs.
+  See **[Jobs — Multi‑Pass Pipeline](./02-jobs-pipeline.md)** for execution details and streaming behavior.
+
+---
+
+## Recap: why ADE’s design stays simple
+
+* **Familiar references**: A1 ranges + simple IDs (`sheet_1/table_1/col_1`) make locations obvious.
+* **Human flow**: *Detect what’s there → name it → write it* mirrors how people clean spreadsheets.
+* **Explainable**: rule deltas and scores show **why** ADE made each choice.
+* **Safe & small**: no raw cell data in the artifact; issues say **where** and **what**.
+* **Scales with file size**: streaming read/write keeps memory flat.
+
+---
+
+### Where to go next
+
+* Configure rules and structure: **[01‑config‑packages.md](./01-config-packages.md)**
+* Understand the engine passes: **[02‑jobs‑pipeline.md](./02-jobs-pipeline.md)**
+* Browse definitions quickly: **[glossary.md](./glossary.md)**
