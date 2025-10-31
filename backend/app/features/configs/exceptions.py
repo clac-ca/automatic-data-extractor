@@ -1,6 +1,6 @@
 """Domain-specific errors for config operations."""
 
-"""Domain-specific exceptions raised by the configs feature."""
+from typing import Sequence
 
 
 class ConfigError(RuntimeError):
@@ -34,12 +34,40 @@ class ConfigVersionNotFoundError(ConfigError):
 class InvalidConfigManifestError(ConfigError):
     """Raised when a manifest payload fails validation."""
 
-    def __init__(self, message: str) -> None:
+    def __init__(self, message: str, *, diagnostics: Sequence[object] | None = None) -> None:
         super().__init__(message)
+        self.diagnostics = list(diagnostics or [])
+
+
+class ConfigDraftNotFoundError(ConfigError):
+    """Raised when a requested draft cannot be located."""
+
+    def __init__(self, draft_id: str) -> None:
+        super().__init__(f"Config draft {draft_id} was not found")
+        self.draft_id = draft_id
+
+
+class ConfigDraftConflictError(ConfigError):
+    """Raised when a draft write encounters a concurrent modification."""
+
+    def __init__(self, path: str) -> None:
+        super().__init__(f"Draft file conflict at {path}")
+        self.path = path
+
+
+class ConfigDraftFileTypeError(ConfigError):
+    """Raised when attempting to read or write an unsupported draft file type."""
+
+    def __init__(self, path: str) -> None:
+        super().__init__(f"Draft file {path} is not a UTF-8 text file")
+        self.path = path
 
 
 __all__ = [
     "ConfigError",
+    "ConfigDraftConflictError",
+    "ConfigDraftFileTypeError",
+    "ConfigDraftNotFoundError",
     "ConfigNotFoundError",
     "ConfigSlugConflictError",
     "ConfigVersionNotFoundError",

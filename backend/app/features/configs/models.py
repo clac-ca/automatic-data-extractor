@@ -106,7 +106,8 @@ class ConfigVersion(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     manifest: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
     manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     package_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
-    package_uri: Mapped[str] = mapped_column(String(512), nullable=False)
+    package_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    config_script_api_version: Mapped[str] = mapped_column(String(10), nullable=False)
 
     created_by_user_id: Mapped[str | None] = mapped_column(
         String(26),

@@ -86,6 +86,19 @@ Details & contracts: see the **[config package guide](./01-config-packages.md)**
 
 ---
 
+## Script API & Validation
+
+ADE enforces a versioned **script API** for every config package.
+
+- Declare `"config_script_api_version": "1"` in `manifest.json`. The backend rejects packages targeting unknown script API versions.
+- Column modules must expose `detect_*` functions and a `transform(*, header, values, column_index, table, job_context, env)` callable that returns `{"values": [...], "warnings": [...]}`. Scores must stay within `[-1.0, 1.0]`.
+- Hooks expose `run(*, job_context, manifest, env, artifact)` and run inside the same sandbox.
+- `ade validate path/to/package.zip` runs the static + dynamic validator locally; the API exposes the same check via `POST /configs/validate`. Activation succeeds only when validation reports **zero errors**.
+
+See the **[Config Package Guide](./01-config-packages.md)** for the complete script API reference and diagnostics catalogue.
+
+---
+
 ## Performance & safety
 
 * Detectors run on **samples**, not full columns; keep them light and deterministic. You can adjust the sample count in the manifest (see the **[mapping pass guide](./04-pass-map-columns-to-target-fields.md#shape-high-level)**).
@@ -97,6 +110,7 @@ Details & contracts: see the **[config package guide](./01-config-packages.md)**
 ## Where to go next
 
 * **Config anatomy & contracts** → **[Config package guide](./01-config-packages.md)**
+* **Config authoring API & drafts** → **[Drafts & file-level editing](./01-config-packages.md#drafts--file-level-editing-api)**
 * **Pass-by-pass execution** → **[Job orchestration guide](./02-job-orchestration.md)**
 * **Artifact spec, schema, and models** → **[Artifact reference](./14-job_artifact_json.md)**
 * **Glossary** → **[Shared terminology](./12-glossary.md)**

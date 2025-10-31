@@ -4,7 +4,7 @@
 ```
 repo/
 ├─ backend/app/  # FastAPI backend on port 8000 (serves /api/*)
-├─ frontend/     # React Router on port 5173 (file-based routes)
+├─ frontend/     # React Router dev server on port 8000 (file-based routes)
 ├─ scripts/      # Node helpers for automation
 ├─ package.json  # Root command center
 └─ README.md

@@ -269,6 +269,7 @@ Your `manifest.json` defines engine defaults, output behavior, and the **target 
 
 ```json
 {
+  "config_script_api_version": "1",
   "info": { "schema": "ade.manifest/v1.0", "title": "Membership Rules", "version": "1.2.0" },
   "engine": {
     "defaults": {
@@ -317,6 +318,7 @@ Your `manifest.json` defines engine defaults, output behavior, and the **target 
 
 **A few rules of thumb**
 
+* `config_script_api_version` locks the script contract. Use `"1"` unless a migration guide tells you otherwise.
 * `columns.order` is the **output order** of target fields.
 * `label` values become **output headers** in the normalized sheet.
 * Keep `columns.order` and `columns.meta` **in sync** (same field keys).
@@ -324,8 +326,8 @@ Your `manifest.json` defines engine defaults, output behavior, and the **target 
 * Use `min_mapping_confidence` to avoid low-confidence auto-maps (default `0.0` preserves current behavior).
 
 > **Manifest validation:**
-> ADE validates `manifest.json` against the current schema (`ade.manifest/v1.0`).
-> Older manifests (`v0.6` and later) remain compatible, but new packages should declare the latest schema.
+> ADE validates `manifest.json` against the current schema (`ade.manifest/v1.0`) and script API version (`"config_script_api_version": "1"`).
+> Older manifests require migration before activation.
 
 ---
 
@@ -541,6 +543,56 @@ def run(
 ```
 
 The same signature applies to `after_mapping.py`, `after_transform.py`, and `after_validate.py` hooks; the only difference is **when** they run and what’s already present in `artifact` when they do.
+
+---
+
+## Drafts & file-level editing API
+
+ADE now exposes a draft workspace so you can edit manifests and scripts directly from the UI (or any API client) without round-tripping ZIP uploads.
+
+### Draft lifecycle
+
+1. **Create** a draft from a stored version  
+   `POST /api/v1/workspaces/{workspace_id}/configs/{config_id}/drafts`  
+   Body: `{"base_config_version_id": "<version_id>"}`  
+   Returns draft metadata (ULID, base sequence, timestamps). Drafts are immutable snapshots; the base version stays untouched.
+
+2. **List / inspect** drafts  
+   `GET .../drafts` → array of drafts for a config  
+   `GET .../drafts/{draft_id}` → metadata for a single draft
+
+3. **Browse files** inside the draft package  
+   `GET .../drafts/{draft_id}/files` → flat listing of files/directories with `sha256` hashes  
+   `GET .../drafts/{draft_id}/files/{path}` → file content (`utf-8`) + current hash
+
+4. **Edit files** with optimistic concurrency  
+   `PUT .../drafts/{draft_id}/files/{path}` body:
+   ```json
+   {
+     "content": "new file contents",
+     "encoding": "utf-8",
+     "expected_sha256": "optional-current-hash"
+   }
+   ```
+   - When `expected_sha256` is provided, the service raises `409 Conflict` if the stored hash differs.  
+   - Unsupported (non UTF-8) files return `415 Unsupported Media Type`.
+   - `DELETE .../files/{path}` removes a file or directory if you decide to purge scripts.
+
+5. **Download** a draft as a ZIP  
+   `GET .../drafts/{draft_id}/download` streams a canonical archive (matching the layout used for version publishing).
+
+6. **Publish** the draft as a new immutable version  
+   `POST .../drafts/{draft_id}/publish` body: `{"label": "optional label"}`  
+   The service runs the same manifest validation + hashing pipeline used by `POST /versions`, stores a new version directory, and keeps the draft for further edits (metadata records the last published version id).
+
+### Access control & notes
+
+- All draft routes require `Workspace.Configs.ReadWrite` and the CSRF token when invoked with session cookies.
+- Hashes (`sha256`) are precomputed server-side to support editor concurrency and quick diffing.
+- Draft metadata lives alongside version directories (`data/configs/<config_id>/drafts/<draft_id>/`), and survives version publish/garbage-collection.
+- Publishing a draft reuses the same manifest validator (`docs/developers/schemas/manifest.v1.0.schema.json`) and dynamic checks described above, so your scripts stay contract-safe.
+
+Use these endpoints to build a richer editor (manifest form, Monaco for scripts, etc.) without writing zip/unzip logic client-side.
 
 ---
 

@@ -103,7 +103,8 @@ class ConfigsRepository:
         manifest: dict[str, object],
         manifest_sha256: str,
         package_sha256: str,
-        package_uri: str,
+        package_path: str,
+        config_script_api_version: str,
         actor_id: str | None,
         sequence: int | None = None,
     ) -> ConfigVersion:
@@ -115,7 +116,8 @@ class ConfigsRepository:
             manifest=manifest,
             manifest_sha256=manifest_sha256,
             package_sha256=package_sha256,
-            package_uri=package_uri,
+            package_path=package_path,
+            config_script_api_version=config_script_api_version,
             created_by_user_id=actor_id,
         )
         self._session.add(version)
@@ -142,6 +144,11 @@ class ConfigsRepository:
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def list_version_sequences(self, *, config_id: str) -> list[int]:
+        stmt = select(ConfigVersion.sequence).where(ConfigVersion.config_id == config_id)
+        result = await self._session.execute(stmt)
+        return [int(value) for value in result.scalars().all()]
 
     async def touch_workspace_state(
         self,
