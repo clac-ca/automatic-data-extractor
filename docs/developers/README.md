@@ -24,12 +24,6 @@ Deep dive: see **[job orchestration](./02-job-orchestration.md)**
 
 ---
 
-## Core concepts (quick glossary)
-Here’s a cleaner, more visual and readable version of your glossary section — designed to look nice in Markdown docs and be skimmable at a glance.
-It uses indentation, light formatting, and visual rhythm to make each term stand out while keeping the tone consistent with your developer guide.
-
----
-
 ## **Core Concepts**
 
 ### **Config package**
