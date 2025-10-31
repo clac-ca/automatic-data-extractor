@@ -12,7 +12,7 @@ from fastapi.routing import Lifespan
 from ..db.engine import ensure_database_ready
 from ..db.session import get_sessionmaker
 from ...features.roles.service import sync_permission_registry
-from .config import Settings, get_settings
+from .config import DEFAULT_CONFIGS_SUBDIR, Settings, get_settings
 
 
 def ensure_runtime_dirs(settings: Settings | None = None) -> None:
@@ -22,10 +22,17 @@ def ensure_runtime_dirs(settings: Settings | None = None) -> None:
 
     data_dir = Path(resolved.storage_data_dir)
     documents_dir = getattr(resolved, "storage_documents_dir", None)
+    configs_dir = getattr(resolved, "storage_configs_dir", None)
+    jobs_dir = Path(resolved.storage_data_dir) / "jobs"
 
     targets: list[Path] = [data_dir]
     if documents_dir is not None:
         targets.append(Path(documents_dir))
+    if configs_dir is not None:
+        targets.append(Path(configs_dir))
+    else:
+        targets.append(data_dir / DEFAULT_CONFIGS_SUBDIR)
+    targets.append(jobs_dir)
 
     for target in targets:
         target.mkdir(parents=True, exist_ok=True)

@@ -41,14 +41,12 @@ async def test_session_dependency_commits_and_populates_context(
             payload = {
                 "config_id": config_id,
                 "workspace_id": workspace_id,
+                "slug": "session-config",
                 "title": "Session Config",
-                "note": None,
-                "status": "inactive",
-                "version": "v1",
-                "files_hash": "",
-                "package_sha256": None,
+                "description": None,
                 "created_at": now_iso,
                 "updated_at": now_iso,
+                "deleted_at": None,
             }
             await session.execute(
                 text(
@@ -56,34 +54,21 @@ async def test_session_dependency_commits_and_populates_context(
                     INSERT INTO configs (
                         config_id,
                         workspace_id,
+                        slug,
                         title,
-                        note,
-                        status,
-                        version,
-                        files_hash,
-                        package_sha256,
                         created_at,
                         updated_at,
-                        created_by,
-                        activated_at,
-                        activated_by,
-                        archived_at,
-                        archived_by
+                        description,
+                        deleted_at
                     ) VALUES (
                         :config_id,
                         :workspace_id,
+                        :slug,
                         :title,
-                        :note,
-                        :status,
-                        :version,
-                        :files_hash,
-                        :package_sha256,
                         :created_at,
                         :updated_at,
-                        NULL,
-                        NULL,
-                        NULL,
-                        NULL
+                        :description,
+                        :deleted_at
                     )
                     """
                 ),
