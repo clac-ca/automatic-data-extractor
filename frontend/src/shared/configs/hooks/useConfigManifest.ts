@@ -1,35 +1,36 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { patchManifest, readManifest } from "../api";
+import { readManifest, validateConfig, writeManifest } from "../api";
 import { configsKeys } from "../keys";
-import type { ManifestEnvelope, ManifestEnvelopeWithEtag, ManifestPatchRequest } from "../types";
+import type { ConfigValidationResponse, Manifest, ManifestInput } from "../types";
 
 interface UseConfigManifestOptions {
   readonly workspaceId: string;
   readonly configId: string;
-  readonly versionId: string;
   readonly enabled?: boolean;
 }
 
-export function useConfigManifestQuery({ workspaceId, configId, versionId, enabled = true }: UseConfigManifestOptions) {
-  return useQuery<ManifestEnvelopeWithEtag>({
-    queryKey: configsKeys.manifest(workspaceId, configId, versionId),
-    queryFn: ({ signal }) => readManifest(workspaceId, configId, versionId, signal),
-    enabled: enabled && workspaceId.length > 0 && configId.length > 0 && versionId.length > 0,
+export function useConfigManifestQuery({ workspaceId, configId, enabled = true }: UseConfigManifestOptions) {
+  return useQuery<Manifest | null>({
+    queryKey: configsKeys.manifest(workspaceId, configId),
+    queryFn: ({ signal }) => readManifest(workspaceId, configId, signal),
+    enabled: enabled && workspaceId.length > 0 && configId.length > 0,
     staleTime: 10_000,
   });
 }
 
-export function usePatchManifestMutation(
-  workspaceId: string,
-  configId: string,
-  versionId: string,
-) {
+export function useSaveManifestMutation(workspaceId: string, configId: string) {
   const queryClient = useQueryClient();
-  return useMutation<ManifestEnvelope, Error, { manifest: ManifestPatchRequest; etag?: string | null }>({
-    mutationFn: ({ manifest, etag }) => patchManifest(workspaceId, configId, versionId, manifest, etag),
+  return useMutation<Manifest, Error, ManifestInput>({
+    mutationFn: (manifest) => writeManifest(workspaceId, configId, manifest),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: configsKeys.manifest(workspaceId, configId, versionId) });
+      queryClient.invalidateQueries({ queryKey: configsKeys.manifest(workspaceId, configId) });
     },
+  });
+}
+
+export function useValidateConfigMutation(workspaceId: string, configId: string) {
+  return useMutation<ConfigValidationResponse, Error>({
+    mutationFn: () => validateConfig(workspaceId, configId),
   });
 }

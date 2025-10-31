@@ -22,10 +22,13 @@ def ensure_runtime_dirs(settings: Settings | None = None) -> None:
 
     data_dir = Path(resolved.storage_data_dir)
     documents_dir = getattr(resolved, "storage_documents_dir", None)
+    configs_dir = getattr(resolved, "storage_configs_dir", None)
 
     targets: list[Path] = [data_dir]
     if documents_dir is not None:
         targets.append(Path(documents_dir))
+    if configs_dir is not None:
+        targets.append(Path(configs_dir))
 
     for target in targets:
         target.mkdir(parents=True, exist_ok=True)

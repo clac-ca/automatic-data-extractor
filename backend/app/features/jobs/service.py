@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any
@@ -12,15 +12,21 @@ from typing import Any
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from backend.app.shared.core.config import Settings
 
-from ..configs.exceptions import ConfigVersionNotFoundError
-from ..configs.models import Config, ConfigFile, ConfigVersion
+from ..configs.exceptions import ConfigNotFoundError, ConfigStatusConflictError
+from ..configs.files import ConfigFilesystem
+from ..configs.models import Config, ConfigStatus
+from ..configs.repository import ConfigsRepository
 from ..documents.models import Document
 from ..documents.storage import DocumentStorage
-from .exceptions import InputDocumentNotFoundError, JobExecutionError, JobNotFoundError
+from .exceptions import (
+    ActiveConfigNotFoundError,
+    InputDocumentNotFoundError,
+    JobExecutionError,
+    JobNotFoundError,
+)
 from .models import Job
 from .processor import (
     JobProcessorRequest,
@@ -39,11 +45,16 @@ class JobsService:
 
     def __init__(self, *, session: AsyncSession, settings: Settings) -> None:
         documents_dir = settings.storage_documents_dir
+        configs_dir = settings.storage_configs_dir
         if documents_dir is None:
             raise RuntimeError("Document storage directory is not configured")
+        if configs_dir is None:
+            raise RuntimeError("Configuration storage directory is not configured")
 
         self._session = session
         self._storage = DocumentStorage(documents_dir)
+        self._filesystem = ConfigFilesystem(configs_dir)
+        self._configs = ConfigsRepository(session)
         self._jobs = JobsRepository(session)
 
     async def list_jobs(
@@ -86,21 +97,23 @@ class JobsService:
         *,
         workspace_id: str,
         input_document_id: str,
-        config_version_id: str,
+        config_id: str | None = None,
         actor_id: str | None = None,
     ) -> JobRecord:
         """Create a job row, run the processor synchronously, and return the result."""
 
         document = await self._get_document(workspace_id, input_document_id)
-        config_version = await self._get_config_version(
+        config = await self._resolve_config(
             workspace_id=workspace_id,
-            config_version_id=config_version_id,
+            config_id=config_id,
         )
-        run_key = self._compute_run_key(document, config_version)
+        run_key = self._compute_run_key(document, config)
 
         job = Job(
             workspace_id=workspace_id,
-            config_version_id=str(config_version.id),
+            config_id=config.config_id,
+            config_files_hash=config.files_hash,
+            config_package_sha256=config.package_sha256,
             status="pending",
             created_by_user_id=actor_id,
             input_document_id=document.document_id,
@@ -115,9 +128,7 @@ class JobsService:
 
         started = perf_counter()
         try:
-            result = await self._execute_job(
-                job, document, config_version, workspace_id=workspace_id
-            )
+            result = await self._execute_job(job, document, config, workspace_id=workspace_id)
         except ProcessorError as exc:
             duration_ms = self._duration_ms(started)
             await self._mark_failed(job, str(exc), duration_ms=duration_ms)
@@ -142,18 +153,21 @@ class JobsService:
         self,
         job: Job,
         document: Document,
-        config_version: ConfigVersion,
+        config: Config,
         *,
         workspace_id: str,
     ) -> JobProcessorResult:
         processor = get_job_processor()
 
         document_path = self._storage.path_for(document.stored_uri)
-        manifest = self._load_manifest(config_version)
-        processor_configuration: dict[str, Any] = dict(manifest)
-        processor_configuration.setdefault("config_version_id", str(config_version.id))
-        processor_configuration["files_hash"] = config_version.files_hash
-        processor_configuration["files"] = self._files_map(config_version.files or [])
+        manifest = self._load_manifest(config)
+        processor_configuration: dict[str, Any] = {
+            "manifest": manifest,
+            "config_id": config.config_id,
+            "files_hash": config.files_hash,
+            "package_sha256": config.package_sha256,
+            "config_path": str(self._filesystem.config_path(config.config_id)),
+        }
 
         request = JobProcessorRequest(
             job_id=job.job_id,
@@ -162,7 +176,7 @@ class JobsService:
             metadata={
                 "document_id": document.document_id,
                 "workspace_id": workspace_id,
-                "config_id": config_version.config_id,
+                "config_id": config.config_id,
             },
         )
 
@@ -185,48 +199,49 @@ class JobsService:
             raise InputDocumentNotFoundError(document_id)
         return document
 
-    async def _get_config_version(
+    async def _resolve_config(
         self,
         *,
         workspace_id: str,
-        config_version_id: str,
-    ) -> ConfigVersion:
-        stmt = (
-            select(ConfigVersion)
-            .join(Config, Config.id == ConfigVersion.config_id)
-            .options(selectinload(ConfigVersion.files))
-            .where(
-                ConfigVersion.id == config_version_id,
-                Config.workspace_id == workspace_id,
-                Config.deleted_at.is_(None),
-                ConfigVersion.deleted_at.is_(None),
+        config_id: str | None,
+    ) -> Config:
+        if config_id:
+            config = await self._configs.get_config(
+                workspace_id=workspace_id, config_id=config_id
             )
-            .limit(1)
-        )
-        result = await self._session.execute(stmt)
-        version = result.scalar_one_or_none()
-        if version is None or version.status != "active":
-            raise ConfigVersionNotFoundError(config_version_id)
-        return version
+            if config is None:
+                raise ConfigNotFoundError(workspace_id, config_id)
+        else:
+            config = await self._configs.get_active_config(workspace_id)
+            if config is None:
+                raise ActiveConfigNotFoundError(workspace_id)
 
-    def _load_manifest(self, config_version: ConfigVersion) -> dict[str, Any]:
-        raw = config_version.manifest_json or "{}"
+        if config.status != ConfigStatus.ACTIVE:
+            raise ConfigStatusConflictError(
+                config.config_id,
+                config.status.value,
+                "Configuration must be active to execute jobs",
+            )
+        return config
+
+    def _load_manifest(self, config: Config) -> dict[str, Any]:
         try:
-            manifest = json.loads(raw)
+            payload = self._filesystem.read_text(config.config_id, "manifest.json")
+        except FileNotFoundError:
+            return {}
+
+        try:
+            manifest = json.loads(payload)
         except json.JSONDecodeError:
-            manifest = {}
-        manifest.setdefault("files_hash", config_version.files_hash)
+            return {}
+
         return manifest
 
-    def _files_map(self, files: Sequence[ConfigFile]) -> dict[str, str]:
-        return {file.path: file.code for file in files}
-
-    def _compute_run_key(self, document: Document, config_version: ConfigVersion) -> str:
+    def _compute_run_key(self, document: Document, config: Config) -> str:
         doc_hash = document.sha256 or ""
-        files_hash = config_version.files_hash or ""
-        flags = ""
-        resource_versions = ""
-        payload = "|".join([doc_hash, files_hash, flags, resource_versions])
+        files_hash = config.files_hash or ""
+        package_hash = config.package_sha256 or ""
+        payload = "|".join([doc_hash, files_hash, package_hash])
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     async def _transition_status(self, job: Job, status: str) -> None:

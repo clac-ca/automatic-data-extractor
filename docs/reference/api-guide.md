@@ -40,6 +40,42 @@ Trigger and monitor extraction runs.
 - `GET /workspaces/{workspace_id}/jobs/{job_id}` – retrieve status (`pending`, `running`, `succeeded`, `failed`) and progress metrics.
 - `GET /workspaces/{workspace_id}/jobs` – list recent jobs, filterable by status, document, or submitter using query parameters.
 
+### Configs
+
+Manage the file-backed extraction logic for each workspace. Only one
+configuration may be `active` at a time; others remain `inactive` (editable) or
+`archived` (read-only).
+
+- `GET /workspaces/{workspace_id}/configs` – list configs (defaults to `active`
+  and `inactive` entries).
+- `GET /workspaces/{workspace_id}/configs/active` – fetch the currently active
+  configuration (404 if none is active).
+- `POST /workspaces/{workspace_id}/configs` – create a new inactive config from
+  the default template or by cloning an existing one.
+- `GET /workspaces/{workspace_id}/configs/{config_id}` – fetch metadata such as
+  title, status, checksums, and timestamps.
+- `POST /workspaces/{workspace_id}/configs/{config_id}/activate` – atomically
+  switch the active configuration for the workspace.
+- `GET|PUT /workspaces/{workspace_id}/configs/{config_id}/manifest` – read or
+  replace the manifest (validation runs on write and rejects plaintext secrets).
+- `GET|PUT|DELETE /workspaces/{workspace_id}/configs/{config_id}/files/{path}` –
+  manage individual files inside the configuration bundle. `PUT` is atomic via
+  temp files and `DELETE` is blocked for hooks/columns referenced by the
+  manifest.
+- `POST /workspaces/{workspace_id}/configs/{config_id}/rename` – rename a
+  canonical column and update the manifest and filesystem atomically.
+- `POST /workspaces/{workspace_id}/configs/{config_id}/validate` – run
+  structural, manifest, and dry-run validation checks.
+- `POST /workspaces/{workspace_id}/configs/{config_id}/clone` – duplicate the
+  bundle as a new inactive config.
+- `GET /workspaces/{workspace_id}/configs/{config_id}/export` – download the
+  configuration as a deterministic zip archive.
+- `POST /workspaces/{workspace_id}/configs/import` – upload a zip archive to
+  create a new inactive configuration.
+- `GET|POST|DELETE /workspaces/{workspace_id}/configs/{config_id}/secrets` –
+  list encrypted secret metadata, create new entries (server encrypts
+  plaintext), or delete existing secrets.
+
 ## Error handling
 
 ADE follows standard HTTP semantics and FastAPI's default error envelope. Every non-2xx response returns a JSON document with a `detail` field:

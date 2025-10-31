@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import io
 import os
 import shutil
 import tempfile
+import zipfile
 from dataclasses import dataclass
 from hashlib import sha256
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Iterable, Iterator
 
 
@@ -37,6 +39,11 @@ class ConfigFilesystem:
         _fsync_dir(bundle)
         return bundle
 
+    def config_path(self, config_id: str) -> Path:
+        """Return the absolute path to the bundle for ``config_id`` without creating it."""
+
+        return self._config_root(config_id)
+
     def delete_config(self, config_id: str) -> None:
         """Remove ``config_id`` from storage if it exists."""
 
@@ -45,6 +52,57 @@ class ConfigFilesystem:
             return
         shutil.rmtree(bundle)
         _fsync_dir(bundle.parent)
+
+    def import_archive(self, config_id: str, archive_bytes: bytes) -> None:
+        """Replace ``config_id`` contents with the extracted ``archive_bytes``."""
+
+        bundle = self._config_root(config_id)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_dir = Path(tmpdir)
+            try:
+                with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+                    _safe_extract_all(archive, temp_dir)
+            except zipfile.BadZipFile as exc:
+                raise ValueError("Archive is not a valid ZIP file") from exc
+
+            source_dir = _resolve_archive_root(temp_dir)
+
+            if bundle.exists():
+                shutil.rmtree(bundle)
+
+            shutil.copytree(source_dir, bundle, dirs_exist_ok=True)
+            _fsync_tree(bundle)
+            _fsync_dir(bundle.parent)
+
+    def copy_config(self, source_config_id: str, target_config_id: str) -> None:
+        """Copy the bundle for ``source_config_id`` into ``target_config_id``."""
+
+        source = self._config_root(source_config_id)
+        if not source.exists():
+            raise FileNotFoundError(f"Config {source_config_id} directory does not exist")
+
+        destination = self._config_root(target_config_id)
+        if destination.exists():
+            shutil.rmtree(destination)
+        shutil.copytree(source, destination, dirs_exist_ok=True)
+        _fsync_tree(destination)
+        _fsync_dir(destination.parent)
+
+    def export_archive(self, config_id: str) -> bytes:
+        """Return a ZIP archive containing the contents of ``config_id``."""
+
+        bundle = self._config_root(config_id)
+        if not bundle.exists():
+            raise FileNotFoundError(f"Config {config_id} directory does not exist")
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            for metadata in self.list_files(config_id):
+                file_path = bundle / metadata.path
+                archive.write(file_path, arcname=metadata.path)
+
+        buffer.seek(0)
+        return buffer.read()
 
     def list_files(self, config_id: str) -> list[ConfigFileMetadata]:
         """Return metadata for every tracked file relative to ``config_id`` root."""
@@ -258,6 +316,49 @@ def _iter_directories(root: Path) -> Iterable[Path]:
         yield current
         for child in sorted((p for p in current.iterdir() if p.is_dir()), reverse=True):
             stack.append(child)
+
+
+def _resolve_archive_root(path: Path) -> Path:
+    manifest_path = path / "manifest.json"
+    if manifest_path.exists():
+        return path
+
+    candidates = [candidate for candidate in path.iterdir() if candidate.is_dir()]
+    if len(candidates) == 1:
+        candidate = candidates[0]
+        if (candidate / "manifest.json").exists():
+            return candidate
+
+    raise ValueError("Archive does not contain a manifest.json at the root")
+
+
+def _safe_extract_all(archive: zipfile.ZipFile, destination: Path) -> None:
+    """Extract ``archive`` into ``destination`` guarding against path traversal."""
+
+    destination = destination.resolve()
+    for member in archive.infolist():
+        name = member.filename
+        if not name:
+            continue
+        pure_path = PurePosixPath(name)
+        parts = [part for part in pure_path.parts if part not in ("", ".")]
+        if not parts:
+            continue
+        if any(part == ".." for part in parts):
+            raise ValueError("Archive contains entries outside of its root directory")
+
+        relative_path = Path(*parts)
+        target_path = (destination / relative_path).resolve()
+        if not target_path.is_relative_to(destination):
+            raise ValueError("Archive contains entries outside of its root directory")
+
+        if member.is_dir():
+            target_path.mkdir(parents=True, exist_ok=True)
+            continue
+
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        with archive.open(member, "r") as source, target_path.open("wb") as handle:
+            shutil.copyfileobj(source, handle)
 
 
 __all__ = ["ConfigFilesystem", "ConfigFileMetadata", "compute_tree_hash"]
