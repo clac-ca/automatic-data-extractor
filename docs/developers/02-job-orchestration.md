@@ -17,6 +17,9 @@ and writes two outputs into a per-job folder:
 - `normalized.xlsx` — the clean, normalized workbook
 
 We keep every job **isolated** in its own working directory under `/var/jobs/<id>/`.
+> **Note:** The `/var` prefix assumes the default container layout. In local development the base path comes
+> from `ADE_STORAGE_DATA_DIR` (default `data/`), so `/var/jobs/<id>/` becomes `<data>/jobs/<id>/` when you
+> run ADE without Docker.
 
 ```text
 /var/jobs/1234/

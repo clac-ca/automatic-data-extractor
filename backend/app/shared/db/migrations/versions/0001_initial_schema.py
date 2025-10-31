@@ -25,6 +25,17 @@ PRINCIPALTYPE = sa.Enum(
     length=20,
 )
 
+JOBSTATUS = sa.Enum(
+    "queued",
+    "running",
+    "succeeded",
+    "failed",
+    "cancelled",
+    name="jobstatus",
+    native_enum=False,
+    length=20,
+)
+
 
 def upgrade() -> None:
     bind = op.get_bind()
@@ -43,6 +54,10 @@ def upgrade() -> None:
     _create_document_tags()
     _create_api_keys()
     _create_system_settings()
+    _create_configs()
+    _create_config_versions()
+    _create_workspace_config_states()
+    _create_jobs()
 
 
 def downgrade() -> None:  # pragma: no cover - intentionally not implemented
@@ -439,4 +454,183 @@ def _create_system_settings() -> None:
         sa.Column("value", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+    )
+
+
+def _create_configs() -> None:
+    op.create_table(
+        "configs",
+        sa.Column("config_id", sa.String(length=26), primary_key=True),
+        sa.Column("workspace_id", sa.String(length=26), nullable=False),
+        sa.Column("slug", sa.String(length=100), nullable=False),
+        sa.Column("title", sa.String(length=255), nullable=False),
+        sa.Column("description", sa.Text(), nullable=True),
+        sa.Column("created_by_user_id", sa.String(length=26), nullable=True),
+        sa.Column("updated_by_user_id", sa.String(length=26), nullable=True),
+        sa.Column("deleted_by_user_id", sa.String(length=26), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["workspace_id"],
+            ["workspaces.workspace_id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["created_by_user_id"],
+            ["users.user_id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["updated_by_user_id"],
+            ["users.user_id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["deleted_by_user_id"],
+            ["users.user_id"],
+            ondelete="SET NULL",
+        ),
+        sa.UniqueConstraint("workspace_id", "slug"),
+    )
+    op.create_index("configs_workspace_idx", "configs", ["workspace_id"], unique=False)
+    op.create_index(
+        "configs_workspace_deleted_idx",
+        "configs",
+        ["workspace_id", "deleted_at"],
+        unique=False,
+    )
+
+
+def _create_config_versions() -> None:
+    op.create_table(
+        "config_versions",
+        sa.Column("config_version_id", sa.String(length=26), primary_key=True),
+        sa.Column("config_id", sa.String(length=26), nullable=False),
+        sa.Column("sequence", sa.Integer(), nullable=False),
+        sa.Column("label", sa.String(length=50), nullable=True),
+        sa.Column("manifest", sa.JSON(), nullable=False),
+        sa.Column("manifest_sha256", sa.String(length=64), nullable=False),
+        sa.Column("package_sha256", sa.String(length=64), nullable=False),
+        sa.Column("package_uri", sa.String(length=512), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("created_by_user_id", sa.String(length=26), nullable=True),
+        sa.Column("deleted_by_user_id", sa.String(length=26), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["config_id"],
+            ["configs.config_id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["created_by_user_id"],
+            ["users.user_id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["deleted_by_user_id"],
+            ["users.user_id"],
+            ondelete="SET NULL",
+        ),
+        sa.UniqueConstraint("config_id", "sequence"),
+    )
+    op.create_index(
+        "config_versions_config_idx",
+        "config_versions",
+        ["config_id"],
+        unique=False,
+    )
+    op.create_index(
+        "config_versions_deleted_idx",
+        "config_versions",
+        ["config_id", "deleted_at"],
+        unique=False,
+    )
+
+
+def _create_workspace_config_states() -> None:
+    op.create_table(
+        "workspace_config_states",
+        sa.Column("workspace_id", sa.String(length=26), primary_key=True),
+        sa.Column("config_id", sa.String(length=26), nullable=True),
+        sa.Column("config_version_id", sa.String(length=26), nullable=True),
+        sa.Column("updated_by_user_id", sa.String(length=26), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["workspace_id"],
+            ["workspaces.workspace_id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["config_id"],
+            ["configs.config_id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["config_version_id"],
+            ["config_versions.config_version_id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["updated_by_user_id"],
+            ["users.user_id"],
+            ondelete="SET NULL",
+        ),
+    )
+    op.create_index(
+        "workspace_config_states_workspace_idx",
+        "workspace_config_states",
+        ["workspace_id"],
+        unique=False,
+    )
+
+
+def _create_jobs() -> None:
+    op.create_table(
+        "jobs",
+        sa.Column("job_id", sa.String(length=26), primary_key=True),
+        sa.Column("workspace_id", sa.String(length=26), nullable=False),
+        sa.Column("config_id", sa.String(length=26), nullable=False),
+        sa.Column("config_version_id", sa.String(length=26), nullable=False),
+        sa.Column("submitted_by_user_id", sa.String(length=26), nullable=True),
+        sa.Column("status", JOBSTATUS, nullable=False, server_default=sa.text("'queued'")),
+        sa.Column("artifact_uri", sa.String(length=512), nullable=True),
+        sa.Column("output_uri", sa.String(length=512), nullable=True),
+        sa.Column("queued_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("error_message", sa.Text(), nullable=True),
+        sa.Column("logs_uri", sa.String(length=512), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["workspace_id"],
+            ["workspaces.workspace_id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["config_id"],
+            ["configs.config_id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["config_version_id"],
+            ["config_versions.config_version_id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["submitted_by_user_id"],
+            ["users.user_id"],
+            ondelete="SET NULL",
+        ),
+    )
+    op.create_index("jobs_workspace_idx", "jobs", ["workspace_id", "created_at"], unique=False)
+    op.create_index(
+        "jobs_config_version_idx",
+        "jobs",
+        ["config_version_id"],
+        unique=False,
     )
