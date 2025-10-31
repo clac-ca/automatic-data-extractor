@@ -13,11 +13,10 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 - Settings are loaded once at startup through `get_settings()` and cached on `app.state.settings`. Routes read from this state rather than reloading environment variables on every request.
 - Environment variables use the `ADE_` prefix (for example `ADE_DATABASE_DSN`, `ADE_STORAGE_UPLOAD_MAX_BYTES`). A local `.env` file is respected during development.
 - Host and port configuration splits into `ADE_SERVER_HOST` / `ADE_SERVER_PORT` for the uvicorn listener and `ADE_SERVER_PUBLIC_URL` for the externally reachable origin. When ADE sits behind HTTPS on a domain such as `https://ade.example.com`, set the public URL and provide a JSON array in `ADE_SERVER_CORS_ORIGINS` so browsers can connect (for example `["https://ade.example.com"]`).
-- Documentation endpoints (`/docs`, `/redoc`, `/openapi.json`) default on for the `local` and `staging` environments and can be
-  toggled explicitly through the `ADE_API_DOCS_ENABLED` flag to keep production surfaces minimal.
-- Account lockout policy is governed by `ADE_FAILED_LOGIN_LOCK_THRESHOLD` (attempts) and
-  `ADE_FAILED_LOGIN_LOCK_DURATION` (lock length, supports suffixed durations like `5m`). Defaults lock a user for
-  five minutes after five consecutive failures.
+- Configuration bundles live under `data/configs/` by default. Override with `ADE_STORAGE_CONFIGS_DIR` if the configs directory needs to sit on a dedicated volume. The directory is created automatically during startup and test runs.
+- Documentation endpoints (`/docs`, `/redoc`, `/openapi.json`) default on for the `local` and `staging` environments and can be toggled explicitly through the `ADE_API_DOCS_ENABLED` flag to keep production surfaces minimal.
+- Account lockout policy is governed by `ADE_FAILED_LOGIN_LOCK_THRESHOLD` (attempts) and `ADE_FAILED_LOGIN_LOCK_DURATION` (lock length, supports suffixed durations like `5m`). Defaults lock a user for five minutes after five consecutive failures.
+- Manifest secrets are encrypted using `ADE_SECRET_KEY` (base64 encoded 32 bytes). Rotate the key carefully—existing configs will need their secrets re-encrypted if the key changes.
 
 ## Operational building blocks
 - Database connections are created via the async SQLAlchemy engine in [`backend/app/shared/db/engine.py`](../../backend/app/shared/db/engine.py) and scoped sessions from [`backend/app/shared/db/session.py`](../../backend/app/shared/db/session.py).

@@ -30,6 +30,12 @@ class Config(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "configs"
     __ulid_field__ = "config_id"
 
+    @property
+    def config_id(self) -> str:  # type: ignore[override]
+        """Expose the ULID primary key using the config_id alias."""
+
+        return self.id
+
     workspace_id: Mapped[str] = mapped_column(
         String(26),
         ForeignKey("workspaces.workspace_id", ondelete="CASCADE"),
@@ -39,6 +45,8 @@ class Config(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         "Workspace",
         back_populates="configs",
         lazy="joined",
+        foreign_keys=[workspace_id],
+        primaryjoin="Config.workspace_id == Workspace.id",
     )
 
     title: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -49,6 +57,7 @@ class Config(ULIDPrimaryKeyMixin, TimestampMixin, Base):
             name="config_status",
             native_enum=False,
             validate_strings=True,
+            values_callable=lambda enum: [member.value for member in enum],
         ),
         nullable=False,
         default=ConfigStatus.INACTIVE,

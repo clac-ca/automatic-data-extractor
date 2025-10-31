@@ -6,14 +6,14 @@ import type { ConfigRecord } from "../types";
 
 interface UseConfigsQueryOptions {
   readonly workspaceId: string;
-  readonly includeDeleted?: boolean;
+  readonly statuses?: readonly string[] | null;
   readonly enabled?: boolean;
 }
 
-export function useConfigsQuery({ workspaceId, includeDeleted = false, enabled = true }: UseConfigsQueryOptions) {
+export function useConfigsQuery({ workspaceId, statuses = null, enabled = true }: UseConfigsQueryOptions) {
   return useQuery<ConfigRecord[]>({
-    queryKey: configsKeys.list(workspaceId, includeDeleted),
-    queryFn: ({ signal }) => listConfigs(workspaceId, { includeDeleted, signal }),
+    queryKey: configsKeys.list(workspaceId, statuses),
+    queryFn: ({ signal }) => listConfigs(workspaceId, { statuses, signal }),
     enabled: enabled && workspaceId.length > 0,
     staleTime: 15_000,
     placeholderData: (previous) => previous ?? [],

@@ -29,7 +29,7 @@ class JobSubmissionRequest(BaseSchema):
     """Payload accepted when clients submit a new job."""
 
     input_document_id: str
-    config_version_id: str
+    config_id: str | None = None
 
 
 class JobRecord(BaseSchema):
@@ -37,7 +37,9 @@ class JobRecord(BaseSchema):
 
     job_id: str
     workspace_id: str
-    config_version_id: str
+    config_id: str
+    config_files_hash: str | None = None
+    config_package_sha256: str | None = None
     status: str
     created_at: datetime
     updated_at: datetime

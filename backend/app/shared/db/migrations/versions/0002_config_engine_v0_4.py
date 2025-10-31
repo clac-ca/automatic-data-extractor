@@ -17,10 +17,26 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    unique_constraints = {
+        constraint["name"]
+        for constraint in inspector.get_unique_constraints("configs")
+        if constraint.get("name")
+    }
+    foreign_keys = {
+        constraint["name"]
+        for constraint in inspector.get_foreign_keys("configs")
+        if constraint.get("name")
+    }
+
     # configs -----------------------------------------------------------------
     with op.batch_alter_table("configs") as batch_op:
-        batch_op.drop_constraint("configs_workspace_id_slug_key", type_="unique")
-        batch_op.drop_constraint("configs_deleted_by_fkey", type_="foreignkey")
+        if "configs_workspace_id_slug_key" in unique_constraints:
+            batch_op.drop_constraint("configs_workspace_id_slug_key", type_="unique")
+        if "configs_deleted_by_fkey" in foreign_keys:
+            batch_op.drop_constraint("configs_deleted_by_fkey", type_="foreignkey")
         batch_op.add_column(sa.Column("note", sa.Text(), nullable=True))
         batch_op.add_column(
             sa.Column(
@@ -149,5 +165,7 @@ def upgrade() -> None:
         )
 
 
-def downgrade() -> None:
-    raise RuntimeError("Downgrade not supported for config engine v0.4 migration")
+def downgrade() -> None:  # pragma: no cover - intentionally not implemented
+    raise NotImplementedError(
+        "Downgrade not supported for config engine v0.4 migration"
+    )

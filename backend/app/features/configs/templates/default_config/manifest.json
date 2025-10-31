@@ -1,9 +1,8 @@
 {
   "info": {
-    "schema": "ade.manifest/v0.4",
+    "schema": "ade.manifest/v0.5",
     "title": "Example Membership Config",
-    "version": "1.0.0",
-    "description": "Default config illustrating detector/transform hooks for member data."
+    "version": "1.0.0"
   },
   "env": {
     "LOCALE": "en-CA"

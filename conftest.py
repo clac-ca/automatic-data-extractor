@@ -51,10 +51,12 @@ def _configure_database(
 
     data_dir = tmp_path_factory.mktemp("backend-app-data")
     documents_dir = data_dir / "documents"
+    configs_dir = data_dir / "configs"
 
     os.environ["ADE_DATABASE_DSN"] = _database_url
     os.environ["ADE_STORAGE_DATA_DIR"] = str(data_dir)
     os.environ["ADE_STORAGE_DOCUMENTS_DIR"] = str(documents_dir)
+    os.environ["ADE_STORAGE_CONFIGS_DIR"] = str(configs_dir)
     # Ensure tests run with OIDC disabled regardless of local .env values.
     os.environ["ADE_OIDC_ENABLED"] = "false"
     # Explicitly override any .env-provided OIDC settings to disable SSO in tests.
@@ -80,6 +82,7 @@ def _configure_database(
         "ADE_DATABASE_DSN",
         "ADE_STORAGE_DATA_DIR",
         "ADE_STORAGE_DOCUMENTS_DIR",
+        "ADE_STORAGE_CONFIGS_DIR",
         "ADE_OIDC_ENABLED",
     ):
         os.environ.pop(env_var, None)

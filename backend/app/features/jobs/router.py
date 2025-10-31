@@ -9,9 +9,10 @@ from backend.app.features.roles.dependencies import require_workspace
 from backend.app.shared.core.schema import ErrorMessage
 
 from .dependencies import get_jobs_service
-from ..configs.exceptions import ConfigVersionNotFoundError
+from ..configs.exceptions import ConfigNotFoundError, ConfigStatusConflictError
 from ..users.models import User
 from .exceptions import (
+    ActiveConfigNotFoundError,
     InputDocumentNotFoundError,
     JobExecutionError,
     JobNotFoundError,
@@ -172,13 +173,17 @@ async def submit_job(
         return await service.submit_job(
             workspace_id=workspace_id,
             input_document_id=payload.input_document_id,
-            config_version_id=payload.config_version_id,
+            config_id=payload.config_id,
             actor_id=str(actor.id),
         )
     except InputDocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except ConfigVersionNotFoundError as exc:
+    except ConfigNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ActiveConfigNotFoundError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ConfigStatusConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except JobExecutionError as exc:
         detail = {
             "error": "job_failed",
