@@ -1,7 +1,5 @@
-"""Placeholder package for future configuration features."""
+"""Config package feature exports."""
 
-from __future__ import annotations
+from .models import Config, ConfigVersion, WorkspaceConfigState
 
-from .router import router
-
-__all__ = ["router"]
+__all__ = ["Config", "ConfigVersion", "WorkspaceConfigState"]
