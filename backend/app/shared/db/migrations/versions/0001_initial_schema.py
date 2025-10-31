@@ -512,7 +512,8 @@ def _create_config_versions() -> None:
         sa.Column("manifest", sa.JSON(), nullable=False),
         sa.Column("manifest_sha256", sa.String(length=64), nullable=False),
         sa.Column("package_sha256", sa.String(length=64), nullable=False),
-        sa.Column("package_uri", sa.String(length=512), nullable=False),
+        sa.Column("package_path", sa.String(length=512), nullable=False),
+        sa.Column("config_script_api_version", sa.String(length=10), nullable=False, server_default=sa.text("'1'")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
@@ -578,11 +579,18 @@ def _create_workspace_config_states() -> None:
             ["users.user_id"],
             ondelete="SET NULL",
         ),
+        sa.UniqueConstraint("config_version_id"),
     )
     op.create_index(
         "workspace_config_states_workspace_idx",
         "workspace_config_states",
         ["workspace_id"],
+        unique=False,
+    )
+    op.create_index(
+        "workspace_config_states_active_version_idx",
+        "workspace_config_states",
+        ["config_version_id"],
         unique=False,
     )
 
@@ -596,6 +604,9 @@ def _create_jobs() -> None:
         sa.Column("config_version_id", sa.String(length=26), nullable=False),
         sa.Column("submitted_by_user_id", sa.String(length=26), nullable=True),
         sa.Column("status", JOBSTATUS, nullable=False, server_default=sa.text("'queued'")),
+        sa.Column("attempt", sa.Integer(), nullable=False, server_default=sa.text("1")),
+        sa.Column("input_hash", sa.String(length=128), nullable=True),
+        sa.Column("trace_id", sa.String(length=64), nullable=True),
         sa.Column("artifact_uri", sa.String(length=512), nullable=True),
         sa.Column("output_uri", sa.String(length=512), nullable=True),
         sa.Column("queued_at", sa.DateTime(timezone=True), nullable=False),
@@ -604,6 +615,7 @@ def _create_jobs() -> None:
         sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("logs_uri", sa.String(length=512), nullable=True),
+        sa.Column("run_request_uri", sa.String(length=512), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
@@ -626,11 +638,18 @@ def _create_jobs() -> None:
             ["users.user_id"],
             ondelete="SET NULL",
         ),
+        sa.UniqueConstraint("workspace_id", "config_version_id", "input_hash", name="jobs_idempotency_key"),
     )
     op.create_index("jobs_workspace_idx", "jobs", ["workspace_id", "created_at"], unique=False)
     op.create_index(
         "jobs_config_version_idx",
         "jobs",
         ["config_version_id"],
+        unique=False,
+    )
+    op.create_index(
+        "jobs_input_idx",
+        "jobs",
+        ["workspace_id", "config_version_id", "input_hash"],
         unique=False,
     )

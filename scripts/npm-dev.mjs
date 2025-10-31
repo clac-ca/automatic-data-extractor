@@ -20,7 +20,7 @@ const hasBackend = existsSync(join("backend", "app")) && existsSync("pyproject.t
 const hasFrontend =
   existsSync("frontend") && existsSync(join("frontend", "package.json"));
 
-const makeUvicornCommand = (extraArgs = []) => {
+const makeUvicornCommand = (port, extraArgs = []) => {
   const venvUvicorn =
     process.platform === "win32"
       ? join(backendDir, ".venv", "Scripts", "uvicorn.exe")
@@ -31,7 +31,7 @@ const makeUvicornCommand = (extraArgs = []) => {
     "--host",
     "0.0.0.0",
     "--port",
-    "8000",
+    `${port}`,
     ...extraArgs,
   ];
 
@@ -66,19 +66,29 @@ if (mode === "frontend" && !hasFrontend) {
   process.exit(1);
 }
 
+const runBackend = hasBackend && (!mode || mode === "backend");
+const runFrontend = hasFrontend && (!mode || mode === "frontend");
+const backendPort =
+  process.env.DEV_BACKEND_PORT ??
+  (runBackend && runFrontend ? "8001" : "8000");
+const frontendPort = process.env.DEV_FRONTEND_PORT ?? "8000";
+
+process.env.DEV_BACKEND_PORT = backendPort;
+process.env.DEV_FRONTEND_PORT = frontendPort;
+
 const tasks = [];
 
-if (hasBackend && (!mode || mode === "backend")) {
+if (runBackend) {
   tasks.push({
     name: "backend",
-    command: makeUvicornCommand(["--reload"]),
+    command: makeUvicornCommand(backendPort, ["--reload"]),
   });
 }
 
-if (hasFrontend && (!mode || mode === "frontend")) {
+if (runFrontend) {
   tasks.push({
     name: "frontend",
-    command: "npm --prefix frontend run dev",
+    command: `npm --prefix frontend run dev -- --host 0.0.0.0 --port ${frontendPort}`,
   });
 }
 

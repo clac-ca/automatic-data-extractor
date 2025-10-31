@@ -72,7 +72,6 @@ def test_settings_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.server_port == 8000
     assert settings.server_public_url == "http://localhost:8000"
     assert set(settings.server_cors_origins) == {
-        "http://localhost:5173",
         "http://localhost:8000",
     }
     assert settings.database_dsn.endswith("data/db/backend.app.sqlite")
@@ -187,7 +186,6 @@ def test_server_public_url_accepts_https(monkeypatch: pytest.MonkeyPatch) -> Non
 
     assert settings.server_public_url == "https://secure.example.com"
     assert set(settings.server_cors_origins) == {
-        "http://localhost:5173",
         "https://secure.example.com",
     }
 

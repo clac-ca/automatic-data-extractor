@@ -29,7 +29,8 @@ DEFAULT_CONFIGS_SUBDIR = "configs"
 DEFAULT_DATABASE_SUBDIR = "db"
 DEFAULT_DATABASE_FILENAME = "backend.app.sqlite"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
-DEFAULT_CORS_ORIGINS = ("http://localhost:5173", DEFAULT_PUBLIC_URL)
+DEFAULT_CORS_ORIGINS = (DEFAULT_PUBLIC_URL,)
+DEFAULT_DEV_FRONTEND_ORIGINS = ("http://localhost:5173",)
 
 _DURATION_PATTERN = re.compile(r"^(?P<value>\d+(?:\.\d+)?)(?:\s*(?P<unit>[a-zA-Z]+))?$", re.IGNORECASE)
 _DURATION_UNITS = {
@@ -469,6 +470,10 @@ class Settings(BaseSettings):
             and self.server_public_url != DEFAULT_PUBLIC_URL
         ):
             origins = [origin for origin in origins if origin != DEFAULT_PUBLIC_URL]
+        if self.server_public_url != DEFAULT_PUBLIC_URL:
+            dev_defaults = set(DEFAULT_DEV_FRONTEND_ORIGINS) | {DEFAULT_PUBLIC_URL}
+            if all(origin == self.server_public_url or origin in dev_defaults for origin in origins):
+                origins = [origin for origin in origins if origin == self.server_public_url]
         self.server_cors_origins = origins
 
         redirect = self.oidc_redirect_url or ""

@@ -4,6 +4,7 @@ import clsx from "clsx";
 
 export interface CodeEditorHandle {
   focus: () => void;
+  revealLine: (lineNumber: number) => void;
 }
 
 interface CodeEditorProps {
@@ -45,6 +46,16 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     () => ({
       focus: () => {
         editorRef.current?.focus();
+      },
+      revealLine: (lineNumber: number) => {
+        const editor = editorRef.current;
+        if (!editor) {
+          return;
+        }
+        const target = Math.max(1, Math.floor(lineNumber));
+        editor.revealLineInCenter(target);
+        editor.setPosition({ lineNumber: target, column: 1 });
+        editor.focus();
       },
     }),
     [],

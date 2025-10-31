@@ -3,7 +3,7 @@
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import DateTime, Enum as SQLEnum, ForeignKey, Index, String, Text
+from sqlalchemy import DateTime, Enum as SQLEnum, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.features.configs.models import Config, ConfigVersion
@@ -72,14 +72,20 @@ class Job(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     artifact_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
     output_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
     logs_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    run_request_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    input_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (
         Index("jobs_workspace_idx", "workspace_id", "created_at"),
         Index("jobs_config_version_idx", "config_version_id"),
+        Index("jobs_input_idx", "workspace_id", "config_version_id", "input_hash"),
+        UniqueConstraint("workspace_id", "config_version_id", "input_hash", name="jobs_idempotency_key"),
     )
 
 

@@ -23,7 +23,8 @@ We keep every job **isolated** in its own working directory under `/var/jobs/<id
 
 ```text
 /var/jobs/1234/
-├─ input.xlsx
+├─ inputs/
+│  └─ 01-input.xlsx
 ├─ artifact.json
 ├─ normalized.xlsx
 ├─ logs.txt                # stdout/stderr from the worker
@@ -68,8 +69,8 @@ from pydantic import BaseModel
 router = APIRouter()
 
 class SubmitJob(BaseModel):
-    document_id: str
     config_version_id: str
+    document_ids: list[str] = []
     allow_network: bool = False
 
 @router.post("/jobs", status_code=202)
@@ -77,7 +78,7 @@ async def submit_job(payload: SubmitJob):
     # 1) refuse when queue/backlog is full
     if app.state.job_manager.queue_full():
         raise HTTPException(429, "Job queue is full. Please retry later.")
-    # 2) create job row + materialize /var/jobs/<id> (input.xlsx + config/*)
+    # 2) create job row + materialize /var/jobs/<id>/ (inputs/*, config/*)
     job_id = await create_job_and_files(payload)
     # 3) enqueue
     app.state.job_manager.submit(job_id)

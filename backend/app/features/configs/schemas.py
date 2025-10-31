@@ -1,48 +1,24 @@
 """Pydantic schemas for config API responses."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-
-
-class ConfigPackageUpload(BaseModel):
-    """Represents a base64 encoded config package zip archive."""
-
-    filename: str = Field(..., min_length=1)
-    content: str = Field(..., min_length=1)
-
-
-class ConfigCreateRequest(BaseModel):
-    """Payload for creating a config and its initial version."""
-
-    slug: str = Field(..., min_length=1, max_length=100)
-    title: str = Field(..., min_length=1, max_length=255)
-    description: str | None = Field(default=None, max_length=2000)
-    manifest: dict[str, Any]
-    package: ConfigPackageUpload
-
-
-class ConfigVersionCreateRequest(BaseModel):
-    """Payload for creating a new config version."""
-
-    label: str | None = Field(default=None, max_length=50)
-    manifest: dict[str, Any]
-    package: ConfigPackageUpload
 
 
 class ConfigVersionRecord(BaseModel):
     """Serializable representation of a config version."""
 
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    model_config = ConfigDict(from_attributes=True)
 
-    config_version_id: str = Field(alias="id", serialization_alias="config_version_id")
+    config_version_id: str
     sequence: int
     label: str | None
     manifest: dict[str, Any]
     manifest_sha256: str
     package_sha256: str
-    package_uri: str
+    package_path: str
+    config_script_api_version: str
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
@@ -51,7 +27,9 @@ class ConfigVersionRecord(BaseModel):
 class ConfigSummary(BaseModel):
     """Lightweight config representation for list endpoints."""
 
-    config_id: str = Field(alias="id", serialization_alias="config_id")
+    model_config = ConfigDict(from_attributes=True)
+
+    config_id: str
     workspace_id: str
     slug: str
     title: str
@@ -61,8 +39,6 @@ class ConfigSummary(BaseModel):
     deleted_at: datetime | None = None
     active_version: ConfigVersionRecord | None = None
 
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
-
 
 class ConfigRecord(ConfigSummary):
     """Detailed config representation including version history."""
@@ -70,11 +46,86 @@ class ConfigRecord(ConfigSummary):
     versions: list[ConfigVersionRecord] = Field(default_factory=list)
 
 
+class ValidationDiagnostic(BaseModel):
+    """Represents a validation diagnostic entry."""
+
+    level: Literal["error", "warning"]
+    code: str
+    path: str
+    message: str
+    hint: str | None = None
+
+
+class ConfigValidationResponse(BaseModel):
+    """Response envelope for config validation."""
+
+    diagnostics: list[ValidationDiagnostic] = Field(default_factory=list)
+
+
+class ConfigPackageEntry(BaseModel):
+    """Represents a single file or directory inside a config package."""
+
+    path: str
+    type: Literal["file", "directory"]
+    size: int | None = None
+    sha256: str | None = None
+
+
+class ConfigFileContent(BaseModel):
+    """Represents the contents of a package file."""
+
+    path: str
+    encoding: str = "utf-8"
+    content: str
+    sha256: str
+
+
+class ConfigFileUpdate(BaseModel):
+    """Request payload for updating draft files."""
+
+    content: str
+    encoding: str = "utf-8"
+    expected_sha256: str | None = None
+
+
+class ConfigDraftRecord(BaseModel):
+    """Metadata describing a config editing draft."""
+
+    draft_id: str
+    config_id: str
+    workspace_id: str
+    base_config_version_id: str | None = None
+    base_sequence: int | None = None
+    manifest_sha256: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    created_by_user_id: str | None = None
+    updated_by_user_id: str | None = None
+    last_published_version_id: str | None = None
+
+
+class ConfigDraftCreateRequest(BaseModel):
+    """Request payload for creating a new draft."""
+
+    base_config_version_id: str
+
+
+class ConfigDraftPublishRequest(BaseModel):
+    """Request payload when publishing a draft to a new version."""
+
+    label: str | None = Field(default=None, max_length=50)
+
+
 __all__ = [
-    "ConfigCreateRequest",
-    "ConfigPackageUpload",
+    "ConfigDraftCreateRequest",
+    "ConfigDraftPublishRequest",
+    "ConfigDraftRecord",
+    "ConfigFileContent",
+    "ConfigFileUpdate",
+    "ConfigPackageEntry",
     "ConfigRecord",
     "ConfigSummary",
-    "ConfigVersionCreateRequest",
+    "ConfigValidationResponse",
     "ConfigVersionRecord",
+    "ValidationDiagnostic",
 ]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -46,6 +47,8 @@ _GOVERNOR_PERMISSIONS = frozenset(
         "Workspace.Settings.ReadWrite",
     }
 )
+
+logger = logging.getLogger(__name__)
 
 _SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
 
