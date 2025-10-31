@@ -37,6 +37,11 @@ class ConfigFilesystem:
         _fsync_dir(bundle)
         return bundle
 
+    def config_path(self, config_id: str) -> Path:
+        """Return the absolute path to the bundle for ``config_id`` without creating it."""
+
+        return self._config_root(config_id)
+
     def delete_config(self, config_id: str) -> None:
         """Remove ``config_id`` from storage if it exists."""
 
@@ -45,6 +50,20 @@ class ConfigFilesystem:
             return
         shutil.rmtree(bundle)
         _fsync_dir(bundle.parent)
+
+    def copy_config(self, source_config_id: str, target_config_id: str) -> None:
+        """Copy the bundle for ``source_config_id`` into ``target_config_id``."""
+
+        source = self._config_root(source_config_id)
+        if not source.exists():
+            raise FileNotFoundError(f"Config {source_config_id} directory does not exist")
+
+        destination = self._config_root(target_config_id)
+        if destination.exists():
+            shutil.rmtree(destination)
+        shutil.copytree(source, destination, dirs_exist_ok=True)
+        _fsync_tree(destination)
+        _fsync_dir(destination.parent)
 
     def list_files(self, config_id: str) -> list[ConfigFileMetadata]:
         """Return metadata for every tracked file relative to ``config_id`` root."""

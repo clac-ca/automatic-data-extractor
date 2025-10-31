@@ -154,6 +154,7 @@ docker rm ade-backend
 ## 6. Where ADE Stores Data
 - `data/db/backend.app.sqlite` – primary metadata database (SQLite).
 - `data/documents/` – uploaded source files.
+- `data/configs/` – active, inactive, and archived configuration bundles (manifest, hooks, column modules, secrets).
 - `data/logs/` *(if enabled)* – structured JSON logs.
 
 Back up the `data/` directory to retain everything you need for a full

@@ -132,13 +132,13 @@ ADE follows a feature-first layout inside the `backend/app/` package:
 - [`backend/app/features/documents`](backend/app/features/documents) – multipart uploads, metadata, downloads, and deletions.
 - [`backend/app/features/jobs`](backend/app/features/jobs) – submission, status tracking, and synchronous execution via the pluggable processor contract.
 - [`backend/app/features/workspaces`](backend/app/features/workspaces) – routing helpers and dependencies that enforce workspace-scoped URLs.
-- [`backend/app/features/configs`](backend/app/features/configs) – configuration packages, version snapshots, and draft file management.
+- [`backend/app/features/configs`](backend/app/features/configs) – workspace-scoped, file-backed configuration bundles (manifests, hooks, column modules, and encrypted secrets).
 - [`backend/app/features/users`](backend/app/features/users) – identity management, roles, and repositories shared across features.
 - [`backend/app/features/system_settings`](backend/app/features/system_settings) – repository and models for instance-wide configuration toggles.
 
 Shared infrastructure lives under [`backend/app/shared`](backend/app/shared) – notably [`backend/app/shared/core`](backend/app/shared/core) for logging, middleware, settings, and other cross-cutting helpers plus [`backend/app/shared/db`](backend/app/shared/db) for SQLAlchemy metadata, mixins, and persistence utilities. React build artefacts are served from [`backend/app/web/static`](backend/app/web/static) by FastAPI.
 
-Uploaded files and the SQLite database are stored beneath the [`data/`](data) directory by default. Override locations with the `ADE_STORAGE_DATA_DIR`, `ADE_DATABASE_DSN`, or `ADE_STORAGE_DOCUMENTS_DIR` environment variables when deploying to production systems.
+Uploaded files, configuration bundles, and the SQLite database are stored beneath the [`data/`](data) directory by default. Override locations with the `ADE_STORAGE_DATA_DIR`, `ADE_DATABASE_DSN`, `ADE_STORAGE_DOCUMENTS_DIR`, or `ADE_STORAGE_CONFIGS_DIR` environment variables when deploying to production systems.
 
 > **Note**
 > The container build currently runs as a smoke test on `main`. Update the admin guide with downstream deployment steps once registry publishing is enabled.

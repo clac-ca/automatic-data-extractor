@@ -38,6 +38,8 @@ class Workspace(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         "Config",
         back_populates="workspace",
         cascade="all, delete-orphan",
+        foreign_keys="Config.workspace_id",
+        primaryjoin="Workspace.id == Config.workspace_id",
     )
 
     memberships: Mapped[list[WorkspaceMembership]] = relationship(

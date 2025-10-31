@@ -83,6 +83,7 @@ async def test_session_dependency_commits_and_populates_context(
                         NULL,
                         NULL,
                         NULL,
+                        NULL,
                         NULL
                     )
                     """

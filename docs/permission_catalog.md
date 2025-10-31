@@ -20,8 +20,8 @@ This catalog mirrors the registry that will live in the database. Each permissio
 | `Workspace.Members.ReadWrite` | workspace | Manage workspace members | Invite, remove, or change member roles. |
 | `Workspace.Documents.Read` | workspace | Read documents | List and download workspace documents. |
 | `Workspace.Documents.ReadWrite` | workspace | Manage documents | Upload, update, delete, or restore workspace documents. |
-| `Workspace.Configs.Read` | workspace | Read configs | View configuration packages, drafts, and published versions. |
-| `Workspace.Configs.ReadWrite` | workspace | Manage configs | Create, edit, publish, revert, or delete configuration packages. |
+| `Workspace.Configs.Read` | workspace | Read configs | View configuration bundles, manifests, file contents, validation results, and activation status. |
+| `Workspace.Configs.ReadWrite` | workspace | Manage configs | Create, edit, clone, validate, activate/inactivate, archive, delete bundles, and manage encrypted secrets. |
 | `Workspace.Jobs.Read` | workspace | Read jobs | Inspect job history and status. |
 | `Workspace.Jobs.ReadWrite` | workspace | Manage jobs | Submit, cancel, retry, or reprioritise jobs within the workspace. |
 
