@@ -538,7 +538,6 @@ function useDocumentRunPreferences(workspaceId: string, documentId: string) {
         ...all,
         [documentId]: {
           configId: next.configId,
-          configVersionId: next.configVersionId,
         },
       });
     },
@@ -550,7 +549,6 @@ function useDocumentRunPreferences(workspaceId: string, documentId: string) {
 
 type DocumentRunPreferences = {
   readonly configId: string | null;
-  readonly configVersionId: string | null;
 };
 /* ------------------------ API helpers & small utilities ------------------------ */
 
@@ -639,11 +637,10 @@ function readRunPreferences(
     if (entry && typeof entry === "object") {
       return {
         configId: entry.configId ?? null,
-        configVersionId: entry.configVersionId ?? null,
       };
     }
   }
-  return { configId: null, configVersionId: null };
+  return { configId: null };
 }
 /* ------------------------- Compact Page Bar / Toolbar ------------------------- */
 
@@ -1124,40 +1121,30 @@ function RunExtractionDrawerContent({
 
   const allConfigs = configsQuery.data ?? [];
   const selectableConfigs = useMemo(
-    () => allConfigs.filter((config) => !config.deleted_at && config.active_version),
+    () => allConfigs.filter((config) => config.status === "active"),
     [allConfigs],
   );
 
-  const preferredSelection = useMemo(() => {
+  const preferredConfigId = useMemo(() => {
     if (preferences.configId) {
       const match = selectableConfigs.find((config) => config.config_id === preferences.configId);
       if (match) {
-        return {
-          configId: match.config_id,
-          versionId: preferences.configVersionId ?? match.active_version?.config_version_id ?? null,
-        } as const;
+        return match.config_id;
       }
     }
-    const fallback = selectableConfigs[0];
-    return {
-      configId: fallback?.config_id ?? "",
-      versionId: fallback?.active_version?.config_version_id ?? null,
-    } as const;
-  }, [preferences.configId, preferences.configVersionId, selectableConfigs]);
+    return selectableConfigs[0]?.config_id ?? "";
+  }, [preferences.configId, selectableConfigs]);
 
-  const [selectedConfigId, setSelectedConfigId] = useState<string>(preferredSelection.configId);
-  const [selectedVersionId, setSelectedVersionId] = useState<string>(preferredSelection.versionId ?? "");
+  const [selectedConfigId, setSelectedConfigId] = useState<string>(preferredConfigId);
 
   useEffect(() => {
-    setSelectedConfigId(preferredSelection.configId);
-    setSelectedVersionId(preferredSelection.versionId ?? "");
-  }, [preferredSelection]);
+    setSelectedConfigId(preferredConfigId);
+  }, [preferredConfigId]);
 
   const selectedConfig = useMemo(
     () => selectableConfigs.find((config) => config.config_id === selectedConfigId) ?? null,
     [selectableConfigs, selectedConfigId],
   );
-  const selectedActiveVersion = selectedConfig?.active_version ?? null;
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -1206,7 +1193,7 @@ function RunExtractionDrawerContent({
   const hasConfigurations = selectableConfigs.length > 0;
 
   const handleSubmit = () => {
-    if (!selectedConfig || !selectedActiveVersion || !selectedVersionId) {
+    if (!selectedConfig) {
       setErrorMessage("Select a configuration before running the extractor.");
       return;
     }
@@ -1214,11 +1201,11 @@ function RunExtractionDrawerContent({
     submitJob.mutate(
       {
         input_document_id: documentRecord.document_id,
-        config_version_id: selectedVersionId,
+        config_id: selectedConfig.config_id,
       },
       {
         onSuccess: (job) => {
-          setPreferences({ configId: selectedConfig.config_id, configVersionId: selectedVersionId });
+          setPreferences({ configId: selectedConfig.config_id });
           onRunSuccess?.(job);
           onClose();
         },
@@ -1290,24 +1277,19 @@ function RunExtractionDrawerContent({
                 onChange={(event) => {
                   const value = event.target.value;
                   setSelectedConfigId(value);
-                  const target = selectableConfigs.find((config) => config.config_id === value) ?? null;
-                  const versionId = target?.active_version?.config_version_id ?? "";
-                  setSelectedVersionId(versionId);
-                  if (target && versionId) {
-                    setPreferences({ configId: target.config_id, configVersionId: versionId });
-                  }
+                  setPreferences({ configId: value || null });
                 }}
                 disabled={submitJob.isPending}
               >
                 <option value="">Select configuration</option>
                 {selectableConfigs.map((config) => (
                   <option key={config.config_id} value={config.config_id}>
-                    {config.title} (Active v{config.active_version?.semver ?? "–"})
+                    {config.title}
                   </option>
                 ))}
               </Select>
             ) : (
-              <Alert tone="info">No configurations available. Create one before running extraction.</Alert>
+              <Alert tone="info">No active configurations available. Activate one before running extraction.</Alert>
             )}
           </section>
 
@@ -1329,7 +1311,7 @@ function RunExtractionDrawerContent({
             type="button"
             onClick={handleSubmit}
             isLoading={submitJob.isPending}
-            disabled={submitJob.isPending || !hasConfigurations || !selectedVersionId}
+            disabled={submitJob.isPending || !hasConfigurations || !selectedConfigId}
           >
             Run extraction
           </Button>

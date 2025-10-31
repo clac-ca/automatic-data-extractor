@@ -22,11 +22,11 @@ export default function WorkspaceConfigsIndexRoute() {
       return;
     }
     const stored = storage.get<LastSelection>();
-    const configs = configsQuery.data.filter((config) => !config.deleted_at);
+    const configs = configsQuery.data.filter((config) => config.status !== "archived");
     const preferred = stored?.configId
       ? configs.find((config) => config.config_id === stored.configId)
       : undefined;
-    const target = preferred ?? configs.find((config) => config.active_version) ?? configs[0];
+    const target = preferred ?? configs.find((config) => config.status === "active") ?? configs[0];
     if (target) {
       navigate(`${target.config_id}/editor`, { replace: true });
     }
