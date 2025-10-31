@@ -1,506 +1,506 @@
 # 02 — Job Orchestration (Deep Dive)
 
-## 0) Start with the Artifact JSON (the backbone)
+This page explains **how ADE runs a job** from end to end—simply and safely—inside a **single Docker container**.  
+No background is required: we’ll start with what a “job” is, then layer on the queue, the worker process, the
+artifact JSON, and the API that ties it together. Each idea is shown first in plain language and then cemented
+with a small code snippet.
 
-**Artifact JSON** is both:
+---
 
-1. **Audit record** — a full narrative of the run (what ADE saw, decided, and wrote).
-2. **Shared state** — the *only* object passed between passes (append‑only during the run).
+## 1) What is a “job”?
 
-**Design guarantees**
+A **job** is one run of ADE on one spreadsheet using one versioned configuration (your small Python rules).  
+The job reads your file, applies your config across **passes** (find tables → map columns → transform → validate → write),
+and writes two outputs into a per-job folder:
 
-* **Append-only during execution:** passes add facts; they don’t rewrite history.
-* **No raw cell values:** the artifact records *locations* (A1), *decisions*, *contributors*, and *summaries*—never the underlying data.
-* **Reproducibility:** a **rule registry** logs the exact code identifiers + content hashes for all callables.
+- `artifact.json` — a complete audit of decisions (no raw cell values)  
+- `normalized.xlsx` — the clean, normalized workbook
 
-### Initial artifact shape (created before Pass 1)
+We keep every job **isolated** in its own working directory under `/var/jobs/<id>/`.
+
+```text
+/var/jobs/1234/
+├─ input.xlsx
+├─ artifact.json
+├─ normalized.xlsx
+├─ logs.txt                # stdout/stderr from the worker
+└─ config/                 # the code you authored in the UI (materialized for this run)
+   ├─ __init__.py
+   ├─ row_types/  __init__.py  *.py
+   ├─ columns/    __init__.py  *.py
+   ├─ hooks/      __init__.py  *.py
+   ├─ requirements.txt  (optional)
+   └─ vendor/            # per-job Python deps installed here
+````
+
+---
+
+## 2) The one-sentence model
+
+**ADE accepts jobs via HTTP, queues them in-memory, and runs each in a separate Python subprocess with strict
+resource limits and no network by default.**
+
+```python
+# high level pseudocode (not production code)
+enqueue(job_id)      # POST /jobs
+--N workers-->       # bounded concurrency
+spawn subprocess     # one per job
+  |-> set rlimits    # CPU, memory, file size, fds
+  |-> install deps   # pip -t config/vendor
+  |-> disable net    # unless allow_network=true
+  |-> run passes     # write artifact.json + normalized.xlsx
+```
+
+---
+
+## 3) The Job API (how clients interact)
+
+Clients create, check, and retrieve jobs over simple HTTP endpoints.
+
+```python
+# app/routes/jobs.py  (sketch)
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+router = APIRouter()
+
+class SubmitJob(BaseModel):
+    document_id: str
+    config_version_id: str
+    allow_network: bool = False
+
+@router.post("/jobs", status_code=202)
+async def submit_job(payload: SubmitJob):
+    # 1) refuse when queue/backlog is full
+    if app.state.job_manager.queue_full():
+        raise HTTPException(429, "Job queue is full. Please retry later.")
+    # 2) create job row + materialize /var/jobs/<id> (input.xlsx + config/*)
+    job_id = await create_job_and_files(payload)
+    # 3) enqueue
+    app.state.job_manager.submit(job_id)
+    return {"job_id": job_id, "status": "QUEUED"}
+
+@router.get("/jobs/{job_id}")
+async def get_job(job_id: int):
+    return await read_job_row(job_id)  # status, timestamps, error_message, etc.
+
+@router.get("/jobs/{job_id}/artifact")
+async def get_artifact(job_id: int):
+    return file_response(f"/var/jobs/{job_id}/artifact.json")
+
+@router.get("/jobs/{job_id}/output")
+async def get_output(job_id: int):
+    return file_response(f"/var/jobs/{job_id}/normalized.xlsx")
+
+@router.post("/jobs/{job_id}/retry", status_code=202)
+async def retry_job(job_id: int):
+    await reset_job_outputs(job_id)     # wipe artifact/output/logs
+    await set_status(job_id, "QUEUED")
+    app.state.job_manager.submit(job_id)
+    return {"job_id": job_id, "status": "QUEUED"}
+```
+
+---
+
+## 4) The queue (bounded work-in-progress)
+
+We use an **in-process** queue with a fixed number of **workers**. This keeps the API responsive and
+prevents overload: if the queue is full, requests get **HTTP 429**.
+
+```python
+# app/jobs/manager.py  (sketch)
+import os, asyncio, sys, datetime as dt
+
+class JobManager:
+    def __init__(self, max_workers: int, max_queue: int):
+        self.queue = asyncio.Queue(maxsize=max_queue)
+        self.max_workers = max_workers
+        self._workers = []
+
+    async def start(self):
+        for i in range(self.max_workers):
+            self._workers.append(asyncio.create_task(self._loop(i)))
+
+    def queue_full(self) -> bool:
+        return self.queue.full()
+
+    def submit(self, job_id: int):
+        self.queue.put_nowait(job_id)
+
+    async def _loop(self, worker_id: int):
+        while True:
+            job_id = await self.queue.get()
+            try:
+                await self._process(job_id)
+            finally:
+                self.queue.task_done()
+
+    async def _process(self, job_id: int):
+        await db.update(job_id, status="RUNNING", started_at=dt.datetime.utcnow())
+        rc, error = await self._spawn(job_id)       # see next section
+        await db.update(job_id,
+                        status=("SUCCESS" if rc == 0 else "ERROR"),
+                        finished_at=dt.datetime.utcnow(),
+                        error_message=error)
+
+# Startup hook (e.g., app lifespan)
+job_manager = JobManager(
+    max_workers=int(os.getenv("ADE_MAX_CONCURRENCY", "2")),
+    max_queue=int(os.getenv("ADE_QUEUE_SIZE", "10")),
+)
+await job_manager.start()
+app.state.job_manager = job_manager
+```
+
+---
+
+## 5) Spawning the worker (the safety boundary)
+
+Each job runs in **its own Python process**. That process sees only the standard library plus the job’s
+`config/` and `config/vendor/` folders on `PYTHONPATH`. We skip global site‑packages and capture all output to `logs.txt`.
+
+```python
+# app/jobs/manager.py  (spawn sketch)
+import asyncio, os, sys, pathlib
+
+WORKER = "/app/app/jobs/worker.py"        # absolute path to our worker script
+
+async def _spawn(self, job_id: int):
+    job_dir = pathlib.Path(f"/var/jobs/{job_id}")
+    log = open(job_dir / "logs.txt", "a", buffering=1)  # line-buffered
+
+    env = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        # Only the job’s code & deps are importable:
+        "PYTHONPATH": f"{job_dir}/config/vendor:{job_dir}/config",
+        # Controls:
+        "ADE_ALLOW_NET_JOB": str(await db.get_allow_network(job_id)).lower(),
+        "ADE_WHEELHOUSE": os.getenv("ADE_WHEELHOUSE", ""),
+        "ADE_WORKER_CPU_SECONDS": os.getenv("ADE_WORKER_CPU_SECONDS", "60"),
+        "ADE_WORKER_MEM_MB": os.getenv("ADE_WORKER_MEM_MB", "512"),
+        "ADE_WORKER_FSIZE_MB": os.getenv("ADE_WORKER_FSIZE_MB", "100"),
+        "ADEJOB_USER": os.getenv("ADEJOB_USER", "nobody"),
+    }
+
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, "-S", "-B", WORKER, str(job_id),
+        cwd=str(job_dir), env=env, stdout=log, stderr=log
+    )
+
+    try:
+        timeout = float(os.getenv("ADE_JOB_TIMEOUT_SECONDS", "300"))
+        await asyncio.wait_for(proc.wait(), timeout=timeout)
+        return proc.returncode, (None if proc.returncode == 0 else _tail_error(job_dir))
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        return 1, f"TIMEOUT (>{int(timeout)}s)"
+
+def _tail_error(job_dir: pathlib.Path) -> str:
+    try:
+        with open(job_dir / "logs.txt", "r") as fh:
+            lines = [ln.strip() for ln in fh.readlines() if ln.strip()]
+        return lines[-1][:240] if lines else "Job failed"
+    except Exception:
+        return "Job failed"
+```
+
+*Why this is safe:* bugs or malicious code cannot crash your API—they only crash the **child** process.
+We also limit CPU time, memory, and file sizes inside that child, and we turn **network off by default**.
+
+---
+
+## 6) The worker (sandboxed subprocess)
+
+The worker sets **resource limits**, optionally **installs dependencies** into `config/vendor/`, **disables sockets**, and then runs the ADE passes, writing the artifact and the normalized workbook.
+
+```python
+# app/jobs/worker.py  (minimal but real)
+import os, sys, json, subprocess, traceback, resource
+
+def set_limits():
+    cpu = int(os.getenv("ADE_WORKER_CPU_SECONDS", "60"))
+    mem = int(os.getenv("ADE_WORKER_MEM_MB", "512")) * 1024 * 1024
+    fsz = int(os.getenv("ADE_WORKER_FSIZE_MB", "100")) * 1024 * 1024
+    resource.setrlimit(resource.RLIMIT_CPU,   (cpu, cpu))
+    resource.setrlimit(resource.RLIMIT_AS,    (mem, mem))
+    resource.setrlimit(resource.RLIMIT_FSIZE, (fsz, fsz))
+
+def drop_privileges():
+    try:
+        import pwd
+        user = os.getenv("ADEJOB_USER", "nobody")
+        pw = pwd.getpwnam(user)
+        os.setgid(pw.pw_gid); os.setuid(pw.pw_uid)
+    except Exception as e:
+        print(f"[worker] privilege drop skipped: {e}", file=sys.stderr)
+
+def disable_network():
+    import socket
+    def _blocked(*a, **k): raise ConnectionError("Networking is disabled for this job")
+    socket.socket = lambda *a, **k: _blocked()
+    socket.create_connection = lambda *a, **k: _blocked()
+
+def install_deps_if_any():
+    req = os.path.join("config", "requirements.txt")
+    if not os.path.exists(req): return
+    cmd = [sys.executable, "-m", "pip", "install", "-t", "config/vendor", "-r", req, "--no-cache-dir"]
+    if os.getenv("ADE_ALLOW_NET_JOB", "false") != "true":
+        cmd += ["--no-index"]
+        wh = os.getenv("ADE_WHEELHOUSE")
+        if wh: cmd += [f"--find-links={wh}"]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    print(res.stdout, end=""); print(res.stderr, end="", file=sys.stderr)
+    if res.returncode != 0: raise RuntimeError("Dependency installation failed")
+
+def run_passes():
+    # This is where your existing pass implementations are invoked.
+    # Pseudocode: structure → mapping → transform → validate → write
+    artifact = {"events": []}
+    # structure():
+    artifact["events"].append({"stage": "structure", "status": "ok"})
+    # mapping():
+    artifact["events"].append({"stage": "mapping", "status": "ok"})
+    # transform():
+    artifact["events"].append({"stage": "transform", "status": "ok"})
+    # validate():
+    artifact["events"].append({"stage": "validate", "status": "ok"})
+    # write normalized.xlsx:
+    artifact["events"].append({"stage": "output", "status": "ok"})
+    return artifact
+
+def main():
+    _job_id = int(sys.argv[1])
+    set_limits()
+    drop_privileges()
+    install_deps_if_any()
+    if os.getenv("ADE_ALLOW_NET_JOB", "false") != "true":
+        disable_network()
+
+    try:
+        artifact = run_passes()
+        with open("artifact.json", "w") as f: json.dump(artifact, f, indent=2)
+        sys.exit(0)
+    except Exception as e:
+        traceback.print_exc()
+        with open("artifact.json", "w") as f:
+            json.dump({"error": str(e)[:400], "events": []}, f, indent=2)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+```
+
+---
+
+## 7) The artifact JSON (audit, not data)
+
+The artifact is your **explainability record**.
+It shows what ADE decided and why—without storing raw cell content. Think of it as “**what happened where**”.
 
 ```json
 {
-  "version": "artifact.v1.1",
-  "job":     { "id": "<job_id>", "source_file": "input.xlsx", "started_at": "2025-10-30T12:34:56Z" },
-  "config":  { "workspace_id": "<ws>", "config_id": "<active-config-id>", "title": "Membership Rules", "version": "1.2.0" },
-  "rules":   {},          // rule registry (filled immediately after init)
-  "sheets":  [],          // filled by Pass 1 (structure)
-  "output":  {},          // filled by Pass 3–5 (generate)
-  "summary": {},          // filled at end
-  "pass_history": []      // appended after each pass completes
+  "job_id": 1234,
+  "summary": { "tables": 1, "rows_written": 155, "issues": 4 },
+  "events": [
+    { "stage": "structure", "header_row": 4, "tables": [{"range": "B4:G159"}] },
+    {
+      "stage": "mapping",
+      "columns": [
+        { "raw": {"col": "col_1", "header": "Employee ID"}, "target": "member_id", "score": 1.8,
+          "contributors": [{"rule": "col.member_id.pattern", "delta": 0.9}] }
+      ]
+    },
+    { "stage": "transform", "changed": {"member_id": 120} },
+    { "stage": "validate", "errors": 3, "warnings": 1 },
+    { "stage": "output", "path": "normalized.xlsx" }
+  ]
 }
 ```
 
-### Building the rule registry (what code ran?)
-
-```python
-def build_rule_registry(config_pkg) -> dict:
-    registry = {}
-    for rule in discover_rules(config_pkg):  # row detectors, column detectors, transforms, validators, hooks
-        impl = f"{rule.module}:{rule.func}"  # e.g., "columns/member_id.py:detect_synonyms"
-        src  = read_source(rule.module, rule.func)
-        ver  = sha1(src)[:6]                 # short content hash
-        registry[rule.rule_id] = {"impl": impl, "version": ver}
-    return registry
-```
-
-> See **Artifact Reference** (`./14-job_artifact_json.md`) for the full schema.
+> The UI can render this to explain **how** ADE turned raw rows into a normalized sheet.
 
 ---
 
-## 1) Orchestration at a glance
+## 8) The passes (what actually runs)
 
-```
-Start
-  │
-  ├─ Build initial artifact
-  │   └─ attach rule registry (impl + hash)
-  │
-  ├─ Pass 1: Structure
-  │   └─ stream rows → label (header/data/separator) → infer tables + A1 ranges
-  │
-  ├─ Pass 2: Mapping
-  │   └─ sample raw columns → score per target field → pick / leave unmapped
-  │
-  ├─ Pass 3–5: Generate
-  │   └─ for each row: Transform → Validate → Write → record summaries/issues
-  │
-  └─ Finish
-      ├─ normalized.xlsx
-      └─ artifact.json (full narrative)
-```
+ADE runs **five ordered passes**. You don’t need to memorize them; just remember: **structure → mapping → generate**.
 
-**Streaming I/O:** ADE never requires full‑sheet loads. Row scanning and writing are streaming; column work can use samples or chunked scans.
+* **Pass 1: Structure** — find tables and headers (row detectors)
+* **Pass 2: Mapping** — map raw columns to target fields (column detectors)
+* **Pass 3–5: Generate** while streaming rows — transform, validate, write
 
----
-
-## 2) Contracts your code must follow (tiny shapes)
-
-* **Row/column detectors:** return **score deltas** (additive hints).
-  `{"scores": {"header": +0.6}}` or `{"scores": {field_name: +0.4}}`
-* **Transforms:** return new values for the column + optional warnings.
-  `{"values": [...], "warnings": [...]}`
-* **Validators:** return issues (no data changes).
-  `{"issues": [{"row_index": 12, "code": "required_missing", ...}]}`
-* **Hooks:** may return `{"notes": "..."}` to annotate history.
-
-All public functions are **keyword‑only** and must tolerate extra kwargs via `**_`.
-
----
-
-## 3) Pseudocode — the orchestrator
-
-> The following pseudocode is faithful to ADE’s control flow but simplified for clarity.
+Here’s a tiny bit of “mental model” pseudocode:
 
 ```python
-def run_job(source_file, active_config):
-    artifact = make_initial_artifact(source_file, active_config)
-    artifact["rules"] = build_rule_registry(active_config)
-    save_artifact_atomic(artifact)
+def process_job(input_xlsx, config_pkg, artifact):
+    # Find tables & header rows
+    tables = detect_tables(input_xlsx, config_pkg.row_types)
+    artifact.add_structure(tables)
 
-    # Pass 1: Structure (find tables & headers)
-    pass1_structure(source_file, active_config, artifact)
-    save_artifact_atomic(artifact)
+    # Map raw columns to target fields, per table
+    for t in tables:
+        mapping = map_columns(input_xlsx, t, config_pkg.columns)
+        artifact.add_mapping(t, mapping)
 
-    # Pass 2: Mapping (raw columns → target fields)
-    pass2_mapping(source_file, active_config, artifact)
-    save_artifact_atomic(artifact)
+    # Stream rows: transform -> validate -> write
+    with open_output_workbook("normalized.xlsx") as writer:
+        for row in stream_rows(input_xlsx, tables):
+            out_row = []
+            for field in output_order():
+                value = row[mapped_source(field)]
+                value = transform(field, value, config_pkg.columns)
+                issues = validate(field, value, config_pkg.columns)
+                artifact.add_issues(field, row.a1, issues)
+                out_row.append(value)
+            writer.write_row(out_row)
 
-    # Optional tiny stats
-    if analyze_enabled(active_config):
-        pass2_5_analyze(source_file, active_config, artifact)
-        save_artifact_atomic(artifact)
-
-    # Pass 3–5: Generate (transform → validate → write)
-    pass3_to_5_generate(source_file, active_config, artifact)
-    save_artifact_atomic(artifact, finalize=True)
-
-    return artifact
-```
-
-`save_artifact_atomic` writes to a temp file and renames, so crashes don’t corrupt the narrative.
-
----
-
-## 4) Pass 1 — Structure (find tables & headers)
-
-**Goal:** Identify table regions and header rows by **streaming** each sheet and labeling each row.
-
-**Reads:** initial artifact, row detector functions, manifest ordering for ties
-**Writes:** `sheets[].row_classification[]`, `sheets[].tables[]` (with `range`, `data_range`, `header`, `columns[]`)
-
-```python
-def pass1_structure(source_file, config, artifact):
-    row_rules = load_row_rules(config)  # [("row.header.text_density", func), ...]
-    for sheet in stream_sheets(source_file):
-        s_entry = {"id": gen_id(), "name": sheet.name, "row_classification": [], "tables": []}
-        artifact["sheets"].append(s_entry)
-
-        # 1) Label rows
-        for row_idx, row_sample in sheet.stream_rows():  # row_sample is a small list of cell values
-            totals, traces = {}, []
-            for rule_id, fn in row_rules:
-                out = safe_call(rule_id, fn,
-                                row_values_sample=row_sample,
-                                row_index=row_idx, sheet_name=sheet.name,
-                                manifest=config.manifest, artifact=artifact)
-                for label, delta in out.get("scores", {}).items():
-                    if delta:
-                        totals[label] = totals.get(label, 0.0) + float(delta)
-                        traces.append({"rule": rule_id, "delta": float(delta)})
-
-            label = choose_best_label(totals, order=row_label_order(config))  # e.g., ["header","data","separator"]
-            s_entry["row_classification"].append({
-                "row_index": row_idx,
-                "label": label,
-                "scores_by_type": totals,
-                "rule_traces": traces,
-                "confidence": softmax_confidence(totals, label)
-            })
-
-        # 2) Infer tables from labeled rows
-        for tbl in infer_tables(s_entry["row_classification"], sheet):
-            s_entry["tables"].append({
-                "id": gen_id("table"),
-                "range": tbl.a1_total,            # e.g., "B4:G159"
-                "data_range": tbl.a1_data,        # e.g., "B5:G159"
-                "header": tbl.header_descriptor,  # {kind:"raw|synthetic|promoted", row_index, source_header:[...]}
-                "columns": enumerate_source_columns(tbl.header_descriptor)  # [{column_id, source_header}, ...]
-            })
-
-    mark_pass_done(artifact, 1, "structure")
-```
-
-**Edge behavior**
-
-* **No usable header found:** synthesize headers (`"Column 1", ...`) and mark `header.kind="synthetic"`.
-* **Data appears before header:** “promote” the best candidate row just above the data; record `header.kind="promoted"`.
-
----
-
-## 5) Pass 2 — Mapping (raw columns → target fields)
-
-**Goal:** For each table, decide which raw column becomes which **target field** using additive scores from small detectors. Uncertain cases remain **unmapped**.
-
-**Reads:** tables from Pass 1, column detectors in `columns/<field>.py`, manifest (`columns.order`, `columns.meta`, thresholds)
-**Writes:** `tables[].mapping[]` with score + contributors
-
-```python
-def pass2_mapping(source_file, config, artifact):
-    fields = load_field_modules(config)  # {"member_id": module, ...}
-
-    for s in artifact["sheets"]:
-        for t in s["tables"]:
-            t["mapping"] = []
-            reader = bind_range(source_file, sheet=s["name"], a1=t["range"])
-
-            for raw in reader.iter_columns():  # {"column_id":"col_1","header":"Employee ID","index":1}
-                sample = reader.sample_values(raw, n=sample_size(config))
-                scores, contrib = {}, {}
-
-                for field, mod in fields.items():
-                    total = 0.0
-                    for rule_id, fn in mod.detect_rules:  # detect_* inside columns/<field>.py
-                        out = safe_call(rule_id, fn,
-                                        header=raw["header"],
-                                        values_sample=sample,
-                                        column_index=raw["index"],
-                                        sheet_name=s["name"], table_id=t["id"],
-                                        field_name=field, field_meta=field_meta(config, field),
-                                        manifest=config.manifest, artifact=artifact)
-                        delta = float(out.get("scores", {}).get(field, 0.0))
-                        if delta:
-                            total += delta
-                            contrib.setdefault(field, []).append({"rule": rule_id, "delta": delta})
-                    scores[field] = total
-
-                field, score = pick_field(scores, min_score=config.manifest.get("mapping", {}).get("min_score"))
-                if field is None:
-                    record_unmapped(t, raw)  # visible later; may be appended as raw_* if enabled
-                    continue
-
-                t["mapping"].append({
-                    "raw": {"column": raw["column_id"], "header": raw["header"]},
-                    "target_field": field,
-                    "score": score,
-                    "contributors": contrib.get(field, [])
-                })
-
-    mark_pass_done(artifact, 2, "mapping")
-```
-
-**Picking a field (tie & threshold)**
-
-```python
-def pick_field(scores: dict[str, float], min_score: float | None):
-    top = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
-    if not top: return None, 0.0
-    best_field, best = top[0]
-    # tie → unmapped
-    if len(top) > 1 and top[1][1] == best: return None, best
-    # low confidence → unmapped
-    if min_score is not None and best < float(min_score): return None, best
-    return best_field, best
-```
-
-> **Detector style:** Prefer several small, cheap, deterministic hints (header synonyms, value shape, locale nudges) over a single heavyweight detector. Negatives are allowed to push *away* from a field.
-
----
-
-## 6) (Optional) Pass 2.5 — Analyze
-
-**Goal:** Compute small, cheap stats for sanity checks (e.g., distinct counts, empties).
-**Writes:** `artifact.analyze[table_id][field] = { "distinct": n, "empty": m }`
-
-```python
-def pass2_5_analyze(source_file, config, artifact):
-    if not analyze_enabled(config): return
-    artifact.setdefault("analyze", {})
-    for s in artifact["sheets"]:
-        for t in s["tables"]:
-            slot = artifact["analyze"].setdefault(t["id"], {})
-            for m in t.get("mapping", []):
-                vals = fetch_column(source_file, sheet=s["name"], a1=t["range"], column_id=m["raw"]["column"])
-                slot[m["target_field"]] = {"distinct": distinct_count(vals), "empty": count_empty(vals)}
+    artifact.add_output("normalized.xlsx")
 ```
 
 ---
 
-## 7) Pass 3–5 — Generate (Transform → Validate → Write)
+## 9) Back-pressure and fairness (why 429?)
 
-**Goal:** Produce the normalized workbook by streaming rows. For each target field (ordered by `manifest.columns.order`), ADE reads the mapped source cell, **transforms** it (optional), **validates** it (optional), and **writes** it.
-
-**Reads:** mapping, manifest (order/labels/flags), field modules
-**Writes:**
-
-* `output`: format, sheet, path, and an output **column plan**
-* `tables[].transforms[]`: per-field change counts
-* `tables[].validation.*`: per-cell issues with A1 coordinates + summaries
-* `summary`: rows/columns written, issues found
+We allow **N jobs** to run at once and **M jobs** to wait in line.
+This prevents one user from overwhelming the server. When the queue is full, we politely ask clients to retry later.
 
 ```python
-def pass3_to_5_generate(source_file, config, artifact):
-    writer = open_writer(path=f"jobs/{artifact['job']['id']}/normalized.xlsx", sheet="Normalized")
-    manifest = config.manifest
-    fields = load_field_modules(config)
-
-    for s in artifact["sheets"]:
-        for t in s["tables"]:
-            plan = build_output_plan(manifest, t)  # [{field, output_header, order, source:{column,header}|None}, ...]
-
-            # headers
-            writer.set_headers([p["output_header"] for p in plan] + maybe_unmapped_headers(manifest, t))
-
-            # prepare per-field iterators (keeps writing row-streaming)
-            processors = {}
-            for p in plan:
-                field, src = p["field"], p["source"]
-                values = fetch_column(source_file, sheet=s["name"], a1=t["range"], column_id=src["column"]) if src else repeat_none(row_count(t))
-
-                # transform
-                if has_transform(fields[field]):
-                    out = call_transform(fields[field],
-                                         values=values,
-                                         header=src["header"] if src else None,
-                                         column_index=src_index(src), sheet_name=s["name"], table_id=t["id"],
-                                         field_name=field, field_meta=field_meta(config, field),
-                                         manifest=manifest, artifact=artifact)
-                    new_vals = out.get("values", values)
-                    record_transform_summary(artifact, table=t, field=field,
-                                             changed=count_changes(values, new_vals), total=len(new_vals))
-                    values = new_vals
-
-                # validate
-                if has_validate(fields[field]):
-                    vout = call_validate(fields[field],
-                                         values=values,
-                                         header=src["header"] if src else None,
-                                         column_index=src_index(src), sheet_name=s["name"], table_id=t["id"],
-                                         field_name=field, field_meta=field_meta(config, field),
-                                         manifest=manifest, artifact=artifact)
-                    attach_issues_with_a1(artifact, sheet=s, table=t, field=field, issues=vout.get("issues", []))
-
-                processors[field] = iter(values)
-
-            # stream rows
-            for r in range(row_count(t)):
-                out_row = [next(processors[p["field"]], None) for p in plan]
-                if append_unmapped(manifest): out_row += unmapped_values_at_row(source_file, s["name"], t, r)
-                writer.write_row(out_row)
-
-    writer.close()
-
-    artifact["output"] = {
-      "format": "xlsx", "sheet": "Normalized",
-      "path": f"jobs/{artifact['job']['id']}/normalized.xlsx",
-      "column_plan": {
-        "target": [{"field": p["field"], "output_header": p["output_header"], "order": p["order"]} for p in plan]
-      }
-    }
-    artifact["summary"] = {
-      "rows_written": writer.rows_written,
-      "columns_written": writer.columns_written,
-      "issues_found": count_all_issues(artifact)
-    }
-    mark_pass_done(artifact, 3, "transform")
-    mark_pass_done(artifact, 4, "validate")
-    mark_pass_done(artifact, 5, "generate")
+# app/routes/jobs.py (back-pressure)
+try:
+    app.state.job_manager.submit(job_id)
+except asyncio.QueueFull:
+    raise HTTPException(429, "Job queue is full. Please retry later.")
 ```
 
-**Attaching A1 coordinates to issues**
+Set these with env vars:
 
-```python
-def attach_issues_with_a1(artifact, sheet, table, field, issues):
-    # Each issue has row_index (1-based within the table's data_range)
-    col_a1 = a1_for_mapped_target(table, field)   # derive column letter(s) from mapping/plan
-    for issue in issues:
-        a1 = a1_from_row_col(table["data_range"], issue["row_index"], col_a1)
-        record_issue(artifact, sheet, table, {
-          "a1": a1, "row_index": issue["row_index"], "target_field": field,
-          "code": issue["code"], "severity": issue["severity"], "message": issue["message"],
-          "rule": f"validate.{field}"
-        })
-```
-
-> **Implementation note:** The column contracts (transform/validate) are expressed over *vectors* (`values: list`), but engines can realize them with buffers/iterators so overall execution stays **row‑streaming**.
+* `ADE_MAX_CONCURRENCY` — workers (e.g., `2`)
+* `ADE_QUEUE_SIZE` — backlog (e.g., `10`)
 
 ---
 
-## 8) Hooks — when and why
+## 10) Limits and safety (why things don’t spiral)
 
-Hooks are optional; they receive the same structured context and may annotate the artifact with `{"notes": "..."}`. Typical placements:
-
-| Hook file            | When it runs  | Good for…                        |
-| -------------------- | ------------- | -------------------------------- |
-| `on_job_start.py`    | Before Pass 1 | Logging metadata, warming caches |
-| `after_mapping.py`   | After Pass 2  | Alerting on unmapped columns     |
-| `after_transform.py` | After Pass 3  | Summaries/metrics                |
-| `after_validate.py`  | After Pass 4  | Aggregating issues, dashboards   |
+We apply **OS rlimits** to the child process so it cannot hog CPU/RAM/disk, and we **block sockets** by default.
 
 ```python
-def run_hook(name, config, artifact):
-    mod = load_hook_module(config, name)          # if present
-    if not mod: return
-    out = safe_call(f"hook.{name}", mod.run, artifact=artifact, manifest=config.manifest, env=config.env, job_id=artifact["job"]["id"], source_file=artifact["job"]["source_file"])
-    if out: artifact.setdefault("hooks", {}).setdefault(name, []).append(out)
+# worker limits (already shown above)
+resource.setrlimit(resource.RLIMIT_CPU,   (cpu, cpu))      # stop CPU loops
+resource.setrlimit(resource.RLIMIT_AS,    (mem, mem))      # cap memory
+resource.setrlimit(resource.RLIMIT_FSIZE, (fsz, fsz))      # cap file writes
+
+# worker network toggle (off by default)
+def disable_network():
+    import socket
+    def _blocked(*a, **k): raise ConnectionError("Networking is disabled for this job")
+    socket.socket = lambda *a, **k: _blocked()
+    socket.create_connection = lambda *a, **k: _blocked()
+```
+
+> If a job times out (wall clock), the parent **kills** it and marks it `ERROR: TIMEOUT`.
+
+---
+
+## 11) Data model (so status is reliable)
+
+We track status and timestamps in SQLite. It’s deliberately boring—and that’s good.
+
+```python
+# app/models/job.py (sketch)
+class Job(Base):
+    __tablename__ = "jobs"
+    id = Column(Integer, primary_key=True)
+    workspace_id = Column(ForeignKey("workspaces.id"), nullable=False)
+    document_id = Column(ForeignKey("documents.id"), nullable=False)
+    config_version_id = Column(ForeignKey("configuration_script_versions.id"), nullable=False)
+
+    status = Column(String(20), nullable=False)  # QUEUED|RUNNING|SUCCESS|ERROR
+    allow_network = Column(Boolean, default=False, nullable=False)
+    attempts = Column(Integer, default=1, nullable=False)
+
+    submitted_by = Column(ForeignKey("users.id"), nullable=False)
+    submitted_at = Column(DateTime, default=utcnow, nullable=False)
+    started_at = Column(DateTime)
+    finished_at = Column(DateTime)
+
+    error_message = Column(Text)     # short, UI-friendly
+    metrics_json = Column(JSON)      # optional
+```
+
+On startup, we reconcile:
+
+```python
+# mark in-flight as failed; requeue queued
+await db.exec("UPDATE jobs SET status='ERROR', error_message='Server restarted' WHERE status='RUNNING'")
+for job_id in await db.list_ids("SELECT id FROM jobs WHERE status='QUEUED'"):
+    app.state.job_manager.submit(job_id)
 ```
 
 ---
 
-## 9) Error handling & determinism
+## 12) Environment knobs (one-container friendly)
 
-* **Rule failures are contained:** If a detector/transform/validator raises, ADE records a neutral result and appends a rule‑error entry to the artifact, then continues.
-
-```python
-def safe_call(rule_id, fn, **kwargs):
-    try:
-        return fn(**kwargs) or {}
-    except Exception as e:
-        artifact = kwargs.get("artifact")
-        if artifact is not None:
-            artifact.setdefault("rule_errors", []).append({"rule": rule_id, "message": str(e), "at": now_iso()})
-        return {}  # neutral
-```
-
-* **Determinism:** Keep rules pure and bounded (no global state, no unseeded randomness).
-* **Security:** Runtime is sandboxed with time/memory limits; **network is off** by default (`allow_net: false`).
+| Variable                  |   Default | What it does                                  |
+| ------------------------- | --------: | --------------------------------------------- |
+| `ADE_MAX_CONCURRENCY`     |       `2` | How many jobs can run at once                 |
+| `ADE_QUEUE_SIZE`          |      `10` | How many jobs can wait                        |
+| `ADE_JOB_TIMEOUT_SECONDS` |     `300` | Kill jobs that exceed wall time               |
+| `ADE_WORKER_CPU_SECONDS`  |      `60` | CPU time cap (per job)                        |
+| `ADE_WORKER_MEM_MB`       |     `512` | Memory cap (MiB)                              |
+| `ADE_WORKER_FSIZE_MB`     |     `100` | Max file size a job can create (MiB)          |
+| `ADE_ALLOW_NET`           |   `false` | Default for `allow_network` if omitted        |
+| `ADE_WHEELHOUSE`          | *(unset)* | Local wheels dir for **offline** pip installs |
 
 ---
 
-## 10) Resumability & atomic writes
+## 13) End-to-end in 30 seconds
 
-Because the artifact is saved atomically **after each pass**, jobs can resume safely:
+You submit. We queue. A worker spawns a safe subprocess. The subprocess installs only what it needs,
+turns off the network, runs your passes, and drops `artifact.json` and `normalized.xlsx` in the job folder.
+You poll status and download outputs. That’s it.
 
-```python
-def resume_if_needed(artifact):
-    done = {p["pass"] for p in artifact.get("pass_history", [])}
-    if 1 not in done: pass1_structure(...)
-    if 2 not in done: pass2_mapping(...)
-    if 3 not in done or 4 not in done or 5 not in done:
-        pass3_to_5_generate(...)
-```
+```bash
+# Client
+curl -X POST https://ade.local/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"document_id":"doc_123","config_version_id":"cfgv_456","allow_network":false}'
 
----
-
-## 11) Practical debugging (reading the artifact)
-
-**Explain a mapping decision**
-
-```python
-def explain_mapping(artifact, table_id, raw_column_id):
-    for s in artifact["sheets"]:
-        for t in s["tables"]:
-            if t["id"] == table_id:
-                for m in t.get("mapping", []):
-                    if m["raw"]["column"] == raw_column_id:
-                        return {"target_field": m["target_field"], "score": m["score"], "contributors": m.get("contributors", [])}
-```
-
-**List validation errors with coordinates**
-
-```python
-def list_errors(artifact):
-    items = []
-    for s in artifact["sheets"]:
-        for t in s["tables"]:
-            for issue in t.get("validation", {}).get("issues", []):
-                items.append((s.get("name"), t["id"], issue["a1"], issue["message"]))
-    return items
+# Later
+curl https://ade.local/jobs/1234
+curl -O https://ade.local/jobs/1234/artifact
+curl -O https://ade.local/jobs/1234/output
 ```
 
 ---
 
-## 12) Reference: helper utilities used above
+## 14) Why this works (and what we didn’t add yet)
 
-```python
-def mark_pass_done(artifact, n, name):
-    artifact["pass_history"].append({"pass": n, "name": name, "completed_at": now_iso()})
+* **Simple:** no Redis/Celery/Kubernetes—just `asyncio.Queue` + `subprocess`.
+* **Safe by default:** separate interpreter, rlimits, and network off.
+* **Explainable:** the artifact tells the whole story, without leaking raw data.
 
-def choose_best_label(totals: dict, order: list[str]) -> str:
-    # highest score; tie broken by manifest-defined order
-    if not totals: return order[0]
-    top = max(order, key=lambda k: (totals.get(k, 0.0), -order.index(k)))
-    return top
+Future hardening (not required to ship): process groups (kill children on timeout), seccomp/bubblewrap, per-job Unix users, Prometheus metrics, cancel endpoint.
+
+---
+
+## 15) Copy-ready checklists
+
+**Operator quick start**
+
+```text
+1) Set ADE_MAX_CONCURRENCY and ADE_QUEUE_SIZE for your box.
+2) Keep ADE_ALLOW_NET=false; allow per job when truly needed.
+3) Ensure /var/jobs and /var/documents are writable by the app.
+4) Watch disk space; clean old /var/jobs/<id> folders periodically.
+5) If queue backs up, return 429 and/or raise concurrency (carefully).
 ```
 
----
+**Developer quick start**
 
-## 13) What to read next
-
-* **Artifact spec & schema** → `./14-job_artifact_json.md`
-* **Pass‑specific deep dives** →
-  `./03-pass-find-tables-and-headers.md` (row detection)
-  `./04-pass-map-columns-to-target-fields.md` (mapping)
-  `./05-pass-transform-values.md` (transform)
-  `./06-pass-validate-values.md` (validate)
-  `./07-pass-generate-normalized-workbook.md` (writer)
-
----
-
-### Appendix A — Minimal detector, transform, validator signatures
-
-```python
-# Row detector (Pass 1)
-def detect_*(*, row_values_sample: list, row_index: int, sheet_name: str,
-             table_hint: dict | None = None, manifest: dict = {}, artifact: dict = {}, **_) -> dict:
-    # -> {"scores": {"header": float, "data": float, "separator": float}}
-
-# Column detector (Pass 2)
-def detect_*(*, header: str | None, values_sample: list, column_index: int,
-             sheet_name: str, table_id: str, field_name: str, field_meta: dict,
-             manifest: dict = {}, artifact: dict = {}, **_) -> dict:
-    # -> {"scores": {field_name: float}}
-
-# Transform (Pass 3)
-def transform(*, values: list, header: str | None, column_index: int,
-              sheet_name: str, table_id: str, field_name: str, field_meta: dict,
-              manifest: dict = {}, artifact: dict = {}, **_) -> dict:
-    # -> {"values": list, "warnings": list[str]}
-
-# Validate (Pass 4)
-def validate(*, values: list, header: str | None, column_index: int,
-             sheet_name: str, table_id: str, field_name: str, field_meta: dict,
-             manifest: dict = {}, artifact: dict = {}, **_) -> dict:
-    # -> {"issues": [{"row_index": int, "code": str, "severity": "error"|"warning"|"info", "message": str}]}
+```text
+1) Implement the five passes behind run_passes() (or call your existing pipeline).
+2) Never store raw cell values in artifact.json—only coordinates and summaries.
+3) Keep transforms/validators pure and fast; the writer streams rows.
+4) Surface short, user-friendly error_message from logs (tail).
 ```
-
----
-
-By putting the **artifact** at the center and keeping passes narrowly scoped, ADE achieves explainable, resumable, and safe processing. The pseudocode above is the roadmap: create the initial artifact, stream rows to **structure**, sample columns to **map**, then **generate** the normalized workbook while recording everything you—and your auditors—need to understand the run.
