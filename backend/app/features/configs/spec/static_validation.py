@@ -93,14 +93,6 @@ class ConfigValidationService:
                         message="Column scripts must define at least one detect_* function",
                     )
                 )
-            if "transform" not in functions:
-                diagnostics.append(
-                    Diagnostic(
-                        path=f"columns.meta.{field_id}.script",
-                        code="missing_transform",
-                        message="Column scripts must define a transform function",
-                    )
-                )
         return diagnostics
 
     def _validate_hooks(self, manifest: ManifestV1, package_root: Path) -> List[Diagnostic]:
@@ -109,6 +101,9 @@ class ConfigValidationService:
             "on_activate": manifest.hooks.on_activate,
             "on_job_start": manifest.hooks.on_job_start,
             "on_after_extract": manifest.hooks.on_after_extract,
+            "after_mapping": manifest.hooks.after_mapping,
+            "after_transform": manifest.hooks.after_transform,
+            "after_validate": manifest.hooks.after_validate,
             "on_job_end": manifest.hooks.on_job_end,
         }.items():
             for index, entry in enumerate(entries):

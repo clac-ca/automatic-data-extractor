@@ -201,7 +201,9 @@ class JobOrchestrator:
             "ADE_OUTPUT_PATH": str(paths.output_path),
             "ADE_WORK_DIR": str(paths.job_dir),
             "ADE_TRACE_ID": trace_id,
-            "ADE_ALLOW_NETWORK": "1" if manifest.engine.defaults.allow_net else "0",
+            "ADE_RUNTIME_NETWORK_ACCESS": "1"
+            if manifest.engine.defaults.runtime_network_access
+            else "0",
             "ADE_WORKER_CPU_SECONDS": str(int(cpu_override) if cpu_override else default_cpu_seconds),
             "ADE_WORKER_MEM_MB": str(int(mem_override) if mem_override else manifest.engine.defaults.memory_mb),
         }

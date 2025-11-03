@@ -21,7 +21,7 @@
 
 - Job context — Dict returned from `on_job_start` hooks; passed to detectors, transforms, validators, and later hooks.
 - Paths — Keyword-only argument with resolved directories like `paths["config"]`, `paths["resources"]`, `paths["cache"]`, `paths["job"]`, and `paths["job_input"]`.
-- Engine defaults — Limits in `manifest.engine.defaults` (timeouts, memory, `allow_net`).
+- Engine defaults — Limits in `manifest.engine.defaults` (timeouts, memory, `runtime_network_access`).
 
 ## Spreadsheet structure
 

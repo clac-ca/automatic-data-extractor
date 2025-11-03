@@ -95,20 +95,20 @@ It’s your **audit trail** and **API** in one place: every pass reads from it a
   },
   "rules": {
     "row_types": {
-      "row.header.text_density":  { "impl": "row_types/header.py:detect_text_density",  "version": "a1f39d" },
-      "row.header.synonym_hits":  { "impl": "row_types/header.py:detect_synonym_hits",  "version": "a1f39d" },
+      "row.header.text_density":  { "impl": "row_types.header:detect_text_density",  "version": "a1f39d" },
+      "row.header.synonym_hits":  { "impl": "row_types.header:detect_synonym_hits",  "version": "a1f39d" },
       "row.data.numeric_density": { "impl": "row_types/data.py:detect_numeric_density", "version": "b1130d" }
     },
     "column_detect": {
-      "col.member_id.pattern":   { "impl": "columns/member_id.py:detect_pattern",      "version": "b77bf2" },
-      "col.department.synonyms": { "impl": "columns/department.py:detect_synonyms",    "version": "c1d004" }
+      "col.member_id.pattern":   { "impl": "columns.member_id:detect_pattern",      "version": "b77bf2" },
+      "col.department.synonyms": { "impl": "columns.department:detect_synonyms",    "version": "c1d004" }
     },
     "transform": {
-      "transform.member_id":     { "impl": "columns/member_id.py:transform",           "version": "d93210" }
+      "transform.member_id":     { "impl": "columns.member_id:transform",           "version": "d93210" }
     },
     "validate": {
-      "validate.member_id":      { "impl": "columns/member_id.py:validate",            "version": "ee12c3" },
-      "validate.required":       { "impl": "columns/_shared.py:validate_required",     "version": "0aa921" }
+      "validate.member_id":      { "impl": "columns.member_id:validate",            "version": "ee12c3" },
+      "validate.required":       { "impl": "columns._shared:validate_required",     "version": "0aa921" }
     }
   },
   "sheets": [],
@@ -148,8 +148,8 @@ Later phases rely on good bounds and header text to make correct mappings.
           "confidence": 0.91,
           "scores_by_type": { "header": 1.24, "data": 0.11 },
           "rule_traces": [
-            { "rule": "row.header.text_density",  "delta": 0.62 },
-            { "rule": "row.header.synonym_hits",  "delta": 0.28 },
+            { "rule": "row_types.header:detect_text_density",  "delta": 0.62 },
+            { "rule": "row_types.header:detect_synonym_hits",  "delta": 0.28 },
             { "rule": "row.data.numeric_density", "delta": -0.05 }
           ]
         }
@@ -205,7 +205,7 @@ Later phases rely on good bounds and header text to make correct mappings.
               "target_field": "member_id",
               "score": 1.8,
               "contributors": [
-                { "rule": "col.member_id.pattern", "delta": 0.90 }
+                { "rule": "columns.member_id:detect_pattern", "delta": 0.90 }
               ]
             },
             { "raw": { "column": "col_2", "header": "Name" }, "target_field": "first_name", "score": 1.2 },
@@ -214,7 +214,7 @@ Later phases rely on good bounds and header text to make correct mappings.
               "target_field": "department",
               "score": 0.9,
               "contributors": [
-                { "rule": "col.department.synonyms", "delta": 0.60 }
+                { "rule": "columns.department:detect_synonyms", "delta": 0.60 }
               ]
             }
           ],
@@ -260,7 +260,7 @@ Later phases rely on good bounds and header text to make correct mappings.
                 "code": "pattern_mismatch",
                 "severity": "error",
                 "message": "Does not match expected pattern",
-                "rule": "validate.member_id"
+                "rule": "columns.member_id:validate"
               }
             ],
             "summary_by_field": {
@@ -303,7 +303,12 @@ Later phases rely on good bounds and header text to make correct mappings.
         { "field": "department", "output_header": "Department", "order": 3 }
       ],
       "appended_unmapped": [
-        { "source_header": "Start Date", "output_header": "raw_Start_Date", "order": 4 }
+        {
+          "source_header": "Start Date",
+          "output_header": "raw_Start_Date",
+          "order": 4,
+          "column": "col_4"
+        }
       ]
     }
   },

@@ -44,6 +44,28 @@ def _column_script(field: str, *, include_transform: bool = True) -> str:
     return textwrap.dedent(body).strip() + "\n"
 
 
+def _column_script_with_required_validator(field: str) -> str:
+    body = f"""
+    def detect_{field}(*, header, values_sample, column_index, table, job_context, env):
+        return {{"scores": {{"{field}": 1.0}}}}
+
+    def transform(*, values, **_):
+        return {{"values": list(values), "warnings": []}}
+
+    def validate(*, values, **_):
+        issues = []
+        if not values:
+            issues.append({{
+                "row_index": 1,
+                "code": "missing",
+                "severity": "error",
+                "message": "Missing value",
+            }})
+        return {{"issues": issues}}
+    """
+    return textwrap.dedent(body).strip() + "\n"
+
+
 def _build_manifest(sheet_title: str = "Members") -> tuple[dict[str, Any], dict[str, str]]:
     manifest: dict[str, Any] = {
         "config_script_api_version": "1",
@@ -98,7 +120,7 @@ def _jobs_endpoint(workspace_id: str) -> str:
     return f"/api/v1/workspaces/{workspace_id}/jobs"
 
 
-async def test_create_config_rejects_column_without_transform(
+async def test_create_config_allows_column_without_transform(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
 ) -> None:
@@ -125,11 +147,11 @@ async def test_create_config_rejects_column_without_transform(
         headers=headers,
     )
 
-    assert response.status_code == 400
-    detail = response.json().get("detail")
-    assert isinstance(detail, dict)
-    diagnostics = detail.get("diagnostics", [])
-    assert any(item.get("code") == "column.transform.missing" for item in diagnostics)
+    assert response.status_code == 201
+    payload = response.json()
+    versions = payload.get("versions", [])
+    assert versions, "Config version was not created"
+    assert payload.get("active_version") is None
 
 
 async def test_create_config_stores_canonical_manifest_and_package_hashes(
@@ -195,6 +217,19 @@ async def test_job_artifact_reflects_manifest_columns(
     await login(async_client, email=owner["email"], password=owner["password"])
 
     manifest, scripts = _build_manifest(sheet_title="Members")
+    manifest.setdefault("hooks", {}).setdefault("after_mapping", []).append(
+        {"script": "hooks/after_mapping.py"}
+    )
+    scripts["hooks/__init__.py"] = ""
+    scripts["hooks/after_mapping.py"] = (
+        textwrap.dedent(
+            """
+            def run(*, artifact, **_):
+                return {"notes": "mapping complete"}
+            """
+        ).strip()
+        + "\n"
+    )
     package_bytes = _build_package(manifest, scripts)
 
     slug = f"job-{uuid4().hex[:8]}"
@@ -222,7 +257,8 @@ async def test_job_artifact_reflects_manifest_columns(
     )
     assert job_response.status_code == 201, job_response.text
     job_payload = job_response.json()
-    assert job_payload["status"] == "succeeded"
+    if job_payload["status"] != "succeeded":
+        pytest.fail(f"job failed: {job_payload}")
     assert job_payload["attempt"] == 1
     assert job_payload["logs_uri"]
     assert job_payload["run_request_uri"]
@@ -236,36 +272,46 @@ async def test_job_artifact_reflects_manifest_columns(
     assert artifact_response.status_code == 200
     artifact = artifact_response.json()
     assert artifact["job"]["trace_id"] == trace_id
-    pass_names = [p["name"] for p in artifact["passes"]]
+    pass_names = [p["name"] for p in artifact["pass_history"]]
     assert pass_names == [
-        "detect_tables",
-        "map_columns",
-        "transform_values",
-        "validate_values",
-        "generate_normalized_workbook",
+        "structure",
+        "mapping",
+        "transform",
+        "validate",
+        "generate",
+    ]
+    assert all("stats" in entry for entry in artifact["pass_history"])
+    mapping_pass = next(entry for entry in artifact["pass_history"] if entry["name"] == "mapping")
+    assert set(mapping_pass["stats"]) == {"mapped", "unmapped"}
+    assert artifact["annotations"]
+    assert any(
+        annotation["stage"] == "after_mapping"
+        and annotation["hook"] == "hooks/after_mapping.py"
+        and annotation.get("notes") == "mapping complete"
+        for annotation in artifact["annotations"]
+    )
+    for annotation in artifact["annotations"]:
+        assert "annotated_at" in annotation
+
+    assert artifact["summary"]["rows_written"] >= 0
+    assert artifact["output"]["sheet"] == "Members"
+    assert artifact["output"]["column_plan"]["target"] == [
+        {"field": "member_id", "output_header": "Member ID", "order": 1},
+        {"field": "first_name", "output_header": "First Name", "order": 2},
     ]
 
-    tables_pass = next(p for p in artifact["passes"] if p["name"] == "detect_tables")
-    assert tables_pass["summary"]["tables"]
+    sheet_entry = artifact["sheets"][0]
+    table_entry = sheet_entry["tables"][0]
+    mapping_entries = table_entry["mapping"]
+    assert any(entry["target_field"] == "member_id" for entry in mapping_entries)
+    assert any(entry["raw"]["header"] == "Legacy Code" for entry in mapping_entries)
 
-    mapping_pass = next(p for p in artifact["passes"] if p["name"] == "map_columns")
-    assignments = mapping_pass["summary"]["assignments"]
-    assert any(item["target_field"] == "member_id" for item in assignments)
-    assert any(item["raw_header"] == "Legacy Code" for item in assignments)
+    transform_targets = {entry["target_field"] for entry in table_entry["transforms"]}
+    assert {"member_id", "first_name"}.issubset(transform_targets)
 
-    transform_pass = next(p for p in artifact["passes"] if p["name"] == "transform_values")
-    transform_fields = {entry["field"] for entry in transform_pass["summary"]["fields"]}
-    assert {"member_id", "first_name"}.issubset(transform_fields)
-
-    validate_pass = next(p for p in artifact["passes"] if p["name"] == "validate_values")
-    validate_fields = {entry["field"] for entry in validate_pass["summary"]["fields"]}
-    assert {"member_id", "first_name"}.issubset(validate_fields)
-
-    generate_pass = next(
-        p for p in artifact["passes"] if p["name"] == "generate_normalized_workbook"
-    )
-    assert generate_pass["summary"]["sheet"] == "Members"
-    assert generate_pass["summary"]["headers"] == ["Member ID", "First Name"]
+    validation_section = table_entry["validation"]
+    assert isinstance(validation_section["issues"], list)
+    assert isinstance(validation_section["summary_by_field"], dict)
 
     output_response = await async_client.get(
         f"{_jobs_endpoint(workspace_id)}/{job_id}/output"
@@ -294,6 +340,163 @@ async def test_job_artifact_reflects_manifest_columns(
     exit_event = next(entry for entry in log_lines if entry.get("event") == "worker.exit")
     assert exit_event["status"] == "succeeded"
     assert exit_event["elapsed_ms"] >= 0
+
+
+async def test_validation_issues_include_a1_and_canonical_codes(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    workspace_id = seed_identity["workspace_id"]
+    owner = seed_identity["workspace_owner"]
+    await login(async_client, email=owner["email"], password=owner["password"])
+
+    manifest, scripts = _build_manifest(sheet_title="Audit")
+    scripts["columns/member_id.py"] = _column_script_with_required_validator("member_id")
+    package_bytes = _build_package(manifest, scripts)
+
+    slug = f"job-{uuid4().hex[:8]}"
+    headers = _csrf_headers(async_client)
+    create_response = await async_client.post(
+        _config_endpoint(workspace_id),
+        data={
+            "slug": slug,
+            "title": "Validation Config",
+            "manifest_json": json.dumps(manifest),
+        },
+        files={"package": ("package.zip", package_bytes, "application/zip")},
+        headers=headers,
+    )
+    assert create_response.status_code == 201, create_response.text
+    config_payload = create_response.json()
+    version_id = config_payload["versions"][0]["config_version_id"]
+
+    job_response = await async_client.post(
+        _jobs_endpoint(workspace_id),
+        json={"config_version_id": version_id},
+        headers=headers,
+    )
+    assert job_response.status_code == 201, job_response.text
+    job_payload = job_response.json()
+    assert job_payload["status"] == "succeeded"
+
+    job_id = job_payload["job_id"]
+    artifact_response = await async_client.get(
+        f"{_jobs_endpoint(workspace_id)}/{job_id}/artifact"
+    )
+    assert artifact_response.status_code == 200
+    artifact = artifact_response.json()
+
+    sheet_entry = artifact["sheets"][0]
+    table_entry = sheet_entry["tables"][0]
+    issues = table_entry["validation"]["issues"]
+    assert issues, "Expected validation issues to be recorded"
+
+    member_issue = next(
+        issue for issue in issues if issue.get("target_field") == "member_id"
+    )
+    assert member_issue["code"] == "required_missing"
+    assert member_issue["row_index"] == 1
+    assert member_issue["a1"] == "A2"
+    assert member_issue["severity"] == "error"
+
+
+async def test_job_appends_unmapped_columns_when_enabled(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    workspace_id = seed_identity["workspace_id"]
+    owner = seed_identity["workspace_owner"]
+    await login(async_client, email=owner["email"], password=owner["password"])
+
+    manifest, scripts = _build_manifest(sheet_title="Members")
+    writer_section = manifest.setdefault("engine", {}).setdefault("writer", {})
+    writer_section["append_unmapped_columns"] = True
+    writer_section["unmapped_prefix"] = "raw_"
+    scripts["columns/member_id.py"] = textwrap.dedent(
+        """
+        def detect_member_id(*, header, **_):
+            scores = {}
+            if header and "Member" in header:
+                scores["member_id"] = 1.0
+            return {"scores": scores}
+
+        def transform(*, values, **_):
+            return {"values": list(values), "warnings": []}
+        """
+    ).strip() + "\n"
+    scripts["columns/first_name.py"] = textwrap.dedent(
+        """
+        def detect_first_name(*, header, **_):
+            scores = {}
+            if header and "First" in header:
+                scores["first_name"] = 1.0
+            return {"scores": scores}
+
+        def transform(*, values, **_):
+            return {"values": list(values), "warnings": []}
+        """
+    ).strip() + "\n"
+    package_bytes = _build_package(manifest, scripts)
+
+    slug = f"unmapped-{uuid4().hex[:8]}"
+    headers = _csrf_headers(async_client)
+    create_response = await async_client.post(
+        _config_endpoint(workspace_id),
+        data={
+            "slug": slug,
+            "title": "Unmapped Columns Config",
+            "manifest_json": json.dumps(manifest),
+        },
+        files={
+            "package": ("package.zip", package_bytes, "application/zip"),
+        },
+        headers=headers,
+    )
+    assert create_response.status_code == 201, create_response.text
+    version_id = create_response.json()["versions"][0]["config_version_id"]
+
+    job_response = await async_client.post(
+        _jobs_endpoint(workspace_id),
+        json={"config_version_id": version_id},
+        headers=headers,
+    )
+    assert job_response.status_code == 201, job_response.text
+    job_payload = job_response.json()
+    if job_payload.get("status") != "succeeded":
+        pytest.fail(f"job failed: {job_payload}")
+
+    job_id = job_payload["job_id"]
+    artifact_response = await async_client.get(
+        f"{_jobs_endpoint(workspace_id)}/{job_id}/artifact"
+    )
+    assert artifact_response.status_code == 200
+    artifact = artifact_response.json()
+
+    appended = artifact["output"]["column_plan"]["appended_unmapped"]
+    assert appended, "Expected unmapped columns to be recorded"
+    assert len(appended) == 1
+    appended_entry = appended[0]
+    assert appended_entry["source_header"] == "Legacy Code"
+    assert appended_entry["output_header"].startswith("raw_")
+    assert appended_entry["order"] == 1
+    assert appended_entry["column"].endswith(".col.3")
+
+    summary = artifact["summary"]
+    assert summary["columns_written"] == 3
+
+    output_response = await async_client.get(
+        f"{_jobs_endpoint(workspace_id)}/{job_id}/output"
+    )
+    assert output_response.status_code == 200
+    workbook = load_workbook(io.BytesIO(output_response.content))
+    sheet = workbook.active
+    rows = list(sheet.iter_rows(values_only=True))
+    assert rows[0][:3] == (
+        "Member ID",
+        "First Name",
+        appended_entry["output_header"],
+    )
+    workbook.close()
 
 
 async def test_job_submission_idempotent_on_input_hash(
@@ -346,7 +549,7 @@ async def test_job_submission_idempotent_on_input_hash(
     assert second_payload["status"] == "succeeded"
 
 
-async def test_validate_endpoint_returns_diagnostics(
+async def test_validate_endpoint_accepts_columns_without_transform(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
 ) -> None:
@@ -368,4 +571,5 @@ async def test_validate_endpoint_returns_diagnostics(
     assert response.status_code == 200
     payload = response.json()
     diagnostics = payload.get("diagnostics", [])
-    assert any(diag["code"] == "column.transform.missing" for diag in diagnostics)
+    assert isinstance(diagnostics, list)
+    assert all(diag.get("code") != "column.transform.missing" for diag in diagnostics)

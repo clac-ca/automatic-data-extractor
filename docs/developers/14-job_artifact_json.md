@@ -22,33 +22,60 @@ A compact, realistic snapshot of an end‑to‑end run:
 
 ```json
 {
+  "schema": "ade.artifact/v1",
   "artifact_version": "1.1",
   "job": {
     "job_id": "job_2025-10-29T12-45-00Z_001",
     "source_file": "employees.xlsx",
-    "config_id": "cfg_acme_v13",
-    "created_at": "2025-10-29T12:45:00Z"
+    "status": "succeeded",
+    "started_at": "2025-10-29T12:45:00Z",
+    "completed_at": "2025-10-29T12:45:32Z",
+    "config_version_id": "cfg_acme_v13",
+    "trace_id": "req-2f6fb96a"
+  },
+  "config": {
+    "config_version_id": "cfg_acme_v13",
+    "manifest_version": "1.0.0"
   },
   "engine": {
     "writer": {
       "mode": "row_streaming",
       "append_unmapped_columns": true,
-      "unmapped_prefix": "raw_"
+      "unmapped_prefix": "raw_",
+      "output_sheet": "Employees"
+    },
+    "defaults": {
+      "timeout_ms": 60000,
+      "memory_mb": 512,
+      "runtime_network_access": false,
+      "mapping_score_threshold": 0.65
     }
   },
   "rules": {
     "row_types": {
-      "row.header.text_density": { "impl": "row_types/header.py:detect_text_density", "version": "a1f39d" }
+      "row_types.header.detect_text_density": { "impl": "row_types.header:detect_text_density" }
     },
     "column_detect": {
-      "col.member_id.pattern": { "impl": "columns/member_id.py:detect_pattern", "version": "b77bf2" },
-      "col.department.synonyms": { "impl": "columns/department.py:detect_synonyms", "version": "c1d004" }
+      "columns.member_id.detect_pattern": {
+        "impl": "columns.member_id:detect_pattern",
+        "field": "member_id"
+      },
+      "columns.department.detect_synonyms": {
+        "impl": "columns.department:detect_synonyms",
+        "field": "department"
+      }
     },
     "transform": {
-      "transform.member_id": { "impl": "columns/member_id.py:transform", "version": "d93210" }
+      "columns.member_id.transform": {
+        "impl": "columns.member_id:transform",
+        "field": "member_id"
+      }
     },
     "validate": {
-      "validate.member_id": { "impl": "columns/member_id.py:validate", "version": "ee12c3" }
+      "columns.member_id.validate": {
+        "impl": "columns.member_id:validate",
+        "field": "member_id"
+      }
     }
   },
   "sheets": [
@@ -62,13 +89,13 @@ A compact, realistic snapshot of an end‑to‑end run:
           "confidence": 0.91,
           "scores_by_type": { "header": 1.24, "data": 0.11 },
           "rule_traces": [
-            { "rule": "row.header.text_density", "delta": 0.62 }
+            { "rule": "row_types.header:detect_text_density", "delta": 0.62 }
           ]
         }
       ],
       "tables": [
         {
-          "id": "table_1",
+          "id": "Employees-table-1",
           "range": "B4:G159",
           "data_range": "B5:G159",
           "header": {
@@ -77,37 +104,55 @@ A compact, realistic snapshot of an end‑to‑end run:
             "source_header": ["Employee ID", "Name", "Department", "Start Date"]
           },
           "columns": [
-            { "column_id": "col_1", "source_header": "Employee ID" },
-            { "column_id": "col_2", "source_header": "Name" },
-            { "column_id": "col_3", "source_header": "Department" }
+            {
+              "column_id": "Employees-table-1.col.1",
+              "source_header": "Employee ID"
+            },
+            {
+              "column_id": "Employees-table-1.col.2",
+              "source_header": "Name"
+            },
+            {
+              "column_id": "Employees-table-1.col.3",
+              "source_header": "Department"
+            }
           ],
           "mapping": [
             {
-              "raw": { "column": "col_1", "header": "Employee ID" },
+              "raw": {
+                "column": "Employees-table-1.col.1",
+                "header": "Employee ID"
+              },
               "target_field": "member_id",
               "score": 1.8,
               "contributors": [
-                { "rule": "col.member_id.pattern", "delta": 0.9 }
+                { "rule": "columns.member_id:detect_pattern", "delta": 0.9 }
               ]
             },
             {
-              "raw": { "column": "col_2", "header": "Name" },
+              "raw": {
+                "column": "Employees-table-1.col.2",
+                "header": "Name"
+              },
               "target_field": "first_name",
               "score": 1.2
             },
             {
-              "raw": { "column": "col_3", "header": "Department" },
+              "raw": {
+                "column": "Employees-table-1.col.3",
+                "header": "Department"
+              },
               "target_field": "department",
               "score": 0.9,
               "contributors": [
-                { "rule": "col.department.synonyms", "delta": 0.6 }
+                { "rule": "columns.department:detect_synonyms", "delta": 0.6 }
               ]
             }
           ],
           "transforms": [
             {
               "target_field": "member_id",
-              "transform": "transform.member_id",
+              "transform": "columns.member_id:transform",
               "changed": 120,
               "total": 155,
               "notes": "uppercased + stripped non-alnum"
@@ -119,10 +164,11 @@ A compact, realistic snapshot of an end‑to‑end run:
                 "a1": "B20",
                 "row_index": 20,
                 "target_field": "member_id",
+                "column": "Employees-table-1.col.1",
                 "code": "pattern_mismatch",
                 "severity": "error",
                 "message": "Does not match expected pattern",
-                "rule": "validate.member_id"
+                "rule": "columns.member_id:validate"
               }
             ],
             "summary_by_field": {
@@ -144,7 +190,12 @@ A compact, realistic snapshot of an end‑to‑end run:
         { "field": "department", "output_header": "Department", "order": 3 }
       ],
       "appended_unmapped": [
-        { "source_header": "Start Date", "output_header": "raw_Start_Date", "order": 4 }
+        {
+          "source_header": "Start Date",
+          "output_header": "raw_Start_Date",
+          "order": 4,
+          "column": "Employees-table-1.col.4"
+        }
       ]
     }
   },
@@ -154,11 +205,44 @@ A compact, realistic snapshot of an end‑to‑end run:
     "issues_found": 4
   },
   "pass_history": [
-    { "pass": 1, "name": "structure", "completed_at": "2025-10-29T12:45:07Z" },
-    { "pass": 2, "name": "mapping", "completed_at": "2025-10-29T12:45:12Z" },
-    { "pass": 3, "name": "transform", "completed_at": "2025-10-29T12:45:22Z" },
-    { "pass": 4, "name": "validate", "completed_at": "2025-10-29T12:45:24Z" },
-    { "pass": 5, "name": "generate", "completed_at": "2025-10-29T12:45:29Z" }
+    {
+      "pass": 1,
+      "name": "structure",
+      "completed_at": "2025-10-29T12:45:07Z",
+      "stats": { "tables": 1, "rows": 155, "columns": 4 }
+    },
+    {
+      "pass": 2,
+      "name": "mapping",
+      "completed_at": "2025-10-29T12:45:12Z",
+      "stats": { "mapped": 3, "unmapped": 1 }
+    },
+    {
+      "pass": 3,
+      "name": "transform",
+      "completed_at": "2025-10-29T12:45:22Z",
+      "stats": { "changed_cells": 12, "fields_with_warnings": 1 }
+    },
+    {
+      "pass": 4,
+      "name": "validate",
+      "completed_at": "2025-10-29T12:45:24Z",
+      "stats": { "errors": 3, "warnings": 1 }
+    },
+    {
+      "pass": 5,
+      "name": "generate",
+      "completed_at": "2025-10-29T12:45:29Z",
+      "stats": { "rows_written": 155, "columns_written": 4 }
+    }
+  ],
+  "annotations": [
+    {
+      "stage": "after_mapping",
+      "hook": "hooks/audit.py",
+      "annotated_at": "2025-10-29T12:45:24Z",
+      "notes": "Mapping completed"
+    }
   ]
 }
 ```
@@ -173,7 +257,7 @@ These mirror the schema and are suitable for validation, serialization, and gene
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, List, Optional, Literal
+from typing import Any, Dict, List, Optional, Literal
 from pydantic import BaseModel, Field, constr
 
 
@@ -205,23 +289,40 @@ class PassName(str, Enum):
 class Job(BaseModel):
     job_id: str
     source_file: str
-    config_id: str
-    created_at: str  # ISO 8601 (use datetime if you prefer)
+    status: Literal["succeeded", "failed"] = "succeeded"
+    started_at: str  # ISO 8601
+    completed_at: str  # ISO 8601
+    config_version_id: Optional[str] = None
+    trace_id: Optional[str] = None
+
+
+class ConfigSnapshot(BaseModel):
+    config_version_id: Optional[str] = None
+    manifest_version: Optional[str] = None
 
 
 class WriterSettings(BaseModel):
     mode: Literal["row_streaming", "in_memory"] = "row_streaming"
     append_unmapped_columns: bool = True
     unmapped_prefix: str = "raw_"
+    output_sheet: Optional[str] = None
+
+
+class EngineDefaults(BaseModel):
+    timeout_ms: Optional[int] = None
+    memory_mb: Optional[int] = None
+    runtime_network_access: Optional[bool] = None
+    mapping_score_threshold: Optional[float] = None
 
 
 class Engine(BaseModel):
     writer: WriterSettings
+    defaults: Optional[EngineDefaults] = None
 
 
 class RuleRef(BaseModel):
     impl: str
-    version: str
+    field: Optional[str] = None
 
 
 RuleRegistry = Dict[str, RuleRef]
@@ -250,17 +351,18 @@ class RowClassification(BaseModel):
 class HeaderDescriptor(BaseModel):
     kind: HeaderKind
     row_index: int
-    source_header: List[str]
+    source_header: List[Optional[str]]
 
 
 class TableColumn(BaseModel):
     column_id: str
-    source_header: str
+    source_header: Optional[str] = None
+    order: int
 
 
 class RawColumnRef(BaseModel):
     column: str
-    header: str
+    header: Optional[str] = None
 
 
 class ScoreContributor(BaseModel):
@@ -270,27 +372,29 @@ class ScoreContributor(BaseModel):
 
 class MappingEntry(BaseModel):
     raw: RawColumnRef
-    target_field: str
+    target_field: Optional[str] = None
     score: float
     contributors: List[ScoreContributor] = Field(default_factory=list)
 
 
 class TransformSummary(BaseModel):
     target_field: str
-    transform: Optional[str] = None
+    transform: str
     changed: int
     total: int
+    warnings: List[str] = Field(default_factory=list)
     notes: Optional[str] = None
 
 
 class Issue(BaseModel):
-    a1: A1Range
-    row_index: int
-    target_field: str
+    a1: Optional[A1Range] = None
+    row_index: Optional[int] = None
+    target_field: Optional[str] = None
     code: str
     severity: IssueSeverity
     message: str
-    rule: str
+    column: Optional[str] = None
+    rule: Optional[str] = None
 
 
 class FieldIssueSummary(BaseModel):
@@ -311,9 +415,10 @@ class ColumnPlanTargetItem(BaseModel):
 
 
 class ColumnPlanUnmappedItem(BaseModel):
-    source_header: str
+    source_header: Optional[str] = None
     output_header: str
     order: int
+    column: str
 
 
 class ColumnPlan(BaseModel):
@@ -337,7 +442,7 @@ class Summary(BaseModel):
 class Table(BaseModel):
     id: str
     range: A1Range
-    data_range: A1Range
+    data_range: Optional[A1Range] = None
     header: HeaderDescriptor
     columns: List[TableColumn]
     mapping: List[MappingEntry] = Field(default_factory=list)
@@ -356,17 +461,21 @@ class PassHistoryItem(BaseModel):
     pass_: int = Field(..., alias="pass")
     name: PassName
     completed_at: str  # ISO 8601
+    stats: Optional[Dict[str, int]] = None
 
 
 class Artifact(BaseModel):
+    schema: Literal["ade.artifact/v1"] = "ade.artifact/v1"
     artifact_version: constr(pattern=r"^\d+\.\d+$") = "1.1"
     job: Job
+    config: ConfigSnapshot
     engine: Engine
     rules: Rules
     sheets: List[Sheet] = Field(default_factory=list)
     output: Optional[Output] = None
     summary: Optional[Summary] = None
     pass_history: List[PassHistoryItem] = Field(default_factory=list)
+    annotations: List[Dict[str, Any]] = Field(default_factory=list)
 
     class Config:
         populate_by_name = True
@@ -389,7 +498,11 @@ if __name__ == "__main__":
 
 ## Practical tips
 
-* **Stable IDs**: `sheet_1 / table_1 / col_1` and A1 ranges make it easy to cross‑reference logs, screenshots, and code.
+* **Stable IDs**: `sheet_1 / Employees-table-1 / Employees-table-1.col.1` and A1 ranges make it easy to cross-reference logs, screenshots, and code.
 * **Explainability**: For any decision (“Why did this map to `member_id`?”), look at `mapping[].contributors[]` and the `rules` registry.
+* **Rule identifiers**: Rule strings follow `<module_id>:<callable>` (for example, `columns.member_id:validate`) for cross-platform stability.
 * **Privacy by design**: No raw cell payloads are stored—only locations and decision traces.
+* **Canonical codes**: The worker normalizes common validation aliases (for example, `missing` → `required_missing`) before persisting issues. Stick to the documented codes for dashboards and alerts.
+* **Per-pass stats**: `pass_history[].stats` captures quick totals (mapped vs. unmapped, changed cells, warning counts) without reprocessing the full artifact.
+* **Hook annotations**: When a hook returns a dict, ADE appends it to `annotations[]` alongside the hook path and stage so audits surface inline notes.
 * **Extensibility**: Add fields under the defined objects as your engine evolves. If you tighten validation, update both the schema and models.
