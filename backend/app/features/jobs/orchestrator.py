@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import sys
 import time
@@ -12,12 +13,14 @@ from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 from backend.app.features.configs.spec import ManifestV1
+from backend.app.shared.core.config import Settings
 
 from ..configs.models import ConfigVersion
 from .storage import JobStoragePaths, JobsStorage
 from .types import ResolvedInput
 
 WORKER_SCRIPT = Path(__file__).with_name("worker.py")
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -37,8 +40,10 @@ class RunResult:
 class JobOrchestrator:
     """Launch jobs in an isolated Python subprocess using a JSON protocol."""
 
-    def __init__(self, storage: JobsStorage) -> None:
+    def __init__(self, storage: JobsStorage, *, settings: Settings, safe_mode_message: str) -> None:
         self._storage = storage
+        self._settings = settings
+        self._safe_mode_message = safe_mode_message
 
     async def run(
         self,
@@ -50,6 +55,17 @@ class JobOrchestrator:
         input_files: Sequence[ResolvedInput],
         timeout_seconds: float,
     ) -> tuple[RunResult, JobStoragePaths]:
+        if self._settings.safe_mode:
+            logger.warning(
+                "Job orchestrator invoked while ADE_SAFE_MODE is enabled; aborting execution.",
+                extra={
+                    "job_id": job_id,
+                    "config_version_id": config_version.id,
+                    "trace_id": trace_id,
+                },
+            )
+            raise RuntimeError(self._safe_mode_message)
+
         paths: JobStoragePaths = self._storage.prepare(job_id)
         self._storage.copy_config(Path(config_version.package_path), paths.config_dir)
         staged_inputs = self._storage.stage_inputs(paths.inputs_dir, input_files)

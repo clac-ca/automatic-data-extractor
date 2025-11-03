@@ -218,6 +218,7 @@ class Settings(BaseSettings):
     # Authentication -------------------------------------------------------------
     auth_force_sso: bool = False
     auth_sso_auto_provision: bool = True
+    safe_mode: bool = False
 
     # ------------------------------------------------------------------
     # Validators
@@ -515,6 +516,10 @@ class Settings(BaseSettings):
     def secret_key_bytes(self) -> bytes:
         encoded = self.secret_key.get_secret_value()
         return base64.b64decode(encoded, validate=True)
+
+    @property
+    def safe_mode_enabled(self) -> bool:
+        return bool(self.safe_mode)
 
 
 @lru_cache(maxsize=1)

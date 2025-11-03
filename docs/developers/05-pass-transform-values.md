@@ -1,35 +1,60 @@
+## docs/developers/05-pass-transform-values.md
+
 # Pass 3 — Transform Values (Optional)
 
-Scripts are plain functions called with explicit keyword arguments. They run in isolation with controlled environments and time limits. Secrets are injected when a script runs and are never returned.
-
-## Isolation
-Calls may run in a per‑call subprocess or in a per‑job worker. The contract is the same in both cases. Network access is off by default and must be enabled explicitly.
-
-## Environment
-The environment is composed in layers: baseline variables, then `manifest.env`, then decrypted `manifest.secrets`, and finally ADE‑provided variables.
-
-## Calls
-[Hooks](./12-glossary.md#scripts-and-hooks) export `run(**kwargs)`. [Detectors](./12-glossary.md#scripts-and-hooks) export functions named `detect_*`. Each column module exports a `transform(**kwargs)`, and may optionally expose `transform_row` for special cases.
-
-## Timeouts and limits
-Timeouts are enforced per call. Keep detectors fast and pure.
-
-## Security
-Secrets are never returned. They are only injected into the child process environment or kwargs.
+Transforms normalize values for **mapped** fields. Each field’s module may provide a `transform` function; if absent, values pass through unchanged.
 
 ## What it reads
-- `tables[].mapping[]` and `target_fields[]`
-- Config package column modules (`transform`, optional `transform_row`)
-- Shared transforms registered under `rules.transform`
+
+* `tables[].mapping[]` from Pass 2.
+* Column modules `columns/<field>.py` (optional `transform`).
+* Context: `table`, `header`, `column_index`, `field_meta`, `manifest`, `job_context`, `env`, and a **read‑only** `artifact` snapshot.
 
 ## What it appends (artifact)
-- `tables[].transform[]` traces per column
-- `pass_history[]` entry recording transformed rows and warnings
 
-## What’s next
-- Validate results in the [validation guide](./06-pass-validate-values.md).
+For each table:
 
----
+* `transforms[]` — one entry per transformed field:
 
-Previous: [Pass 2 — Map columns](./04-pass-map-columns-to-target-fields.md)  
-Next: [Pass 4 — Validate values](./06-pass-validate-values.md)
+  ```json
+  {
+    "target_field": "member_id",
+    "transform": "columns.member_id:transform",
+    "changed": 120,
+    "total": 155,
+    "warnings": ["trimmed non-alnum"]
+  }
+  ```
+* A `pass_history[]` entry named **`transform`** with stats:
+  `{ changed_cells, fields_with_warnings }`.
+
+## Transform contract
+
+* **Signature (recommended):**
+
+  ```python
+  def transform(*, values, header=None, column_index=None, table=None, field_name=None, field_meta=None, manifest=None, job_context=None, env=None, artifact=None, **_):
+      # Must return a dict with a 'values' list; 'warnings' is optional.
+      cleaned = []
+      for v in values:
+          if v is None:
+              cleaned.append(None)
+          else:
+              s = "".join(ch for ch in str(v) if ch.isalnum()).upper()
+              cleaned.append(s or None)
+      return {"values": cleaned, "warnings": []}
+  ```
+* **Return:** `{"values": list, "warnings": list[str] | []}`.
+  ADE computes `changed` by comparing original vs. returned values.
+* **Optionality:** If `transform` is not defined, the field is still valid and values are unchanged.
+
+## Performance & Safety
+
+* Functions run inside the job worker with explicit kwargs, not globals.
+* Keep them pure and fast; avoid I/O unless required.
+* **Network access** is **off by default** and governed by `engine.defaults.allow_net`. Enable only when strictly necessary.
+
+## See also
+
+* [Pass 4 — Validate values](./06-pass-validate-values.md)
+* [Artifact schema (tables → transforms)](./schemas/artifact.v1.1.schema.json)
