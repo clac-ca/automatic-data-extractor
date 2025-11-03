@@ -48,6 +48,7 @@ def create_application_lifespan(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         ensure_runtime_dirs(settings)
         app.state.settings = settings
+        app.state.safe_mode = bool(settings.safe_mode)
         await ensure_database_ready(settings)
         session_factory = get_sessionmaker(settings=settings)
         async with session_factory() as session:

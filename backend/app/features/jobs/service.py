@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 from uuid import uuid4
@@ -25,16 +26,26 @@ from .schemas import JobArtifact, JobRecord, JobSubmitRequest
 from .storage import JobsStorage
 from .types import ResolvedInput
 
+SAFE_MODE_DISABLED_MESSAGE = (
+    "ADE_SAFE_MODE is enabled. Job execution is temporarily disabled so you can revert config changes and restart without safe mode."
+)
+logger = logging.getLogger(__name__)
+
 
 class JobsService:
     """Coordinate job metadata persistence and synchronous execution."""
 
     def __init__(self, *, session: AsyncSession, settings: Settings) -> None:
         self._session = session
+        self._settings = settings
         self._configs = ConfigsRepository(session)
         self._jobs = JobsRepository(session)
         self._storage = JobsStorage(settings)
-        self._orchestrator = JobOrchestrator(self._storage)
+        self._orchestrator = JobOrchestrator(
+            self._storage,
+            settings=settings,
+            safe_mode_message=SAFE_MODE_DISABLED_MESSAGE,
+        )
         self._manifest_loader = ManifestLoader()
         self._documents = DocumentsRepository(session)
         documents_dir = settings.storage_documents_dir
@@ -49,6 +60,16 @@ class JobsService:
         request: JobSubmitRequest,
         actor: User | None,
     ) -> JobRecord:
+        if self._settings.safe_mode:
+            logger.warning(
+                "Blocked job submission while ADE_SAFE_MODE is enabled.",
+                extra={
+                    "workspace_id": workspace_id,
+                    "config_version_id": request.config_version_id,
+                },
+            )
+            raise JobSubmissionError(SAFE_MODE_DISABLED_MESSAGE)
+
         version = await self._configs.get_version_by_id(request.config_version_id)
         if version is None or version.deleted_at is not None:
             raise JobSubmissionError("Config version is not available")
@@ -272,4 +293,4 @@ class JobsService:
             raise JobSubmissionError("Stored manifest is invalid") from exc
 
 
-__all__ = ["JobsService"]
+__all__ = ["JobsService", "SAFE_MODE_DISABLED_MESSAGE"]

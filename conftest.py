@@ -57,6 +57,7 @@ def _configure_database(
     os.environ["ADE_STORAGE_DOCUMENTS_DIR"] = str(documents_dir)
     # Ensure tests run with OIDC disabled regardless of local .env values.
     os.environ["ADE_OIDC_ENABLED"] = "false"
+    os.environ["ADE_SAFE_MODE"] = "false"
     # Explicitly override any .env-provided OIDC settings to disable SSO in tests.
     os.environ["ADE_OIDC_CLIENT_ID"] = ""
     os.environ["ADE_OIDC_CLIENT_SECRET"] = ""
@@ -81,6 +82,7 @@ def _configure_database(
         "ADE_STORAGE_DATA_DIR",
         "ADE_STORAGE_DOCUMENTS_DIR",
         "ADE_OIDC_ENABLED",
+        "ADE_SAFE_MODE",
     ):
         os.environ.pop(env_var, None)
 
@@ -102,12 +104,14 @@ def override_app_settings(app: FastAPI) -> Callable[..., Settings]:
         base = reload_settings()
         updated = base.model_copy(update=updates)
         app.state.settings = updated
+        app.state.safe_mode = bool(updated.safe_mode)
         ensure_runtime_dirs(updated)
         return updated
 
     yield _apply
 
     app.state.settings = original
+    app.state.safe_mode = bool(original.safe_mode)
     ensure_runtime_dirs(original)
     reload_settings()
 

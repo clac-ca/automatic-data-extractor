@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastNumber": 12,
+  "lastNumber": 14,
   "packages": [
     {
       "number": 1,
@@ -121,6 +121,26 @@
       "createdAt": "2025-11-03T15:55:00.815Z",
       "updatedAt": "2025-11-03T16:15:44.910Z",
       "path": "/workspace/automatic-data-extractor/.workpackage/packages/0012-docs-parity-for-job-artifact-hooks"
+    },
+    {
+      "number": 13,
+      "slug": "ade-safe-mode-skip-config-execution",
+      "title": "ADE Safe Mode (Skip Config Execution)",
+      "status": "active",
+      "summary": "Add ADE_SAFE_MODE backend flag, health surface, job/orchestrator guards, and frontend banner.",
+      "createdAt": "2025-11-03T19:50:53.632Z",
+      "updatedAt": "2025-11-03T19:51:05.580Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0013-ade-safe-mode-skip-config-execution"
+    },
+    {
+      "number": 14,
+      "slug": "docs-code-parity-job-runtime",
+      "title": "Docs/code parity: job runtime",
+      "status": "draft",
+      "summary": "Implement the job orchestration + config dependency features promised in dev docs (queueing, requirements install, activation hooks) and adjust docs/tests accordingly.",
+      "createdAt": "2025-11-03T19:59:46.296Z",
+      "updatedAt": "2025-11-03T19:59:46.296Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0014-docs-code-parity-job-runtime"
     }
   ]
 }

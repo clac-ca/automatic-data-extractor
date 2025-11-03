@@ -1,6 +1,7 @@
 """ADE FastAPI application entry point."""
 
 from __future__ import annotations
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,7 @@ WEB_DIR = Path(__file__).resolve().parent / "web"
 WEB_STATIC_DIR = WEB_DIR / "static"
 SPA_INDEX = WEB_STATIC_DIR / "index.html"
 API_PREFIX = "/api"
+logger = logging.getLogger(__name__)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -48,6 +50,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     app.state.settings = settings
+    app.state.safe_mode = bool(settings.safe_mode)
+    if settings.safe_mode:
+        logger.warning(
+            "ADE safe mode enabled; user-submitted configuration code will not execute.",
+            extra={"safe_mode": True},
+        )
     configure_auth_dependencies(settings=settings)
 
     register_middleware(app)

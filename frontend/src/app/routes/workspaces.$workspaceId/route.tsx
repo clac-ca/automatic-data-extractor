@@ -15,6 +15,8 @@ import { GlobalTopBar } from "../workspaces/GlobalTopBar";
 import { ProfileDropdown } from "../workspaces/ProfileDropdown";
 import { WorkspaceNav } from "./WorkspaceNav";
 import { defaultWorkspaceSection } from "../workspaces/workspace-navigation";
+import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
+import { Alert } from "@ui/alert";
 
 export interface WorkspaceLoaderData {
   readonly workspace: WorkspaceProfile;
@@ -103,6 +105,9 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
   const session = useSession();
   const navigate = useNavigate();
   const location = useLocation();
+  const safeMode = useSafeModeStatus();
+  const safeModeEnabled = safeMode.data?.enabled ?? false;
+  const safeModeDetail = safeMode.data?.detail ?? DEFAULT_SAFE_MODE_MESSAGE;
 
   const navStorage = useMemo(
     () => createScopedStorage(`ade.ui.workspace.${workspace.id}.navCollapsed`),
@@ -168,6 +173,13 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
         {primaryNav}
         <main className="relative flex-1 overflow-y-auto">
           <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-6">
+            {safeModeEnabled ? (
+              <div className="mb-4">
+                <Alert tone="warning" heading="Safe mode active">
+                  {safeModeDetail}
+                </Alert>
+              </div>
+            ) : null}
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
               <Outlet key={outletKey} />
             </div>

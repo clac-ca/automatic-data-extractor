@@ -19,6 +19,7 @@ import { useWorkspaceContext } from "../workspaces.$workspaceId/WorkspaceContext
 import { useConfigsQuery } from "@shared/configs";
 import { client } from "@shared/api/client";
 import { createScopedStorage } from "@shared/storage";
+import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import type { components, paths } from "@openapi";
 
 import { Alert } from "@ui/alert";
@@ -118,6 +119,10 @@ export default function WorkspaceDocumentsRoute() {
   // Operations
   const uploadDocuments = useUploadWorkspaceDocuments(workspace.id);
   const deleteDocuments = useDeleteWorkspaceDocuments(workspace.id);
+  const safeModeStatus = useSafeModeStatus();
+  const safeModeEnabled = safeModeStatus.data?.enabled ?? false;
+  const safeModeDetail = safeModeStatus.data?.detail ?? DEFAULT_SAFE_MODE_MESSAGE;
+  const safeModeLoading = safeModeStatus.isPending;
 
   const [banner, setBanner] = useState<{ tone: "error"; message: string } | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -386,6 +391,9 @@ export default function WorkspaceDocumentsRoute() {
               onRunDocument={handleOpenRunDrawer}
               downloadingId={downloadingId}
               renderJobStatus={renderJobStatus}
+              safeModeEnabled={safeModeEnabled}
+              safeModeMessage={safeModeDetail}
+              safeModeLoading={safeModeLoading}
             />
           )}
         </div>
@@ -396,10 +404,15 @@ export default function WorkspaceDocumentsRoute() {
         count={selectedCount}
         onClear={() => setSelectedIds(new Set())}
         onRun={() => {
-          if (firstSelectedDocument) handleOpenRunDrawer(firstSelectedDocument);
+          if (firstSelectedDocument && !safeModeEnabled && !safeModeLoading) {
+            handleOpenRunDrawer(firstSelectedDocument);
+          }
         }}
         onDelete={handleDeleteSelected}
         busy={isDeleting}
+        safeModeEnabled={safeModeEnabled}
+        safeModeMessage={safeModeDetail}
+        safeModeLoading={safeModeLoading}
       />
 
       {/* Run drawer */}
@@ -410,6 +423,9 @@ export default function WorkspaceDocumentsRoute() {
         onClose={() => setRunDrawerDocument(null)}
         onRunSuccess={handleRunSuccess}
         onRunError={handleRunError}
+        safeModeEnabled={safeModeEnabled}
+        safeModeMessage={safeModeDetail}
+        safeModeLoading={safeModeLoading}
       />
     </>
   );
@@ -818,6 +834,9 @@ interface DocumentsTableProps {
   readonly onRunDocument?: (document: DocumentRecord) => void;
   readonly downloadingId?: string | null;
   readonly renderJobStatus?: (document: DocumentRecord) => ReactNode;
+  readonly safeModeEnabled?: boolean;
+  readonly safeModeMessage?: string;
+  readonly safeModeLoading?: boolean;
 }
 
 function DocumentsTable({
@@ -833,6 +852,9 @@ function DocumentsTable({
   onRunDocument,
   downloadingId = null,
   renderJobStatus,
+  safeModeEnabled = false,
+  safeModeMessage,
+  safeModeLoading = false,
 }: DocumentsTableProps) {
   const headerCheckboxRef = useRef<HTMLInputElement | null>(null);
 
@@ -924,6 +946,9 @@ function DocumentsTable({
                     onRun={onRunDocument}
                     disabled={disableRowActions}
                     downloading={downloadingId === document.document_id}
+                    safeModeEnabled={safeModeEnabled}
+                    safeModeMessage={safeModeMessage}
+                    safeModeLoading={safeModeLoading}
                   />
                 </td>
               </tr>
@@ -944,6 +969,9 @@ interface DocumentActionsMenuProps {
   readonly onRun?: (document: DocumentRecord) => void;
   readonly disabled?: boolean;
   readonly downloading?: boolean;
+  readonly safeModeEnabled?: boolean;
+  readonly safeModeMessage?: string;
+  readonly safeModeLoading?: boolean;
 }
 
 function DocumentActionsMenu({
@@ -953,15 +981,29 @@ function DocumentActionsMenu({
   onRun,
   disabled = false,
   downloading = false,
+  safeModeEnabled = false,
+  safeModeMessage,
+  safeModeLoading = false,
 }: DocumentActionsMenuProps) {
+  const runDisabled = disabled || !onRun || safeModeEnabled || safeModeLoading;
+  const runTitle = safeModeEnabled
+    ? safeModeMessage ?? DEFAULT_SAFE_MODE_MESSAGE
+    : safeModeLoading
+      ? "Checking ADE safe mode status..."
+      : undefined;
+
   return (
     <div className="inline-flex items-center gap-1.5">
       <Button
         type="button"
         size="sm"
         variant="primary"
-        onClick={() => onRun?.(document)}
-        disabled={disabled || !onRun}
+        onClick={() => {
+          if (runDisabled) return;
+          onRun?.(document);
+        }}
+        disabled={runDisabled}
+        title={runTitle}
       >
         Run
       </Button>
@@ -1051,6 +1093,9 @@ interface RunExtractionDrawerProps {
   readonly onClose: () => void;
   readonly onRunSuccess?: (job: JobRecord) => void;
   readonly onRunError?: (message: string) => void;
+  readonly safeModeEnabled?: boolean;
+  readonly safeModeMessage?: string;
+  readonly safeModeLoading?: boolean;
 }
 
 function RunExtractionDrawer({
@@ -1060,6 +1105,9 @@ function RunExtractionDrawer({
   onClose,
   onRunSuccess,
   onRunError,
+  safeModeEnabled = false,
+  safeModeMessage,
+  safeModeLoading = false,
 }: RunExtractionDrawerProps) {
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
 
@@ -1092,6 +1140,9 @@ function RunExtractionDrawer({
       onClose={onClose}
       onRunSuccess={onRunSuccess}
       onRunError={onRunError}
+      safeModeEnabled={safeModeEnabled}
+      safeModeMessage={safeModeMessage}
+      safeModeLoading={safeModeLoading}
     />,
     window.document.body,
   );
@@ -1103,6 +1154,9 @@ interface DrawerContentProps {
   readonly onClose: () => void;
   readonly onRunSuccess?: (job: JobRecord) => void;
   readonly onRunError?: (message: string) => void;
+  readonly safeModeEnabled?: boolean;
+  readonly safeModeMessage?: string;
+  readonly safeModeLoading?: boolean;
 }
 
 function RunExtractionDrawerContent({
@@ -1111,6 +1165,9 @@ function RunExtractionDrawerContent({
   onClose,
   onRunSuccess,
   onRunError,
+  safeModeEnabled = false,
+  safeModeMessage,
+  safeModeLoading = false,
 }: DrawerContentProps) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
@@ -1160,6 +1217,7 @@ function RunExtractionDrawerContent({
   const selectedActiveVersion = selectedConfig?.active_version ?? null;
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const safeModeDetail = safeModeMessage ?? DEFAULT_SAFE_MODE_MESSAGE;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -1204,8 +1262,18 @@ function RunExtractionDrawerContent({
   }, [onClose]);
 
   const hasConfigurations = selectableConfigs.length > 0;
+  const runDisabled =
+    submitJob.isPending || safeModeLoading || safeModeEnabled || !hasConfigurations || !selectedVersionId;
+  const runButtonTitle = safeModeEnabled
+    ? safeModeDetail
+    : safeModeLoading
+      ? "Checking ADE safe mode status..."
+      : undefined;
 
   const handleSubmit = () => {
+    if (safeModeEnabled || safeModeLoading) {
+      return;
+    }
     if (!selectedConfig || !selectedActiveVersion || !selectedVersionId) {
       setErrorMessage("Select a configuration before running the extractor.");
       return;
@@ -1318,6 +1386,7 @@ function RunExtractionDrawerContent({
             </p>
           </section>
 
+          {safeModeEnabled ? <Alert tone="warning">{safeModeDetail}</Alert> : null}
           {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
         </div>
 
@@ -1329,7 +1398,8 @@ function RunExtractionDrawerContent({
             type="button"
             onClick={handleSubmit}
             isLoading={submitJob.isPending}
-            disabled={submitJob.isPending || !hasConfigurations || !selectedVersionId}
+            disabled={runDisabled}
+            title={runButtonTitle}
           >
             Run extraction
           </Button>
@@ -1444,20 +1514,34 @@ function BulkBar({
   onRun,
   onDelete,
   busy,
+  safeModeEnabled = false,
+  safeModeMessage,
+  safeModeLoading = false,
 }: {
   count: number;
   onClear: () => void;
   onRun: () => void;
   onDelete: () => void;
   busy?: boolean;
+  safeModeEnabled?: boolean;
+  safeModeMessage?: string;
+  safeModeLoading?: boolean;
 }) {
   if (count === 0) return null;
+  const runDisabled = busy || safeModeEnabled || safeModeLoading;
+  const runTitle = safeModeEnabled
+    ? safeModeMessage ?? DEFAULT_SAFE_MODE_MESSAGE
+    : safeModeLoading
+      ? "Checking ADE safe mode status..."
+      : undefined;
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-7xl px-2 pb-2 sm:px-4 sm:pb-4">
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 text-sm text-slate-700 shadow-lg backdrop-blur">
         <span className="mr-2"><strong>{count}</strong> selected</span>
         <Button variant="ghost" size="sm" onClick={onClear}>Clear</Button>
-        <Button size="sm" onClick={onRun} disabled={busy}>Run extraction</Button>
+        <Button size="sm" onClick={() => !runDisabled && onRun()} disabled={runDisabled} title={runTitle}>
+          Run extraction
+        </Button>
         <Button size="sm" variant="danger" onClick={onDelete} disabled={busy} isLoading={busy}>Delete</Button>
       </div>
     </div>

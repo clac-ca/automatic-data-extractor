@@ -106,6 +106,20 @@ async def retry_job(job_id: int):
 
 ---
 
+### Safe mode (`ADE_SAFE_MODE`)
+
+When the environment variable `ADE_SAFE_MODE` is set to `true`, ADE enters a recovery mode that keeps the API and UI online while skipping any configuration execution. The behaviour changes are:
+
+- Job submissions are rejected with HTTP 400 (`JobSubmissionError`) using the message “ADE_SAFE_MODE is enabled…”.
+- The orchestrator refuses to spawn worker subprocesses, protecting future code paths that might bypass the service guard.
+- `/api/v1/health` includes a `safe-mode` component with a `degraded` status so dashboards (and CI) can detect the state without special handling.
+- The frontend surfaces a banner, disables the “Run extraction” buttons, and adds tooltips that point operators back to the `ADE_SAFE_MODE` toggle.
+- Existing job artifacts remain readable; once the config package is fixed, restart ADE without the flag to resume normal processing.
+
+Use safe mode as an escape hatch after deploying a broken config package—flip it on, revert the offending code, restart normally.
+
+---
+
 ## 4) The queue (bounded work-in-progress)
 
 We use an **in-process** queue with a fixed number of **workers**. This keeps the API responsive and
