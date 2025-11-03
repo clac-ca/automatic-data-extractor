@@ -1,61 +1,67 @@
+## docs/developers/04-pass-map-columns-to-target-fields.md
+
 # Pass 2 — Map Columns to Target Fields
 
-**Audience:** Engineers reviewing pass 2 output (column mapping) and downstream integrators  
-**Goal:** Understand how pass 2 records assignments in the artifact so you can audit and reuse them.
+ADE decides which **target field** (from the manifest) each source column represents. Detectors attached to each field contribute score deltas; ties are broken deterministically.
 
-> **At a glance**
->
-> - Captures detection outcomes only (no full data): raw → canonical assignments with scores.
-> - Includes just enough structure (sheets, tables, bounds, headers) to disambiguate decisions.
-> - Serves UI review between detection and transformation; stabilizes integrations with a versioned schema.
+## What it reads
 
-## Shape (high‑level)
+* `sheets[].tables[]` from Pass 1 (bounds, header text, column count).
+* Config package **column modules** in `columns/<field>.py` exposing `detect_*`.
+* Manifest `columns.order` and `columns.meta[*].label/synonyms`.
+* `engine.defaults.min_mapping_confidence` (**score threshold**; default `0.0`).
 
-- `version`: schema identifier (e.g., `mapping.v1`).
-- `job`: job/workspace identifiers.
-- `config`: config identifiers and column order.
-- `sheets[] → tables[] → raw_columns[] → mapping` (assignments / unassigned / extras).
-- `bounds`: both 0‑based indices and an A1 range (`a1`).
+## What it appends (artifact)
 
----
+For each table:
 
-## Minimal example
+* `mapping[]` — one entry per source column:
 
-```json
-{
-  "version": "mapping.v1",
-  "sheets": [
-    {
-      "name": "Sheet1",
-      "tables": [{
-        "bounds": { "top": 3, "left": 1, "height": 156, "width": 6, "a1": "B4:G159" },
-        "mapping": {
-          "assignments": { "member_id": { "raw": "sheet0.t0.c0", "score": 1.78 } },
-          "unassigned": ["first_name"],
-          "extras": ["sheet0.t0.c2"]
-        }
-      }]
-    }
-  ]
-}
+  ```json
+  {
+    "raw": { "column": "Employees-table-1.col.1", "header": "Employee ID" },
+    "target_field": "member_id",
+    "score": 1.8,
+    "contributors": [
+      { "rule": "columns.member_id:detect_pattern", "delta": 0.9 }
+    ]
+  }
+  ```
+* A `pass_history[]` entry named **`mapping`** with stats:
+  `{ mapped, unmapped }`.
+
+## Detector contract (columns)
+
+Column detector functions return deltas keyed by **target field ids**:
+
+```python
+# columns/member_id.py
+def detect_pattern(*, header, values_sample, column_index, table, job_context, env, manifest, field_name, field_meta, **_):
+    # Example: boost when header or sample matches an ID-like pattern
+    deltas = {}
+    if header and "id" in header.lower():
+        deltas[field_name] = deltas.get(field_name, 0.0) + 0.6
+    return {"scores": deltas}
 ```
 
----
+**Guidelines**
 
-## Schema
-See `schemas/artifact.v1.1.schema.json` (tables → `mapping`) for the authoritative definition.
+* Keep per‑detector deltas in roughly **[-1.0, +1.0]**.
+* Use a workspace‑wide threshold via `engine.defaults.min_mapping_confidence`. A column only maps if the best score **≥ threshold**; otherwise it is left **unmapped**.
 
-## Notes
-- Keep the mapping free of full data. Include only samples and decisions.
-- Store both A1 and 0‑based bounds to help humans and code.
-- `raw_columns[*].samples` should be minimal and representative; never include sensitive values.
+## Selection algorithm (deterministic)
 
-## What’s next
+1. Sum deltas per target field across all detectors.
+2. Take the field(s) with the **highest** total.
+3. Break ties by:
 
-- Learn how transforms run in the [transform guide](./05-pass-transform-values.md).
-- See how mappings play into the full flow in the [job orchestration guide](./02-job-orchestration.md).
+   * Exact match on `columns.meta[*].label` against the source header (case‑insensitive).
+   * Then presence in `columns.meta[*].synonyms`.
+   * Then **first** in `columns.order`.
 
----
+Only minimal evidence is stored: source header text, rule traces, scores. **No full column data** is persisted.
 
-Previous: [Pass 1 — Find tables & headers](./03-pass-find-tables-and-headers.md)  
-Next: [Pass 3 — Transform values](./05-pass-transform-values.md)
+## See also
+
+* [Artifact schema (tables → mapping)](./schemas/artifact.v1.1.schema.json)
+* [Pass 3 — Transform values](./05-pass-transform-values.md)
