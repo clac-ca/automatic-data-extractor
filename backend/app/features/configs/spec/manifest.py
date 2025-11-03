@@ -39,8 +39,8 @@ class EngineDefaults(BaseModel):
 
     timeout_ms: int = Field(default=120_000, ge=1000)
     memory_mb: int = Field(default=512, ge=64)
-    allow_net: bool = False
-    min_mapping_confidence: float = Field(default=0.0, ge=0.0)
+    runtime_network_access: bool = False
+    mapping_score_threshold: float = Field(default=0.0, ge=0.0)
 
 
 class EngineWriter(BaseModel):
@@ -72,6 +72,9 @@ class HooksConfig(BaseModel):
     on_activate: List[HookRef] = Field(default_factory=list)
     on_job_start: List[HookRef] = Field(default_factory=list)
     on_after_extract: List[HookRef] = Field(default_factory=list)
+    after_mapping: List[HookRef] = Field(default_factory=list)
+    after_transform: List[HookRef] = Field(default_factory=list)
+    after_validate: List[HookRef] = Field(default_factory=list)
     on_job_end: List[HookRef] = Field(default_factory=list)
 
 

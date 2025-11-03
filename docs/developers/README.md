@@ -103,7 +103,7 @@ See the **[Config Package Guide](./01-config-packages.md)** for the complete scr
 
 * Detectors run on **samples**, not full columns; keep them light and deterministic. You can adjust the sample count in the manifest (see the **[mapping pass guide](./04-pass-map-columns-to-target-fields.md#shape-high-level)**).
 * Transforms/validators operate column-wise while ADE writes rows (streaming writer); passes 3–4 are described in the **[transform guide](./05-pass-transform-values.md)** and **[validation guide](./06-pass-validate-values.md)**.
-* Runtime is sandboxed with time/memory limits; network is **off** by default (`allow_net: false` in manifest.json). Lifecycle hooks and limits live in the **[job orchestration guide](./02-job-orchestration.md)**.
+* Runtime is sandboxed with time/memory limits; network is **off** by default (`runtime_network_access: false` in manifest.json). Lifecycle hooks and limits live in the **[job orchestration guide](./02-job-orchestration.md)**.
 
 ---
 

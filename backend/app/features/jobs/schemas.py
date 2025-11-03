@@ -84,9 +84,23 @@ class JobRecord(BaseModel):
 class JobArtifact(BaseModel):
     """Representation of the job artifact JSON."""
 
+    model_config = ConfigDict(protected_namespaces=(), populate_by_name=True)
+
+    schema_: str = Field(alias="schema", serialization_alias="schema")
+    artifact_version: str | None = None
     job: dict[str, Any]
     config: dict[str, Any]
-    passes: list[dict[str, Any]]
+    engine: dict[str, Any] | None = None
+    rules: dict[str, Any] | None = None
+    sheets: list[dict[str, Any]]
+    output: dict[str, Any] | None = None
+    summary: dict[str, Any] | None = None
+    pass_history: list[dict[str, Any]]
+    annotations: list[dict[str, Any]] = Field(default_factory=list)
+
+    @property
+    def schema(self) -> str:
+        return self.schema_
 
 
 __all__ = [

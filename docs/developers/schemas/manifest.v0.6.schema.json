@@ -44,7 +44,7 @@
           "properties": {
             "timeout_ms": { "type": "integer", "minimum": 100 },
             "memory_mb": { "type": "integer", "minimum": 64 },
-            "allow_net": { "type": "boolean", "default": false }
+            "runtime_network_access": { "type": "boolean", "default": false }
           }
         },
         "writer": {

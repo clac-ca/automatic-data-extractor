@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastNumber": 11,
+  "lastNumber": 12,
   "packages": [
     {
       "number": 1,
@@ -111,6 +111,16 @@
       "createdAt": "2025-10-27T18:44:08.305Z",
       "updatedAt": "2025-10-27T19:02:18.152Z",
       "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0011-backend-configurations-jobs-redesign"
+    },
+    {
+      "number": 12,
+      "slug": "docs-parity-for-job-artifact-hooks",
+      "title": "Docs parity for job artifact & hooks",
+      "status": "active",
+      "summary": "Implement documented job artifact schema, hook lifecycle, and related behaviors.",
+      "createdAt": "2025-11-03T15:55:00.815Z",
+      "updatedAt": "2025-11-03T16:15:44.910Z",
+      "path": "/workspace/automatic-data-extractor/.workpackage/packages/0012-docs-parity-for-job-artifact-hooks"
     }
   ]
 }

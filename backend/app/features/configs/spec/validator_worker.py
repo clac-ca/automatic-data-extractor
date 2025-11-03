@@ -137,19 +137,20 @@ def _load_and_validate_column(field_id: str, module_path: Path) -> list[dict[str
     if module is None:
         return diagnostics
     transform = getattr(module, "transform", None)
-    if transform is None or not callable(transform):
-        diagnostics.append(
-            {
-                "level": "error",
-                "code": "column.transform.missing",
-                "path": module_path.as_posix(),
-                "message": "Column module must define a callable transform()",
-                "hint": "Implement transform(*, header, values, column_index, table, job_context, env).",
-            }
-        )
-        return diagnostics
-    diagnostics.extend(_validate_transform_signature(module_path, transform))
-    diagnostics.extend(_exercise_transform(module_path, transform))
+    if transform is not None:
+        if not callable(transform):
+            diagnostics.append(
+                {
+                    "level": "error",
+                    "code": "column.transform.invalid",
+                    "path": module_path.as_posix(),
+                    "message": "Column module transform must be callable when provided",
+                    "hint": "Define transform(*, values, **_) to opt in to column transforms.",
+                }
+            )
+        else:
+            diagnostics.extend(_validate_transform_signature(module_path, transform))
+            diagnostics.extend(_exercise_transform(module_path, transform))
     for name, attr in inspect.getmembers(module, inspect.isfunction):
         if name.startswith("detect_"):
             diagnostics.extend(_exercise_detector(module_path, name, attr))
@@ -159,12 +160,12 @@ def _load_and_validate_column(field_id: str, module_path: Path) -> list[dict[str
 def _validate_transform_signature(module_path: Path, transform: Callable[..., Any]) -> list[dict[str, Any]]:
     diagnostics: list[dict[str, Any]] = []
     sig = inspect.signature(transform)
-    required = ["header", "values", "column_index", "table", "job_context", "env"]
-    keyword_only = [
-        param
+    accepts_kwargs = any(param.kind is inspect.Parameter.VAR_KEYWORD for param in sig.parameters.values())
+    has_values_param = any(
+        param.kind in (inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        and param.name == "values"
         for param in sig.parameters.values()
-        if param.kind in (inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.VAR_KEYWORD)
-    ]
+    )
     if any(param.kind is inspect.Parameter.POSITIONAL_ONLY for param in sig.parameters.values()):
         diagnostics.append(
             {
@@ -172,20 +173,25 @@ def _validate_transform_signature(module_path: Path, transform: Callable[..., An
                 "code": "column.transform.signature",
                 "path": module_path.as_posix(),
                 "message": "transform() may not define positional-only parameters",
-                "hint": "Use keyword-only arguments as part of the script API contract.",
+                "hint": (
+                    "Use keyword-only arguments as part of the script API contract. "
+                    "Recommended signature: transform(*, values, header=None, "
+                    "column_index=None, **_)."
+                ),
             }
         )
         return diagnostics
-    present = {param.name for param in keyword_only}
-    missing = [name for name in required if name not in present]
-    if missing:
+    if not has_values_param and not accepts_kwargs:
         diagnostics.append(
             {
                 "level": "error",
                 "code": "column.transform.signature",
                 "path": module_path.as_posix(),
-                "message": f"transform() is missing required keyword parameters: {', '.join(missing)}",
-                "hint": "Expected signature: transform(*, header, values, column_index, table, job_context, env).",
+                "message": "transform() must accept a 'values' keyword argument",
+                "hint": (
+                    "Recommended signature: transform(*, values, header=None, "
+                    "column_index=None, **_)."
+                ),
             }
         )
     return diagnostics
@@ -193,15 +199,49 @@ def _validate_transform_signature(module_path: Path, transform: Callable[..., An
 
 def _exercise_transform(module_path: Path, transform: Callable[..., Any]) -> list[dict[str, Any]]:
     diagnostics: list[dict[str, Any]] = []
+    signature = None
     try:
-        result = transform(
-            header="Sample Header",
-            values=["a", "b"],
-            column_index=1,
-            table={"id": "table-1"},
-            job_context={"job_id": "validator"},
-            env={},
-        )
+        signature = inspect.signature(transform)
+    except (TypeError, ValueError):
+        signature = None
+
+    accepts_kwargs = False
+    supported_params: set[str] = set()
+    if signature is not None:
+        for name, param in signature.parameters.items():
+            if name == "self":
+                continue
+            if param.kind is inspect.Parameter.VAR_KEYWORD:
+                accepts_kwargs = True
+            if param.kind in (
+                inspect.Parameter.KEYWORD_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            ):
+                supported_params.add(name)
+    else:
+        accepts_kwargs = True
+
+    payload = {
+        "header": "Sample Header",
+        "values": ["a", "b"],
+        "column_index": 1,
+        "table": {"id": "table-1"},
+        "job_context": {"job_id": "validator"},
+        "env": {},
+    }
+    kwargs: dict[str, Any] = {}
+    for key, value in payload.items():
+        if key == "values":
+            kwargs[key] = value
+            continue
+        if key in supported_params or accepts_kwargs:
+            kwargs[key] = value
+
+    if "values" not in kwargs and ("values" in supported_params or accepts_kwargs):
+        kwargs["values"] = payload["values"]
+
+    try:
+        result = transform(**kwargs)
     except Exception as exc:
         diagnostics.append(
             {

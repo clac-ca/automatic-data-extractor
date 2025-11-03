@@ -127,10 +127,10 @@ We'll introduce a set of **REST API endpoints** under a new **/jobs** namespace 
     {
       "document_id": "<doc_id>",
       "config_id": "<config_id>",
-      "allow_network": false
+      "runtime_network_access": false
     }
     ```
-    The `allow_network` field is optional and defaults to `false`.
+    The `runtime_network_access` field is optional and defaults to `false`.
   - **Server processing:**
     - Authenticate and authorize the user against the target workspace/document.
     - Create a new row in the `jobs` table (status `QUEUED`) linked to the document and configuration; the primary key becomes the job ID.
@@ -138,7 +138,7 @@ We'll introduce a set of **REST API endpoints** under a new **/jobs** namespace 
       - Copy the source file from `var/documents/<workspace>/<doc_id>/` into `input.xlsx`.
       - Materialize the selected configuration into `config/` (modules, manifests, etc.) and persist any bundled assets.
     - When `requirements.txt` exists:
-      - If both the global `ADE_ALLOW_NET` flag and `allow_network` are `false`, install dependencies offline with `pip install -t config/vendor -r requirements.txt --no-index --find-links=/opt/ade/wheels`. Missing wheels cause a controlled failure.
+      - If both the global `ADE_RUNTIME_NETWORK_ACCESS` flag and `runtime_network_access` are `false`, install dependencies offline with `pip install -t config/vendor -r requirements.txt --no-index --find-links=/opt/ade/wheels`. Missing wheels cause a controlled failure.
       - When network access is permitted, run pip normally (ideally in a background task) to fetch packages.
       - Always target `config/vendor` and treat pip errors as job failures, recording installer output for later inspection.
     - Enqueue the job ID on the `JobManager` queue so a worker can pick it up.
@@ -156,7 +156,7 @@ We'll introduce a set of **REST API endpoints** under a new **/jobs** namespace 
       "finished_at": null,
       "document_id": "...",
       "config_id": "...",
-      "allow_network": false,
+      "runtime_network_access": false,
       "error_message": null
     }
     ```
@@ -365,7 +365,7 @@ To proceed, we'll spawn the subprocess with arguments similar to `[sys.executabl
         logger.warning("Could not drop privileges; continuing with current user")
     ```
   - Prefer a dedicated user over `nobody` so we can manage permissions precisely (and ensure job files remain writable).
-- **Disable networking:** With `allow_network=False`, monkey-patch sockets inside the worker.
+- **Disable networking:** With `runtime_network_access=False`, monkey-patch sockets inside the worker.
   - Example implementation:
     ```python
     import socket
@@ -378,7 +378,7 @@ To proceed, we'll spawn the subprocess with arguments similar to `[sys.executabl
     ```
   - This blocks normal libraries (e.g., `requests`, `urllib`). Sophisticated attackers could still reach system calls (ctypes, external binaries); we accept this risk for MVP and can harden later with kernel-level tooling.
   - Keep container images lean (no `curl`, `ping`, etc.) and rely on `RLIMIT_NPROC` plus lack of capabilities (no `CAP_NET_RAW`) to limit abuse.
-  - When `allow_network=True`, skip the patch so legitimate outbound requests succeed; wall-clock timeouts still prevent indefinite hangs.
+  - When `runtime_network_access=True`, skip the patch so legitimate outbound requests succeed; wall-clock timeouts still prevent indefinite hangs.
 - **Install dependencies (if not done in main):**
   - **Pre-install during submission:** keeps worker startup fast but delays API responses and runs pip with higher privileges.
   - **Install inside the worker (chosen approach):** execute pip after setting up limits so malicious `setup.py` code stays sandboxed.
@@ -396,7 +396,7 @@ To proceed, we'll spawn the subprocess with arguments similar to `[sys.executabl
         "-r",
         "config/requirements.txt",
     ]
-    if not allow_network:
+    if not runtime_network_access:
         pip_cmd += ["--no-index"]
         if wheelhouse:
             pip_cmd += [f"--find-links={wheelhouse}"]
@@ -417,18 +417,18 @@ So inside worker.py, pseudocode:
 def run(job_id: int):  
 \# Apply resource limits  
 \# Drop privileges  
-\# (If allow_net is False, monkeypatch sockets now, \*but\* hold off until after pip if pip needs network\*)  
+\# (If runtime_network_access is False, monkeypatch sockets now, \*but\* hold off until after pip if pip needs network\*)  
 ```python
-def run(job_id: int, allow_network: bool) -> int:
+def run(job_id: int, runtime_network_access: bool) -> int:
     """Skeleton of the worker entry point."""
     configure_rlimits()
     drop_privileges()
 
     requirements_path = Path("config/requirements.txt")
     if requirements_path.exists():
-        install_requirements(requirements_path, allow_network)
+        install_requirements(requirements_path, runtime_network_access)
 
-    if not allow_network:
+    if not runtime_network_access:
         disable_network()
 
     try:
@@ -550,7 +550,7 @@ We will adjust the Dockerfile to support this job execution environment:
   - `ADE_WORKER_CPU_SECONDS` — CPU rlimit (default ~60 seconds to balance safety with heavy workloads).
   - `ADE_WORKER_MEM_MB` — memory rlimit (default 500 MB, tune per container sizing).
   - `ADE_WORKER_FSIZE_MB` — maximum file size for outputs/logs (default 100 MB).
-  - `ADE_ALLOW_NET` — default network policy for jobs (`false` unless explicitly allowed).
+  - `ADE_RUNTIME_NETWORK_ACCESS` — default network policy for jobs (`false` unless explicitly allowed).
   - `ADE_WHEELHOUSE` — optional path to a local wheel cache for offline installs.
 
 These envs will be read either in Python startup or passed through. We can put them in the FastAPI settings (maybe using Pydantic Settings or os.getenv in our code).
@@ -598,7 +598,7 @@ ENV ADE_MAX_CONCURRENCY=2 \
     ADE_WORKER_CPU_SECONDS=60 \
     ADE_WORKER_MEM_MB=500 \
     ADE_WORKER_FSIZE_MB=100 \
-    ADE_ALLOW_NET=false
+    ADE_RUNTIME_NETWORK_ACCESS=false
 # Optional wheelhouse location
 # ENV ADE_WHEELHOUSE=/opt/ade/wheels
 
@@ -640,7 +640,7 @@ v
 |-> \[Apply rlimits (CPU, MEM, etc.)\]  
 |-> \[Drop privileges to 'adejob'\]  
 |-> \[Install deps via pip -t\]\[1\]  
-|-> \[if allow_net=False: monkeypatch sockets\]  
+|-> \[if runtime_network_access=False: monkeypatch sockets\]  
 |-> \[Open input.xlsx; import user code\]  
 |-> \[PASS 1: detect structure\]  
 | (calls row_types detectors)  
@@ -688,8 +688,8 @@ We will now outline changes and additions to the codebase to implement the above
 - Possibly utility to gracefully shutdown workers on app shutdown (e.g., set a flag and put dummy tasks to unblock them).
 - We will ensure to commit DB transactions appropriately around these updates.
 - **app/jobs/worker.py** - The entry-point for the job subprocess (could be run with -m or direct path).
-- It will parse sys.argv for the job_id (and maybe any flags like allow_net).
-- Read environment variables for limits and allow_net flag.
+- It will parse sys.argv for the job_id (and maybe any flags like runtime_network_access).
+- Read environment variables for limits and runtime_network_access flag.
 - Apply resource limits via resource library.
 - Drop user privileges if possible (use os.setuid/gid).
 - If a requirements.txt exists in config/, perform the pip install logic (with target directory).
@@ -711,7 +711,7 @@ We'll also include in this script the network monkeypatch function and any other
   - create_job(request) for POST /jobs.
   - Validate input (the document_id and config_id).
   - Maybe find the config version to use (latest active version for that config? Or as provided).
-  - Create the job record: e.g., job = Job(id=newid, document_id=..., config_id=..., status="QUEUED", submitted_by=user, submitted_at=now, allow_network=... ). Save to DB.
+  - Create the job record: e.g., job = Job(id=newid, document_id=..., config_id=..., status="QUEUED", submitted_by=user, submitted_at=now, runtime_network_access=... ). Save to DB.
   - Call a service function to prepare files: e.g., prepare_job_files(job). This will:
     - Make directory var/jobs/&lt;id&gt;.
     - Copy the input file from var/documents/&lt;workspace&gt;/&lt;doc_id&gt;/... to .../input.xlsx.
@@ -719,7 +719,7 @@ We'll also include in this script the network monkeypatch function and any other
     - Write requirements.txt if present (from the config version record).
     - Write \__init_\_.py files in necessary dirs.
     - We might do a quick check: if requirements exist:
-      - If global ADE_ALLOW_NET false and no wheelhouse, and allow_network false, we _know_ this will fail to install. We could preemptively reject the job submission with 400, telling user dependencies cannot be resolved. But better is to accept and let it fail in worker with a clear error in artifact. We can choose either. Perhaps accept and mark error later (user will see error anyway).
+      - If global ADE_RUNTIME_NETWORK_ACCESS false and no wheelhouse, and runtime_network_access false, we _know_ this will fail to install. We could preemptively reject the job submission with 400, telling user dependencies cannot be resolved. But better is to accept and let it fail in worker with a clear error in artifact. We can choose either. Perhaps accept and mark error later (user will see error anyway).
     - (We do **not** run pip here in the main thread to avoid delay.)
   - Enqueue the job: app.state.job_manager.submit(job.id). If this raises QueueFull, we update job status to, say, "REJECTED" or simply don't create it at all (maybe we should abort creation with 503/429 to client, and not insert into DB or remove it). Or we insert and immediately mark it as failed with "Queue full". Simpler: if queue full, just return 429 and do not insert job record (or remove it). But clients might prefer a clean response. We can handle either way; a 429 with no job ID might be fine. Let's do that: if queue is full, skip DB insertion and respond with an error message. The user can try again later.
   - Return the response JSON with job_id and initial status.
@@ -792,12 +792,12 @@ app.include_router(
 Also ensure to shut down workers on app exit if needed (though when container stops, child processes get terminated anyway). We could trap shutdown event to set JobManager stop flag and perhaps wait for workers to finish or kill them.
 
 - **app/models.py or wherever DB models are defined** - update the Job model if needed:
-- Fields likely needed: status (string), started_at, finished_at, maybe allow_network (bool), error_message (text or part of JSON), and possibly metrics JSON (for things like row count, etc.).
+- Fields likely needed: status (string), started_at, finished_at, maybe runtime_network_access (bool), error_message (text or part of JSON), and possibly metrics JSON (for things like row count, etc.).
 - The prompt indicated jobs table already has status, timestamps, metrics/logs JSON. So perhaps:
   - status - we will use "QUEUED", "RUNNING", "SUCCESS", "ERROR".
   - logs or metrics JSON - could store something like {"error": "...", "duration": 12.5, ...}. Alternatively, separate columns.
 - If any migrations needed, note them (but out-of-scope to detail here).
-- We'll ensure allow_network is stored (or we can treat all false except some flag - easier to have a boolean column or include in JSON).
+- We'll ensure runtime_network_access is stored (or we can treat all false except some flag - easier to have a boolean column or include in JSON).
 - We should also have a foreign key to the config version used (to exactly know what code was run).
 - Also maybe store attempts count if we want.
 - **app/db/\__init_\_.py or session management** - ensure we can perform DB updates in async background tasks. If using an async session, we might get it via contextvars or pass it. Possibly, the JobManager will need to acquire a session for updates. We might use async_session() context manager inside process_job. Or reuse a global session if thread-safe (not likely, better to create new).
@@ -823,7 +823,7 @@ Also ensure to shut down workers on app exit if needed (though when container st
     del env\[var\]  
     \# Set up Pythonpath for sandbox:  
     env\["PYTHONPATH"\] = f"{job_dir}/config/vendor:{job_dir}/config"  
-    env\["ADE_ALLOW_NET_JOB"\] = "true" if job.allow_network else "false"  
+    env\["ADE_RUNTIME_NETWORK_ACCESS_JOB"\] = "true" if job.runtime_network_access else "false"  
     \# Pass through resource limits  
     env\["ADE_WORKER_CPU_SECONDS"\] = os.getenv("ADE_WORKER_CPU_SECONDS", "60")  
     env\["ADE_WORKER_MEM_MB"\] = os.getenv("ADE_WORKER_MEM_MB", "500")  
@@ -887,7 +887,7 @@ return "Job failed (unable to read logs)"
     socket.create_connection = lambda \*args, \*\*kwargs: (_for_ in ()).throw(RuntimeError("Network use not allowed"))  
     def main():  
     job_id = sys.argv\[1\]  
-    allow_net = os.getenv("ADE_ALLOW_NET_JOB", "false").lower() == "true"  
+    runtime_network_access = os.getenv("ADE_RUNTIME_NETWORK_ACCESS_JOB", "false").lower() == "true"  
     \# Resource limits  
     cpu_limit = int(os.getenv("ADE_WORKER_CPU_SECONDS", "60"))  
     mem_limit_mb = int(os.getenv("ADE_WORKER_MEM_MB", "500"))  
@@ -906,7 +906,7 @@ return "Job failed (unable to read logs)"
     req_path = f"config/requirements.txt"  
     if os.path.exists(req_path):  
     pip_cmd = \[sys.executable, "-m", "pip", "install", "-t", "config/vendor", "-r", req_path, "--no-cache-dir"\]  
-    if not allow_net:  
+    if not runtime_network_access:  
     wheelhouse = os.getenv("ADE_WHEELHOUSE", "")  
     pip_cmd += \["--no-index"\]  
     if wheelhouse:  
@@ -916,7 +916,7 @@ return "Job failed (unable to read logs)"
     print(res.stdout, res.stderr, file=sys.stderr)  
     sys.exit(1)  
     \# Setup network restrictions if needed  
-    if not allow_net:  
+    if not runtime_network_access:  
     disable_network()  
     \# Open artifact file  
     artifact_path = "artifact.json"  
@@ -977,10 +977,10 @@ return "Job failed (unable to read logs)"
     submitted_at = Column(DateTime, default=datetime.utcnow)  
     started_at = Column(DateTime)  
     finished_at = Column(DateTime)  
-    allow_network = Column(Boolean, default=False)  
+    runtime_network_access = Column(Boolean, default=False)  
     error_message = Column(Text, nullable=True)  
     metrics = Column(JSON, nullable=True) # could store {"duration":..., "rows":..., etc.}
-- We would update Alembic migration to add allow_network, error_message if not present.
+- We would update Alembic migration to add runtime_network_access, error_message if not present.
 
 The above outlines the key code changes. Actual code will need proper error handling, logging, and possibly adjustments after testing.
 
@@ -1007,7 +1007,7 @@ So, our approach ensures **"code cannot impact server"** by process and user sep
 
 Furthermore, since the job user is unprivileged, it cannot create raw sockets or do anything that requires capabilities (like sending ICMP packets). It also cannot modify firewall rules or network settings. So even if our Python patch were removed by some trick, the process could open TCP connections - however, those would be subject to the container's network policies. If our container runs in an environment with restricted egress (which it might not by default), that helps. But currently, we assume an open network environment but rely on our code logic to prevent usage.
 
-We provide a safe **override**: if a specific job needs internet (perhaps to fetch a remote resource or something, in certain controlled scenarios), an admin can set allow_network=true for that job. In that case, we do not patch sockets, thereby allowing outbound requests. This is off by default, addressing the requirement of network being off unless explicitly toggled.
+We provide a safe **override**: if a specific job needs internet (perhaps to fetch a remote resource or something, in certain controlled scenarios), an admin can set runtime_network_access=true for that job. In that case, we do not patch sockets, thereby allowing outbound requests. This is off by default, addressing the requirement of network being off unless explicitly toggled.
 
 **Limiting Imports and Environment:** We ensure the job process's PYTHONPATH only includes the directories we allow (the job's config and vendor). Critically, we do not include the system site-packages【14†output】, so the job cannot import things like our database driver, or cloud SDKs that might hold credentials in memory, etc. The only exception is the Python standard library which is always available - but the standard lib is generally safe and does not include functions to directly compromise the system beyond what OS permissions allow. (We note that os and subprocess are in stdlib, which can be used to launch processes or manipulate files, but those operations are constrained by OS perms and our rlimits).
 
@@ -1039,7 +1039,7 @@ We also scrub the environment handed to the job process:
 - A determined attacker could still exploit kernel vulnerabilities via allowed syscalls. Docker's default seccomp profile blocks many risky calls, but we do not yet enforce a custom allowlist.
 - Jobs can consume disk space by creating multiple files up to the per-file limit; future work could add quotas or cgroups for stricter control.
 - Wall-clock timeouts complement CPU limits, but without cgroups a cooperative-yielding job might still run longer than desired; we balance this with generous yet finite timeouts.
-- Allowing `allow_network=true` exposes internal services if misused; we treat it as an opt-in for trusted scenarios and can later restrict via proxying.
+- Allowing `runtime_network_access=true` exposes internal services if misused; we treat it as an opt-in for trusted scenarios and can later restrict via proxying.
 - Users can print raw data to `logs.txt`; while that file is not automatically exposed, we should document the behaviour and avoid surfacing logs publicly by default.
 
 **Secrets and Whitelists:** The job process should ideally only be able to read/write within its directory. We considered using something like Bubblewrap to create a mount namespace where only var/jobs/&lt;id&gt; and maybe /tmp are present (and maybe a read-only view of needed libraries). Without that, we rely on OS perms. Possibly, as an extra safety measure, we could set up a simple AppArmor or SELinux profile to restrict file access. But that's heavy for MVP. We'll mention that as future.
@@ -1054,7 +1054,7 @@ To ensure the system works correctly and safely, we propose a comprehensive test
 
 - _Detectors and Transforms:_ Write unit tests for any pure functions in the user config processing pipeline. For instance, if we have a standard library function for mapping columns or validating rows (outside user code), test those with sample inputs. Similarly, if there are user code examples (like a simple row detector), we can simulate calling it to ensure integration (though user code isn't in our control for testing, we can include a dummy config for tests).
 - _Resource Limit Setting:_ A unit test in the worker context could simulate setting RLIMITs. This is tricky to test in isolation (as setting global rlimits in a test will affect the test process). Instead, we might test our resource_limits function by checking that it returns expected values or that if we intentionally set a low limit and allocate memory, a MemoryError is raised. This may be more of an integration test.
-- _Network Blocking:_ Write a small piece of code that tries to open a socket (e.g., socket.socket().connect(('example.com',80))) and ensure that after our disable_network() is called, it raises an error. We can embed such code in a dummy worker run invocation to verify the monkeypatch works. Also test that if allow_network=True, such calls succeed (if internet is available in test environment or we can simulate by connecting to localhost).
+- _Network Blocking:_ Write a small piece of code that tries to open a socket (e.g., socket.socket().connect(('example.com',80))) and ensure that after our disable_network() is called, it raises an error. We can embed such code in a dummy worker run invocation to verify the monkeypatch works. Also test that if runtime_network_access=True, such calls succeed (if internet is available in test environment or we can simulate by connecting to localhost).
 - _Pip install logic:_ Create a temporary directory structure mimicking config/vendor and use a sample requirements.txt (perhaps pointing to a small pure Python package or a local wheel file). Test that our pip install command correctly installs into the target directory and that the installed module can be imported from that directory. This ensures our pip install -t invocation is correct.
 - _Queue Behavior:_ For the JobManager, simulate adding jobs to the queue and ensure that if we add more than the max size, it raises QueueFull. We can test the submit method by configuring a small max_queue and catching the exception when overfull.
 - _Concurrency Control:_ If we implement set_concurrency, we can write a test that initially starts with concurrency 1, submits a couple of jobs, then calls set_concurrency(2) and ensures that now two jobs can run simultaneously (we might need to instrument or stub the worker to not actually do heavy work, just wait a bit so we can observe concurrency).
@@ -1078,9 +1078,9 @@ We can simulate the entire flow with a known simple config:
   - _CPU limit:_ Use a config containing an infinite loop (e.g., `while True: pass`) and assert the worker is terminated around the CPU threshold, with status `ERROR` and no impact on subsequent jobs.
   - _Memory limit:_ Allocate a large list (for example, `bytearray(1024 * 1024 * 1024)`) and confirm the job fails with an out-of-memory error while the system remains responsive.
   - _File size limit:_ Attempt to write a file larger than the configured limit and verify the process terminates, the file is truncated, and the job status reflects the failure.
-- _Network block:_ Write a config that tries to fetch something from network (if internet accessible in test env, maybe urllib.request.urlopen('<http://example.com>')). Without allow_network, it should raise an exception due to our socket patch. The job would then fail (unless the user code catches it, but assume not). We verify:
+- _Network block:_ Write a config that tries to fetch something from network (if internet accessible in test env, maybe urllib.request.urlopen('<http://example.com>')). Without runtime_network_access, it should raise an exception due to our socket patch. The job would then fail (unless the user code catches it, but assume not). We verify:
   - Job status = ERROR, logs show something like "Network disabled" from our exception.
-  - If we then mark allow_network true for this job (and ensure environment or Docker allows egress), then it should succeed in actually making the request. We might not want to call external site in tests. Instead, we can do a network call to a dummy local server (could spin up a simple HTTP server in test thread). But at least we see no exception in that case and maybe the artifact can include "fetched data" (if user code puts it).
+  - If we then mark runtime_network_access true for this job (and ensure environment or Docker allows egress), then it should succeed in actually making the request. We might not want to call external site in tests. Instead, we can do a network call to a dummy local server (could spin up a simple HTTP server in test thread). But at least we see no exception in that case and maybe the artifact can include "fetched data" (if user code puts it).
   - Ensure toggling the flag works as intended.
 - **Queue full 429 test:** As touched on, if we want to precisely test queue limits:
 - Set concurrency low and queue small. Attempt POST /jobs more times than concurrency+queue.
@@ -1092,7 +1092,7 @@ We can simulate the entire flow with a known simple config:
   - Response indicates job re-queued.
   - The old artifact.json might have captured the error; after retry completes (assuming we fix the config or it still fails similarly), we should see that artifact overwritten or appended. We likely overwrote it. So verify that after retry, artifact reflects the second run (maybe contains only the second run's events).
   - The job's started_at and finished_at should update, and maybe an incremented attempt count if we track it.
-  - If possible, test a scenario where the first run failed due to some ephemeral issue (like network off but needed), and for retry we toggle allow_network on. The second attempt should succeed. Then check job is SUCCESS after retry.
+  - If possible, test a scenario where the first run failed due to some ephemeral issue (like network off but needed), and for retry we toggle runtime_network_access on. The second attempt should succeed. Then check job is SUCCESS after retry.
   - Also test retry on a SUCCESS job (should either not be allowed or simply run again producing same output). We clarify expected behavior. Probably we only allow if failed. If not allowed, the endpoint might return 400. We test that.
 - **Multi-tenant scenario:** If relevant, test that a user cannot access another user's job details or files:
 - For RBAC, ensure the /jobs/{id} endpoint checks that the job's workspace/user matches. Write a test where user A submits a job, then user B (with a different auth token or session) tries to GET that job. Should get 403 or not found.
@@ -1160,7 +1160,7 @@ To help operators manage ADE's job system, we provide the following guidelines:
 **Configuration and Deployment:**
 - **Set concurrency via environment:** Tune `ADE_MAX_CONCURRENCY` and `ADE_QUEUE_SIZE` to match available resources.
 - **Adjust resource limits:** Modify `ADE_WORKER_CPU_SECONDS`, `ADE_WORKER_MEM_MB`, and `ADE_JOB_TIMEOUT_SECONDS` when workloads require additional headroom.
-- **Network access policy:** Leave `ADE_ALLOW_NET` disabled by default; enable per job only when necessary.
+- **Network access policy:** Leave `ADE_RUNTIME_NETWORK_ACCESS` disabled by default; enable per job only when necessary.
 - **Wheelhouse (offline dependencies):** Preload `/opt/ade/wheels` and set `ADE_WHEELHOUSE` for air-gapped deployments.
 - **Container users:** Running as root simplifies privilege dropping; if you switch to a non-root main user, ensure it can still transition to `adejob`.
 - **File permissions:** Confirm `var/documents` and `var/jobs` remain writable (adjust ownership when mounting volumes).
@@ -1181,7 +1181,7 @@ To help operators manage ADE's job system, we provide the following guidelines:
 - \[ \] **Submission Test:** Submit a sample job via UI/API to ensure the pipeline works end-to-end (watch it go to success and produce output).
 - \[ \] **Resource Monitoring:** Keep an eye on CPU/memory when multiple jobs run. Adjust concurrency or limits if container is near its limits.
 - \[ \] **Error Handling:** Spot-check a known failing job (maybe introduce a bug in a rule intentionally) and see that it fails gracefully and surfaces the error to the user (in job status or artifact).
-- \[ \] **Network Toggle:** If a job requires network, test turning allow_net on for that job and observe it.
+- \[ \] **Network Toggle:** If a job requires network, test turning runtime_network_access on for that job and observe it.
 - \[ \] **Concurrency Change:** Try using the concurrency admin endpoint to ensure it works (maybe not in production immediately, but know that it's available).
 - \[ \] **Logs Access:** Ensure you have means to access var/jobs files. Either through an admin UI or by mounting the volume so you can retrieve artifact or logs for analysis. If something goes wrong in production, these files are critical for debugging user issues.
 - \[ \] **Cleanup Strategy:** Plan how/when to remove old job directories to save space (maybe keep last X days). We might later provide a script or API to clean them.
@@ -1196,7 +1196,7 @@ Despite careful design, there are some **risks and open questions** remaining:
 
 - **Inter-job Interference (Same-User Issue):** As discussed, all job subprocesses run as the same Unix user (adejob). A malicious user could exploit this by trying to affect other running jobs (e.g., sending signals). We decided this risk is acceptable given our user base (likely cooperative, not adversarial). However, if in future we allow arbitrary third-party code, this becomes a concern. **Follow-up:** Investigate using Linux user namespaces or distinct UIDs per job to prevent signal attacks. Alternatively, integrate a seccomp filter to block kill() calls from within the sandbox (so a job cannot signal another) - seccomp can filter specific syscalls.
 - **Lack of Kernel Namespacing:** Without bubblewrap, the sandbox still sees the full container filesystem (read-only parts). If someone finds a sensitive file accidentally left world-readable, they could read it. **Follow-up:** Do a thorough audit of the container file permissions (make sure nothing sensitive is world-readable). Possibly implement bubblewrap in a later version to mount a minimal FS (only /tmp and the job dir, plus necessary libs) for ultimate safety. Many modern container setups have unprivileged user namespaces enabled, so bubblewrap can likely run without too much hassle.
-- **Dependency Installation Security:** Installing pip packages at runtime introduces supply chain risks: a user could specify a dependency that is actually malicious. During installation, that package's setup.py runs with our sandbox user privileges. We've limited those privileges and resources, which mitigates impact, but this is a potential vector. If an attacker can upload a package to PyPI and then have our system install it, they could attempt to exploit it (e.g., try to read files or phone home). But since network is off by default for jobs, even a malicious package's install can't exfiltrate data unless allow_net was true for that job. **Follow-up:** For high security, consider requiring that all requirements come from a pre-approved list or internal index. Alternatively, sandbox the pip installation step further (e.g., run pip inside bubblewrap or a container with no access aside from wheelhouse).
+- **Dependency Installation Security:** Installing pip packages at runtime introduces supply chain risks: a user could specify a dependency that is actually malicious. During installation, that package's setup.py runs with our sandbox user privileges. We've limited those privileges and resources, which mitigates impact, but this is a potential vector. If an attacker can upload a package to PyPI and then have our system install it, they could attempt to exploit it (e.g., try to read files or phone home). But since network is off by default for jobs, even a malicious package's install can't exfiltrate data unless runtime_network_access was true for that job. **Follow-up:** For high security, consider requiring that all requirements come from a pre-approved list or internal index. Alternatively, sandbox the pip installation step further (e.g., run pip inside bubblewrap or a container with no access aside from wheelhouse).
 - **Handling Large Data/Performance:** We assume moderate file sizes and job durations. If users upload massive spreadsheets (hundreds of MBs) or very complex transformations, our simple approach might struggle:
 - Reading/writing Excel via openpyxl is memory-heavy. It might approach our memory limit or be slow. Perhaps using streaming CSV or an optimized library could be needed. **Follow-up:** Evaluate alternative libraries (like pandas or pyarrow) for efficiency, but those might require raising memory limits or adding native libs. We might advise chunk processing if needed.
 - We also currently hold artifact data in memory until end (in our pseudocode). If artifact grows large (lots of events), that could be memory heavy. Could consider writing incrementally (open file, write JSON lines or flush partial results each pass). **Follow-up:** Implement streaming artifact writing if needed (the JSON structure would need to allow it, e.g., writing an array in pieces or using NDJSON).
