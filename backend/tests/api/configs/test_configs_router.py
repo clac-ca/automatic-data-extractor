@@ -34,8 +34,8 @@ def _manifest(title: str, fields: list[str]) -> dict[str, Any]:
             "defaults": {
                 "timeout_ms": 120000,
                 "memory_mb": 256,
-                "allow_net": False,
-                "min_mapping_confidence": 0.0,
+                "runtime_network_access": False,
+                "mapping_score_threshold": 0.0,
             },
             "writer": {
                 "mode": "row_streaming",

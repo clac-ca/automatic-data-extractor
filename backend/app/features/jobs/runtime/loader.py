@@ -29,6 +29,17 @@ class LoadedRowModule:
     module: ModuleType
 
 
+HOOK_GROUPS: tuple[str, ...] = (
+    "on_activate",
+    "on_job_start",
+    "on_after_extract",
+    "after_mapping",
+    "after_transform",
+    "after_validate",
+    "on_job_end",
+)
+
+
 class ConfigPackageLoader:
     """Import column, hook, and row detector modules from a stored config package."""
 
@@ -59,12 +70,16 @@ class ConfigPackageLoader:
     def load_hook_modules(self, manifest: dict[str, Any]) -> dict[str, list[LoadedHookModule]]:
         hooks_section = manifest.get("hooks") or {}
         loaded: dict[str, list[LoadedHookModule]] = {}
-        for hook_name, entries in hooks_section.items():
+        for hook_name in HOOK_GROUPS:
+            entries = hooks_section.get(hook_name)
             if not isinstance(entries, list):
+                loaded[hook_name] = []
                 continue
             bucket: list[LoadedHookModule] = []
             for entry in entries:
                 if not isinstance(entry, dict):
+                    continue
+                if not entry.get("enabled", True):
                     continue
                 script = entry.get("script")
                 if not script:
@@ -77,8 +92,7 @@ class ConfigPackageLoader:
                         module=module,
                     )
                 )
-            if bucket:
-                loaded[hook_name] = bucket
+            loaded[hook_name] = bucket
         return loaded
 
     def load_row_type_modules(self) -> list[LoadedRowModule]:
