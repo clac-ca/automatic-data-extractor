@@ -8,12 +8,16 @@ Validation rules confirm that transformed values meet expectations. Failures are
 - Table metadata (header rows, target fields, ranges)
 
 ## What it appends (artifact)
-- `tables[].validate[]` diagnostics with `{path, level, code, message}`
-- `summary.validation` rollups
+- `sheets[].tables[].validation.issues[]` with `{row_index, a1, target_field, code, severity, message, rule}`
+- `sheets[].tables[].validation.summary_by_field` rollups
 - `pass_history[]` entry with counts by severity
 
 ## Diagnostic shape
-Validation traces follow the standard `{ "path": "...", "level": "warning|error", "code": "column.member_id.missing", "message": "Member ID is required" }` shape.
+Validation traces normalize common codes (for example, `missing` → `required_missing`) and attach A1 coordinates. Return dictionaries shaped like `{ "row_index": 1, "code": "required_missing", "severity": "error", "message": "Member ID is required" }`.
+
+Recommended codes: `required_missing`, `pattern_mismatch`, `invalid_format`, `out_of_range`, `duplicate_value`. Use them consistently so dashboards can group related issues.
+
+> Note: Validators may still return issues even when there are no data rows; ADE computes the A1 location relative to the header row.
 
 ## Common rules
 - Required field checks (`validate.required`)

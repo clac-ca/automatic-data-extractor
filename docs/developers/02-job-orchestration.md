@@ -51,7 +51,7 @@ enqueue(job_id)      # POST /jobs
 spawn subprocess     # one per job
   |-> set rlimits    # CPU, memory, file size, fds
   |-> install deps   # pip -t config/vendor
-  |-> disable net    # unless allow_network=true
+  |-> disable net    # unless runtime_network_access=true
   |-> run passes     # write artifact.json + normalized.xlsx
 ```
 
@@ -71,7 +71,7 @@ router = APIRouter()
 class SubmitJob(BaseModel):
     config_version_id: str
     document_ids: list[str] = []
-    allow_network: bool = False
+    runtime_network_access: bool = False
 
 @router.post("/jobs", status_code=202)
 async def submit_job(payload: SubmitJob):
@@ -178,7 +178,9 @@ async def _spawn(self, job_id: int):
         # Only the job’s code & deps are importable:
         "PYTHONPATH": f"{job_dir}/config/vendor:{job_dir}/config",
         # Controls:
-        "ADE_ALLOW_NET_JOB": str(await db.get_allow_network(job_id)).lower(),
+        "ADE_RUNTIME_NETWORK_ACCESS_JOB": str(
+            await db.get_runtime_network_access(job_id)
+        ).lower(),
         "ADE_WHEELHOUSE": os.getenv("ADE_WHEELHOUSE", ""),
         "ADE_WORKER_CPU_SECONDS": os.getenv("ADE_WORKER_CPU_SECONDS", "60"),
         "ADE_WORKER_MEM_MB": os.getenv("ADE_WORKER_MEM_MB", "512"),
@@ -249,7 +251,7 @@ def install_deps_if_any():
     req = os.path.join("config", "requirements.txt")
     if not os.path.exists(req): return
     cmd = [sys.executable, "-m", "pip", "install", "-t", "config/vendor", "-r", req, "--no-cache-dir"]
-    if os.getenv("ADE_ALLOW_NET_JOB", "false") != "true":
+    if os.getenv("ADE_RUNTIME_NETWORK_ACCESS_JOB", "false") != "true":
         cmd += ["--no-index"]
         wh = os.getenv("ADE_WHEELHOUSE")
         if wh: cmd += [f"--find-links={wh}"]
@@ -278,7 +280,7 @@ def main():
     set_limits()
     drop_privileges()
     install_deps_if_any()
-    if os.getenv("ADE_ALLOW_NET_JOB", "false") != "true":
+    if os.getenv("ADE_RUNTIME_NETWORK_ACCESS_JOB", "false") != "true":
         disable_network()
 
     try:
@@ -420,7 +422,7 @@ class Job(Base):
     config_version_id = Column(ForeignKey("configuration_script_versions.id"), nullable=False)
 
     status = Column(String(20), nullable=False)  # QUEUED|RUNNING|SUCCESS|ERROR
-    allow_network = Column(Boolean, default=False, nullable=False)
+    runtime_network_access = Column(Boolean, default=False, nullable=False)
     attempts = Column(Integer, default=1, nullable=False)
 
     submitted_by = Column(ForeignKey("users.id"), nullable=False)
@@ -453,7 +455,7 @@ for job_id in await db.list_ids("SELECT id FROM jobs WHERE status='QUEUED'"):
 | `ADE_WORKER_CPU_SECONDS`  |      `60` | CPU time cap (per job)                        |
 | `ADE_WORKER_MEM_MB`       |     `512` | Memory cap (MiB)                              |
 | `ADE_WORKER_FSIZE_MB`     |     `100` | Max file size a job can create (MiB)          |
-| `ADE_ALLOW_NET`           |   `false` | Default for `allow_network` if omitted        |
+| `ADE_RUNTIME_NETWORK_ACCESS` |   `false` | Default for `runtime_network_access` if omitted |
 | `ADE_WHEELHOUSE`          | *(unset)* | Local wheels dir for **offline** pip installs |
 
 ---
@@ -468,7 +470,7 @@ You poll status and download outputs. That’s it.
 # Client
 curl -X POST https://ade.local/jobs \
   -H "Content-Type: application/json" \
-  -d '{"document_id":"doc_123","config_version_id":"cfgv_456","allow_network":false}'
+  -d '{"document_id":"doc_123","config_version_id":"cfgv_456","runtime_network_access":false}'
 
 # Later
 curl https://ade.local/jobs/1234
@@ -494,7 +496,7 @@ Future hardening (not required to ship): process groups (kill children on timeou
 
 ```text
 1) Set ADE_MAX_CONCURRENCY and ADE_QUEUE_SIZE for your box.
-2) Keep ADE_ALLOW_NET=false; allow per job when truly needed.
+2) Keep ADE_RUNTIME_NETWORK_ACCESS=false; allow per job when truly needed.
 3) Ensure /var/jobs and /var/documents are writable by the app.
 4) Watch disk space; clean old /var/jobs/<id> folders periodically.
 5) If queue backs up, return 429 and/or raise concurrency (carefully).

@@ -155,7 +155,7 @@ def detect_email_shape(
 **Scoring conventions (recommended)**
 
 * Keep individual detector deltas roughly in **[-1.0, +1.0]**; totals act like a confidence signal.
-* Use a global confidence gate via `engine.defaults.min_mapping_confidence` (see manifest below).
+* Use a global confidence gate via `engine.defaults.mapping_score_threshold` (see manifest below).
   If the best score is below the gate, leave the column **unmapped** (safer than guessing).
 
 ---
@@ -168,30 +168,19 @@ Transforms run column-wise under the hood while ADE writes rows.
 **Minimal transform — normalize IDs**
 
 ```python
-def transform(
-    *,
-    job_id: str,
-    source_file: str,
-    sheet_name: str,
-    table_id: str,
-    column_index: int,
-    header: str | None,
-    values: list,
-    field_name: str,
-    field_meta: dict,
-    manifest: dict,
-    env: dict | None = None,
-    artifact: dict,
-    **_,
-):
+def transform(*, values, **context):
     """Normalize IDs."""
-    def clean(v):
-        if v is None:
+
+    def clean(value):
+        if value is None:
             return None
-        s = "".join(ch for ch in str(v) if ch.isalnum()).upper()
-        return s or None
+        alnum = "".join(ch for ch in str(value) if ch.isalnum()).upper()
+        return alnum or None
+
     return {"values": [clean(v) for v in values], "warnings": []}
 ```
+
+> **Context:** ADE also supplies `header`, `column_index`, `table`, `job_context`, `manifest`, `env`, and `artifact`. Accept `**context` (or explicit keyword-only params) to opt into the fields you need; only `values` is required.
 
 ---
 
@@ -275,8 +264,8 @@ Your `manifest.json` defines engine defaults, output behavior, and the **target 
     "defaults": {
       "timeout_ms": 120000,
       "memory_mb": 256,
-      "allow_net": false,
-      "min_mapping_confidence": 0.0
+      "runtime_network_access": false,
+      "mapping_score_threshold": 0.0
     },
     "writer": { "mode": "row_streaming", "append_unmapped_columns": true, "unmapped_prefix": "raw_" }
   },
@@ -323,7 +312,7 @@ Your `manifest.json` defines engine defaults, output behavior, and the **target 
 * `label` values become **output headers** in the normalized sheet.
 * Keep `columns.order` and `columns.meta` **in sync** (same field keys).
 * Use `type_hint` / `synonyms` / `pattern` to **guide** detectors and validators (optional but helpful).
-* Use `min_mapping_confidence` to avoid low-confidence auto-maps (default `0.0` preserves current behavior).
+* Use `mapping_score_threshold` to avoid low-confidence auto-maps (default `0.0` preserves current behavior).
 
 > **Manifest validation:**
 > ADE validates `manifest.json` against the current schema (`ade.manifest/v1.0`) and script API version (`"config_script_api_version": "1"`).
@@ -365,7 +354,7 @@ def run(*, artifact: dict, **_):
 
 If your rules need third‑party libraries:
 
-* Add a **`requirements.txt`** to the package. ADE installs it into an **isolated per‑job environment** when `engine.defaults.allow_net: true`.
+* Add a **`requirements.txt`** to the package. ADE installs it into an **isolated per‑job environment** when `engine.defaults.runtime_network_access: true`.
 * Prefer **pinned versions**. For air‑gapped or reproducible runs, vendor pure‑Python deps (e.g., `vendor/`) and import them directly.
 
 > The artifact records any packages/versions installed for the job.
@@ -517,7 +506,10 @@ def validate(
     """
 ```
 
-> **Note:** You return `row_index`; ADE will attach A1 coordinates and rule ids in the artifact.
+> **Notes:**
+> - Return `row_index` (1-based within the table); ADE automatically adds Excel-style `a1` coordinates and rule IDs in the artifact.
+> - Prefer the shared issue codes `required_missing`, `pattern_mismatch`, `invalid_format`, `out_of_range`, and `duplicate_value`.
+>   ADE normalizes common aliases (for example, `missing` → `required_missing`) before persisting issues.
 
 ---
 

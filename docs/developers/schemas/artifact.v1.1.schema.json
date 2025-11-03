@@ -4,19 +4,45 @@
   "title": "ADE Artifact v1.1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["artifact_version", "job", "engine", "rules", "sheets", "pass_history"],
+  "required": [
+    "schema",
+    "artifact_version",
+    "job",
+    "config",
+    "engine",
+    "rules",
+    "sheets",
+    "output",
+    "summary",
+    "pass_history",
+    "annotations"
+  ],
   "properties": {
+    "schema": { "type": "string", "const": "ade.artifact/v1" },
     "artifact_version": { "type": "string", "const": "1.1" },
 
     "job": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["job_id", "source_file", "config_id", "created_at"],
+      "required": ["job_id", "status", "started_at", "completed_at", "source_file"],
       "properties": {
         "job_id": { "type": "string", "minLength": 1 },
-        "source_file": { "type": "string", "minLength": 1 },
-        "config_id": { "type": "string", "minLength": 1 },
-        "created_at": { "type": "string", "format": "date-time" }
+        "config_version_id": { "type": ["string", "null"] },
+        "trace_id": { "type": ["string", "null"] },
+        "status": { "type": "string", "enum": ["succeeded", "failed"] },
+        "started_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "type": "string", "format": "date-time" },
+        "source_file": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["config_version_id"],
+      "properties": {
+        "config_version_id": { "type": ["string", "null"] },
+        "manifest_version": { "type": ["string", "null"] }
       }
     },
 
@@ -32,7 +58,18 @@
           "properties": {
             "mode": { "type": "string", "enum": ["row_streaming", "in_memory"] },
             "append_unmapped_columns": { "type": "boolean", "default": true },
-            "unmapped_prefix": { "type": "string", "default": "raw_" }
+            "unmapped_prefix": { "type": "string", "default": "raw_" },
+            "output_sheet": { "type": ["string", "null"] }
+          }
+        },
+        "defaults": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout_ms": { "type": "integer", "minimum": 0 },
+            "memory_mb": { "type": "integer", "minimum": 0 },
+            "runtime_network_access": { "type": "boolean" },
+            "mapping_score_threshold": { "type": "number" }
           }
         }
       }
@@ -72,31 +109,33 @@
     "pass_history": {
       "type": "array",
       "items": { "$ref": "#/$defs/PassHistoryItem" }
+    },
+
+    "annotations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Annotation" }
     }
   },
 
   "$defs": {
     "IdSheet": { "type": "string", "pattern": "^sheet_[1-9][0-9]*$" },
-    "IdTable": { "type": "string", "pattern": "^table_[1-9][0-9]*$" },
-    "IdColumn": { "type": "string", "pattern": "^col_[1-9][0-9]*$" },
+    "IdTable": { "type": "string", "minLength": 1 },
+    "IdColumn": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.\-]+\\.col\\.[1-9][0-9]*$"
+    },
     "TargetFieldId": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
 
     "RuleId": {
       "type": "string",
-      "description": "Short rule key used by traces, e.g. col.member_id.pattern",
-      "pattern": "^[a-z]+(?:\\.[a-z0-9_]+)+$"
+      "description": "Dotted module id with callable suffix, e.g. columns.member_id:transform",
+      "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z0-9_]+)*:[a-z_][a-z0-9_]*$"
     },
 
     "ImplRef": {
       "type": "string",
       "description": "Path-with-function 'path/to/file.py:function_name'",
       "pattern": "^[A-Za-z0-9_\\-./]+:[A-Za-z_][A-Za-z0-9_]*$"
-    },
-
-    "GitishVersion": {
-      "type": "string",
-      "description": "Hash/ID of rule implementation version (e.g., git SHA)",
-      "pattern": "^[0-9a-f]{6,40}$"
     },
 
     "A1Cell": {
@@ -113,13 +152,13 @@
       "type": "object",
       "additionalProperties": false,
       "patternProperties": {
-        "^[a-z]+(?:\\.[a-z0-9_]+)+$": {
+        "^[a-z][a-z0-9_]*(?:\\.[a-z0-9_]+)+$": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["impl", "version"],
+          "required": ["impl"],
           "properties": {
             "impl": { "$ref": "#/$defs/ImplRef" },
-            "version": { "$ref": "#/$defs/GitishVersion" },
+            "field": { "$ref": "#/$defs/TargetFieldId" },
             "description": { "type": "string" }
           }
         }
@@ -164,7 +203,7 @@
         "row_index": { "type": "integer", "minimum": 1 },
         "source_header": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": { "type": ["string", "null"] },
           "minItems": 1
         }
       }
@@ -173,10 +212,11 @@
     "ColumnDescriptor": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["column_id"],
+      "required": ["column_id", "order"],
       "properties": {
         "column_id": { "$ref": "#/$defs/IdColumn" },
-        "source_header": { "type": "string" }
+        "source_header": { "type": ["string", "null"] },
+        "order": { "type": "integer", "minimum": 1 }
       }
     },
 
@@ -201,10 +241,15 @@
           "required": ["column"],
           "properties": {
             "column": { "$ref": "#/$defs/IdColumn" },
-            "header": { "type": "string" }
+            "header": { "type": ["string", "null"] }
           }
         },
-        "target_field": { "$ref": "#/$defs/TargetFieldId" },
+        "target_field": {
+          "oneOf": [
+            { "$ref": "#/$defs/TargetFieldId" },
+            { "type": "null" }
+          ]
+        },
         "score": { "type": "number" },
         "contributors": {
           "type": "array",
@@ -227,17 +272,16 @@
     "TransformSummary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["target_field", "changed", "total"],
+      "required": ["target_field", "transform", "changed", "total"],
       "properties": {
         "target_field": { "$ref": "#/$defs/TargetFieldId" },
-        "transform": {
-          "oneOf": [
-            { "type": "string" },
-            { "type": "null" }
-          ]
-        },
+        "transform": { "$ref": "#/$defs/RuleId" },
         "changed": { "type": "integer", "minimum": 0 },
         "total": { "type": "integer", "minimum": 0 },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
         "notes": { "type": "string" }
       }
     },
@@ -245,7 +289,7 @@
     "ValidationIssue": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["a1", "row_index", "target_field", "code", "severity", "message"],
+      "required": ["code", "severity", "message"],
       "properties": {
         "a1": { "$ref": "#/$defs/A1Cell" },
         "row_index": { "type": "integer", "minimum": 1 },
@@ -253,6 +297,7 @@
         "code": { "type": "string" },
         "severity": { "type": "string", "enum": ["error", "warning", "info"] },
         "message": { "type": "string" },
+        "column": { "$ref": "#/$defs/IdColumn" },
         "rule": { "$ref": "#/$defs/RuleId" }
       }
     },
@@ -312,11 +357,12 @@
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["source_header", "output_header", "order"],
+                "required": ["source_header", "output_header", "order", "column"],
                 "properties": {
-                  "source_header": { "type": "string" },
+                  "source_header": { "type": ["string", "null"] },
                   "output_header": { "type": "string" },
-                  "order": { "type": "integer", "minimum": 1 }
+                  "order": { "type": "integer", "minimum": 1 },
+                  "column": { "type": "string" }
                 }
               }
             }
@@ -341,23 +387,43 @@
       "additionalProperties": false,
       "required": ["pass", "name", "completed_at"],
       "properties": {
-        "pass": { "type": "number" },
+        "pass": { "type": "integer", "minimum": 1 },
         "name": {
           "type": "string",
-          "enum": ["structure", "mapping", "analyze", "transform", "validate", "generate"]
+          "enum": ["structure", "mapping", "transform", "validate", "generate"]
         },
-        "completed_at": { "type": "string", "format": "date-time" }
+        "completed_at": { "type": "string", "format": "date-time" },
+        "stats": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        }
       }
+    },
+
+    "Annotation": {
+      "type": "object",
+      "required": ["stage", "hook", "annotated_at"],
+      "properties": {
+        "stage": { "type": "string" },
+        "hook": { "type": "string" },
+        "annotated_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": true
     },
 
     "Table": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "range", "data_range", "header", "columns"],
+      "required": ["id", "range", "header", "columns"],
       "properties": {
         "id": { "$ref": "#/$defs/IdTable" },
         "range": { "$ref": "#/$defs/A1Range" },
-        "data_range": { "$ref": "#/$defs/A1Range" },
+        "data_range": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/A1Range" }
+          ]
+        },
         "header": { "$ref": "#/$defs/HeaderInfo" },
         "columns": {
           "type": "array",

@@ -37,8 +37,8 @@
           "properties": {
             "timeout_ms": { "type": "integer", "minimum": 1000 },
             "memory_mb": { "type": "integer", "minimum": 64 },
-            "allow_net": { "type": "boolean", "default": false },
-            "min_mapping_confidence": { "type": "number", "minimum": 0.0 }
+            "runtime_network_access": { "type": "boolean", "default": false },
+            "mapping_score_threshold": { "type": "number", "minimum": 0.0 }
           }
         },
         "writer": {
