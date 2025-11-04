@@ -17,11 +17,10 @@ ${ADE_DATA_DIR}/
 │       │   ├─ member_id.py
 │       │   └─ employee_number.py
 │       ├─ hooks/
-│       │   ├─ on_job_start.py        # run()
-│       │   ├─ after_mapping.py       # run()
-│       │   ├─ after_transform.py     # run()
-│       │   ├─ after_validate.py      # run()
-│       │   └─ on_job_end.py          # run()
+│       │  ├─ on_job_start.py         # def run(*, job, **_): ...
+│       │  ├─ after_mapping.py        # def after_mapping(*, job, table, **_): ...
+│       │  ├─ before_save.py          # def before_save(*, job, book, **_): ...
+│       │  └─ on_job_end.py           # def run(*, job, **_): ...
 ```
 
 When you **prepare** a config, ADE freezes this folder into a **read-only snapshot** inside its own versioned virtual environment (`venvs/<config_id>/activation/snapshot/`).
@@ -36,80 +35,81 @@ Every job that uses this config imports from that snapshot—not from your worki
 flowchart TD
 
 %% ===== 1) CONFIG PACKAGE =====
-subgraph A[Config package]
+subgraph A["Config package (what the author provides)"]
   direction TB
-  A1[manifest.json]
-  A2[row_detectors: detect_*]
-  A3[column_detectors: detect_*, transform, validate]
-  A4[hooks: run]
-  A5[requirements.txt - optional]
+  A1["manifest.json"]
+  A2["row_detectors/ detect_* functions"]
+  A3["column_detectors/ detect_*, transform(), validate()"]
+  A4["hooks/ on_job_start(), after_mapping(), before_save(), on_job_end()"]
+  A5["requirements.txt and .env (optional)"]
   A1 --> A2
   A1 --> A3
   A1 --> A4
-  A1 -.-> A5
+  A1 --> A5
 end
 
-%% ===== 2) PREPARE (FREEZE) =====
-subgraph B[Prepare]
+%% ===== 2) PREPARE =====
+subgraph B["Prepare (freeze a runnable environment)"]
   direction TB
-  B1[Create venv]
-  B2[Install dependencies]
-  B3[Snapshot to activation/snapshot]
-  B4[Write packages.txt and build.json]
+  B1["Create virtualenv"]
+  B2["Install dependencies"]
+  B3["Snapshot to activation/snapshot"]
+  B4["Write packages.txt and build.json"]
   B1 --> B2 --> B3 --> B4
 end
 
 A --> B
 
-%% ===== 3) RUNTIME · ROWS → TABLES =====
-subgraph C[Runtime: rows to tables]
+%% ===== 3) P1 STRUCTURE =====
+subgraph C["P1 Structure (detect tables and headers)"]
   direction TB
-  C1[Stream rows]
-  C2[Call row_detectors]
-  C3[Sum scores and label row]
-  C4[Infer table ranges]
-  C5{Header missing above data?}
-  C5 -- yes --> C6[Create synthetic header]
-  C5 -- no  --> C7[Use detected headers]
+  C1["Stream rows"]
+  C2["Run row_detectors"]
+  C3["Sum scores and label rows"]
+  C4["Infer tables"]
+  C5{"Header above first data row?"}
+  C6["Create synthetic header"]
+  C7["Use detected headers"]
   C1 --> C2 --> C3 --> C4 --> C5
+  C5 -- "yes" --> C7
+  C5 -- "no"  --> C6
 end
 
 B4 --> C1
 
-%% ===== 4) RUNTIME · COLUMNS → FIELDS =====
-subgraph D[Runtime: columns to fields, transform, validate, hooks]
+%% ===== 4) P2-P4 MAP/TRANSFORM/VALIDATE =====
+subgraph D["P2-P4 Map Transform Validate (build normalized rows)"]
   direction TB
-  D0[hook on_job_start]
-  D1[For each table column]
-  D2[Call column_detectors]
-  D3[Add scores per field]
-  D4{Top score ≥ threshold?}
-  D4 -- yes --> D5[Map to field]
-  D4 -- no  --> D6[Mark unmapped]
-  D7[hook after_mapping]
-  D8[transform mapped columns]
-  D9[hook after_transform]
-  D10[validate mapped columns]
-  D11[hook after_validate]
-  D12[hook on_job_end]
-  D0 --> D1 --> D2 --> D3 --> D4
-  D5 --> D7
-  D6 --> D7
-  D7 --> D8 --> D9 --> D10 --> D11 --> D12
+  D0["HOOK on_job_start()"]
+  D1["Map columns"]
+  D2["HOOK after_mapping()"]
+  D3["Transform values"]
+  D4["Validate values"]
+  D5["Build normalized rows"]
+  D0 --> D1 --> D2 --> D3 --> D4 --> D5
 end
 
 C6 --> D0
 C7 --> D0
 
-%% ===== 5) OUTPUTS =====
-subgraph E[Outputs]
+%% ===== 5) P5 FINALIZE AND WRITE =====
+subgraph E["P5 Finalize and Write (produce outputs)"]
   direction TB
-  E1[Write normalized.xlsx]
-  E2[Update artifact.json]
-  E1 --> E2
+  E0["Assemble workbook"]
+  E1["HOOK before_save()"]
+  E1a["Re-validate after changes"]
+  E2["Write normalized.xlsx"]
+  E3["HOOK on_job_end()"]
+  E4["Update artifact.json"]
+  E0 --> E1 --> E1a --> E2 --> E3 --> E4
 end
 
-D11 --> E1
+D5 --> E0
+
+%% ===== Outputs (explicit) =====
+E2 --> Z1[("Output file: normalized.xlsx")]
+E4 --> Z2[("Output file: artifact.json")]
+
 ```
 
 

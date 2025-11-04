@@ -31,10 +31,10 @@ ${ADE_DATA_DIR}/                                  # Root folder for all ADE stat
 │     │  ├─ header.py                             # Heuristics that vote for “this row looks like a header row”
 │     │  └─ data.py                               # Heuristics that vote for “this row looks like data row”
 │     ├─ hooks/                                   # Optional lifecycle hooks that run around job stages
-│     │  ├─ on_job_start.py                       # Runs before ADE starts processing the file
-│     │  ├─ after_mapping.py                      # Runs after column mapping completes
-│     │  ├─ after_transform.py                    # Runs after transforms complete
-│     │  └─ after_validate.py                     # Runs after validations complete
+│     │  ├─ on_job_start.py                       # def run(*, job, **_): ...
+│     │  ├─ after_mapping.py                      # def after_mapping(*, job, table, **_): ...
+│     │  ├─ before_save.py                        # def before_save(*, job, book, **_): ...
+│     │  └─ on_job_end.py                         # def run(*, job, **_): ...
 │     └─ requirements.txt?                        # Optional per-config dependencies installed during prepare
 │
 ├─ venvs/                                         # Prepared virtual environments (built once per config, reused by jobs)
@@ -99,7 +99,7 @@ You only rebuild when the config or its dependencies change.
 
 ```mermaid
 flowchart TD
-    S1[Step 1: Config - Admin creates config package in GUI] --> S2[Step 2: Build - ADE prepares virtualenv and frozen snapshot]
+    S1[Step 1: Admin creates config package in GUI] --> S2[Step 2: ADE prepares virtualenv and frozen snapshot]
 
     %% Job A (vertical passes)
     S2 -- reused snapshot --> J1[Step 3: Run job A]
