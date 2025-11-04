@@ -35,7 +35,7 @@ Every job that uses this config imports from that snapshot—not from your worki
 flowchart TD
 
 %% ===== 1) CONFIG PACKAGE =====
-subgraph A["Config package (what the author provides)"]
+subgraph A["Config package"]
   direction TB
   A1["manifest.json"]
   A2["row_detectors/ detect_* functions"]
@@ -49,7 +49,7 @@ subgraph A["Config package (what the author provides)"]
 end
 
 %% ===== 2) PREPARE =====
-subgraph B["Prepare (freeze a runnable environment)"]
+subgraph B["Prepare venvs"]
   direction TB
   B1["Create virtualenv"]
   B2["Install dependencies"]
@@ -61,7 +61,7 @@ end
 A --> B
 
 %% ===== 3) P1 STRUCTURE =====
-subgraph C["P1 Structure (detect tables and headers)"]
+subgraph C["Detect tables"]
   direction TB
   C1["Stream rows"]
   C2["Run row_detectors"]
@@ -78,7 +78,7 @@ end
 B4 --> C1
 
 %% ===== 4) P2-P4 MAP/TRANSFORM/VALIDATE =====
-subgraph D["P2-P4 Map Transform Validate (build normalized rows)"]
+subgraph D["Map Transform Validate"]
   direction TB
   D0["HOOK on_job_start()"]
   D1["Map columns"]
@@ -93,7 +93,7 @@ C6 --> D0
 C7 --> D0
 
 %% ===== 5) P5 FINALIZE AND WRITE =====
-subgraph E["P5 Finalize and Write (produce outputs)"]
+subgraph E["Finalize and Write"]
   direction TB
   E0["Assemble workbook"]
   E1["HOOK before_save()"]
