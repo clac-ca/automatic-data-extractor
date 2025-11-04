@@ -52,7 +52,7 @@ For each table:
 
 * Functions run inside the job worker with explicit kwargs, not globals.
 * Keep them pure and fast; avoid I/O unless required.
-* **Network access** is **off by default** and governed by `engine.defaults.allow_net`. Enable only when strictly necessary.
+* **Network access** is **off by default** and governed by `engine.defaults.runtime_network_access`. Enable only when strictly necessary.
 
 ## See also
 

@@ -24,7 +24,13 @@ from backend.app.features.configs.spec import (
     ManifestV1,
 )
 
+from .activation_env import (
+    ActivationEnvironmentManager,
+    ActivationError,
+    ActivationMetadataStore,
+)
 from .exceptions import (
+    ConfigActivationError,
     ConfigDraftConflictError,
     ConfigDraftFileTypeError,
     ConfigDraftNotFoundError,
@@ -136,6 +142,12 @@ class ConfigsService:
         self._storage = ConfigStorage(settings)
         self._manifest_loader = ManifestLoader()
         self._package_validator = ConfigPackageValidator()
+        self._activation_store = ActivationMetadataStore(self._storage)
+        self._activation_manager = ActivationEnvironmentManager(
+            settings=settings,
+            storage=self._storage,
+            metadata_store=self._activation_store,
+        )
 
     async def list_configs(
         self,
@@ -682,6 +694,17 @@ class ConfigsService:
         )
         if version is None or version.deleted_at is not None:
             raise ConfigVersionNotFoundError(config_version_id)
+
+        manifest_model = self._manifest_loader.load(version.manifest)
+        try:
+            await self._activation_manager.ensure_environment(
+                config=config,
+                version=version,
+                manifest=manifest_model,
+            )
+        except ActivationError as exc:
+            raise ConfigActivationError(str(exc), diagnostics=getattr(exc, "diagnostics", [])) from exc
+
         await self._repository.touch_workspace_state(
             workspace_id=workspace_id,
             config_id=config.id,
@@ -823,21 +846,39 @@ class ConfigsService:
     def _build_version(self, version: ConfigVersion | None) -> ConfigVersionRecord | None:
         if version is None:
             return None
-        return ConfigVersionRecord.model_validate(
-            {
-                "config_version_id": version.id,
-                "sequence": version.sequence,
-                "label": version.label,
-                "manifest": version.manifest,
-                "manifest_sha256": version.manifest_sha256,
-                "package_sha256": version.package_sha256,
-                "package_path": version.package_path,
-                "config_script_api_version": version.config_script_api_version,
-                "created_at": version.created_at,
-                "updated_at": version.updated_at,
-                "deleted_at": version.deleted_at,
+        payload = {
+            "config_version_id": version.id,
+            "sequence": version.sequence,
+            "label": version.label,
+            "manifest": version.manifest,
+            "manifest_sha256": version.manifest_sha256,
+            "package_sha256": version.package_sha256,
+            "package_path": version.package_path,
+            "config_script_api_version": version.config_script_api_version,
+            "created_at": version.created_at,
+            "updated_at": version.updated_at,
+            "deleted_at": version.deleted_at,
+        }
+        activation = self._activation_store.load(config_id=version.config_id, version=version)
+        if activation is not None:
+            payload["activation"] = {
+                "status": activation.status,
+                "started_at": activation.started_at,
+                "completed_at": activation.completed_at,
+                "error": activation.error,
+                "venv_path": activation.venv_path.as_posix() if activation.venv_path else None,
+                "python_executable": (
+                    activation.python_executable.as_posix() if activation.python_executable else None
+                ),
+                "packages_uri": activation.packages_path.as_posix() if activation.packages_path else None,
+                "install_log_uri": activation.install_log_path.as_posix()
+                if activation.install_log_path
+                else None,
+                "hooks_uri": activation.hooks_path.as_posix() if activation.hooks_path else None,
+                "diagnostics": activation.diagnostics,
+                "annotations": activation.annotations,
             }
-        )
+        return ConfigVersionRecord.model_validate(payload)
 
     def _filter_versions(
         self,

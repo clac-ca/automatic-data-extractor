@@ -37,6 +37,7 @@ class ConfigStorage:
 
     _DRAFTS_DIRNAME = "drafts"
     _PACKAGE_SUBDIR = "package"
+    _ACTIVATION_SUBDIR = "activation"
     _METADATA_FILENAME = "metadata.json"
 
     def __init__(self, settings: Settings) -> None:
@@ -50,6 +51,9 @@ class ConfigStorage:
 
     def version_dir(self, config_id: str, sequence: int) -> Path:
         return self._root / config_id / f"{sequence:04d}"
+
+    def activation_dir(self, config_id: str, sequence: int) -> Path:
+        return self.version_dir(config_id, sequence) / self._ACTIVATION_SUBDIR
 
     def draft_dir(self, config_id: str, draft_id: str) -> Path:
         return self._drafts_root(config_id) / draft_id

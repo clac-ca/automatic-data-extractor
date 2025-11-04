@@ -354,10 +354,11 @@ def run(*, artifact: dict, **_):
 
 If your rules need third‑party libraries:
 
-* Add a **`requirements.txt`** to the package. ADE installs it into an **isolated per‑job environment** when `engine.defaults.runtime_network_access: true`.
-* Prefer **pinned versions**. For air‑gapped or reproducible runs, vendor pure‑Python deps (e.g., `vendor/`) and import them directly.
+* Add a **`requirements.txt`** to the package. ADE installs it during activation into a **per-version virtualenv** (`data/venvs/<config_version_id>` by default).
+* Prefer **pinned versions**. Vendored pure-Python code (`vendor/`) still works as a fallback when activation metadata is missing or you need offline installs.
+* Use `hooks/on_activate/*.py` for additional setup after dependencies land (e.g., downloading ML models into the config storage path).
 
-> The artifact records any packages/versions installed for the job.
+> Activation snapshots live under `configs/<config_id>/<sequence>/activation/` and include `packages.txt`, `install.log`, and the resolved interpreter path.
 
 ---
 

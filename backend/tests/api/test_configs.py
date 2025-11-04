@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import textwrap
@@ -102,12 +103,16 @@ def _build_manifest(sheet_title: str = "Members") -> tuple[dict[str, Any], dict[
     return manifest, scripts
 
 
-def _build_package(manifest: dict[str, Any], scripts: dict[str, str]) -> bytes:
+def _build_package(
+    manifest: dict[str, Any], scripts: dict[str, str], *, extra_files: dict[str, str] | None = None
+) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("manifest.json", json.dumps(manifest, indent=2))
         archive.writestr("columns/__init__.py", "")
         for path, content in scripts.items():
+            archive.writestr(path, content)
+        for path, content in (extra_files or {}).items():
             archive.writestr(path, content)
     return buffer.getvalue()
 
@@ -118,6 +123,31 @@ def _config_endpoint(workspace_id: str) -> str:
 
 def _jobs_endpoint(workspace_id: str) -> str:
     return f"/api/v1/workspaces/{workspace_id}/jobs"
+
+
+async def _wait_for_job(
+    async_client: AsyncClient,
+    *,
+    workspace_id: str,
+    job_id: str,
+    headers: dict[str, str] | None = None,
+    timeout: float = 15.0,
+) -> dict[str, Any]:
+    """Poll the job detail endpoint until the job completes."""
+
+    headers = headers or {}
+    detail_url = f"{_jobs_endpoint(workspace_id)}/{job_id}"
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + timeout
+    while True:
+        response = await async_client.get(detail_url, headers=headers)
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("status") in {"succeeded", "failed"}:
+            return payload
+        if loop.time() >= deadline:
+            pytest.fail(f"job {job_id} did not complete in time: {payload}")
+        await asyncio.sleep(0.1)
 
 
 async def test_create_config_allows_column_without_transform(
@@ -208,6 +238,128 @@ async def test_create_config_stores_canonical_manifest_and_package_hashes(
     assert version["package_sha256"] == expected_package_hash
 
 
+async def test_activate_version_builds_environment_and_runs_hooks(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    workspace_id = seed_identity["workspace_id"]
+    owner = seed_identity["workspace_owner"]
+    await login(async_client, email=owner["email"], password=owner["password"])
+
+    manifest, scripts = _build_manifest()
+    manifest["hooks"] = {
+        "on_activate": [
+            {
+                "script": "hooks/on_activate.py",
+                "enabled": True,
+            }
+        ]
+    }
+    scripts["hooks/__init__.py"] = ""
+    scripts["hooks/on_activate.py"] = textwrap.dedent(
+        """
+        def run(*, manifest, env, artifact, job_context):
+            return {"note": "activated"}
+        """
+    ).strip()
+    package_bytes = _build_package(manifest, scripts)
+
+    headers = _csrf_headers(async_client)
+    create = await async_client.post(
+        _config_endpoint(workspace_id),
+        data={
+            "slug": "activation-demo",
+            "title": "Activation Demo",
+            "manifest_json": json.dumps(manifest),
+        },
+        files={"package": ("package.zip", package_bytes, "application/zip")},
+        headers=headers,
+    )
+    create.raise_for_status()
+    created = create.json()
+    config_id = created["config_id"]
+    version = created["versions"][0]
+    version_id = version["config_version_id"]
+
+    activate = await async_client.post(
+        f"{_config_endpoint(workspace_id)}/{config_id}/versions/{version_id}/activate",
+        headers=headers,
+    )
+    assert activate.status_code == 200, activate.text
+    activated = activate.json()["active_version"]
+    activation = activated.get("activation")
+    assert activation is not None, activated
+    assert activation["status"] == "succeeded"
+    assert activation["annotations"] and activation["annotations"][0]["note"] == "activated"
+
+    python_exec = activation["python_executable"]
+    assert python_exec and Path(python_exec).exists()
+    packages_uri = activation["packages_uri"]
+    assert packages_uri and Path(packages_uri).exists()
+    hooks_uri = activation["hooks_uri"]
+    assert hooks_uri and Path(hooks_uri).exists()
+
+    storage = ConfigStorage(get_settings())
+    activation_dir = storage.activation_dir(config_id, version["sequence"])
+    result_path = activation_dir / "result.json"
+    assert result_path.exists()
+    result_payload = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result_payload["status"] == "succeeded"
+
+
+async def test_activate_version_fails_on_invalid_requirements(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    workspace_id = seed_identity["workspace_id"]
+    owner = seed_identity["workspace_owner"]
+    await login(async_client, email=owner["email"], password=owner["password"])
+
+    manifest, scripts = _build_manifest()
+    package_bytes = _build_package(
+        manifest,
+        scripts,
+        extra_files={"requirements.txt": "not_a_valid_requirement!!!\n"},
+    )
+
+    headers = _csrf_headers(async_client)
+    create = await async_client.post(
+        _config_endpoint(workspace_id),
+        data={
+            "slug": "activation-error",
+            "title": "Activation Error",
+            "manifest_json": json.dumps(manifest),
+        },
+        files={"package": ("package.zip", package_bytes, "application/zip")},
+        headers=headers,
+    )
+    create.raise_for_status()
+    created = create.json()
+    config_id = created["config_id"]
+    version = created["versions"][0]
+    version_id = version["config_version_id"]
+
+    activate = await async_client.post(
+        f"{_config_endpoint(workspace_id)}/{config_id}/versions/{version_id}/activate",
+        headers=headers,
+    )
+    assert activate.status_code == 400, activate.text
+    detail = activate.json()
+    diagnostics = detail.get("detail", {}).get("diagnostics")
+    assert diagnostics
+
+    refreshed = await async_client.get(f"{_config_endpoint(workspace_id)}/{config_id}", headers=headers)
+    refreshed.raise_for_status()
+    assert refreshed.json().get("active_version") is None
+
+    storage = ConfigStorage(get_settings())
+    activation_dir = storage.activation_dir(config_id, version["sequence"])
+    result_path = activation_dir / "result.json"
+    assert result_path.exists()
+    result_payload = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result_payload["status"] == "failed"
+
+
 async def test_job_artifact_reflects_manifest_columns(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
@@ -255,16 +407,20 @@ async def test_job_artifact_reflects_manifest_columns(
         json={"config_version_id": version_id},
         headers=headers,
     )
-    assert job_response.status_code == 201, job_response.text
-    job_payload = job_response.json()
+    assert job_response.status_code == 202, job_response.text
+    job_id = job_response.json()["job_id"]
+    job_payload = await _wait_for_job(
+        async_client,
+        workspace_id=workspace_id,
+        job_id=job_id,
+        headers=headers,
+    )
     if job_payload["status"] != "succeeded":
         pytest.fail(f"job failed: {job_payload}")
     assert job_payload["attempt"] == 1
     assert job_payload["logs_uri"]
     assert job_payload["run_request_uri"]
     trace_id = job_payload["trace_id"]
-
-    job_id = job_payload["job_id"]
 
     artifact_response = await async_client.get(
         f"{_jobs_endpoint(workspace_id)}/{job_id}/artifact"
@@ -338,8 +494,10 @@ async def test_job_artifact_reflects_manifest_columns(
     ]
     assert any(entry.get("event") == "worker.spawn" for entry in log_lines)
     exit_event = next(entry for entry in log_lines if entry.get("event") == "worker.exit")
-    assert exit_event["status"] == "succeeded"
-    assert exit_event["elapsed_ms"] >= 0
+    assert exit_event.get("state") == "succeeded"
+    assert exit_event.get("duration_ms", 0) >= 0
+    exit_detail = exit_event.get("detail", {})
+    assert exit_detail.get("exit_code") == 0
 
 
 async def test_validation_issues_include_a1_and_canonical_codes(
@@ -375,11 +533,15 @@ async def test_validation_issues_include_a1_and_canonical_codes(
         json={"config_version_id": version_id},
         headers=headers,
     )
-    assert job_response.status_code == 201, job_response.text
-    job_payload = job_response.json()
+    assert job_response.status_code == 202, job_response.text
+    job_id = job_response.json()["job_id"]
+    job_payload = await _wait_for_job(
+        async_client,
+        workspace_id=workspace_id,
+        job_id=job_id,
+        headers=headers,
+    )
     assert job_payload["status"] == "succeeded"
-
-    job_id = job_payload["job_id"]
     artifact_response = await async_client.get(
         f"{_jobs_endpoint(workspace_id)}/{job_id}/artifact"
     )
@@ -460,12 +622,16 @@ async def test_job_appends_unmapped_columns_when_enabled(
         json={"config_version_id": version_id},
         headers=headers,
     )
-    assert job_response.status_code == 201, job_response.text
-    job_payload = job_response.json()
+    assert job_response.status_code == 202, job_response.text
+    job_id = job_response.json()["job_id"]
+    job_payload = await _wait_for_job(
+        async_client,
+        workspace_id=workspace_id,
+        job_id=job_id,
+        headers=headers,
+    )
     if job_payload.get("status") != "succeeded":
         pytest.fail(f"job failed: {job_payload}")
-
-    job_id = job_payload["job_id"]
     artifact_response = await async_client.get(
         f"{_jobs_endpoint(workspace_id)}/{job_id}/artifact"
     )
@@ -533,18 +699,25 @@ async def test_job_submission_idempotent_on_input_hash(
         json={"config_version_id": version_id, "input_hash": input_hash},
         headers=headers,
     )
-    assert first.status_code == 201
-    first_payload = first.json()
+    assert first.status_code == 202
+    first_job_id = first.json()["job_id"]
+    first_payload = await _wait_for_job(
+        async_client,
+        workspace_id=workspace_id,
+        job_id=first_job_id,
+        headers=headers,
+    )
+    assert first_payload["status"] == "succeeded"
 
     second = await async_client.post(
         _jobs_endpoint(workspace_id),
         json={"config_version_id": version_id, "input_hash": input_hash},
         headers=headers,
     )
-    assert second.status_code == 201
+    assert second.status_code == 202
     second_payload = second.json()
 
-    assert second_payload["job_id"] == first_payload["job_id"]
+    assert second_payload["job_id"] == first_job_id
     assert second_payload["attempt"] == 1
     assert second_payload["status"] == "succeeded"
 
