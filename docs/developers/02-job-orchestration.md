@@ -27,32 +27,34 @@ We keep every job **isolated** in its own working directory under `/var/jobs/<id
 │  └─ 01-input.xlsx
 ├─ artifact.json
 ├─ normalized.xlsx
-├─ logs.txt                # stdout/stderr from the worker
+├─ events.ndjson          # structured lifecycle events (append-only)
+├─ run-request.json       # JSON payload handed to the worker
 └─ config/                 # the code you authored in the UI (materialized for this run)
    ├─ __init__.py
    ├─ row_types/  __init__.py  *.py
    ├─ columns/    __init__.py  *.py
    ├─ hooks/      __init__.py  *.py
    ├─ requirements.txt  (optional)
-   └─ vendor/            # per-job Python deps installed here
+   └─ vendor/            # legacy fallback when activation metadata is missing
 ````
 
 ---
 
 ## 2) The one-sentence model
 
-**ADE accepts jobs via HTTP, queues them in-memory, and runs each in a separate Python subprocess with strict
-resource limits and no network by default.**
+**ADE accepts jobs via HTTP, reserves queue capacity up front, and runs each job in a separate Python subprocess
+with strict resource limits, an activation-time virtualenv, and no network by default.**
 
 ```python
 # high level pseudocode (not production code)
-enqueue(job_id)      # POST /jobs
---N workers-->       # bounded concurrency
+reserve_slot()       # POST /jobs, 202 + Location header
+enqueue(job_id)      # persisted after the reservation succeeds
+--N workers-->       # bounded concurrency (single-process manager)
 spawn subprocess     # one per job
   |-> set rlimits    # CPU, memory, file size, fds
-  |-> install deps   # pip -t config/vendor
+  |-> use activation venv  # per-config Python with pip-installed deps
   |-> disable net    # unless runtime_network_access=true
-  |-> run passes     # write artifact.json + normalized.xlsx
+  |-> run passes     # write artifact.json + normalized.xlsx + events.ndjson
 ```
 
 ---
@@ -63,7 +65,7 @@ Clients create, check, and retrieve jobs over simple HTTP endpoints.
 
 ```python
 # app/routes/jobs.py  (sketch)
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -74,15 +76,25 @@ class SubmitJob(BaseModel):
     runtime_network_access: bool = False
 
 @router.post("/jobs", status_code=202)
-async def submit_job(payload: SubmitJob):
-    # 1) refuse when queue/backlog is full
-    if app.state.job_manager.queue_full():
-        raise HTTPException(429, "Job queue is full. Please retry later.")
-    # 2) create job row + materialize /var/jobs/<id>/ (inputs/*, config/*)
+async def submit_job(payload: SubmitJob, response: Response):
+    # 1) refuse when queue/backlog is full (no DB row is created)
+    reservation = app.state.job_manager.try_reserve()
+    if reservation is None:
+        raise HTTPException(
+            status_code=429,
+            detail={"message": "Queue saturated", "retry_after": app.state.job_manager.retry_after_hint()},
+            headers={"Retry-After": str(app.state.job_manager.retry_after_hint())},
+        )
+
+    # 2) create the job row after the reservation succeeds
     job_id = await create_job_and_files(payload)
-    # 3) enqueue
-    app.state.job_manager.submit(job_id)
-    return {"job_id": job_id, "status": "QUEUED"}
+
+    # 3) enqueue (always async; inline execution path has been removed)
+    await app.state.job_manager.enqueue(job_id, reservation)
+
+    location = f"/api/v1/workspaces/{payload.workspace_id}/jobs/{job_id}"
+    response.headers["Location"] = location
+    return {"job_id": job_id, "status": "queued"}
 
 @router.get("/jobs/{job_id}")
 async def get_job(job_id: int):
@@ -97,11 +109,14 @@ async def get_output(job_id: int):
     return file_response(f"/var/jobs/{job_id}/normalized.xlsx")
 
 @router.post("/jobs/{job_id}/retry", status_code=202)
-async def retry_job(job_id: int):
-    await reset_job_outputs(job_id)     # wipe artifact/output/logs
-    await set_status(job_id, "QUEUED")
-    app.state.job_manager.submit(job_id)
-    return {"job_id": job_id, "status": "QUEUED"}
+async def retry_job(job_id: int, response: Response):
+    reservation = app.state.job_manager.try_reserve()
+    if reservation is None:
+        raise HTTPException(status_code=429, detail="Queue saturated")
+    retry = await create_retry_attempt(job_id)
+    await app.state.job_manager.enqueue(retry.job_id, reservation)
+    response.headers["Location"] = f"/api/v1/workspaces/{retry.workspace_id}/jobs/{retry.job_id}"
+    return {"job_id": retry.job_id, "status": "queued", "retry_of": job_id, "attempt": retry.attempt}
 ```
 
 ---
@@ -122,8 +137,10 @@ Use safe mode as an escape hatch after deploying a broken config package—flip 
 
 ## 4) The queue (bounded work-in-progress)
 
-We use an **in-process** queue with a fixed number of **workers**. This keeps the API responsive and
-prevents overload: if the queue is full, requests get **HTTP 429**.
+ADE runs a **single-process** manager with a bounded queue. Every submission reserves capacity before we
+touch the database, so if saturation happens we return **HTTP 429** without creating a job row. On
+startup the manager rehydrates queued jobs from the database and reclaims stale “running” jobs that lack a
+recent heartbeat.
 
 ```python
 # app/jobs/manager.py  (sketch)
@@ -133,17 +150,21 @@ class JobManager:
     def __init__(self, max_workers: int, max_queue: int):
         self.queue = asyncio.Queue(maxsize=max_queue)
         self.max_workers = max_workers
-        self._workers = []
+        self._workers: list[asyncio.Task[None]] = []
+        self._inflight: set[int] = set()
 
     async def start(self):
         for i in range(self.max_workers):
             self._workers.append(asyncio.create_task(self._loop(i)))
 
-    def queue_full(self) -> bool:
-        return self.queue.full()
+    def try_reserve(self) -> bool:
+        if self.queue.full():
+            return False
+        self._inflight.add(object())  # placeholder handle
+        return True
 
-    def submit(self, job_id: int):
-        self.queue.put_nowait(job_id)
+    async def enqueue(self, job_id: int):
+        await self.queue.put(job_id)
 
     async def _loop(self, worker_id: int):
         while True:
@@ -154,17 +175,14 @@ class JobManager:
                 self.queue.task_done()
 
     async def _process(self, job_id: int):
-        await db.update(job_id, status="RUNNING", started_at=dt.datetime.utcnow())
+        await db.mark_running(job_id)
         rc, error = await self._spawn(job_id)       # see next section
-        await db.update(job_id,
-                        status=("SUCCESS" if rc == 0 else "ERROR"),
-                        finished_at=dt.datetime.utcnow(),
-                        error_message=error)
+        await db.finish(job_id, success=(rc == 0), error_message=error)
 
 # Startup hook (e.g., app lifespan)
 job_manager = JobManager(
-    max_workers=int(os.getenv("ADE_MAX_CONCURRENCY", "2")),
-    max_queue=int(os.getenv("ADE_QUEUE_SIZE", "10")),
+    max_workers=int(os.getenv("ADE_QUEUE_MAX_CONCURRENCY", "2")),
+    max_queue=int(os.getenv("ADE_QUEUE_MAX_SIZE", "10")),
 )
 await job_manager.start()
 app.state.job_manager = job_manager
@@ -172,7 +190,35 @@ app.state.job_manager = job_manager
 
 ---
 
-## 5) Spawning the worker (the safety boundary)
+## 5) Activation environment (per-version virtualenv)
+
+Every config version owns a **dedicated virtual environment** that is built during activation, not at
+job time. The activation pipeline runs in four ordered steps:
+
+1. Detect `requirements.txt` inside the uploaded package.
+2. Create `<ADE_ACTIVATION_ENVS_DIR>/<config_version_id>/` (default root `data/venvs/`).
+3. Run `pip install -r requirements.txt` with non-interactive flags and capture `pip freeze` into
+   `activation/packages.txt`.
+4. Execute `hooks/on_activate/*.py` inside that venv; any failure leaves the version inactive and
+   records diagnostics.
+
+ADE persists the activation snapshot alongside the package under
+`configs/<config_id>/<sequence>/activation/`:
+
+```text
+activation/
+├─ result.json        # status, timestamps, interpreter path, diagnostics
+├─ install.log        # stdout/stderr from pip install
+├─ packages.txt       # frozen dependency list
+└─ hooks.json         # annotations + diagnostics from on_activate hooks
+```
+
+When activation succeeds, job submissions launch the worker with the stored `python_executable`. If no
+metadata exists (legacy packages), ADE falls back to the vendored code bundled inside the config.
+
+---
+
+## 6) Spawning the worker (the safety boundary)
 
 Each job runs in **its own Python process**. That process sees only the standard library plus the job’s
 `config/` and `config/vendor/` folders on `PYTHONPATH`. We skip global site‑packages and capture all output to `logs.txt`.
@@ -185,12 +231,18 @@ WORKER = "/app/app/jobs/worker.py"        # absolute path to our worker script
 
 async def _spawn(self, job_id: int):
     job_dir = pathlib.Path(f"/var/jobs/{job_id}")
-    log = open(job_dir / "logs.txt", "a", buffering=1)  # line-buffered
+    events = job_dir / "events.ndjson"
+
+    python_cmd = activation.python_executable or sys.executable
+    pythonpath = f"{job_dir}/config"
+    if activation.python_executable is None:
+        # Legacy fallback: allow vendored deps when activation metadata is absent
+        pythonpath = f"{job_dir}/config/vendor:{pythonpath}"
 
     env = {
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        # Only the job’s code & deps are importable:
-        "PYTHONPATH": f"{job_dir}/config/vendor:{job_dir}/config",
+        # Only the job’s code (and legacy vendor fallback) are importable:
+        "PYTHONPATH": pythonpath,
         # Controls:
         "ADE_RUNTIME_NETWORK_ACCESS_JOB": str(
             await db.get_runtime_network_access(job_id)
@@ -203,26 +255,25 @@ async def _spawn(self, job_id: int):
     }
 
     proc = await asyncio.create_subprocess_exec(
-        sys.executable, "-S", "-B", WORKER, str(job_id),
-        cwd=str(job_dir), env=env, stdout=log, stderr=log
+        python_cmd, "-I", "-B", WORKER, str(job_id),
+        cwd=str(job_dir), env=env,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
 
     try:
         timeout = float(os.getenv("ADE_JOB_TIMEOUT_SECONDS", "300"))
-        await asyncio.wait_for(proc.wait(), timeout=timeout)
-        return proc.returncode, (None if proc.returncode == 0 else _tail_error(job_dir))
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
         proc.kill()
         await proc.wait()
-        return 1, f"TIMEOUT (>{int(timeout)}s)"
+        stdout, stderr = b"", b""
 
-def _tail_error(job_dir: pathlib.Path) -> str:
-    try:
-        with open(job_dir / "logs.txt", "r") as fh:
-            lines = [ln.strip() for ln in fh.readlines() if ln.strip()]
-        return lines[-1][:240] if lines else "Job failed"
-    except Exception:
-        return "Job failed"
+    record_event(events, event="worker.exit", job_id=job_id,
+                 state=("succeeded" if proc.returncode == 0 else "failed"),
+                 detail={"stderr": stderr.decode("utf-8", errors="replace")})
+    return proc.returncode, stdout
 ```
 
 *Why this is safe:* bugs or malicious code cannot crash your API—they only crash the **child** process.
@@ -230,90 +281,71 @@ We also limit CPU time, memory, and file sizes inside that child, and we turn **
 
 ---
 
-## 6) The worker (sandboxed subprocess)
+## 7) The worker (sandboxed subprocess)
 
-The worker sets **resource limits**, optionally **installs dependencies** into `config/vendor/`, **disables sockets**, and then runs the ADE passes, writing the artifact and the normalized workbook.
+The worker sets **resource limits**, applies the resolved network policy, and then runs the ADE passes using the activation-time virtualenv, writing the artifact and the normalized workbook.
 
 ```python
 # app/jobs/worker.py  (minimal but real)
-import os, sys, json, subprocess, traceback, resource
+import json, os, resource, socket, sys, traceback
+from pathlib import Path
 
-def set_limits():
+from backend.app.features.jobs.runtime import PipelineRunner
+
+def apply_resource_limits():
     cpu = int(os.getenv("ADE_WORKER_CPU_SECONDS", "60"))
     mem = int(os.getenv("ADE_WORKER_MEM_MB", "512")) * 1024 * 1024
-    fsz = int(os.getenv("ADE_WORKER_FSIZE_MB", "100")) * 1024 * 1024
-    resource.setrlimit(resource.RLIMIT_CPU,   (cpu, cpu))
-    resource.setrlimit(resource.RLIMIT_AS,    (mem, mem))
-    resource.setrlimit(resource.RLIMIT_FSIZE, (fsz, fsz))
+    resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu))
+    resource.setrlimit(resource.RLIMIT_AS, (mem, mem))
 
-def drop_privileges():
-    try:
-        import pwd
-        user = os.getenv("ADEJOB_USER", "nobody")
-        pw = pwd.getpwnam(user)
-        os.setgid(pw.pw_gid); os.setuid(pw.pw_uid)
-    except Exception as e:
-        print(f"[worker] privilege drop skipped: {e}", file=sys.stderr)
+def disable_network(*, allow: bool) -> None:
+    if allow:
+        return
 
-def disable_network():
-    import socket
-    def _blocked(*a, **k): raise ConnectionError("Networking is disabled for this job")
-    socket.socket = lambda *a, **k: _blocked()
-    socket.create_connection = lambda *a, **k: _blocked()
+    def _blocked(*_args, **_kwargs):
+        raise ConnectionError("Networking is disabled for this job")
 
-def install_deps_if_any():
-    req = os.path.join("config", "requirements.txt")
-    if not os.path.exists(req): return
-    cmd = [sys.executable, "-m", "pip", "install", "-t", "config/vendor", "-r", req, "--no-cache-dir"]
-    if os.getenv("ADE_RUNTIME_NETWORK_ACCESS_JOB", "false") != "true":
-        cmd += ["--no-index"]
-        wh = os.getenv("ADE_WHEELHOUSE")
-        if wh: cmd += [f"--find-links={wh}"]
-    res = subprocess.run(cmd, capture_output=True, text=True)
-    print(res.stdout, end=""); print(res.stderr, end="", file=sys.stderr)
-    if res.returncode != 0: raise RuntimeError("Dependency installation failed")
+    socket.socket = lambda *a, **k: (_blocked(*a, **k))
+    socket.create_connection = lambda *a, **k: (_blocked(*a, **k))
 
-def run_passes():
-    # This is where your existing pass implementations are invoked.
-    # Pseudocode: structure → mapping → transform → validate → write
-    artifact = {"events": []}
-    # structure():
-    artifact["events"].append({"stage": "structure", "status": "ok"})
-    # mapping():
-    artifact["events"].append({"stage": "mapping", "status": "ok"})
-    # transform():
-    artifact["events"].append({"stage": "transform", "status": "ok"})
-    # validate():
-    artifact["events"].append({"stage": "validate", "status": "ok"})
-    # write normalized.xlsx:
-    artifact["events"].append({"stage": "output", "status": "ok"})
-    return artifact
+def main() -> None:
+    request = json.loads(sys.stdin.read())
+    apply_resource_limits()
+    allow_network = os.environ.get("ADE_RUNTIME_NETWORK_ACCESS", "0") in {"1", "true"}
+    disable_network(allow=allow_network)
 
-def main():
-    _job_id = int(sys.argv[1])
-    set_limits()
-    drop_privileges()
-    install_deps_if_any()
-    if os.getenv("ADE_RUNTIME_NETWORK_ACCESS_JOB", "false") != "true":
-        disable_network()
+    manifest_path = Path(request["manifest_path"]).resolve()
+    pipeline = PipelineRunner(
+        config_dir=manifest_path.parent,
+        manifest=json.loads(manifest_path.read_text(encoding="utf-8")),
+        job_context={"job_id": request.get("job_id")},
+        input_paths=[str(path) for path in request.get("input_paths", [])],
+    )
 
     try:
-        artifact = run_passes()
-        with open("artifact.json", "w") as f: json.dump(artifact, f, indent=2)
+        result = pipeline.execute()
+        write_artifact(result)
         sys.exit(0)
-    except Exception as e:
+    except Exception as exc:  # pragma: no cover - defensive
         traceback.print_exc()
-        with open("artifact.json", "w") as f:
-            json.dump({"error": str(e)[:400], "events": []}, f, indent=2)
+        write_error(str(exc))
         sys.exit(1)
 
-if __name__ == "__main__":
+def write_artifact(result) -> None:
+    payload = {"status": "succeeded", "tables": result.tables_summary}
+    Path(os.environ["ADE_ARTIFACT_PATH"]).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+def write_error(message: str) -> None:
+    payload = {"status": "failed", "error": message[:400]}
+    Path(os.environ["ADE_ARTIFACT_PATH"]).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+if __name__ == "__main__":  # pragma: no cover - CLI entrypoint
     main()
 ```
 
 ---
 
-## 7) The artifact JSON (audit, not data)
+## 8) The artifact JSON (audit, not data)
 
 The artifact is your **explainability record**.
 It shows what ADE decided and why—without storing raw cell content. Think of it as “**what happened where**”.
@@ -342,7 +374,7 @@ It shows what ADE decided and why—without storing raw cell content. Think of i
 
 ---
 
-## 8) The passes (what actually runs)
+## 9) The passes (what actually runs)
 
 ADE runs **five ordered passes**. You don’t need to memorize them; just remember: **structure → mapping → generate**.
 
@@ -380,7 +412,7 @@ def process_job(input_xlsx, config_pkg, artifact):
 
 ---
 
-## 9) Back-pressure and fairness (why 429?)
+## 10) Back-pressure and fairness (why 429?)
 
 We allow **N jobs** to run at once and **M jobs** to wait in line.
 This prevents one user from overwhelming the server. When the queue is full, we politely ask clients to retry later.

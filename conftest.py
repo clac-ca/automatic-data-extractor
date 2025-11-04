@@ -15,6 +15,7 @@ from sqlalchemy import select
 from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
+from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 
 from backend.app.shared.core.config import Settings, get_settings, reload_settings
@@ -120,9 +121,12 @@ def override_app_settings(app: FastAPI) -> Callable[..., Settings]:
 async def async_client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     """Provide an HTTPX async client bound to the FastAPI app."""
 
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        yield client
+    async with LifespanManager(app):
+        if app.state.settings.queue_enabled:
+            assert getattr(app.state, "job_queue", None) is not None, "queue manager did not start"
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            yield client
 
 
 @pytest_asyncio.fixture()

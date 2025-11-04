@@ -22,6 +22,7 @@
 - Job context — Dict returned from `on_job_start` hooks; passed to detectors, transforms, validators, and later hooks.
 - Paths — Keyword-only argument with resolved directories like `paths["config"]`, `paths["resources"]`, `paths["cache"]`, `paths["job"]`, and `paths["job_input"]`.
 - Engine defaults — Limits in `manifest.engine.defaults` (timeouts, memory, `runtime_network_access`).
+- Runtime network access — Boolean flag (`manifest.engine.defaults.runtime_network_access`) that keeps the worker offline unless explicitly enabled.
 
 ## Spreadsheet structure
 
@@ -67,6 +68,7 @@
 - Resources directory — Optional `resources/` under the config directory for supporting data files.
 - Cache directory — Hook-accessible path (`paths["cache"]`) for temporary artifacts reused during jobs.
 - Job directory — Per-run folder referenced by `paths["job"]` that holds transient data and logs.
+- Activation snapshot — Folder under `configs/<config>/<sequence>/activation/` containing venv metadata (`result.json`, `packages.txt`, `install.log`, `hooks.json`).
 
 ## Security and lifecycle
 
@@ -74,6 +76,7 @@
 - Status — `draft | active | archived`; only draft configs are editable.
 - Active config — Exactly one active config per workspace at a time.
 - Sandbox — Restricted subprocess (`python -I -B`) with rlimits and no network unless enabled.
+- Activation environment — Virtualenv built during activation (`data/venvs/<config_version_id>`) reused for all jobs targeting that config version.
 
 ## IDs and addressing
 

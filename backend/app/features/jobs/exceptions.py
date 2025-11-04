@@ -12,4 +12,28 @@ class JobSubmissionError(Exception):
         super().__init__(message)
 
 
-__all__ = ["JobNotFoundError", "JobSubmissionError"]
+class JobQueueFullError(Exception):
+    def __init__(
+        self,
+        *,
+        max_size: int,
+        queue_size: int,
+        max_concurrency: int,
+    ) -> None:
+        super().__init__(f"Job queue is full (max {max_size} items)")
+        self.max_size = max_size
+        self.queue_size = queue_size
+        self.max_concurrency = max_concurrency
+
+
+class JobQueueUnavailableError(Exception):
+    def __init__(self) -> None:
+        super().__init__("Job queue is not available")
+
+
+__all__ = [
+    "JobNotFoundError",
+    "JobQueueFullError",
+    "JobQueueUnavailableError",
+    "JobSubmissionError",
+]

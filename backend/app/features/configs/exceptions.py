@@ -63,8 +63,17 @@ class ConfigDraftFileTypeError(ConfigError):
         self.path = path
 
 
+class ConfigActivationError(ConfigError):
+    """Raised when a config version cannot be activated."""
+
+    def __init__(self, message: str, *, diagnostics: Sequence[object] | None = None) -> None:
+        super().__init__(message)
+        self.diagnostics = list(diagnostics or [])
+
+
 __all__ = [
     "ConfigError",
+    "ConfigActivationError",
     "ConfigDraftConflictError",
     "ConfigDraftFileTypeError",
     "ConfigDraftNotFoundError",
