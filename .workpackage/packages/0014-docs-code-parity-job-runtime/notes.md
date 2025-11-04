@@ -21,7 +21,7 @@ Align the **developer docs** and the **runtime** for job submission/processing, 
 * `backend/app/features/jobs/orchestrator.py` always shells out with `sys.executable`; it never consults a per-config venv and always injects `config/vendor` onto `PYTHONPATH`.
 * `backend/app/features/jobs/runtime/pipeline.py` enforces hook ordering and deep-copies artifacts, but `on_activate` hooks are never invoked because activation skips runtime code, so the documented deps-first-then-hooks activation contract is unmet.
 * `backend/tests/api/jobs/test_jobs_router.py` asserts the current synchronous flow (201 + succeeded status); docs/tests will need wholesale updates for the queued contract.
-* Developer docs still reference `engine.defaults.allow_net` and per-job `vendor/` installs even though runtime uses `runtime_network_access` and never runs `pip`.
+* Developer docs must emphasise `engine.defaults.runtime_network_access` and per-version activation environments
 
 ---
 
@@ -49,7 +49,7 @@ Align the **developer docs** and the **runtime** for job submission/processing, 
 * **Queue semantics** (`backend/app/features/jobs/router.py`, `service.py`): API currently returns `201` and blocks while the worker runs; docs promise a `202` queue, worker pool, and `429` back-pressure.
 * **Dependency handling** (`backend/app/features/configs/service.py`): Docs describe `requirements.txt` installs during activation; runtime never creates per-version environments.
 * **Hooks** (`backend/app/features/jobs/runtime/pipeline.py`): Stage hooks largely match docs, but `on_activate` is never executed and activation failures never gate publishing.
-* **Network policy** (`backend/app/features/jobs/worker.py`): Runtime disables sockets based on env, yet activation-time installs are unspecified and docs reference `allow_net` instead of `runtime_network_access`.
+* **Network policy** (`backend/app/features/jobs/worker.py`): Runtime disables sockets based on manifest/env; activation-time installs are unspecified and docs need to explain the `runtime_network_access` toggle end to end.
 * **Logs & metadata** (`backend/app/features/jobs/storage.py` + docs): Runtime emits structured `events.ndjson`/`run-request.json`, while docs assume plaintext logs and omit environment metadata.
 
 ---
@@ -94,17 +94,17 @@ Align the **developer docs** and the **runtime** for job submission/processing, 
 
 ### D4 — Network policy enforcement (P0)
 
-**Deliver:** Allow outbound network during activation installs, then enforce socket blocking in the worker when `runtime_network_access` is false. Accept legacy `engine.defaults.allow_net` manifest fields for one release window, map them to `runtime_network_access`, and emit a deprecation diagnostic during validation. Propagate manifest/env toggles cleanly through activation and runtime, expose overrides in metadata for auditing, and keep runtime default offline.
+**Deliver:** Allow outbound network during activation installs, then enforce socket blocking in the worker when `runtime_network_access` is false. Propagate manifest/env toggles cleanly through activation and runtime, expose overrides in metadata for auditing, and keep runtime default offline.
 
 **Acceptance:**
 
-* [ ] Worker socket creation fails by default and succeeds only when `runtime_network_access` (or legacy `allow_net`) enables it.
-* [ ] Validation maps `allow_net` to `runtime_network_access` with a warning diagnostic.
+* [ ] Worker socket creation fails by default and succeeds only when `runtime_network_access` enables it.
+* [ ] Validation enforces `runtime_network_access` semantics (schema + diagnostics) and rejects stale field names.
 * [ ] Runtime metadata exposes the resolved network access flag for audit.
 
 ### D5 — Documentation parity & examples (P0)
 
-**Deliver:** Refresh developer docs to cover the queued API (including headers/bodies for 202/429), activation-time dependency flow with venv storage paths, hook lifecycle (including `on_activate` ordering), network policy defaults, structured logs/events schema, and manifest validation changes (e.g., `allow_net` deprecation, manifest version bump). Provide an example manifest showing `requirements.txt` plus `engine.defaults.runtime_network_access`.
+**Deliver:** Refresh developer docs to cover the queued API (including headers/bodies for 202/429), activation-time dependency flow with venv storage paths, hook lifecycle (including `on_activate` ordering), network policy defaults, structured logs/events schema, and manifest validation changes (e.g., `runtime_network_access` requirements, manifest version bump). Provide an example manifest showing `requirements.txt` plus `engine.defaults.runtime_network_access`.
 
 **Acceptance:**
 
@@ -140,9 +140,9 @@ Align the **developer docs** and the **runtime** for job submission/processing, 
 
 ### Phase D — Network policy
 
-* [ ] Audit code/docs for lingering `allow_net` references; migrate to `runtime_network_access` nomenclature.
+* [ ] Audit code/docs to ensure everything uses `runtime_network_access` nomenclature.
 * [ ] Ensure activation installs run with temporary network access and capture audit logs of dependency downloads; runtime remains offline unless explicitly enabled.
-* [ ] Reinforce worker socket patching + env propagation; add tests that simulate blocked/allowed connections and cover legacy `allow_net` mapping.
+* [ ] Reinforce worker socket patching + env propagation; add tests that simulate blocked/allowed connections under `runtime_network_access` toggles.
 * [ ] Surface manifest/global overrides in API responses for observability.
 
 ### Phase E — Docs parity
@@ -150,7 +150,7 @@ Align the **developer docs** and the **runtime** for job submission/processing, 
 * [x] Update: `02-job-orchestration.md` (queued lifecycle, polling/retry examples, structured events/logs).
 * [x] Update: `01-config-packages.md` (activation flow, venv storage, `on_activate`, environment metadata).
 * [x] Update: `05-pass-transform-values.md` + `12-glossary.md` for runtime network terminology and hook lifecycle definitions.
-* [ ] Refresh schemas/examples to include `runtime_network_access`, environment metadata, event schema, and manifest snippets with `requirements.txt` plus legacy `allow_net` deprecation note.
+* [ ] Refresh schemas/examples to include `runtime_network_access`, environment metadata, event schema, and manifest snippets with `requirements.txt` plus clear runtime network guidance.
 
 ---
 
@@ -164,8 +164,8 @@ Align the **developer docs** and the **runtime** for job submission/processing, 
    * Extend `ConfigsService.activate_version` to create the venv, install deps (hardened pip flags), freeze, and run hooks within the venv.
    * Persist activation metadata under config storage; orchestrator uses venv interpreter; remove vendor PYTHONPATH injection.
    * Add service tests covering install failure and hook failure gating activation.
-3. **Runtime network gating & `allow_net` deprecation**
-   * Enforce `runtime_network_access` in the worker (socket patch + tests) and accept legacy `allow_net` with warning diagnostics.
+3. **Runtime network gating**
+   * Enforce `runtime_network_access` in the worker (socket patch + tests) and document the opt-in path for enabling network access.
    * Surface runtime network flag in job/artifact metadata; document the behavior.
    * Prep docs for manifest/schema updates in the follow-up docs PR.
 
@@ -176,7 +176,7 @@ Align the **developer docs** and the **runtime** for job submission/processing, 
 * [ ] Draft ADR at `docs/developers/design-decisions/dd-????-queued-runner-and-activation-env.md` capturing queue semantics (202/429, single-node, rehydration), deps-before-hooks activation, per-version venv, and runtime network policy default.
 * [ ] Create stubs for `backend/app/features/jobs/manager.py`, `backend/app/features/jobs/models.py` (state enums/heartbeat), and `backend/app/features/configs/activation_env.py` (venv helpers).
 * [ ] Flip router/service to return `202` + `Location` behind `ADE_QUEUE_ENABLED` flag; keep legacy tests as `_legacy` fixtures for comparison.
-* [ ] Add manifest validation mapping `engine.defaults.allow_net` → `engine.defaults.runtime_network_access` with a deprecation diagnostic.
+* [ ] Add manifest validation that rejects deprecated network fields and requires `engine.defaults.runtime_network_access`.
 
 ---
 
@@ -230,7 +230,7 @@ Align the **developer docs** and the **runtime** for job submission/processing, 
 ## Notes
 
 * 2025-11-03T20:32:00Z • Decision: **no per‑job site‑packages**; use **one venv per config version** at activation.
-* 2025-11-03T20:34:00Z • Naming: replace `allow_net` with `runtime_network_access` across manifest, worker, and docs; accept legacy field for one release with deprecation diagnostic.
+* 2025-11-03T20:34:00Z • Naming: ensure `runtime_network_access` is the sole field referenced across manifest, worker, and docs.
 * 2025-11-03T20:36:00Z • Docs to update: `01-config-packages.md`, `02-job-orchestration.md`, `12-glossary.md`.
 * 2025-11-03T21:30:00Z • Event schema: `{ ts, event, job_id, attempt, state, duration_ms?, detail? }`; events include `enqueue`, `start`, `exit`, `retry`, `error`.
 * 2025-11-03T21:31:00Z • Manifest/schema: bump manifest minor version if we add `engine.environment` or rename fields; validation must emit actionable guidance.
