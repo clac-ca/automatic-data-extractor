@@ -27,6 +27,7 @@ from backend.app.shared.core.schema import ErrorMessage
 
 from .dependencies import get_configs_service
 from .exceptions import (
+    ConfigActivationError,
     ConfigDraftConflictError,
     ConfigDraftFileTypeError,
     ConfigDraftNotFoundError,
@@ -223,6 +224,7 @@ async def create_config(
     status_code=status.HTTP_200_OK,
     summary="Retrieve config details",
     responses={
+        status.HTTP_400_BAD_REQUEST: {"model": ErrorMessage},
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorMessage},
         status.HTTP_403_FORBIDDEN: {"model": ErrorMessage},
         status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
@@ -383,6 +385,12 @@ async def activate_version(
             config_version_id=config_version_id,
             actor=actor,
         )
+    except ConfigActivationError as exc:
+        detail: dict[str, Any] = {"message": str(exc)}
+        diagnostics = getattr(exc, "diagnostics", [])
+        if diagnostics:
+            detail["diagnostics"] = diagnostics
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=detail) from exc
     except (ConfigNotFoundError, ConfigVersionNotFoundError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 

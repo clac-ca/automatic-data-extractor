@@ -1,9 +1,12 @@
 """Pydantic models for job API payloads."""
 
 from datetime import datetime
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from ..configs.schemas import ConfigActivationMetadata
 
 from .models import JobStatus
 
@@ -57,6 +60,7 @@ class JobConfigVersion(BaseModel):
     config_version_id: str
     config_id: str
     label: str | None = None
+    activation: ConfigActivationMetadata | None = None
 
 
 class JobRecord(BaseModel):
@@ -76,8 +80,10 @@ class JobRecord(BaseModel):
     queued_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
+    last_heartbeat: datetime | None = None
     error_message: str | None = None
     attempt: int
+    retry_of_job_id: str | None = None
     config_version: JobConfigVersion
 
 

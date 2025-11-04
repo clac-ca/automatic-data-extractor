@@ -6,7 +6,7 @@
   "summary": "Implement the job orchestration + config dependency features promised in dev docs (queueing, requirements install, activation hooks) and adjust docs/tests accordingly.",
   "status": "draft",
   "createdAt": "2025-11-03T19:59:46.296Z",
-  "updatedAt": "2025-11-03T19:59:46.296Z",
+  "updatedAt": "2025-11-03T21:32:00.000Z",
   "owner": "jkropp",
   "tags": [],
   "links": [],

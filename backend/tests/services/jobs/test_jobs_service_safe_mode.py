@@ -7,6 +7,8 @@ from typing import cast
 
 import pytest
 
+from backend.app.features.configs.activation_env import ActivationMetadataStore
+from backend.app.features.configs.storage import ConfigStorage
 from backend.app.features.jobs.exceptions import JobSubmissionError
 from backend.app.features.jobs.orchestrator import JobOrchestrator
 from backend.app.features.jobs.schemas import JobSubmitRequest
@@ -47,10 +49,12 @@ async def test_orchestrator_blocks_execution_in_safe_mode(
 ) -> None:
     settings = override_app_settings(safe_mode=True)
     storage = JobsStorage(settings)
+    activation_store = ActivationMetadataStore(ConfigStorage(settings))
     orchestrator = JobOrchestrator(
         storage,
         settings=settings,
         safe_mode_message=SAFE_MODE_DISABLED_MESSAGE,
+        activation_store=activation_store,
     )
 
     config_version = SimpleNamespace(id="cfg-123", package_path=str(tmp_path / "package"))
@@ -60,6 +64,7 @@ async def test_orchestrator_blocks_execution_in_safe_mode(
     with pytest.raises(RuntimeError) as excinfo:
         await orchestrator.run(
             job_id="job-123",
+            attempt=1,
             config_version=config_version,  # type: ignore[arg-type]
             manifest=manifest,
             trace_id="trace-123",
