@@ -4,13 +4,8 @@
 
 **ADE (Automatic Data Extractor)** turns messy spreadsheets — inconsistent headers, irregular tables, and varying formats — into clean, structured workbooks you can trust.
 
-It does this using small, human-readable Python scripts that describe *how* to find, map, and clean data.
-Those scripts live inside a **[config package](./01-config-packages.md)** — a simple folder that tells ADE *how to think* about a file.
-
-Instead of machine learning, ADE runs on *python callables (functions) you write* and configure via the GUI.
-It’s explainable, reproducible, and deterministic:
-
-> same input + same config = the same output, every time.
+It does this using small, human-readable Python scripts (called `config package scripts`) that describe *how* to find, map, and clean data.
+Those config package scripts live inside a **[config package](./01-config-packages.md)** and are created & managed by workspace owners in the frontend web interface (http://localhost:8000/workspaces/<workspace_id>/configs).
 
 ---
 
@@ -30,11 +25,11 @@ ${ADE_DATA_DIR}/                                  # Root folder for all ADE stat
 ├─ config_packages/                               # Editable config packages you author in the UI (source of truth)
 │  └─ <config_id>/                                # One folder per published config (immutable once published)
 │     ├─ manifest.json                            # Config manifest (engine defaults, field metadata, script paths)
-│     ├─ columns/                                 # Field logic: detect → transform (optional) → validate (optional)
+│     ├─ column_detectors/                        # Field logic: detect → transform (optional) → validate (optional)
 │     │  └─ <field>.py                            # One Python file per target field (e.g., member_id.py)
-│     ├─ row_types/                               # Row-level detectors used to find tables and header rows
-│     │  ├─ header.py                             # Heuristics that vote for “this row looks like a header”
-│     │  └─ data.py                               # Heuristics that vote for “this row looks like data”
+│     ├─ row_detectors/                           # Row-level detectors used to find tables and header rows
+│     │  ├─ header.py                             # Heuristics that vote for “this row looks like a header row”
+│     │  └─ data.py                               # Heuristics that vote for “this row looks like data row”
 │     ├─ hooks/                                   # Optional lifecycle hooks that run around job stages
 │     │  ├─ on_job_start.py                       # Runs before ADE starts processing the file
 │     │  ├─ after_mapping.py                      # Runs after column mapping completes
@@ -81,7 +76,7 @@ At a high level, ADE runs in three steps:
 
 1. **Config — Define the rules**
    An admin authors a [config package](./01-config-packages.md) in the GUI.
-   It’s a folder of small Python scripts that describe how to detect tables, map columns, and (optionally) transform or validate data.
+   It’s a folder of small Python scripts (referred to as `config package scripts`) that describe how to detect tables, map columns, and (optionally) transform or validate data.
 
 2. **Build — Freeze the environment**
    ADE builds a dedicated Python virtual environment for that config, installs dependencies, and freezes a snapshot of your scripts.
@@ -149,20 +144,11 @@ flowchart TD
     C5 --> R3[Results - job C: normalized.xlsx and artifact.json]
 ```
 
----
-
 ### Key Idea
 
 > **Prepare once, run many.**
 > Build the environment once per config; reuse it for every job.
 > Each run is isolated, reproducible, and fully auditable — the same logic, the same results, every time.
-
----
-Here’s a fully rewritten, polished continuation that matches the tone, rhythm, and clarity of your new *Big Idea* section — tighter, more narrative, less repetitive, and structured for developers who want to *understand, not just operate* ADE.
-
-It preserves all the meaning from your original sections but reads like a unified, thoughtfully written developer story.
-
----
 
 ## 7. The Runtime — How Jobs Actually Run
 
@@ -186,8 +172,6 @@ The runtime design stays intentionally simple:
 
 *Deep dive:* [Job Orchestration → Queue & Workers](./02-job-orchestration.md#queue-and-worker)
 
----
-
 ## 8. Safety, Determinism, and Reproducibility
 
 ADE treats every config package as untrusted code.
@@ -204,8 +188,6 @@ Even if you edit or republish a config later, old jobs remain fully explainable 
 *Learn more:*
 [Config Packages → Hooks and Safety](./01-config-packages.md#hooks)
 [Job Orchestration → Isolation and Safety](./02-job-orchestration.md#isolation-and-safety)
-
----
 
 ## 9. Environment and Configuration
 
@@ -233,8 +215,6 @@ Performance and safety knobs include:
 
 
 Defaults are conservative for development and scale easily upward in production.
-
----
 
 ## 10. Where to Go Next
 
