@@ -6,6 +6,24 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class ConfigActivationMetadata(BaseModel):
+    """Metadata describing activation environment state."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    status: str
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error: str | None = None
+    venv_path: str | None = None
+    python_executable: str | None = None
+    packages_uri: str | None = None
+    install_log_uri: str | None = None
+    hooks_uri: str | None = None
+    diagnostics: list[dict[str, Any]] = Field(default_factory=list)
+    annotations: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class ConfigVersionRecord(BaseModel):
     """Serializable representation of a config version."""
 
@@ -22,6 +40,7 @@ class ConfigVersionRecord(BaseModel):
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
+    activation: ConfigActivationMetadata | None = None
 
 
 class ConfigSummary(BaseModel):
@@ -120,6 +139,7 @@ __all__ = [
     "ConfigDraftCreateRequest",
     "ConfigDraftPublishRequest",
     "ConfigDraftRecord",
+    "ConfigActivationMetadata",
     "ConfigFileContent",
     "ConfigFileUpdate",
     "ConfigPackageEntry",

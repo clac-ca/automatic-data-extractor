@@ -33,17 +33,26 @@ class JobsStorage:
 
     def prepare(self, job_id: str) -> JobStoragePaths:
         job_dir = self._base_dir / job_id
-        if job_dir.exists():
-            shutil.rmtree(job_dir)
+        job_dir.mkdir(parents=True, exist_ok=True)
         config_dir = job_dir / "config"
-        inputs_dir = job_dir / "inputs"
-        artifact_path = job_dir / "artifact.json"
-        output_path = job_dir / "normalized.xlsx"
-        logs_path = job_dir / "events.ndjson"
-        request_path = job_dir / "run-request.json"
+        if config_dir.exists():
+            shutil.rmtree(config_dir)
         config_dir.mkdir(parents=True, exist_ok=True)
+        inputs_dir = job_dir / "inputs"
+        if inputs_dir.exists():
+            shutil.rmtree(inputs_dir)
         inputs_dir.mkdir(parents=True, exist_ok=True)
+        artifact_path = job_dir / "artifact.json"
+        if artifact_path.exists():
+            artifact_path.unlink()
+        output_path = job_dir / "normalized.xlsx"
+        if output_path.exists():
+            output_path.unlink()
+        logs_path = job_dir / "events.ndjson"
+        # Preserve the log stream if it already exists so rehydrated attempts append
+        # to the same event history rather than truncating it.
         logs_path.touch(exist_ok=True)
+        request_path = job_dir / "run-request.json"
         request_path.touch(exist_ok=True)
         return JobStoragePaths(
             job_dir=job_dir,
@@ -55,6 +64,13 @@ class JobsStorage:
             request_path=request_path,
         )
 
+    def ensure_logs_path(self, job_id: str) -> Path:
+        job_dir = self._base_dir / job_id
+        job_dir.mkdir(parents=True, exist_ok=True)
+        logs_path = job_dir / "events.ndjson"
+        logs_path.touch(exist_ok=True)
+        return logs_path
+
     def copy_config(self, source: Path, destination: Path) -> None:
         if destination.exists():
             shutil.rmtree(destination)
@@ -63,13 +79,31 @@ class JobsStorage:
     def write_run_request(self, path: Path, payload: dict[str, Any]) -> None:
         path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-    def append_log(self, path: Path, event: dict[str, Any]) -> None:
-        enriched = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            **event,
+    def record_event(
+        self,
+        path: Path,
+        *,
+        event: str,
+        job_id: str,
+        attempt: int,
+        state: str | None = None,
+        duration_ms: int | None = None,
+        detail: dict[str, Any] | None = None,
+    ) -> None:
+        payload: dict[str, Any] = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "event": event,
+            "job_id": job_id,
+            "attempt": attempt,
         }
+        if state is not None:
+            payload["state"] = state
+        if duration_ms is not None:
+            payload["duration_ms"] = duration_ms
+        if detail:
+            payload["detail"] = detail
         with path.open("a", encoding="utf-8") as stream:
-            stream.write(json.dumps(enriched, separators=(",", ":")) + "\n")
+            stream.write(json.dumps(payload, separators=(",", ":")) + "\n")
 
     def stage_inputs(self, inputs_dir: Path, inputs: Iterable[ResolvedInput]) -> list[Path]:
         staged: list[Path] = []

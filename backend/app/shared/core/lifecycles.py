@@ -11,6 +11,7 @@ from fastapi.routing import Lifespan
 
 from ..db.engine import ensure_database_ready
 from ..db.session import get_sessionmaker
+from ...features.jobs.manager import JobQueueManager
 from ...features.roles.service import sync_permission_registry
 from .config import DEFAULT_CONFIGS_SUBDIR, Settings, get_settings
 
@@ -53,7 +54,20 @@ def create_application_lifespan(
         session_factory = get_sessionmaker(settings=settings)
         async with session_factory() as session:
             await sync_permission_registry(session=session)
-        yield
+        queue_manager: JobQueueManager | None = None
+        if settings.queue_enabled:
+            queue_manager = JobQueueManager(
+                settings=settings,
+                session_factory=session_factory,
+            )
+            await queue_manager.start()
+        app.state.job_queue = queue_manager
+        try:
+            yield
+        finally:
+            if queue_manager is not None:
+                await queue_manager.stop()
+            app.state.job_queue = None
 
     return lifespan
 

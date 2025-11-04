@@ -1,57 +1,70 @@
 """Job submission and artifact orchestration services."""
 
+from __future__ import annotations
+
 import hashlib
 import json
 import logging
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 from uuid import uuid4
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.features.users.models import User
-from backend.app.features.configs.spec import ManifestLoader, ManifestV1
 from backend.app.shared.core.config import Settings
-from backend.app.shared.core.time import utc_now
 
+from ..configs.activation_env import ActivationMetadataStore
 from ..configs.repository import ConfigsRepository
 from ..configs.models import ConfigVersion
+from ..configs.storage import ConfigStorage
 from ..documents.repository import DocumentsRepository
 from ..documents.storage import DocumentStorage
-from .exceptions import JobNotFoundError, JobSubmissionError
+from .constants import SAFE_MODE_DISABLED_MESSAGE
+from .exceptions import JobNotFoundError, JobQueueUnavailableError, JobSubmissionError
+from .manager import JobQueueManager, QueueReservation
 from .models import Job, JobStatus
-from .orchestrator import JobOrchestrator
 from .repository import JobsRepository
 from .schemas import JobArtifact, JobRecord, JobSubmitRequest
 from .storage import JobsStorage
 from .types import ResolvedInput
 
-SAFE_MODE_DISABLED_MESSAGE = (
-    "ADE_SAFE_MODE is enabled. Job execution is temporarily disabled so you can revert config changes and restart without safe mode."
-)
 logger = logging.getLogger(__name__)
 
 
 class JobsService:
-    """Coordinate job metadata persistence and synchronous execution."""
+    """Coordinate job metadata persistence and queue interactions."""
 
-    def __init__(self, *, session: AsyncSession, settings: Settings) -> None:
+    def __init__(
+        self,
+        *,
+        session: AsyncSession,
+        settings: Settings,
+        queue: JobQueueManager | None = None,
+    ) -> None:
         self._session = session
         self._settings = settings
+        self._queue = queue
         self._configs = ConfigsRepository(session)
         self._jobs = JobsRepository(session)
         self._storage = JobsStorage(settings)
-        self._orchestrator = JobOrchestrator(
-            self._storage,
-            settings=settings,
-            safe_mode_message=SAFE_MODE_DISABLED_MESSAGE,
-        )
-        self._manifest_loader = ManifestLoader()
         self._documents = DocumentsRepository(session)
+        self._config_storage = ConfigStorage(settings)
+        self._activation_store = ActivationMetadataStore(self._config_storage)
         documents_dir = settings.storage_documents_dir
         if documents_dir is None:
             raise RuntimeError("Document storage directory is not configured")
         self._document_storage = DocumentStorage(documents_dir)
+
+    @property
+    def queue_enabled(self) -> bool:
+        return self._settings.queue_enabled and self._queue is not None
+
+    def queue_metrics(self) -> dict[str, int] | None:
+        if not self.queue_enabled or self._queue is None:
+            return None
+        return self._queue.metrics()
 
     async def submit_job(
         self,
@@ -78,8 +91,7 @@ class JobsService:
         if version.config.deleted_at is not None:
             raise JobSubmissionError("Config is archived")
 
-        manifest = self._load_manifest(version)
-        inputs, computed_hash = await self._resolve_inputs(
+        _, computed_hash = await self._resolve_inputs(
             workspace_id=workspace_id,
             request=request,
         )
@@ -91,14 +103,23 @@ class JobsService:
             config_version_id=version.id,
             input_hash=input_hash,
         )
-
+        parent_job_id: str | None = None
+        attempt_number = 1
         if existing is not None:
             status = JobStatus(existing.status)
             if status in {JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.SUCCEEDED}:
                 return self._build_record(existing, version)
-            job = await self._jobs.reset_for_retry(existing, trace_id=trace_id)
-        else:
-            actor_id = getattr(actor, "id", None)
+            parent_job_id = existing.retry_of_job_id or existing.id
+            attempt_number = existing.attempt + 1
+
+        queue = self._queue
+        if queue is None:
+            raise JobQueueUnavailableError()
+
+        actor_id = getattr(actor, "id", None)
+        reservation = await queue.try_reserve()
+
+        try:
             job = await self._jobs.create_job(
                 workspace_id=workspace_id,
                 config_id=version.config_id,
@@ -106,76 +127,85 @@ class JobsService:
                 actor_id=actor_id,
                 input_hash=input_hash,
                 trace_id=trace_id,
-            )
-
-        actor_id = getattr(actor, "id", None)
-        await self._jobs.update_status(
-            job,
-            status=JobStatus.RUNNING,
-            started_at=utc_now(),
-        )
-
-        package_path = Path(version.package_path)
-        if not package_path.exists():
-            await self._jobs.update_status(
-                job,
-                status=JobStatus.FAILED,
-                completed_at=utc_now(),
-                error_message="Config package directory is missing",
+                document_ids=request.all_document_ids,
+                retry_of_job_id=parent_job_id,
+                attempt=attempt_number,
             )
             await self._session.commit()
-            raise JobSubmissionError("Config package directory is missing")
+        except IntegrityError:
+            await self._session.rollback()
+            await reservation.release()
+            existing = await self._jobs.find_existing_job(
+                workspace_id=workspace_id,
+                config_version_id=version.id,
+                input_hash=input_hash,
+            )
+            if existing is None:
+                raise
+            return self._build_record(existing, version)
+        except Exception:
+            await self._session.rollback()
+            await reservation.release()
+            raise
 
-        paths = None
-        try:
-            run_result, paths = await self._orchestrator.run(
-                job_id=job.id,
-                config_version=version,
-                manifest=manifest,
-                trace_id=trace_id,
-                input_files=inputs,
-                timeout_seconds=max(1.0, manifest.engine.defaults.timeout_ms / 1000),
-            )
-        except Exception as exc:  # pragma: no cover - defensive failure path
-            await self._jobs.update_status(
-                job,
-                status=JobStatus.FAILED,
-                completed_at=utc_now(),
-                error_message=str(exc),
-            )
-            await self._session.commit()
-            raise JobSubmissionError("Job execution failed") from exc
-        finally:
-            if paths is not None:
-                self._storage.cleanup_inputs(paths)
-
-        await self._jobs.record_paths(
-            job,
-            logs_uri=str(paths.logs_path),
-            run_request_uri=str(paths.request_path),
-        )
-
-        if run_result.status == "succeeded" and run_result.artifact_path and run_result.output_path:
-            await self._jobs.update_status(
-                job,
-                status=JobStatus.SUCCEEDED,
-                completed_at=utc_now(),
-                artifact_uri=str(run_result.artifact_path),
-                output_uri=str(run_result.output_path),
-            )
-        else:
-            error_message = run_result.error_message or self._summarise_diagnostics(run_result.diagnostics)
-            if run_result.timed_out:
-                error_message = error_message or "Worker timed out"
-            await self._jobs.update_status(
-                job,
-                status=JobStatus.FAILED,
-                completed_at=utc_now(),
-                error_message=error_message,
-            )
-        await self._session.commit()
         await self._session.refresh(job)
+        try:
+            await queue.enqueue(job.id, attempt=job.attempt, reservation=reservation)
+        except Exception:
+            await reservation.release()
+            raise
+
         return self._build_record(job, version)
+
+    async def retry_job(
+        self,
+        *,
+        workspace_id: str,
+        job_id: str,
+        actor: User | None,
+    ) -> JobRecord:
+        job = await self._jobs.get_job(workspace_id=workspace_id, job_id=job_id)
+        if job is None:
+            raise JobNotFoundError(job_id)
+        version = await self._configs.get_version_by_id(job.config_version_id)
+        if version is None:
+            raise JobNotFoundError(job_id)
+        trace_id = uuid4().hex
+        next_attempt = job.attempt + 1
+        actor_id = getattr(actor, "id", None)
+
+        queue = self._queue
+        if queue is None:
+            raise JobQueueUnavailableError()
+
+        reservation = await queue.try_reserve()
+
+        try:
+            retry_job = await self._jobs.create_job(
+                workspace_id=job.workspace_id,
+                config_id=job.config_id,
+                config_version_id=job.config_version_id,
+                actor_id=actor_id,
+                input_hash=job.input_hash or uuid4().hex,
+                trace_id=trace_id,
+                document_ids=list(job.input_documents),
+                retry_of_job_id=job.id,
+                attempt=next_attempt,
+            )
+            await self._session.commit()
+        except Exception:
+            await self._session.rollback()
+            await reservation.release()
+            raise
+
+        await self._session.refresh(retry_job)
+        try:
+            await queue.enqueue(retry_job.id, attempt=retry_job.attempt, reservation=reservation)
+        except Exception:
+            await reservation.release()
+            raise
+
+        return self._build_record(retry_job, version)
 
     async def get_job(
         self,
@@ -230,24 +260,35 @@ class JobsService:
             "queued_at": job.queued_at,
             "started_at": job.started_at,
             "completed_at": job.completed_at,
+            "last_heartbeat": job.last_heartbeat,
             "error_message": job.error_message,
+            "retry_of_job_id": job.retry_of_job_id,
             "config_version": {
                 "config_version_id": version.id,
                 "config_id": version.config_id,
                 "label": version.label,
             },
         }
+        activation = self._activation_store.load(config_id=version.config_id, version=version)
+        if activation is not None:
+            payload["config_version"]["activation"] = {
+                "status": activation.status,
+                "started_at": activation.started_at,
+                "completed_at": activation.completed_at,
+                "error": activation.error,
+                "venv_path": activation.venv_path.as_posix() if activation.venv_path else None,
+                "python_executable": (
+                    activation.python_executable.as_posix() if activation.python_executable else None
+                ),
+                "packages_uri": activation.packages_path.as_posix() if activation.packages_path else None,
+                "install_log_uri": activation.install_log_path.as_posix()
+                if activation.install_log_path
+                else None,
+                "hooks_uri": activation.hooks_path.as_posix() if activation.hooks_path else None,
+                "diagnostics": activation.diagnostics,
+                "annotations": activation.annotations,
+            }
         return JobRecord.model_validate(payload)
-
-    def _summarise_diagnostics(self, diagnostics: list[dict[str, Any]]) -> str | None:
-        if not diagnostics:
-            return None
-        first = diagnostics[0]
-        message = first.get("message")
-        code = first.get("code")
-        if message and code:
-            return f"{code}: {message}"
-        return message or code
 
     async def _resolve_inputs(
         self,
@@ -270,9 +311,13 @@ class JobsService:
             try:
                 source_path = self._document_storage.path_for(document.stored_uri)
             except ValueError as exc:
-                raise JobSubmissionError(f"Document {document_id} has an invalid storage path") from exc
+                raise JobSubmissionError(
+                    f"Document {document_id} has an invalid storage path"
+                ) from exc
             if not source_path.exists():
-                raise JobSubmissionError(f"Document {document_id} content is missing from storage")
+                raise JobSubmissionError(
+                    f"Document {document_id} content is missing from storage"
+                )
             filename = document.original_filename or f"{document_id}.bin"
             resolved.append(
                 ResolvedInput(
@@ -283,14 +328,10 @@ class JobsService:
                 )
             )
 
-        combined_hash = hashlib.sha256("".join(sorted(item.sha256 for item in resolved)).encode("utf-8")).hexdigest()
+        combined_hash = hashlib.sha256(
+            "".join(sorted(item.sha256 for item in resolved)).encode("utf-8")
+        ).hexdigest()
         return resolved, combined_hash
 
-    def _load_manifest(self, version: ConfigVersion) -> ManifestV1:
-        try:
-            return self._manifest_loader.load(version.manifest)
-        except Exception as exc:  # pragma: no cover - manifests validated on publish
-            raise JobSubmissionError("Stored manifest is invalid") from exc
 
-
-__all__ = ["JobsService", "SAFE_MODE_DISABLED_MESSAGE"]
+__all__ = ["JobsService"]
