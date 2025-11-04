@@ -46,7 +46,7 @@ ${ADE_DATA_DIR}/                                  # Root folder for all ADE stat
 │  └─ <config_id>/                                # Matches a config in config_packages/<config_id>
 │     ├─ bin/python                               # Python interpreter used at runtime for this config’s jobs
 │     └─ ade-build/                               # Read-only build artifacts used by jobs (safe to import from)
-│        ├─ snapshot/                             # Frozen copy of your scripts taken at prepare time (deterministic)
+│        ├─ config_package_snapshot/              # Frozen copy of your scripts taken at prepare time (deterministic)
 │        ├─ packages.txt                          # Exact dependency versions (output of `pip freeze`)
 │        ├─ install.log                           # Text log of `pip install` (diagnostics for prepare failures)
 │        └─ build.json                            # Build metadata: { content_hash, deps_hash, prepared_at, ... }
@@ -60,9 +60,8 @@ ${ADE_DATA_DIR}/                                  # Root folder for all ADE stat
 │     ├─ run-request.json                         # Snapshot of parameters handed to the worker subprocess
 │     └─ .venv  →  ../../venvs/<config_id>/       # Symlink to the prepared environment used by this job (no copying)
 │
-├─ documents/                                     # Workspace-wide document store (original uploads and shared inputs)
-│  └─ <document_id>/                              # One folder per stored document (not tied to a single job)
-│     └─ <filename>.xlsx                          # The raw file as received (used by jobs that reference this document)
+├─ document/                                      # Document store (original uploads, normalized files, etc..)
+│  ├─ <document_id>.<ext>                          # Raw uploaded file (primary store)
 │
 ├─ db/                                            # Application database (SQLite by default; easy to back up)
 │  └─ backend.app.sqlite                          # Single-file SQLite database containing ADE metadata and state
@@ -216,15 +215,24 @@ Every other path (`config_packages/`, `venvs/`, `jobs/`, etc.) is derived from i
 
 Performance and safety knobs include:
 
-* `ADE_MAX_CONCURRENCY` — maximum concurrent jobs
-* `ADE_QUEUE_SIZE` — maximum jobs in queue
-* `ADE_WORKER_MEM_MB` — per-job memory limit
+| Variable                             | Default                   | What it controls                                               |
+| ------------------------------------ | ------------------------- | -------------------------------------------------------------- |
+| `ADE_DATA_DIR`                       | `./data`                  | Root directory for all ADE state                               |
+| `ADE_CONFIGS_DIR`                    | `$ADE_DATA_DIR/configs`   | Where editable config packages live                            |
+| `ADE_VENVS_DIR`                      | `$ADE_DATA_DIR/venvs`     | One virtualenv per `config_id` (prepare step)                  |
+| `ADE_JOBS_DIR`                       | `$ADE_DATA_DIR/jobs`      | Per‑job working directories                                    |
+| `ADE_PIP_CACHE_DIR`                  | `$ADE_DATA_DIR/cache/pip` | Pip cache for wheels/sdists (speeds prepares)                  |
+| `ADE_WHEELHOUSE`                     | *(unset)*                 | Local wheels dir for offline/air‑gapped prepares               |
+| `ADE_MAX_CONCURRENCY`                | `2`                       | Worker subprocesses in parallel                                |
+| `ADE_QUEUE_SIZE`                     | `10`                      | Max waiting jobs before 429 is returned                        |
+| `ADE_JOB_TIMEOUT_SECONDS`            | `300`                     | Wall‑clock timeout per job                                     |
+| `ADE_WORKER_CPU_SECONDS`             | `60`                      | CPU limit per job (rlimit)                                     |
+| `ADE_WORKER_MEM_MB`                  | `512`                     | Memory limit per job (MiB, rlimit)                             |
+| `ADE_WORKER_FSIZE_MB`                | `100`                     | Max file size a job can create (MiB, rlimit)                   |
+| `ADE_RUNTIME_NETWORK_ACCESS_DEFAULT` | `false`                   | Default runtime network policy (prepare may still use network) |
+
 
 Defaults are conservative for development and scale easily upward in production.
-
-For a full reference, see
-[Developer Guide → Environment Variables](./README.md#environment-and-configuration)
-and the [Glossary](./12-glossary.md#8-environment-variables-behavior-knobs).
 
 ---
 
