@@ -209,10 +209,7 @@ class JobQueueManager:
             for job in queued:
                 await self.enqueue(job.id, attempt=job.attempt, force=True)
             running = await jobs_repo.list_jobs_by_status(JobStatus.RUNNING)
-            cutoff = utc_now() - self._stale_after
             for job in running:
-                if job.last_heartbeat and job.last_heartbeat >= cutoff:
-                    continue
                 await jobs_repo.requeue(job)
                 await session.commit()
                 await self.enqueue(job.id, attempt=job.attempt, force=True)
