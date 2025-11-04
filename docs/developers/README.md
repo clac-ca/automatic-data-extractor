@@ -7,7 +7,7 @@
 It does this using small, human-readable Python scripts that describe *how* to find, map, and clean data.
 Those scripts live inside a **[config package](./01-config-packages.md)** — a simple folder that tells ADE *how to think* about a file.
 
-Instead of machine learning, ADE runs on *python callables you write*.
+Instead of machine learning, ADE runs on *python callables (functions) you write* and configure via the GUI.
 It’s explainable, reproducible, and deterministic:
 
 > same input + same config = the same output, every time.
