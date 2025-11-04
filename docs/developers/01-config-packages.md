@@ -112,7 +112,6 @@ E4 --> Z2[("Output file: artifact.json")]
 
 ```
 
-
 ## 1. How ADE Reads Spreadsheets and Calls Your Detectors
 
 ADE starts by reads spreadsheets efficiently by **streaming** each sheet, one row at a time—rather than loading the entire file.
