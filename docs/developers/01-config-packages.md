@@ -1,6 +1,6 @@
 # Config Packages — Click‑Through Reference (Teaching Edition)
 
-<a id="top"></a>
+
 
 An ADE **config package** is an installable Python distribution that bundles your spreadsheet rules inside **`ade_config`**. ADE builds **one virtual environment per configuration** and reuses it deterministically (**build once, run many**).
 
@@ -10,6 +10,7 @@ An ADE **config package** is an installable Python distribution that bundles you
 **Built runtime:** `${ADE_DATA_DIR}/workspaces/<workspace_id>/venvs/<config_id>/`
 
 ---
+<a id="top"></a>
 
 ## Clickable file tree (with concise inline comments)
 
