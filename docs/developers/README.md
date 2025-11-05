@@ -33,7 +33,7 @@ automatic-data-extractor/
 │  ├─ pyproject.toml
 │  └─ tests/
 │
-├─ web/                             # React SPA (Vite/CRA)
+├─ frontend/                        # React SPA (Vite/CRA)
 │  ├─ src/
 │  ├─ public/
 │  ├─ package.json
