@@ -170,7 +170,7 @@ ${ADE_DATA_DIR}/                                          # Root folder for all 
 │     └─ __init__.py                                      # Required by Python; marks this folder as a package
 ```
 
-> For a deeper look inside config packages, see ([`01-config-packages.md`](./01-config-packages.md).
+> For a deeper look inside config packages, see ([`01-config-packages.md`](./01-config-packages.md)).
 
 ## Step 2: Build — Freeze the Environment
 
