@@ -191,17 +191,13 @@ Once a configuration environment is built, ADE can process real spreadsheets saf
 * Each run reuses the frozen virtual environment from **Step 2: Build**.
 * ADE launches an isolated worker that imports your `ade_config`, then streams rows from the uploaded document through your detectors and hooks.
 * Your logic helps ADE understand the file: where tables start, what each column represents, and how to clean/validate values.
+* The engine produces the finalized spreadsheet.
 
 **Worker command**
 
 ```bash
 ${ADE_DATA_DIR}/venvs/<config_id>/bin/python -I -B -m ade_engine.worker <job_id>
 ```
-
-**Deterministic pipeline (five passes)**
-**Find tables → Map columns → Transform (optional) → Validate (optional) → Generate**
-
-**Outputs & audit trail**
 
 All results are written atomically inside the job folder so you always have a consistent, inspectable record:
 
