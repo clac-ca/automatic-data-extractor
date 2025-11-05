@@ -1,281 +1,324 @@
 # Developer Guide
 
-## What ADE Is — and Why It Exists
+ADE turns messy spreadsheets into consistent, auditable workbooks through a simple, repeatable flow:
 
-**ADE (Automatic Data Extractor)** turns messy spreadsheets — inconsistent headers, irregular tables, and varying formats — into clean, structured workbooks you can trust.
-
-It does this using small, human-readable Python scripts (called `config package scripts`) that describe *how* to find, map, and clean data.
-Those config package scripts live inside a **[config package](./01-config-packages.md)** and are created & managed by workspace owners in the frontend web interface (http://localhost:8000/workspaces/<workspace_id>/configs).
+1. **Config** — define the rules ([`docs/developers/01-config-packages.md`](docs/developers/01-config-packages.md))
+2. **Build** — freeze the environment
+3. **Run** — process files at scale
 
 ---
 
-## The Persistent Storage Layout (ADE_DATA_DIR)
+## Repository and Runtime Layout
 
-Everything ADE does—config packages, environments, jobs, logs, and caches—lives neatly under one data root directory, usually ./data during development. In production, this folder is typically mounted to an external file share (e.g., Azure File Storage) so it persists across restarts.
+The ADE monorepo brings together three cooperating layers:
 
-Each folder has one job:
+* **Frontend (React Router)** — a single-page application where workspace owners create and manage configuration packages, edit code, and trigger builds and runs.
+* **Backend (FastAPI)** — an API service that stores metadata, builds isolated Python environments, and orchestrates job execution.
+* **Engine (Custom python `ade_engine`)** — the runtime module that executes inside the worker process. It reads and interprets spreadsheets, applies your detectors and hooks, and produces structured outputs with full audit trails.
 
-* **`config_packages/`** — where configs you author in the GUI live
-* **`venvs/`** — where ADE builds and stores virtual environments for each config
-* **`jobs/`** — where each run’s inputs, outputs, and logs are kept
-* **`documents/`** — where shared uploaded files are stored
+Everything ADE produces (config packages, venvs, jobs, logs, and caches) is persisted under `ADE_DATA_DIR` (default `./data`). In production, this folder is typically mounted to an external file share so it persists across restarts.
 
 ```text
-${ADE_DATA_DIR}/                                          # Root folder for all ADE state (default: ./data)
+automatic-data-extractor/
+├─ backend/                         # FastAPI app (serves API and the built SPA in prod)
+│  ├─ app/
+│  │  ├─ main.py                    # mounts: /api (routers), / (StaticFiles for SPA build)
+│  │  ├─ api/                       # routers
+│  │  ├─ core/                      # settings, logging, lifespan, security
+│  │  ├─ services/                  # build/run/queue logic
+│  │  ├─ repositories/              # DB persistence
+│  │  ├─ schemas/                   # Pydantic models
+│  │  ├─ workers/                   # subprocess orchestration (engine worker)
+│  │  ├─ web/static/                # ← SPA build copied here from web/dist (kept in repo; .gitignore the contents)
+│  │  └─ templates/                 # optional: server-side templates/emails (keep .keep)
+│  ├─ migrations/                   # Alembic
+│  ├─ pyproject.toml
+│  └─ tests/
+│
+├─ web/                             # React SPA (Vite/CRA)
+│  ├─ src/
+│  ├─ public/
+│  ├─ package.json
+│  └─ vite.config.ts
+│
+├─ engine/                          # ade-engine (installable Python package)
+│  ├─ pyproject.toml
+│  ├─ src/ade_engine/...
+│  └─ tests/
+│
+├─ templates/
+│  └─ config-packages/
+│     ├─ default/
+│     │  ├─ template.manifest.json  # template catalog metadata (name/description/tags/min engine)
+│     │  └─ src/ade_config/         # detectors/hooks + runtime manifest/env
+│     │     ├─ manifest.json
+│     │     ├─ config.env
+│     │     ├─ column_detectors/
+│     │     ├─ row_detectors/
+│     │     └─ hooks/
+│     └─ <other-template>/
+│        ├─ template.manifest.json
+│        └─ src/ade_config/...
+│
+├─ schemas/                         # JSON Schemas for validation (IDE‑friendly)
+│  ├─ config-manifest.v1.json
+│  └─ template-manifest.v1.json
+│
+├─ examples/                        # sample inputs/outputs for docs/tests
+├─ docs/                            # Developer Guide + HOWTOs
+├─ scripts/                         # helper scripts (copy build, seed data, etc.)
+├─ Dockerfile                       # multi-stage: build web → copy into backend/app/static
+├─ compose.yaml                     # optional: local prod run (app + reverse proxy)
+├─ Makefile                         # quickstarts (setup/dev/build/run)
+├─ .env.example                     # documented env vars
+├─ .editorconfig
+├─ .pre-commit-config.yaml
+├─ .gitignore
+├─ .github/workflows/               # CI (lint, test, build, publish)
+└─ 🗄️ (runtime output below — generated in ADE_DATA_DIR)
 
-├─ config_packages/                                       # Editable config packages you author in the UI (source of truth)
-│  └─ <config_id>/                                        # One folder per published config (immutable once published)
-│     ├─ manifest.json                                    # Config manifest (engine defaults, field metadata, script paths)
-│     ├─ column_detectors/                                # Field logic: detect → transform (optional) → validate (optional)
-│     │  └─ <field>.py                                    # One Python file per target field (e.g., member_id.py)
-│     ├─ row_detectors/                                   # Row-level detectors used to find tables and header rows
-│     │  ├─ header.py                                     # Heuristics that vote for “this row looks like a header row”
-│     │  └─ data.py                                       # Heuristics that vote for “this row looks like a data row”
-│     ├─ hooks/                                           # Optional lifecycle hooks that run around job stages
-│     │  ├─ on_job_start.py                               # def run(*, job, **_): initialize tiny policy/state; note() to artifact
-│     │  ├─ after_mapping.py                              # def after_mapping(*, job, table, **_): correct mapping/order/labels
-│     │  ├─ before_save.py                                # def before_save(*, job, book, **_): rename tab, add sheets, widths
-│     │  └─ on_job_end.py                                 # def run(*, job, **_)
-│     └─ requirements.txt?                                # Optional per-config dependencies installed during prepare
-|
-├─ venvs/                                                 # Prepared Python virtual environments (one per config version)
-│  └─ <config_id>/                                        # Matches a config in config_packages/<config_id>
-│     ├─ bin/python  |  Scripts/python.exe                # Interpreter the worker uses at runtime for this config’s jobs
-│     └─ ade-runtime/                                     # Read-only build artifacts + ephemeral per-job mounts
-│        ├─ config_snapshot/                              # ← Frozen copy of your config package (import root at runtime)
-│        │  ├─ manifest.json                              # Snapshot taken at prepare; jobs import only from this folder
-│        │  ├─ column_detectors/                          # Deterministic: editing config_packages/ later won’t affect runs
-│        │  ├─ row_detectors/
-│        │  └─ hooks/
-│        ├─ packages.txt                                  # Exact dependency versions (output of `pip freeze`)
-│        ├─ install.log                                   # Text log of `pip install` (diagnostics for prepare failures)
-│        ├─ build.json                                    # { content_hash, deps_hash, python_version, prepared_at, ... }
-│        └─ jobs/                                         # ← Per-job mount points (ephemeral; one entry per running job)
-│           └─ <job_id>  →  ${ADE_DATA_DIR}/jobs/<job_id>/ # Symlink (POSIX) or junction (Windows) to the live job folder
-│                                                          #   The worker’s CWD is set to this folder. If link creation
-│                                                          #   isn’t possible, we set CWD to the real job dir directly.
-├─ jobs/                                                  # One working directory per job (inputs, outputs, and audit trail)
-│  └─ <job_id>/                                           # A single run of ADE on a single input using a single config
-│     ├─ inputs/                                          # Uploaded files for this job (e.g., spreadsheets to process)
-│     ├─ artifact.json                                    # Human/audit-readable record of what happened and why (no raw dumps)
-│     ├─ normalized.xlsx                                  # Final clean workbook produced by ADE for this job (atomic writes)
-│     ├─ events.ndjson                                    # Append-only timeline: enqueue, start, finish, error (for debugging)
-│     ├─ run-request.json                                 # Snapshot of parameters handed to the worker subprocess
-|
-├─ documents/                                             # Document store (original uploads, normalized files, etc.)  [plural]
-│  └─ <document_id>.<ext>                                 # Raw uploaded file (primary store)
+${ADE_DATA_DIR}/
+├─ workspaces/
+│  └─ <workspace_id>/
+│     ├─ config_packages/           # GUI-managed installable config projects (source of truth)
+│     │  └─ <config_id>/
+│     │     ├─ pyproject.toml       # Distribution metadata (ade-config)
+│     │     ├─ requirements.txt     # Optional overlay pins (editable in GUI)
+│     │     └─ src/ade_config/
+│     │        ├─ column_detectors/ # detect → transform (opt) → validate (opt)
+│     │        ├─ row_detectors/    # header/data row heuristics
+│     │        ├─ hooks/            # on_job_start/after_mapping/before_save/on_job_end
+│     │        ├─ manifest.json     # read via importlib.resources
+│     │        └─ config.env        # optional env vars
+│     ├─ venvs/                     # One Python virtualenv per config_id
+│     │  └─ <config_id>/
+│     │     ├─ bin/python
+│     │     ├─ ade-runtime/
+│     │     │  ├─ packages.txt      # pip freeze
+│     │     │  └─ build.json        # {config_version, engine_version, python_version, built_at}
+│     │     └─ <site-packages>/
+│     │        ├─ ade_engine/...    # Installed ADE engine
+│     │        └─ ade_config/...    # Installed config package
+│     ├─ jobs/                      # One working directory per job (inputs, outputs, audit)
+│     │  └─ <job_id>/
+│     │     ├─ inputs/              # Uploaded files (e.g., spreadsheets)
+│     │     ├─ outputs/             # ← clearer than root files
+│     │     │  └─ normalized.xlsx   # final clean workbook (atomic write)
+│     │     └─ logs/
+│     │        ├─ artifact.json     # human/audit-readable narrative
+│     │        └─ events.ndjson     # append-only timeline
+│     └─ documents/
+│        └─ <document_id>.<ext>     # optional shared document store
+│
+├─ db/
+│  └─ app.sqlite                    # SQLite in dev (or DSN for prod)
+├─ cache/
+│  └─ pip/                          # pip download/build cache (safe to delete)
+└─ logs/                            # optional: centralized service logs
+```
 
-├─ db/                                                    # Application database (SQLite by default; easy to back up)
-│  └─ backend.app.sqlite                                  # Single-file SQLite database containing ADE metadata and state
+## 1) Config — Define the Rules
 
-└─ cache/                                                 # Local caches to make prepares faster and reduce network usage
-   └─ pip/                                                # Pip download/build cache (safe to delete; will be repopulated)
+Every ADE workflow starts with a **config package** you create in the **in‑browser editor**. The editor lets you browse files, edit Python, and save changes in real time.
+
+Under the hood, a config is just a Python package named **`ade_config`**. Inside it, you define three ideas that tell ADE how to read, interpret, and clean your spreadsheets:
+
+1. **How to find the table**
+   *Row detectors* classify each row (header, data, separator, etc.) so ADE can pinpoint where each table begins and ends.
+
+2. **What each column means**
+   *Column detectors* recognize fields like "Invoice Date" or "Amount," even when header names vary. This is how ADE maps columns reliably across inconsistent inputs.
+
+3. **How to make the data trustworthy**
+
+   * *Transforms (optional)* — clean or normalize values.
+   * *Validators (optional)* — check that values match the expected format.
+   * *Hooks (optional)* — run custom logic at key moments (e.g., before a job starts, after mapping, after validation).
+
+A few companion files sit alongside your Python code in the config package:
+
+* **`manifest.json`** — static metadata that describes your configuration to the engine.
+* **`config.env`** *(optional)* — simple `KEY=VALUE` pairs loaded **before** any of your code runs.
+* **`pyproject.toml`** *(optional)* — declare external Python dependencies for your detectors and hooks. ADE installs them during **Build**.
+
+> For a deeper look inside config packages, see `docs/developers/01-config-packages.md`.
+
+---
+
+## 2) Build — Freeze the Environment
+
+Click **Build** in the editor to lock your configuration into a self‑contained, reproducible runtime.
+
+Behind the scenes ADE:
+
+1. Creates a fresh virtual environment at `venvs/<config_id>/` using Python’s built‑in `venv`.
+2. Installs, in order:
+   **`ade_engine`** (the runtime that executes jobs) → **`ade_config`** (your rules, exactly as they exist at build time).
+   If you declared dependencies in `pyproject.toml`, those are installed here as well.
+
+> You can build as often as you like while the config is in **Draft**. Each build produces a clean, reproducible runtime you can test against.
+
+---
+
+## 3) Run — Process Files
+
+Once a configuration environment is built, ADE can process real spreadsheets safely and predictably—over and over.
+
+* Each run reuses the frozen environment from **Build**.
+* ADE launches an isolated worker that imports your `ade_config`, then streams rows from the uploaded document through your detectors and hooks.
+* Your logic helps ADE understand the file: where tables start, what each column represents, and how to clean/validate values.
+
+**Worker command**
+
+```bash
+${ADE_DATA_DIR}/venvs/<config_id>/bin/python -I -B -m ade_engine.worker <job_id>
+```
+
+**Deterministic pipeline (five passes)**
+**Find tables → Map columns → Transform (optional) → Validate (optional) → Generate**
+
+**Outputs & audit trail**
+
+All results are written atomically inside the job folder so you always have a consistent, inspectable record:
+
+```
+jobs/<job_id>/
+  inputs/
+    sample.xlsx
+  normalized.xlsx   # final structured workbook
+  artifact.json     # full audit trail and rule explanations
+  events.ndjson     # timeline of the run
 ```
 
 ---
 
-## The Big Idea — How ADE Works
+## Under the Hood — How the Engine Runs Inside the Worker
 
-ADE is a small, deterministic engine.
-You teach it *how* to interpret a spreadsheet, and it does the rest — the same way, every time.
+Inside the worker process, ADE runs **`ade_engine`**, which orchestrates the job and calls into your `ade_config`:
 
-At a high level, ADE runs in three steps:
+* **I/O model** — The engine reads Excel with **`openpyxl` in streaming mode** (predictable memory on large sheets) and reads CSV with Python’s standard library (UTF‑8 by default).
+  It **never passes raw file handles** to your code. Instead, it streams rows through a small API, keeping detectors, transforms, validators, and hooks **pure and easy to test**.
 
-1. **Config — Define the rules**
-   An admin authors a [config package](./01-config-packages.md) in the GUI.
-   It’s a folder of small Python scripts (referred to as `config package scripts`) that describe how to detect tables, map columns, and (optionally) transform or validate data.
+* **Importing your config** — Because each environment contains exactly one configuration, the engine imports **`ade_config`** directly. To read packaged data like the manifest without absolute paths, it uses `importlib.resources`:
 
-2. **Build — Freeze the environment**
-   ADE builds a dedicated Python virtual environment for that config, installs dependencies, and freezes a snapshot of your scripts.
-   This snapshot is versioned and reusable — the same input and config always yield the same output.
+  ```python
+  # ade_engine/runtime.py
+  import json, importlib.resources as res
 
-3. **Run — Process files**
-   When jobs execute, they reuse the prepared environment.
-   Each job applies the same five passes — **Find → Map → Transform → Validate → Generate** — and produces its own results:
+  def load_manifest() -> dict:
+      p = res.files("ade_config").joinpath("manifest.json")
+      return json.loads(p.read_text("utf-8"))
+  ```
 
-   * `normalized.xlsx` — the clean, structured workbook
-   * `artifact.json` — the audit trail of what happened and why
+* **Explicit paths & isolation** — The backend sets the worker’s current directory to `jobs/<job_id>/` and exposes clear I/O paths via env vars:
 
-Once built, the environment can be reused by **many jobs**.
-That means faster runs, no redundant installs, and perfect reproducibility.
-You only rebuild when the config or its dependencies change.
+  ```
+  ADE_JOB_DIR       = ${ADE_DATA_DIR}/jobs/<job_id>
+  ADE_INPUTS_DIR    = ${ADE_DATA_DIR}/jobs/<job_id>/inputs
+  ADE_OUTPUT_PATH   = ${ADE_DATA_DIR}/jobs/<job_id>/normalized.xlsx
+  ADE_ARTIFACT_PATH = ${ADE_DATA_DIR}/jobs/<job_id>/artifact.json
+  ADE_EVENTS_PATH   = ${ADE_DATA_DIR}/jobs/<job_id>/events.ndjson
+  ```
+
+  The worker runs Python with `-I -B` (isolated mode; no user site; no `.pyc` writes).
+
+* **Resource ceilings (POSIX)** — Where available, ADE applies best‑effort `rlimit` caps (CPU seconds, address space, max file size). On non‑POSIX systems these limits may not be available and are skipped.
 
 ---
 
-### Visual Overview
+## Visual Overview
 
 ```mermaid
 flowchart TD
-    S1[Step 1: Admin creates config package in GUI] --> S2[Step 2: ADE prepares virtualenv and frozen snapshot]
+    S1[Step 1: Create config package in the GUI] --> S2[Step 2: Build — ADE creates venv and installs engine + config]
 
-    %% Job A (vertical passes)
-    S2 -- reused snapshot --> J1[Step 3: Run job A]
-    subgraph Job_A [Run job A - processing passes]
+    %% Job A
+    S2 -- reuse frozen venv --> J1[Step 3: Run job A]
+    subgraph Job_A [Job A — five passes]
         direction TB
-        A1[1. Find tables]
-        A2[2. Map columns]
-        A3[3. Transform values - optional]
-        A4[4. Validate data - optional]
-        A5[5. Generate output]
+        A1[1) Find tables]
+        A2[2) Map columns]
+        A3[3) Transform (optional)]
+        A4[4) Validate (optional)]
+        A5[5) Generate outputs]
         A1 --> A2 --> A3 --> A4 --> A5
     end
     J1 --> A1
-    A5 --> R1[Results - job A: normalized.xlsx and artifact.json]
+    A5 --> R1[Results: normalized.xlsx + artifact.json]
 
-    %% Job B (vertical passes)
-    S2 -- reused snapshot --> J2[Run job B]
-    subgraph Job_B [Run job B - processing passes]
+    %% Job B
+    S2 -- reuse frozen venv --> J2[Run job B]
+    subgraph Job_B [Job B — five passes]
         direction TB
-        B1[1. Find tables]
-        B2[2. Map columns]
-        B3[3. Transform values - optional]
-        B4[4. Validate data - optional]
-        B5[5. Generate output]
-        B1 --> B2 --> B3 --> B4 --> B5
+        B1[1) Find tables] --> B2[2) Map columns] --> B3[3) Transform (optional)]
+        B3 --> B4[4) Validate (optional)] --> B5[5) Generate outputs]
     end
-    J2 --> B1
-    B5 --> R2[Results - job B: normalized.xlsx and artifact.json]
+    B5 --> R2[Results: normalized.xlsx + artifact.json]
 
-    %% Job C (vertical passes)
-    S2 -- reused snapshot --> J3[Run job C]
-    subgraph Job_C [Run job C - processing passes]
+    %% Job C
+    S2 -- reuse frozen venv --> J3[Run job C]
+    subgraph Job_C [Job C — five passes]
         direction TB
-        C1[1. Find tables]
-        C2[2. Map columns]
-        C3[3. Transform values - optional]
-        C4[4. Validate data - optional]
-        C5[5. Generate output]
-        C1 --> C2 --> C3 --> C4 --> C5
+        C1[1) Find tables] --> C2[2) Map columns] --> C3[3) Transform (optional)]
+        C3 --> C4[4) Validate (optional)] --> C5[5) Generate outputs]
     end
-    J3 --> C1
-    C5 --> R3[Results - job C: normalized.xlsx and artifact.json]
+    C5 --> R3[Results: normalized.xlsx + artifact.json]
 ```
 
-## The runtime — how jobs actually run
+## Environment & Configuration
 
-When a job is submitted, ADE places it into a lightweight internal queue. A bounded pool of worker subprocesses picks up queued jobs. Each worker launches in isolation, loads the **frozen snapshot** for its config, and executes the five passes.
+ADE is configured via environment variables so it remains simple and portable. Defaults suit development and scale cleanly to production.
 
-Every worker runs inside its own sandbox:
+| Variable                  | Default                         | What it controls                                            |
+| ------------------------- | ------------------------------- | ----------------------------------------------------------- |
+| `ADE_DATA_DIR`            | `./data`                        | Root directory for all ADE state                            |
+| `ADE_CONFIGS_DIR`         | `$ADE_DATA_DIR/config_packages` | Where GUI‑managed, installable config projects live         |
+| `ADE_VENVS_DIR`           | `$ADE_DATA_DIR/venvs`           | Builds environments (one per `config_id`)                   |
+| `ADE_JOBS_DIR`            | `$ADE_DATA_DIR/jobs`            | Per‑job working directories                                 |
+| `ADE_PIP_CACHE_DIR`       | `$ADE_DATA_DIR/cache/pip`       | pip cache for wheels/sdists (speeds up building)            |
+| `ADE_MAX_CONCURRENCY`     | `2`                             | Backend dispatcher parallelism                              |
+| `ADE_QUEUE_SIZE`          | `10`                            | Max enqueued jobs before the API returns 429                |
+| `ADE_JOB_TIMEOUT_SECONDS` | `300`                           | Parent‑enforced wall‑clock timeout for a worker             |
+| `ADE_WORKER_CPU_SECONDS`  | `60`                            | Best‑effort CPU limit per job (POSIX `rlimit`)              |
+| `ADE_WORKER_MEM_MB`       | `512`                           | Best‑effort address‑space ceiling per job (POSIX `rlimit`)  |
+| `ADE_WORKER_FSIZE_MB`     | `100`                           | Best‑effort max file size a job can create (POSIX `rlimit`) |
 
-* **Network access** is disabled by default (opt‑in per job/config).
-* **CPU, memory, and file‑size limits** prevent a bad script from impacting others.
-* The worker writes **three outputs** to the job folder:
+If a configuration ships `ade_config/config.env`, the engine loads its variables at worker start *before* importing configuration code. If you need to override values for a single run later, add a job‑level mechanism in the backend and set env vars before spawning the worker.
 
-  * `normalized.xlsx` — the clean workbook (atomic write)
-  * `artifact.json` — the full audit record (atomic updates)
-  * `events.ndjson` — a chronological event log for debugging
+## Excel and CSV Support
 
-### Where the worker runs (precisely)
+ADE reads `.xlsx` and `.csv` inputs and always writes a normalized `.xlsx` workbook as the final output. Excel is handled by `openpyxl` in streaming mode (`read_only=True`, `data_only=True`); CSV uses the Python standard library with UTF‑8 as the default encoding. Other formats can be added later as pluggable readers without changing how configurations are authored.
 
-For each job, ADE starts the prepared interpreter:
+## A First Run You Can Try Locally
 
+You can exercise the complete path without the frontend. Copy the template to create a configuration, build the environment, and run a job by hand:
+
+```bash
+# 1) Create a per-config virtual environment and install engine + config (production installs)
+python -m venv data/venvs/<config_id>
+data/venvs/<config_id>/bin/pip install engine/
+data/venvs/<config_id>/bin/pip install data/config_packages/<config_id>/
+data/venvs/<config_id>/bin/pip freeze > data/venvs/<config_id>/ade-runtime/packages.txt
+
+# 2) Seed a job and run it
+mkdir -p data/jobs/<job_id>/inputs
+cp examples/inputs/sample.xlsx data/jobs/<job_id>/inputs/
+data/venvs/<config_id>/bin/python -I -B -m ade_engine.worker <job_id>
 ```
-venvs/<config_id>/bin/python -I -B -m ade.worker <job_id>
+
+When the worker exits, `artifact.json` explains each decision and its supporting scores, `normalized.xlsx` contains the cleaned workbook, and `events.ndjson` shows a timestamped trail of the run.
+
+## Troubleshooting and Reproducibility
+
+If a build fails, re‑run the build action and check `packages.txt` to see the resolved dependency set. If imports fail inside the worker, verify that `ade_engine` and `ade_config` exist in the venv’s `site‑packages` and that this command succeeds:
+
+```bash
+data/venvs/<config_id>/bin/python -I -B -c "import ade_engine, ade_config; print('ok')"
 ```
 
-with:
+If mapping results look unexpected, open `artifact.json`; it records the winning scores and the rules that contributed to each decision. Performance issues usually trace back to heavy work in detectors; prefer sampling in detectors, move heavier cleanup into transforms, and keep validators light. Because every configuration has its own environment, installs are isolated; if you suspect a dependency clash, run `pip check` in the venv to diagnose.
 
-* **CWD** = `venvs/<config_id>/ade-runtime/jobs/<job_id>/`
-  This is a symlink/junction to `${ADE_DATA_DIR}/jobs/<job_id>/`, so relative IO is local and obvious.
-  If link creation isn’t possible, ADE falls back to **CWD = `${ADE_DATA_DIR}/jobs/<job_id>`**. Behavior is identical.
-
-* **PYTHONPATH** = `venvs/<config_id>/ade-runtime/config_snapshot/`
-  Workers import **only** from the frozen snapshot; editing config files later does not affect running jobs.
-
-* **Environment variables** (the worker’s IO contract):
-
-  * `ADE_JOB_DIR` — `${ADE_DATA_DIR}/jobs/<job_id>`
-  * `ADE_INPUTS_DIR` — `${ADE_DATA_DIR}/jobs/<job_id>/inputs`
-  * `ADE_OUTPUT_PATH` — `${ADE_DATA_DIR}/jobs/<job_id>/normalized.xlsx`
-  * `ADE_ARTIFACT_PATH` — `${ADE_DATA_DIR}/jobs/<job_id>/artifact.json`
-  * `ADE_EVENTS_PATH` — `${ADE_DATA_DIR}/jobs/<job_id>/events.ndjson`
-  * `ADE_SNAPSHOT_DIR` — `venvs/<config_id>/ade-runtime/config_snapshot`
-  * Safety knobs: `ADE_WORKER_CPU_SECONDS`, `ADE_WORKER_MEM_MB`, `ADE_WORKER_FSIZE_MB`, `ADE_RUNTIME_NETWORK_ACCESS`
-
-> **Config package scripts never touch files directly.** The engine streams values to your detectors/transforms/validators and writes outputs on your behalf. Your code remains pure, deterministic, and easy to reason about.
-
----
-
-## 5) Safety, determinism, and reproducibility
-
-ADE treats every config package as untrusted:
-
-* Each run executes in its **own subprocess**, separate from the API.
-* **Network** is off by default (opt‑in when necessary).
-* **Resource limits** cap CPU time, memory, and file size.
-* ADE logs **only structured metadata** in the artifact — never raw cell dumps.
-
-**Determinism:** jobs import from the **frozen snapshot** (`config_snapshot/`). Even if you edit or republish a config later, past and in‑flight jobs stay explainable — the artifact records exactly which rules and versions ran.
-
-**Atomicity:** ADE writes `normalized.xlsx` and `artifact.json` using atomic replace semantics to avoid torn files.
-
----
-
-## 6) Config → Build → Run (expanded)
-
-* **Author** a config package in the UI. You declare target fields and write small functions:
-
-  * **Row detectors** label rows as header/data/separator.
-  * **Column detectors** map raw columns to target fields using additive scoring (can boost one field and nudge down lookalikes).
-  * Optional **transform** and **validate** per field; optional **hooks** at stable moments.
-
-* **Prepare** the config. ADE:
-
-  * Creates a clean **virtual environment** for the config version.
-  * Installs pinned dependencies (if any).
-  * Copies your package into `venvs/<config_id>/ade-runtime/**config_snapshot/**` and records metadata (`packages.txt`, `build.json`, `install.log`).
-  * Skips work if the content/deps hashes haven’t changed.
-
-* **Run** jobs. Workers import from the snapshot and execute the five passes. Hooks can adjust mapping, tweak the final workbook, and leave notes in the artifact. Results are written to the job folder.
-
-> Deep dive and complete API: **[Config Packages](./01-config-packages.md)**
-
----
-
-## 7) Environment & configuration
-
-ADE is configured via environment variables (simple, portable). The important ones:
-
-| Variable                             | Default                         | What it controls                                               |
-| ------------------------------------ | ------------------------------- | -------------------------------------------------------------- |
-| `ADE_DATA_DIR`                       | `./data`                        | Root directory for all ADE state                               |
-| `ADE_CONFIGS_DIR`                    | `$ADE_DATA_DIR/config_packages` | Where editable config packages live                            |
-| `ADE_VENVS_DIR`                      | `$ADE_DATA_DIR/venvs`           | Prepared environments per `config_id`                          |
-| `ADE_JOBS_DIR`                       | `$ADE_DATA_DIR/jobs`            | Per‑job working directories                                    |
-| `ADE_PIP_CACHE_DIR`                  | `$ADE_DATA_DIR/cache/pip`       | pip cache for wheels/sdists (speeds prepares)                  |
-| `ADE_WHEELHOUSE`                     | *(unset)*                       | Local wheels dir for offline/air‑gapped prepares               |
-| `ADE_MAX_CONCURRENCY`                | `2`                             | Worker subprocesses in parallel                                |
-| `ADE_QUEUE_SIZE`                     | `10`                            | Max waiting jobs before 429 is returned                        |
-| `ADE_JOB_TIMEOUT_SECONDS`            | `300`                           | Wall‑clock timeout per job                                     |
-| `ADE_WORKER_CPU_SECONDS`             | `60`                            | CPU limit per job (rlimit)                                     |
-| `ADE_WORKER_MEM_MB`                  | `512`                           | Memory limit per job (MiB, rlimit)                             |
-| `ADE_WORKER_FSIZE_MB`                | `100`                           | Max file size a job can create (MiB, rlimit)                   |
-| `ADE_RUNTIME_NETWORK_ACCESS_DEFAULT` | `false`                         | Default runtime network policy (prepare may still use network) |
-
-Defaults are conservative for development and scale easily for production.
-
----
-
-## 8) What gets written where (quick reference)
-
-* **`jobs/<job_id>/inputs/`** — raw input files for this run.
-* **`jobs/<job_id>/normalized.xlsx`** — generated workbook (atomic write).
-* **`jobs/<job_id>/artifact.json`** — audit record (append‑only narrative; atomic updates).
-* **`jobs/<job_id>/events.ndjson`** — lifecycle event log (enqueue/start/finish/error).
-* **`venvs/<config_id>/ade-runtime/config_snapshot/`** — frozen import root that made the decisions.
-
----
-
-## 9) Troubleshooting at a glance
-
-* **Prepare errors** → read `venvs/<config_id>/ade-runtime/install.log` and `build.json`.
-* **Unexpected mapping** → inspect `artifact.json` (it includes the winning score and top contributing rules).
-* **Performance** → detectors should use **samples**; heavy cleanup belongs in **transform**; keep validators light.
-* **Crashes** → rule errors are captured in the artifact; jobs continue with neutral results.
-
----
-
-## 10) Where to go next
+## Where to go next
 
 1. **[Config Packages](./01-config-packages.md)** — what a config is, Script API v1, detectors, transforms, validators, hooks.
 2. **[Job Orchestration](./02-job-orchestration.md)** — queue, workers, resource limits, atomic writes.
