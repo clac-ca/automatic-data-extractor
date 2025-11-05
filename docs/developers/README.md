@@ -2,9 +2,9 @@
 
 ADE turns messy spreadsheets into consistent, auditable workbooks through a simple, repeatable flow:
 
-1. **Config** — define the rules ([`docs/developers/01-config-packages.md`](docs/developers/01-config-packages.md))
-2. **Build** — freeze the environment
-3. **Run** — process files at scale
+1. **Config** — define detection, mapping, and transformation rules ([`01-config-packages.md`](docs/developers/01-config-packages.md))
+2. **Build** — set up a dedicated virtual environment (`venvs/<config_id>/`) with `ade_engine` and your `ade_config` installed
+3. **Run** — use that frozen environment to process one or more input files deterministically
 
 ---
 
@@ -12,7 +12,7 @@ ADE turns messy spreadsheets into consistent, auditable workbooks through a simp
 
 The ADE monorepo brings together three cooperating layers:
 
-* **Frontend (React Router)** — a single-page application where workspace owners create and manage configuration packages, edit code, and trigger builds and runs.
+* **Frontend (React Router)** — a web application where workspace owners create and manage configuration packages, edit code, and trigger builds and runs.
 * **Backend (FastAPI)** — an API service that stores metadata, builds isolated Python environments, and orchestrates job execution.
 * **Engine (Custom python `ade_engine`)** — the runtime module that executes inside the worker process. It reads and interprets spreadsheets, applies your detectors and hooks, and produces structured outputs with full audit trails.
 
@@ -75,7 +75,7 @@ automatic-data-extractor/
 ├─ .github/workflows/               # CI (lint, test, build, publish)
 ```
 
-Everything ADE produces (config packages, venvs, jobs, logs, and caches) is persisted under `ADE_DATA_DIR` (default `./data`). In production, this folder is typically mounted to an external file share so it persists across restarts.
+Everything ADE produces (config_packages, venvs, jobs, logs, cache, etc..) is persisted under `ADE_DATA_DIR` (default `./data`). In production, this folder is typically mounted to an external file share so it persists across restarts.
 
 ```text
 ${ADE_DATA_DIR}/
@@ -118,7 +118,7 @@ ${ADE_DATA_DIR}/
 └─ logs/                            # optional: centralized service logs
 ```
 
-## 1) Config — Define the Rules
+## Step 1: Config — Define the Rules
 
 Every ADE workflow starts with a **config package** you create in the **in‑browser editor**. The editor lets you browse files, edit Python, and save changes in real time.
 
@@ -134,13 +134,22 @@ Under the hood, a config is just a Python package named **`ade_config`**. Inside
 
    * *Transforms (optional)* — clean or normalize values.
    * *Validators (optional)* — check that values match the expected format.
-   * *Hooks (optional)* — run custom logic at key moments (e.g., before a job starts, after mapping, after validation).
+   * *Hooks (optional)* — run custom logic at key points in the job lifecycle.
 
-A few companion files sit alongside your Python code in the config package:
+### Lifecycle Hooks
 
-* **`manifest.json`** — static metadata that describes your configuration to the engine.
-* **`config.env`** *(optional)* — simple `KEY=VALUE` pairs loaded **before** any of your code runs.
-* **`pyproject.toml`** *(optional)* — declare external Python dependencies for your detectors and hooks. ADE installs them during **Build**.
+Hooks give you precise control over the pipeline without changing the core engine. Each hook is an optional Python module that exposes a callable function and runs at a specific stage:
+
+| Hook                   | Runs                           | Typical use                                                                      |
+| ---------------------- | ------------------------------ | -------------------------------------------------------------------------------- |
+| **`on_job_start.py`**  | Before any files are processed | Initialize shared state, load reference data, or record metadata in the artifact |
+| **`after_mapping.py`** | After columns are mapped       | Adjust mappings, reorder fields, or correct mislabeled headers                   |
+| **`before_save.py`**   | Just before output is written  | Add summary tabs, rename sheets, or tweak formatting                             |
+| **`on_job_end.py`**    | After the job completes        | Clean up temporary resources or emit final notes                                 |
+
+Each hook receives structured context objects (e.g., `job`, `table`, `book`) and can safely write observations to the audit artifact using `note()`.
+
+### Example Config Package Layout
 
 ```text
 ${ADE_DATA_DIR}/                                          # Root folder for all ADE state (default: ./data)
@@ -164,24 +173,23 @@ ${ADE_DATA_DIR}/                                          # Root folder for all 
 
 > For a deeper look inside config packages, see ([`docs/developers/01-config-packages.md`](docs/developers/01-config-packages.md)).
 
-## 2) Build — Freeze the Environment
+## Step 2: Build — Freeze the Environment
 
 Click **Build** in the editor to lock your configuration into a self‑contained, reproducible runtime.
 
 Behind the scenes ADE:
 
 1. Creates a fresh virtual environment at `venvs/<config_id>/` using Python’s built‑in `venv`.
-2. Installs, in order:
-   **`ade_engine`** (the runtime that executes jobs) → **`ade_config`** (your rules, exactly as they exist at build time).
-   If you declared dependencies in `pyproject.toml`, those are installed here as well.
+2. Installs the custom python **`ade_engine`** (the runtime that executes jobs) and your custom configured **`ade_config`** (your rules created in step 1).
+   If you declared dependencies in the config package `pyproject.toml`, those are installed here as well.
 
-> You can build as often as you like while the config is in **Draft**. Each build produces a clean, reproducible runtime you can test against.
+> You can build as often as you like while the config package is in **Draft**. Each build produces a clean virtual python environment.
 
-## 3) Run — Process Files
+## Step 3: Run — Process Files
 
 Once a configuration environment is built, ADE can process real spreadsheets safely and predictably—over and over.
 
-* Each run reuses the frozen environment from **Build**.
+* Each run reuses the frozen virtual environment from **Step 2: Build**.
 * ADE launches an isolated worker that imports your `ade_config`, then streams rows from the uploaded document through your detectors and hooks.
 * Your logic helps ADE understand the file: where tables start, what each column represents, and how to clean/validate values.
 
