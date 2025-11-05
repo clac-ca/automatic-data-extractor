@@ -162,9 +162,7 @@ ${ADE_DATA_DIR}/                                          # Root folder for all 
 │     └─ __init__.py                                      # Required by Python; marks this folder as a package
 ```
 
-> For a deeper look inside config packages, see `docs/developers/01-config-packages.md`.
-
----
+> For a deeper look inside config packages, see ([`docs/developers/01-config-packages.md`](docs/developers/01-config-packages.md)).
 
 ## 2) Build — Freeze the Environment
 
@@ -178,8 +176,6 @@ Behind the scenes ADE:
    If you declared dependencies in `pyproject.toml`, those are installed here as well.
 
 > You can build as often as you like while the config is in **Draft**. Each build produces a clean, reproducible runtime you can test against.
-
----
 
 ## 3) Run — Process Files
 
