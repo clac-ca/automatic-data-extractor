@@ -6,8 +6,9 @@ An ADE **config package** is an installable Python distribution that bundles you
 
 > Runtime note: Workers run in standard Python virtual environments. We **do not hard‑block network traffic**; keep rules deterministic, pure, and lightweight. Avoid network calls unless your use case truly requires it.
 
-**Authoring path:** `${ADE_DATA_DIR}/workspaces/<workspace_id>/config_packages/<config_id>/`
-**Built runtime:** `${ADE_DATA_DIR}/workspaces/<workspace_id>/venvs/<config_id>/`
+**Config packages are stored here:** `${ADE_DATA_DIR}/workspaces/<workspace_id>/config_packages/<config_id>/`
+
+**And copied to the virtual env upon build:** `${ADE_DATA_DIR}/workspaces/<workspace_id>/venvs/<config_id>/`
 
 ---
 <a id="top"></a>
