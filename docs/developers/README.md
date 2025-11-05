@@ -117,6 +117,47 @@ ${ADE_DATA_DIR}/
 └─ logs/                            # optional: centralized service logs
 ```
 
+## Visual Overview
+
+```mermaid
+flowchart TD
+    S1["Step 1: Create config package in the GUI"] --> S2["Step 2: Build — ADE creates venv and installs engine + config"]
+
+    %% Job A
+    S2 -->|reuse frozen venv| J1["Step 3: Run job A"]
+    subgraph Job_A["Job A — five passes"]
+        direction TB
+        A1["1) Find tables"]
+        A2["2) Map columns"]
+        A3["3) Transform (optional)"]
+        A4["4) Validate (optional)"]
+        A5["5) Generate outputs"]
+        A1 --> A2 --> A3 --> A4 --> A5
+    end
+    J1 --> A1
+    A5 --> R1["Results: output.xlsx + artifact.json"]
+
+    %% Job B
+    S2 -->|reuse frozen venv| J2["Step 3: Run job B"]
+    subgraph Job_B["Job B — five passes"]
+        direction TB
+        B1["1) Find tables"] --> B2["2) Map columns"] --> B3["3) Transform (optional)"]
+        B3 --> B4["4) Validate (optional)"] --> B5["5) Generate outputs"]
+    end
+    J2 --> B1
+    B5 --> R2["Results: output.xlsx + artifact.json"]
+
+    %% Job C
+    S2 -->|reuse frozen venv| J3["Step 3: Run job C"]
+    subgraph Job_C["Job C — five passes"]
+        direction TB
+        C1["1) Find tables"] --> C2["2) Map columns"] --> C3["3) Transform (optional)"]
+        C3 --> C4["4) Validate (optional)"] --> C5["5) Generate outputs"]
+    end
+    J3 --> C1
+    C5 --> R3["Results: output.xlsx + artifact.json"]
+```
+
 ## Step 1: Config — Define the Rules
 
 Every ADE workflow starts with a **config package** you create in the **in‑browser editor**. The editor lets you browse files, edit Python, and save changes in real time.
@@ -209,47 +250,6 @@ jobs/<job_id>/
     output.xlsx     # final structured workbook
   artifact.json     # full audit trail and rule explanations
   events.ndjson     # timeline of the run
-```
-
-## Visual Overview
-
-```mermaid
-flowchart TD
-    S1["Step 1: Create config package in the GUI"] --> S2["Step 2: Build — ADE creates venv and installs engine + config"]
-
-    %% Job A
-    S2 -->|reuse frozen venv| J1["Step 3: Run job A"]
-    subgraph Job_A["Job A — five passes"]
-        direction TB
-        A1["1) Find tables"]
-        A2["2) Map columns"]
-        A3["3) Transform (optional)"]
-        A4["4) Validate (optional)"]
-        A5["5) Generate outputs"]
-        A1 --> A2 --> A3 --> A4 --> A5
-    end
-    J1 --> A1
-    A5 --> R1["Results: output.xlsx + artifact.json"]
-
-    %% Job B
-    S2 -->|reuse frozen venv| J2["Step 3: Run job B"]
-    subgraph Job_B["Job B — five passes"]
-        direction TB
-        B1["1) Find tables"] --> B2["2) Map columns"] --> B3["3) Transform (optional)"]
-        B3 --> B4["4) Validate (optional)"] --> B5["5) Generate outputs"]
-    end
-    J2 --> B1
-    B5 --> R2["Results: output.xlsx + artifact.json"]
-
-    %% Job C
-    S2 -->|reuse frozen venv| J3["Step 3: Run job C"]
-    subgraph Job_C["Job C — five passes"]
-        direction TB
-        C1["1) Find tables"] --> C2["2) Map columns"] --> C3["3) Transform (optional)"]
-        C3 --> C4["4) Validate (optional)"] --> C5["5) Generate outputs"]
-    end
-    J3 --> C1
-    C5 --> R3["Results: output.xlsx + artifact.json"]
 ```
 
 ## Environment & Configuration
