@@ -16,8 +16,6 @@ The ADE monorepo brings together three cooperating layers:
 * **Backend (FastAPI)** — an API service that stores metadata, builds isolated Python environments, and orchestrates job execution.
 * **Engine (Custom python `ade_engine`)** — the runtime module that executes inside the worker process. It reads and interprets spreadsheets, applies your detectors and hooks, and produces structured outputs with full audit trails.
 
-Everything ADE produces (config packages, venvs, jobs, logs, and caches) is persisted under `ADE_DATA_DIR` (default `./data`). In production, this folder is typically mounted to an external file share so it persists across restarts.
-
 ```text
 automatic-data-extractor/
 ├─ backend/                         # FastAPI app (serves API and the built SPA in prod)
@@ -75,8 +73,11 @@ automatic-data-extractor/
 ├─ .pre-commit-config.yaml
 ├─ .gitignore
 ├─ .github/workflows/               # CI (lint, test, build, publish)
-└─ 🗄️ (runtime output below — generated in ADE_DATA_DIR)
+```
 
+Everything ADE produces (config packages, venvs, jobs, logs, and caches) is persisted under `ADE_DATA_DIR` (default `./data`). In production, this folder is typically mounted to an external file share so it persists across restarts.
+
+```text
 ${ADE_DATA_DIR}/
 ├─ workspaces/
 │  └─ <workspace_id>/
