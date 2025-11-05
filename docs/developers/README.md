@@ -65,7 +65,7 @@ automatic-data-extractor/
 ├─ examples/                        # sample inputs/outputs for docs/tests
 ├─ docs/                            # Developer Guide + HOWTOs
 ├─ scripts/                         # helper scripts (copy build, seed data, etc.)
-├─ Dockerfile                       # multi-stage: build web → copy into backend/app/static
+├─ Dockerfile                       # multi-stage: build web → copy into backend/app/web/static
 ├─ compose.yaml                     # optional: local prod run (app + reverse proxy)
 ├─ Makefile                         # quickstarts (setup/dev/build/run)
 ├─ .env.example                     # documented env vars
@@ -102,9 +102,8 @@ ${ADE_DATA_DIR}/
 │     │        └─ ade_config/...    # Installed config package
 │     ├─ jobs/                      # One working directory per job (inputs, outputs, audit)
 │     │  └─ <job_id>/
-│     │     ├─ inputs/              # Uploaded files (e.g., spreadsheets)
-│     │     ├─ outputs/             # ← clearer than root files
-│     │     │  └─ normalized.xlsx   # final clean workbook (atomic write)
+│     │     ├─ input/               # Uploaded files
+│     │     ├─ output/              # Generated output files
 │     │     └─ logs/
 │     │        ├─ artifact.json     # human/audit-readable narrative
 │     │        └─ events.ndjson     # append-only timeline
@@ -208,86 +207,53 @@ All results are written atomically inside the job folder so you always have a co
 
 ```
 jobs/<job_id>/
-  inputs/
-    sample.xlsx
-  normalized.xlsx   # final structured workbook
+  input/
+    input.xlsx
+  output/
+    output.xlsx     # final structured workbook
   artifact.json     # full audit trail and rule explanations
   events.ndjson     # timeline of the run
 ```
-
----
-
-## Under the Hood — How the Engine Runs Inside the Worker
-
-Inside the worker process, ADE runs **`ade_engine`**, which orchestrates the job and calls into your `ade_config`:
-
-* **I/O model** — The engine reads Excel with **`openpyxl` in streaming mode** (predictable memory on large sheets) and reads CSV with Python’s standard library (UTF‑8 by default).
-  It **never passes raw file handles** to your code. Instead, it streams rows through a small API, keeping detectors, transforms, validators, and hooks **pure and easy to test**.
-
-* **Importing your config** — Because each environment contains exactly one configuration, the engine imports **`ade_config`** directly. To read packaged data like the manifest without absolute paths, it uses `importlib.resources`:
-
-  ```python
-  # ade_engine/runtime.py
-  import json, importlib.resources as res
-
-  def load_manifest() -> dict:
-      p = res.files("ade_config").joinpath("manifest.json")
-      return json.loads(p.read_text("utf-8"))
-  ```
-
-* **Explicit paths & isolation** — The backend sets the worker’s current directory to `jobs/<job_id>/` and exposes clear I/O paths via env vars:
-
-  ```
-  ADE_JOB_DIR       = ${ADE_DATA_DIR}/jobs/<job_id>
-  ADE_INPUTS_DIR    = ${ADE_DATA_DIR}/jobs/<job_id>/inputs
-  ADE_OUTPUT_PATH   = ${ADE_DATA_DIR}/jobs/<job_id>/normalized.xlsx
-  ADE_ARTIFACT_PATH = ${ADE_DATA_DIR}/jobs/<job_id>/artifact.json
-  ADE_EVENTS_PATH   = ${ADE_DATA_DIR}/jobs/<job_id>/events.ndjson
-  ```
-
-  The worker runs Python with `-I -B` (isolated mode; no user site; no `.pyc` writes).
-
-* **Resource ceilings (POSIX)** — Where available, ADE applies best‑effort `rlimit` caps (CPU seconds, address space, max file size). On non‑POSIX systems these limits may not be available and are skipped.
-
----
 
 ## Visual Overview
 
 ```mermaid
 flowchart TD
-    S1[Step 1: Create config package in the GUI] --> S2[Step 2: Build — ADE creates venv and installs engine + config]
+    S1["Step 1: Create config package in the GUI"] --> S2["Step 2: Build — ADE creates venv and installs engine + config"]
 
     %% Job A
-    S2 -- reuse frozen venv --> J1[Step 3: Run job A]
-    subgraph Job_A [Job A — five passes]
+    S2 -->|reuse frozen venv| J1["Step 3: Run job A"]
+    subgraph Job_A["Job A — five passes"]
         direction TB
-        A1[1) Find tables]
-        A2[2) Map columns]
-        A3[3) Transform (optional)]
-        A4[4) Validate (optional)]
-        A5[5) Generate outputs]
+        A1["1) Find tables"]
+        A2["2) Map columns"]
+        A3["3) Transform (optional)"]
+        A4["4) Validate (optional)"]
+        A5["5) Generate outputs"]
         A1 --> A2 --> A3 --> A4 --> A5
     end
     J1 --> A1
-    A5 --> R1[Results: normalized.xlsx + artifact.json]
+    A5 --> R1["Results: output.xlsx + artifact.json"]
 
     %% Job B
-    S2 -- reuse frozen venv --> J2[Run job B]
-    subgraph Job_B [Job B — five passes]
+    S2 -->|reuse frozen venv| J2["Step 3: Run job B"]
+    subgraph Job_B["Job B — five passes"]
         direction TB
-        B1[1) Find tables] --> B2[2) Map columns] --> B3[3) Transform (optional)]
-        B3 --> B4[4) Validate (optional)] --> B5[5) Generate outputs]
+        B1["1) Find tables"] --> B2["2) Map columns"] --> B3["3) Transform (optional)"]
+        B3 --> B4["4) Validate (optional)"] --> B5["5) Generate outputs"]
     end
-    B5 --> R2[Results: normalized.xlsx + artifact.json]
+    J2 --> B1
+    B5 --> R2["Results: output.xlsx + artifact.json"]
 
     %% Job C
-    S2 -- reuse frozen venv --> J3[Run job C]
-    subgraph Job_C [Job C — five passes]
+    S2 -->|reuse frozen venv| J3["Step 3: Run job C"]
+    subgraph Job_C["Job C — five passes"]
         direction TB
-        C1[1) Find tables] --> C2[2) Map columns] --> C3[3) Transform (optional)]
-        C3 --> C4[4) Validate (optional)] --> C5[5) Generate outputs]
+        C1["1) Find tables"] --> C2["2) Map columns"] --> C3["3) Transform (optional)"]
+        C3 --> C4["4) Validate (optional)"] --> C5["5) Generate outputs"]
     end
-    C5 --> R3[Results: normalized.xlsx + artifact.json]
+    J3 --> C1
+    C5 --> R3["Results: output.xlsx + artifact.json"]
 ```
 
 ## Environment & Configuration
@@ -331,7 +297,7 @@ cp examples/inputs/sample.xlsx data/jobs/<job_id>/inputs/
 data/venvs/<config_id>/bin/python -I -B -m ade_engine.worker <job_id>
 ```
 
-When the worker exits, `artifact.json` explains each decision and its supporting scores, `normalized.xlsx` contains the cleaned workbook, and `events.ndjson` shows a timestamped trail of the run.
+When the worker exits, `artifact.json` explains each decision and its supporting scores, `output.xlsx` contains the cleaned workbook, and `events.ndjson` shows a timestamped trail of the run.
 
 ## Troubleshooting and Reproducibility
 
