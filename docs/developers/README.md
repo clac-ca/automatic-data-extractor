@@ -125,10 +125,10 @@ Every ADE workflow starts with a **config package** you create in the **in‑bro
 Under the hood, a config is just a Python package named **`ade_config`**. Inside it, you define three ideas that tell ADE how to read, interpret, and clean your spreadsheets:
 
 1. **How to find the table**
-   *Row detectors* classify each row (header, data, separator, etc.) so ADE can pinpoint where each table begins and ends.
+   * *Row detectors*  — classify each row (header, data, separator, etc.) so ADE can pinpoint where each table begins and ends.
 
 2. **What each column means**
-   *Column detectors* recognize fields like "Invoice Date" or "Amount," even when header names vary. This is how ADE maps columns reliably across inconsistent inputs.
+   * *Column detectors*  — recognize fields like "Invoice Date" or "Amount," even when header names vary. This is how ADE maps columns reliably across inconsistent inputs.
 
 3. **How to make the data trustworthy**
 
@@ -141,6 +141,26 @@ A few companion files sit alongside your Python code in the config package:
 * **`manifest.json`** — static metadata that describes your configuration to the engine.
 * **`config.env`** *(optional)* — simple `KEY=VALUE` pairs loaded **before** any of your code runs.
 * **`pyproject.toml`** *(optional)* — declare external Python dependencies for your detectors and hooks. ADE installs them during **Build**.
+
+```text
+${ADE_DATA_DIR}/                                          # Root folder for all ADE state (default: ./data)
+├─ config_packages/                                       # Editable config packages you author in the UI (source of truth)
+│  └─ <config_id>/                                        # One folder per published config (immutable once published)
+│     ├─ manifest.json                                    # Config manifest: metadata, defaults, entrypoints
+│     ├─ config.env?                                      # Optional environment file loaded before detectors/hooks
+│     ├─ pyproject.toml?                                  # Optional dependency list (supersedes requirements.txt)
+│     ├─ column_detectors/                                # Field logic: detect → transform (optional) → validate (optional)
+│     │  └─ <field>.py                                    # One Python file per target field (e.g., member_id.py)
+│     ├─ row_detectors/                                   # Row-level detectors used to find tables and header rows
+│     │  ├─ header.py                                     # Heuristics that vote for “this row looks like a header row”
+│     │  └─ data.py                                       # Heuristics that vote for “this row looks like a data row”
+│     ├─ hooks/                                           # Optional lifecycle hooks that run around job stages
+│     │  ├─ on_job_start.py                               # def run(*, job, **_): initialize tiny policy/state; note() to artifact
+│     │  ├─ after_mapping.py                              # def after_mapping(*, job, table, **_): correct mapping/order/labels
+│     │  ├─ before_save.py                                # def before_save(*, job, book, **_): rename tab, add sheets, widths
+│     │  └─ on_job_end.py                                 # def run(*, job, **_)
+│     └─ __init__.py                                      # Required by Python; marks this folder as a package
+```
 
 > For a deeper look inside config packages, see `docs/developers/01-config-packages.md`.
 
