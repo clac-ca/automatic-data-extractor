@@ -1,4 +1,4 @@
-# Config Packages — Click‑Through Reference (Teaching Edition)
+# Config Packages — Click‑Through Reference
 
 
 
@@ -13,7 +13,7 @@ An ADE **config package** is an installable Python distribution that bundles you
 ---
 <a id="top"></a>
 
-## Clickable file tree (with concise inline comments)
+## Clickable file tree
 
 > Click any item to jump to its section. Each file’s code block is written to teach the concept: small, readable functions, realistic inputs/outputs, and comments that explain “why,” not just “what.”
 
