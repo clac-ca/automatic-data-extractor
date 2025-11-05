@@ -2,7 +2,7 @@
 
 ADE turns messy spreadsheets into consistent, auditable workbooks through a simple, repeatable flow:
 
-1. **Config** — define detection, mapping, and transformation rules ([`01-config-packages.md`](docs/developers/01-config-packages.md))
+1. **Config** — define detection, mapping, and transformation rules ([`01-config-packages.md`](./01-config-packages.md)
 2. **Build** — set up a dedicated virtual environment (`venvs/<config_id>/`) with `ade_engine` and your `ade_config` installed
 3. **Run** — use that frozen environment to process one or more input files deterministically
 
@@ -170,7 +170,7 @@ ${ADE_DATA_DIR}/                                          # Root folder for all 
 │     └─ __init__.py                                      # Required by Python; marks this folder as a package
 ```
 
-> For a deeper look inside config packages, see ([`docs/developers/01-config-packages.md`](docs/developers/01-config-packages.md)).
+> For a deeper look inside config packages, see ([`01-config-packages.md`](./01-config-packages.md).
 
 ## Step 2: Build — Freeze the Environment
 
