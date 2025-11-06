@@ -41,9 +41,11 @@ An ADE **config package** is a small, installable Python project (**`ade_config`
 Think of an ADE **config package** as a set of tiny functions the engine calls while it reads a spreadsheet.
 
 1. **Stream once → find the table.**
+
    The engine reads each sheet **row by row** and calls your row detectors (`row_detectors/*.py`). Those `detect_*` functions return small scores like “this looks like a **header**” or “**data**.” From those labels, the engine finds the table’s **start**, **end**, and **header row** (trimming empty space).
 
 2. **Materialize the table (it’s small).**
+
    With bounds known, the engine loads just that region into memory as:
 
    ```text
@@ -54,6 +56,7 @@ Think of an ADE **config package** as a set of tiny functions the engine calls w
    ```
 
 3. **Map raw columns to your fields.**
+
    For each column, the engine calls your column detectors (`column_detectors/<field>.py`). Each `detect_*` receives:
 
    * `header` — the column’s header text
@@ -63,6 +66,7 @@ Think of an ADE **config package** as a set of tiny functions the engine calls w
      Each `detect_*` returns a tiny **score** for *its* field. The engine sums scores and assigns the best‑scoring field to the column. If enabled in the manifest, **unmatched** columns are appended on the far right with a prefix like `raw_Amount`.
 
 4. **(Optional) Transform & validate — row by row.**
+
    Still inside each column file:
 
    * `transform()` (if present) can **normalize** a value or even fill **multiple fields** for that row (e.g., `full_name → first_name + last_name`).
@@ -70,6 +74,7 @@ Think of an ADE **config package** as a set of tiny functions the engine calls w
      These run **after mapping** and only affect the **current row**.
 
 5. **Hooks let you modify whole objects at the right time.**
+
    Hooks are **completely optional**. They let you extend behavior without touching the engine. The four you’ll use most:
 
    ### `on_job_start(job)` → return **None**
@@ -137,6 +142,7 @@ Think of an ADE **config package** as a set of tiny functions the engine calls w
    See: [`on_job_end.py`](#onjobendpy)
 
 6. **Everything is auditable.**
+
    Every detector score, mapping choice, transform delta, and validation issue is recorded in the **artifact** so you can explain any result.
 
 ---
