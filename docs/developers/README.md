@@ -15,6 +15,9 @@ The ADE monorepo brings together three cooperating layers:
 * **Frontend (React Router)** — a web application where workspace owners create and manage configuration packages, edit code, and trigger builds and runs.
 * **Backend (FastAPI)** — an API service that stores metadata, builds isolated Python environments, and orchestrates job execution.
 * **Engine (Custom python `ade_engine`)** — the runtime module that executes inside the worker process. It reads and interprets spreadsheets, applies your detectors and hooks, and produces structured outputs with full audit trails.
+* **Config package (Custom python `ade_config`)*** — built and configured in the frontend, each config package contains all the business logic that tells ADE how to interpret and transform data. They are versioned, allowing you to create drafts, test changes, roll back safely, and extend behavior through a highly flexible and modular Python interface.
+
+At job runtime, the **ADE Engine** and your versioned **ADE Config Package** are loaded into an isolated virtual environment.  The output is a normalized excel file.
 
 ```text
 automatic-data-extractor/
