@@ -122,8 +122,6 @@ async def async_client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     """Provide an HTTPX async client bound to the FastAPI app."""
 
     async with LifespanManager(app):
-        if app.state.settings.queue_enabled:
-            assert getattr(app.state, "job_queue", None) is not None, "queue manager did not start"
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://testserver") as client:
             yield client

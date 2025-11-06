@@ -178,7 +178,6 @@ class Settings(BaseSettings):
     storage_data_dir: Path = Field(default=DEFAULT_DATA_DIR)
     storage_documents_dir: Path | None = None
     storage_configs_dir: Path | None = None
-    activation_envs_dir: Path | None = None
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
     secret_key: SecretStr = Field(
@@ -191,18 +190,6 @@ class Settings(BaseSettings):
     database_pool_size: int = Field(5, ge=1)
     database_max_overflow: int = Field(10, ge=0)
     database_pool_timeout: int = Field(30, gt=0)
-
-    # Queue ----------------------------------------------------------------------
-    queue_enabled: bool = True
-    queue_max_concurrency: int = Field(2, ge=1)
-    queue_max_size: int = Field(64, ge=1)
-    queue_stale_after: timedelta = Field(default=timedelta(seconds=60))
-    queue_heartbeat_interval: timedelta = Field(default=timedelta(seconds=5))
-
-    @field_validator("queue_stale_after", "queue_heartbeat_interval", mode="before")
-    @classmethod
-    def _coerce_queue_durations(cls, value: Any, info: ValidationInfo) -> timedelta:
-        return _parse_duration(value, field_name=info.field_name)
 
     # JWT ------------------------------------------------------------------------
     jwt_secret: SecretStr = Field(default=SecretStr("development-secret"))
@@ -466,12 +453,6 @@ class Settings(BaseSettings):
             configs_dir = data_dir / DEFAULT_CONFIGS_SUBDIR
         configs_dir = _normalise_path(configs_dir, base=data_dir)
         self.storage_configs_dir = configs_dir
-
-        activation_dir = self.activation_envs_dir
-        if activation_dir is None:
-            activation_dir = data_dir / "venvs"
-        activation_dir = _normalise_path(activation_dir, base=data_dir)
-        self.activation_envs_dir = activation_dir
 
         if not self.database_dsn:
             sqlite_path = (data_dir / DEFAULT_DATABASE_SUBDIR / DEFAULT_DATABASE_FILENAME).resolve()

@@ -19,61 +19,68 @@ The ADE monorepo brings together four cooperating layers:
 
 ```text
 automatic-data-extractor/
-├─ backend/                         # FastAPI app (serves API and the built SPA in prod)
-│  ├─ app/
-│  │  ├─ main.py                    # mounts: /api (routers), / (StaticFiles for SPA build)
-│  │  ├─ api/                       # routers
-│  │  ├─ core/                      # settings, logging, lifespan, security
-│  │  ├─ services/                  # build/run/queue logic
-│  │  ├─ repositories/              # DB persistence
-│  │  ├─ schemas/                   # Pydantic models
-│  │  ├─ workers/                   # subprocess orchestration (engine worker)
-│  │  ├─ web/static/                # ← SPA build copied here from web/dist (kept in repo; .gitignore the contents)
-│  │  └─ templates/                 # optional: server-side templates/emails (keep .keep)
-│  ├─ migrations/                   # Alembic
-│  ├─ pyproject.toml
-│  └─ tests/
+├─ apps/                                   # Deployable applications (things you run/ship)
+│  ├─ api/                                 # FastAPI service (serves /api + static SPA)
+│  │  ├─ app/
+│  │  │  ├─ main.py                        # mounts: /api routers; serves / from ./web/static
+│  │  │  ├─ api/                           # route modules (FastAPI routers)
+│  │  │  ├─ core/                          # settings, logging, lifespan, security
+│  │  │  ├─ services/                      # build/run orchestration, queues
+│  │  │  ├─ repositories/                  # DB access & persistence layer
+│  │  │  ├─ schemas/                       # Pydantic models (request/response/DB)
+│  │  │  ├─ workers/                       # subprocess/worker orchestration
+│  │  │  ├─ web/static/                    # ← SPA build copied here at image build time (DO NOT COMMIT)
+│  │  │  └─ templates/                     # optional: server-rendered templates/emails
+│  │  ├─ migrations/                       # Alembic migration scripts
+│  │  ├─ pyproject.toml                    # Python project for the API app
+│  │  └─ tests/                            # API service tests
+│  │
+│  └─ web/                                 # React SPA (Vite)
+│     ├─ src/                              # routes, components, features
+│     ├─ public/                           # static public assets
+│     ├─ package.json
+│     └─ vite.config.ts
 │
-├─ frontend/                        # React SPA (Vite/CRA)
-│  ├─ src/
-│  ├─ public/
-│  ├─ package.json
-│  └─ vite.config.ts
+├─ packages/                               # Reusable libraries (imported by apps)
+│  └─ ade-engine/                          # installable Python package: ade_engine
+│     ├─ pyproject.toml
+│     ├─ src/ade_engine/                   # engine runtime, IO, pipeline, hooks integration
+│     └─ tests/                            # engine unit tests
 │
-├─ engine/                          # ade-engine (installable Python package)
-│  ├─ pyproject.toml
-│  ├─ src/ade_engine/...
-│  └─ tests/
-│
-├─ templates/
+├─ templates/                              # Starter content templates (user-facing seeds)
 │  └─ config-packages/
 │     ├─ default/
-│     │  ├─ template.manifest.json  # template catalog metadata (name/description/tags/min engine)
-│     │  └─ src/ade_config/         # detectors/hooks + runtime manifest/env
-│     │     ├─ manifest.json
-│     │     ├─ config.env
-│     │     ├─ column_detectors/
-│     │     ├─ row_detectors/
-│     │     └─ hooks/
+│     │  ├─ template.manifest.json         # catalog metadata (name/description/tags/min engine)
+│     │  └─ src/ade_config/                # detectors/hooks + runtime manifest/env
+│     │     ├─ manifest.json               # read via importlib.resources
+│     │     ├─ config.env                  # optional env vars for this config
+│     │     ├─ column_detectors/           # detect → transform (opt) → validate (opt)
+│     │     ├─ row_detectors/              # header/data row heuristics
+│     │     └─ hooks/                      # on_job_start/after_mapping/before_save/on_job_end
 │     └─ <other-template>/
 │        ├─ template.manifest.json
 │        └─ src/ade_config/...
 │
-├─ schemas/                         # JSON Schemas for validation (IDE‑friendly)
-│  ├─ config-manifest.v1.json
-│  └─ template-manifest.v1.json
+├─ specs/                                   # JSON Schemas & other formal specs
+│  ├─ config-manifest.v1.json               # config package manifest schema
+│  └─ template-manifest.v1.json             # template catalog schema
 │
-├─ examples/                        # sample inputs/outputs for docs/tests
-├─ docs/                            # Developer Guide + HOWTOs
-├─ scripts/                         # helper scripts (copy build, seed data, etc.)
-├─ Dockerfile                       # multi-stage: build web → copy into backend/app/web/static
-├─ compose.yaml                     # optional: local prod run (app + reverse proxy)
-├─ Makefile                         # quickstarts (setup/dev/build/run)
-├─ .env.example                     # documented env vars
+├─ examples/                                # sample inputs/outputs for docs/tests
+├─ docs/                                    # Developer Guide, HOWTOs, operations runbooks
+├─ scripts/                                 # helper scripts (seed data, local tools, etc.)
+│
+├─ infra/                                   # deployment infra (container, compose, k8s, IaC)
+│  ├─ docker/
+│  │  └─ api.Dockerfile                     # multi-stage: build web → copy dist → apps/api/app/web/static
+│  ├─ compose.yaml                          # optional: local prod-style run
+│  └─ k8s/                                  # optional: manifests/helm when needed
+│
+├─ Makefile                                 # friendly entrypoints (setup/dev/build/run)
+├─ .env.example                             # documented env vars for local/dev
 ├─ .editorconfig
 ├─ .pre-commit-config.yaml
 ├─ .gitignore
-├─ .github/workflows/               # CI (lint, test, build, publish)
+└─ .github/workflows/                       # CI: lint, test, build, publish
 ```
 
 Everything ADE produces (config_packages, venvs, jobs, logs, cache, etc..) is persisted under `ADE_DATA_DIR` (default `./data`). In production, this folder is typically mounted to an external file share so it persists across restarts.
@@ -136,7 +143,7 @@ flowchart TD
         A1 --> A2 --> A3 --> A4 --> A5
     end
     J1 --> A1
-    A5 --> R1["Results: output.xlsx + artifact.json"]
+    A5 --> R1["Results: output.xlsx + logs/artifact.json"]
 
     %% Job B
     S2 -->|reuse frozen venv| J2["Step 3: Run job B"]
@@ -146,7 +153,7 @@ flowchart TD
         B3 --> B4["4) Validate (optional)"] --> B5["5) Generate outputs"]
     end
     J2 --> B1
-    B5 --> R2["Results: output.xlsx + artifact.json"]
+    B5 --> R2["Results: output.xlsx + logs/artifact.json"]
 
     %% Job C
     S2 -->|reuse frozen venv| J3["Step 3: Run job C"]
@@ -156,7 +163,7 @@ flowchart TD
         C3 --> C4["4) Validate (optional)"] --> C5["5) Generate outputs"]
     end
     J3 --> C1
-    C5 --> R3["Results: output.xlsx + artifact.json"]
+    C5 --> R3["Results: output.xlsx + logs/artifact.json"]
 ```
 
 ## Step 1: Config — Define the Rules
@@ -166,9 +173,11 @@ Every ADE workflow starts with a **config package** you create in the **in‑bro
 Under the hood, a config is just a Python package named **`ade_config`**. Inside it, you define three ideas that tell ADE how to read, interpret, and clean your spreadsheets:
 
 1. **How to find the table**
+
    * *Row detectors*  — classify each row (header, data, separator, etc.) so ADE can pinpoint where each table begins and ends.
 
 2. **What each column means**
+
    * *Column detectors*  — recognize fields like "Invoice Date" or "Amount," even when header names vary. This is how ADE maps columns reliably across inconsistent inputs.
 
 3. **How to make the data trustworthy**
@@ -248,9 +257,10 @@ jobs/<job_id>/
   input/
     input.xlsx
   output/
-    output.xlsx     # final structured workbook
-  artifact.json     # full audit trail and rule explanations
-  events.ndjson     # timeline of the run
+    output.xlsx       # final structured workbook
+  logs/
+    artifact.json     # full audit trail and rule explanations
+    events.ndjson     # timeline of the run
 ```
 
 ## Environment & Configuration
@@ -284,17 +294,17 @@ You can exercise the complete path without the frontend. Copy the template to cr
 ```bash
 # 1) Create a per-config virtual environment and install engine + config (production installs)
 python -m venv data/venvs/<config_id>
-data/venvs/<config_id>/bin/pip install engine/
+data/venvs/<config_id>/bin/pip install packages/ade-engine/
 data/venvs/<config_id>/bin/pip install data/config_packages/<config_id>/
 data/venvs/<config_id>/bin/pip freeze > data/venvs/<config_id>/ade-runtime/packages.txt
 
 # 2) Seed a job and run it
-mkdir -p data/jobs/<job_id>/inputs
-cp examples/inputs/sample.xlsx data/jobs/<job_id>/inputs/
+mkdir -p data/jobs/<job_id>/input
+cp examples/inputs/sample.xlsx data/jobs/<job_id>/input/
 data/venvs/<config_id>/bin/python -I -B -m ade_engine.worker <job_id>
 ```
 
-When the worker exits, `artifact.json` explains each decision and its supporting scores, `output.xlsx` contains the cleaned workbook, and `events.ndjson` shows a timestamped trail of the run.
+When the worker exits, `logs/artifact.json` explains each decision and its supporting scores, `output.xlsx` contains the cleaned workbook, and `logs/events.ndjson` shows a timestamped trail of the run.
 
 ## Troubleshooting and Reproducibility
 

@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from backend.app.features.jobs.service import SAFE_MODE_DISABLED_MESSAGE
 from backend.app.shared.core.config import Settings
 
 from .exceptions import HealthCheckError
 from .schemas import HealthCheckResponse, HealthComponentStatus
+
+SAFE_MODE_DISABLED_MESSAGE = (
+    "User-submitted configuration execution is currently disabled because ADE_SAFE_MODE is enabled."
+)
 
 
 class HealthService:

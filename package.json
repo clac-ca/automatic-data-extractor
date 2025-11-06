@@ -30,8 +30,7 @@
     "clean:force": "node scripts/npm-clean.mjs",
     "reset": "node scripts/npm-reset.mjs",
     "reset:force": "node scripts/npm-reset.mjs",
-    "ci": "node scripts/npm-ci.mjs",
-    "validate": "./.venv/bin/python -m backend.app.scripts.validate"
+    "ci": "node scripts/npm-ci.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.0.0",
