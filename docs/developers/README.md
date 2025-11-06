@@ -14,7 +14,7 @@ The ADE monorepo brings together four cooperating layers:
 
 * **Frontend (React Router)** — web app where workspace owners create and manage config packages, edit code, and trigger builds and runs.
 * **Backend (Python FastAPI)** — API service that stores metadata, builds isolated Python environments, and orchestrates job execution.
-* **Engine (Python `ade_engine`)** — python runtime module that executes inside the worker process, reading spreadsheets, applying detectors and hooks, and producing normalized outputs with full audit trails.
+* **Engine (Python `ade_engine`)** — runtime module that executes inside the worker process, reading spreadsheets, applying detectors and hooks, and producing normalized outputs with full audit trails.
 * **Config package (Python `ade_config`)** — built and managed in the frontend; defines the business logic that tells ADE how to detect, map, and transform data. Versioned for draft, testing, rollback, and extension through a flexible Python interface.
 
 ```text
@@ -165,13 +165,11 @@ Every ADE workflow starts with a **config package** you create in the **in‑bro
 
 Under the hood, a config is just a Python package named **`ade_config`**. Inside it, you define three ideas that tell ADE how to read, interpret, and clean your spreadsheets:
 
-1. **How to find the table**
-   * *Row detectors*  — classify each row (header, data, separator, etc.) so ADE can pinpoint where each table begins and ends.
+1. **How to find the table**: *Row detectors*  — classify each row (header, data, separator, etc.) so ADE can pinpoint where each table begins and ends.
 
-2. **What each column means**
-   * *Column detectors*  — recognize fields like "Invoice Date" or "Amount," even when header names vary. This is how ADE maps columns reliably across inconsistent inputs.
+2. **What each column means**: *Column detectors*  — recognize fields like "Invoice Date" or "Amount," even when header names vary. This is how ADE maps columns reliably across inconsistent inputs.
 
-3. **How to make the data trustworthy**
+3. **How to make the data trustworthy**:
 
    * *Transforms (optional)* — clean or normalize values.
    * *Validators (optional)* — check that values match the expected format.
