@@ -16,7 +16,9 @@ const run = (command, args = [], options = {}) =>
   });
 
 const backendDir = ".";
-const hasBackend = existsSync(join("apps", "api", "app")) && existsSync("pyproject.toml");
+const hasBackend =
+  existsSync(join("apps", "api", "app")) &&
+  existsSync(join("apps", "api", "pyproject.toml"));
 const hasFrontend =
   existsSync(join("apps", "web")) && existsSync(join("apps", "web", "package.json"));
 
@@ -57,7 +59,9 @@ if (mode && !validModes.has(mode)) {
 }
 
 if (mode === "backend" && !hasBackend) {
-  console.error("Backend not found. Ensure apps/api/app/ and pyproject.toml exist before running backend mode.");
+  console.error(
+    "Backend not found. Ensure apps/api/app/ and apps/api/pyproject.toml exist before running backend mode.",
+  );
   process.exit(1);
 }
 

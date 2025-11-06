@@ -27,7 +27,9 @@ if (!validScopes.includes(scope)) {
 const shouldRunBackend = scope === undefined || scope === "backend" || scope === "all";
 const shouldRunFrontend = scope === undefined || scope === "frontend" || scope === "all";
 
-const backendPresent = existsSync(join("apps", "api", "app")) && existsSync("pyproject.toml");
+const backendPresent =
+  existsSync(join("apps", "api", "app")) &&
+  existsSync(join("apps", "api", "pyproject.toml"));
 const frontendPresent =
   existsSync(join("apps", "web")) && existsSync(join("apps", "web", "package.json"));
 
@@ -53,7 +55,8 @@ const lintBackend = async () => {
   const fallback = process.platform === "win32" ? "python" : "python3";
   const pythonExecutable =
     pythonCandidates.find((candidate) => existsSync(candidate)) || fallback;
-  await run(pythonExecutable, ["-m", "ruff", "check", "apps/api/app"]);
+  const backendRoot = join(process.cwd(), "apps/api");
+  await run(pythonExecutable, ["-m", "ruff", "check", "app"], { cwd: backendRoot });
 };
 
 const frontendHasLintScript = async () => {

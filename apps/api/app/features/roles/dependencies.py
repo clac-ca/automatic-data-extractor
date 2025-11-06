@@ -84,7 +84,10 @@ def require_permissions_catalog_access(
     global_permission: str = "Roles.Read.All",
     workspace_permission: str = "Workspace.Roles.Read",
     workspace_param: str = "workspace_id",
-) -> Callable[[Request, SecurityScopes, str, str | None, AuthenticatedIdentity, AsyncSession], User]:
+) -> Callable[
+    [Request, SecurityScopes, str, str | None, AuthenticatedIdentity, AsyncSession],
+    User,
+]:
     """Return a dependency that validates permission catalog access by scope."""
 
     async def dependency(

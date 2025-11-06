@@ -5,11 +5,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import ClassVar
 
-from sqlalchemy import DateTime, String
-from sqlalchemy.orm import Mapped, declared_attr, mapped_column
-
 from apps.api.app.shared.core.ids import generate_ulid
 from apps.api.app.shared.core.time import utc_now
+from sqlalchemy import DateTime, String
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 __all__ = ["generate_ulid", "TimestampMixin", "ULIDPrimaryKeyMixin"]
 

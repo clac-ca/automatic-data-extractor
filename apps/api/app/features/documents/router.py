@@ -328,7 +328,9 @@ async def list_documents(
     last_run_to: Annotated[
         datetime | None,
         Query(
-            description="Return documents with a last run on/before this UTC timestamp (inclusive).",
+            description=(
+                "Return documents with a last run on/before this UTC timestamp (inclusive)."
+            ),
             example="2024-02-29T23:59:59Z",
         ),
     ] = None,

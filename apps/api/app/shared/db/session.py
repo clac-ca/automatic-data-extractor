@@ -5,10 +5,9 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
+from apps.api.app.shared.core.config import Settings, get_settings
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-from apps.api.app.shared.core.config import Settings, get_settings
 
 from .engine import engine_cache_key, get_engine
 

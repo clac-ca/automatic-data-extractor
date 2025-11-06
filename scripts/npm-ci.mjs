@@ -36,7 +36,9 @@ const runCapture = (command, args = [], options = {}) =>
     });
   });
 
-const hasBackend = existsSync(join("apps", "api", "app")) && existsSync("pyproject.toml");
+const hasBackend =
+  existsSync(join("apps", "api", "app")) &&
+  existsSync(join("apps", "api", "pyproject.toml"));
 const hasFrontend =
   existsSync(join("apps", "web")) && existsSync(join("apps", "web", "package.json"));
 

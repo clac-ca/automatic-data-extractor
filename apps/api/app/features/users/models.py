@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from apps.api.app.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
+
+if TYPE_CHECKING:
+    from apps.api.app.features.roles.models import Principal
 
 
 def _normalise_email(value: str) -> str:

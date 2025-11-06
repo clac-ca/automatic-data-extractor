@@ -26,6 +26,7 @@ from .registry import (
     SYSTEM_ROLES,
     PermissionScope,
 )
+from .schemas import RoleCreate, RoleUpdate
 
 GLOBAL_IMPLICATIONS: Mapping[str, tuple[str, ...]] = {
     "Roles.ReadWrite.All": ("Roles.Read.All",),

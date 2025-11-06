@@ -20,7 +20,7 @@ apps/api/
 └─ tests/                        # pytest suites (api + services + utilities)
 ```
 
-Install dependencies from the repo root (`pip install -e .[dev]`) or via `npm run setup`.
+Install dependencies from the repo root (`pip install -e apps/api[dev]`) or via `npm run setup`.
 
 ## Commands
 

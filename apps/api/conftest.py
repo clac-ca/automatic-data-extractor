@@ -18,7 +18,7 @@ from fastapi import FastAPI
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 
-from apps.api.app.shared.core.config import Settings, get_settings, reload_settings
+from apps.api.app.shared.core.config import PROJECT_ROOT, Settings, get_settings, reload_settings
 from apps.api.app.shared.db.engine import ensure_database_ready, render_sync_url, reset_database_state
 from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.auth.security import hash_password
@@ -33,6 +33,8 @@ from apps.api.app.features.users.models import User, UserCredential
 from apps.api.app.features.workspaces.models import Workspace, WorkspaceMembership
 from apps.api.app.shared.core.lifecycles import ensure_runtime_dirs
 from apps.api.app.main import create_app
+
+API_ROOT = (PROJECT_ROOT / "apps/api").resolve()
 
 
 @pytest.fixture(scope="session")
@@ -70,8 +72,9 @@ def _configure_database(
     ensure_runtime_dirs(settings)
     reset_database_state()
 
-    config = Config(str(Path("alembic.ini")))
+    config = Config(str(API_ROOT / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", render_sync_url(_database_url))
+    config.set_main_option("script_location", str(API_ROOT / "migrations"))
     command.upgrade(config, "head")
 
     yield

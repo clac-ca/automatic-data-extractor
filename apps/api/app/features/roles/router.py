@@ -165,8 +165,9 @@ def _role_permission_requirements(role: Role, *, write: bool) -> tuple[str, str,
 
 
 async def _load_role(
-    role_id: str = Path(..., min_length=1),
-    session: AsyncSession = Depends(get_session),
+    role_id: Annotated[str, Path(..., min_length=1)],
+    *,
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Role:
     role = await get_role(session=session, role_id=role_id)
     if role is None:
@@ -177,7 +178,7 @@ async def _load_role(
 async def require_role_read_access(
     role: Annotated[Role, Depends(_load_role)],
     identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
-    session: AsyncSession = Depends(get_session),
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Role:
     permission, scope_type, scope_id = _role_permission_requirements(role, write=False)
     decision = await authorize(
@@ -199,7 +200,7 @@ async def require_role_read_access(
 async def require_role_write_access(
     role: Annotated[Role, Depends(_load_role)],
     identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
-    session: AsyncSession = Depends(get_session),
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> tuple[User, Role]:
     permission, scope_type, scope_id = _role_permission_requirements(role, write=True)
     decision = await authorize(
@@ -233,11 +234,16 @@ async def require_role_write_access(
     },
 )
 async def list_global_roles(
-    scope: Literal["global"] = Query(
-        "global", description="Role scope to list (global only)", alias="scope"
-    ),
-    session: AsyncSession = Depends(get_session),
-    _actor: User = Security(require_global("Roles.Read.All")),
+    *,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    scope: Annotated[
+        Literal["global"],
+        Query(
+            description="Role scope to list (global only)",
+            alias="scope",
+        ),
+    ] = "global",
+    _actor: Annotated[User, Security(require_global("Roles.Read.All"))],
 ) -> list[RoleRead]:
     """Return the catalog of global roles."""
 
@@ -269,11 +275,16 @@ async def list_global_roles(
 )
 async def create_global_role_endpoint(
     payload: RoleCreate,
-    scope: Literal["global"] = Query(
-        "global", description="Role scope to create (global only)", alias="scope"
-    ),
-    session: AsyncSession = Depends(get_session),
-    actor: User = Security(require_global("Roles.ReadWrite.All")),
+    *,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    scope: Annotated[
+        Literal["global"],
+        Query(
+            description="Role scope to create (global only)",
+            alias="scope",
+        ),
+    ] = "global",
+    actor: Annotated[User, Security(require_global("Roles.ReadWrite.All"))],
 ) -> RoleRead:
     """Create a new global role definition."""
 
@@ -351,8 +362,9 @@ async def read_role_detail(
 async def update_role_definition(
     payload: RoleUpdate,
     actor_and_role: Annotated[tuple[User, Role], Security(require_role_write_access)],
-    role_id: str = Path(..., min_length=1),
-    session: AsyncSession = Depends(get_session),
+    role_id: Annotated[str, Path(..., min_length=1)],
+    *,
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> RoleRead:
     """Update the specified role in its scope."""
 
@@ -422,8 +434,9 @@ async def update_role_definition(
 )
 async def delete_role_definition(
     actor_and_role: Annotated[tuple[User, Role], Security(require_role_write_access)],
-    role_id: str = Path(..., min_length=1),
-    session: AsyncSession = Depends(get_session),
+    role_id: Annotated[str, Path(..., min_length=1)],
+    *,
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> None:
     """Delete the specified role definition."""
 
@@ -478,11 +491,12 @@ async def delete_role_definition(
     },
 )
 async def list_global_role_assignments(
-    principal_id: str | None = Query(default=None, min_length=1),
-    user_id: str | None = Query(default=None, min_length=1),
-    role_id: str | None = Query(default=None, min_length=1),
-    session: AsyncSession = Depends(get_session),
-    _actor: User = Security(require_global("Roles.Read.All")),
+    *,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    principal_id: Annotated[str | None, Query(min_length=1)] = None,
+    user_id: Annotated[str | None, Query(min_length=1)] = None,
+    role_id: Annotated[str | None, Query(min_length=1)] = None,
+    _actor: Annotated[User, Security(require_global("Roles.Read.All"))],
 ) -> list[RoleAssignmentRead]:
     """Return global role assignments filtered by optional identifiers."""
 
@@ -534,8 +548,9 @@ async def list_global_role_assignments(
 async def create_global_role_assignment(
     payload: RoleAssignmentCreate,
     response: Response,
-    session: AsyncSession = Depends(get_session),
-    _actor: User = Security(require_global("Roles.ReadWrite.All")),
+    *,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[User, Security(require_global("Roles.ReadWrite.All"))],
 ) -> RoleAssignmentRead:
     """Create or return an existing global role assignment."""
 
@@ -605,9 +620,10 @@ async def create_global_role_assignment(
     },
 )
 async def delete_global_role_assignment(
-    assignment_id: str = Path(..., min_length=1),
-    session: AsyncSession = Depends(get_session),
-    _actor: User = Security(require_global("Roles.ReadWrite.All")),
+    assignment_id: Annotated[str, Path(..., min_length=1)],
+    *,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[User, Security(require_global("Roles.ReadWrite.All"))],
 ) -> None:
     """Delete a global role assignment by identifier."""
 
@@ -640,14 +656,19 @@ async def delete_global_role_assignment(
     },
 )
 async def list_workspace_role_assignments(
-    workspace_id: str = Path(..., min_length=1),
-    principal_id: str | None = Query(default=None, min_length=1),
-    user_id: str | None = Query(default=None, min_length=1),
-    role_id: str | None = Query(default=None, min_length=1),
-    _actor: User = Security(
-        require_workspace("Workspace.Members.Read"), scopes=["{workspace_id}"]
-    ),
-    session: AsyncSession = Depends(get_session),
+    workspace_id: Annotated[str, Path(..., min_length=1)],
+    principal_id: Annotated[str | None, Query(min_length=1)] = None,
+    user_id: Annotated[str | None, Query(min_length=1)] = None,
+    role_id: Annotated[str | None, Query(min_length=1)] = None,
+    *,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Members.Read"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
 ) -> list[RoleAssignmentRead]:
     """Return workspace role assignments filtered by optional identifiers."""
 
@@ -699,11 +720,16 @@ async def list_workspace_role_assignments(
 async def create_workspace_role_assignment(
     payload: RoleAssignmentCreate,
     response: Response,
-    workspace_id: str = Path(..., min_length=1),
-    _actor: User = Security(
-        require_workspace("Workspace.Members.ReadWrite"), scopes=["{workspace_id}"]
-    ),
-    session: AsyncSession = Depends(get_session),
+    workspace_id: Annotated[str, Path(..., min_length=1)],
+    *,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Members.ReadWrite"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
 ) -> RoleAssignmentRead:
     """Create or return an existing workspace role assignment."""
 
@@ -773,12 +799,17 @@ async def create_workspace_role_assignment(
     },
 )
 async def delete_workspace_role_assignment(
-    workspace_id: str = Path(..., min_length=1),
-    assignment_id: str = Path(..., min_length=1),
-    _actor: User = Security(
-        require_workspace("Workspace.Members.ReadWrite"), scopes=["{workspace_id}"]
-    ),
-    session: AsyncSession = Depends(get_session),
+    workspace_id: Annotated[str, Path(..., min_length=1)],
+    assignment_id: Annotated[str, Path(..., min_length=1)],
+    *,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Members.ReadWrite"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
 ) -> None:
     """Delete a workspace role assignment by identifier."""
 
@@ -807,22 +838,32 @@ async def delete_workspace_role_assignment(
     },
 )
 async def list_permissions(
-    scope: PermissionScope = Query(
-        ..., description="Permission scope to list", examples={"default": {"value": "workspace"}}
-    ),
-    workspace_id: str | None = Query(
-        default=None,
-        min_length=1,
-        description="Workspace identifier required when scope=workspace.",
-    ),
-    session: AsyncSession = Depends(get_session),
-    actor: User = Security(
-        require_permissions_catalog_access(
-            global_permission="Roles.Read.All",
-            workspace_permission="Workspace.Roles.Read",
+    scope: Annotated[
+        PermissionScope,
+        Query(
+            description="Permission scope to list",
+            examples={"default": {"value": "workspace"}},
         ),
-        scopes=["{workspace_id}"],
-    ),
+    ],
+    workspace_id: Annotated[
+        str | None,
+        Query(
+            min_length=1,
+            description="Workspace identifier required when scope=workspace.",
+        ),
+    ] = None,
+    *,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    actor: Annotated[
+        User,
+        Security(
+            require_permissions_catalog_access(
+                global_permission="Roles.Read.All",
+                workspace_permission="Workspace.Roles.Read",
+            ),
+            scopes=["{workspace_id}"],
+        ),
+    ],
 ) -> list[PermissionRead]:
     """Return permission registry entries filtered by ``scope``."""
 
@@ -858,12 +899,15 @@ async def list_permissions(
 )
 async def read_effective_permissions(
     identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
-    workspace_id: str | None = Query(
-        default=None,
-        min_length=1,
-        description="Optional workspace identifier for scoped permissions.",
-    ),
-    session: AsyncSession = Depends(get_session),
+    workspace_id: Annotated[
+        str | None,
+        Query(
+            min_length=1,
+            description="Optional workspace identifier for scoped permissions.",
+        ),
+    ] = None,
+    *,
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> EffectivePermissionsResponse:
     """Return global and optional workspace permissions for the active user."""
 
@@ -914,7 +958,7 @@ async def read_effective_permissions(
 async def check_permissions(
     payload: PermissionCheckRequest,
     identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
-    session: AsyncSession = Depends(get_session),
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> PermissionCheckResponse:
     """Return a permission map describing whether the caller has each key."""
 

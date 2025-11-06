@@ -43,8 +43,10 @@ python -m venv .venv
 source .venv/bin/activate  # Windows: .\.venv\Scripts\Activate.ps1
 
 # Install dependencies
-pip install -e .[dev]
+pip install -e apps/api[dev]
 npm install
+npm install --prefix apps/web  # install SPA dependencies
+# alternatively, run `npm run setup` to perform both installs with one command
 
 # Run the backend
 uvicorn apps.api.app.main:create_app --reload --factory --port 8000

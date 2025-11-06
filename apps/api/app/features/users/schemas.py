@@ -17,7 +17,10 @@ class UserProfile(BaseSchema):
     is_active: bool
     is_service_account: bool
     display_name: str | None = None
-    preferred_workspace_id: str | None = Field(default=None, validation_alias="preferred_workspace_id")
+    preferred_workspace_id: str | None = Field(
+        default=None,
+        validation_alias="preferred_workspace_id",
+    )
     roles: list[str] = Field(default_factory=list)
     permissions: list[str] = Field(default_factory=list)
 
