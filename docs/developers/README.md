@@ -10,14 +10,14 @@ ADE turns messy spreadsheets into consistent, auditable workbooks through a simp
 
 ## Repository and Runtime Layout
 
-The ADE monorepo brings together three cooperating layers:
+The ADE monorepo brings together four cooperating layers:
 
-* **Frontend (React Router)** — a web application where workspace owners create and manage configuration packages, edit code, and trigger builds and runs.
+* **Frontend (React Router)** — a web application where workspace owners create and manage config packages, edit code, and trigger builds and runs.
 * **Backend (FastAPI)** — an API service that stores metadata, builds isolated Python environments, and orchestrates job execution.
-* **Engine (Custom python `ade_engine`)** — the runtime module that executes inside the worker process. It reads and interprets spreadsheets, applies your detectors and hooks, and produces structured outputs with full audit trails.
-* **Config package (Custom python `ade_config`)*** — built and configured in the frontend, each config package contains all the business logic that tells ADE how to interpret and transform data. They are versioned, allowing you to create drafts, test changes, roll back safely, and extend behavior through a highly flexible and modular Python interface.
+* **Engine (`ade_engine`)** — the runtime module that executes inside the worker process. It reads and interprets spreadsheets, applies detectors and hooks, and produces a normalized Excel workbook.
+* **Config package (`ade_config`)** — built and managed in the frontend, each package defines the business logic that tells ADE how to detect, map, and transform data. Configs are versioned, so you can draft, test, roll back, and extend them through a flexible, modular Python interface.
 
-At job runtime, the **ADE Engine** and your versioned **ADE Config Package** are loaded into an isolated virtual environment.  The output is a normalized excel file.
+At job runtime, the **ADE Engine** and your versioned **ADE Config** load into an isolated virtual python environment (venv) and output a normalized Excel workbook.
 
 ```text
 automatic-data-extractor/
