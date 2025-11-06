@@ -96,7 +96,7 @@ ${ADE_DATA_DIR}/                                  # Root folder for all ADE stat
 │     └─ <filename>.xlsx         # Original file as received
 │
 ├─ db/                           # Application database (SQLite by default)
-│  └─ backend.app.sqlite         # Metadata for configs, jobs, documents, etc.
+│  └─ api.sqlite                  # Metadata for configs, jobs, documents, etc.
 │
 └─ cache/
    └─ pip/                       # pip download/build cache (safe to delete)
