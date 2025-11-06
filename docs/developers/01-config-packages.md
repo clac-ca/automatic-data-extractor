@@ -1,918 +1,381 @@
-# Config Packages — Click‑Through Reference
+# Config Packages — quick tour & how it runs
 
 
-
-An ADE **config package** is an installable Python distribution that bundles your spreadsheet rules inside **`ade_config`**. ADE builds **one virtual environment per configuration** and reuses it deterministically (**build once, run many**).
-
-> Runtime note: Workers run in standard Python virtual environments. We **do not hard‑block network traffic**; keep rules deterministic, pure, and lightweight. Avoid network calls unless your use case truly requires it.
-
-**Config packages are stored here:** `${ADE_DATA_DIR}/workspaces/<workspace_id>/config_packages/<config_id>/`
-
-**And copied to the virtual env upon build:** `${ADE_DATA_DIR}/workspaces/<workspace_id>/venvs/<config_id>/`
+An ADE **config package** is a small, installable Python project (**`ade_config`**) that teaches the engine how to read messy spreadsheets and write a clean workbook. You write simple Python functions; the engine streams files, calls your functions, and records every step in an **artifact** (audit trail).
 
 ---
 <a id="top"></a>
 
-## Clickable file tree
-
-> Click any item to jump to its section. Each file’s code block is written to teach the concept: small, readable functions, realistic inputs/outputs, and comments that explain “why,” not just “what.”
+## Clickable project explorer (start here)
 
 * **my-config/**
 
-  * **[pyproject.toml](#pyproject-toml)** — packaging metadata; ADE installs this into the per‑config venv.
+  * **[pyproject.toml](#pyprojecttoml)** — packaging metadata (installable; `src/` layout)
   * **src/**
 
-    * **ade_config/** — runtime package imported by the worker.
+    * **ade_config/** — the runtime package the engine imports
 
-      * **[manifest.json](#manifestjson)** — engine defaults, column model (order + meta), hook entrypoints.
-      * **[config.env](#configenv-optional)** *(optional)* — environment “knobs” for detectors/transforms (e.g., `DATE_FMT`).
-      * **[_shared.py](#sharedpy)** — tiny helpers used across detectors (name‑casing, date/number parsing, ratios).
-      * **[column_detectors/](#column_detectors)** — one script **per normalized field**: map → transform → validate.
+      * **[manifest.json](#manifestjson)** — engine defaults, column model, hooks
+      * **[config.env](#configenv)** *(optional)* — environment knobs (e.g., `DATE_FMT`)
+      * **[_shared.py](#sharedpy)** — tiny helpers (names, dates, numbers)
+      * **[column_detectors/](#columndetectors)** — one file per **canonical field**
 
-        * **[member_id.py](#member_idpy)** — IDs (synonyms + regex + uniqueness) → uppercase alphanumerics; duplicates flagged.
-        * **[first_name.py](#first_namepy)** — names (shape checks + careful title‑case for O’Neil/McKay/hyphens).
-        * **[last_name.py](#last_namepy)** — same approach as first name (consistency matters).
-        * **[email.py](#emailpy)** — email pattern + lowercase + gentle domain typo repairs; duplicates flagged.
-        * **[department.py](#departmentpy)** — env‑driven synonyms → canonical labels; warn on out‑of‑set.
-        * **[join_date.py](#join_datepy)** — Excel serials + flexible formats → ISO `YYYY‑MM‑DD`; future‑date grace window.
-        * **[amount.py](#amountpy)** — currency strings → precise `Decimal` rounding → float for Excel writer.
-      * **[row_detectors/](#row_detectors)** — vote per row to find tables & header rows (Pass 1).
+        * **[member_id.py](#memberidpy)** — ID mapping → normalize → validate
+        * **[full_name.py](#fullnamepy)** — multi‑field transform (`→ first_name`, `last_name`)
+        * **[first_name.py](#firstnamepy)**, **[last_name.py](#lastnamepy)**
+        * **[email.py](#emailpy)**, **[department.py](#departmentpy)**, **[join_date.py](#joindatepy)**, **[amount.py](#amountpy)**
+      * **[row_detectors/](#rowdetectors)** — row‑by‑row “is this header/data?” voters
 
-        * **[header.py](#headerpy)** — text density ↑, early‑row bias ↑, numeric penalty ↓ → headers.
-        * **[data.py](#datapy)** — numeric presence ↑, moderate blanks OK, not header‑like → data rows.
-      * **[hooks/](#hooks)** — lifecycle extension points (small, fast, deterministic).
+        * **[header.py](#headerpy)**, **[data.py](#datapy)**
+      * **[hooks/](#hooks)** — life‑cycle touches
 
-        * **[on_job_start.py](#on_job_startpy)** — provenance note + quick env sanity.
-        * **[after_mapping.py](#after_mappingpy)** — post‑mapping guidance (suggest synonyms instead of force‑mapping).
-        * **[before_save.py](#before_savepy)** — “Summary” sheet; standardized naming; optional freeze/autosize.
-        * **[on_job_end.py](#on_job_endpy)** — compact issue breakdown for triage.
-      * **[**init**.py](#initpy)** — marks `ade_config` as a package (empty is fine).
+        * **[on_job_start.py](#onjobstartpy)**, **[after_mapping.py](#aftermappingpy)**, **[before_save.py](#beforesavepy)**, **[on_job_end.py](#onjobendpy)**
+      * **[**init**.py](#initpy)** — marks the package
 
 ---
 
-## pyproject.toml
+## The idea in plain English
 
-<a id="pyproject-toml"></a> [↑ back to tree](#top)
+The **engine** runs inside a **virtual environment** that contains the engine + your `ade_config`. It opens spreadsheets in **streaming** mode (memory‑light), and calls your functions at a few simple moments:
 
-```toml
-# pyproject.toml — installable package for ADE to build into a venv.
+1. **Row streaming → find tables.**
+   The engine goes **row by row** and calls every function named **`detect_*`** in `row_detectors/header.py` and `row_detectors/data.py`. Each function returns tiny **scores** like “this row looks like a **header**” or “this row looks like **data**.” From these labels the engine finds **table regions** (start/end + header row), and logs the details in the **artifact**.
 
-[build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+2. **Per table → identify columns.**
+   For each table region (one at a time), the engine builds a small in‑memory view and calls every **`detect_*`** in each field module under `column_detectors/`. Detectors return **scores** (“this column looks like `member_id`”). The engine picks a best match per column. If enabled in `manifest.json`, any **unmatched columns** are appended **on the far right** using a `raw_…` prefix.
 
-[project]
-name = "ade-config-membership"             # Keep stable; bump version when publishing
-version = "1.3.1"
-description = "ADE configuration: detectors, transforms, validators, hooks"
-readme = "README.md"
-requires-python = ">=3.11"
-authors = [{ name = "Data Quality Team", email = "dq@example.com" }]
-license = { text = "Proprietary" }
-keywords = ["ade", "etl", "spreadsheets", "validation", "mapping"]
+3. **Row by row → transform & validate.**
+   For each **row** in the table, the engine calls a **`transform()`** (if present) for each mapped field. A transform returns a small **delta dict** (it can fill **multiple fields** — e.g., `full_name` → `first_name` & `last_name`). Then a **`validate()`** (if present) returns any row‑level issues. Every decision is added to the **artifact**.
 
-[project.urls]
-Homepage = "https://your-company.example/ade/configs/membership"
+4. **Hooks → light polish.**
 
-[tool.setuptools]
-package-dir = {"" = "src"}                 # src/ layout
+* `on_job_start(job)` → return **None** (log/setup).
+* `after_mapping(worksheet, table)` → return the **same table** (you may edit header cells, etc.).
+* `before_save(workbook)` → return the **workbook** (rename sheets, add “Summary,” freeze panes, optional Excel structured table).
+* `on_job_end(artifact)` → return **None** (summaries/logs).
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["ade_config*"]                  # Only ship the runtime package
-
-[tool.ade]
-display_name = "Membership Normalization"
-min_engine = ">=0.4.0"
-tags = ["membership", "hr", "finance"]
-```
+That’s it: **stream → find tables → map columns → transform/validate → write → polish → save**. The **artifact** keeps a precise, reproducible trail.
+[Back to top](#top)
 
 ---
 
-## src/ade_config/manifest.json
+## What functions the engine looks for (simple rules)
 
-<a id="manifestjson"></a> [↑ back to tree](#top)
+* In **row detectors** (`row_detectors/*.py`), any top‑level function named **`detect_*`** will be called for each row and must return a small score dict. Define as many as you like; the engine **sums** their effects.
+* In **column detectors** (`column_detectors/<field>.py`), any top‑level **`detect_*`** will be called on each raw column to score whether that column matches **that field**.
+* In each **column** file, if you define **`transform()`** or **`validate()`**, the engine calls them **row‑by‑row** for mapped rows.
+* In **hooks** (`hooks/*.py`), the engine calls these **exact names**:
+  `on_job_start`, `after_mapping`, `before_save`, `on_job_end`.
 
-> Shown as **JSONC** (JSON with comments). Remove comments in the real file.
-
-```jsonc
-{
-  "config_script_api_version": "1",
-
-  "info": { "schema": "ade.config-manifest/v1", "title": "Membership Rules", "version": "1.3.1" },
-
-  "engine": {
-    "defaults": {
-      "timeout_ms": 180000,
-      "memory_mb": 384,
-      "mapping_score_threshold": 0.35  // if best field score < 0.35 → leave unmapped (safer)
-    },
-    "writer": { "mode": "row_streaming", "append_unmapped_columns": true, "unmapped_prefix": "raw_" }
-  },
-
-  "env": {
-    "LOCALE": "en-CA",
-    "DATE_FMT": "%Y-%m-%d",
-    "AMOUNT_DECIMALS": "2",
-    "FUTURE_DATE_GRACE_DAYS": "7",
-    "DEPT_CANONICAL": "Sales;Support;Engineering;HR;Finance;Marketing;Operations",
-    "DEPT_SYNONYMS": "sls=Sales,tech support=Support,eng=Engineering,dev=Engineering,acct=Finance,acctg=Finance,mktg=Marketing,ops=Operations"
-  },
-
-  "hooks": {
-    "on_job_start":  [{ "script": "hooks/on_job_start.py" }],
-    "after_mapping": [{ "script": "hooks/after_mapping.py" }],
-    "before_save":   [{ "script": "hooks/before_save.py" }],
-    "on_job_end":    [{ "script": "hooks/on_job_end.py" }]
-  },
-
-  "columns": {
-    "order": ["member_id","first_name","last_name","email","department","join_date","amount"],
-    "meta": {
-      "member_id": {
-        "label": "Member ID", "required": true, "script": "column_detectors/member_id.py",
-        "synonyms": ["member id","member#","id (member)","customer id","client id"],
-        "type_hint": "string", "pattern": "^[A-Z0-9]{6,12}$"
-      },
-      "first_name": {
-        "label": "First Name", "required": true, "script": "column_detectors/first_name.py",
-        "synonyms": ["first name","given name","fname"], "type_hint": "string"
-      },
-      "last_name": {
-        "label": "Last Name", "required": true, "script": "column_detectors/last_name.py",
-        "synonyms": ["last name","surname","family name","lname"], "type_hint": "string"
-      },
-      "email": {
-        "label": "Email", "required": true, "script": "column_detectors/email.py",
-        "synonyms": ["email","e-mail","email address"], "type_hint": "string",
-        "pattern": "^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$"
-      },
-      "department": {
-        "label": "Department", "required": false, "script": "column_detectors/department.py",
-        "synonyms": ["dept","division","team","org"], "type_hint": "string",
-        "allowed": ["Sales","Support","Engineering","HR","Finance","Marketing","Operations"]
-      },
-      "join_date": {
-        "label": "Join Date", "required": false, "script": "column_detectors/join_date.py",
-        "synonyms": ["join date","start date","hire date","onboarded"], "type_hint": "date"
-      },
-      "amount": {
-        "label": "Amount", "required": false, "script": "column_detectors/amount.py",
-        "synonyms": ["amount","total","payment","fee","charge"], "type_hint": "number"
-      }
-    }
-  }
-}
-```
+All calls are **keyword‑only**. It’s safe to accept `**_` for future compatibility.
+[Back to top](#top)
 
 ---
 
-## src/ade_config/config.env (optional)
+## Call & return (complete quick reference)
 
-<a id="configenv-optional"></a> [↑ back to tree](#top)
+| Stage           | Where                         | Engine calls    | You get (kwargs)                                                                                                                                                                       | You return                                                                    |
+| --------------- | ----------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Job start       | `hooks/on_job_start.py`       | `on_job_start`  | `job_id`, `manifest`, `env`, `artifact`, `logger`                                                                                                                                      | `None`                                                                        |
+| Row detection   | `row_detectors/header.py`     | all `detect_*`  | `row_index`, `row_values_sample`, `sheet_name`, `manifest`, `env`, `artifact`, `logger`                                                                                                | `{"scores":{"header": float}}`                                                |
+| Row detection   | `row_detectors/data.py`       | all `detect_*`  | same as above                                                                                                                                                                          | `{"scores":{"data": float}}`                                                  |
+| Column mapping  | `column_detectors/<field>.py` | all `detect_*`  | `worksheet` (OpenPyXL), `table_ref` (A1 range), `column_index` (1‑based inside region), `header`, `values_sample`, `field_name`, `field_meta`, `manifest`, `env`, `artifact`, `logger` | `{"scores":{"<field_name>": float}}`                                          |
+| After mapping   | `hooks/after_mapping.py`      | `after_mapping` | `worksheet` (OpenPyXL), `table` (OpenPyXL `Table`), `logger`                                                                                                                           | **the same `table`** (possibly mutated)                                       |
+| Transform (row) | `column_detectors/<field>.py` | `transform`     | `row_index`, `field_name`, `value` (raw cell), `row` (dict of canonical fields), `manifest`, `env`, `artifact`, `logger`                                                               | **delta dict**, e.g. `{"first_name": "…", "last_name": "…"}` (or `{}`/`None`) |
+| Validate (row)  | `column_detectors/<field>.py` | `validate`      | `row_index`, `field_name`, `value` (post‑transform), `row` (post‑merge), `manifest`, `env`, `artifact`, `logger`                                                                       | list of issues (or `[]`)                                                      |
+| Before save     | `hooks/before_save.py`        | `before_save`   | `workbook` (OpenPyXL `Workbook`), `artifact`, `logger`                                                                                                                                 | **`workbook`** (same or replacement)                                          |
+| Job end         | `hooks/on_job_end.py`         | `on_job_end`    | `artifact`, `logger`                                                                                                                                                                   | `None`                                                                        |
 
-```dotenv
-# Loaded before detectors/hooks import. Read via the `env` kwarg.
-
-LOCALE=en-CA
-DATE_FMT=%Y-%m-%d
-AMOUNT_DECIMALS=2
-FUTURE_DATE_GRACE_DAYS=7
-
-# Canonical department labels + synonyms tuned by non-devs in the UI
-DEPT_CANONICAL=Sales;Support;Engineering;HR;Finance;Marketing;Operations
-DEPT_SYNONYMS=sls=Sales,tech support=Support,eng=Engineering,dev=Engineering,acct=Finance,acctg=Finance,mktg=Marketing,ops=Operations
-```
+Tip: **Unmatched** columns go to the right **if** `manifest.engine.writer.append_unmapped_columns = true` (using `unmapped_prefix`).
+[Back to top](#top)
 
 ---
 
-## src/ade_config/_shared.py
+## Minimal, copy‑ready examples
 
-<a id="sharedpy"></a> [↑ back to tree](#top)
+### Row detector — `row_detectors/header.py`
+
+<a id="rowdetectors"></a><a id="headerpy"></a>
 
 ```python
-"""
-_shared.py — small, dependency-free helpers used across detectors/transforms.
-
-Design goals:
-- Keep detectors tiny by centralizing common parsing/casing logic.
-- Be explicit and deterministic (no locale-specific behavior).
-"""
-
-from __future__ import annotations
-import re
-from datetime import datetime, timedelta
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-
-# ---------- Utility: safe ratio ---------------------------------------------
-
-def ratio(numer: int, denom: int) -> float:
-    return (numer / denom) if denom else 0.0
-
-# ---------- Names -----------------------------------------------------------
-
-def title_name(value: str | None) -> str | None:
-    """
-    Title-case names while preserving O'/Mc and separators.
-    Examples: " mckay "→"McKay", "o'neil"→"O'Neil", "mary-jane"→"Mary-Jane"
-    """
-    if not value:
-        return None
-    s = str(value).strip()
-    if not s:
-        return None
-    base = s.lower()
-    parts = re.split(r"([ -])", base)  # keep separators
-
-    def fix(tok: str) -> str:
-        t = tok.capitalize()
-        if t.startswith("O'") and len(t) > 2:
-            t = "O'" + t[2:].capitalize()
-        if t.startswith("Mc") and len(t) > 2:
-            t = "Mc" + t[2:].capitalize()
-        return t
-
-    return "".join(fix(p) if p not in {" ", "-"} else p for p in parts)
-
-# ---------- Dates -----------------------------------------------------------
-
-EXCEL_EPOCH = datetime(1899, 12, 30)  # Excel 1900 system
-DATE_FORMATS = ["%Y-%m-%d","%m/%d/%Y","%d/%m/%Y","%b %d, %Y","%d %b %Y","%B %d, %Y","%Y%m%d"]
-
-def is_date_like(v) -> bool:
-    if v in (None, ""):
-        return False
-    if isinstance(v, (int, float)):
-        return True  # Excel serials
-    s = str(v).strip()
-    return bool(s) and any(ch in s for ch in "-/ ,") and any(ch.isdigit() for ch in s)
-
-def parse_date_to_iso(value, hint: str | None = None) -> str | None:
-    """Return YYYY-MM-DD or None. Try env hint first, then a small format library, then serials."""
-    if value in (None, ""):
-        return None
-    if isinstance(value, (int, float)):
-        try:
-            return (EXCEL_EPOCH + timedelta(days=float(value))).strftime("%Y-%m-%d")
-        except Exception:
-            return None
-    s = str(value).strip()
-    if hint:
-        try:
-            return datetime.strptime(s, hint).strftime("%Y-%m-%d")
-        except Exception:
-            pass
-    for fmt in DATE_FORMATS:
-        try:
-            return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
-        except Exception:
-            continue
-    return None
-
-# ---------- Numbers ---------------------------------------------------------
-
-CURRENCY_SYMBOLS = {"$", "£", "€", "¥", "₹"}
-
-def to_decimal(raw) -> Decimal | None:
-    """Parse currency-like strings. Handles commas and (accounting) negatives: "(123.45)"→-123.45."""
-    if raw in (None, ""):
-        return None
-    s = str(raw).strip()
-    for sym in CURRENCY_SYMBOLS:
-        s = s.replace(sym, "")
-    s = s.replace(",", "")
-    if s.startswith("(") and s.endswith(")"):
-        s = "-" + s[1:-1]
-    try:
-        return Decimal(s)
-    except InvalidOperation:
-        return None
-
-def quantize_decimal(value: Decimal, decimals: int) -> Decimal:
-    """ROUND_HALF_UP to requested precision."""
-    q = Decimal(10) ** -decimals
-    return value.quantize(q, rounding=ROUND_HALF_UP)
-```
-
----
-
-## Return‑shape quick reference
-
-* **Detectors (row or column)** → `{"scores": { "<label or field_name>": float }}`
-* **Transform** → `{"values": list, "warnings": list[str]}`
-* **Validate** → `{"issues": [{"row_index": int, "code": str, "severity": "error"|"warning"|"info", "message": str}]}`
-
-Keep detector deltas roughly **[-1.0, +1.0]** and preserve list lengths in transforms.
-
----
-
-## src/ade_config/column_detectors/
-
-<a id="column_detectors"></a> [↑ back to tree](#top)
-
-### member_id.py
-
-<a id="member_idpy"></a> [↑ back to tree](#top)
-
-```python
-"""
-member_id.py — Stable IDs
-
-What this teaches:
-- Mapping = header synonyms + value regex shape + uniqueness hint.
-- Transform = clean to uppercase alphanumerics.
-- Validate = required, pattern, and duplicate values.
-
-Examples
-- header: "Member #"
-- values: [" ab-123 ", None, "AB123", "ab—123"]  → transform → ["AB123", None, "AB123", "AB123"]
-- issues: duplicates flagged if repeated after normalization.
-"""
-
-from __future__ import annotations
-import re
-from collections import Counter
-from ade_config._shared import ratio
-
-ID_RE = re.compile(r"^[A-Za-z0-9]{6,12}$")
-
-def _clean_id(raw) -> str | None:
-    if raw in (None, ""):
-        return None
-    return "".join(ch for ch in str(raw) if ch.isalnum()).upper() or None
-
-# ---- mapping detectors ------------------------------------------------------
-
-def detect_header_synonyms(*, header: str | None, field_name: str, field_meta: dict, **_) -> dict:
-    score = 0.0
-    if header:
-        h = header.lower()
-        score = min(0.6 * sum(1 for syn in (field_meta.get("synonyms") or []) if syn in h), 0.9)
-    return {"scores": {field_name: score}}
-
-def detect_value_shape(*, values_sample: list, field_name: str, **_) -> dict:
-    hits = sum(bool(ID_RE.match((_clean_id(v) or ""))) for v in values_sample)
-    return {"scores": {field_name: round(ratio(hits, len(values_sample)), 2)}}
-
-def detect_uniqueness_hint(*, values_sample: list, field_name: str, **_) -> dict:
-    cleaned = [(_clean_id(v)) for v in values_sample if v not in (None, "")]
-    uniq_ratio = ratio(len(set(cleaned)), len(cleaned))
-    return {"scores": {field_name: 0.2 if uniq_ratio >= 0.9 else 0.0}}
-
-# ---- transform --------------------------------------------------------------
-
-def transform(*, values: list, field_name: str, **_) -> dict:
-    normalized = [_clean_id(v) for v in values]
-    blanks = sum(v is None for v in normalized)
-    return {"values": normalized, "warnings": ([f"{field_name}: {blanks} blank → None"] if blanks else [])}
-
-# ---- validate ---------------------------------------------------------------
-
-def validate(*, values: list, field_name: str, field_meta: dict, **_) -> dict:
-    issues = []
-    if field_meta.get("required", False):
-        for i, v in enumerate(values, start=1):
-            if v in (None, ""):
-                issues.append({"row_index": i, "code": "required_missing", "severity": "error",
-                               "message": f"{field_name} is required."})
-    for i, v in enumerate(values, start=1):
-        if v not in (None, "") and not ID_RE.match(str(v)):
-            issues.append({"row_index": i, "code": "invalid_format", "severity": "error",
-                           "message": f"{field_name} must match {ID_RE.pattern}"})
-    counts = Counter([v for v in values if v not in (None, "")])
-    dupes = {val for val, c in counts.items() if c > 1}
-    for i, v in enumerate(values, start=1):
-        if v in dupes:
-            issues.append({"row_index": i, "code": "duplicate_value", "severity": "error",
-                           "message": f"{field_name} duplicate: {v}"})
-    return {"issues": issues}
-```
-
----
-
-### first_name.py
-
-<a id="first_namepy"></a> [↑ back to tree](#top)
-
-```python
-"""
-first_name.py — Reader-friendly first names
-
-What this teaches:
-- Mapping = header synonyms + value-shape.
-- Transform = careful title-casing (O'Neil, McKay, hyphens).
-"""
-
-from __future__ import annotations
-import re
-from ade_config._shared import title_name, ratio
-
-NAMEISH = re.compile(r"^[A-Za-z][A-Za-z' -]{0,49}$")
-
-def detect_header_synonyms(*, header: str | None, field_name: str, field_meta: dict, **_) -> dict:
-    score = 0.0
-    if header:
-        h = header.lower()
-        score = min(0.6 * sum(1 for syn in (field_meta.get("synonyms") or []) if syn in h), 0.9)
-    return {"scores": {field_name: score}}
-
-def detect_value_shape(*, values_sample: list, field_name: str, **_) -> dict:
-    hits = sum(1 for v in values_sample if v not in (None, "") and NAMEISH.match(str(v).strip()))
-    return {"scores": {field_name: round(0.8 * ratio(hits, len(values_sample)), 2)}}
-
-def transform(*, values: list, field_name: str, **_) -> dict:
-    return {"values": [title_name(v) for v in values], "warnings": []}
-
-def validate(*, values: list, field_name: str, field_meta: dict, **_) -> dict:
-    issues = []
-    if field_meta.get("required", False):
-        for i, v in enumerate(values, start=1):
-            if v in (None, ""):
-                issues.append({"row_index": i, "code": "required_missing", "severity": "error",
-                               "message": f"{field_name} is required."})
-    return {"issues": issues}
-```
-
----
-
-### last_name.py
-
-<a id="last_namepy"></a> [↑ back to tree](#top)
-
-```python
-"""
-last_name.py — Mirror of first name logic with a slightly looser length bound.
-"""
-
-from __future__ import annotations
-import re
-from ade_config._shared import title_name, ratio
-
-NAMEISH = re.compile(r"^[A-Za-z][A-Za-z' -]{0,64}$")
-
-def detect_header_synonyms(*, header: str | None, field_name: str, field_meta: dict, **_) -> dict:
-    score = 0.0
-    if header:
-        h = header.lower()
-        score = min(0.6 * sum(1 for syn in (field_meta.get("synonyms") or []) if syn in h), 0.9)
-    return {"scores": {field_name: score}}
-
-def detect_value_shape(*, values_sample: list, field_name: str, **_) -> dict:
-    hits = sum(1 for v in values_sample if v not in (None, "") and NAMEISH.match(str(v).strip()))
-    return {"scores": {field_name: round(0.8 * ratio(hits, len(values_sample)), 2)}}
-
-def transform(*, values: list, field_name: str, **_) -> dict:
-    return {"values": [title_name(v) for v in values], "warnings": []}
-
-def validate(*, values: list, field_name: str, field_meta: dict, **_) -> dict:
-    issues = []
-    if field_meta.get("required", False):
-        for i, v in enumerate(values, start=1):
-            if v in (None, ""):
-                issues.append({"row_index": i, "code": "required_missing", "severity": "error",
-                               "message": f"{field_name} is required."})
-    return {"issues": issues}
-```
-
----
-
-### email.py
-
-<a id="emailpy"></a> [↑ back to tree](#top)
-
-```python
-"""
-email.py — Emails with gentle repairs
-
-What this teaches:
-- Mapping = header synonyms + value pattern.
-- Transform = lowercase + fix common domain typos.
-- Validate = pattern + duplicate detection.
-
-Edge cases handled:
-" JACK@ACME.IO " → "jack@acme.io"
-"ann@gmial.com"  → "ann@gmail.com"
-"""
-
-from __future__ import annotations
-import re
-from collections import Counter
-from ade_config._shared import ratio
-
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[a-z]{2,}$", re.I)
-FIX_DOMAINS = {
-    "gmial.com":"gmail.com", "gamil.com":"gmail.com",
-    "hotnail.com":"hotmail.com", "outlok.com":"outlook.com", "yaho.com":"yahoo.com"
-}
-
-def detect_header_synonyms(*, header: str | None, field_name: str, field_meta: dict, **_) -> dict:
-    score = 0.0
-    if header:
-        h = header.lower()
-        score = min(0.6 * sum(1 for syn in (field_meta.get("synonyms") or []) if syn in h), 0.9)
-    return {"scores": {field_name: score}}
-
-def detect_value_shape(*, values_sample: list, field_name: str, **_) -> dict:
-    hits = sum(bool(EMAIL_RE.match(str(v).strip())) for v in values_sample if v not in (None, ""))
-    return {"scores": {field_name: round(ratio(hits, len(values_sample)), 2)}}
-
-def transform(*, values: list, field_name: str, **_) -> dict:
-    out = []
-    for v in values:
-        if v in (None, ""):
-            out.append(None); continue
-        s = str(v).strip().lower()
-        if "@" in s:
-            local, _, domain = s.partition("@")
-            s = f"{local}@{FIX_DOMAINS.get(domain, domain)}"
-        out.append(s)
-    return {"values": out, "warnings": []}
-
-def validate(*, values: list, field_name: str, field_meta: dict, **_) -> dict:
-    issues = []
-    if field_meta.get("required", False):
-        for i, v in enumerate(values, start=1):
-            if v in (None, ""):
-                issues.append({"row_index": i, "code": "required_missing", "severity": "error",
-                               "message": f"{field_name} is required."})
-    for i, v in enumerate(values, start=1):
-        if v not in (None, "") and not EMAIL_RE.match(str(v)):
-            issues.append({"row_index": i, "code": "invalid_format", "severity": "error",
-                           "message": f"{field_name} must look like user@domain.tld"})
-    counts = Counter([v for v in values if v not in (None, "")])
-    dupes = {val for val, c in counts.items() if c > 1}
-    for i, v in enumerate(values, start=1):
-        if v in dupes:
-            issues.append({"row_index": i, "code": "duplicate_value", "severity": "error",
-                           "message": f"{field_name} duplicate: {v}"})
-    return {"issues": issues}
-```
-
----
-
-### department.py
-
-<a id="departmentpy"></a> [↑ back to tree](#top)
-
-```python
-"""
-department.py — Canonical labels via env-driven synonyms
-
-What this teaches:
-- Transform maps synonyms to canonical, leaves unknowns unchanged.
-- Validate warns (not errors) for values outside the canonical set.
-
-Example env:
-  DEPT_CANONICAL="Sales;Support;Engineering"
-  DEPT_SYNONYMS="sls=Sales,tech support=Support,dev=Engineering"
-values: ["sls","support","eng","finance"] → ["Sales","Support","eng","finance"]   (warn on 'eng'/'finance')
-"""
-
-from __future__ import annotations
-
-def _parse_kv(spec: str | None) -> dict[str, str]:
-    result: dict[str, str] = {}
-    if not spec:
-        return result
-    for item in spec.split(","):
-        k, sep, v = item.partition("=")
-        if sep and k.strip() and v.strip():
-            result[k.strip().lower()] = v.strip()
-    return result
-
-def _parse_list(spec: str | None) -> list[str]:
-    return [s.strip() for s in (spec or "").split(";") if s.strip()]
-
-def detect_header_synonyms(*, header: str | None, field_name: str, field_meta: dict, **_) -> dict:
-    score = 0.0
-    if header:
-        h = header.lower()
-        score = min(0.6 * sum(1 for syn in (field_meta.get("synonyms") or []) if syn in h), 0.9)
-    return {"scores": {field_name: score}}
-
-def detect_value_shape(*, values_sample: list, field_name: str, **_) -> dict:
-    textish = sum(isinstance(v, str) and v.strip() for v in values_sample)
-    return {"scores": {field_name: round(0.4 * (textish / max(1, len(values_sample))), 2)}}
-
-def transform(*, values: list, field_name: str, field_meta: dict, env: dict | None = None, **_) -> dict:
-    env = env or {}
-    canonical = set(_parse_list(env.get("DEPT_CANONICAL")) or field_meta.get("allowed", []))
-    synonyms = _parse_kv(env.get("DEPT_SYNONYMS"))
-    out: list[str | None] = []
-    for raw in values:
-        if raw in (None, ""):
-            out.append(None); continue
-        s = str(raw).strip()
-        out.append(s if s in canonical else synonyms.get(s.lower(), s))
-    return {"values": out, "warnings": []}
-
-def validate(*, values: list, field_name: str, field_meta: dict, env: dict | None = None, **_) -> dict:
-    env = env or {}
-    allowed = set(_parse_list(env.get("DEPT_CANONICAL")) or field_meta.get("allowed", []))
-    issues = []
-    if allowed:
-        for i, v in enumerate(values, start=1):
-            if v not in (None, "") and v not in allowed:
-                issues.append({"row_index": i, "code": "out_of_set", "severity": "warning",
-                               "message": f"{field_name} '{v}' not in allowed set"})
-    return {"issues": issues}
-```
-
----
-
-### join_date.py
-
-<a id="join_datepy"></a> [↑ back to tree](#top)
-
-```python
-"""
-join_date.py — From varied inputs to ISO YYYY-MM-DD
-
-What this teaches:
-- Mapping by “date-likeness”.
-- Transform via env hint then known formats, plus Excel serials.
-- Validate warns for future dates beyond a small grace window.
-
-Example:
-  DATE_FMT=%Y-%m-%d
-  values: [45163, "09/15/2024", "15/09/2024", "Sep 15, 2024", ""]
-  → ["2023-09-15","2024-09-15","2024-09-15","2024-09-15", None]
-"""
-
-from __future__ import annotations
-from datetime import datetime, timedelta
-from ade_config._shared import is_date_like, parse_date_to_iso
-
-def detect_header_synonyms(*, header: str | None, field_name: str, field_meta: dict, **_) -> dict:
-    score = 0.0
-    if header:
-        h = header.lower()
-        score = min(0.6 * sum(1 for syn in (field_meta.get("synonyms") or []) if syn in h), 0.9)
-    return {"scores": {field_name: score}}
-
-def detect_value_shape(*, values_sample: list, field_name: str, **_) -> dict:
-    r = sum(is_date_like(v) for v in values_sample) / max(1, len(values_sample))
-    return {"scores": {field_name: round(0.7 * r, 2)}}
-
-def transform(*, values: list, field_name: str, env: dict | None = None, **_) -> dict:
-    env = env or {}
-    hint = env.get("DATE_FMT")
-    return {"values": [parse_date_to_iso(v, hint) for v in values], "warnings": []}
-
-def validate(*, values: list, field_name: str, env: dict | None = None, **_) -> dict:
-    env = env or {}
-    issues = []
-    grace = int(env.get("FUTURE_DATE_GRACE_DAYS", "0"))
-    future_cutoff = datetime.utcnow() + timedelta(days=grace)
-    for i, v in enumerate(values, start=1):
-        if v in (None, ""):
-            continue
-        try:
-            dt = datetime.strptime(v, "%Y-%m-%d")
-        except Exception:
-            issues.append({"row_index": i, "code": "invalid_format", "severity": "error",
-                           "message": f"{field_name} must be YYYY-MM-DD"})
-            continue
-        if dt > future_cutoff:
-            issues.append({"row_index": i, "code": "out_of_range", "severity": "warning",
-                           "message": f"{field_name} '{v}' is in the future"})
-    return {"issues": issues}
-```
-
----
-
-### amount.py
-
-<a id="amountpy"></a> [↑ back to tree](#top)
-
-```python
-"""
-amount.py — Currency-lite parsing that’s deterministic
-
-What this teaches:
-- Mapping by “can parse as Decimal” ratio.
-- Transform with ROUND_HALF_UP to env precision; cast to float for Excel writer.
-- Validate with a simple non-negative check (customize as needed).
-
-Example (AMOUNT_DECIMALS=2):
-  values: ["$1,234.5", "(22.75)", "", 123] → [1234.50, -22.75, None, 123.00]
-"""
-
-from __future__ import annotations
-from ade_config._shared import to_decimal, quantize_decimal, ratio
-
-def detect_header_synonyms(*, header: str | None, field_name: str, field_meta: dict, **_) -> dict:
-    score = 0.0
-    if header:
-        h = header.lower()
-        score = min(0.5 * sum(1 for syn in (field_meta.get("synonyms") or []) if syn in h), 0.9)
-    return {"scores": {field_name: score}}
-
-def detect_value_shape(*, values_sample: list, field_name: str, **_) -> dict:
-    nums = sum(to_decimal(v) is not None for v in values_sample)
-    return {"scores": {field_name: round(ratio(nums, len(values_sample)), 2)}}
-
-def transform(*, values: list, field_name: str, env: dict | None = None, **_) -> dict:
-    env = env or {}
-    decimals = int(env.get("AMOUNT_DECIMALS", "2"))
-    out: list[float | None] = []
-    for v in values:
-        d = to_decimal(v)
-        out.append(None if d is None else float(quantize_decimal(d, decimals)))
-    return {"values": out, "warnings": [f"{field_name}: rounded to {decimals} dp (ROUND_HALF_UP)"]}
-
-def validate(*, values: list, field_name: str, **_) -> dict:
-    issues = []
-    for i, v in enumerate(values, start=1):
-        if v is not None and v < 0:
-            issues.append({"row_index": i, "code": "out_of_range", "severity": "warning",
-                           "message": f"{field_name} is negative ({v})"})
-    return {"issues": issues}
-```
-
----
-
-## src/ade_config/row_detectors/
-
-<a id="row_detectors"></a> [↑ back to tree](#top)
-
-### header.py
-
-<a id="headerpy"></a> [↑ back to tree](#top)
-
-```python
-"""
-header.py — Recognize headers with simple, explainable signals.
-
-Signals:
-- Text density: headers tend to be string-rich.
-- Position bias: early rows are more likely headers.
-- Numeric penalty: number-heavy rows look like data.
-"""
-
-from __future__ import annotations
-
+# Called for every row; you can define many detect_* functions.
 def detect_text_density(*, row_values_sample: list, **_) -> dict:
     non_blank = [c for c in row_values_sample if c not in (None, "")]
     if not non_blank:
         return {"scores": {"header": 0.0}}
     strings = sum(isinstance(c, str) for c in non_blank)
     ratio = strings / len(non_blank)
-    bump = 0.7 if ratio >= 0.7 else (0.3 if ratio >= 0.5 else 0.0)
-    return {"scores": {"header": bump}}
-
-def detect_position_bias(*, row_index: int, **_) -> dict:
-    boost = 0.4 if row_index <= 3 else (0.2 if row_index <= 6 else (0.1 if row_index <= 10 else 0.0))
-    return {"scores": {"header": boost}}
-
-def detect_numeric_penalty(*, row_values_sample: list, **_) -> dict:
-    nums = sum(str(v).replace(".", "", 1).isdigit() for v in row_values_sample if v not in (None, ""))
-    penalty = -0.3 if nums >= max(2, len(row_values_sample) // 2) else 0.0
-    return {"scores": {"header": penalty}}
+    return {"scores": {"header": 0.7 if ratio >= 0.7 else (0.3 if ratio >= 0.5 else 0.0)}}
 ```
 
-### data.py
+[Back to top](#top)
 
-<a id="datapy"></a> [↑ back to tree](#top)
+### Row detector — `row_detectors/data.py`
+
+<a id="datapy"></a>
 
 ```python
-"""
-data.py — Recognize data rows with complementary signals.
-
-Signals:
-- Numeric presence: at least one number.
-- Reasonable blanks: some blanks are normal (not too many).
-- Not header-like: very text-heavy rows get a small penalty.
-"""
-
-from __future__ import annotations
-
 def detect_numeric_presence(*, row_values_sample: list, **_) -> dict:
     nums = sum(str(v).replace(".", "", 1).isdigit() for v in row_values_sample if v not in (None, ""))
     return {"scores": {"data": +0.4 if nums >= 1 else 0.0}}
 
-def detect_blank_ratio(*, row_values_sample: list, **_) -> dict:
-    total = len(row_values_sample) or 1
-    blanks = sum(v in (None, "") for v in row_values_sample)
-    r = blanks / total
-    score = +0.2 if 0.0 < r <= 0.4 else (-0.2 if r >= 0.8 else 0.0)
-    return {"scores": {"data": score}}
-
 def detect_not_header_like(*, row_values_sample: list, **_) -> dict:
     non_blank = [v for v in row_values_sample if v not in (None, "")]
-    if not non_blank:
-        return {"scores": {"data": 0.0}}
+    if not non_blank: return {"scores": {"data": 0.0}}
     strings = sum(isinstance(v, str) for v in non_blank)
-    ratio = strings / len(non_blank)
-    return {"scores": {"data": -0.2 if ratio >= 0.8 else 0.0}}
+    r = strings / len(non_blank)
+    return {"scores": {"data": -0.2 if r >= 0.8 else 0.0}}
 ```
 
----
+[Back to top](#top)
 
-## src/ade_config/hooks/
+### Column detector — `column_detectors/member_id.py`
 
-<a id="hooks"></a> [↑ back to tree](#top)
-
-### on_job_start.py
-
-<a id="on_job_startpy"></a> [↑ back to tree](#top)
+<a id="columndetectors"></a><a id="memberidpy"></a>
 
 ```python
-"""
-on_job_start.py — Record provenance + quick env sanity.
-"""
+import re
+ID = re.compile(r"^[A-Za-z0-9]{6,12}$")
 
-from __future__ import annotations
+def detect_header_synonyms(*, header: str | None, field_name: str, field_meta: dict, **_) -> dict:
+    score = 0.0
+    if header:
+        h = header.lower()
+        score = min(0.9, 0.6 * sum(1 for syn in (field_meta.get("synonyms") or []) if syn in h))
+    return {"scores": {field_name: score}}
 
-def run(*, job_id: str, manifest: dict, env: dict | None = None, **_):
-    env = env or {}
-    missing = [k for k in ("LOCALE", "DATE_FMT") if not env.get(k)]
-    status = "OK" if not missing else f"Missing {', '.join(missing)}"
-    return {"notes": f"Job {job_id} start | Locale={env.get('LOCALE','n/a')} | DateFmt={env.get('DATE_FMT','n/a')} | {status}"}
+def detect_value_shape(*, values_sample: list, field_name: str, **_) -> dict:
+    hits = sum(1 for v in values_sample if v not in (None, "") and ID.match(str(v).strip()))
+    return {"scores": {field_name: round(hits / max(1, len(values_sample)), 2)}}
+
+def transform(*, row_index: int, field_name: str, value, row: dict, **_) -> dict | None:
+    """Normalize to uppercase alphanumerics."""
+    if value in (None, ""): return None
+    s = "".join(ch for ch in str(value) if ch.isalnum()).upper() or None
+    return {"member_id": s} if s else None
+
+def validate(*, row_index: int, field_name: str, value, row: dict, field_meta: dict, **_) -> list[dict]:
+    issues = []
+    if field_meta.get("required", False) and (value in (None, "")):
+        issues.append({"row_index": row_index, "code": "required_missing", "severity": "error",
+                       "message": f"{field_name} is required."})
+    if value not in (None, "") and not ID.match(str(value)):
+        issues.append({"row_index": row_index, "code": "invalid_format", "severity": "error",
+                       "message": f"{field_name} must match {ID.pattern}"})
+    return issues
 ```
 
-### after_mapping.py
+[Back to top](#top)
 
-<a id="after_mappingpy"></a> [↑ back to tree](#top)
+### Transform that populates multiple fields — `column_detectors/full_name.py`
+
+<a id="fullnamepy"></a>
 
 ```python
-"""
-after_mapping.py — Gentle guidance after mapping; avoid force-mapping.
-"""
+from ade_config._shared import title_name
 
-from __future__ import annotations
-
-def run(*, table: dict | None = None, **_):
-    if not table:
+def transform(*, row_index: int, field_name: str, value, row: dict, **_) -> dict | None:
+    """
+    Accept the cell value for 'full_name' and return a small delta dict
+    that can fill several fields in the current row.
+    """
+    if value in (None, ""):
         return None
-    unmapped_headers = {str(c.get("header","")).strip().lower() for c in table.get("unmapped", [])}
-    mapped_fields = set((table.get("mapped") or {}).keys())
-    if "work email" in unmapped_headers and "email" not in mapped_fields:
-        return {"notes": "Hint: add 'Work Email' to email synonyms in manifest.json"}
+    full = title_name(str(value))
+    if not full:
+        return None
+    parts = [p for p in full.split(" ") if p]
+    first = parts[0] if parts else None
+    last  = parts[-1] if len(parts) > 1 else None
+    return {"full_name": full, "first_name": first, "last_name": last}
+```
+
+[Back to top](#top)
+
+### Email, Department, Dates, Amount — tiny patterns
+
+<a id="emailpy"></a><a id="departmentpy"></a><a id="joindatepy"></a><a id="amountpy"></a>
+
+```python
+# email.py (transform) — lowercase + fix a few common domains; validate pattern
+import re
+DOMAINS = {"gmial.com":"gmail.com","gamil.com":"gmail.com","outlok.com":"outlook.com"}
+EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[a-z]{2,}$", re.I)
+
+def transform(*, row_index: int, field_name: str, value, row: dict, **_) -> dict | None:
+    if value in (None, ""): return None
+    s = str(value).strip().lower()
+    if "@" in s:
+        local, _, domain = s.partition("@")
+        s = f"{local}@{DOMAINS.get(domain, domain)}"
+    return {"email": s}
+
+def validate(*, row_index: int, field_name: str, value, row: dict, field_meta: dict, **_) -> list[dict]:
+    return [] if (value in (None, "") or EMAIL.match(str(value))) else [
+        {"row_index": row_index, "code": "invalid_format", "severity": "error",
+         "message": f"{field_name} must look like user@domain.tld"}]
+```
+
+```python
+# department.py (transform) — map synonyms to canonical labels from env/manifest
+def transform(*, row_index: int, field_name: str, value, row: dict, manifest: dict, env: dict | None = None, **_) -> dict | None:
+    env = env or {}
+    allowed = set((env.get("DEPT_CANONICAL") or "").split(";")) if env.get("DEPT_CANONICAL") else set(manifest["columns"]["meta"]["department"].get("allowed", []))
+    synonyms = {}
+    for kv in (env.get("DEPT_SYNONYMS") or "").split(","):
+        k, _, v = kv.partition("=")
+        if k.strip() and v.strip(): synonyms[k.strip().lower()] = v.strip()
+    if value in (None, ""): return None
+    s = str(value).strip()
+    return {"department": s if s in allowed else synonyms.get(s.lower(), s)}
+```
+
+```python
+# join_date.py (transform) — parse to ISO YYYY-MM-DD (Excel serials & common formats)
+from datetime import datetime, timedelta
+EXCEL_EPOCH = datetime(1899, 12, 30)
+FORMATS = ["%Y-%m-%d","%m/%d/%Y","%d/%m/%Y","%b %d, %Y","%d %b %Y","%Y%m%d"]
+
+def transform(*, row_index: int, field_name: str, value, row: dict, env: dict | None = None, **_) -> dict | None:
+    if value in (None, ""): return None
+    if isinstance(value, (int, float)):
+        try: return {"join_date": (EXCEL_EPOCH + timedelta(days=float(value))).strftime("%Y-%m-%d")}
+        except Exception: return None
+    s = str(value).strip()
+    fmt = (env or {}).get("DATE_FMT")
+    try:
+        if fmt: return {"join_date": datetime.strptime(s, fmt).strftime("%Y-%m-%d")}
+    except Exception: pass
+    for f in FORMATS:
+        try: return {"join_date": datetime.strptime(s, f).strftime("%Y-%m-%d")}
+        except Exception: continue
     return None
 ```
 
-### before_save.py
-
-<a id="before_savepy"></a> [↑ back to tree](#top)
-
 ```python
-"""
-before_save.py — Add 'Summary', standardize, and (if supported) freeze/autosize.
-"""
+# amount.py (transform) — parse currency-like strings and round to env precision
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+def _to_decimal(x):
+    if x in (None, ""): return None
+    s = str(x).strip().replace(",", "")
+    for sym in "$£€¥₹": s = s.replace(sym, "")
+    if s.startswith("(") and s.endswith(")"): s = "-" + s[1:-1]
+    try: return Decimal(s)
+    except InvalidOperation: return None
 
-from __future__ import annotations
-
-def run(*, book: object | None = None, artifact: dict | None = None, **_):
-    if not (book and artifact):
-        return None
-
-    # 1) Summary: minimal, readable metrics
-    try:
-        total_rows = sum(len(t.get("rows", [])) for s in artifact.get("sheets", []) for t in s.get("tables", []))
-        total_issues = sum(len(t.get("validation", {}).get("issues", []))
-                           for s in artifact.get("sheets", []) for t in s.get("tables", []))
-        if hasattr(book, "create_sheet"):
-            book.create_sheet(name="Summary", rows=[["Metric","Value"],["Total rows", total_rows],["Total issues", total_issues]])
-    except Exception:
-        pass
-
-    # 2) Standardize first sheet name
-    if hasattr(book, "rename_sheet"):
-        try:
-            book.rename_sheet(old_name="Sheet1", new_name="Normalized")
-        except Exception:
-            pass
-
-    # 3) Optional niceties
-    if hasattr(book, "freeze_panes"):
-        try:
-            book.freeze_panes(sheet="Normalized", cell="A2")
-        except Exception:
-            pass
-    if hasattr(book, "autosize_columns"):
-        try:
-            book.autosize_columns(sheet="Normalized")
-        except Exception:
-            pass
-
-    return {"notes": "Added Summary; standardized sheet; optional header freeze/autosize if supported."}
+def transform(*, row_index: int, field_name: str, value, row: dict, env: dict | None = None, **_) -> dict | None:
+    d = _to_decimal(value)
+    if d is None: return None
+    decimals = int((env or {}).get("AMOUNT_DECIMALS", "2"))
+    q = Decimal(10) ** -decimals
+    return {"amount": float(d.quantize(q, rounding=ROUND_HALF_UP))}
 ```
 
-### on_job_end.py
+[Back to top](#top)
 
-<a id="on_job_endpy"></a> [↑ back to tree](#top)
+---
+
+## Hooks — light, predictable, typed
+
+<a id="hooks"></a>
+
+**Objects you’ll see:**
+
+* `worksheet` and `workbook` are real **OpenPyXL** objects.
+* `table` is an **OpenPyXL `Table`** (useful for ref/style); mapping metadata lives in the artifact and engine context.
+* Use the provided `logger` to write messages; `on_job_start` / `on_job_end` return **None**.
+
+### `hooks/after_mapping.py` — mutate table headers; return the table
+
+<a id="aftermappingpy"></a>
 
 ```python
-"""
-on_job_end.py — Compact issue breakdown for quick triage (code=count).
-"""
+from openpyxl.worksheet.worksheet import Worksheet  # type: ignore
+from openpyxl.worksheet.table import Table as XLTable # type: ignore
+from openpyxl.utils.cell import coordinate_from_string, column_index_from_string # type: ignore
 
-from __future__ import annotations
+def _header_row(ref: str) -> tuple[int, int, int]:
+    min_a1, max_a1 = ref.split(":")
+    (min_col_letters, min_row) = coordinate_from_string(min_a1)
+    (max_col_letters, _)       = coordinate_from_string(max_a1)
+    return (min_row, column_index_from_string(min_col_letters), column_index_from_string(max_col_letters))
+
+def after_mapping(*, worksheet: Worksheet, table: XLTable, logger=None, **_) -> XLTable:
+    """Normalize header labels (e.g., 'Work Email' → 'Email') and return the same table."""
+    try:
+        row, cmin, cmax = _header_row(table.ref)
+        for col_idx in range(cmin, cmax + 1):
+            cell = worksheet.cell(row=row, column=col_idx)
+            if str(cell.value).strip().lower() == "work email":
+                cell.value = "Email"
+                if logger: logger.info("after_mapping: normalized header at %s", cell.coordinate)
+    except Exception:
+        if logger: logger.debug("after_mapping: header edit skipped", exc_info=False)
+    return table
+```
+
+[Back to top](#top)
+
+### `hooks/before_save.py` — polish workbook; return workbook
+
+<a id="beforesavepy"></a>
+
+```python
+from openpyxl.workbook import Workbook          # type: ignore
+from openpyxl.utils import get_column_letter    # type: ignore
+from openpyxl.worksheet.table import Table, TableStyleInfo  # type: ignore
+
+def before_save(*, workbook: Workbook, artifact: dict | None = None, logger=None, **_) -> Workbook:
+    """Rename, freeze, add Summary, optional Excel 'structured table', autosize; then return workbook."""
+    ws = workbook.active
+    if ws.title != "Normalized":
+        ws.title = "Normalized"
+    ws.freeze_panes = "A2"
+
+    total_rows = sum(len(t.get("rows", [])) for s in (artifact or {}).get("sheets", []) for t in s.get("tables", []))
+    total_issues = sum(len(t.get("validation", {}).get("issues", [])) for s in (artifact or {}).get("sheets", []) for t in s.get("tables", []))
+    summary = workbook.create_sheet("Summary")
+    summary.append(["Metric", "Value"])
+    summary.append(["Total rows", total_rows])
+    summary.append(["Total issues", total_issues])
+
+    if ws.max_row and ws.max_column:
+        ref = f"A1:{get_column_letter(ws.max_column)}{ws.max_row}"
+        tbl = Table(displayName="NormalizedTable", ref=ref)
+        tbl.tableStyleInfo = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True)
+        ws.add_table(tbl)
+        for c in range(1, ws.max_column + 1):
+            letter, width = get_column_letter(c), 10
+            try:
+                width = max(width, max((len(str(cell.value)) for cell in ws[letter] if cell.value is not None), default=10) + 2)
+            except Exception:
+                pass
+            ws.column_dimensions[letter].width = min(60, width)
+    return workbook
+```
+
+[Back to top](#top)
+
+### `hooks/on_job_start.py` & `hooks/on_job_end.py` — log; return None
+
+<a id="onjobstartpy"></a><a id="onjobendpy"></a>
+
+```python
+# on_job_start.py
+def on_job_start(*, job_id: str, manifest: dict, env: dict | None = None, artifact: dict | None = None, logger=None, **_) -> None:
+    env = env or {}
+    if logger:
+        logger.info("job_start id=%s locale=%s date_fmt=%s",
+                    job_id, env.get("LOCALE","n/a"), env.get("DATE_FMT","n/a"))
+    return None
+```
+
+```python
+# on_job_end.py
 from collections import Counter
-
-def run(*, artifact: dict | None = None, **_):
+def on_job_end(*, artifact: dict | None = None, logger=None, **_) -> None:
     if not artifact:
+        if logger: logger.warning("on_job_end: missing artifact")
         return None
     counts = Counter()
     for s in artifact.get("sheets", []):
@@ -920,28 +383,126 @@ def run(*, artifact: dict | None = None, **_):
             for issue in t.get("validation", {}).get("issues", []):
                 counts[issue.get("code","other")] += 1
     total = sum(counts.values())
-    breakdown = ", ".join(f"{code}={n}" for code, n in sorted(counts.items())) or "none"
-    return {"notes": f"Issues: total={total}; {breakdown}"}
+    if logger:
+        breakdown = ", ".join(f"{code}={n}" for code, n in sorted(counts.items())) or "none"
+        logger.info("on_job_end: issues_total=%s | %s", total, breakdown)
+    return None
 ```
+
+[Back to top](#top)
 
 ---
 
-## src/ade_config/**init**.py
+## Appendix: `pyproject.toml`, `manifest.json`, and small helpers
 
-<a id="initpy"></a> [↑ back to tree](#top)
+### `pyproject.toml`
+
+<a id="pyprojecttoml"></a>
+
+```toml
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ade-config-membership"
+version = "1.8.0"
+requires-python = ">=3.11"
+description = "ADE configuration: streaming detectors, row-level transforms, validators, hooks"
+readme = "README.md"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ade_config*"]
+
+[tool.ade]
+display_name = "Membership Normalization"
+min_engine = ">=0.4.0"
+tags = ["membership","hr","finance"]
+```
+
+[Back to top](#top)
+
+### `manifest.json`
+
+<a id="manifestjson"></a>
+
+```json
+{
+  "config_script_api_version": "1",
+  "engine": {
+    "defaults": {
+      "timeout_ms": 180000,
+      "memory_mb": 384,
+      "mapping_score_threshold": 0.35
+    },
+    "writer": {
+      "mode": "row_streaming",
+      "append_unmapped_columns": true,
+      "unmapped_prefix": "raw_"
+    }
+  },
+  "columns": {
+    "order": ["member_id","full_name","first_name","last_name","email","department","join_date","amount"],
+    "meta": {
+      "member_id":  { "label":"Member ID", "required":true,  "script":"column_detectors/member_id.py",
+                      "synonyms": ["member id","member#","id (member)","customer id","client id"] },
+      "full_name":  { "label":"Full Name", "script":"column_detectors/full_name.py",
+                      "synonyms": ["full name","name","employee name"] },
+      "first_name": { "label":"First Name", "required":true,  "script":"column_detectors/first_name.py",
+                      "synonyms": ["first name","given name","fname"] },
+      "last_name":  { "label":"Last Name", "required":true,  "script":"column_detectors/last_name.py",
+                      "synonyms": ["last name","surname","family name","lname"] },
+      "email":      { "label":"Email", "required":true,      "script":"column_detectors/email.py",
+                      "synonyms": ["email","e-mail","email address"] },
+      "department": { "label":"Department", "script":"column_detectors/department.py",
+                      "synonyms": ["dept","division","team","org"] },
+      "join_date":  { "label":"Join Date", "script":"column_detectors/join_date.py",
+                      "synonyms": ["join date","start date","hire date","onboarded"] },
+      "amount":     { "label":"Amount", "script":"column_detectors/amount.py",
+                      "synonyms": ["amount","total","payment","fee","charge"] }
+    }
+  }
+}
+```
+
+[Back to top](#top)
+
+### `_shared.py`
+
+<a id="sharedpy"></a>
 
 ```python
-# Empty is fine; marks src/ade_config/ as a Python package.
-# Optional later: re-export helpers for convenience, e.g.:
-#   from ._shared import title_name, parse_date_to_iso
+from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+import re
+
+def ratio(n: int, d: int) -> float:
+    return (n / d) if d else 0.0
+
+def title_name(value: str | None) -> str | None:
+    if not value: return None
+    s = str(value).strip().lower()
+    if not s: return None
+    parts = re.split(r"([ -])", s)
+    def fix(tok: str) -> str:
+        t = tok.capitalize()
+        if t.startswith("O'") and len(t) > 2: t = "O'" + t[2:].capitalize()
+        if t.startswith("Mc") and len(t) > 2: t = "Mc" + t[2:].capitalize()
+        return t
+    return "".join(fix(p) if p not in {" ", "-"} else p for p in parts)
 ```
 
----
+[Back to top](#top)
 
-### Final notes
+### `__init__.py`
 
-* The **clickable tree** is now lean and professional (no legend), but each entry still explains *why it exists*.
-* Every script favors **intuitive names**, small functions, and **inline examples** so authors can copy the pattern safely.
-* The **contracts** (detector → transform → validate) are consistent, with return shapes repeated where they matter.
+<a id="initpy"></a>
 
-If you want, I can tailor the **synonyms**, **patterns**, and **examples** to your domain (e.g., invoices, enrollments, claims) so this becomes copy‑paste‑ready for your first production config.
+```python
+# Marks src/ade_config/ as a Python package.
+```
+
+[Back to top](#top)
