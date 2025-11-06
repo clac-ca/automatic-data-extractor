@@ -4,8 +4,6 @@
 
 An ADE **config package** is a small, installable Python project (**`ade_config`**) that teaches the engine how to read messy spreadsheets and write a clean, consistent workbook. You write straightforward Python functions; the engine streams the spreadsheet once to find the real table bounds, **materializes each table** (it’s small), calls your functions, and records each decision in an **artifact** (audit trail).
 
----
-
 ## Clickable project explorer (start here)
 
 * **my-config/**
