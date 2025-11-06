@@ -16,9 +16,9 @@ const run = (command, args = [], options = {}) =>
   });
 
 const backendDir = ".";
-const hasBackend = existsSync(join("backend", "app")) && existsSync("pyproject.toml");
+const hasBackend = existsSync(join("apps", "api", "app")) && existsSync("pyproject.toml");
 const hasFrontend =
-  existsSync("frontend") && existsSync(join("frontend", "package.json"));
+  existsSync(join("apps", "web")) && existsSync(join("apps", "web", "package.json"));
 
 const makeUvicornCommand = (port, extraArgs = []) => {
   const venvUvicorn =
@@ -26,7 +26,7 @@ const makeUvicornCommand = (port, extraArgs = []) => {
       ? join(backendDir, ".venv", "Scripts", "uvicorn.exe")
       : join(backendDir, ".venv", "bin", "uvicorn");
   const args = [
-    "backend.app.main:create_app",
+    "apps.api.app.main:create_app",
     "--factory",
     "--host",
     "0.0.0.0",
@@ -57,12 +57,12 @@ if (mode && !validModes.has(mode)) {
 }
 
 if (mode === "backend" && !hasBackend) {
-  console.error("Backend not found. Ensure backend/app/ and pyproject.toml exist before running backend mode.");
+  console.error("Backend not found. Ensure apps/api/app/ and pyproject.toml exist before running backend mode.");
   process.exit(1);
 }
 
 if (mode === "frontend" && !hasFrontend) {
-  console.error("Frontend not found. Create frontend/ before running frontend mode.");
+  console.error("Frontend not found. Create apps/web/ before running frontend mode.");
   process.exit(1);
 }
 
@@ -88,12 +88,12 @@ if (runBackend) {
 if (runFrontend) {
   tasks.push({
     name: "frontend",
-    command: `npm --prefix frontend run dev -- --host 0.0.0.0 --port ${frontendPort}`,
+    command: `npm --prefix apps/web run dev -- --host 0.0.0.0 --port ${frontendPort}`,
   });
 }
 
 if (tasks.length === 0) {
-  console.log("Nothing to run yet. Add backend/app/ and/or frontend/ first.");
+  console.log("Nothing to run yet. Add apps/api/app/ and/or apps/web/ first.");
   process.exit(0);
 }
 

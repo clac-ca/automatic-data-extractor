@@ -13,20 +13,20 @@ edit broken configs and then restart without safe mode.
   - existing job artifacts remain readable.
 
 ## Backend Touchpoints
-1. **Configuration (`backend/app/shared/core/config.py`)**
+1. **Configuration (`apps/api/app/shared/core/config.py`)**
    - Add `safe_mode: bool = False` field (env var `ADE_SAFE_MODE`).
    - Normalize truthy/falsey values using Pydantic coercion.
    - Expose helper property `safe_mode_enabled` (optional syntactic sugar).
 
-2. **App bootstrap (`backend/app/main.py`)**
+2. **App bootstrap (`apps/api/app/main.py`)**
    - Persist flag on `app.state` so dependencies/routers can reference it.
    - Optionally emit structured log line when safe mode is enabled to aid observability.
 
-3. **Health endpoint (`backend/app/features/health/service.py`)**
+3. **Health endpoint (`apps/api/app/features/health/service.py`)**
    - Include a component detail (`{"name": "safe-mode", "status": "degraded", ...}`) when enabled.
    - Allows the UI to show a passive banner without extra calls.
 
-4. **Jobs service (`backend/app/features/jobs/service.py`)**
+4. **Jobs service (`apps/api/app/features/jobs/service.py`)**
    - Inject `settings.safe_mode` into the service.
    - **Before** manifest load / job creation, short-circuit when safe mode is active:
      ```python
@@ -37,7 +37,7 @@ edit broken configs and then restart without safe mode.
      ```
    - Ensure attempts still result in committed `JobSubmissionError` -> HTTP 400 via router.
 
-5. **Orchestrator guard (`backend/app/features/jobs/orchestrator.py`)** *(defensive)*
+5. **Orchestrator guard (`apps/api/app/features/jobs/orchestrator.py`)** *(defensive)*
    - Validate `settings.safe_mode` before spawning subprocesses; if triggered outside the main service, log + raise.
    - Protects future callers that might bypass `JobsService`.
 

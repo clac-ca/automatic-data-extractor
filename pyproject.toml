@@ -41,16 +41,16 @@ dev = [
   "openapi-spec-validator==0.7.2",
 ]
 
-# ---- Packaging (auto-discover all backend* packages) ----
+# ---- Packaging (auto-discover API packages) ----
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["backend.app*"]
+include = ["apps", "apps.api", "apps.api.app*"]
 
 # Keep type marker; add other assets here only if needed at runtime
 [tool.setuptools.package-data]
-"backend.app" = [
+"apps.api.app" = [
   "py.typed",
   "web/**/*",
   "db/migrations/**/*",
@@ -60,7 +60,7 @@ include = ["backend.app*"]
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = [
-  "backend/tests",
+  "apps/api/tests",
 ]
 asyncio_mode = "auto"
 addopts = "-ra"
@@ -84,12 +84,12 @@ no_implicit_optional = true
 pretty = true
 
 [[tool.mypy.overrides]]
-module = "backend.app.*.tests.*"
+module = "apps.api.tests.*"
 disallow_untyped_defs = false
 
 [tool.coverage.run]
 branch = true
-source = ["backend.app"]
+source = ["apps.api.app"]
 
 [tool.coverage.report]
 skip_empty = true

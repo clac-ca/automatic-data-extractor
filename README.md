@@ -47,7 +47,7 @@ pip install -e .[dev]
 npm install
 
 # Run the backend
-uvicorn backend.app.main:create_app --reload --factory --port 8000
+uvicorn apps.api.app.main:create_app --reload --factory --port 8000
 ```
 
 Then open [http://localhost:8000](http://localhost:8000) in your browser.

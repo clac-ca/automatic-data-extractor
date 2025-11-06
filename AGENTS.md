@@ -3,8 +3,8 @@
 
 ```
 repo/
-├─ backend/app/  # FastAPI backend on port 8000 (serves /api/*)
-├─ frontend/     # React Router dev server on port 8000 (file-based routes)
+├─ apps/api/app/  # FastAPI backend on port 8000 (serves /api/*)
+├─ apps/web/     # React Router dev server on port 8000 (file-based routes)
 ├─ scripts/      # Node helpers for automation
 ├─ package.json  # Root command center
 └─ README.md
@@ -20,7 +20,7 @@ You may use `ade <script>` as a shortcut for any `npm run <script>` command; bot
 npm run setup   # Install deps
 npm run dev     # FastAPI + React Router
 npm run test    # Run all tests
-npm run build   # Build SPA → backend/app/web/static
+npm run build   # Build SPA → apps/api/app/web/static
 npm run start   # Serve API + SPA
 npm run openapi-typescript # Export backend schema + generate TS types
 npm run routes:frontend  # List frontend (React Router) routes as JSON

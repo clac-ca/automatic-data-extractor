@@ -24,7 +24,7 @@ const runCapture = (command, args = [], options = {}) =>
   });
 
 const hasFrontend =
-  existsSync("frontend") && existsSync(join("frontend", "package.json"));
+  existsSync(join("apps", "web")) && existsSync(join("apps", "web", "package.json"));
 
 const rawArgs = process.argv.slice(2).filter((arg) => arg !== "--");
 const args = new Set(rawArgs);
@@ -92,11 +92,11 @@ const collectFrontendRoutes = async () => {
     return { status: "skipped", reason: "frontend missing" };
   }
 
-  const nodeModulesDir = join("frontend", "node_modules");
+  const nodeModulesDir = join("apps", "web", "node_modules");
   if (!existsSync(nodeModulesDir)) {
     try {
-      console.error("frontend dependencies missing; running `npm ci` inside frontend/");
-      await runCapture("npm", ["ci"], { cwd: "frontend" });
+      console.error("frontend dependencies missing; running `npm ci` inside apps/web/");
+      await runCapture("npm", ["ci"], { cwd: join("apps", "web") });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {
@@ -120,11 +120,11 @@ const collectFrontendRoutes = async () => {
   try {
     const { stdout } = existsSync(localBin)
       ? await runCapture(localBinAbsolute, ["routes", "--json"], {
-          cwd: "frontend",
+          cwd: join("apps", "web"),
           shell: process.platform === "win32",
         })
       : await runCapture("npx", ["react-router", "routes", "--json"], {
-          cwd: "frontend",
+          cwd: join("apps", "web"),
           shell: process.platform === "win32",
         });
     const parsed = JSON.parse(stdout);

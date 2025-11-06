@@ -24,7 +24,7 @@
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
-    "docker:test": "docker compose run --rm ade python -c \"import importlib; importlib.import_module('backend.app.main')\"",
+    "docker:test": "docker compose run --rm ade python -c \"import importlib; importlib.import_module('apps.api.app.main')\"",
     "workpackage": "node scripts/npm-workpackage.mjs",
     "clean": "node scripts/npm-clean.mjs",
     "clean:force": "node scripts/npm-clean.mjs",

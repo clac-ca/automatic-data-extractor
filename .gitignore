@@ -15,20 +15,20 @@ yarn-error.log*
 # Build outputs
 dist/
 build/
-frontend/build/
-backend/app/openapi.json
-frontend/src/generated/openapi.d.ts
-backend/app/web/*
-!backend/app/web/README.md
-!backend/app/web/static/
-backend/app/web/static/*
-!backend/app/web/static/.gitkeep
+apps/web/build/
+apps/api/app/openapi.json
+apps/web/src/generated/openapi.d.ts
+apps/api/app/web/*
+!apps/api/app/web/README.md
+!apps/api/app/web/static/
+apps/api/app/web/static/*
+!apps/api/app/web/static/.gitkeep
 
 # Backend runtime artefacts
 data/
 
 # Frontend env files
-frontend/.env*
+apps/web/.env*
 
 # Workpackage runtime artifacts
 .workpackage/packages/*/log.ndjson

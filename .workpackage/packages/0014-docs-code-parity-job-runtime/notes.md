@@ -15,12 +15,12 @@ Align the **developer docs** and the **runtime** for job submission/processing, 
 
 ## Repository reconnaissance
 
-* `backend/app/features/jobs/router.py` responds with **201** and returns a completed `JobRecord`; there is no async queue or `202 Accepted` path today, and HTTP headers/body lack a `Location` pointer or `{ status: "queued" }` payload.
-* `backend/app/features/jobs/service.py` executes jobs inline by calling `JobOrchestrator.run(...)` after marking the row `running`; saturation/back-pressure are absent.
-* `backend/app/features/configs/service.py::activate_version` only updates workspace state—no dependency install, `on_activate` hook execution, or environment metadata persistence.
-* `backend/app/features/jobs/orchestrator.py` always shells out with `sys.executable`; it never consults a per-config venv and always injects `config/vendor` onto `PYTHONPATH`.
-* `backend/app/features/jobs/runtime/pipeline.py` enforces hook ordering and deep-copies artifacts, but `on_activate` hooks are never invoked because activation skips runtime code, so the documented deps-first-then-hooks activation contract is unmet.
-* `backend/tests/api/jobs/test_jobs_router.py` asserts the current synchronous flow (201 + succeeded status); docs/tests will need wholesale updates for the queued contract.
+* `apps/api/app/features/jobs/router.py` responds with **201** and returns a completed `JobRecord`; there is no async queue or `202 Accepted` path today, and HTTP headers/body lack a `Location` pointer or `{ status: "queued" }` payload.
+* `apps/api/app/features/jobs/service.py` executes jobs inline by calling `JobOrchestrator.run(...)` after marking the row `running`; saturation/back-pressure are absent.
+* `apps/api/app/features/configs/service.py::activate_version` only updates workspace state—no dependency install, `on_activate` hook execution, or environment metadata persistence.
+* `apps/api/app/features/jobs/orchestrator.py` always shells out with `sys.executable`; it never consults a per-config venv and always injects `config/vendor` onto `PYTHONPATH`.
+* `apps/api/app/features/jobs/runtime/pipeline.py` enforces hook ordering and deep-copies artifacts, but `on_activate` hooks are never invoked because activation skips runtime code, so the documented deps-first-then-hooks activation contract is unmet.
+* `apps/api/tests/api/jobs/test_jobs_router.py` asserts the current synchronous flow (201 + succeeded status); docs/tests will need wholesale updates for the queued contract.
 * Developer docs must emphasise `engine.defaults.runtime_network_access` and per-version activation environments
 
 ---
@@ -46,11 +46,11 @@ Align the **developer docs** and the **runtime** for job submission/processing, 
 
 ## Current gaps (audit)
 
-* **Queue semantics** (`backend/app/features/jobs/router.py`, `service.py`): API currently returns `201` and blocks while the worker runs; docs promise a `202` queue, worker pool, and `429` back-pressure.
-* **Dependency handling** (`backend/app/features/configs/service.py`): Docs describe `requirements.txt` installs during activation; runtime never creates per-version environments.
-* **Hooks** (`backend/app/features/jobs/runtime/pipeline.py`): Stage hooks largely match docs, but `on_activate` is never executed and activation failures never gate publishing.
-* **Network policy** (`backend/app/features/jobs/worker.py`): Runtime disables sockets based on manifest/env; activation-time installs are unspecified and docs need to explain the `runtime_network_access` toggle end to end.
-* **Logs & metadata** (`backend/app/features/jobs/storage.py` + docs): Runtime emits structured `events.ndjson`/`run-request.json`, while docs assume plaintext logs and omit environment metadata.
+* **Queue semantics** (`apps/api/app/features/jobs/router.py`, `service.py`): API currently returns `201` and blocks while the worker runs; docs promise a `202` queue, worker pool, and `429` back-pressure.
+* **Dependency handling** (`apps/api/app/features/configs/service.py`): Docs describe `requirements.txt` installs during activation; runtime never creates per-version environments.
+* **Hooks** (`apps/api/app/features/jobs/runtime/pipeline.py`): Stage hooks largely match docs, but `on_activate` is never executed and activation failures never gate publishing.
+* **Network policy** (`apps/api/app/features/jobs/worker.py`): Runtime disables sockets based on manifest/env; activation-time installs are unspecified and docs need to explain the `runtime_network_access` toggle end to end.
+* **Logs & metadata** (`apps/api/app/features/jobs/storage.py` + docs): Runtime emits structured `events.ndjson`/`run-request.json`, while docs assume plaintext logs and omit environment metadata.
 
 ---
 
@@ -58,7 +58,7 @@ Align the **developer docs** and the **runtime** for job submission/processing, 
 
 ### D1 — Queued job runner (P0)
 
-**Deliver:** Introduce an async job manager (e.g., `backend/app/features/jobs/manager.py`) that owns a bounded queue and worker tasks running within a **single process/pod**. `JobsService.submit_job` should enqueue work instead of executing inline, `POST /jobs` must return `202 Accepted` with a `Location` header plus `{ job_id, status: "queued" }`, and saturation should produce `429 Too Many Requests` with a `Retry-After` hint. Extend `GET /jobs/{id}` to surface queue timestamps, attempts, retry lineage, and heartbeat data so the manager can rehydrate queued/running jobs on restart (stale "running" jobs fall back to `queued`). `POST /jobs/{id}/retry` should enqueue a fresh attempt linked to the prior run. Worker startup should rehydrate queue state from persistence.
+**Deliver:** Introduce an async job manager (e.g., `apps/api/app/features/jobs/manager.py`) that owns a bounded queue and worker tasks running within a **single process/pod**. `JobsService.submit_job` should enqueue work instead of executing inline, `POST /jobs` must return `202 Accepted` with a `Location` header plus `{ job_id, status: "queued" }`, and saturation should produce `429 Too Many Requests` with a `Retry-After` hint. Extend `GET /jobs/{id}` to surface queue timestamps, attempts, retry lineage, and heartbeat data so the manager can rehydrate queued/running jobs on restart (stale "running" jobs fall back to `queued`). `POST /jobs/{id}/retry` should enqueue a fresh attempt linked to the prior run. Worker startup should rehydrate queue state from persistence.
 
 **Acceptance:**
 
@@ -118,9 +118,9 @@ Align the **developer docs** and the **runtime** for job submission/processing, 
 
 ### Phase A — Queue & API
 
-* [x] Add an async `JobQueueManager` with bounded workers, metrics, and graceful shutdown hooks (new module under `backend/app/features/jobs/`).
+* [x] Add an async `JobQueueManager` with bounded workers, metrics, and graceful shutdown hooks (new module under `apps/api/app/features/jobs/`).
 * [x] Update `JobsService.submit_job` to enqueue and return immediately; propagate saturation via `JobSubmissionError` so the router emits `429` + `Retry-After`.
-* [x] Adjust `backend/app/features/jobs/router.py` + schemas to return `202`, include `Location`, and expose queue timestamps/links.
+* [x] Adjust `apps/api/app/features/jobs/router.py` + schemas to return `202`, include `Location`, and expose queue timestamps/links.
 * [x] Extend persistence (`models.py`, `repository.py`, `schemas.py`) to track queue timestamps, attempts, retry lineage, and expose `events.ndjson` URIs.
 * [x] Persist worker heartbeats / last_seen to support rehydration and stale-run detection on restart.
 * [x] Ensure worker lifecycle appends `enqueue`/`start`/`finish`/`retry`/`error` events to storage with durations.
@@ -159,7 +159,7 @@ Align the **developer docs** and the **runtime** for job submission/processing, 
 1. **Queue skeleton & 202/429 contract**
    * Add `JobQueueManager` (bounded asyncio queue; N workers; single-process assumption) and flip `POST /jobs` to enqueue + `202` with `Location` header/body payload.
    * Emit `429` with `Retry-After` when saturated; persist queue timestamps/events; add feature flag for rollback.
-   * Update API tests in `backend/tests/api/jobs/` for the new contract.
+   * Update API tests in `apps/api/tests/api/jobs/` for the new contract.
 2. **Activation pipeline: venv + deps + `on_activate`**
    * Extend `ConfigsService.activate_version` to create the venv, install deps (hardened pip flags), freeze, and run hooks within the venv.
    * Persist activation metadata under config storage; orchestrator uses venv interpreter; remove vendor PYTHONPATH injection.
@@ -174,7 +174,7 @@ Align the **developer docs** and the **runtime** for job submission/processing, 
 ### Day-one checklist
 
 * [ ] Draft ADR at `docs/developers/design-decisions/dd-????-queued-runner-and-activation-env.md` capturing queue semantics (202/429, single-node, rehydration), deps-before-hooks activation, per-version venv, and runtime network policy default.
-* [ ] Create stubs for `backend/app/features/jobs/manager.py`, `backend/app/features/jobs/models.py` (state enums/heartbeat), and `backend/app/features/configs/activation_env.py` (venv helpers).
+* [ ] Create stubs for `apps/api/app/features/jobs/manager.py`, `apps/api/app/features/jobs/models.py` (state enums/heartbeat), and `apps/api/app/features/configs/activation_env.py` (venv helpers).
 * [ ] Flip router/service to return `202` + `Location` behind `ADE_QUEUE_ENABLED` flag; keep legacy tests as `_legacy` fixtures for comparison.
 * [ ] Add manifest validation that rejects deprecated network fields and requires `engine.defaults.runtime_network_access`.
 
@@ -235,4 +235,4 @@ Align the **developer docs** and the **runtime** for job submission/processing, 
 * 2025-11-03T21:30:00Z • Event schema: `{ ts, event, job_id, attempt, state, duration_ms?, detail? }`; events include `enqueue`, `start`, `exit`, `retry`, `error`.
 * 2025-11-03T21:31:00Z • Manifest/schema: bump manifest minor version if we add `engine.environment` or rename fields; validation must emit actionable guidance.
 * 2025-11-03T22:40:00Z • Phase A shipped: queue manager, 202/429 API, retry route, heartbeats, rehydration, and normalized events are live behind the default path; saturation no longer persists failed rows.
-* 2025-11-03T22:42:00Z • Next up: start Phase B by adding `backend/app/features/configs/activation_env.py`, wiring `ConfigsService.activate_version` to create/use per-version venvs (deps → `on_activate`), and pointing the orchestrator at the venv interpreter; follow with network policy + docs (Phases D/E).
+* 2025-11-03T22:42:00Z • Next up: start Phase B by adding `apps/api/app/features/configs/activation_env.py`, wiring `ConfigsService.activate_version` to create/use per-version venvs (deps → `on_activate`), and pointing the orchestrator at the venv interpreter; follow with network policy + docs (Phases D/E).

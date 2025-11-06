@@ -27,9 +27,9 @@ if (!validScopes.includes(scope)) {
 const shouldRunBackend = scope === undefined || scope === "backend" || scope === "all";
 const shouldRunFrontend = scope === undefined || scope === "frontend" || scope === "all";
 
-const backendPresent = existsSync(join("backend", "app")) && existsSync("pyproject.toml");
+const backendPresent = existsSync(join("apps", "api", "app")) && existsSync("pyproject.toml");
 const frontendPresent =
-  existsSync("frontend") && existsSync(join("frontend", "package.json"));
+  existsSync(join("apps", "web")) && existsSync(join("apps", "web", "package.json"));
 
 if (shouldRunBackend && !backendPresent) {
   console.warn("⚠️  backend directory missing; skipping backend lint");
@@ -53,13 +53,13 @@ const lintBackend = async () => {
   const fallback = process.platform === "win32" ? "python" : "python3";
   const pythonExecutable =
     pythonCandidates.find((candidate) => existsSync(candidate)) || fallback;
-  await run(pythonExecutable, ["-m", "ruff", "check", "backend/app"]);
+  await run(pythonExecutable, ["-m", "ruff", "check", "apps/api/app"]);
 };
 
 const frontendHasLintScript = async () => {
   if (!frontendPresent) return false;
   try {
-    const pkg = JSON.parse(await readFile("frontend/package.json", "utf8"));
+    const pkg = JSON.parse(await readFile("apps/web/package.json", "utf8"));
     return typeof pkg?.scripts?.lint === "string";
   } catch {
     return false;
@@ -73,7 +73,7 @@ const lintFrontend = async () => {
     console.warn("⚠️  frontend lint script missing; skipping frontend lint");
     return;
   }
-  await run("npm", ["run", "lint"], { cwd: "frontend" });
+  await run("npm", ["run", "lint"], { cwd: join("apps", "web") });
 };
 
 await lintBackend();

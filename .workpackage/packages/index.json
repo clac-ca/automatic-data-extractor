@@ -77,7 +77,7 @@
       "slug": "port-ade-backend-features",
       "title": "Port ADE backend features",
       "status": "done",
-      "summary": "Incrementally migrate required backend capabilities from .old-codebase/ade into backend/app following backend/docs/backend_porting_guardrails.md.",
+      "summary": "Incrementally migrate required backend capabilities from .old-codebase/ade into apps/api/app following backend/docs/backend_porting_guardrails.md.",
       "createdAt": "2025-10-20T03:14:38.973Z",
       "updatedAt": "2025-10-20T03:14:44.335Z",
       "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0008-port-ade-backend-features"

@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Introduce `ADE_SAFE_MODE` to boot the API/UI without executing config packages, surfacing a health component and UI banner while job submissions return HTTP 400.
 - Deliver workspace chrome toggles and a redesigned documents page with filters, grid/list views, bulk actions, and an inspector drawer.
 - Introduce an Angular workspace directory service with loading and error states to power the app shell navigation.
-- Rebuild the ADE frontend in `frontend/` with a Vite/React workspace shell, focus mode, inspector context, and document/configuration surfaces.
+- Rebuild the ADE frontend in `apps/web/` with a Vite/React workspace shell, focus mode, inspector context, and document/configuration surfaces.
 - Add a stubbed telemetry helper (`trackEvent`) to prepare for backend event collection.
 - Introduce a command palette (`⌘K` / `Ctrl+K`) and refined navigation chrome inspired by best-in-class productivity apps.
 - Enable document uploads and deletions directly from the Documents page with API-backed mutations, toasts, and inspector download shortcuts.
@@ -29,7 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Introduce per-feature service dependencies and repositories (documents, configurations, jobs, users, health) to keep routers thin, scaffold system-settings helpers for future admin flows, and mount the v1 router from `ade/v1/router.py`.
 - Replace the legacy workspace layout with a four-zone navigation model (top bar, collapsible left rail, main surface, optional inspector) and persist per-workspace chrome state.
 - Simplify router spine: remove remote-mounted AppShell chrome, render workspace nav/top bar inside `WorkspaceLayout`, and gate private routes with a plain session-guarded Outlet.
-- Move the backend package under `backend/app/` and align tooling, docs, and build outputs with the new location.
+- Move the backend package under `apps/api/app/` and align tooling, docs, and build outputs with the new location.
 - Adopt React Router framework mode with file-based routes, replace the manual `AppRouter` with generated routes, and inline the workspace documents screen under `src/app/routes`.
 - Collapse legacy feature route wrappers into `src/app/routes/**`, keep `/workspaces/:id/configurations` as the canonical path, and hang detail pages off shared layout segments.
 - Move workspace navigation/top-bar/layout helpers into `src/app/routes/workspaces/$workspaceId/` and standardise feature API clients under `features/*/api/client.ts` with barrel re-exports.
@@ -39,7 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Refine document uploads with drag-and-drop handling, client-side filtering of supported formats, and clearer status messaging during manual uploads.
 - Surface a workspace upload progress tray that lists in-flight files while backend uploads run, keeping drag-and-drop and picker flows transparent.
 - Validate configuration scripts inside a sandboxed subprocess with size limits, timeouts, and network isolation.
-- Move frontend sources into `frontend/src/**` to match the React Router file-based layout and update tooling aliases.
+- Move frontend sources into `apps/web/src/**` to match the React Router file-based layout and update tooling aliases.
 - Simplify the FastAPI entrypoint by removing CLI-specific helpers from `ade/app.py` and relying on uvicorn plus npm scripts for asset syncing.
 
 ### Removed

@@ -1,6 +1,6 @@
 # Backend & Frontend Folder Revamp Plan
 
-This document inventories the work needed to migrate from the current `backend/` + `frontend/` layout to the structure described in `docs/developers/README.md`. It focuses on filesystem moves, tooling fallout, and validation checkpoints so we can execute the refactor in a single, predictable sequence.
+This document inventories the work needed to migrate from the current `backend/` + `apps/web/` layout to the structure described in `docs/developers/README.md`. It focuses on filesystem moves, tooling fallout, and validation checkpoints so we can execute the refactor in a single, predictable sequence.
 
 ## 1. Goals
 - Relocate the FastAPI application under `apps/api/app/**` with the supporting assets outlined in the developer guide.
@@ -9,16 +9,16 @@ This document inventories the work needed to migrate from the current `backend/`
 - Keep local development (`npm run dev`), CI, Docker, and documentation working throughout the move.
 
 ## 2. Current Layout Snapshot
-- `backend/app/**` — FastAPI code, migrations, shared libs, static web bundle, scripts.
-- `backend/tests/**` — pytest suites.
-- `frontend/**` — React Router app, node_modules, build artifacts.
+- `apps/api/app/**` — FastAPI code, migrations, shared libs, static web bundle, scripts.
+- `apps/api/tests/**` — pytest suites.
+- `apps/web/**` — React Router app, node_modules, build artifacts.
 - `engine/` — empty placeholder for future engine code.
-- Node tooling (`scripts/*.mjs`) hard-codes `backend/app` & `frontend`.
-- Dockerfile copies `backend/...` and `frontend/...` into the image.
-- Docs across `docs/**` reference `backend/app/...` and `frontend/...`.
-- Alembic configuration (`alembic.ini`, `backend/app/shared/db/migrations/env.py`) and tests (`backend/tests/services/db/test_migrations.py`) assume migrations under `backend/app/shared/db/migrations`.
-- Root `.env.example`, `.gitignore`, and various docs reference `backend/app/web/static`.
-- CI / scripts expect Python package name `backend.app`.
+- Node tooling (`scripts/*.mjs`) hard-codes `apps/api/app` & `apps/web`.
+- Dockerfile copies `apps/api/...` and `apps/web/...` into the image.
+- Docs across `docs/**` reference `apps/api/app/...` and `apps/web/...`.
+- Alembic configuration (`alembic.ini`, `apps/api/app/shared/db/migrations/env.py`) and tests (`apps/api/tests/services/db/test_migrations.py`) assume migrations under `apps/api/app/shared/db/migrations`.
+- Root `.env.example`, `.gitignore`, and various docs reference `apps/api/app/web/static`.
+- CI / scripts expect Python package name `apps.api.app`.
 
 ## 3. Target Layout
 The ADE monorepo brings together four cooperating layers:
@@ -140,26 +140,26 @@ ${ADE_DATA_DIR}/
 
 ### 4.1 Scaffolding & Moves
 1. Create destination directories: `apps/api/{app,migrations,tests}`, `apps/web`, and `packages/ade-engine`.
-2. Move Python modules from `backend/app/**` into `apps/api/app/**`, preserving the internal structure for now (`features` can be re-homed later, but ensure imports still resolve).
-3. Relocate `backend/app/shared/db/migrations` to `apps/api/migrations` and adjust package imports accordingly.
-4. Move `backend/tests/**` into `apps/api/tests/**`; update any relative fixtures that assume `tests/` lives under `backend/`.
-5. Relocate the React project (`frontend/**`) into `apps/web/**`, including hidden files like `.eslintrc`, `.npmrc`, etc. Ensure `apps/web/node_modules` remains ignored.
-6. If any tooling expects a `backend/app/web/static/README.md`, move it alongside the static directory under `apps/api/app/web`.
-7. Drop the empty `backend/` and `frontend/` directories after verifying all references point to the new locations.
+2. Move Python modules from `apps/api/app/**` into `apps/api/app/**`, preserving the internal structure for now (`features` can be re-homed later, but ensure imports still resolve).
+3. Relocate `apps/api/app/shared/db/migrations` to `apps/api/migrations` and adjust package imports accordingly.
+4. Move `apps/api/tests/**` into `apps/api/tests/**`; update any relative fixtures that assume `tests/` lives under `backend/`.
+5. Relocate the React project (`apps/web/**`) into `apps/web/**`, including hidden files like `.eslintrc`, `.npmrc`, etc. Ensure `apps/web/node_modules` remains ignored.
+6. If any tooling expects a `apps/api/app/web/static/README.md`, move it alongside the static directory under `apps/api/app/web`.
+7. Drop the empty `backend/` and `apps/web/` directories after verifying all references point to the new locations.
 
 ### 4.2 Python Packaging & Tooling
 1. Update `pyproject.toml`:
-   - Adjust `tool.setuptools.packages.find` include pattern to `["apps.api.app*"]` (or maintain a shim for `backend.app` if we expose a namespace).
+   - Adjust `tool.setuptools.packages.find` include pattern to `["apps.api.app*"]` (or maintain a shim for `apps.api.app` if we expose a namespace).
    - Refresh `tool.setuptools.package-data` glob paths (static assets, migrations under `apps/api/migrations`).
    - Update pytest, coverage, and mypy configuration paths (`apps/api/tests`, `apps/api/app`).
 2. Update imports across Python modules and tests. Options:
-   - Keep `backend.app` as a namespace package by adding a thin shim (e.g., `backend/app/__init__.py` inside a compatibility package under `apps/api`) to avoid touching every import immediately.
-   - Or rename to `apps.api.app` and run a bulk `sed`/editor replace for `backend.app` → `apps.api.app`.
+   - Keep `apps.api.app` as a namespace package by adding a thin shim (e.g., `apps/api/app/__init__.py` inside a compatibility package under `apps/api`) to avoid touching every import immediately.
+   - Or rename to `apps.api.app` and run a bulk `sed`/editor replace for `apps.api.app` → `apps.api.app`.
 3. Update Alembic:
    - `alembic.ini` `script_location` to `apps/api/migrations`.
-   - `apps/api/migrations/env.py` (moved from `backend/app/shared/db/migrations/env.py`) to import the new settings module path.
+   - `apps/api/migrations/env.py` (moved from `apps/api/app/shared/db/migrations/env.py`) to import the new settings module path.
    - Any direct references in migration scripts (e.g., relative imports) to the new package path.
-4. Ensure `backend/tests/services/db/test_migrations.py` (now under `apps/api/tests/...`) looks for the new tables without referencing old paths.
+4. Ensure `apps/api/tests/services/db/test_migrations.py` (now under `apps/api/tests/...`) looks for the new tables without referencing old paths.
 5. Update `Dockerfile`:
    - COPY backend files from `apps/api`.
    - Copy SPA bundle into `apps/api/app/web/static`.
@@ -178,17 +178,17 @@ ${ADE_DATA_DIR}/
 
 ### 4.4 Environment & Config
 1. Ensure `.env.example` keys align with the new directory expectations (already partially updated for ADE data directories).
-2. Update `backend/app/shared/core/config.py` (soon under `apps/api/app/shared/core/config.py`) defaults if paths change (e.g., `PROJECT_ROOT` calculation uses relative parents—verify after move).
-3. Review `.gitignore`, `.dockerignore`, and lint/test configs for stale references (`backend/app/web/static`, `frontend/build`, etc.).
-4. Verify any hard-coded paths in scripts (e.g., `npm-clean.mjs` removing `backend/app/web/static`) point to the new locations.
+2. Update `apps/api/app/shared/core/config.py` (soon under `apps/api/app/shared/core/config.py`) defaults if paths change (e.g., `PROJECT_ROOT` calculation uses relative parents—verify after move).
+3. Review `.gitignore`, `.dockerignore`, and lint/test configs for stale references (`apps/api/app/web/static`, `apps/web/build`, etc.).
+4. Verify any hard-coded paths in scripts (e.g., `npm-clean.mjs` removing `apps/api/app/web/static`) point to the new locations.
 
 ### 4.5 Documentation & Metadata
-1. Global search for `backend/app` and `frontend/` references across:
+1. Global search for `apps/api/app` and `apps/web/` references across:
    - `docs/**` (developer guide, admin guide, glossary, reference, workpackage notes).
    - Root `README.md`, `AGENTS.md`, `CHANGELOG.md`.
    - `docs/developers/_archive` materials (update or annotate with legacy status).
 2. Update architecture diagrams and ASCII trees in docs to show the new structure.
-3. Refresh command examples (e.g., `npm run build` comment pointing to `backend/app/web/static`) to reference `apps/api/app/web/static`.
+3. Refresh command examples (e.g., `npm run build` comment pointing to `apps/api/app/web/static`) to reference `apps/api/app/web/static`.
 4. Update changelog or release notes if they describe the old structure or mention migration steps.
 
 ### 4.6 Engine Package Scaffold
@@ -218,7 +218,7 @@ ${ADE_DATA_DIR}/
 - Static path references in docs (e.g., `docs/reference/glossary.md`) reflect the new layout.
 
 ## 6. Open Questions / Decisions
-- **Package name retention:** keep `backend.app` as an import alias via `src/backend/app/__init__.py` shim or fully rename to `apps.api.app`? Decide before bulk renames.
+- **Package name retention:** keep `apps.api.app` as an import alias via `src/apps/api/app/__init__.py` shim or fully rename to `apps.api.app`? Decide before bulk renames.
 - **Feature → Services breakdown:** immediate re-homing of `features/**` into `services/`, `repositories/`, `schemas/`, `workers/`, or defer until after the move?
 - **Future queue implementation:** if queue primitives are reintroduced, confirm where they live (`app/services` vs. separate package).
 - **Node package manager strategy:** remain on npm with `--prefix` or adopt workspace tooling (pnpm/npm workspaces) once layout stabilises.
