@@ -12,9 +12,9 @@
   "links": [],
   "context": {
     "initialScopePaths": [
-      "backend/app/features/configs",
-      "backend/app/features/jobs",
-      "backend/app/api/v1"
+      "apps/api/app/features/configs",
+      "apps/api/app/features/jobs",
+      "apps/api/app/api/v1"
     ],
     "nonGoals": [
       "Object storage or remote blobs (local filesystem only in v1).",

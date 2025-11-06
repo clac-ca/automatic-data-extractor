@@ -13,7 +13,7 @@ const venvUvicorn =
 
 const command = existsSync(venvUvicorn) ? venvUvicorn : "uvicorn";
 const args = [
-  "backend.app.main:create_app",
+  "apps.api.app.main:create_app",
   "--factory",
   "--host",
   "0.0.0.0",

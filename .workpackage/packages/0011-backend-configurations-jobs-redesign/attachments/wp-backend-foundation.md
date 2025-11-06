@@ -8,7 +8,7 @@ These staged work packages translate the config package and job orchestration de
 ## WP1 — Metadata & Storage Baseline
 - **Goals:** Create durable metadata tables for configs, config versions, workspace activation state, and jobs. Establish deterministic on-disk layout for config packages and per-job artifacts under `ADE_STORAGE_DATA_DIR`.
 - **Deliverables:** Updated Alembic migration, SQLAlchemy models, and startup bootstrap that provision package and job directories.
-- **Code:** `backend/app/shared/db/migrations/versions/0001_initial_schema.py`, `backend/app/features/configs/models.py`, `backend/app/features/jobs/models.py`, `backend/app/shared/core/lifecycles.py`.
+- **Code:** `apps/api/app/shared/db/migrations/versions/0001_initial_schema.py`, `apps/api/app/features/configs/models.py`, `apps/api/app/features/jobs/models.py`, `apps/api/app/shared/core/lifecycles.py`.
 - **Testing:** Unit tests confirming new tables exist, models reflect schema, and runtime directories are created for configs and jobs beneath `ADE_STORAGE_DATA_DIR` (for example `data/configs/<config_id>/<version>/` and `data/jobs/<job_id>/`).
 - **Acceptance:**
   - Schema stores config metadata, version manifest JSON + content hashes, workspace → active_version mapping, and job lifecycle fields (queued/started/completed timestamps, artifact paths).
@@ -22,7 +22,7 @@ These staged work packages translate the config package and job orchestration de
 ## WP2 — Config Registry & Package Lifecycle
 - **Goals:** Implement services that manage manifest-backed config packages on disk, enforce single active config per workspace, and expose FastAPI endpoints for CRUD/version operations.
 - **Deliverables:** Config repository/service/router, storage helpers that materialize package structure (`manifest.json`, `columns/`, `row_types/`, `hooks/`, optional `requirements.txt`), and manifest validation aligned with docs.
-- **Code:** `backend/app/features/configs/{repository.py,service.py,schemas.py,router.py}`, storage helpers under `backend/app/features/configs/storage.py`, shared manifest validation utilities.
+- **Code:** `apps/api/app/features/configs/{repository.py,service.py,schemas.py,router.py}`, storage helpers under `apps/api/app/features/configs/storage.py`, shared manifest validation utilities.
 - **Testing:** API + service tests covering create/import, versioning with immutable hashes, workspace activation semantics, and manifest validation errors.
 - **Acceptance:**
   - Config creation records metadata + version row, materializes package folder, and validates manifest/structure against doc contracts.
@@ -37,7 +37,7 @@ These staged work packages translate the config package and job orchestration de
 ## WP3 — Job Orchestration Skeleton
 - **Goals:** Provide a minimal job manager that queues work, prepares sandbox-ready working directories, runs the documented pass pipeline, and persists artifacts/output metadata.
 - **Deliverables:** Job repository/service/orchestrator modules, router endpoints for submit/list/detail, helpers to emit `artifact.json` and streaming `normalized.xlsx`, and a subprocess adapter stub (no resource limits yet).
-- **Code:** `backend/app/features/jobs/{repository.py,service.py,schemas.py,router.py,orchestrator.py}`, shared sandbox utilities under `backend/app/shared/adapters/` as needed.
+- **Code:** `apps/api/app/features/jobs/{repository.py,service.py,schemas.py,router.py,orchestrator.py}`, shared sandbox utilities under `apps/api/app/shared/adapters/` as needed.
 - **Testing:** Service and API tests verifying queueing, status transitions (QUEUED → RUNNING → SUCCEEDED/FAILED), artifact + normalized file creation, and recorded pass diagnostics.
 - **Acceptance:**
   - Submitting a job enqueues it, materializes `var/jobs/<job_id>/` (input copy, config snapshot, vendor dir), and launches pass runner in an isolated subprocess per design recommendation.
@@ -54,7 +54,7 @@ These staged work packages translate the config package and job orchestration de
 ## WP4 — Config Authoring Surface (Manifest + Files API)
 - **Goals:** Support granular editing of config packages directly from the new frontend experience without full ZIP round-trips.
 - **Deliverables:** Endpoints to list package trees, stream individual files, update manifest metadata, and save script modules; change tracking helpers for drafts; upload/download parity.
-- **Code:** `backend/app/features/configs/{router.py,service.py,storage.py}`, potential helpers under `backend/app/features/configs/editor.py`.
+- **Code:** `apps/api/app/features/configs/{router.py,service.py,storage.py}`, potential helpers under `apps/api/app/features/configs/editor.py`.
 - **Testing:** API tests for file CRUD, optimistic lock/version conflicts, diff previews, and ZIP reconstruction; storage tests ensuring canonical archives stay intact.
 - **Acceptance:**
   - Clients can fetch manifest JSON and package files individually, edit them, and persist changes to a new version.
@@ -70,7 +70,7 @@ These staged work packages translate the config package and job orchestration de
 ## WP5 — Runtime Execution Parity with Design Docs
 - **Goals:** Replace the worker stub with the full pass pipeline described in `02-job-orchestration.md`, using the script API defined in `01-config-packages.md`.
 - **Deliverables:** Streaming reader for XLSX inputs, manifest-driven pass runner that loads detectors/transforms/validators, hook invocation, artifact writer respecting schema.
-- **Code:** `backend/app/features/jobs/worker.py`, shared helpers under `backend/app/features/jobs/runtime/`, potential refactors in `backend/app/features/jobs/orchestrator.py`.
+- **Code:** `apps/api/app/features/jobs/worker.py`, shared helpers under `apps/api/app/features/jobs/runtime/`, potential refactors in `apps/api/app/features/jobs/orchestrator.py`.
 - **Testing:** Unit tests for each pass, integration tests asserting artifact content matches expectations, regression suite using sample config packages.
 - **Acceptance:**
   - Worker reads input spreadsheets, runs find→map→transform→validate→output passes, and records results per artifact spec (`docs/developers/14-job_artifact_json.md`).
@@ -86,7 +86,7 @@ These staged work packages translate the config package and job orchestration de
 ## WP6 — Job Input Handling & Document Integration
 - **Goals:** Bridge document storage with job execution so real user uploads become job inputs with idempotent hashing.
 - **Deliverables:** Repository/service updates to resolve document binaries, copy them into job directories, and persist run metadata; optional preflight validation for unsupported formats.
-- **Code:** `backend/app/features/jobs/{service.py,storage.py}`, `backend/app/features/documents/`, potential shared utilities under `backend/app/shared/io/`.
+- **Code:** `apps/api/app/features/jobs/{service.py,storage.py}`, `apps/api/app/features/documents/`, potential shared utilities under `apps/api/app/shared/io/`.
 - **Testing:** Service tests that submit jobs with documents, ensure inputs are staged, and hashed for idempotency; API tests covering retries and unsupported file errors.
 - **Acceptance:**
   - Jobs API accepts document references (or direct file uploads) and materializes `input.xlsx` in the job folder.
@@ -101,7 +101,7 @@ These staged work packages translate the config package and job orchestration de
 ## WP7 — Observability, Cancellation, and Hardening
 - **Goals:** Align with future hardening notes in `02-job-orchestration.md` by adding cancel support, improved logging/metrics, and stricter sandboxing.
 - **Deliverables:** Cancel endpoint, process group kill logic, structured logs/metrics hooks, optional seccomp/bubblewrap integration flag.
-- **Code:** `backend/app/features/jobs/{router.py,service.py,orchestrator.py}`, shared adapters under `backend/app/shared/observability/`.
+- **Code:** `apps/api/app/features/jobs/{router.py,service.py,orchestrator.py}`, shared adapters under `apps/api/app/shared/observability/`.
 - **Testing:** Tests asserting cancel transitions, worker termination behavior, and metric emission; stress tests for queue overflow.
 - **Acceptance:**
   - Users can cancel queued or running jobs; subprocesses terminate cleanly and mark status `cancelled`.
@@ -116,7 +116,7 @@ These staged work packages translate the config package and job orchestration de
 ## WP8 — Secrets & Environment Management
 - **Goals:** Provide a secure secrets store and runtime injection path that matches the manifest contracts in `01-config-packages.md` and the safety guidance in `docs/developers/README.md`.
 - **Deliverables:** Encrypted-at-rest secrets storage, CRUD APIs for config-level secrets, integration with manifest `env` overrides and job sandbox environment.
-- **Code:** `backend/app/features/configs/{schemas.py,service.py,router.py}`, `backend/app/shared/security/`, potential Alembic migrations for secrets tables.
+- **Code:** `apps/api/app/features/configs/{schemas.py,service.py,router.py}`, `apps/api/app/shared/security/`, potential Alembic migrations for secrets tables.
 - **Testing:** API tests covering secret creation/update/audit, permission checks, and redaction; worker tests ensuring secrets surface via `env` but never leak into artifacts/logs.
 - **Acceptance:**
   - Secrets are stored encrypted, scoped per workspace/config, and versioned for audit.
@@ -132,7 +132,7 @@ These staged work packages translate the config package and job orchestration de
 ## WP9 — API Surface & Contract Automation
 - **Goals:** Lock down backend contracts for the new frontend by providing OpenAPI stability, generated TypeScript types, and regression coverage for error envelopes.
 - **Deliverables:** Hardened FastAPI routes with explicit schemas, `npm run openapi-typescript` automation, CI check for contract drift, and comprehensive API tests for configs/jobs flows.
-- **Code:** `backend/app/api/v1/__init__.py`, `backend/app/features/{configs,jobs}/schemas.py`, automation under `scripts/` and `package.json`.
+- **Code:** `apps/api/app/api/v1/__init__.py`, `apps/api/app/features/{configs,jobs}/schemas.py`, automation under `scripts/` and `package.json`.
 - **Testing:** Snapshot tests for OpenAPI output, contract tests verifying response shapes, frontend type generation smoke test.
 - **Acceptance:**
   - OpenAPI spec reflects all config/job endpoints and stays backward compatible across releases.
@@ -147,7 +147,7 @@ These staged work packages translate the config package and job orchestration de
 ## WP10 — Deployment & Ops Readiness
 - **Goals:** Ensure the service is production-ready with configuration knobs, migrations, data retention, and operational docs.
 - **Deliverables:** Environment variable documentation, bootstrap scripts, data retention policies for job artifacts/configs, and observability dashboards.
-- **Code:** `backend/app/shared/core/config.py`, deployment manifests, `docs/developers/` ops guides.
+- **Code:** `apps/api/app/shared/core/config.py`, deployment manifests, `docs/developers/` ops guides.
 - **Testing:** Smoke tests for configuration loading, migration verification in CI, scripted backups/cleanup dry runs.
 - **Acceptance:**
   - Application boots cleanly with documented environment variables (storage dirs, secrets backend, concurrency limits).

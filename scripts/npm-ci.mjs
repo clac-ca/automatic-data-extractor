@@ -36,16 +36,16 @@ const runCapture = (command, args = [], options = {}) =>
     });
   });
 
-const hasBackend = existsSync(join("backend", "app")) && existsSync("pyproject.toml");
+const hasBackend = existsSync(join("apps", "api", "app")) && existsSync("pyproject.toml");
 const hasFrontend =
-  existsSync("frontend") && existsSync(join("frontend", "package.json"));
+  existsSync(join("apps", "web")) && existsSync(join("apps", "web", "package.json"));
 
 const collectFrontendRoutes = async () => {
   if (!hasFrontend) {
     return { status: "skipped", reason: "frontend missing" };
   }
 
-  const nodeModulesDir = join("frontend", "node_modules");
+  const nodeModulesDir = join("apps", "web", "node_modules");
   if (!existsSync(nodeModulesDir)) {
     return {
       status: "skipped",
@@ -60,11 +60,11 @@ const collectFrontendRoutes = async () => {
   try {
     const { stdout } = existsSync(localBin)
       ? await runCapture(localBinAbsolute, ["routes", "--json"], {
-          cwd: "frontend",
+          cwd: join("apps", "web"),
           shell: process.platform === "win32",
         })
       : await runCapture("npx", ["react-router", "routes", "--json"], {
-          cwd: "frontend",
+          cwd: join("apps", "web"),
           shell: process.platform === "win32",
         });
     const parsed = JSON.parse(stdout);

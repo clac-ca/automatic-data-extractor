@@ -35,7 +35,7 @@ const pythonCandidates = [
   process.platform === "win32" ? "python3" : "python",
 ].filter(Boolean);
 
-const moduleArgs = ["-m", "backend.app.scripts.api_routes", ...process.argv.slice(2)];
+const moduleArgs = ["-m", "apps.api.app.scripts.api_routes", ...process.argv.slice(2)];
 let lastError;
 for (const command of pythonCandidates) {
   try {

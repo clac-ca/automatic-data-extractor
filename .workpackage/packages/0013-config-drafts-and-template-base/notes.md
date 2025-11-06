@@ -214,7 +214,7 @@ data/
 
 ## 7) Template & cloning
 
-* **Default template** lives in-repo: `backend/app/features/configs/templates/default/` (manifest + empty columns/hooks + optional commented `requirements.txt`).
+* **Default template** lives in-repo: `apps/api/app/features/configs/templates/default/` (manifest + empty columns/hooks + optional commented `requirements.txt`).
 * **Clone** uses the stored **source package** (configs/…), not the venv; never copies prepare artifacts.
 * If an ancient version lacks a full package, fallback to `venv/.ade/config/` as a last resort (logged).
 
@@ -261,7 +261,7 @@ data/
 
 ### A) Template → Draft (Phase 1)
 
-* [ ] Add `backend/app/features/configs/templates/default/{manifest.json, columns/__init__.py, hooks/__init__.py, requirements.txt?}`
+* [ ] Add `apps/api/app/features/configs/templates/default/{manifest.json, columns/__init__.py, hooks/__init__.py, requirements.txt?}`
 * [ ] `TemplateLoader.load("default") -> TemplatePackage`
 * [ ] `ConfigsService.create_draft_from_template(workspace_id, template_version_id?, title?, config_id?)`
 * [ ] `POST /configs/drafts` (template mode) + tests (happy path, rename handling, WS mismatch)
@@ -365,7 +365,7 @@ data/
 
 ### Default template (starter)
 
-`backend/app/features/configs/templates/default/manifest.json` (minimal):
+`apps/api/app/features/configs/templates/default/manifest.json` (minimal):
 
 ```json
 {

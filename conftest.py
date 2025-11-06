@@ -18,28 +18,28 @@ from fastapi import FastAPI
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 
-from backend.app.shared.core.config import Settings, get_settings, reload_settings
-from backend.app.shared.db.engine import ensure_database_ready, render_sync_url, reset_database_state
-from backend.app.shared.db.session import get_sessionmaker
-from backend.app.features.auth.security import hash_password
-from backend.app.features.roles.models import Role
-from backend.app.features.roles.service import (
+from apps.api.app.shared.core.config import Settings, get_settings, reload_settings
+from apps.api.app.shared.db.engine import ensure_database_ready, render_sync_url, reset_database_state
+from apps.api.app.shared.db.session import get_sessionmaker
+from apps.api.app.features.auth.security import hash_password
+from apps.api.app.features.roles.models import Role
+from apps.api.app.features.roles.service import (
     assign_global_role,
     assign_role,
     ensure_user_principal,
     sync_permission_registry,
 )
-from backend.app.features.users.models import User, UserCredential
-from backend.app.features.workspaces.models import Workspace, WorkspaceMembership
-from backend.app.shared.core.lifecycles import ensure_runtime_dirs
-from backend.app.main import create_app
+from apps.api.app.features.users.models import User, UserCredential
+from apps.api.app.features.workspaces.models import Workspace, WorkspaceMembership
+from apps.api.app.shared.core.lifecycles import ensure_runtime_dirs
+from apps.api.app.main import create_app
 
 
 @pytest.fixture(scope="session")
 def _database_url(tmp_path_factory: pytest.TempPathFactory) -> str:
     """Provide a file-backed SQLite database URL for the test session."""
 
-    db_path = tmp_path_factory.mktemp("backend-app-db") / "backend_app.sqlite"
+    db_path = tmp_path_factory.mktemp("api-app-db") / "api.sqlite"
     return f"sqlite+aiosqlite:///{db_path}"
 
 
@@ -50,7 +50,7 @@ def _configure_database(
 ) -> AsyncIterator[None]:
     """Apply Alembic migrations against the ephemeral test database."""
 
-    data_dir = tmp_path_factory.mktemp("backend-app-data")
+    data_dir = tmp_path_factory.mktemp("api-app-data")
     documents_dir = data_dir / "documents"
 
     os.environ["ADE_DATABASE_DSN"] = _database_url

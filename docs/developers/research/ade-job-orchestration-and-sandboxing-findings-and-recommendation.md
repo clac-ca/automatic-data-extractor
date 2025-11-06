@@ -582,7 +582,7 @@ RUN mkdir -p /app/var/jobs /app/var/documents \
  && chown -R ade:ade /app/var
 
 # Copy backend code
-COPY backend/ /app/
+COPY apps/ /app/apps/
 WORKDIR /app
 
 # Install API dependencies

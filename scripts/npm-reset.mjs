@@ -34,7 +34,7 @@ if (!autoForce) {
   console.log("This will:");
   console.log("  - Remove build artifacts and dependencies");
   console.log("  - Delete the ./data directory");
-  console.log("  - Reinstall backend/frontend requirements");
+  console.log("  - Reinstall API/web requirements");
   const answer = (await rl.question("Proceed? [y/N] ")).trim().toLowerCase();
   await rl.close();
 
