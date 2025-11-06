@@ -64,7 +64,7 @@ export environment variables in your shell.
    source .venv/bin/activate  # Windows PowerShell: .\.venv\Scripts\Activate.ps1
 
    python -m pip install --upgrade pip
-   pip install -e .[dev]
+   pip install -e apps/api[dev]
    ```
 
 2. Start the application server:
@@ -102,7 +102,7 @@ npm install  # first run only
 npm run dev -- --host
 ```
 
-Tip: If you frequently switch branches, run `pip install -e .[dev]` again after pulling changes so your environment stays in sync with the code.
+Tip: If you frequently switch branches, run `pip install -e apps/api[dev]` again after pulling changes so your environment stays in sync with the code.
 
 ## 5. Option B – Run ADE with Docker
 Docker is useful when you want ADE isolated from the host Python install or to
@@ -171,7 +171,7 @@ With these basics you can run ADE on a laptop, VM, or container host and manage
 administrators through the API while the frontend experience is completed.
 
 ## 8. Troubleshooting
-- **`uvicorn` exits immediately:** ensure the Python dependencies are installed (`pip install -e .[dev]`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn apps.api.app.main:create_app --factory`).
+- **`uvicorn` exits immediately:** ensure the Python dependencies are installed (`pip install -e apps/api[dev]`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn apps.api.app.main:create_app --factory`).
 - **Port conflicts on 8000:** choose another port with `uvicorn ... --port 9000` or stop the conflicting process.
 - **Frontend shows a blank page:** rebuild assets with `npm run build` and copy `apps/web/build/client/` into `apps/api/app/web/static/`).
 - **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api` prefix.

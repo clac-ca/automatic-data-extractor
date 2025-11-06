@@ -30,7 +30,10 @@ DEFAULT_PUBLIC_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS = (DEFAULT_PUBLIC_URL,)
 DEFAULT_DEV_FRONTEND_ORIGINS = ("http://localhost:5173",)
 
-_DURATION_PATTERN = re.compile(r"^(?P<value>\d+(?:\.\d+)?)(?:\s*(?P<unit>[a-zA-Z]+))?$", re.IGNORECASE)
+_DURATION_PATTERN = re.compile(
+    r"^(?P<value>\d+(?:\.\d+)?)(?:\s*(?P<unit>[a-zA-Z]+))?$",
+    re.IGNORECASE,
+)
 _DURATION_UNITS = {
     "s": 1,
     "sec": 1,
@@ -71,7 +74,8 @@ def _parse_duration(value: Any, *, field_name: str) -> timedelta:
         match = _DURATION_PATTERN.match(text)
         if not match:
             raise ValueError(
-                f"{field_name} must be numeric seconds or a value like '15m', '1h', or '30 minutes'",
+                f"{field_name} must be numeric seconds or a value like "
+                "'15m', '1h', or '30 minutes'",
             )
         number = float(match.group("value"))
         unit = match.group("unit")
@@ -79,7 +83,8 @@ def _parse_duration(value: Any, *, field_name: str) -> timedelta:
             multiplier = _DURATION_UNITS.get(unit.lower())
             if multiplier is None:
                 raise ValueError(
-                    f"Unsupported duration unit for {field_name}. Use seconds (s), minutes (m), hours (h), or days (d).",
+                    f"Unsupported duration unit for {field_name}. "
+                    "Use seconds (s), minutes (m), hours (h), or days (d).",
                 )
             seconds = number * multiplier
         else:
@@ -471,15 +476,23 @@ class Settings(BaseSettings):
             origins = [origin for origin in origins if origin != DEFAULT_PUBLIC_URL]
         if self.server_public_url != DEFAULT_PUBLIC_URL:
             dev_defaults = set(DEFAULT_DEV_FRONTEND_ORIGINS) | {DEFAULT_PUBLIC_URL}
-            if all(origin == self.server_public_url or origin in dev_defaults for origin in origins):
-                origins = [origin for origin in origins if origin == self.server_public_url]
+            if all(
+                origin == self.server_public_url or origin in dev_defaults
+                for origin in origins
+            ):
+                origins = [
+                    origin for origin in origins if origin == self.server_public_url
+                ]
         self.server_cors_origins = origins
 
         redirect = self.oidc_redirect_url or ""
         if redirect.startswith("/"):
             base_origin = self.server_public_url.rstrip("/")
             if not base_origin:
-                raise ValueError("server_public_url must be configured when using relative oidc_redirect_url")
+                raise ValueError(
+                    "server_public_url must be configured when using relative "
+                    "oidc_redirect_url"
+                )
             self.oidc_redirect_url = f"{base_origin}{redirect}"
 
         required = {
@@ -493,11 +506,14 @@ class Settings(BaseSettings):
         if self.oidc_enabled and len(provided) != len(required):
             missing = sorted(set(required) - set(provided))
             raise ValueError(
-                "oidc_enabled is true but required OIDC settings are missing: " + ", ".join(missing),
+                "oidc_enabled is true but required OIDC settings are missing: "
+                + ", ".join(missing),
             )
         if not self.oidc_enabled and provided and len(provided) != len(required):
             missing = sorted(set(required) - set(provided))
-            raise ValueError("OIDC configuration incomplete. Provide all of: " + ", ".join(missing))
+            raise ValueError(
+                "OIDC configuration incomplete. Provide all of: " + ", ".join(missing)
+            )
         self.oidc_enabled = len(provided) == len(required)
 
         return self

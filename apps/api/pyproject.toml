@@ -45,8 +45,12 @@ dev = [
 [tool.setuptools]
 include-package-data = true
 
+[tool.setuptools.package-dir]
+"" = ".."
+
 [tool.setuptools.packages.find]
-include = ["apps", "apps.api", "apps.api.app*"]
+where = [".."]
+include = ["apps*"]
 
 # Keep type marker; add other assets here only if needed at runtime
 [tool.setuptools.package-data]
@@ -60,7 +64,7 @@ include = ["apps", "apps.api", "apps.api.app*"]
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = [
-  "apps/api/tests",
+  "tests",
 ]
 asyncio_mode = "auto"
 addopts = "-ra"

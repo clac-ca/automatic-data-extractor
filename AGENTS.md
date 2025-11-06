@@ -1,34 +1,150 @@
 # AGENTS.md
 ## 🧱 Project Overview
 
+## Repository and Runtime Layout
+
+The ADE monorepo brings together four cooperating layers:
+
+| Layer                             | Description                                                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Frontend (React Router)**       | Web app where users create and manage config packages, edit code, and trigger builds/runs.                         |
+| **Backend (FastAPI)**             | API service that stores metadata, builds isolated Python environments, and orchestrates jobs.                      |
+| **Engine (`ade_engine`)**         | Python runtime executed in a worker; reads spreadsheets, applies detectors/hooks, and outputs structured results.  |
+| **Config Package (`ade_config`)** | Defines rules that teach ADE how to detect, map, transform, and validate data. Versioned for testing and rollback. |
+
+
+```text
+automatic-data-extractor/
+├─ apps/                                   # Deployable applications
+│  ├─ api/                                 # FastAPI service (serves /api + static SPA)
+│  │  ├─ app/
+│  │  │  ├─ api/v1/                        # HTTP routers
+│  │  │  │  ├─ router.py                   # Root APIRouter; imports feature routers
+│  │  │  │  └─ deps.py                     # Global Depends providers
+│  │  │  ├─ features/                      # Domain-first modules (auth, configs, jobs, etc.)
+│  │  │  │  ├─ auth/                       # Example feature module
+│  │  │  │  │  ├─ router.py                # HTTP routes for this feature
+│  │  │  │  │  ├─ service.py               # Business logic
+│  │  │  │  │  ├─ repository.py            # DB persistence
+│  │  │  │  │  └─ schemas.py               # Pydantic I/O models
+│  │  │  ├─ scripts/                       # App-scoped CLIs (seed, migrate, etc.)
+│  │  │  ├─ shared/                        # Cross-cutting infra (settings, db, logging)
+│  │  │  ├─ web/static/                    # ← Built SPA copied here at image build time (DO NOT COMMIT)
+│  │  │  ├─ templates/                     # Optional: Jinja2 emails/server-rendered templates
+│  │  │  └─ main.py                        # Mounts /api routers; serves SPA from ./web/static
+│  │  ├─ migrations/                       # Alembic migrations
+│  │  ├─ alembic.ini                       # Alembic config
+│  │  ├─ pyproject.toml                    # Python project metadata
+│  │  └─ tests/
+│  │     ├─ unit/                          # Fast, isolated logic tests
+│  │     ├─ integration/                   # DB + API tests with test app
+│  │     └─ e2e/                           # Optional full pipeline/contract tests
+│  └─ web/                                 # React SPA (Vite)
+│     ├─ src/                              # Routes, components, features
+│     ├─ public/                           # Static public assets
+│     ├─ package.json
+│     └─ vite.config.ts
+│
+├─ packages/                               # Reusable Python libraries
+│  └─ ade-engine/                          # installable package: ade_engine
+│     ├─ pyproject.toml
+│     ├─ src/ade_engine/                   # Engine runtime (I/O, pipeline, hooks)
+│     └─ tests/                            # Engine unit tests
+│
+├─ templates/                              # Starter templates (user-facing seeds)
+│  └─ config-packages/
+│     ├─ default/
+│     │  ├─ template.manifest.json         # Catalog metadata
+│     │  └─ src/ade_config/                # Detectors/hooks + runtime manifest/env
+│     │     ├─ manifest.json
+│     │     ├─ config.env
+│     │     ├─ column_detectors/
+│     │     ├─ row_detectors/
+│     │     └─ hooks/
+│     └─ <other-template>/...
+│
+├─ specs/                                   # JSON Schemas & formal definitions
+│  ├─ config-manifest.v1.json
+│  └─ template-manifest.v1.json
+│
+├─ examples/                                # Sample inputs/outputs
+├─ docs/                                    # Developer guides, HOWTOs, runbooks
+├─ scripts/                                 # Repo-level helper scripts
+│
+├─ infra/                                   # Deployment infrastructure
+│  ├─ docker/
+│  │  └─ api.Dockerfile                     # Multi-stage build: web → api/app/web/static
+│  ├─ compose.yaml                          # Local prod-style stack
+│  └─ k8s/                                  # Optional: Helm/manifests
+│
+├─ Makefile                                 # Developer entrypoints
+├─ .env.example                             # Example env vars
+├─ .editorconfig
+├─ .pre-commit-config.yaml
+├─ .gitignore
+└─ .github/workflows/                       # CI (lint, test, build, publish)
 ```
-repo/
-├─ apps/api/app/  # FastAPI backend on port 8000 (serves /api/*)
-├─ apps/web/     # React Router dev server on port 8000 (file-based routes)
-├─ scripts/      # Node helpers for automation
-├─ package.json  # Root command center
-└─ README.md
+
+Everything ADE produces (config_packages, venvs, jobs, logs, cache, etc..) is persisted under `ADE_DATA_DIR` (default `./data`).
+
+```text
+${ADE_DATA_DIR}/
+├─ workspaces/
+│  └─ <workspace_id>/
+│     ├─ config_packages/           # Source-of-truth configs (GUI-managed)
+│     │  └─ <config_id>/
+│     │     ├─ pyproject.toml       # Config distribution metadata
+│     │     ├─ requirements.txt     # Optional dependency overlay
+│     │     └─ src/ade_config/
+│     │        ├─ column_detectors/
+│     │        ├─ row_detectors/
+│     │        ├─ hooks/
+│     │        ├─ manifest.json
+│     │        └─ config.env
+│     ├─ venvs/                     # One Python venv per config
+│     │  └─ <config_id>/
+│     │     ├─ bin/python
+│     │     ├─ ade-runtime/
+│     │     │  ├─ packages.txt
+│     │     │  └─ build.json
+│     │     └─ <site-packages>/
+│     │        ├─ ade_engine/
+│     │        └─ ade_config/
+│     ├─ jobs/
+│     │  └─ <job_id>/
+│     │     ├─ input/               # Uploaded files
+│     │     ├─ output/              # Generated files
+│     │     └─ logs/
+│     │        ├─ artifact.json     # Human-readable narrative
+│     │        └─ events.ndjson     # Append-only event log
+│     └─ documents/
+│        └─ <document_id>.<ext>     # Optional shared store
+│
+├─ db/app.sqlite                     # SQLite (dev) or DSN (prod)
+├─ cache/pip/                        # pip cache (safe to delete)
+└─ logs/                             # Central service logs
 ```
 
 ---
 
 ## ⚡ Available Tools
 
-You may use `ade <script>` as a shortcut for any `npm run <script>` command; both forms stay in sync.
+> You can use either ade <script> or npm run <script> — both are synced.
 
 ```bash
-npm run setup   # Install deps
-npm run dev     # FastAPI + React Router
-npm run test    # Run all tests
-npm run build   # Build SPA → apps/api/app/web/static
-npm run start   # Serve API + SPA
-npm run openapi-typescript # Export backend schema + generate TS types
-npm run routes:frontend  # List frontend (React Router) routes as JSON
-npm run routes:backend   # Summarize backend FastAPI API routes
-npm run workpackage # Manage work packages (JSON CLI)
-npm run clean:force  # Remove build/installs without confirmation
-npm run reset:force  # Clean + setup without confirmation
-npm run ci      # Full CI pipeline
+npm run setup              # Install deps (.venv + web node_modules)
+npm run dev                # FastAPI + React dev servers
+npm run test               # Run all tests
+npm run build              # Build SPA → apps/api/app/web/static
+npm run start              # Serve API + SPA
+npm run openapi-typescript # Generate TS types from OpenAPI
+npm run routes:frontend    # List React Router routes
+npm run routes:backend     # List FastAPI routes
+npm run workpackage        # Manage work packages (CLI JSON interface)
+npm run clean:force        # Force delete build/venvs
+npm run reset:force        # Clean + setup fresh
+npm run ci                 # Full CI pipeline (lint, test, build)
+
 ```
 
 ---

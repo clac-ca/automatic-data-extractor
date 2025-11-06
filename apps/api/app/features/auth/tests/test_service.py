@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from fastapi import Request
-
 from apps.api.app.features.auth.service import AuthService
 from apps.api.app.shared.core.config import Settings
+from fastapi import Request
 
 
 def _make_request(*, scheme: str = "http", headers: dict[str, str] | None = None) -> Request:
-    raw_headers = [(key.lower().encode("latin-1"), value.encode("latin-1")) for key, value in (headers or {}).items()]
+    raw_headers = [
+        (key.lower().encode("latin-1"), value.encode("latin-1"))
+        for key, value in (headers or {}).items()
+    ]
     scope = {
         "type": "http",
         "http_version": "1.1",

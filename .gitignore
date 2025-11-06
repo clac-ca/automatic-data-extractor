@@ -1,35 +1,72 @@
-# Python artifacts
+# --- OS / Editors ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# --- Python ---
 __pycache__/
 *.py[cod]
-*.egg-info/
+*.pyo
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
 .venv/
-.env
+venv/
+ENV/
+*.egg-info/
+.eggs/
+build/
+dist/
+.coverage
+.coverage.*
+htmlcov/
+pytestdebug.log
 
-# Node artifacts
+# --- Node / Frontend (Vite + React) ---
 node_modules/
 npm-debug.log*
 yarn-error.log*
-.pnpm-store/
-.react-router/
-
-# Build outputs
-dist/
-build/
+pnpm-debug.log*
+apps/web/node_modules/
+apps/web/.vite/
+apps/web/dist/
 apps/web/build/
-apps/api/app/openapi.json
-apps/web/src/generated/openapi.d.ts
-apps/api/app/web/*
-!apps/api/app/web/README.md
-!apps/api/app/web/static/
-apps/api/app/web/static/*
-!apps/api/app/web/static/.gitkeep
+apps/web/coverage/
+apps/web/.eslintcache
 
-# Backend runtime artefacts
+# Generated API types (adjust if you decide to commit them)
+apps/web/src/generated/
+
+# --- ADE runtime data (by default under ./data) ---
+# Persisted workspaces, jobs, logs, caches, etc. DO NOT COMMIT.
 data/
 
-# Frontend env files
-apps/web/.env*
+# --- Docker / Compose local artifacts (if any) ---
+# Uncomment or add entries if your workflow writes here:
+# infra/docker/**/tmp/
+# infra/docker/**/build/
 
-# Workpackage runtime artifacts
-.workpackage/packages/*/log.ndjson
-.workpackage/.lock
+# --- Environment / Secrets ---
+.env
+.env.*
+*.env
+apps/**/.env
+apps/**/.env.*
+packages/**/.env
+infra/**/.env
+infra/**/.env.*
+
+# --- SPA bundle mounted into API image (DO NOT COMMIT per repo design) ---
+apps/api/app/web/static/
+
+# --- Misc / Tools ---
+# Workpackage attachments referenced by scripts
+.workpackage/
+# IDE test artifacts, temp files
+*.tmp
+*.bak
+*~

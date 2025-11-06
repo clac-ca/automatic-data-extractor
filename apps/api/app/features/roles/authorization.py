@@ -30,7 +30,11 @@ async def authorize(
 
     principal = await session.get(Principal, principal_id)
     if principal is None:
-        return AuthorizationDecision(granted=frozenset(), required=(permission_key,), missing=(permission_key,))
+        return AuthorizationDecision(
+            granted=frozenset(),
+            required=(permission_key,),
+            missing=(permission_key,),
+        )
 
     if scope_type == "global":
         granted = await get_global_permissions_for_principal(

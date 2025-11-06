@@ -12,11 +12,11 @@ This document inventories the work needed to migrate from the current `backend/`
 - `apps/api/app/**` — FastAPI code, migrations, shared libs, static web bundle, scripts.
 - `apps/api/tests/**` — pytest suites.
 - `apps/web/**` — React Router app, node_modules, build artifacts.
-- `engine/` — empty placeholder for future engine code.
+- `packages/ade-engine/` — empty placeholder for future engine code.
 - Node tooling (`scripts/*.mjs`) hard-codes `apps/api/app` & `apps/web`.
 - Dockerfile copies `apps/api/...` and `apps/web/...` into the image.
 - Docs across `docs/**` reference `apps/api/app/...` and `apps/web/...`.
-- Alembic configuration (`alembic.ini`, `apps/api/app/shared/db/migrations/env.py`) and tests (`apps/api/tests/services/db/test_migrations.py`) assume migrations under `apps/api/app/shared/db/migrations`.
+- Alembic configuration (`alembic.ini`, `apps/api/migrations/env.py`) and tests (`apps/api/tests/services/db/test_migrations.py`) assume migrations under `apps/api/migrations`.
 - Root `.env.example`, `.gitignore`, and various docs reference `apps/api/app/web/static`.
 - CI / scripts expect Python package name `apps.api.app`.
 
@@ -156,7 +156,7 @@ ${ADE_DATA_DIR}/
    - Keep `apps.api.app` as a namespace package by adding a thin shim (e.g., `apps/api/app/__init__.py` inside a compatibility package under `apps/api`) to avoid touching every import immediately.
    - Or rename to `apps.api.app` and run a bulk `sed`/editor replace for `apps.api.app` → `apps.api.app`.
 3. Update Alembic:
-   - `alembic.ini` `script_location` to `apps/api/migrations`.
+   - Move `alembic.ini` under `apps/api/` with `script_location = migrations`.
    - `apps/api/migrations/env.py` (moved from `apps/api/app/shared/db/migrations/env.py`) to import the new settings module path.
    - Any direct references in migration scripts (e.g., relative imports) to the new package path.
 4. Ensure `apps/api/tests/services/db/test_migrations.py` (now under `apps/api/tests/...`) looks for the new tables without referencing old paths.

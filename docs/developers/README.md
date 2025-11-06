@@ -22,19 +22,28 @@ automatic-data-extractor/
 ├─ apps/                                   # Deployable applications (things you run/ship)
 │  ├─ api/                                 # FastAPI service (serves /api + static SPA)
 │  │  ├─ app/
-│  │  │  ├─ main.py                        # mounts: /api routers; serves / from ./web/static
-│  │  │  ├─ api/                           # route modules (FastAPI routers)
-│  │  │  ├─ core/                          # settings, logging, lifespan, security
-│  │  │  ├─ services/                      # build/run orchestration, queues
-│  │  │  ├─ repositories/                  # DB access & persistence layer
-│  │  │  ├─ schemas/                       # Pydantic models (request/response/DB)
-│  │  │  ├─ workers/                       # subprocess/worker orchestration
+│  │  │  ├─ api/v1/                        # thin API entrypoints: compose/attach feature routers only
+│  │  │  │  ├─ router.py                   # APIRouter that mounts features.*.router; imported by main.py
+│  │  │  │  └─ deps.py                     # global Depends providers shared across endpoints
+│  │  │  ├─ features/                      # domain-first modules; each owns its router/service/repo/schemas
+│  │  │  │  ├─ auth/
+│  │  │  │  │  ├─ router.py                # routes for this feature (mounted by api/router.py)
+│  │  │  │  │  ├─ service.py               # business logic for auth
+│  │  │  │  │  ├─ repository.py            # DB persistence for auth
+│  │  │  │  │  ├─ schemas.py               # Pydantic request/response models
+│  │  │  │  ├─ etc..
+│  │  │  ├─ scripts/                       #
+│  │  │  ├─ shared/                        # cross-cutting infra used by all features
 │  │  │  ├─ web/static/                    # ← SPA build copied here at image build time (DO NOT COMMIT)
-│  │  │  └─ templates/                     # optional: server-rendered templates/emails
+│  │  │  ├─ templates/                     # optional: server-rendered templates/emails
+│  │  │  └─ main.py                        # mounts: /api routers; serves / from ./web/static
 │  │  ├─ migrations/                       # Alembic migration scripts
+│  │  ├─ alembic.ini                       # Alembic config
 │  │  ├─ pyproject.toml                    # Python project for the API app
 │  │  └─ tests/                            # API service tests
-│  │
+│  │     ├─ unit/                          # fast, isolated tests (services, schemas)
+│  │     ├─ integration/                   # DB, repositories, API routes with test app
+│  │     └─ e2e/                           # optional contract/smoke tests against a running instance
 │  └─ web/                                 # React SPA (Vite)
 │     ├─ src/                              # routes, components, features
 │     ├─ public/                           # static public assets

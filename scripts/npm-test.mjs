@@ -16,7 +16,9 @@ const run = (command, args = [], options = {}) =>
     });
   });
 
-const backendPresent = existsSync(join("apps", "api", "app")) && existsSync("pyproject.toml");
+const backendPresent =
+  existsSync(join("apps", "api", "app")) &&
+  existsSync(join("apps", "api", "pyproject.toml"));
 const frontendPresent =
   existsSync(join("apps", "web")) && existsSync(join("apps", "web", "package.json"));
 
@@ -33,7 +35,9 @@ if (backendPresent) {
   const pythonExecutable =
     pythonCandidates.find((candidate) => existsSync(candidate)) ||
     (process.platform === "win32" ? "python" : "python3");
-  await run(pythonExecutable, ["-m", "pytest", "-q"], { cwd: process.cwd() });
+  await run(pythonExecutable, ["-m", "pytest", "-q"], {
+    cwd: join(process.cwd(), "apps/api"),
+  });
 }
 
 let frontendHasTests = false;
