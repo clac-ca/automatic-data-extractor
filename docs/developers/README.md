@@ -165,11 +165,13 @@ Every ADE workflow starts with a **config package** you create in the **in‑bro
 
 Under the hood, a config is just a Python package named **`ade_config`**. Inside it, you define three ideas that tell ADE how to read, interpret, and clean your spreadsheets:
 
-1. **How to find the table**: *Row detectors*  — classify each row (header, data, separator, etc.) so ADE can pinpoint where each table begins and ends.
+1. **How to find the table**
+   * *Row detectors*  — classify each row (header, data, separator, etc.) so ADE can pinpoint where each table begins and ends.
 
-2. **What each column means**: *Column detectors*  — recognize fields like "Invoice Date" or "Amount," even when header names vary. This is how ADE maps columns reliably across inconsistent inputs.
+2. **What each column means**
+   * *Column detectors*  — recognize fields like "Invoice Date" or "Amount," even when header names vary. This is how ADE maps columns reliably across inconsistent inputs.
 
-3. **How to make the data trustworthy**:
+3. **How to make the data trustworthy**
 
    * *Transforms (optional)* — clean or normalize values.
    * *Validators (optional)* — check that values match the expected format.
