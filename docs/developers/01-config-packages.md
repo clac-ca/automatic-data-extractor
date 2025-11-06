@@ -43,7 +43,7 @@ An ADE **config package** is a small, installable Python project (**`ade_config`
 1. **Stream once → find the real table.**
    The engine opens the workbook in streaming mode and reads **row by row**. It calls every `detect_*` function in `row_detectors/header.py` and `row_detectors/data.py`. Those functions return tiny scores like “this row looks like **header**/**data**.” From the labels the engine detects the **start/end** of the table and the **header row**, trimming empty rows/columns. Decisions go into the **artifact**.
 
-2. **Materialize the table (it’s small).**
+2. **Materialize the table**
    With bounds known, the engine **loads just that region** into memory as a compact `TableData`:
 
    ```text
@@ -56,15 +56,15 @@ An ADE **config package** is a small, installable Python project (**`ade_config`
 3. **Map columns to fields (column detectors).**
    For each raw column in the table, the engine calls **every `detect_*`** in each field’s `column_detectors/<field>.py`. Detectors receive:
 
-   * `header` (cleaned header text),
-   * `sample_values` (a small, representative sample; size is configurable),
+   * `header` (original header),
+   * `sample_values` (a small, representative sample; size is configurable in the manifest.json),
    * `column_values` (the full column list, shared, zero‑copy),
    * `table_data` (headers + rows), for rare rules that need context.
      Each detector returns a small **score** for **its field**; the engine sums scores and picks the best field per column (above your threshold).
      If enabled in `manifest.json`, **unmatched columns** are appended **on the far right** with a prefix (e.g., `raw_Amount`).
 
-4. **`after_mapping(table)` — whole table in, whole table out.**
-   You can normalize headers, reorder/drop columns, or patch values before transforms/validators run. Return the **same** `table_data` (possibly mutated).
+4. **`after_mapping(table)`**
+   Optionally, you can use the after_mapping.py hook to make any further adjustments before the transform and validate logic runs.
 
 5. **Transform & validate — row by row (after mapping).**
    For each row:
