@@ -38,51 +38,140 @@ An ADE **config package** is a small, installable Python project (**`ade_config`
 
 ## What you need to know (high‑level idea)
 
-**How the engine runs your config:**
+Think of an ADE **config package** as a set of tiny functions the engine calls while it reads a spreadsheet.
 
-1. **Stream once → find the real table.**
-   The engine opens the workbook in streaming mode and reads **row by row**. It calls every `detect_*` function in `row_detectors/header.py` and `row_detectors/data.py`. Those functions return tiny scores like “this row looks like **header**/**data**.” From the labels the engine detects the **start/end** of the table and the **header row**, trimming empty rows/columns. Decisions go into the **artifact**.
+1. **Stream once → find the table.**
+   The engine reads each sheet **row by row** and calls your row detectors (`row_detectors/*.py`). Those `detect_*` functions return small scores like “this looks like a **header**” or “**data**.” From those labels, the engine finds the table’s **start**, **end**, and **header row** (trimming empty space).
 
-2. **Materialize the table**
-   With bounds known, the engine **loads just that region** into memory as a compact `TableData`:
+2. **Materialize the table (it’s small).**
+   With bounds known, the engine loads just that region into memory as:
 
    ```text
-   table_data = {
-     "headers": list[str],          # normalized header names for the region
+   table = {
+     "headers": list[str],          # normalized header names
      "rows":    list[list[Any]]     # 2D array; one list per data row
    }
    ```
 
-3. **Map columns to fields (column detectors).**
-   For each raw column in the table, the engine calls **every `detect_*`** in each field’s `column_detectors/<field>.py`. Detectors receive:
+3. **Map raw columns to your fields.**
+   For each column, the engine calls your column detectors (`column_detectors/<field>.py`). Each `detect_*` receives:
 
-   * `header` (original header),
-   * `sample_values` (a small, representative sample; size is configurable in the manifest.json),
-   * `column_values` (the full column list, shared, zero‑copy),
-   * `table_data` (headers + rows), for rare rules that need context.
-     Each detector returns a small **score** for **its field**; the engine sums scores and picks the best field per column (above your threshold).
-     If enabled in `manifest.json`, **unmatched columns** are appended **on the far right** with a prefix (e.g., `raw_Amount`).
+   * `header` — the column’s header text
+   * `column_values_sample` — a small, representative slice of that column (size is **configurable** in `manifest.json`)
+   * `column_values` — the entire column (already built once; no extra copying)
+   * `table` — the whole table, if context helps
+     Each `detect_*` returns a tiny **score** for *its* field. The engine sums scores and assigns the best‑scoring field to the column. If enabled in the manifest, **unmatched** columns are appended on the far right with a prefix like `raw_Amount`.
 
-4. **`after_mapping(table)`**
-   Optionally, you can use the after_mapping.py hook to make any further adjustments before the transform and validate logic runs.
+4. **(Optional) Transform & validate — row by row.**
+   Still inside each column file:
 
-5. **Transform & validate — row by row (after mapping).**
-   For each row:
+   * `transform()` (if present) can **normalize** a value or even fill **multiple fields** for that row (e.g., `full_name → first_name + last_name`).
+   * `validate()` (if present) returns a list of **issues** for that row (e.g., “missing member_id”).
+     These run **after mapping** and only affect the **current row**.
 
-   * If a column file defines **`transform()`**, the engine calls it and expects a small **delta dict** (you can fill **multiple fields** from one input, e.g., `full_name → first_name, last_name`).
-   * If a column file defines **`validate()`**, the engine calls it and expects a list of **row‑level issues**.
-     Everything is added to the **artifact**.
+5. **Hooks let you modify whole objects at the right time.**
+   Hooks are **completely optional**. They let you extend behavior without touching the engine. The four you’ll use most:
 
-6. **Write the normalized output → `before_save(workbook)` → save.**
-   The engine writes rows to a normalized sheet, then calls `before_save` with the real **OpenPyXL `Workbook`** for cosmetic/project‑level touches. Return the workbook; the engine saves, and finally calls `on_job_end`.
+   ### `on_job_start(job)` → return **None**
 
-**Function discovery (simple rules):**
+   Runs once at the beginning. Use it to log or load small reference data.
 
-* Any top‑level function named **`detect_*`** in `row_detectors/*.py` or `column_detectors/<field>.py` is called.
-* In each column file, **`transform()`** and **`validate()`** are **optional** and run **after mapping**.
-* Hooks must be named **`on_job_start`**, **`after_mapping`**, **`before_save`**, **`on_job_end`**.
+   ```python
+   # hooks/on_job_start.py
+   def on_job_start(*, job_id: str, manifest: dict, env: dict | None = None, logger=None, **_):
+       if logger: logger.info("job_start id=%s locale=%s", job_id, (env or {}).get("LOCALE", "n/a"))
+       return None
+   ```
 
-**All calls are keyword‑only**. It’s safe to accept `**_` to ignore things you don’t need.
+   See: [`on_job_start.py`](#onjobstartpy)
+
+   ### `after_mapping(table)` → return the **table**
+
+   Runs after columns are mapped and **before** transforms/validators. You get the **whole table** and can mutate it: fix headers, reorder or drop columns, massage values. Return the **same `table`** (possibly changed).
+
+   ```python
+   # hooks/after_mapping.py
+   def after_mapping(*, table: dict, logger=None, **_):
+       # Example: rename "Work Email" -> "Email"
+       table["headers"] = ["Email" if str(h).strip().lower()=="work email" else h for h in table["headers"]]
+       return table
+   ```
+
+   See: [`after_mapping.py`](#aftermappingpy)
+
+   ### `before_save(workbook)` → return the **workbook**
+
+   Runs right before writing to disk. You get the **actual OpenPyXL `Workbook`** and can do project‑level polish: rename sheets, freeze panes, add a “Summary,” or style the normalized range as an Excel table. Return the **workbook**.
+
+   ```python
+   # hooks/before_save.py
+   from openpyxl.utils import get_column_letter
+   from openpyxl.worksheet.table import Table, TableStyleInfo
+
+   def before_save(*, workbook, **_):
+       ws = workbook.active
+       ws.title = "Normalized"
+       ws.freeze_panes = "A2"
+       # Optional: style as an Excel table
+       ref = f"A1:{get_column_letter(ws.max_column)}{ws.max_row}"
+       tbl = Table(displayName="NormalizedTable", ref=ref)
+       tbl.tableStyleInfo = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True)
+       ws.add_table(tbl)
+       return workbook
+   ```
+
+   See: [`before_save.py`](#beforesavepy)
+
+   ### `on_job_end(artifact)` → return **None**
+
+   Runs once at the end. Perfect for logging a summary or exporting metrics from the **artifact**.
+
+   ```python
+   # hooks/on_job_end.py
+   def on_job_end(*, artifact: dict | None = None, logger=None, **_):
+       total_tables = sum(len(s.get("tables", [])) for s in (artifact or {}).get("sheets", []))
+       if logger: logger.info("job_end: tables=%s", total_tables)
+       return None
+   ```
+
+   See: [`on_job_end.py`](#onjobendpy)
+
+6. **Everything is auditable.**
+   Every detector score, mapping choice, transform delta, and validation issue is recorded in the **artifact** so you can explain any result.
+
+---
+
+### One tiny detector to make it concrete
+
+Here’s a single `detect_*` that prefers the **sample** (fast) and only reads the **full** column if a decision is borderline. Notice the tiny return shape.
+
+```python
+# column_detectors/email.py
+import re
+EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[a-z]{2,}$", re.I)
+
+def detect_value_shape(
+    *,
+    field_name: str,
+    header: str | None,
+    column_values_sample: list,
+    column_values: tuple,
+    table: dict,
+    **_
+) -> dict:
+    # Fast path: decide from column_values_sample
+    hits = sum(1 for v in column_values_sample if v and EMAIL.match(str(v)))
+    ratio = hits / max(1, len(column_values_sample))
+    score = 0.7 * ratio
+
+    # If borderline, refine using column_values (already built once)
+    if 0.4 <= score < 0.6:
+        hits_full = sum(1 for v in column_values if v and EMAIL.match(str(v)))
+        score = max(score, 0.8 * (hits_full / max(1, len(column_values))))
+
+    return {"scores": {field_name: round(score, 2)}}
+```
+
 [Back to top](#top)
 
 ---
@@ -365,14 +454,14 @@ def detect_not_header_like(*, row_values: list, **_) -> dict:
 
 <a id="columndetectors"></a>
 
-> **How column detectors are called:** For each raw column in the materialized table, the engine calls every `detect_*` in the **target field’s** file and **adds** their scores. Use **`sample_values`** first for speed; only use **`column_values`** (full list) if your rule truly needs it. You can also peek at **`table_data`** if context helps.
+> **How column detectors are called:** For each raw column in the materialized table, the engine calls every `detect_*` in the **target field’s** file and **adds** their scores. Use **`column_values_sample`** first for speed; only use **`column_values`** (full list) if your rule truly needs it. You can also peek at **`table_data`** if context helps.
 
 **Common kwargs for all `detect_*` in this folder:**
 
 * `field_name: str` — the field for this file (e.g., `"email"`).
 * `field_meta: dict` — this field’s manifest entry (labels, synonyms, hints).
 * `header: str | None` — cleaned header text.
-* `sample_values: list` — stratified sample of column values (size from manifest).
+* `column_values_sample: list` — stratified sample of column values (size from manifest).
 * `column_values: list | None` — the full column list (shared, zero‑copy).
 * `table_data: dict` — the whole table (`{"headers": [...], "rows": [[...], ...]}`).
 * Plus `manifest`, `env`, `artifact`, `logger`, `column_index` (1‑based), etc.
@@ -409,18 +498,18 @@ def detect_header_synonyms(*, header: str | None, field_name: str, field_meta: d
 
 def detect_value_shape(
     *,
-    sample_values: list,
+    column_values_sample: list,
     column_values: list | None = None,
     field_name: str,
     **_
 ) -> dict:
     """
-    Prefer sample_values; escalate to full column only if borderline and available.
+    Prefer column_values_sample; escalate to full column only if borderline and available.
     """
-    if not sample_values:
+    if not column_values_sample:
         return {"scores": {field_name: 0.0}}
-    sample_hits = sum(bool(ID.match(_normalize(v) or "")) for v in sample_values)
-    ratio = sample_hits / max(1, len(sample_values))
+    sample_hits = sum(bool(ID.match(_normalize(v) or "")) for v in column_values_sample)
+    ratio = sample_hits / max(1, len(column_values_sample))
     score = round(0.6 * ratio, 2)
 
     if 0.4 <= score < 0.6 and column_values is not None:
@@ -473,9 +562,9 @@ def detect_header_synonyms(*, header: str | None, field_name: str, **_) -> dict:
         score = min(0.9, 0.6 * sum(1 for s in HINTS if s in h))
     return {"scores": {field_name: score}}
 
-def detect_value_shape(*, sample_values: list, field_name: str, **_) -> dict:
-    hits = sum(1 for v in sample_values if v not in (None, "") and NAMEISH.match(str(v).strip()))
-    ratio = hits / max(1, len(sample_values))
+def detect_value_shape(*, column_values_sample: list, field_name: str, **_) -> dict:
+    hits = sum(1 for v in column_values_sample if v not in (None, "") and NAMEISH.match(str(v).strip()))
+    ratio = hits / max(1, len(column_values_sample))
     return {"scores": {field_name: round(0.6 * ratio, 2)}}
 
 def transform(*, row_index: int, field_name: str, value, row: dict, **_) -> dict | None:
@@ -574,14 +663,14 @@ def detect_header_synonyms(*, header: str | None, field_name: str, **_) -> dict:
 
 def detect_value_shape(
     *,
-    sample_values: list,
+    column_values_sample: list,
     column_values: list | None = None,
     field_name: str,
     **_
 ) -> dict:
     # Sample first (fast path)
-    sample_hits = sum(bool(EMAIL.match(str(v))) for v in sample_values if v not in (None, ""))
-    sample_ratio = sample_hits / max(1, len(sample_values))
+    sample_hits = sum(bool(EMAIL.match(str(v))) for v in column_values_sample if v not in (None, ""))
+    sample_ratio = sample_hits / max(1, len(column_values_sample))
     score = round(0.7 * sample_ratio, 2)
 
     # If borderline and full list is available, refine using full column
@@ -888,7 +977,7 @@ def on_job_end(*, artifact: dict | None = None, logger: Logger | None = None, **
 ### Recap (mental model)
 
 * **Row detectors**: `row_detectors/*.py` with `detect_*` → stream rows to find table bounds.
-* **Column detectors**: `column_detectors/<field>.py` with `detect_*` → receive `header`, `sample_values`, `column_values`, `table_data`; return a **score for your field**.
+* **Column detectors**: `column_detectors/<field>.py` with `detect_*` → receive `header`, `column_values_sample`, `column_values`, `table_data`; return a **score for your field**.
 * **Transforms / validators** (optional): run **row‑by‑row after mapping** in the same column file.
 * **Hooks**: `after_mapping(table) → table`, `before_save(workbook) → workbook`, `on_job_start/on_job_end → None`.
 * **Unmatched columns**: appended on the right when enabled in `manifest.json` (using `unmapped_prefix`).
