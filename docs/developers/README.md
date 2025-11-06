@@ -228,12 +228,12 @@ Behind the scenes ADE:
 
 ## Step 3: Run — Process Files
 
-Once a configuration environment is built, ADE can process real spreadsheets safely and predictably—over and over.
+Once the configuration environment is built, ADE can process real spreadsheets safely and consistently.
 
-* Each run reuses the frozen virtual environment from **Step 2: Build**.
-* ADE launches an isolated worker that imports your `ade_config`, then streams rows from the uploaded document through your detectors and hooks.
-* Your logic helps ADE understand the file: where tables start, what each column represents, and how to clean/validate values.
-* The engine produces the finalized spreadsheet.
+* Each run reuses the frozen virtual environment created in **Step 2: Build**.
+* ADE launches an isolated worker that loads the **`ade_engine`** and your custom **`ade_config`**.
+* The engine streams rows from the uploaded file through your detectors, transforms, and hooks, using your logic to identify tables, map columns, and clean or validate data.
+* The result is a fully normalized Excel workbook, written along with a complete audit trail.
 
 **Worker command**
 
