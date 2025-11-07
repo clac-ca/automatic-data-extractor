@@ -1,26 +1,25 @@
 from datetime import UTC, datetime
 
 import pytest
-from pydantic import ValidationError
+from fastapi import HTTPException
 
-from apps.api.app.features.documents.filtering import (
+from apps.api.app.features.documents.filters import (
     DOCUMENT_SOURCE_VALUES,
     DOCUMENT_STATUS_VALUES,
-    DocumentFilterParams,
     DocumentFilters,
-    DocumentSort,
-    DocumentSortableField,
     DocumentSource,
     DocumentStatus,
 )
+from apps.api.app.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
+from apps.api.app.shared.sorting import parse_sort, resolve_sort
 
 
-def test_document_filters_normalise_lists_and_strings() -> None:
+def test_document_filters_normalise_sets_and_strings() -> None:
     filters = DocumentFilters(
-        status=[DocumentStatus.UPLOADED.value, DocumentStatus.PROCESSED],
-        source=[DocumentSource.MANUAL_UPLOAD, DocumentSource.MANUAL_UPLOAD.value],
-        tags=[" alpha ", "beta", "alpha", ""],
-        uploader_ids=[
+        status_in=[DocumentStatus.UPLOADED.value, DocumentStatus.PROCESSED],
+        source_in=[DocumentSource.MANUAL_UPLOAD, DocumentSource.MANUAL_UPLOAD.value],
+        tags_in=[" alpha ", "beta", "alpha", ""],
+        uploader_id_in=[
             "01H8M8Z1QB9X4Y7V5T2R3S4Q5A",
             "01H8M8Z1QB9X4Y7V5T2R3S4Q5A",
             "01H8M8Z1QB9X4Y7V5T2R3S4Q6A",
@@ -28,81 +27,44 @@ def test_document_filters_normalise_lists_and_strings() -> None:
         q="  quarterly ",
     )
 
-    assert filters.status == [DocumentStatus.UPLOADED, DocumentStatus.PROCESSED]
-    assert filters.source == [DocumentSource.MANUAL_UPLOAD]
-    assert filters.tags == ["alpha", "beta"]
-    assert filters.uploader_ids == [
+    assert filters.status_in == {
+        DocumentStatus.UPLOADED,
+        DocumentStatus.PROCESSED,
+    }
+    assert filters.source_in == {DocumentSource.MANUAL_UPLOAD}
+    assert filters.tags_in == {"alpha", "beta"}
+    assert filters.uploader_id_in == {
         "01H8M8Z1QB9X4Y7V5T2R3S4Q5A",
         "01H8M8Z1QB9X4Y7V5T2R3S4Q6A",
-    ]
+    }
     assert filters.q == "quarterly"
-    assert filters.uploader_me is False
 
 
-@pytest.mark.parametrize(
-    "created_from, created_to",
-    [
-        (
-            datetime(2024, 5, 2, tzinfo=UTC),
-            datetime(2024, 5, 1, tzinfo=UTC),
-        ),
-    ],
-)
-def test_document_filters_reject_invalid_created_range(
-    created_from: datetime, created_to: datetime
-) -> None:
-    with pytest.raises(ValidationError):
-        DocumentFilters(created_from=created_from, created_to=created_to)
+def test_document_filters_normalise_datetimes_to_utc() -> None:
+    filters = DocumentFilters(
+        created_at_from=datetime(2024, 5, 1, 8, 30),
+        last_run_to=datetime(2024, 5, 3, 12, 0, tzinfo=UTC),
+    )
+
+    assert filters.created_at_from.tzinfo is UTC
+    assert filters.last_run_to.tzinfo is UTC
 
 
-@pytest.mark.parametrize(
-    "last_run_from, last_run_to",
-    [
-        (
-            datetime(2024, 4, 10, tzinfo=UTC),
-            datetime(2024, 4, 9, tzinfo=UTC),
-        ),
-    ],
-)
-def test_document_filters_reject_invalid_last_run_range(
-    last_run_from: datetime, last_run_to: datetime
-) -> None:
-    with pytest.raises(ValidationError):
-        DocumentFilters(last_run_from=last_run_from, last_run_to=last_run_to)
+def test_document_filters_reject_invalid_ranges() -> None:
+    with pytest.raises(HTTPException):
+        DocumentFilters(
+            created_at_from=datetime(2024, 5, 2),
+            created_at_to=datetime(2024, 5, 2),
+        )
 
+    with pytest.raises(HTTPException):
+        DocumentFilters(
+            last_run_from=datetime(2024, 4, 10, tzinfo=UTC),
+            last_run_to=datetime(2024, 4, 10, tzinfo=UTC),
+        )
 
-def test_document_filters_reject_invalid_byte_size_range() -> None:
-    with pytest.raises(ValidationError):
-        DocumentFilters(byte_size_min=500, byte_size_max=100)
-
-
-def test_document_sort_parsing_defaults_to_created_desc() -> None:
-    result = DocumentSort.parse(None)
-
-    assert result.field is DocumentSortableField.CREATED_AT
-    assert result.descending is True
-
-
-@pytest.mark.parametrize(
-    "raw, expected_field, expected_descending",
-    [
-        ("status", DocumentSortableField.STATUS, False),
-        ("-byte_size", DocumentSortableField.BYTE_SIZE, True),
-        ("name", DocumentSortableField.NAME, False),
-    ],
-)
-def test_document_sort_parsing_handles_prefixes(
-    raw: str, expected_field: DocumentSortableField, expected_descending: bool
-) -> None:
-    parsed = DocumentSort.parse(raw)
-
-    assert parsed.field is expected_field
-    assert parsed.descending is expected_descending
-
-
-def test_document_sort_parsing_rejects_unknown_field() -> None:
-    with pytest.raises(ValueError):
-        DocumentSort.parse("-unknown")
+    with pytest.raises(HTTPException):
+        DocumentFilters(byte_size_from=100, byte_size_to=50)
 
 
 def test_document_filter_enums_export_expected_values() -> None:
@@ -110,17 +72,18 @@ def test_document_filter_enums_export_expected_values() -> None:
     assert set(DOCUMENT_SOURCE_VALUES) == {source.value for source in DocumentSource}
 
 
-def test_document_filter_params_normalise_uploader_and_sort() -> None:
-    params = DocumentFilterParams(
-        uploader="me",
-        sort="-status",
-        status=[DocumentStatus.PROCESSED.value, DocumentStatus.UPLOADED.value],
+def test_sort_helpers_apply_defaults_and_tie_breakers() -> None:
+    order = resolve_sort(
+        parse_sort(None),
+        allowed=SORT_FIELDS,
+        default=DEFAULT_SORT,
+        id_field=ID_FIELD,
     )
 
-    assert params.uploader_me is True
-    assert params.sort.field is DocumentSortableField.STATUS
-    assert params.sort.descending is True
+    assert order[0] is SORT_FIELDS["created_at"][1]
+    assert order[-1] is ID_FIELD[1]
 
-    filters = params.to_filters()
-    assert isinstance(filters, DocumentFilters)
-    assert filters.status == [DocumentStatus.PROCESSED, DocumentStatus.UPLOADED]
+
+def test_sort_helpers_reject_unknown_fields() -> None:
+    with pytest.raises(HTTPException):
+        resolve_sort(["-unknown"], allowed=SORT_FIELDS, default=DEFAULT_SORT, id_field=ID_FIELD)

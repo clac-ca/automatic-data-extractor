@@ -7,10 +7,10 @@ from typing import Any
 
 from pydantic import Field
 
-from apps.api.app.shared.core.pagination import PaginationEnvelope
 from apps.api.app.shared.core.schema import BaseSchema
+from apps.api.app.shared.pagination import Page
 
-from .filtering import DocumentSource, DocumentStatus, ULIDStr
+from .filters import DocumentSource, DocumentStatus, ULIDStr
 
 
 class UploaderSummary(BaseSchema):
@@ -81,13 +81,8 @@ class DocumentRecord(BaseSchema):
         return self.name
 
 
-class DocumentListResponse(PaginationEnvelope):
+class DocumentListResponse(Page[DocumentRecord]):
     """Paginated envelope of document records."""
-
-    items: list[DocumentRecord] = Field(
-        default_factory=list,
-        description="Documents returned for the requested page.",
-    )
 
 
 __all__ = ["DocumentListResponse", "DocumentRecord", "UploaderSummary"]
