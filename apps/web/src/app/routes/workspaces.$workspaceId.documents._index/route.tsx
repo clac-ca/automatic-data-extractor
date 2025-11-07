@@ -13,11 +13,12 @@ import {
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { useSearchParams } from "react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useWorkspaceContext } from "../workspaces.$workspaceId/WorkspaceContext";
 import { useConfigsQuery } from "@shared/configs";
 import { client } from "@shared/api/client";
+import { normalizePaginatedResponse, type PaginatedResult, useFlattenedPages } from "@shared/api/pagination";
 import { createScopedStorage } from "@shared/storage";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import type { components, paths } from "@openapi";
@@ -29,7 +30,7 @@ import { Button } from "@ui/button";
 
 /* -------------------------------- Types & constants ------------------------------- */
 
-type DocumentListResponse = components["schemas"]["DocumentListResponse"];
+type DocumentListResponseWire = components["schemas"]["DocumentListResponse"];
 type DocumentStatus = components["schemas"]["DocumentStatus"];
 type DocumentRecord = components["schemas"]["DocumentRecord"];
 type JobRecord = components["schemas"]["JobRecord"];
@@ -49,6 +50,8 @@ type JobStatus = JobRecord["status"];
 type StatusFilterInput = DocumentStatus | DocumentStatus[] | null | undefined;
 
 type StatusOptionValue = "all" | DocumentStatus;
+
+type DocumentListPage = PaginatedResult<DocumentRecord>;
 
 const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
   uploaded: "Uploaded",
@@ -91,6 +94,8 @@ const documentsKeys = {
   list: (workspaceId: string, status: DocumentStatus[] | null, search: string | null, sort: string | null) =>
     [...documentsKeys.workspace(workspaceId), "list", { status, search, sort }] as const,
 };
+
+const DOCUMENTS_PAGE_SIZE = 50;
 
 const jobsKeys = {
   root: (workspaceId: string) => ["jobs", workspaceId] as const,
@@ -138,7 +143,10 @@ export default function WorkspaceDocumentsRoute() {
     sort: sortOrder,
   });
   const { refetch: refetchDocuments } = documentsQuery;
-  const documents = documentsQuery.data?.items ?? [];
+  const getDocumentKey = useCallback((document: DocumentRecord) => document.document_id, []);
+  const documents = useFlattenedPages(documentsQuery.data?.pages, getDocumentKey);
+  const fetchingNextPage = documentsQuery.isFetchingNextPage;
+  const backgroundFetch = documentsQuery.isFetching && !fetchingNextPage;
 
   /* ----------------------------- URL sync ----------------------------- */
   useEffect(() => {
@@ -378,23 +386,37 @@ export default function WorkspaceDocumentsRoute() {
           ) : documents.length === 0 ? (
             <EmptyState onUploadClick={handleOpenFilePicker} />
           ) : (
-            <DocumentsTable
-              documents={documents}
-              selectedIds={selectedIdsSet}
-              onToggleDocument={handleToggleDocument}
-              onToggleAll={handleToggleAll}
-              disableSelection={documentsQuery.isFetching || isDeleting || uploadDocuments.isPending}
-              disableRowActions={deleteDocuments.isPending}
-              formatStatusLabel={statusFormatter}
-              onDeleteDocument={handleDeleteSingle}
-              onDownloadDocument={handleDownloadDocument}
-              onRunDocument={handleOpenRunDrawer}
-              downloadingId={downloadingId}
-              renderJobStatus={renderJobStatus}
-              safeModeEnabled={safeModeEnabled}
-              safeModeMessage={safeModeDetail}
-              safeModeLoading={safeModeLoading}
-            />
+            <>
+              <DocumentsTable
+                documents={documents}
+                selectedIds={selectedIdsSet}
+                onToggleDocument={handleToggleDocument}
+                onToggleAll={handleToggleAll}
+                disableSelection={backgroundFetch || isDeleting || uploadDocuments.isPending}
+                disableRowActions={deleteDocuments.isPending}
+                formatStatusLabel={statusFormatter}
+                onDeleteDocument={handleDeleteSingle}
+                onDownloadDocument={handleDownloadDocument}
+                onRunDocument={handleOpenRunDrawer}
+                downloadingId={downloadingId}
+                renderJobStatus={renderJobStatus}
+                safeModeEnabled={safeModeEnabled}
+                safeModeMessage={safeModeDetail}
+                safeModeLoading={safeModeLoading}
+              />
+              {documentsQuery.hasNextPage ? (
+                <div className="flex justify-center border-t border-slate-200 pt-3">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => documentsQuery.fetchNextPage()}
+                    disabled={fetchingNextPage}
+                  >
+                    {fetchingNextPage ? "Loading more documents…" : "Load more documents"}
+                  </Button>
+                </div>
+              ) : null}
+            </>
           )}
         </div>
       </div>
@@ -444,14 +466,22 @@ function useWorkspaceDocuments(workspaceId: string, options: WorkspaceDocumentsO
   const search = options.search.trim() || null;
   const sort = options.sort.trim() || null;
 
-  return useQuery<DocumentListResponse>({
+  return useInfiniteQuery<DocumentListPage>({
     queryKey: documentsKeys.list(workspaceId, normalizedStatus, search, sort),
-    queryFn: ({ signal }) =>
+    initialPageParam: 1,
+    queryFn: ({ pageParam, signal }) =>
       fetchWorkspaceDocuments(
         workspaceId,
-        { status: normalizedStatus, search, sort },
-        signal
+        {
+          status: normalizedStatus,
+          search,
+          sort,
+          page: typeof pageParam === "number" ? pageParam : 1,
+          pageSize: DOCUMENTS_PAGE_SIZE,
+        },
+        signal,
       ),
+    getNextPageParam: (lastPage) => (lastPage.hasNext ? lastPage.page + 1 : undefined),
     enabled: workspaceId.length > 0,
     placeholderData: (previous) => previous,
     staleTime: 15_000,
@@ -572,22 +602,32 @@ type DocumentRunPreferences = {
 
 async function fetchWorkspaceDocuments(
   workspaceId: string,
-  options: { status: DocumentStatus[] | null; search: string | null; sort: string | null },
+  options: {
+    status: DocumentStatus[] | null;
+    search: string | null;
+    sort: string | null;
+    page: number;
+    pageSize: number;
+  },
   signal?: AbortSignal,
-): Promise<DocumentListResponse> {
+): Promise<DocumentListPage> {
   const query: ListDocumentsQuery = {};
   if (options.status && options.status.length > 0) query.status = Array.from(options.status);
   if (options.search) query.q = options.search;
   if (options.sort) query.sort = options.sort;
+  if (options.page && options.page > 0) {
+    (query as Record<string, unknown>).page = options.page;
+  }
+  if (options.pageSize && options.pageSize > 0) {
+    (query as Record<string, unknown>).page_size = options.pageSize;
+  }
 
   const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents", {
     params: { path: { workspace_id: workspaceId }, query },
     signal,
   });
 
-  return (
-    data ?? { items: [], page: 1, per_page: 0, has_next: false, total: 0 }
-  );
+  return normalizePaginatedResponse<DocumentRecord>(data as DocumentListResponseWire | null | undefined);
 }
 
 async function listWorkspaceJobs(
