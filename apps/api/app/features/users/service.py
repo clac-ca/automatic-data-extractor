@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,11 +11,14 @@ from apps.api.app.features.roles.service import (
     get_global_permissions_for_user,
     get_global_role_slugs_for_user,
 )
+from apps.api.app.shared.pagination import paginate_sql
+from apps.api.app.shared.types import OrderBy
 
 from ..auth.security import hash_password
 from .models import User
 from .repository import UsersRepository
-from .schemas import UserProfile, UserSummary
+from .schemas import UserListResponse, UserProfile, UserSummary
+from .filters import UserFilters, apply_user_filters
 
 
 class UsersService:
@@ -29,21 +33,47 @@ class UsersService:
 
         return await self._build_profile(user)
 
-    async def list_users(self) -> list[UserSummary]:
-        """Return all users ordered by email."""
+    async def list_users(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        include_total: bool,
+        order_by: OrderBy,
+        filters: UserFilters,
+    ) -> UserListResponse:
+        """Return paginated users according to the supplied parameters."""
 
-        users = await self._repo.list_users()
-        summaries: list[UserSummary] = []
-        for user in users:
+        stmt = select(User)
+        stmt = apply_user_filters(stmt, filters)
+        page_result = await paginate_sql(
+            self._session,
+            stmt,
+            page=page,
+            page_size=page_size,
+            order_by=order_by,
+            include_total=include_total,
+        )
+
+        items: list[UserSummary] = []
+        for user in page_result.items:
             profile = await self._build_profile(user)
-            summaries.append(
+            items.append(
                 UserSummary(
                     **profile.model_dump(),
                     created_at=user.created_at,
                     updated_at=user.updated_at,
                 )
             )
-        return summaries
+
+        return UserListResponse(
+            items=items,
+            page=page_result.page,
+            page_size=page_result.page_size,
+            has_next=page_result.has_next,
+            has_previous=page_result.has_previous,
+            total=page_result.total,
+        )
 
     async def _build_profile(self, user: User) -> UserProfile:
         permissions = await get_global_permissions_for_user(

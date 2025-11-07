@@ -37,13 +37,21 @@ async def test_list_users_admin_success(
     admin = seed_identity["admin"]
     token, _ = await login(async_client, email=admin["email"], password=admin["password"])
 
-    response = await async_client.get(
-        "/api/v1/users",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert response.status_code == 200
-    data = response.json()
-    emails = {item["email"] for item in data}
+    emails: set[str] = set()
+    page = 1
+    while True:
+        response = await async_client.get(
+            "/api/v1/users",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"page": page, "page_size": 100},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        emails.update(item["email"] for item in data["items"])
+        if not data["has_next"]:
+            break
+        page += 1
+        assert page < 10, "unexpectedly large number of pages"
     expected = {
         seed_identity["admin"]["email"],
         seed_identity["workspace_owner"]["email"],

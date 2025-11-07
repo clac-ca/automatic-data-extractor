@@ -9,7 +9,7 @@ from apps.api.app.settings import get_settings
 from apps.api.app.shared.db.engine import ensure_database_ready
 from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.workspaces.models import Workspace
-from apps.api.app.shared.core.pagination import paginate
+from apps.api.app.shared.pagination import paginate_sql
 
 pytestmark = pytest.mark.asyncio
 
@@ -30,11 +30,11 @@ async def test_paginate_returns_envelope_with_optional_total() -> None:
         query = select(Workspace).where(
             Workspace.slug.like(f"pagination-{suffix}-%")
         )
-        envelope = await paginate(
+        page = await paginate_sql(
             session,
             query,
             page=1,
-            per_page=2,
+            page_size=2,
             order_by=(
                 Workspace.created_at.asc(),
                 Workspace.id.asc(),
@@ -42,11 +42,11 @@ async def test_paginate_returns_envelope_with_optional_total() -> None:
             include_total=True,
         )
 
-        assert envelope["page"] == 1
-        assert envelope["per_page"] == 2
-        assert envelope["has_next"] is True
-        assert envelope["total"] == 3
-        assert [item.slug for item in envelope["items"]] == [
+        assert page.page == 1
+        assert page.page_size == 2
+        assert page.has_next is True
+        assert page.total == 3
+        assert [item.slug for item in page.items] == [
             records[0].slug,
             records[1].slug,
         ]

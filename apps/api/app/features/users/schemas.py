@@ -7,6 +7,7 @@ from datetime import datetime
 from pydantic import Field
 
 from apps.api.app.shared.core.schema import BaseSchema
+from apps.api.app.shared.pagination import Page
 
 
 class UserProfile(BaseSchema):
@@ -32,4 +33,8 @@ class UserSummary(UserProfile):
     updated_at: datetime
 
 
-__all__ = ["UserProfile", "UserSummary"]
+class UserListResponse(Page[UserSummary]):
+    """Paginated collection of users."""
+
+
+__all__ = ["UserListResponse", "UserProfile", "UserSummary"]
