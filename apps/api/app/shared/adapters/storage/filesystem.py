@@ -50,15 +50,18 @@ class FilesystemStorage(StorageAdapter):
         destination = self.path_for(uri)
 
         def _write() -> StoredObject:
-            try:
-                stream.seek(0)
-            except (AttributeError, OSError):
-                pass
+            rewind = getattr(stream, "seek", None)
+            if callable(rewind):
+                try:
+                    rewind(0)
+                except (OSError, ValueError):
+                    pass
 
             size = 0
             digest = sha256()
             destination.parent.mkdir(parents=True, exist_ok=True)
 
+            success = False
             try:
                 with destination.open("wb") as target:
                     while True:
@@ -70,9 +73,10 @@ class FilesystemStorage(StorageAdapter):
                             raise StorageLimitError(limit=max_bytes, received=size)
                         target.write(chunk)
                         digest.update(chunk)
-            except Exception:
-                destination.unlink(missing_ok=True)
-                raise
+                success = True
+            finally:
+                if not success:
+                    destination.unlink(missing_ok=True)
 
             return StoredObject(uri=uri, sha256=digest.hexdigest(), byte_size=size)
 

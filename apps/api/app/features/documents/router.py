@@ -12,12 +12,12 @@ from fastapi import (
     Form,
     HTTPException,
     Path,
+    Request,
     Security,
     UploadFile,
     status,
 )
 from fastapi.responses import StreamingResponse
-from fastapi import Request
 
 from apps.api.app.features.auth.dependencies import require_authenticated, require_csrf
 from apps.api.app.features.roles.dependencies import require_workspace
@@ -37,8 +37,8 @@ from .exceptions import (
 )
 from .filters import DocumentFilters
 from .schemas import DocumentListResponse, DocumentRecord
-from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 from .service import DocumentsService
+from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(
     prefix="/workspaces/{workspace_id}",
@@ -72,7 +72,9 @@ _FILTER_KEYS = {
 def get_document_filters(request: Request) -> DocumentFilters:
     allowed = _FILTER_KEYS
     allowed_with_shared = allowed | {"sort", "page", "page_size", "include_total"}
-    extras = [key for key in request.query_params.keys() if key not in allowed_with_shared]
+    extras = sorted(
+        {key for key in request.query_params.keys() if key not in allowed_with_shared}
+    )
     if extras:
         detail = [
             {
@@ -97,8 +99,11 @@ def get_document_filters(request: Request) -> DocumentFilters:
 def _parse_metadata(metadata: str | None) -> dict[str, Any]:
     if metadata is None:
         return {}
+    candidate = metadata.strip()
+    if not candidate:
+        return {}
     try:
-        decoded = json.loads(metadata)
+        decoded = json.loads(candidate)
     except json.JSONDecodeError as exc:  # pragma: no cover - validation guard
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,

@@ -13,11 +13,11 @@ from apps.api.app.shared.sorting import make_sort_dependency
 from apps.api.app.shared.types import OrderBy
 
 from .dependencies import get_users_service
+from .filters import UserFilters
 from .models import User
 from .schemas import UserListResponse, UserProfile
-from .filters import UserFilters
-from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 from .service import UsersService
+from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(tags=["users"], dependencies=[Security(require_authenticated)])
 

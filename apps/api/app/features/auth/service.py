@@ -547,7 +547,8 @@ class AuthService:
     ) -> tuple[TokenPayload, TokenPayload | None]:
         """Decode the access token and optional refresh token from the request."""
 
-        session_cookie = request.cookies.get(self.settings.session_cookie_name)
+        raw_session_cookie = request.cookies.get(self.settings.session_cookie_name)
+        session_cookie = (raw_session_cookie or "").strip()
         if not session_cookie:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session token missing")
         try:
@@ -558,7 +559,8 @@ class AuthService:
                 detail="Invalid session token",
             ) from exc
 
-        refresh_cookie = request.cookies.get(self.settings.session_refresh_cookie_name)
+        raw_refresh_cookie = request.cookies.get(self.settings.session_refresh_cookie_name)
+        refresh_cookie = (raw_refresh_cookie or "").strip()
         if not refresh_cookie:
             if include_refresh:
                 raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Refresh token missing")

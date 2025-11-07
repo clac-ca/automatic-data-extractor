@@ -6,13 +6,13 @@ import logging
 import time
 from uuid import uuid4
 
+from apps.api.app.settings import get_settings
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
-from apps.api.app.settings import get_settings
 from .logging import bind_request_context, clear_request_context
 
 _REQUEST_LOGGER = logging.getLogger("apps.api.app.request")
@@ -32,35 +32,37 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         bind_request_context(correlation_id)
 
         start = time.perf_counter()
+        response: Response | None = None
+        error: Exception | None = None
         try:
             response = await call_next(request)
-        except Exception:  # pragma: no cover - defensive logging path
-            duration_ms = (time.perf_counter() - start) * 1000
-            _REQUEST_LOGGER.exception(
-                "request.error",
-                extra={
-                    "path": request.url.path,
-                    "method": request.method,
-                    "duration_ms": round(duration_ms, 2),
-                    "correlation_id": correlation_id,
-                },
-            )
+        except Exception as exc:  # pragma: no cover - defensive logging path
+            error = exc
             raise
-        else:
-            duration_ms = (time.perf_counter() - start) * 1000
-            _REQUEST_LOGGER.info(
-                "request.complete",
-                extra={
-                    "path": request.url.path,
-                    "method": request.method,
-                    "status_code": response.status_code,
-                    "duration_ms": round(duration_ms, 2),
-                    "correlation_id": correlation_id,
-                },
-            )
         finally:
+            duration_ms = (time.perf_counter() - start) * 1000
+            log_extra = {
+                "path": request.url.path,
+                "method": request.method,
+                "duration_ms": round(duration_ms, 2),
+                "correlation_id": correlation_id,
+            }
+            if response is not None:
+                log_extra["status_code"] = response.status_code
+
+            if error is None and response is not None:
+                _REQUEST_LOGGER.info("request.complete", extra=log_extra)
+            else:
+                _REQUEST_LOGGER.error(
+                    "request.error",
+                    extra=log_extra,
+                    exc_info=error,
+                )
+
             clear_request_context()
 
+        if response is None:  # pragma: no cover - defensive guard
+            raise RuntimeError("Request handler returned no response")
         response.headers["X-Request-ID"] = correlation_id
         return response
 

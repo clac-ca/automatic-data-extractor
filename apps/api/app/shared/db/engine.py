@@ -119,7 +119,7 @@ def reset_database_state() -> None:
 
     try:
         from . import session as session_module
-    except Exception:
+    except ImportError:
         session_module = None
 
     if session_module is not None:

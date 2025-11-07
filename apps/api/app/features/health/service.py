@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from pydantic import ValidationError
+
 from apps.api.app.settings import Settings
 
 from .exceptions import HealthCheckError
@@ -43,5 +45,5 @@ class HealthService:
                 timestamp=datetime.now(tz=UTC),
                 components=components,
             )
-        except Exception as exc:  # pragma: no cover - defensive guardrail
+        except ValidationError as exc:  # pragma: no cover - defensive guardrail
             raise HealthCheckError("Failed to compute health status") from exc

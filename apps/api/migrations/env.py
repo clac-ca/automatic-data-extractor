@@ -8,6 +8,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 from apps.api.app.shared.db import metadata
 from apps.api.app.shared.db.engine import render_sync_url
@@ -49,7 +50,7 @@ def _database_url() -> str:
 def _should_render_as_batch(url: str) -> bool:
     try:
         backend = make_url(url).get_backend_name()
-    except Exception:
+    except ArgumentError:
         backend = "sqlite" if url.startswith("sqlite") else ""
     return backend == "sqlite"
 

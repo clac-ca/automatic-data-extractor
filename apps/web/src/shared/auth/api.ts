@@ -28,10 +28,7 @@ export async function fetchAuthProviders(options: RequestOptions = {}): Promise<
     const { data } = await client.GET("/api/v1/auth/providers", {
       signal: options.signal,
     });
-    if (!data) {
-      return { providers: [], force_sso: false };
-    }
-    return data as AuthProviderResponse;
+    return normalizeAuthProviderResponse(data);
   } catch (error: unknown) {
     if (error instanceof ApiError && error.status === 404) {
       return { providers: [], force_sso: false };
@@ -66,6 +63,7 @@ export function normalizeSessionEnvelope(envelope: SessionEnvelopeWire): Session
     ...envelope,
     expires_at: envelope.expires_at ?? null,
     refresh_expires_at: envelope.refresh_expires_at ?? null,
+    return_to: envelope.return_to ?? null,
   };
 }
 
@@ -78,7 +76,11 @@ function extractSessionEnvelope(payload: unknown): SessionEnvelope | null {
     return payload.session ? normalizeSessionEnvelope(payload.session) : null;
   }
 
-  return normalizeSessionEnvelope(payload as SessionEnvelopeWire);
+  if (isSessionEnvelope(payload)) {
+    return normalizeSessionEnvelope(payload);
+  }
+
+  throw new Error("Unexpected session payload shape returned by the server.");
 }
 
 function isSessionResponse(payload: unknown): payload is SessionResponse {
@@ -93,6 +95,56 @@ function isSessionResponse(payload: unknown): payload is SessionResponse {
     Array.isArray(candidate.providers) &&
     "force_sso" in candidate
   );
+}
+
+function isSessionEnvelope(payload: unknown): payload is SessionEnvelopeWire {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+  const candidate = payload as Partial<SessionEnvelopeWire>;
+  return Boolean(candidate.user);
+}
+
+function normalizeAuthProviderResponse(data: unknown): AuthProviderResponse {
+  if (!isAuthProviderResponse(data)) {
+    return { providers: [], force_sso: false };
+  }
+
+  return {
+    providers: data.providers.map((provider) => ({
+      ...provider,
+      icon_url: provider.icon_url ?? null,
+    })),
+    force_sso: data.force_sso,
+  };
+}
+
+function isAuthProviderResponse(value: unknown): value is AuthProviderResponse {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (!Array.isArray(value.providers) || typeof value.force_sso !== "boolean") {
+    return false;
+  }
+  return value.providers.every(isAuthProvider);
+}
+
+function isAuthProvider(value: unknown): value is AuthProvider {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (
+    typeof value.id !== "string" ||
+    typeof value.label !== "string" ||
+    typeof value.start_url !== "string"
+  ) {
+    return false;
+  }
+  return value.icon_url === undefined || value.icon_url === null || typeof value.icon_url === "string";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 interface RequestOptions {
@@ -117,5 +169,6 @@ export type SessionEnvelope = Readonly<
   SessionEnvelopeWire & {
     expires_at: string | null;
     refresh_expires_at: string | null;
+    return_to: string | null;
   }
 >;

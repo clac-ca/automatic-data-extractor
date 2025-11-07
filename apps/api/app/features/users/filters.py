@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from pydantic import Field, field_validator
 from sqlalchemy import func, or_
 from sqlalchemy.sql import Select
@@ -15,24 +13,24 @@ from .models import User
 class UserFilters(FilterBase):
     """Query parameters supported by the user listing endpoint."""
 
-    q: Optional[str] = Field(
+    q: str | None = Field(
         None,
         min_length=MIN_SEARCH_LEN,
         max_length=MAX_SEARCH_LEN,
         description="Free text search across email and display name.",
     )
-    is_active: Optional[bool] = Field(
+    is_active: bool | None = Field(
         None,
         description="Filter by active/inactive status.",
     )
-    is_service_account: Optional[bool] = Field(
+    is_service_account: bool | None = Field(
         None,
         description="Filter by service account flag.",
     )
 
     @field_validator("q")
     @classmethod
-    def _trim_query(cls, value: Optional[str]) -> Optional[str]:
+    def _trim_query(cls, value: str | None) -> str | None:
         if value is None:
             return None
         candidate = value.strip()

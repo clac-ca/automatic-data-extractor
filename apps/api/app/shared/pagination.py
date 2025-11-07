@@ -1,19 +1,19 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from itertools import islice
-from typing import Any, Generic, Iterable, Optional, Sequence, TypeVar
-
-from pydantic import BaseModel, Field, conint
-from sqlalchemy import func, select, text
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import Select
-from sqlalchemy.sql.elements import ColumnElement
+from typing import Any, Generic, TypeVar
 
 from apps.api.app.settings import (
     COUNT_STATEMENT_TIMEOUT_MS,
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
 )
+from pydantic import BaseModel, Field, conint
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import Select
+from sqlalchemy.sql.elements import ColumnElement
 
 T = TypeVar("T")
 
@@ -39,7 +39,7 @@ class Page(BaseModel, Generic[T]):
     page_size: int
     has_next: bool
     has_previous: bool
-    total: Optional[int] = None
+    total: int | None = None
 
 
 async def paginate_sql(
@@ -108,7 +108,7 @@ def paginate_sequence(
         total = len(data)
         items = data[start : start + page_size]
         has_next = start + page_size < total
-        total_value: Optional[int] = total
+        total_value: int | None = total
     else:
         window = list(islice(iterable, start, start + page_size + 1))
         has_next = len(window) > page_size

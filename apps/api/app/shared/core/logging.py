@@ -83,7 +83,7 @@ def setup_logging(settings: Settings) -> None:
         logging.getLogger(noisy).handlers = []
         logging.getLogger(noisy).propagate = True
 
-    setattr(root_logger, "_ade_configured", True)
+    root_logger._ade_configured = True  # type: ignore[attr-defined]
 
 
 def bind_request_context(correlation_id: str | None) -> None:
@@ -108,7 +108,7 @@ def _coerce_value(value: Any) -> Any:
     if hasattr(value, "isoformat"):
         try:
             return value.isoformat()
-        except Exception:  # pragma: no cover - defensive fallback
+        except (TypeError, ValueError, AttributeError):  # pragma: no cover - defensive fallback
             pass
     return str(value)
 

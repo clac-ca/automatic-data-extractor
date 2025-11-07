@@ -16,7 +16,7 @@ from .schema import BaseSchema
 
 try:  # pragma: no cover - optional dependency
     import orjson  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
+except ImportError:  # pragma: no cover - optional dependency
     orjson = None
 
 

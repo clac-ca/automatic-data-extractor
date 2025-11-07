@@ -46,7 +46,7 @@ export async function clientLoader({
     }
 
     return { workspace: resolved, workspaces };
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
       const url = new URL(request.url);
       const loginRedirect = buildLoginRedirect(`${url.pathname}${url.search}${url.hash}`);

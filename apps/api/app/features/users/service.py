@@ -15,10 +15,10 @@ from apps.api.app.shared.pagination import paginate_sql
 from apps.api.app.shared.types import OrderBy
 
 from ..auth.security import hash_password
+from .filters import UserFilters, apply_user_filters
 from .models import User
 from .repository import UsersRepository
 from .schemas import UserListResponse, UserProfile, UserSummary
-from .filters import UserFilters, apply_user_filters
 
 
 class UsersService:
