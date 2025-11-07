@@ -207,12 +207,12 @@ async def read_session(
         if refresh_payload is not None:
             refresh_expires_at = refresh_payload.expires_at
     elif principal.credentials == "bearer_token":
-        auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
+        auth_header = request.headers.get("authorization")
         token_value: str | None = None
         if auth_header:
-            parts = auth_header.split(" ", 1)
-            if len(parts) == 2:
-                token_value = parts[1].strip() or None
+            scheme, _, candidate = auth_header.partition(" ")
+            if scheme.lower() == "bearer":
+                token_value = candidate.strip() or None
         if not token_value:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session token missing")
         try:

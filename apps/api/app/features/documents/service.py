@@ -13,9 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.features.users.models import User
 from apps.api.app.settings import Settings
+from apps.api.app.shared.db import generate_ulid
 from apps.api.app.shared.pagination import paginate_sql
 from apps.api.app.shared.types import OrderBy
-from apps.api.app.shared.db import generate_ulid
 
 from .exceptions import (
     DocumentFileMissingError,
@@ -156,8 +156,14 @@ class DocumentsService:
         stream = self._storage.stream(document.stored_uri)
 
         async def _guarded() -> AsyncIterator[bytes]:
-            async for chunk in stream:
-                yield chunk
+            try:
+                async for chunk in stream:
+                    yield chunk
+            except FileNotFoundError as exc:
+                raise DocumentFileMissingError(
+                    document_id=document_id,
+                    stored_uri=document.stored_uri,
+                ) from exc
 
         return DocumentRecord.model_validate(document), _guarded()
 

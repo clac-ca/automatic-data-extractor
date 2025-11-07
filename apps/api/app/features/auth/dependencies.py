@@ -62,9 +62,10 @@ async def get_current_identity(
             credentials="bearer_token",
         )
 
-    cookie_value = session_cookie or request.cookies.get(
+    raw_cookie = session_cookie or request.cookies.get(
         service.settings.session_cookie_name
     )
+    cookie_value = (raw_cookie or "").strip()
     if cookie_value:
         try:
             payload = service.decode_token(cookie_value, expected_type="access")

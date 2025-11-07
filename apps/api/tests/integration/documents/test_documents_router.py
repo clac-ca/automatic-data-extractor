@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import json
 
+import io
+
 import pytest
+from fastapi import UploadFile
 from httpx import AsyncClient
 
 from apps.api.app.settings import get_settings
 from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.documents.models import Document
+from apps.api.app.features.documents.service import DocumentsService
+from apps.api.app.features.documents.exceptions import DocumentFileMissingError
+from apps.api.app.features.users.models import User
 from apps.api.tests.utils import login
 
 
@@ -69,6 +75,29 @@ async def test_upload_list_download_document(
     assert download.content == b"hello world"
     assert download.headers["content-type"].startswith("text/plain")
     assert 'attachment; filename="example.txt"' in download.headers['content-disposition']
+
+
+async def test_upload_document_ignores_blank_metadata(
+    async_client: AsyncClient,
+    seed_identity: dict[str, object],
+) -> None:
+    """Whitespace-only metadata payloads should be treated as empty objects."""
+
+    member = seed_identity["member"]
+    token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
+    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    upload = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={"file": ("blank.txt", b"payload", "text/plain")},
+        data={"metadata": "   "},
+    )
+
+    assert upload.status_code == 201, upload.text
+    payload = upload.json()
+    assert payload["metadata"] == {}
 
 
 async def test_upload_document_exceeds_limit_returns_413(
@@ -268,3 +297,45 @@ async def test_list_documents_uploader_me_filters(
     payload = listing.json()
     assert len(payload["items"]) == 1
     assert payload["items"][0]["name"] == "member.txt"
+
+
+async def test_stream_document_handles_missing_file_mid_stream(
+    seed_identity: dict[str, object]
+) -> None:
+    """Document streaming should surface a domain error when the file disappears."""
+
+    settings = get_settings()
+    session_factory = get_sessionmaker()
+
+    async with session_factory() as session:
+        service = DocumentsService(session=session, settings=settings)
+        workspace_id = str(seed_identity["workspace_id"])
+        member_info = seed_identity["member"]
+        member = await session.get(User, member_info["id"])  # type: ignore[index]
+        assert member is not None
+
+        upload = UploadFile(
+            filename="race.txt",
+            file=io.BytesIO(b"race"),
+        )
+        record = await service.create_document(
+            workspace_id=workspace_id,
+            upload=upload,
+            metadata=None,
+            expires_at=None,
+            actor=member,
+        )
+
+        _, stream = await service.stream_document(
+            workspace_id=workspace_id,
+            document_id=record.document_id,
+        )
+
+        stored_row = await session.get(Document, record.document_id)
+        assert stored_row is not None
+        stored_path = settings.documents_dir / stored_row.stored_uri
+        stored_path.unlink()
+
+        with pytest.raises(DocumentFileMissingError):
+            async for _ in stream:
+                pass

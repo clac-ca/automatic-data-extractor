@@ -90,7 +90,7 @@ export function composeManifestPatch(current: ParsedManifest, nextColumns: Manif
     ...current.raw,
     name: current.name,
     files_hash: current.filesHash,
-    columns: nextColumns.map((column, index) => ({
+    columns: nextColumns.map((column) => ({
       key: column.key,
       label: column.label,
       path: column.path,

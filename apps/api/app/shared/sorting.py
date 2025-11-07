@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from typing import Iterable, Sequence
-
-from fastapi import HTTPException, Query
+from collections.abc import Iterable, Sequence
 
 from apps.api.app.settings import MAX_SORT_FIELDS
+from fastapi import HTTPException, Query
 
 from .types import OrderBy, SortAllowedMap
 

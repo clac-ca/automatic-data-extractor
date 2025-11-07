@@ -139,8 +139,9 @@ export class ApiClient {
 
     try {
       return (await response.json()) as ProblemDetails;
-    } catch (error) {
-      console.warn("Failed to parse problem details", error);
+    } catch (error: unknown) {
+      const reason = error instanceof Error ? error : new Error(String(error));
+      console.warn("Failed to parse problem details", reason);
       return undefined;
     }
   }

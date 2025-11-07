@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Optional, Set
+from typing import Annotated
 
 from fastapi import HTTPException
 from pydantic import Field, field_validator
 from sqlalchemy import and_, func, or_
-from sqlalchemy.sql import Select
 from sqlalchemy.orm import aliased
+from sqlalchemy.sql import Select
 
 from apps.api.app.settings import MAX_SEARCH_LEN, MAX_SET_SIZE, MIN_SEARCH_LEN
 from apps.api.app.shared.filters import FilterBase
@@ -38,55 +38,55 @@ ULIDStr = Annotated[
 class DocumentFilters(FilterBase):
     """Query parameters supported by the document listing endpoint."""
 
-    q: Optional[str] = Field(
+    q: str | None = Field(
         None,
         min_length=MIN_SEARCH_LEN,
         max_length=MAX_SEARCH_LEN,
         description="Free text search applied to document name and uploader info.",
     )
-    status_in: Optional[Set[DocumentStatus]] = Field(
+    status_in: set[DocumentStatus] | None = Field(
         None,
         description="Filter by one or more document statuses.",
     )
-    source_in: Optional[Set[DocumentSource]] = Field(
+    source_in: set[DocumentSource] | None = Field(
         None,
         description="Filter by the origin of the document.",
     )
-    tags_in: Optional[Set[str]] = Field(
+    tags_in: set[str] | None = Field(
         None,
         description="Filter by documents tagged with any of the provided values.",
     )
-    uploader: Optional[str] = Field(
+    uploader: str | None = Field(
         None,
         description="Restrict results to the literal 'me' to scope to the caller.",
     )
-    uploader_id_in: Optional[Set[ULIDStr]] = Field(
+    uploader_id_in: set[ULIDStr] | None = Field(
         None,
         alias="uploader_id_in",
         description="Filter by one or more uploader identifiers.",
     )
-    created_at_from: Optional[datetime] = Field(
+    created_at_from: datetime | None = Field(
         None,
         description="Return documents created on or after this timestamp (UTC).",
     )
-    created_at_to: Optional[datetime] = Field(
+    created_at_to: datetime | None = Field(
         None,
         description="Return documents created before this timestamp (UTC).",
     )
-    last_run_from: Optional[datetime] = Field(
+    last_run_from: datetime | None = Field(
         None,
         description="Return documents last processed on or after this timestamp (UTC).",
     )
-    last_run_to: Optional[datetime] = Field(
+    last_run_to: datetime | None = Field(
         None,
         description="Return documents last processed before this timestamp (UTC).",
     )
-    byte_size_from: Optional[int] = Field(
+    byte_size_from: int | None = Field(
         None,
         ge=0,
         description="Return documents with a byte size greater than or equal to this value.",
     )
-    byte_size_to: Optional[int] = Field(
+    byte_size_to: int | None = Field(
         None,
         ge=0,
         description="Return documents with a byte size less than this value.",
@@ -94,7 +94,7 @@ class DocumentFilters(FilterBase):
 
     @field_validator("q")
     @classmethod
-    def _trim_query(cls, value: Optional[str]) -> Optional[str]:
+    def _trim_query(cls, value: str | None) -> str | None:
         if value is None:
             return None
         candidate = value.strip()
@@ -211,7 +211,7 @@ def apply_document_filters(
     if filters.tags_in:
         predicates.append(Document.tags.any(DocumentTag.tag.in_(sorted(filters.tags_in))))
 
-    uploader_ids: Set[str] = set()
+    uploader_ids: set[str] = set()
     if filters.uploader == "me":
         if actor is None:
             raise HTTPException(422, "uploader=me requires authentication")

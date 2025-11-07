@@ -780,7 +780,7 @@ function DocumentsToolbar({
         <div className="relative">
           <Input
             id={searchId}
-            ref={inputRef as any}
+            ref={inputRef}
             type="search"
             placeholder="Search (⌘K or /)"
             value={search}
@@ -1373,9 +1373,9 @@ function RunExtractionDrawerContent({
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
               <p className="font-semibold text-slate-800" title={documentRecord.name}>{documentRecord.name}</p>
               <p className="text-xs text-slate-500">Uploaded {new Date(documentRecord.created_at).toLocaleString()}</p>
-              {(documentRecord as any).last_run_at ? (
+              {documentRecord.last_run_at ? (
                 <p className="text-xs text-slate-500">
-                  Last run {new Date((documentRecord as any).last_run_at).toLocaleString()}
+                  Last run {new Date(documentRecord.last_run_at).toLocaleString()}
                 </p>
               ) : null}
             </div>

@@ -7,7 +7,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
-from apps.api.app.shared.adapters.storage import FilesystemStorage, StorageLimitError, StoredObject
+from apps.api.app.shared.adapters.storage import (
+    FilesystemStorage,
+    StorageError,
+    StorageLimitError,
+    StoredObject,
+)
 
 from .exceptions import DocumentTooLargeError
 
@@ -46,7 +51,7 @@ class DocumentStorage:
         # Normalise adapter-specific errors to ValueError for callers/tests.
         try:
             return self._adapter.path_for(stored_uri)
-        except Exception as exc:  # pragma: no cover - narrow to StorageError at runtime
+        except StorageError as exc:
             # Keep API surface predictable for higher-level features/tests which
             # assert ValueError on invalid storage URIs.
             raise ValueError(str(exc)) from exc
