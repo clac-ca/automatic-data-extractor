@@ -605,11 +605,14 @@ def _create_jobs() -> None:
         sa.Column("submitted_by_user_id", sa.String(length=26), nullable=True),
         sa.Column("status", JOBSTATUS, nullable=False, server_default=sa.text("'queued'")),
         sa.Column("attempt", sa.Integer(), nullable=False, server_default=sa.text("1")),
+        sa.Column("retry_of_job_id", sa.String(length=26), nullable=True),
         sa.Column("input_hash", sa.String(length=128), nullable=True),
+        sa.Column("input_documents", sa.JSON(), nullable=False),
         sa.Column("trace_id", sa.String(length=64), nullable=True),
         sa.Column("artifact_uri", sa.String(length=512), nullable=True),
         sa.Column("output_uri", sa.String(length=512), nullable=True),
         sa.Column("queued_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("last_heartbeat", sa.DateTime(timezone=True), nullable=True),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
@@ -638,7 +641,6 @@ def _create_jobs() -> None:
             ["users.user_id"],
             ondelete="SET NULL",
         ),
-        sa.UniqueConstraint("workspace_id", "config_version_id", "input_hash", name="jobs_idempotency_key"),
     )
     op.create_index("jobs_workspace_idx", "jobs", ["workspace_id", "created_at"], unique=False)
     op.create_index(
@@ -652,4 +654,24 @@ def _create_jobs() -> None:
         "jobs",
         ["workspace_id", "config_version_id", "input_hash"],
         unique=False,
+    )
+    op.create_index(
+        "jobs_status_queued_idx",
+        "jobs",
+        ["status", "queued_at"],
+        unique=False,
+    )
+    op.create_index(
+        "jobs_retry_of_idx",
+        "jobs",
+        ["retry_of_job_id"],
+        unique=False,
+    )
+    op.create_index(
+        "jobs_input_unique_idx",
+        "jobs",
+        ["workspace_id", "config_version_id", "input_hash"],
+        unique=True,
+        sqlite_where=sa.text("retry_of_job_id IS NULL"),
+        postgresql_where=sa.text("retry_of_job_id IS NULL"),
     )
