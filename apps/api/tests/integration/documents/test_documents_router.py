@@ -50,7 +50,7 @@ async def test_upload_list_download_document(
     assert listing.status_code == 200
     payload = listing.json()
     assert payload["page"] == 1
-    assert payload["per_page"] == 50
+    assert payload["page_size"] == 25
     assert payload["has_next"] is False
     assert "total" not in payload
     assert any(item["document_id"] == document_id for item in payload["items"])
@@ -181,7 +181,7 @@ async def test_download_missing_file_returns_404(
     assert "was not found" in download.text
 
 
-async def test_list_documents_unknown_param_returns_400(
+async def test_list_documents_unknown_param_returns_422(
     async_client: AsyncClient,
     seed_identity: dict[str, object],
 ) -> None:
@@ -196,15 +196,13 @@ async def test_list_documents_unknown_param_returns_400(
         params={"unexpected": "value"},
     )
 
-    assert response.status_code == 400
-    assert response.headers["content-type"].startswith("application/problem+json")
-    problem = response.json()
-    assert problem["title"] == "Invalid query parameter"
-    assert problem["detail"] == "Unknown query parameter: unexpected"
-    assert problem["errors"] == {"unexpected": ["Unknown query parameter"]}
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["detail"][0]["loc"] == ["query", "unexpected"]
+    assert payload["detail"][0]["type"] == "extra_forbidden"
 
 
-async def test_list_documents_invalid_filter_returns_problem_details(
+async def test_list_documents_invalid_filter_returns_422(
     async_client: AsyncClient,
     seed_identity: dict[str, object],
 ) -> None:
@@ -216,16 +214,12 @@ async def test_list_documents_invalid_filter_returns_problem_details(
     response = await async_client.get(
         f"{workspace_base}/documents",
         headers=headers,
-        params={"status": "bogus"},
+        params={"status_in": "bogus"},
     )
 
-    assert response.status_code == 400
-    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.status_code == 422
     payload = response.json()
-    assert payload["title"] == "Invalid query parameters"
-    assert payload["status"] == 400
-    assert "status" in payload["errors"]
-    assert any("uploaded" in message for message in payload["errors"]["status"])
+    assert payload["detail"] == "Invalid status value"
 
 
 async def test_list_documents_uploader_me_filters(

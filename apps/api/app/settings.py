@@ -26,6 +26,14 @@ DEFAULT_DB_FILENAME = "ade.sqlite"
 DEFAULT_ALEMBIC_INI = DEFAULT_API_ROOT / "alembic.ini"
 DEFAULT_ALEMBIC_MIGRATIONS = DEFAULT_API_ROOT / "migrations"
 
+DEFAULT_PAGE_SIZE = 25
+MAX_PAGE_SIZE = 100
+MAX_SORT_FIELDS = 3
+MIN_SEARCH_LEN = 2
+MAX_SEARCH_LEN = 128
+MAX_SET_SIZE = 50                  # cap for *_in lists
+COUNT_STATEMENT_TIMEOUT_MS: int | None = None  # optional (Postgres), e.g., 500
+
 DEFAULT_SUBDIRS = {
     "documents_dir": "documents",
     "configs_dir": "config_packages",

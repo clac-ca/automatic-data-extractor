@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import cast
 
 from sqlalchemy import (
@@ -22,12 +23,26 @@ from apps.api.app.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
 
 from ..users.models import User
 from ..workspaces.models import Workspace
-from .filtering import (
-    DOCUMENT_SOURCE_VALUES,
-    DOCUMENT_STATUS_VALUES,
-    DocumentSource,
-    DocumentStatus,
-)
+
+
+class DocumentStatus(str, Enum):
+    """Canonical document processing states."""
+
+    UPLOADED = "uploaded"
+    PROCESSING = "processing"
+    PROCESSED = "processed"
+    FAILED = "failed"
+    ARCHIVED = "archived"
+
+
+class DocumentSource(str, Enum):
+    """Origins for uploaded documents."""
+
+    MANUAL_UPLOAD = "manual_upload"
+
+
+DOCUMENT_STATUS_VALUES = tuple(status.value for status in DocumentStatus)
+DOCUMENT_SOURCE_VALUES = tuple(source.value for source in DocumentSource)
 
 
 class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -157,4 +172,11 @@ class DocumentTag(Base):
     )
 
 
-__all__ = ["Document", "DocumentTag"]
+__all__ = [
+    "DOCUMENT_SOURCE_VALUES",
+    "DOCUMENT_STATUS_VALUES",
+    "Document",
+    "DocumentSource",
+    "DocumentStatus",
+    "DocumentTag",
+]
