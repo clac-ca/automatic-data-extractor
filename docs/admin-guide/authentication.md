@@ -34,7 +34,7 @@ tied to `/api/v1/auth/session/refresh`. Secure cookies are used whenever the req
 ### Configuration
 
 * Provide `ADE_OIDC_CLIENT_ID`, `ADE_OIDC_CLIENT_SECRET`, `ADE_OIDC_ISSUER`, `ADE_OIDC_REDIRECT_URL`, and `ADE_OIDC_SCOPES` to enable the flow. ADE always authenticates as a confidential client, so the secret is required. The redirect URL should point at the SPA callback route (`/auth/callback`), which finalises the login before forwarding the user to their requested destination. Supplement this with `ADE_AUTH_FORCE_SSO` when you are ready to disable password-based logins entirely, and use `ADE_AUTH_SSO_AUTO_PROVISION` if you need to pause automatic account creation.【F:.env.example†L58-L66】【F:apps/web/src/app/routes/auth.callback.tsx†L1-L74】
-* The settings layer normalises scopes, enforces HTTPS issuers and redirect URLs, and converts relative callbacks against `server_public_url`.【F:apps/api/app/shared/core/config.py†L331-L399】【F:apps/api/app/shared/core/config.py†L436-L459】
+* The settings layer normalises scopes, enforces HTTPS issuers and redirect URLs, and converts relative callbacks against `server_public_url`.【F:apps/api/app/settings.py†L323-L394】
 * When those settings are present, `/auth/providers` automatically publishes a "Single sign-on" option so the login page advertises SSO alongside the credential form. Leave `ADE_AUTH_FORCE_SSO=false` during rollout so the inaugural administrator can continue signing in with their password, then flip it once the identity provider login is verified.【F:apps/api/app/features/auth/service.py†L143-L166】【F:apps/web/src/app/routes/login.tsx†L1-L74】
 
 ### Login flow

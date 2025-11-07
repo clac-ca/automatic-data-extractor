@@ -3,7 +3,7 @@
 Shared terminology used across the Automatic Data Extractor API, database, and UI.
 
 ## Document
-A file uploaded through the documents API. Metadata and lifecycle operations are handled by [`apps/api/app/features/documents`](../../apps/api/app/features/documents). Stored bytes live under the configured `storage_documents_dir`.
+A file uploaded through the documents API. Metadata and lifecycle operations are handled by [`apps/api/app/features/documents`](../../apps/api/app/features/documents). Stored bytes live under the configured `documents_dir`.
 
 ## Job
 An extraction request that consumes an input document and configuration revision. Job submission and monitoring routes are defined in [`apps/api/app/features/jobs`](../../apps/api/app/features/jobs). Execution happens inline through the pluggable processor contract exposed by [`apps/api/app/features/jobs/processor.py`](../../apps/api/app/features/jobs/processor.py).

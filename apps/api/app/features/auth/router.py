@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.features.auth.dependencies import require_authenticated, require_csrf
 from apps.api.app.features.roles.dependencies import require_global
-from apps.api.app.shared.core.config import Settings, get_app_settings
+from apps.api.app.settings import Settings, get_settings
 from apps.api.app.shared.core.schema import ErrorMessage
 from apps.api.app.shared.db.session import get_session
 
@@ -59,7 +59,7 @@ setup_router = APIRouter(prefix="/setup", tags=["setup"])
 )
 async def list_auth_providers(
     session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> ProviderDiscoveryResponse:
     service = AuthService(session=session, settings=settings)
     discovery = service.get_provider_discovery()
@@ -84,7 +84,7 @@ async def list_auth_providers(
 )
 async def read_setup_status(
     session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> SetupStatus:
     service = AuthService(session=session, settings=settings)
     requires_setup, completed_at = await service.get_initial_setup_status()
@@ -113,7 +113,7 @@ async def complete_setup(
     response: Response,
     payload: SetupRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> SessionEnvelope:
     service = AuthService(session=session, settings=settings)
     user = await service.complete_initial_setup(
@@ -155,7 +155,7 @@ async def create_session(
     response: Response,
     payload: LoginRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> SessionEnvelope:
     """Authenticate with credentials and establish the session cookies."""
 
@@ -193,7 +193,7 @@ async def read_session(
     request: Request,
     principal: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
     session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> SessionEnvelope:
     service = AuthService(session=session, settings=settings)
     expires_at: datetime | None = None
@@ -254,7 +254,7 @@ async def refresh_session(
     request: Request,
     response: Response,
     session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> SessionEnvelope:
     """Rotate the session using the refresh cookie and re-issue cookies."""
 
@@ -302,7 +302,7 @@ async def delete_session(
     request: Request,
     response: Response,
     session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> Response:
     """Remove authentication cookies and end the session."""
 
@@ -372,7 +372,7 @@ async def create_api_key(
         Security(require_global("System.Settings.ReadWrite")),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> APIKeyIssueResponse:
     service = AuthService(session=session, settings=settings)
     if payload.user_id is not None:
@@ -426,7 +426,7 @@ async def list_api_keys(
         Security(require_global("System.Settings.ReadWrite")),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> list[APIKeySummary]:
     service = AuthService(session=session, settings=settings)
     records = await service.list_api_keys()
@@ -484,7 +484,7 @@ async def revoke_api_key(
         Security(require_global("System.Settings.ReadWrite")),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> Response:
     service = AuthService(session=session, settings=settings)
     await service.revoke_api_key(api_key_id)
@@ -506,7 +506,7 @@ async def revoke_api_key(
 async def start_sso_login(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    settings: Annotated[Settings, Depends(get_settings)],
     next_path: Annotated[str | None, Query(alias="next")] = None,
 ) -> RedirectResponse:
     service = AuthService(session=session, settings=settings)
@@ -551,7 +551,7 @@ async def finish_sso_login(
     request: Request,
     response: Response,
     session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    settings: Annotated[Settings, Depends(get_settings)],
     code: str | None = None,
     state: str | None = None,
 ) -> SessionEnvelope:

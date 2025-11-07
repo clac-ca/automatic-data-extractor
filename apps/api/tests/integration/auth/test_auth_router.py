@@ -10,7 +10,7 @@ import pytest
 from httpx import AsyncClient
 from pydantic import SecretStr
 
-from apps.api.app.shared.core.config import get_settings, reload_settings
+from apps.api.app.settings import get_settings, reload_settings
 from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.auth.service import (
     SSO_STATE_COOKIE,
@@ -453,4 +453,3 @@ async def test_sso_callback_rejects_state_mismatch(
         cookies={SSO_STATE_COOKIE: state_cookie},
     )
     assert callback.status_code == 400
-

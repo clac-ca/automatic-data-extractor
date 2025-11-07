@@ -12,7 +12,7 @@ from fastapi.routing import Lifespan
 from ...features.roles.service import sync_permission_registry
 from ..db.engine import ensure_database_ready
 from ..db.session import get_sessionmaker
-from .config import Settings, get_settings
+from apps.api.app.settings import Settings, get_settings
 
 
 def ensure_runtime_dirs(settings: Settings | None = None) -> None:
@@ -20,14 +20,14 @@ def ensure_runtime_dirs(settings: Settings | None = None) -> None:
 
     resolved = settings or get_settings()
 
-    data_dir = Path(resolved.storage_data_dir)
+    data_dir = Path(resolved.data_dir)
     targets: set[Path] = {data_dir}
     for attribute in (
-        "storage_documents_dir",
-        "storage_configs_dir",
-        "storage_venvs_dir",
-        "storage_jobs_dir",
-        "storage_pip_cache_dir",
+        "documents_dir",
+        "configs_dir",
+        "venvs_dir",
+        "jobs_dir",
+        "pip_cache_dir",
     ):
         candidate = getattr(resolved, attribute, None)
         if candidate is not None:

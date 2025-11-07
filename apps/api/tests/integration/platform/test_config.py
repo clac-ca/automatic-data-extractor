@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from apps.api.app.shared.core.config import Settings, get_settings, reload_settings
+from apps.api.app.settings import Settings, get_settings, reload_settings
 from apps.api.app.shared.core.lifecycles import ensure_runtime_dirs
 
 
@@ -20,24 +20,23 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     for var in (
         "ADE_APP_NAME",
         "ADE_API_DOCS_ENABLED",
+        "ADE_DEBUG",
+        "ADE_DEV_MODE",
+        "ADE_SAFE_MODE",
+        "ADE_LOGGING_LEVEL",
         "ADE_SERVER_HOST",
         "ADE_SERVER_PORT",
         "ADE_SERVER_PUBLIC_URL",
         "ADE_SERVER_CORS_ORIGINS",
         "ADE_DATA_DIR",
-        "ADE_STORAGE_DATA_DIR",
         "ADE_DOCUMENTS_DIR",
-        "ADE_STORAGE_DOCUMENTS_DIR",
         "ADE_CONFIGS_DIR",
-        "ADE_STORAGE_CONFIGS_DIR",
         "ADE_VENVS_DIR",
-        "ADE_STORAGE_VENVS_DIR",
         "ADE_JOBS_DIR",
-        "ADE_STORAGE_JOBS_DIR",
         "ADE_PIP_CACHE_DIR",
-        "ADE_STORAGE_PIP_CACHE_DIR",
-        "ADE_STORAGE_DOCUMENT_RETENTION_PERIOD",
         "ADE_STORAGE_UPLOAD_MAX_BYTES",
+        "ADE_STORAGE_DOCUMENT_RETENTION_PERIOD",
+        "ADE_SECRET_KEY",
         "ADE_DATABASE_DSN",
         "ADE_JWT_SECRET",
         "ADE_JWT_ACCESS_TTL",
@@ -48,6 +47,14 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_SESSION_CSRF_COOKIE_NAME",
         "ADE_SESSION_COOKIE_PATH",
         "ADE_SESSION_COOKIE_DOMAIN",
+        "ADE_FAILED_LOGIN_LOCK_THRESHOLD",
+        "ADE_FAILED_LOGIN_LOCK_DURATION",
+        "ADE_MAX_CONCURRENCY",
+        "ADE_QUEUE_SIZE",
+        "ADE_JOB_TIMEOUT_SECONDS",
+        "ADE_WORKER_CPU_SECONDS",
+        "ADE_WORKER_MEM_MB",
+        "ADE_WORKER_FSIZE_MB",
         "ADE_OIDC_ENABLED",
         "ADE_OIDC_CLIENT_ID",
         "ADE_OIDC_CLIENT_SECRET",
@@ -55,6 +62,7 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_OIDC_REDIRECT_URL",
         "ADE_OIDC_SCOPES",
         "ADE_AUTH_FORCE_SSO",
+        "ADE_AUTH_SSO_AUTO_PROVISION",
     ):
         monkeypatch.delenv(var, raising=False)
     try:
@@ -81,17 +89,15 @@ def test_settings_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.server_host == "localhost"
     assert settings.server_port == 8000
     assert settings.server_public_url == "http://localhost:8000"
-    assert set(settings.server_cors_origins) == {
-        "http://localhost:8000",
-    }
-    assert settings.database_dsn.endswith("data/db/api.sqlite")
+    assert settings.server_cors_origins == ["http://localhost:5173"]
+    assert settings.database_dsn.endswith("data/db/ade.sqlite")
     assert settings.jwt_access_ttl == timedelta(minutes=60)
     assert settings.jwt_refresh_ttl == timedelta(days=14)
-    assert settings.storage_documents_dir == settings.storage_data_dir / "documents"
-    assert settings.storage_configs_dir == settings.storage_data_dir / "config_packages"
-    assert settings.storage_venvs_dir == settings.storage_data_dir / "venvs"
-    assert settings.storage_jobs_dir == settings.storage_data_dir / "jobs"
-    assert settings.storage_pip_cache_dir == settings.storage_data_dir / "cache" / "pip"
+    assert settings.documents_dir == settings.data_dir / "documents"
+    assert settings.configs_dir == settings.data_dir / "config_packages"
+    assert settings.venvs_dir == settings.data_dir / "venvs"
+    assert settings.jobs_dir == settings.data_dir / "jobs"
+    assert settings.pip_cache_dir == settings.data_dir / "cache" / "pip"
 
 
 def test_settings_reads_from_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -121,11 +127,10 @@ ADE_JWT_REFRESH_TTL=7d
     assert settings.server_host == "0.0.0.0"
     assert settings.server_port == 9000
     assert settings.server_public_url == "https://api.dev.local"
-    assert set(settings.server_cors_origins) == {
-        "https://api.dev.local",
+    assert settings.server_cors_origins == [
         "http://localhost:3000",
         "http://example.dev:4000",
-    }
+    ]
     assert settings.jwt_access_ttl == timedelta(minutes=5)
     assert settings.jwt_refresh_ttl == timedelta(days=7)
 
@@ -148,10 +153,7 @@ def test_settings_env_var_override(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.server_host == "dev.internal"
     assert settings.server_port == 8100
     assert settings.server_public_url == "https://api.local"
-    assert set(settings.server_cors_origins) == {
-        "https://api.local",
-        "http://example.com",
-    }
+    assert settings.server_cors_origins == ["http://example.com"]
 
 
 def test_cors_accepts_comma_separated_values(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -165,11 +167,7 @@ def test_cors_accepts_comma_separated_values(monkeypatch: pytest.MonkeyPatch) ->
 
     settings = get_settings()
 
-    assert set(settings.server_cors_origins) == {
-        "http://localhost:8000",
-        "http://one.test",
-        "http://two.test",
-    }
+    assert settings.server_cors_origins == ["http://one.test", "http://two.test"]
 
 
 def test_cors_deduplicates_origins(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -183,11 +181,7 @@ def test_cors_deduplicates_origins(monkeypatch: pytest.MonkeyPatch) -> None:
 
     settings = get_settings()
 
-    assert set(settings.server_cors_origins) == {
-        "http://localhost:8000",
-        "http://one.test",
-        "http://two.test",
-    }
+    assert settings.server_cors_origins == ["http://one.test", "http://two.test"]
 
 
 def test_server_public_url_accepts_https(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -199,9 +193,7 @@ def test_server_public_url_accepts_https(monkeypatch: pytest.MonkeyPatch) -> Non
     settings = get_settings()
 
     assert settings.server_public_url == "https://secure.example.com"
-    assert set(settings.server_cors_origins) == {
-        "https://secure.example.com",
-    }
+    assert settings.server_cors_origins == ["http://localhost:5173"]
 
 
 def test_storage_directories_follow_data_dir(
@@ -215,12 +207,12 @@ def test_storage_directories_follow_data_dir(
 
     settings = get_settings()
 
-    assert settings.storage_data_dir == data_dir.resolve()
-    assert settings.storage_documents_dir == (data_dir / "documents").resolve()
-    assert settings.storage_configs_dir == (data_dir / "config_packages").resolve()
-    assert settings.storage_venvs_dir == (data_dir / "venvs").resolve()
-    assert settings.storage_jobs_dir == (data_dir / "jobs").resolve()
-    assert settings.storage_pip_cache_dir == (data_dir / "cache" / "pip").resolve()
+    assert settings.data_dir == data_dir.resolve()
+    assert settings.documents_dir == (data_dir / "documents").resolve()
+    assert settings.configs_dir == (data_dir / "config_packages").resolve()
+    assert settings.venvs_dir == (data_dir / "venvs").resolve()
+    assert settings.jobs_dir == (data_dir / "jobs").resolve()
+    assert settings.pip_cache_dir == (data_dir / "cache" / "pip").resolve()
 
 
 def test_global_storage_directory_created(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -258,7 +250,7 @@ def test_storage_directory_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     settings = get_settings()
 
-    assert settings.storage_configs_dir == configs_dir.resolve()
-    assert settings.storage_venvs_dir == venvs_dir.resolve()
-    assert settings.storage_jobs_dir == jobs_dir.resolve()
-    assert settings.storage_pip_cache_dir == pip_cache_dir.resolve()
+    assert settings.configs_dir == configs_dir.resolve()
+    assert settings.venvs_dir == venvs_dir.resolve()
+    assert settings.jobs_dir == jobs_dir.resolve()
+    assert settings.pip_cache_dir == pip_cache_dir.resolve()

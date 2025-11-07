@@ -18,7 +18,7 @@ from fastapi import FastAPI
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 
-from apps.api.app.shared.core.config import PROJECT_ROOT, Settings, get_settings, reload_settings
+from apps.api.app.settings import PROJECT_ROOT, Settings, get_settings, reload_settings
 from apps.api.app.shared.db.engine import ensure_database_ready, render_sync_url, reset_database_state
 from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.auth.security import hash_password
@@ -56,8 +56,8 @@ def _configure_database(
     documents_dir = data_dir / "documents"
 
     os.environ["ADE_DATABASE_DSN"] = _database_url
-    os.environ["ADE_STORAGE_DATA_DIR"] = str(data_dir)
-    os.environ["ADE_STORAGE_DOCUMENTS_DIR"] = str(documents_dir)
+    os.environ["ADE_DATA_DIR"] = str(data_dir)
+    os.environ["ADE_DOCUMENTS_DIR"] = str(documents_dir)
     # Ensure tests run with OIDC disabled regardless of local .env values.
     os.environ["ADE_OIDC_ENABLED"] = "false"
     os.environ["ADE_SAFE_MODE"] = "false"
@@ -83,8 +83,8 @@ def _configure_database(
     reload_settings()
     for env_var in (
         "ADE_DATABASE_DSN",
-        "ADE_STORAGE_DATA_DIR",
-        "ADE_STORAGE_DOCUMENTS_DIR",
+        "ADE_DATA_DIR",
+        "ADE_DOCUMENTS_DIR",
         "ADE_OIDC_ENABLED",
         "ADE_SAFE_MODE",
     ):

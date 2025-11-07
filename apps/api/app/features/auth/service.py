@@ -25,7 +25,7 @@ from apps.api.app.features.roles.service import (
     has_users_with_global_role,
     sync_permission_registry,
 )
-from apps.api.app.shared.core.config import Settings
+from apps.api.app.settings import Settings
 
 from ..system_settings.repository import SystemSettingsRepository
 from ..users.models import User

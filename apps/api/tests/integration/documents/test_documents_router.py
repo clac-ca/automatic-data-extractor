@@ -7,7 +7,7 @@ import json
 import pytest
 from httpx import AsyncClient
 
-from apps.api.app.shared.core.config import get_settings
+from apps.api.app.settings import get_settings
 from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.documents.models import Document
 from apps.api.tests.utils import login
@@ -137,7 +137,7 @@ async def test_delete_document_marks_deleted(
         stored_uri = row.stored_uri
 
     settings = get_settings()
-    stored_path = settings.storage_documents_dir / stored_uri
+    stored_path = settings.documents_dir / stored_uri
     assert not stored_path.exists()
 
 
@@ -169,7 +169,7 @@ async def test_download_missing_file_returns_404(
         stored_uri = row.stored_uri
 
     settings = get_settings()
-    stored_path = settings.storage_documents_dir / stored_uri
+    stored_path = settings.documents_dir / stored_uri
     assert stored_path.exists()
     stored_path.unlink()
 

@@ -1,6 +1,5 @@
-"""ADE API shell exposing error handlers and settings dependency."""
+"""ADE API shell exposing error handler registration."""
 
-from ..shared.core.config import get_app_settings
 from ..shared.core.errors import register_exception_handlers
 
-__all__ = ["register_exception_handlers", "get_app_settings"]
+__all__ = ["register_exception_handlers"]

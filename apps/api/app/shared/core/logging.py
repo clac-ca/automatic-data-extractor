@@ -8,7 +8,7 @@ from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 
-from .config import Settings
+from apps.api.app.settings import Settings
 
 _CORRELATION_ID: ContextVar[str | None] = ContextVar("api_app_correlation_id", default=None)
 _STANDARD_ATTRS = {

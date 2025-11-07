@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from .api import register_exception_handlers
 from .api.v1 import router as api_router
 from .features.auth.dependencies import configure_auth_dependencies
-from .shared.core.config import Settings, get_settings
+from .settings import Settings, get_settings
 from .shared.core.lifecycles import create_application_lifespan
 from .shared.core.logging import setup_logging
 from .shared.core.middleware import register_middleware

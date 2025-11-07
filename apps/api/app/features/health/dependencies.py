@@ -6,13 +6,13 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from apps.api.app.shared.core.config import Settings, get_app_settings
+from apps.api.app.settings import Settings, get_settings
 
 from .service import HealthService
 
 
 def get_health_service(
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> HealthService:
     """Return a health service configured for the current request."""
 

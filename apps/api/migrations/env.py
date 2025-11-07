@@ -11,7 +11,7 @@ from sqlalchemy.engine import make_url
 
 from apps.api.app.shared.db import metadata
 from apps.api.app.shared.db.engine import render_sync_url
-from apps.api.app.shared.core.config import get_settings
+from apps.api.app.settings import get_settings
 
 config = context.config
 

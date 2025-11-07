@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from apps.api.app.shared.core.config import Settings
+from apps.api.app.settings import Settings
 
 from .exceptions import HealthCheckError
 from .schemas import HealthCheckResponse, HealthComponentStatus
