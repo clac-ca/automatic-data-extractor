@@ -12,6 +12,10 @@ interface SessionContextValue {
 
 const SessionContext = createContext<SessionContextValue | undefined>(undefined);
 
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
 interface SessionProviderProps {
   readonly session: SessionEnvelope;
   readonly refetch: RefetchSession;
@@ -58,8 +62,8 @@ function useSessionAutoRefresh(session: SessionEnvelope, refetch: RefetchSession
 
     const now = Date.now();
     if (refreshExpiresAt <= now) {
-      void refetch().catch((error) => {
-        console.warn("Failed to refetch session after refresh expiry", error);
+      void refetch().catch((error: unknown) => {
+        console.warn("Failed to refetch session after refresh expiry", toError(error));
       });
       return undefined;
     }
@@ -74,16 +78,16 @@ function useSessionAutoRefresh(session: SessionEnvelope, refetch: RefetchSession
         if (cancelled) {
           return;
         }
-        await refetch().catch((refetchError) => {
-          console.warn("Failed to refetch session after refresh", refetchError);
+        await refetch().catch((refetchError: unknown) => {
+          console.warn("Failed to refetch session after refresh", toError(refetchError));
         });
-      } catch (error) {
+      } catch (error: unknown) {
         if (cancelled) {
           return;
         }
-        console.warn("Failed to refresh session", error);
-        await refetch().catch((refetchError) => {
-          console.warn("Failed to refetch session after refresh failure", refetchError);
+        console.warn("Failed to refresh session", toError(error));
+        await refetch().catch((refetchError: unknown) => {
+          console.warn("Failed to refetch session after refresh failure", toError(refetchError));
         });
       }
     }, delay);

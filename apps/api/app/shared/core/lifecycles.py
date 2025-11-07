@@ -6,13 +6,13 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from apps.api.app.settings import Settings, get_settings
 from fastapi import FastAPI
 from fastapi.routing import Lifespan
 
 from ...features.roles.service import sync_permission_registry
 from ..db.engine import ensure_database_ready
 from ..db.session import get_sessionmaker
-from apps.api.app.settings import Settings, get_settings
 
 
 def ensure_runtime_dirs(settings: Settings | None = None) -> None:
