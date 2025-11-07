@@ -3,7 +3,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from apps.api.app.features.auth.service import AuthService
-from apps.api.app.shared.core.config import Settings
+from apps.api.app.settings import Settings
 from fastapi import Request
 
 

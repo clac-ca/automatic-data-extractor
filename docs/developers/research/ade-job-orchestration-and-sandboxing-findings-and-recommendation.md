@@ -17,7 +17,7 @@
 ## 2. Repository Recon (what exists today)
 
 **Project Overview:** ADE consists of a FastAPI backend (data extraction API) and a React frontend (compiled to static files), served together in one Docker container. Currently, **all persistence** is handled locally: metadata in a SQLite database, and files stored under a var/ directory in the container's filesystem. Key parts of the existing design include:
-> **Storage note:** Replace `/var/...` with the configured `ADE_STORAGE_DATA_DIR` when running outside the container image. The default `.env.example` maps this to the local `data/` folder.
+> **Storage note:** Replace `/var/...` with the configured `ADE_DATA_DIR` when running outside the container image. The default `.env.example` maps this to the local `data/` folder.
 
 - **Database (SQLite via SQLAlchemy):** Tables for users, workspaces, documents (with metadata), and importantly **configurations** and **configuration_script_versions** (which store the user's Python extraction rules code, likely as text blobs and versioned hashes). There is also a **jobs** table to record job runs (status, timestamps, logs/metrics in JSON). We will extend this jobs table usage to track the queued/running/completed jobs.
 - **File Storage (var/):** Large artifacts are stored as files:

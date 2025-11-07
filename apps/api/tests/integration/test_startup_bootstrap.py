@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from apps.api.app.shared.core.config import Settings
+from apps.api.app.settings import Settings
 from apps.api.app.main import create_app
 
 
@@ -22,8 +22,8 @@ async def test_app_startup_bootstraps_database(tmp_path: Path) -> None:
     settings = Settings.model_validate(
         {
             "database_dsn": f"sqlite+aiosqlite:///{database_path}",
-            "storage_data_dir": str(data_dir),
-            "storage_documents_dir": str(documents_dir),
+            "data_dir": str(data_dir),
+            "documents_dir": str(documents_dir),
         }
     )
 

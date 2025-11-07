@@ -5,7 +5,7 @@ from urllib.parse import parse_qsl, urlparse
 import pytest
 from fastapi import HTTPException
 
-from apps.api.app.shared.core.config import reload_settings
+from apps.api.app.settings import reload_settings
 from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.auth.service import AuthService, OIDCProviderMetadata
 from apps.api.app.features.roles.service import sync_permission_registry

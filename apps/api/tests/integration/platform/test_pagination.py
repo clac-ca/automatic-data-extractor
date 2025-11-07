@@ -5,7 +5,7 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from apps.api.app.shared.core.config import get_settings
+from apps.api.app.settings import get_settings
 from apps.api.app.shared.db.engine import ensure_database_ready
 from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.workspaces.models import Workspace

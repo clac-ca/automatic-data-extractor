@@ -5,11 +5,11 @@ from unittest.mock import MagicMock
 
 from apps.api.app.features.documents.router import _build_download_disposition
 from apps.api.app.features.documents.service import DocumentsService
-from apps.api.app.shared.core.config import Settings
+from apps.api.app.settings import Settings
 
 
 def _make_documents_service(tmp_path: Path) -> DocumentsService:
-    settings = Settings(storage_documents_dir=tmp_path)
+    settings = Settings(documents_dir=tmp_path)
     session = MagicMock()
     return DocumentsService(session=session, settings=settings)
 

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from apps.api.app.features.users.models import User
-from apps.api.app.shared.core.config import Settings
+from apps.api.app.settings import Settings
 from apps.api.app.shared.core.pagination import paginate
 from apps.api.app.shared.db import generate_ulid
 
@@ -46,7 +46,7 @@ class DocumentsService:
         self._session = session
         self._settings = settings
 
-        documents_dir = settings.storage_documents_dir
+        documents_dir = settings.documents_dir
         if documents_dir is None:
             raise RuntimeError("Document storage directory is not configured")
         self._storage = DocumentStorage(documents_dir)

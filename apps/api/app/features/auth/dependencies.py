@@ -15,7 +15,7 @@ from fastapi.security import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.features.roles.service import ensure_user_principal
-from apps.api.app.shared.core.config import Settings, get_app_settings
+from apps.api.app.settings import Settings, get_settings
 from apps.api.app.shared.db.session import get_session
 
 from ..users.models import User
@@ -44,7 +44,7 @@ async def get_current_identity(
     api_key: Annotated[str | None, Security(_api_key_scheme)],
     session_cookie: Annotated[str | None, Security(_session_cookie_scheme)],
     session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> AuthenticatedIdentity:
     """Resolve the authenticated identity for the request."""
 
@@ -107,7 +107,7 @@ async def require_csrf(
     request: Request,
     identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
     session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
     """Enforce CSRF validation for mutating requests."""
 

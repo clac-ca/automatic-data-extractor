@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from apps.api.app.shared.core.config import get_settings
+from apps.api.app.settings import get_settings
 from apps.api.app.shared.db import generate_ulid
 from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.documents.filtering import (

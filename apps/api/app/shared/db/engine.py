@@ -8,7 +8,7 @@ from typing import Any
 
 from alembic import command
 from alembic.config import Config
-from apps.api.app.shared.core.config import PROJECT_ROOT, Settings, get_settings
+from apps.api.app.settings import PROJECT_ROOT, Settings, get_settings
 from sqlalchemy import event
 from sqlalchemy.engine import URL, Connection, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
