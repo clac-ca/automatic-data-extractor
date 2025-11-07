@@ -9,12 +9,14 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from apps.api.app.settings import get_settings
 from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.roles.models import Principal, Role, RoleAssignment, RolePermission
 from apps.api.app.features.roles.service import assign_global_role
 from apps.api.app.features.workspaces.models import WorkspaceMembership
 
 pytestmark = pytest.mark.asyncio
+SESSION_COOKIE = get_settings().session_cookie_name
 
 
 async def _login(client: AsyncClient, email: str, password: str) -> str:
@@ -23,7 +25,7 @@ async def _login(client: AsyncClient, email: str, password: str) -> str:
         json={"email": email, "password": password},
     )
     assert response.status_code == 200, response.text
-    token = client.cookies.get("backend_app_session")
+    token = client.cookies.get(SESSION_COOKIE)
     assert token, "Session cookie missing"
     return token
 

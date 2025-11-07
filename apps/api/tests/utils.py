@@ -6,7 +6,9 @@ from typing import Any, Tuple
 
 from httpx import AsyncClient
 
-ADE_SESSION_COOKIE = "backend_app_session"
+from apps.api.app.settings import get_settings
+
+ADE_SESSION_COOKIE = get_settings().session_cookie_name
 
 
 async def login(

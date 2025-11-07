@@ -1,3 +1,5 @@
+import { readCsrfToken } from "./api/csrf";
+
 const DEFAULT_BASE_URL = "/api/v1";
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
@@ -58,7 +60,7 @@ export class ApiClient {
     }
 
     if (!SAFE_METHODS.has(method) && !requestHeaders.has("X-CSRF-Token")) {
-      const csrfToken = readCookie(getCsrfCookieName());
+      const csrfToken = readCsrfToken();
       if (csrfToken) {
         requestHeaders.set("X-CSRF-Token", csrfToken);
       }
@@ -142,30 +144,6 @@ export class ApiClient {
       return undefined;
     }
   }
-}
-
-function getCsrfCookieName() {
-  const fromEnv = import.meta.env.VITE_SESSION_CSRF_COOKIE ?? import.meta.env.VITE_SESSION_CSRF_COOKIE_NAME;
-  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
-    return fromEnv.trim();
-  }
-  return "backend_app_csrf";
-}
-
-function readCookie(name: string) {
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  const cookies = document.cookie.split(";");
-  for (const cookie of cookies) {
-    const [rawName, ...valueParts] = cookie.trim().split("=");
-    if (rawName === name) {
-      return decodeURIComponent(valueParts.join("="));
-    }
-  }
-
-  return null;
 }
 
 const defaultClient = new ApiClient(import.meta.env.VITE_API_BASE_URL ?? DEFAULT_BASE_URL);

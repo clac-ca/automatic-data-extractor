@@ -5852,7 +5852,7 @@
       "SessionCookie": {
         "type": "apiKey",
         "in": "cookie",
-        "name": "backend_app_session",
+        "name": "ade_session",
         "description": "Browser session cookie issued after interactive sign-in."
       }
     }

@@ -24,7 +24,7 @@ from .service import AuthenticatedIdentity, AuthService
 _bearer_scheme = HTTPBearer(auto_error=False)
 _api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 _session_cookie_scheme = APIKeyCookie(
-    name="backend_app_session",
+    name="ade_session",
     scheme_name="SessionCookie",
     auto_error=False,
 )

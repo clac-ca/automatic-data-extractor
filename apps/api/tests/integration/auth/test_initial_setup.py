@@ -6,12 +6,17 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select, text
 
-from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.roles.models import Role
 from apps.api.app.features.roles.service import assign_global_role
+from apps.api.app.settings import get_settings
+from apps.api.app.shared.db.session import get_sessionmaker
 
 
 pytestmark = pytest.mark.asyncio
+_settings = get_settings()
+SESSION_COOKIE = _settings.session_cookie_name
+REFRESH_COOKIE = _settings.session_refresh_cookie_name
+CSRF_COOKIE = _settings.session_csrf_cookie_name
 
 
 async def test_initial_setup_creates_admin_and_sets_session(
@@ -49,9 +54,9 @@ async def test_initial_setup_creates_admin_and_sets_session(
     assert data["expires_at"]
     assert data["refresh_expires_at"]
 
-    session_cookie = async_client.cookies.get("backend_app_session")
-    refresh_cookie = async_client.cookies.get("backend_app_refresh")
-    csrf_cookie = async_client.cookies.get("backend_app_csrf")
+    session_cookie = async_client.cookies.get(SESSION_COOKIE)
+    refresh_cookie = async_client.cookies.get(REFRESH_COOKIE)
+    csrf_cookie = async_client.cookies.get(CSRF_COOKIE)
     assert session_cookie
     assert refresh_cookie
     assert csrf_cookie
