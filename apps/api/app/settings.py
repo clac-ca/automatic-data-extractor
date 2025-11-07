@@ -15,12 +15,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ---- Defaults ---------------------------------------------------------------
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-
+MODULE_DIR = Path(__file__).resolve().parent
+DEFAULT_API_ROOT = MODULE_DIR.parent
+DEFAULT_WEB_DIR = MODULE_DIR / "web"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173"]
 DEFAULT_DATA_DIR = Path("./data")            # resolve later
 DEFAULT_DB_FILENAME = "ade.sqlite"
+DEFAULT_ALEMBIC_INI = DEFAULT_API_ROOT / "alembic.ini"
+DEFAULT_ALEMBIC_MIGRATIONS = DEFAULT_API_ROOT / "migrations"
 
 DEFAULT_SUBDIRS = {
     "documents_dir": "documents",
@@ -104,6 +107,18 @@ def _resolve_dir(base: Path, override: Path | None, default_subdir: str) -> Path
     return p.resolve()
 
 
+def _resolve_path(value: Path | str | None, *, default: Path) -> Path:
+    """Expand, absolutize, and resolve a configurable path."""
+
+    if value in (None, ""):
+        candidate = default
+    elif isinstance(value, Path):
+        candidate = value
+    else:
+        candidate = Path(str(value).strip())
+    return candidate.expanduser().resolve()
+
+
 # ---- Settings ---------------------------------------------------------------
 
 class Settings(BaseSettings):
@@ -133,6 +148,12 @@ class Settings(BaseSettings):
     server_port: int = Field(8000, ge=1, le=65535)
     server_public_url: str = DEFAULT_PUBLIC_URL
     server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
+
+    # Paths
+    api_root: Path = Field(default=DEFAULT_API_ROOT)
+    web_dir: Path = Field(default=DEFAULT_WEB_DIR)
+    alembic_ini_path: Path = Field(default=DEFAULT_ALEMBIC_INI)
+    alembic_migrations_dir: Path = Field(default=DEFAULT_ALEMBIC_MIGRATIONS)
 
     # Storage
     data_dir: Path = DEFAULT_DATA_DIR
@@ -284,6 +305,15 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _finalize(self) -> "Settings":
+        self.api_root = _resolve_path(self.api_root, default=DEFAULT_API_ROOT)
+        self.web_dir = _resolve_path(self.web_dir, default=DEFAULT_WEB_DIR)
+        self.alembic_ini_path = _resolve_path(
+            self.alembic_ini_path, default=DEFAULT_ALEMBIC_INI
+        )
+        self.alembic_migrations_dir = _resolve_path(
+            self.alembic_migrations_dir, default=DEFAULT_ALEMBIC_MIGRATIONS
+        )
+
         base = self.data_dir.expanduser().resolve()
         self.data_dir = base
 
@@ -343,7 +373,6 @@ def reload_settings() -> Settings:
 
 
 __all__ = [
-    "PROJECT_ROOT",
     "DEFAULT_CORS_ORIGINS",
     "DEFAULT_DATA_DIR",
     "DEFAULT_DB_FILENAME",
