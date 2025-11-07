@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import unicodedata
-from datetime import datetime
 from typing import Annotated, Any
 from urllib.parse import quote
 
@@ -13,21 +12,20 @@ from fastapi import (
     Form,
     HTTPException,
     Path,
-    Query,
-    Request,
     Security,
     UploadFile,
     status,
 )
 from fastapi.responses import StreamingResponse
-from pydantic import ValidationError
+from fastapi import Request
 
 from apps.api.app.features.auth.dependencies import require_authenticated, require_csrf
-from apps.api.app.features.pagination.dependencies import get_pagination_params
 from apps.api.app.features.roles.dependencies import require_workspace
-from apps.api.app.shared.core.errors import ProblemDetail, ProblemException
-from apps.api.app.shared.core.pagination import PaginationParams
+from apps.api.app.shared.core.errors import ProblemDetail
 from apps.api.app.shared.core.schema import ErrorMessage
+from apps.api.app.shared.pagination import PageParams
+from apps.api.app.shared.sorting import make_sort_dependency
+from apps.api.app.shared.types import OrderBy
 
 from ..users.models import User
 from .dependencies import get_documents_service
@@ -37,8 +35,9 @@ from .exceptions import (
     DocumentTooLargeError,
     InvalidDocumentExpirationError,
 )
-from .filtering import DocumentFilterParams
+from .filters import DocumentFilters
 from .schemas import DocumentListResponse, DocumentRecord
+from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 from .service import DocumentsService
 
 router = APIRouter(
@@ -46,6 +45,53 @@ router = APIRouter(
     tags=["documents"],
     dependencies=[Security(require_authenticated)],
 )
+
+
+get_sort_order = make_sort_dependency(
+    allowed=SORT_FIELDS,
+    default=DEFAULT_SORT,
+    id_field=ID_FIELD,
+)
+
+_FILTER_KEYS = {
+    "q",
+    "status_in",
+    "source_in",
+    "tags_in",
+    "uploader",
+    "uploader_id_in",
+    "created_at_from",
+    "created_at_to",
+    "last_run_from",
+    "last_run_to",
+    "byte_size_from",
+    "byte_size_to",
+}
+
+
+def get_document_filters(request: Request) -> DocumentFilters:
+    allowed = _FILTER_KEYS
+    allowed_with_shared = allowed | {"sort", "page", "page_size", "include_total"}
+    extras = [key for key in request.query_params.keys() if key not in allowed_with_shared]
+    if extras:
+        detail = [
+            {
+                "type": "extra_forbidden",
+                "loc": ["query", key],
+                "msg": "Extra inputs are not permitted",
+                "input": request.query_params.get(key),
+            }
+            for key in extras
+        ]
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
+
+    raw: dict[str, Any] = {}
+    for key in allowed:
+        values = request.query_params.getlist(key)
+        if not values:
+            continue
+        raw[key] = values if len(values) > 1 else values[0]
+    return DocumentFilters.model_validate(raw)
 
 
 def _parse_metadata(metadata: str | None) -> dict[str, Any]:
@@ -90,82 +136,6 @@ def _build_download_disposition(filename: str) -> str:
         return f'attachment; filename="{fallback}"'
 
     return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{encoded}'
-
-
-def _parse_document_filters(
-    request: Request,
-    *,
-    status_values: list[str] | None,
-    source: list[str] | None,
-    tag: list[str] | None,
-    uploader: str | None,
-    uploader_ids: list[str] | None,
-    q: str | None,
-    created_from: datetime | None,
-    created_to: datetime | None,
-    last_run_from: datetime | None,
-    last_run_to: datetime | None,
-    byte_size_min: int | None,
-    byte_size_max: int | None,
-    sort: str | None,
-) -> DocumentFilterParams:
-    allowed_filter_keys = {
-        "status",
-        "source",
-        "tag",
-        "uploader",
-        "uploader_id",
-        "q",
-        "created_from",
-        "created_to",
-        "last_run_from",
-        "last_run_to",
-        "byte_size_min",
-        "byte_size_max",
-        "sort",
-    }
-    allowed_query_keys = allowed_filter_keys | {"page", "per_page", "include_total"}
-
-    for key in request.query_params.keys():
-        if key not in allowed_query_keys:
-            message = f"Unknown query parameter: {key}"
-            raise ProblemException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                title="Invalid query parameter",
-                detail=message,
-                errors={key: ["Unknown query parameter"]},
-            )
-
-    raw = {
-        "status": status_values or [],
-        "source": source or [],
-        "tags": tag or [],
-        "uploader": uploader,
-        "uploader_ids": uploader_ids or [],
-        "q": q,
-        "created_from": created_from,
-        "created_to": created_to,
-        "last_run_from": last_run_from,
-        "last_run_to": last_run_to,
-        "byte_size_min": byte_size_min,
-        "byte_size_max": byte_size_max,
-        "sort": sort,
-    }
-
-    try:
-        return DocumentFilterParams.model_validate(raw)
-    except ValidationError as exc:
-        errors: dict[str, list[str]] = {}
-        for error in exc.errors():
-            loc = error.get("loc", ())
-            field = str(loc[0]) if loc else "query"
-            errors.setdefault(field, []).append(error.get("msg", "Invalid value"))
-        raise ProblemException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            title="Invalid query parameters",
-            detail="One or more query parameters are invalid.",
-            errors=errors or None,
-        ) from exc
 
 
 @router.post(
@@ -251,137 +221,26 @@ async def list_documents(
     workspace_id: Annotated[
         str, Path(min_length=1, description="Workspace identifier")
     ],
-    request: Request,
+    page: Annotated[PageParams, Depends()],
+    filters: Annotated[DocumentFilters, Depends(get_document_filters)],
+    order_by: Annotated[OrderBy, Depends(get_sort_order)],
     service: Annotated[DocumentsService, Depends(get_documents_service)],
-    pagination: Annotated[PaginationParams, Depends(get_pagination_params)],
-    _actor: Annotated[
+    actor: Annotated[
         User,
         Security(
             require_workspace("Workspace.Documents.Read"),
             scopes=["{workspace_id}"],
         ),
     ],
-    *,
-    status: Annotated[
-        list[str] | None,
-        Query(
-            description="Filter by one or more document statuses.",
-            example=["uploaded", "processed"],
-        ),
-    ] = None,
-    source: Annotated[
-        list[str] | None,
-        Query(
-            description="Restrict results to the given document sources.",
-            example=["manual_upload"],
-        ),
-    ] = None,
-    tag: Annotated[
-        list[str] | None,
-        Query(
-            description="Return documents containing any of the provided tags.",
-            example=["finance", "2024"],
-        ),
-    ] = None,
-    uploader: Annotated[
-        str | None,
-        Query(
-            description="Identity shortcut; use `me` to resolve to the authenticated uploader.",
-            example="me",
-        ),
-    ] = None,
-    uploader_id: Annotated[
-        list[str] | None,
-        Query(
-            description="Filter by explicit uploader ULIDs (repeatable).",
-            example=["01H0H0H0H0H0H0H0H0H0H0H0H"],
-        ),
-    ] = None,
-    q: Annotated[
-        str | None,
-        Query(
-            description="Substring search applied to document name or uploader metadata.",
-            example="quarterly",
-        ),
-    ] = None,
-    created_from: Annotated[
-        datetime | None,
-        Query(
-            description="Return documents created on/after this UTC timestamp.",
-            example="2024-01-01T00:00:00Z",
-        ),
-    ] = None,
-    created_to: Annotated[
-        datetime | None,
-        Query(
-            description="Return documents created on/before this UTC timestamp.",
-            example="2024-01-31T23:59:59Z",
-        ),
-    ] = None,
-    last_run_from: Annotated[
-        datetime | None,
-        Query(
-            description="Return documents with a last run on/after this UTC timestamp.",
-            example="2024-02-01T00:00:00Z",
-        ),
-    ] = None,
-    last_run_to: Annotated[
-        datetime | None,
-        Query(
-            description=(
-                "Return documents with a last run on/before this UTC timestamp (inclusive)."
-            ),
-            example="2024-02-29T23:59:59Z",
-        ),
-    ] = None,
-    byte_size_min: Annotated[
-        int | None,
-        Query(
-            ge=0,
-            description="Only include documents at least this many bytes in size.",
-            example=1024,
-        ),
-    ] = None,
-    byte_size_max: Annotated[
-        int | None,
-        Query(
-            ge=0,
-            description="Only include documents at most this many bytes in size.",
-            example=1048576,
-        ),
-    ] = None,
-    sort: Annotated[
-        str | None,
-        Query(
-            description="Single-field sort directive (prefix with '-' for descending).",
-            example="-created_at",
-        ),
-    ] = None,
 ) -> DocumentListResponse:
-    filters = _parse_document_filters(
-        request,
-        status_values=status,
-        source=source,
-        tag=tag,
-        uploader=uploader,
-        uploader_ids=uploader_id,
-        q=q,
-        created_from=created_from,
-        created_to=created_to,
-        last_run_from=last_run_from,
-        last_run_to=last_run_to,
-        byte_size_min=byte_size_min,
-        byte_size_max=byte_size_max,
-        sort=sort,
-    )
     return await service.list_documents(
         workspace_id=workspace_id,
-        page=pagination.page,
-        per_page=pagination.per_page,
-        include_total=pagination.include_total,
-        filters=filters.to_filters(),
-        sort=filters.sort,
-        actor=_actor,
+        page=page.page,
+        page_size=page.page_size,
+        include_total=page.include_total,
+        order_by=order_by,
+        filters=filters,
+        actor=actor,
     )
 
 

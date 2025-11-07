@@ -1,0 +1,276 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Annotated, Optional, Set
+
+from fastapi import HTTPException
+from pydantic import Field, field_validator
+from sqlalchemy import and_, func, or_
+from sqlalchemy.sql import Select
+from sqlalchemy.orm import aliased
+
+from apps.api.app.settings import MAX_SEARCH_LEN, MAX_SET_SIZE, MIN_SEARCH_LEN
+from apps.api.app.shared.filters import FilterBase
+from apps.api.app.shared.validators import normalize_utc, parse_csv_or_repeated
+
+from ..users.models import User
+from .models import (
+    DOCUMENT_SOURCE_VALUES,
+    DOCUMENT_STATUS_VALUES,
+    Document,
+    DocumentSource,
+    DocumentStatus,
+    DocumentTag,
+)
+
+ULID_PATTERN = r"[0-9A-HJKMNP-TV-Z]{26}"
+ULIDStr = Annotated[
+    str,
+    Field(
+        min_length=26,
+        max_length=26,
+        pattern=ULID_PATTERN,
+        description="ULID (26-character string).",
+    ),
+]
+
+
+class DocumentFilters(FilterBase):
+    """Query parameters supported by the document listing endpoint."""
+
+    q: Optional[str] = Field(
+        None,
+        min_length=MIN_SEARCH_LEN,
+        max_length=MAX_SEARCH_LEN,
+        description="Free text search applied to document name and uploader info.",
+    )
+    status_in: Optional[Set[DocumentStatus]] = Field(
+        None,
+        description="Filter by one or more document statuses.",
+    )
+    source_in: Optional[Set[DocumentSource]] = Field(
+        None,
+        description="Filter by the origin of the document.",
+    )
+    tags_in: Optional[Set[str]] = Field(
+        None,
+        description="Filter by documents tagged with any of the provided values.",
+    )
+    uploader: Optional[str] = Field(
+        None,
+        description="Restrict results to the literal 'me' to scope to the caller.",
+    )
+    uploader_id_in: Optional[Set[ULIDStr]] = Field(
+        None,
+        alias="uploader_id_in",
+        description="Filter by one or more uploader identifiers.",
+    )
+    created_at_from: Optional[datetime] = Field(
+        None,
+        description="Return documents created on or after this timestamp (UTC).",
+    )
+    created_at_to: Optional[datetime] = Field(
+        None,
+        description="Return documents created before this timestamp (UTC).",
+    )
+    last_run_from: Optional[datetime] = Field(
+        None,
+        description="Return documents last processed on or after this timestamp (UTC).",
+    )
+    last_run_to: Optional[datetime] = Field(
+        None,
+        description="Return documents last processed before this timestamp (UTC).",
+    )
+    byte_size_from: Optional[int] = Field(
+        None,
+        ge=0,
+        description="Return documents with a byte size greater than or equal to this value.",
+    )
+    byte_size_to: Optional[int] = Field(
+        None,
+        ge=0,
+        description="Return documents with a byte size less than this value.",
+    )
+
+    @field_validator("q")
+    @classmethod
+    def _trim_query(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("status_in", mode="before")
+    @classmethod
+    def _parse_statuses(cls, value):
+        parsed = parse_csv_or_repeated(value)
+        if parsed and len(parsed) > MAX_SET_SIZE:
+            raise HTTPException(422, f"Too many status values; max {MAX_SET_SIZE}.")
+        if not parsed:
+            return None
+        try:
+            return {DocumentStatus(item) for item in parsed}
+        except ValueError as exc:  # pragma: no cover - validation guard
+            raise HTTPException(422, "Invalid status value") from exc
+
+    @field_validator("source_in", mode="before")
+    @classmethod
+    def _parse_sources(cls, value):
+        parsed = parse_csv_or_repeated(value)
+        if parsed and len(parsed) > MAX_SET_SIZE:
+            raise HTTPException(422, f"Too many source values; max {MAX_SET_SIZE}.")
+        if not parsed:
+            return None
+        try:
+            return {DocumentSource(item) for item in parsed}
+        except ValueError as exc:  # pragma: no cover - validation guard
+            raise HTTPException(422, "Invalid source value") from exc
+
+    @field_validator("tags_in", mode="before")
+    @classmethod
+    def _parse_tags(cls, value):
+        parsed = parse_csv_or_repeated(value)
+        if parsed and len(parsed) > MAX_SET_SIZE:
+            raise HTTPException(422, f"Too many tag values; max {MAX_SET_SIZE}.")
+        if not parsed:
+            return None
+        cleaned = {tag.strip() for tag in parsed if tag.strip()}
+        return cleaned or None
+
+    @field_validator("uploader_id_in", mode="before")
+    @classmethod
+    def _parse_uploader_ids(cls, value):
+        parsed = parse_csv_or_repeated(value)
+        if parsed and len(parsed) > MAX_SET_SIZE:
+            raise HTTPException(422, f"Too many uploader IDs; max {MAX_SET_SIZE}.")
+        return parsed or None
+
+    @field_validator(
+        "created_at_from",
+        "created_at_to",
+        "last_run_from",
+        "last_run_to",
+        mode="before",
+    )
+    @classmethod
+    def _normalise_datetimes(cls, value):
+        return normalize_utc(value)
+
+    @field_validator("byte_size_to")
+    @classmethod
+    def _validate_byte_size_to(cls, value, info):
+        byte_size_from = info.data.get("byte_size_from")
+        if value is not None and byte_size_from is not None and value <= byte_size_from:
+            raise HTTPException(
+                422,
+                "byte_size_to must be greater than byte_size_from",
+            )
+        return value
+
+    @field_validator("created_at_to")
+    @classmethod
+    def _validate_created_range(cls, value, info):
+        created_at_from = info.data.get("created_at_from")
+        if value is not None and created_at_from is not None and value <= created_at_from:
+            raise HTTPException(
+                422,
+                "created_at_to must be greater than created_at_from",
+            )
+        return value
+
+    @field_validator("last_run_to")
+    @classmethod
+    def _validate_last_run_range(cls, value, info):
+        last_run_from = info.data.get("last_run_from")
+        if value is not None and last_run_from is not None and value <= last_run_from:
+            raise HTTPException(
+                422,
+                "last_run_to must be greater than last_run_from",
+            )
+        return value
+
+
+def apply_document_filters(
+    stmt: Select,
+    filters: DocumentFilters,
+    *,
+    actor: User | None,
+) -> Select:
+    """Apply ``filters`` to the provided document ``stmt``."""
+
+    predicates = []
+
+    if filters.status_in:
+        predicates.append(
+            Document.status.in_([status.value for status in sorted(filters.status_in)])
+        )
+    if filters.source_in:
+        predicates.append(
+            Document.source.in_([source.value for source in sorted(filters.source_in)])
+        )
+    if filters.tags_in:
+        predicates.append(Document.tags.any(DocumentTag.tag.in_(sorted(filters.tags_in))))
+
+    uploader_ids: Set[str] = set()
+    if filters.uploader == "me":
+        if actor is None:
+            raise HTTPException(422, "uploader=me requires authentication")
+        uploader_ids.add(actor.id)
+    elif filters.uploader:
+        raise HTTPException(422, "uploader only accepts the literal 'me'")
+    if filters.uploader_id_in:
+        uploader_ids.update(filters.uploader_id_in)
+    if uploader_ids:
+        predicates.append(Document.uploaded_by_user_id.in_(sorted(uploader_ids)))
+
+    if filters.created_at_from is not None:
+        predicates.append(Document.created_at >= filters.created_at_from)
+    if filters.created_at_to is not None:
+        predicates.append(Document.created_at < filters.created_at_to)
+
+    if filters.last_run_from is not None:
+        predicates.append(Document.last_run_at.is_not(None))
+        predicates.append(Document.last_run_at >= filters.last_run_from)
+    if filters.last_run_to is not None:
+        if filters.last_run_from is not None:
+            predicates.append(Document.last_run_at < filters.last_run_to)
+        else:
+            predicates.append(
+                or_(
+                    Document.last_run_at.is_(None),
+                    Document.last_run_at < filters.last_run_to,
+                )
+            )
+
+    if filters.byte_size_from is not None:
+        predicates.append(Document.byte_size >= filters.byte_size_from)
+    if filters.byte_size_to is not None:
+        predicates.append(Document.byte_size < filters.byte_size_to)
+
+    if filters.q:
+        uploader_alias = aliased(User)
+        pattern = f"%{filters.q.lower()}%"
+        stmt = stmt.outerjoin(uploader_alias, Document.uploaded_by_user)
+        predicates.append(
+            or_(
+                func.lower(Document.original_filename).like(pattern),
+                func.lower(uploader_alias.display_name).like(pattern),
+                func.lower(uploader_alias.email).like(pattern),
+            )
+        )
+
+    if predicates:
+        stmt = stmt.where(and_(*predicates))
+
+    return stmt
+
+
+__all__ = [
+    "DOCUMENT_SOURCE_VALUES",
+    "DOCUMENT_STATUS_VALUES",
+    "DocumentFilters",
+    "DocumentSource",
+    "DocumentStatus",
+    "ULIDStr",
+    "apply_document_filters",
+]
