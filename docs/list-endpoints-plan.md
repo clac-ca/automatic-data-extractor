@@ -13,7 +13,7 @@ This document captures the full design for implementing a standardized paginatio
 
 ```
 apps/api/app/
-  core/settings.py
+  settings.py
   shared/
     types.py
     filters.py
@@ -85,7 +85,7 @@ apps/api/app/
 
 ## Shared Modules to Implement
 
-### `core/settings.py`
+### `settings.py`
 
 ```python
 DEFAULT_PAGE_SIZE = 25
