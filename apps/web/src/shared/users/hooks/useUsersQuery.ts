@@ -1,16 +1,54 @@
-import { useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 
-import { fetchUsers } from "../api";
-import type { components } from "@openapi";
+import { fetchUsers, type FetchUsersOptions, type UserListPage } from "../api";
+import { useFlattenedPages } from "@shared/api/pagination";
 
-export function useUsersQuery(options: { enabled?: boolean } = {}) {
-  return useQuery<UserSummary[]>({
-    queryKey: ["users", "all"],
-    queryFn: fetchUsers,
-    enabled: options.enabled ?? true,
-    staleTime: 60_000,
-    placeholderData: (previous) => previous ?? [],
-  });
+export interface UseUsersQueryOptions {
+  readonly enabled?: boolean;
+  readonly search?: string;
+  readonly pageSize?: number;
 }
 
-type UserSummary = components["schemas"]["UserSummary"];
+export function useUsersQuery(options: UseUsersQueryOptions = {}) {
+  const {
+    enabled = true,
+    search = "",
+    pageSize,
+  } = options;
+
+  const trimmedSearch = search.trim();
+  const effectiveSearch = trimmedSearch.length >= 2 ? trimmedSearch : "";
+
+  const query = useInfiniteQuery<UserListPage, Error>({
+    queryKey: ["users", "all", { search: trimmedSearch, pageSize }],
+    initialPageParam: 1,
+    queryFn: ({ pageParam, signal }) =>
+      fetchUsers(normalizeFetchOptions({
+        page: typeof pageParam === "number" ? pageParam : 1,
+        pageSize,
+        search: effectiveSearch || undefined,
+        signal,
+      })),
+    getNextPageParam: (lastPage) => (lastPage.hasNext ? lastPage.page + 1 : undefined),
+    enabled,
+    staleTime: 60_000,
+  });
+
+  const getUserKey = useCallback((user: UserListPage["items"][number]) => user.user_id, []);
+  const users = useFlattenedPages(query.data?.pages, getUserKey);
+
+  return {
+    ...query,
+    users,
+  };
+}
+
+function normalizeFetchOptions(options: FetchUsersOptions): FetchUsersOptions {
+  const next: FetchUsersOptions = { ...options };
+  if (!next.page || next.page < 1) {
+    next.page = 1;
+  }
+  return next;
+}
+

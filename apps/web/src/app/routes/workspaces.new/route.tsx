@@ -46,8 +46,8 @@ function WorkspaceCreateContent() {
   const createWorkspace = useCreateWorkspaceMutation();
 
   const canSelectOwner = session.user.permissions?.includes("Users.Read.All") ?? false;
-  const usersQuery = useUsersQuery({ enabled: canSelectOwner });
-  const ownerOptions = useMemo<UserSummary[]>(() => usersQuery.data ?? [], [usersQuery.data]);
+  const usersQuery = useUsersQuery({ enabled: canSelectOwner, pageSize: 50 });
+  const ownerOptions = useMemo<UserSummary[]>(() => usersQuery.users, [usersQuery.users]);
   const filteredOwnerOptions = useMemo(() => {
     if (!session.user.user_id) {
       return ownerOptions;
@@ -92,7 +92,8 @@ function WorkspaceCreateContent() {
   }, [canSelectOwner, session.user.user_id, setValue]);
 
   const isSubmitting = createWorkspace.isPending;
-  const ownerSelectDisabled = isSubmitting || usersQuery.isLoading || !canSelectOwner;
+  const usersLoading = usersQuery.isPending && usersQuery.users.length === 0;
+  const ownerSelectDisabled = isSubmitting || usersLoading || !canSelectOwner;
   const currentUserLabel = session.user.display_name
     ? `${session.user.display_name} (you)`
     : `${session.user.email ?? "Current user"} (you)`;
@@ -204,6 +205,18 @@ function WorkspaceCreateContent() {
                   </option>
                 ))}
               </select>
+              {usersQuery.hasNextPage ? (
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => usersQuery.fetchNextPage()}
+                    disabled={usersQuery.isFetchingNextPage}
+                  >
+                    {usersQuery.isFetchingNextPage ? "Loading more users…" : "Load more users"}
+                  </Button>
+                </div>
+              ) : null}
             </FormField>
           ) : null}
 

@@ -23,7 +23,6 @@ export function WorkspaceMembersSection() {
   const canManageMembers = hasPermission("Workspace.Members.ReadWrite");
   const membersQuery = useWorkspaceMembersQuery(workspace.id);
   const rolesQuery = useWorkspaceRolesQuery(workspace.id);
-  const usersQuery = useUsersQuery({ enabled: canManageMembers });
 
   const addMember = useAddWorkspaceMemberMutation(workspace.id);
   const updateMemberRoles = useUpdateWorkspaceMemberRolesMutation(workspace.id);
@@ -35,11 +34,25 @@ export function WorkspaceMembersSection() {
   const [inviteUserId, setInviteUserId] = useState<string>("");
   const [inviteRoleIds, setInviteRoleIds] = useState<string[]>([]);
   const [inviteSearch, setInviteSearch] = useState<string>("");
+  const [debouncedInviteSearch, setDebouncedInviteSearch] = useState<string>("");
   const [inviteOption, setInviteOption] = useState<"existing" | "new">("existing");
   const [inviteEmail, setInviteEmail] = useState<string>("");
   const [inviteDisplayName, setInviteDisplayName] = useState<string>("");
   const [memberSearch, setMemberSearch] = useState<string>("");
   const [feedbackMessage, setFeedbackMessage] = useState<{ tone: "success" | "danger"; message: string } | null>(null);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedInviteSearch(inviteSearch.trim());
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [inviteSearch]);
+
+  const usersQuery = useUsersQuery({
+    enabled: canManageMembers,
+    search: debouncedInviteSearch,
+    pageSize: 50,
+  });
 
   const roleLookup = useMemo(() => {
     const map = new Map<string, RoleDefinition>();
@@ -76,23 +89,26 @@ export function WorkspaceMembersSection() {
     });
   }, [members, normalizedMemberSearch]);
 
+  const usersLoading = usersQuery.isPending && usersQuery.users.length === 0;
+  const usersFetchingMore = usersQuery.isFetchingNextPage;
+
   const availableUsers: UserSummary[] = useMemo(() => {
-    if (!usersQuery.data) {
-      return [];
-    }
     const collator = new Intl.Collator("en", { sensitivity: "base" });
-    return usersQuery.data
+    return usersQuery.users
       .filter((user) => !memberIds.has(user.user_id))
       .sort((a, b) => {
         const nameA = a.display_name ?? a.email;
         const nameB = b.display_name ?? b.email;
         return collator.compare(nameA ?? "", nameB ?? "");
       });
-  }, [memberIds, usersQuery.data]);
+  }, [memberIds, usersQuery.users]);
 
   const normalizedInviteSearch = inviteSearch.trim().toLowerCase();
+  const serverInviteSearch = debouncedInviteSearch.trim().toLowerCase();
+  const usingServerSearch = serverInviteSearch.length >= 2;
+  const inviteSearchTooShort = inviteOption === "existing" && inviteSearch.trim().length > 0 && inviteSearch.trim().length < 2;
   const filteredAvailableUsers = useMemo(() => {
-    if (!normalizedInviteSearch) {
+    if (!normalizedInviteSearch || usingServerSearch) {
       return availableUsers;
     }
     return availableUsers.filter((user) => {
@@ -102,7 +118,7 @@ export function WorkspaceMembersSection() {
         user.email.toLowerCase().includes(normalizedInviteSearch)
       );
     });
-  }, [availableUsers, normalizedInviteSearch]);
+  }, [availableUsers, normalizedInviteSearch, usingServerSearch]);
 
   const selectedInviteUser = useMemo(
     () =>
@@ -363,9 +379,17 @@ export function WorkspaceMembersSection() {
                       value={inviteSearch}
                       onChange={(event) => setInviteSearch(event.target.value)}
                       placeholder="e.g. Casey or casey@example.com"
-                      disabled={isInvitePending || usersQuery.isLoading}
+                      disabled={isInvitePending || usersLoading}
                     />
                   </FormField>
+                  {inviteSearchTooShort ? (
+                    <p className="text-xs text-slate-500">
+                      Enter at least two characters to search the full directory.
+                    </p>
+                  ) : null}
+                  {usersQuery.isError ? (
+                    <p className="text-xs text-rose-600">Unable to load users. Try again shortly.</p>
+                  ) : null}
                   <FormField label="User" required>
                     <Select
                       value={inviteUserId}
@@ -375,7 +399,7 @@ export function WorkspaceMembersSection() {
                           setInviteSearch("");
                         }
                       }}
-                      disabled={isInvitePending || usersQuery.isLoading}
+                      disabled={isInvitePending || usersLoading}
                       required
                     >
                       <option value="">Select a user</option>
@@ -398,6 +422,18 @@ export function WorkspaceMembersSection() {
                     <p className="text-xs text-slate-500">
                       No users matched "{inviteSearch}". Clear the search to see everyone.
                     </p>
+                  ) : null}
+                  {usersQuery.hasNextPage ? (
+                    <div className="pt-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => usersQuery.fetchNextPage()}
+                        disabled={usersLoading || usersFetchingMore}
+                      >
+                        {usersFetchingMore ? "Loading more users…" : "Load more users"}
+                      </Button>
+                    </div>
                   ) : null}
                 </>
               ) : (
