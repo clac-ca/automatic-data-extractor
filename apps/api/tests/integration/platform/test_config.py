@@ -24,8 +24,18 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_SERVER_PORT",
         "ADE_SERVER_PUBLIC_URL",
         "ADE_SERVER_CORS_ORIGINS",
+        "ADE_DATA_DIR",
         "ADE_STORAGE_DATA_DIR",
+        "ADE_DOCUMENTS_DIR",
         "ADE_STORAGE_DOCUMENTS_DIR",
+        "ADE_CONFIGS_DIR",
+        "ADE_STORAGE_CONFIGS_DIR",
+        "ADE_VENVS_DIR",
+        "ADE_STORAGE_VENVS_DIR",
+        "ADE_JOBS_DIR",
+        "ADE_STORAGE_JOBS_DIR",
+        "ADE_PIP_CACHE_DIR",
+        "ADE_STORAGE_PIP_CACHE_DIR",
         "ADE_STORAGE_DOCUMENT_RETENTION_PERIOD",
         "ADE_STORAGE_UPLOAD_MAX_BYTES",
         "ADE_DATABASE_DSN",
@@ -78,6 +88,10 @@ def test_settings_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.jwt_access_ttl == timedelta(minutes=60)
     assert settings.jwt_refresh_ttl == timedelta(days=14)
     assert settings.storage_documents_dir == settings.storage_data_dir / "documents"
+    assert settings.storage_configs_dir == settings.storage_data_dir / "config_packages"
+    assert settings.storage_venvs_dir == settings.storage_data_dir / "venvs"
+    assert settings.storage_jobs_dir == settings.storage_data_dir / "jobs"
+    assert settings.storage_pip_cache_dir == settings.storage_data_dir / "cache" / "pip"
 
 
 def test_settings_reads_from_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -196,23 +210,55 @@ def test_storage_directories_follow_data_dir(
     """Documents directory should default inside the configured data directory."""
 
     data_dir = tmp_path / "api-app-data"
-    monkeypatch.setenv("ADE_STORAGE_DATA_DIR", str(data_dir))
+    monkeypatch.setenv("ADE_DATA_DIR", str(data_dir))
     reload_settings()
 
     settings = get_settings()
 
     assert settings.storage_data_dir == data_dir.resolve()
     assert settings.storage_documents_dir == (data_dir / "documents").resolve()
+    assert settings.storage_configs_dir == (data_dir / "config_packages").resolve()
+    assert settings.storage_venvs_dir == (data_dir / "venvs").resolve()
+    assert settings.storage_jobs_dir == (data_dir / "jobs").resolve()
+    assert settings.storage_pip_cache_dir == (data_dir / "cache" / "pip").resolve()
 
 
 def test_global_storage_directory_created(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """ensure_runtime_dirs should create the storage directory and return it."""
 
     data_dir = tmp_path / "api-app-data"
-    monkeypatch.setenv("ADE_STORAGE_DATA_DIR", str(data_dir))
+    monkeypatch.setenv("ADE_DATA_DIR", str(data_dir))
     reload_settings()
 
     ensure_runtime_dirs()
 
     assert data_dir.exists()
     assert (data_dir / "documents").exists()
+    assert (data_dir / "config_packages").exists()
+    assert (data_dir / "venvs").exists()
+    assert (data_dir / "jobs").exists()
+    assert (data_dir / "cache" / "pip").exists()
+
+
+def test_storage_directory_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Explicit ADE_*_DIR overrides should be honoured."""
+
+    data_dir = tmp_path / "api-app-data"
+    configs_dir = tmp_path / "alt-configs"
+    venvs_dir = tmp_path / "alt-venvs"
+    jobs_dir = tmp_path / "alt-jobs"
+    pip_cache_dir = tmp_path / "alt-cache" / "pip"
+
+    monkeypatch.setenv("ADE_DATA_DIR", str(data_dir))
+    monkeypatch.setenv("ADE_CONFIGS_DIR", str(configs_dir))
+    monkeypatch.setenv("ADE_VENVS_DIR", str(venvs_dir))
+    monkeypatch.setenv("ADE_JOBS_DIR", str(jobs_dir))
+    monkeypatch.setenv("ADE_PIP_CACHE_DIR", str(pip_cache_dir))
+    reload_settings()
+
+    settings = get_settings()
+
+    assert settings.storage_configs_dir == configs_dir.resolve()
+    assert settings.storage_venvs_dir == venvs_dir.resolve()
+    assert settings.storage_jobs_dir == jobs_dir.resolve()
+    assert settings.storage_pip_cache_dir == pip_cache_dir.resolve()
