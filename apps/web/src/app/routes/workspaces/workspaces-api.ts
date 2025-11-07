@@ -188,20 +188,14 @@ export function useWorkspacesQuery(options: WorkspacesQueryOptions = {}) {
 type WorkspaceApiProfile = components["schemas"]["WorkspaceProfile"];
 type WorkspaceCreatePayloadSchema = components["schemas"]["WorkspaceCreate"];
 type WorkspaceUpdatePayloadSchema = components["schemas"]["WorkspaceUpdate"];
-type WorkspaceMemberSchema = components["schemas"]["WorkspaceMember"];
-type RoleDefinitionSchema = components["schemas"]["RoleRead"];
 type RoleCreatePayloadSchema = components["schemas"]["RoleCreate"];
 type RoleUpdatePayloadSchema = components["schemas"]["RoleUpdate"];
-type PermissionDefinitionSchema = components["schemas"]["PermissionRead"];
 
 export type WorkspaceProfile = WorkspaceModel;
 export type WorkspaceCreatePayload = WorkspaceCreatePayloadSchema;
 export type WorkspaceUpdatePayload = WorkspaceUpdatePayloadSchema;
-type WorkspaceMember = WorkspaceMemberSchema;
-type RoleDefinition = RoleDefinitionSchema;
 type RoleCreatePayload = RoleCreatePayloadSchema;
 type RoleUpdatePayload = RoleUpdatePayloadSchema;
-type PermissionDefinition = PermissionDefinitionSchema;
 
 interface WorkspaceModel {
   id: string;

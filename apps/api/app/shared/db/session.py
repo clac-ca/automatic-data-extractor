@@ -7,6 +7,7 @@ from typing import Annotated, Any
 
 from apps.api.app.settings import Settings, get_settings
 from fastapi import Depends, Request
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .engine import engine_cache_key, get_engine
@@ -60,18 +61,27 @@ async def get_session(
 
     session = session_factory()
     request.state.db_session = session
+    error: BaseException | None = None
     try:
         yield session
-        if session.in_transaction():
-            await session.commit()
-    except Exception:
-        if session.in_transaction():
-            await session.rollback()
+    except BaseException as exc:
+        error = exc
         raise
     finally:
-        if getattr(request.state, "db_session", None) is session:
-            request.state.db_session = None
-        await session.close()
+        try:
+            if session.in_transaction():
+                if error is None:
+                    try:
+                        await session.commit()
+                    except SQLAlchemyError:
+                        await session.rollback()
+                        raise
+                else:
+                    await session.rollback()
+        finally:
+            if getattr(request.state, "db_session", None) is session:
+                request.state.db_session = None
+            await session.close()
 
 
 __all__ = ["get_session", "get_sessionmaker", "reset_session_state"]

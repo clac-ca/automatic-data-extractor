@@ -207,6 +207,45 @@ async def test_profile_requires_authentication(async_client: AsyncClient) -> Non
     response = await async_client.get("/api/v1/auth/session")
     assert response.status_code == 401
 
+
+async def test_bearer_authorization_requires_bearer_scheme(
+    async_client: AsyncClient, seed_identity: dict[str, Any]
+) -> None:
+    """Authorization headers must use the Bearer scheme and include a token."""
+
+    admin = seed_identity["admin"]
+    await _login(async_client, admin["email"], admin["password"])
+    token = async_client.cookies.get(SESSION_COOKIE)
+    assert token, "Access token cookie not issued"
+
+    async_client.cookies.clear()
+
+    wrong_scheme = await async_client.get(
+        "/api/v1/auth/session",
+        headers={"Authorization": f"Basic {token}"},
+    )
+    assert wrong_scheme.status_code == 401
+
+    missing_token = await async_client.get(
+        "/api/v1/auth/session",
+        headers={"Authorization": "Bearer   "},
+    )
+    assert missing_token.status_code == 401
+
+    authorised = await async_client.get(
+        "/api/v1/auth/session",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert authorised.status_code == 200
+
+
+async def test_session_cookie_whitespace_rejected(async_client: AsyncClient) -> None:
+    """Whitespace-only session cookies should be treated as missing."""
+
+    async_client.cookies.set(SESSION_COOKIE, "   ")
+    response = await async_client.get("/api/v1/auth/session")
+    assert response.status_code == 401
+
 async def test_refresh_requires_csrf_header(
     async_client: AsyncClient, seed_identity: dict[str, Any]
 ) -> None:

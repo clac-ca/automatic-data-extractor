@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 from datetime import timedelta
 from functools import lru_cache
@@ -65,8 +66,15 @@ def _parse_duration(value: Any, *, field_name: str) -> timedelta:
             unit = s[-1].lower()
             num = s[:-1].strip()
             if unit not in _UNIT_SECONDS or not num:
-                raise ValueError(f"{field_name} must be secs or 'Xs','Xm','Xh','Xd'")
-            seconds = float(num) * _UNIT_SECONDS[unit]
+                raise ValueError(
+                    f"{field_name} must be secs or 'Xs','Xm','Xh','Xd'"
+                ) from None
+            try:
+                seconds = float(num) * _UNIT_SECONDS[unit]
+            except ValueError as exc:
+                raise ValueError(
+                    f"{field_name} must be secs or 'Xs','Xm','Xh','Xd'"
+                ) from exc
     else:
         raise TypeError(f"{field_name} must be number, duration string, or timedelta")
     if seconds <= 0:
@@ -243,7 +251,10 @@ class Settings(BaseSettings):
     pip_cache_dir: Path | None = None
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
-    secret_key: SecretStr = Field(default=SecretStr("ZGV2ZWxvcG1lbnQtY29uZmlnLXNlY3JldC1rZXktMzI="))  # base64-encoded 32 bytes
+    secret_key: SecretStr = Field(
+        default=SecretStr("ZGV2ZWxvcG1lbnQtY29uZmlnLXNlY3JldC1rZXktMzI="),
+        description="Base64-encoded 32 byte secret key",
+    )
 
     # Database
     database_dsn: str | None = None
@@ -350,7 +361,7 @@ class Settings(BaseSettings):
         raw = v.get_secret_value() if isinstance(v, SecretStr) else str(v).strip()
         try:
             decoded = base64.b64decode(raw, validate=True)
-        except Exception as exc:
+        except (binascii.Error, ValueError) as exc:
             raise ValueError("ADE_SECRET_KEY must be base64 encoded") from exc
         if len(decoded) != 32:
             raise ValueError("ADE_SECRET_KEY must decode to exactly 32 bytes")
@@ -383,7 +394,7 @@ class Settings(BaseSettings):
     # ---- Finalize: resolve paths & validate OIDC ----
 
     @model_validator(mode="after")
-    def _finalize(self) -> "Settings":
+    def _finalize(self) -> Settings:
         self.api_root = _resolve_path(self.api_root, default=DEFAULT_API_ROOT)
         self.web_dir = _resolve_path(self.web_dir, default=DEFAULT_WEB_DIR)
         self.alembic_ini_path = _resolve_path(

@@ -3,7 +3,6 @@ import { client } from "@shared/api/client";
 import type {
   ConfigRecord,
   ConfigScriptContent,
-  ConfigScriptSummary,
   ConfigVersionRecord,
   ConfigVersionTestResponse,
   ConfigVersionValidateResponse,
@@ -17,7 +16,10 @@ export interface ListConfigsOptions {
   readonly signal?: AbortSignal;
 }
 
-export async function listConfigs(workspaceId: string, options: ListConfigsOptions = {}) {
+export async function listConfigs(
+  workspaceId: string,
+  options: ListConfigsOptions = {},
+): Promise<ConfigRecord[]> {
   const { signal, includeDeleted } = options;
   const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/configs", {
     params: {
@@ -26,7 +28,7 @@ export async function listConfigs(workspaceId: string, options: ListConfigsOptio
     },
     signal,
   });
-  return data ?? [];
+  return (data ?? []) as ConfigRecord[];
 }
 
 export interface ListConfigVersionsOptions {
@@ -38,7 +40,7 @@ export async function listConfigVersions(
   workspaceId: string,
   configId: string,
   options: ListConfigVersionsOptions = {},
-) {
+): Promise<ConfigVersionRecord[]> {
   const { includeDeleted, signal } = options;
   const { data } = await client.GET(
     "/api/v1/workspaces/{workspace_id}/configs/{config_id}/versions",
@@ -50,7 +52,7 @@ export async function listConfigVersions(
       signal,
     },
   );
-  return data ?? [];
+  return (data ?? []) as ConfigVersionRecord[];
 }
 
 export async function readConfigVersion(
@@ -58,7 +60,7 @@ export async function readConfigVersion(
   configId: string,
   configVersionId: string,
   signal?: AbortSignal,
-) {
+): Promise<ConfigVersionRecord | null> {
   const { data } = await client.GET(
     "/api/v1/workspaces/{workspace_id}/configs/{config_id}/versions/{config_version_id}",
     {
@@ -68,7 +70,7 @@ export async function readConfigVersion(
       signal,
     },
   );
-  return data ?? null;
+  return (data ?? null) as ConfigVersionRecord | null;
 }
 
 export async function createVersion(
