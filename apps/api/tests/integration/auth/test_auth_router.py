@@ -19,7 +19,10 @@ from apps.api.app.features.auth.service import (
 )
 from apps.api.app.features.users.repository import UsersRepository
 
-CSRF_COOKIE = "backend_app_csrf"
+_settings = get_settings()
+CSRF_COOKIE = _settings.session_csrf_cookie_name
+SESSION_COOKIE = _settings.session_cookie_name
+REFRESH_COOKIE = _settings.session_refresh_cookie_name
 
 
 pytestmark = pytest.mark.asyncio
@@ -401,8 +404,8 @@ async def test_logout_clears_cookies(
         headers=_csrf_headers(async_client),
     )
     assert response.status_code == 204
-    assert async_client.cookies.get("backend_app_session") is None
-    assert async_client.cookies.get("backend_app_refresh") is None
+    assert async_client.cookies.get(SESSION_COOKIE) is None
+    assert async_client.cookies.get(REFRESH_COOKIE) is None
 
 async def test_sso_callback_rejects_state_mismatch(
     monkeypatch: pytest.MonkeyPatch,

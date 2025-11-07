@@ -1,5 +1,6 @@
 import createClient, { type Middleware } from "openapi-fetch";
 
+import { readCsrfToken } from "./csrf";
 import { ApiError } from "../api";
 import type { paths } from "@openapi";
 
@@ -43,34 +44,6 @@ const throwOnError: Middleware = {
 
 client.use(csrfMiddleware);
 client.use(throwOnError);
-
-function readCsrfToken() {
-  const name = getCsrfCookieName();
-  if (typeof document === "undefined") {
-    return null;
-  }
-  const rawCookies = document.cookie;
-  if (!rawCookies) {
-    return null;
-  }
-  const cookies = rawCookies.split(";");
-  for (const cookie of cookies) {
-    const [rawName, ...valueParts] = cookie.trim().split("=");
-    if (rawName === name) {
-      return decodeURIComponent(valueParts.join("="));
-    }
-  }
-  return null;
-}
-
-function getCsrfCookieName() {
-  const configured =
-    import.meta.env.VITE_SESSION_CSRF_COOKIE ?? import.meta.env.VITE_SESSION_CSRF_COOKIE_NAME;
-  if (typeof configured === "string" && configured.trim().length > 0) {
-    return configured.trim();
-  }
-  return "backend_app_csrf";
-}
 
 async function tryParseProblem(response: Response) {
   const contentType = response.headers.get("content-type") ?? "";

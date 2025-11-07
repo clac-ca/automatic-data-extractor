@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from fastapi.security import SecurityScopes
 from starlette.requests import Request
 
+from apps.api.app.settings import get_settings
 from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.auth.dependencies import require_csrf
 from apps.api.app.features.auth.service import AuthenticatedIdentity
@@ -16,6 +17,7 @@ from apps.api.app.features.users.models import User
 
 
 pytestmark = pytest.mark.asyncio
+SESSION_COOKIE = get_settings().session_cookie_name
 
 
 async def test_require_global_allows_authorised_user(app, seed_identity) -> None:
@@ -148,7 +150,7 @@ async def test_require_csrf_rejects_invalid_cookie(app, async_client, seed_ident
     request = Request({
         "type": "http",
         "method": "POST",
-        "headers": [(b"Cookie", f"backend_app_session={session_cookie}".encode())],
+        "headers": [(b"Cookie", f"{SESSION_COOKIE}={session_cookie}".encode())],
         "query_string": b"",
         "path": "/api/v1/documents",
     })
@@ -177,6 +179,6 @@ async def _login(client, email: str, password: str) -> str:
         json={"email": email, "password": password},
     )
     assert response.status_code == 200, response.text
-    token = client.cookies.get("backend_app_session")
+    token = client.cookies.get(SESSION_COOKIE)
     assert token
     return token
