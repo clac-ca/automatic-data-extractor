@@ -786,22 +786,6 @@
         ],
         "summary": "List all users (administrator only)",
         "operationId": "list_users_api_v1_users_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/UserSummary"
-                  },
-                  "type": "array",
-                  "title": "Response List Users Api V1 Users Get"
-                }
-              }
-            }
-          }
-        },
         "security": [
           {
             "HTTPBearer": []
@@ -812,7 +796,132 @@
           {
             "SessionCookie": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "include_total",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Total"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 128
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Active"
+            }
+          },
+          {
+            "name": "is_service_account",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Service Account"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "CSV; prefix '-' for DESC. Allowed: created_at, display_name, email, failed_login_count, id, is_active, is_service_account, last_login_at, updated_at. Example: -created_at,name",
+              "title": "Sort"
+            },
+            "description": "CSV; prefix '-' for DESC. Allowed: created_at, display_name, email, failed_login_count, id, is_active, is_service_account, last_login_at, updated_at. Example: -created_at,name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/roles": {
@@ -3443,260 +3552,37 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "status",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Filter by one or more document statuses.",
-              "title": "Status"
-            },
-            "description": "Filter by one or more document statuses.",
-            "example": [
-              "uploaded",
-              "processed"
-            ]
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
           },
           {
-            "name": "source",
+            "name": "page_size",
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Restrict results to the given document sources.",
-              "title": "Source"
-            },
-            "description": "Restrict results to the given document sources.",
-            "example": [
-              "manual_upload"
-            ]
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Page Size"
+            }
           },
           {
-            "name": "tag",
+            "name": "include_total",
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Return documents containing any of the provided tags.",
-              "title": "Tag"
-            },
-            "description": "Return documents containing any of the provided tags.",
-            "example": [
-              "finance",
-              "2024"
-            ]
-          },
-          {
-            "name": "uploader",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Identity shortcut; use `me` to resolve to the authenticated uploader.",
-              "title": "Uploader"
-            },
-            "description": "Identity shortcut; use `me` to resolve to the authenticated uploader.",
-            "example": "me"
-          },
-          {
-            "name": "uploader_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Filter by explicit uploader ULIDs (repeatable).",
-              "title": "Uploader Id"
-            },
-            "description": "Filter by explicit uploader ULIDs (repeatable).",
-            "example": [
-              "01H0H0H0H0H0H0H0H0H0H0H0H"
-            ]
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Substring search applied to document name or uploader metadata.",
-              "title": "Q"
-            },
-            "description": "Substring search applied to document name or uploader metadata.",
-            "example": "quarterly"
-          },
-          {
-            "name": "created_from",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Return documents created on/after this UTC timestamp.",
-              "title": "Created From"
-            },
-            "description": "Return documents created on/after this UTC timestamp.",
-            "example": "2024-01-01T00:00:00Z"
-          },
-          {
-            "name": "created_to",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Return documents created on/before this UTC timestamp.",
-              "title": "Created To"
-            },
-            "description": "Return documents created on/before this UTC timestamp.",
-            "example": "2024-01-31T23:59:59Z"
-          },
-          {
-            "name": "last_run_from",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Return documents with a last run on/after this UTC timestamp.",
-              "title": "Last Run From"
-            },
-            "description": "Return documents with a last run on/after this UTC timestamp.",
-            "example": "2024-02-01T00:00:00Z"
-          },
-          {
-            "name": "last_run_to",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Return documents with a last run on/before this UTC timestamp (inclusive).",
-              "title": "Last Run To"
-            },
-            "description": "Return documents with a last run on/before this UTC timestamp (inclusive).",
-            "example": "2024-02-29T23:59:59Z"
-          },
-          {
-            "name": "byte_size_min",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Only include documents at least this many bytes in size.",
-              "title": "Byte Size Min"
-            },
-            "description": "Only include documents at least this many bytes in size.",
-            "example": 1024
-          },
-          {
-            "name": "byte_size_max",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Only include documents at most this many bytes in size.",
-              "title": "Byte Size Max"
-            },
-            "description": "Only include documents at most this many bytes in size.",
-            "example": 1048576
+              "type": "boolean",
+              "default": false,
+              "title": "Include Total"
+            }
           },
           {
             "name": "sort",
@@ -3711,50 +3597,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Single-field sort directive (prefix with '-' for descending).",
+              "description": "CSV; prefix '-' for DESC. Allowed: byte_size, created_at, id, last_run_at, name, source, status. Example: -created_at,name",
               "title": "Sort"
             },
-            "description": "Single-field sort directive (prefix with '-' for descending).",
-            "example": "-created_at"
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number.",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number."
-          },
-          {
-            "name": "per_page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "description": "Maximum number of items to return per page (1-200).",
-              "default": 50,
-              "title": "Per Page"
-            },
-            "description": "Maximum number of items to return per page (1-200)."
-          },
-          {
-            "name": "include_total",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "description": "Include an exact total count alongside the current page.",
-              "default": false,
-              "title": "Include Total"
-            },
-            "description": "Include an exact total count alongside the current page."
+            "description": "CSV; prefix '-' for DESC. Allowed: byte_size, created_at, id, last_run_at, name, source, status. Example: -created_at,name"
           }
         ],
         "responses": {
@@ -4457,46 +4303,43 @@
               "$ref": "#/components/schemas/DocumentRecord"
             },
             "type": "array",
-            "title": "Items",
-            "description": "Documents returned for the requested page."
+            "title": "Items"
           },
           "page": {
             "type": "integer",
-            "minimum": 1.0,
-            "title": "Page",
-            "description": "1-based page number."
+            "title": "Page"
           },
-          "per_page": {
+          "page_size": {
             "type": "integer",
-            "maximum": 200.0,
-            "minimum": 1.0,
-            "title": "Per Page",
-            "description": "Number of items per page returned in this response."
+            "title": "Page Size"
           },
           "has_next": {
             "type": "boolean",
-            "title": "Has Next",
-            "description": "Whether another page exists after this one."
+            "title": "Has Next"
+          },
+          "has_previous": {
+            "type": "boolean",
+            "title": "Has Previous"
           },
           "total": {
             "anyOf": [
               {
-                "type": "integer",
-                "minimum": 0.0
+                "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Total",
-            "description": "Total number of matching records when requested."
+            "title": "Total"
           }
         },
         "type": "object",
         "required": [
+          "items",
           "page",
-          "per_page",
-          "has_next"
+          "page_size",
+          "has_next",
+          "has_previous"
         ],
         "title": "DocumentListResponse",
         "description": "Paginated envelope of document records."
@@ -5415,6 +5258,54 @@
         "title": "UploaderSummary",
         "description": "Minimal representation of the user who uploaded the document."
       },
+      "UserListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "has_next": {
+            "type": "boolean",
+            "title": "Has Next"
+          },
+          "has_previous": {
+            "type": "boolean",
+            "title": "Has Previous"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "has_next",
+          "has_previous"
+        ],
+        "title": "UserListResponse",
+        "description": "Paginated collection of users."
+      },
       "UserProfile": {
         "properties": {
           "user_id": {
@@ -5857,6 +5748,11 @@
       }
     }
   },
+  "servers": [
+    {
+      "url": "http://localhost:8000"
+    }
+  ],
   "security": [
     {
       "SessionCookie": []
