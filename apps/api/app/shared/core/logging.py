@@ -69,6 +69,10 @@ def setup_logging(settings: Settings) -> None:
     """Configure the root logger with JSON output."""
 
     root_logger = logging.getLogger()
+    if getattr(root_logger, "_ade_configured", False):
+        root_logger.setLevel(settings.logging_level.upper())
+        return
+
     handler = logging.StreamHandler()
     handler.setFormatter(JSONLogFormatter())
 
@@ -78,6 +82,8 @@ def setup_logging(settings: Settings) -> None:
     for noisy in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         logging.getLogger(noisy).handlers = []
         logging.getLogger(noisy).propagate = True
+
+    setattr(root_logger, "_ade_configured", True)
 
 
 def bind_request_context(correlation_id: str | None) -> None:

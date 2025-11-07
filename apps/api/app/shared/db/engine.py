@@ -8,13 +8,11 @@ from typing import Any
 
 from alembic import command
 from alembic.config import Config
-from apps.api.app.settings import PROJECT_ROOT, Settings, get_settings
+from apps.api.app.settings import Settings, get_settings
 from sqlalchemy import event
 from sqlalchemy.engine import URL, Connection, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool, StaticPool
-
-API_ROOT = (PROJECT_ROOT / "apps/api").resolve()
 
 _ENGINE: AsyncEngine | None = None
 _ENGINE_KEY: tuple[Any, ...] | None = None
@@ -130,18 +128,18 @@ def reset_database_state() -> None:
     reset_bootstrap_state()
 
 
-def _load_alembic_config() -> Config:
-    config_path = API_ROOT / "alembic.ini"
+def _load_alembic_config(settings: Settings) -> Config:
+    config_path = settings.alembic_ini_path
     if not config_path.exists():
         msg = f"Alembic configuration not found at {config_path}"
         raise FileNotFoundError(msg)
     config = Config(str(config_path))
-    config.set_main_option("script_location", str(API_ROOT / "migrations"))
+    config.set_main_option("script_location", str(settings.alembic_migrations_dir))
     return config
 
 
 def _upgrade_database(settings: Settings, connection: Connection | None = None) -> None:
-    config = _load_alembic_config()
+    config = _load_alembic_config(settings)
     config.set_main_option("sqlalchemy.url", render_sync_url(settings.database_dsn))
     if connection is not None:
         config.attributes["connection"] = connection
