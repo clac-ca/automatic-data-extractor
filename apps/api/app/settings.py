@@ -7,11 +7,12 @@ import json
 from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 from urllib.parse import urlparse
 
 from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings.sources import DotEnvSettingsSource, EnvSettingsSource
 
 # ---- Defaults ---------------------------------------------------------------
 
@@ -32,6 +33,8 @@ DEFAULT_SUBDIRS = {
     "jobs_dir": "jobs",
     "pip_cache_dir": "cache/pip",
 }
+
+_LENIENT_LIST_FIELDS = {"server_cors_origins", "oidc_scopes"}
 
 _UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 
@@ -121,6 +124,40 @@ def _resolve_path(value: Path | str | None, *, default: Path) -> Path:
 
 # ---- Settings ---------------------------------------------------------------
 
+class _LenientEnvSettingsSource(EnvSettingsSource):
+    """Environment source that preserves raw strings for list-like fields."""
+
+    lenient_fields: ClassVar[set[str]] = _LENIENT_LIST_FIELDS
+
+    def prepare_field_value(
+        self,
+        field_name: str,
+        field,
+        value: Any,
+        value_is_complex: bool,
+    ) -> Any:
+        if field_name in self.lenient_fields and isinstance(value, str):
+            return value
+        return super().prepare_field_value(field_name, field, value, value_is_complex)
+
+
+class _LenientDotEnvSettingsSource(DotEnvSettingsSource):
+    """Dotenv source that preserves raw strings for list-like fields."""
+
+    lenient_fields: ClassVar[set[str]] = _LENIENT_LIST_FIELDS
+
+    def prepare_field_value(
+        self,
+        field_name: str,
+        field,
+        value: Any,
+        value_is_complex: bool,
+    ) -> Any:
+        if field_name in self.lenient_fields and isinstance(value, str):
+            return value
+        return super().prepare_field_value(field_name, field, value, value_is_complex)
+
+
 class Settings(BaseSettings):
     """FastAPI settings loaded from ADE_* environment variables."""
 
@@ -129,7 +166,41 @@ class Settings(BaseSettings):
         env_prefix="ADE_",
         case_sensitive=False,
         extra="ignore",
+        env_ignore_empty=True,
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        env_source = _LenientEnvSettingsSource(
+            settings_cls,
+            case_sensitive=getattr(env_settings, "case_sensitive", None),
+            env_prefix=getattr(env_settings, "env_prefix", None),
+            env_nested_delimiter=getattr(env_settings, "env_nested_delimiter", None),
+            env_nested_max_split=getattr(env_settings, "env_nested_max_split", None),
+            env_ignore_empty=getattr(env_settings, "env_ignore_empty", None),
+            env_parse_none_str=getattr(env_settings, "env_parse_none_str", None),
+            env_parse_enums=getattr(env_settings, "env_parse_enums", None),
+        )
+        dotenv_source = _LenientDotEnvSettingsSource(
+            settings_cls,
+            env_file=getattr(dotenv_settings, "env_file", None),
+            env_file_encoding=getattr(dotenv_settings, "env_file_encoding", None),
+            case_sensitive=getattr(dotenv_settings, "case_sensitive", None),
+            env_prefix=getattr(dotenv_settings, "env_prefix", None),
+            env_nested_delimiter=getattr(dotenv_settings, "env_nested_delimiter", None),
+            env_nested_max_split=getattr(dotenv_settings, "env_nested_max_split", None),
+            env_ignore_empty=getattr(dotenv_settings, "env_ignore_empty", None),
+            env_parse_none_str=getattr(dotenv_settings, "env_parse_none_str", None),
+            env_parse_enums=getattr(dotenv_settings, "env_parse_enums", None),
+        )
+        return (init_settings, env_source, dotenv_source, file_secret_settings)
 
     # Core
     debug: bool = False
@@ -325,15 +396,19 @@ class Settings(BaseSettings):
             sqlite = (base / "db" / DEFAULT_DB_FILENAME).resolve()
             self.database_dsn = f"sqlite+aiosqlite:///{sqlite.as_posix()}"
 
+        oidc_config = {
+            "ADE_OIDC_CLIENT_ID": self.oidc_client_id,
+            "ADE_OIDC_CLIENT_SECRET": self.oidc_client_secret,
+            "ADE_OIDC_ISSUER": self.oidc_issuer,
+            "ADE_OIDC_REDIRECT_URL": self.oidc_redirect_url,
+        }
+        provided_oidc_values = [name for name, val in oidc_config.items() if val]
+
+        if not self.oidc_enabled and len(provided_oidc_values) == len(oidc_config):
+            self.oidc_enabled = True
+
         if self.oidc_enabled:
-            missing = [
-                name for name, val in {
-                    "ADE_OIDC_CLIENT_ID": self.oidc_client_id,
-                    "ADE_OIDC_CLIENT_SECRET": self.oidc_client_secret,
-                    "ADE_OIDC_ISSUER": self.oidc_issuer,
-                    "ADE_OIDC_REDIRECT_URL": self.oidc_redirect_url,
-                }.items() if not val
-            ]
+            missing = [name for name, val in oidc_config.items() if not val]
             if missing:
                 raise ValueError("OIDC enabled but missing: " + ", ".join(missing))
             if "openid" not in self.oidc_scopes:
@@ -342,11 +417,7 @@ class Settings(BaseSettings):
                 self.oidc_redirect_url = f"{self.server_public_url}{self.oidc_redirect_url}"
         else:
             # If disabled, discourage partial config that hints at a misconfigured env
-            provided = any([
-                self.oidc_client_id, self.oidc_client_secret,
-                self.oidc_issuer, self.oidc_redirect_url,
-            ])
-            if provided:
+            if provided_oidc_values:
                 raise ValueError("Set ADE_OIDC_ENABLED=true when supplying other OIDC settings")
 
         return self
@@ -363,13 +434,17 @@ class Settings(BaseSettings):
 
 
 @lru_cache(maxsize=1)
-def get_settings() -> Settings:
+def _build_settings() -> Settings:
     return Settings()
 
 
+def get_settings() -> Settings:
+    return _build_settings()
+
+
 def reload_settings() -> Settings:
-    get_settings.cache_clear()
-    return get_settings()
+    _build_settings.cache_clear()
+    return _build_settings()
 
 
 __all__ = [

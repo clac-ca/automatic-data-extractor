@@ -71,6 +71,7 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         pass
     yield
     try:
+        monkeypatch.undo()
         reload_settings()
     except ValidationError:
         pass
