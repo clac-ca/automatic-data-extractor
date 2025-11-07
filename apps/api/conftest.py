@@ -31,6 +31,7 @@ from apps.api.app.features.roles.service import (
 from apps.api.app.features.users.models import User, UserCredential
 from apps.api.app.features.workspaces.models import Workspace, WorkspaceMembership
 from apps.api.app.shared.core.lifecycles import ensure_runtime_dirs
+from apps.api.app.features.auth.dependencies import configure_auth_dependencies
 from apps.api.app.main import create_app
 
 
@@ -99,22 +100,30 @@ def app(_configure_database: None) -> FastAPI:
 def override_app_settings(app: FastAPI) -> Callable[..., Settings]:
     """Refresh application settings for a test case."""
 
-    original = app.state.settings
+    previous_override = app.dependency_overrides.get(get_settings)
 
     def _apply(**updates: Any) -> Settings:
         base = reload_settings()
         updated = base.model_copy(update=updates)
+        app.dependency_overrides[get_settings] = lambda: updated
         app.state.settings = updated
         app.state.safe_mode = bool(updated.safe_mode)
+        configure_auth_dependencies(settings=updated)
         ensure_runtime_dirs(updated)
         return updated
 
     yield _apply
 
-    app.state.settings = original
-    app.state.safe_mode = bool(original.safe_mode)
-    ensure_runtime_dirs(original)
-    reload_settings()
+    if previous_override is not None:
+        app.dependency_overrides[get_settings] = previous_override
+    else:
+        app.dependency_overrides.pop(get_settings, None)
+
+    restored = reload_settings()
+    app.state.settings = restored
+    app.state.safe_mode = bool(restored.safe_mode)
+    configure_auth_dependencies(settings=restored)
+    ensure_runtime_dirs(restored)
 
 
 @pytest_asyncio.fixture()
