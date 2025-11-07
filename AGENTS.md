@@ -1,17 +1,32 @@
 # AGENTS.md
-## 🧱 Project Overview
+ADE is a lightweight, configurable engine for normalizing Excel/CSV files at scale.
 
-## Repository and Runtime Layout
+## Monorepo overview
 
-The ADE monorepo brings together four cooperating layers:
+* **Frontend** — React (Vite) SPA to author config packages and trigger builds/runs.
+* **Backend** — FastAPI service that stores metadata, builds isolated Python environments, and orchestrates jobs.
+* **Engine** — Installable `ade_engine` package that executes detectors/hooks and writes outputs.
+* **Config packages** — Installable `ade_config` projects you author; versioned and built per workspace.
 
-| Layer                             | Description                                                                                                        |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Frontend (React Router)**       | Web app where users create and manage config packages, edit code, and trigger builds/runs.                         |
-| **Backend (FastAPI)**             | API service that stores metadata, builds isolated Python environments, and orchestrates jobs.                      |
-| **Engine (`ade_engine`)**         | Python runtime executed in a worker; reads spreadsheets, applies detectors/hooks, and outputs structured results.  |
-| **Config Package (`ade_config`)** | Defines rules that teach ADE how to detect, map, transform, and validate data. Versioned for testing and rollback. |
+## ⚡ Available Tools
 
+> You can use either ade <script> or npm run <script> — both are synced.
+
+```bash
+npm run setup              # Install deps (.venv + web node_modules)
+npm run dev                # FastAPI + React dev servers
+npm run test               # Run all tests
+npm run build              # Build SPA → apps/api/app/web/static
+npm run start              # Serve API + SPA
+npm run openapi-typescript # Generate TS types from OpenAPI
+npm run routes:frontend    # List React Router routes
+npm run routes:backend     # List FastAPI routes
+npm run workpackage        # Manage work packages (CLI JSON interface)
+npm run clean:force        # Force delete build/venvs
+npm run reset:force        # Clean + setup fresh
+npm run ci                 # Full CI pipeline (lint, test, build)
+
+```
 
 ```text
 automatic-data-extractor/
@@ -123,28 +138,6 @@ ${ADE_DATA_DIR}/
 ├─ db/app.sqlite                     # SQLite (dev) or DSN (prod)
 ├─ cache/pip/                        # pip cache (safe to delete)
 └─ logs/                             # Central service logs
-```
-
----
-
-## ⚡ Available Tools
-
-> You can use either ade <script> or npm run <script> — both are synced.
-
-```bash
-npm run setup              # Install deps (.venv + web node_modules)
-npm run dev                # FastAPI + React dev servers
-npm run test               # Run all tests
-npm run build              # Build SPA → apps/api/app/web/static
-npm run start              # Serve API + SPA
-npm run openapi-typescript # Generate TS types from OpenAPI
-npm run routes:frontend    # List React Router routes
-npm run routes:backend     # List FastAPI routes
-npm run workpackage        # Manage work packages (CLI JSON interface)
-npm run clean:force        # Force delete build/venvs
-npm run reset:force        # Clean + setup fresh
-npm run ci                 # Full CI pipeline (lint, test, build)
-
 ```
 
 ---

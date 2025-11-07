@@ -13,7 +13,14 @@ from typing import Any
 from urllib.parse import urlparse
 
 from fastapi import Request
-from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    Field,
+    SecretStr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ---------------------------------------------------------------------------
@@ -23,7 +30,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 DEFAULT_DATA_DIR = (PROJECT_ROOT / "data").resolve()
 DEFAULT_DOCUMENTS_SUBDIR = "documents"
-DEFAULT_CONFIGS_SUBDIR = "configs"
+DEFAULT_CONFIGS_SUBDIR = "config_packages"
+DEFAULT_VENVS_SUBDIR = "venvs"
+DEFAULT_JOBS_SUBDIR = "jobs"
+DEFAULT_CACHE_SUBDIR = "cache"
+DEFAULT_PIP_CACHE_SUBDIR = "pip"
 DEFAULT_DATABASE_SUBDIR = "db"
 DEFAULT_DATABASE_FILENAME = "api.sqlite"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
@@ -178,9 +189,30 @@ class Settings(BaseSettings):
     server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
 
     # Storage --------------------------------------------------------------------
-    storage_data_dir: Path = Field(default=DEFAULT_DATA_DIR)
-    storage_documents_dir: Path | None = None
-    storage_configs_dir: Path | None = None
+    storage_data_dir: Path = Field(
+        default=DEFAULT_DATA_DIR,
+        validation_alias=AliasChoices("DATA_DIR", "STORAGE_DATA_DIR"),
+    )
+    storage_documents_dir: Path | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DOCUMENTS_DIR", "STORAGE_DOCUMENTS_DIR"),
+    )
+    storage_configs_dir: Path | None = Field(
+        default=None,
+        validation_alias=AliasChoices("CONFIGS_DIR", "STORAGE_CONFIGS_DIR"),
+    )
+    storage_venvs_dir: Path | None = Field(
+        default=None,
+        validation_alias=AliasChoices("VENVS_DIR", "STORAGE_VENVS_DIR"),
+    )
+    storage_jobs_dir: Path | None = Field(
+        default=None,
+        validation_alias=AliasChoices("JOBS_DIR", "STORAGE_JOBS_DIR"),
+    )
+    storage_pip_cache_dir: Path | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PIP_CACHE_DIR", "STORAGE_PIP_CACHE_DIR"),
+    )
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
     secret_key: SecretStr = Field(
@@ -274,18 +306,16 @@ class Settings(BaseSettings):
             return value
         return Path(str(value).strip())
 
-    @field_validator("storage_documents_dir", mode="before")
+    @field_validator(
+        "storage_documents_dir",
+        "storage_configs_dir",
+        "storage_venvs_dir",
+        "storage_jobs_dir",
+        "storage_pip_cache_dir",
+        mode="before",
+    )
     @classmethod
-    def _coerce_documents_dir(cls, value: Any) -> Path | None:
-        if value in (None, ""):
-            return None
-        if isinstance(value, Path):
-            return value
-        return Path(str(value).strip())
-
-    @field_validator("storage_configs_dir", mode="before")
-    @classmethod
-    def _coerce_configs_dir(cls, value: Any) -> Path | None:
+    def _coerce_optional_dirs(cls, value: Any) -> Path | None:
         if value in (None, ""):
             return None
         if isinstance(value, Path):
@@ -456,6 +486,24 @@ class Settings(BaseSettings):
             configs_dir = data_dir / DEFAULT_CONFIGS_SUBDIR
         configs_dir = _normalise_path(configs_dir, base=data_dir)
         self.storage_configs_dir = configs_dir
+
+        venvs_dir = self.storage_venvs_dir
+        if venvs_dir is None:
+            venvs_dir = data_dir / DEFAULT_VENVS_SUBDIR
+        venvs_dir = _normalise_path(venvs_dir, base=data_dir)
+        self.storage_venvs_dir = venvs_dir
+
+        jobs_dir = self.storage_jobs_dir
+        if jobs_dir is None:
+            jobs_dir = data_dir / DEFAULT_JOBS_SUBDIR
+        jobs_dir = _normalise_path(jobs_dir, base=data_dir)
+        self.storage_jobs_dir = jobs_dir
+
+        pip_cache_dir = self.storage_pip_cache_dir
+        if pip_cache_dir is None:
+            pip_cache_dir = data_dir / DEFAULT_CACHE_SUBDIR / DEFAULT_PIP_CACHE_SUBDIR
+        pip_cache_dir = _normalise_path(pip_cache_dir, base=data_dir)
+        self.storage_pip_cache_dir = pip_cache_dir
 
         if not self.database_dsn:
             sqlite_path = (data_dir / DEFAULT_DATABASE_SUBDIR / DEFAULT_DATABASE_FILENAME).resolve()
