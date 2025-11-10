@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE_CONFIG = REPO_ROOT / "templates" / "config-packages" / "default"
+TEMPLATE_CONFIG = REPO_ROOT / "apps" / "api" / "app" / "templates" / "config_packages" / "default"
 LOCAL_ENGINE = REPO_ROOT / "packages" / "ade-engine"
 
 

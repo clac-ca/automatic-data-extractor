@@ -35,6 +35,17 @@ automatic-data-extractor/
 │  │  │  │  ├─ dependency.py               # shared FastAPI dependencies (auth, RBAC, services)
 │  │  │  ├─ web/static/                    # ← SPA build copied here at image build time (DO NOT COMMIT)
 │  │  │  ├─ templates/                     # optional: server-rendered templates/emails
+│  │  │  │  └─ config_packages/            # bundled starter ADE config packages
+│  │  │  │     ├─ default/
+│  │  │  │     │  ├─ pyproject.toml
+│  │  │  │     │  └─ src/ade_config/
+│  │  │  │     │     ├─ manifest.json               # read via importlib.resources
+│  │  │  │     │     ├─ column_detectors/           # detect → transform (opt) → validate (opt)
+│  │  │  │     │     ├─ row_detectors/              # header/data row heuristics
+│  │  │  │     │     └─ hooks/                      # on_job_start.py/after_mapping.py/before_save.py/on_job_end.py
+│  │  │  │     └─ <other-template>/
+│  │  │  │        ├─ manifest.json
+│  │  │  │        └─ src/ade_config/...
 │  │  │  └─ main.py                        # mounts: /api routers; serves / from ./web/static
 │  │  ├─ migrations/                       # Alembic migration scripts
 │  │  ├─ alembic.ini                       # Alembic config
@@ -55,19 +66,6 @@ automatic-data-extractor/
 │     ├─ src/ade_engine/                   # engine runtime, IO, pipeline, hooks integration
 │     └─ tests/                            # engine unit tests
 │
-├─ templates/                              # Starter content templates (user-facing seeds)
-│  └─ config-packages/
-│     ├─ default/
-│     │  ├─ pyproject.toml
-│     │  └─ src/ade_config/
-│     │     ├─ manifest.json               # read via importlib.resources
-│     │     ├─ column_detectors/           # detect → transform (opt) → validate (opt)
-│     │     ├─ row_detectors/              # header/data row heuristics
-│     │     └─ hooks/                      # on_job_start.py/after_mapping.py/before_save.py/on_job_end.py
-│     └─ <other-template>/
-│        ├─ manifest.json
-│        └─ src/ade_config/...
-│
 ├─ examples/                                # sample inputs/outputs for docs/tests
 ├─ docs/                                    # Developer Guide, HOWTOs, operations runbooks
 ├─ scripts/                                 # helper scripts (seed data, local tools, etc.)
@@ -84,6 +82,8 @@ automatic-data-extractor/
 ├─ .gitignore
 └─ .github/workflows/                       # CI: lint, test, build, publish
 ```
+
+Bundled ADE config templates now live under `apps/api/app/templates/config_packages/` and ship with the backend package.
 
 Everything ADE produces (config_packages, venvs, jobs, logs, cache, etc.) is persisted under `./data`. Individual subdirectories can be overridden via environment variables (`ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_JOBS_DIR`, etc.), but by default they are organized as subfolders under the data root. In production, this folder is typically mounted to an external file share so it persists across restarts.
 

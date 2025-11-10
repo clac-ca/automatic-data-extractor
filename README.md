@@ -35,11 +35,10 @@ Under the hood, each run executes your **ADE Config** (detectors, transforms, va
 automatic-data-extractor/
 ├─ apps/
 │  ├─ api/                # FastAPI service (serves /api + static SPA)
+│  │  └─ app/templates/config_packages/    # Bundled starter ADE config packages
 │  └─ web/                # React (Vite) SPA
 ├─ packages/
 │  └─ ade-engine/         # Runtime: ade_engine
-├─ templates/
-│  └─ config-packages/    # Starter config packages
 ├─ examples/              # Sample inputs/outputs
 ├─ docs/                  # Developer guide, HOWTOs, runbooks
 ├─ infra/
@@ -50,6 +49,8 @@ automatic-data-extractor/
 ```
 
 </details>
+
+Bundled ADE config templates now live under `apps/api/app/templates/config_packages/` inside the backend package.
 
 Everything ADE produces (documents, configs, venvs, jobs, cache, …) lands under `./data/...` by default. Each storage path (`ADE_DOCUMENTS_DIR`, `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_JOBS_DIR`, `ADE_PIP_CACHE_DIR`) can point anywhere so you can mount different volumes as needed.
 

@@ -45,6 +45,16 @@ automatic-data-extractor/
 │  │  │  │  ├─ dependency.py               # Global FastAPI dependencies (auth, RBAC, services)
 │  │  │  ├─ web/static/                    # ← Built SPA copied here at image build time (DO NOT COMMIT)
 │  │  │  ├─ templates/                     # Optional: Jinja2 emails/server-rendered templates
+│  │  │  │  └─ config_packages/            # Bundled ADE config package templates
+│  │  │  │     ├─ default/
+│  │  │  │     │  ├─ template.manifest.json
+│  │  │  │     │  └─ src/ade_config/                # Detectors/hooks + runtime manifest/env
+│  │  │  │     │     ├─ manifest.json
+│  │  │  │     │     ├─ config.env
+│  │  │  │     │     ├─ column_detectors/
+│  │  │  │     │     ├─ row_detectors/
+│  │  │  │     │     └─ hooks/
+│  │  │  │     └─ <other-template>/...
 │  │  │  └─ main.py                        # Mounts /api routers; serves SPA from ./web/static
 │  │  ├─ migrations/                       # Alembic migrations
 │  │  ├─ alembic.ini                       # Alembic config
@@ -64,18 +74,6 @@ automatic-data-extractor/
 │     ├─ pyproject.toml
 │     ├─ src/ade_engine/                   # Engine runtime (I/O, pipeline, hooks)
 │     └─ tests/                            # Engine unit tests
-│
-├─ templates/                              # Starter templates (user-facing seeds)
-│  └─ config-packages/
-│     ├─ default/
-│     │  ├─ template.manifest.json         # Catalog metadata
-│     │  └─ src/ade_config/                # Detectors/hooks + runtime manifest/env
-│     │     ├─ manifest.json
-│     │     ├─ config.env
-│     │     ├─ column_detectors/
-│     │     ├─ row_detectors/
-│     │     └─ hooks/
-│     └─ <other-template>/...
 │
 ├─ specs/                                   # JSON Schemas & formal definitions
 │  ├─ config-manifest.v1.json
