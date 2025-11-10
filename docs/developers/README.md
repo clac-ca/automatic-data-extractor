@@ -242,11 +242,16 @@ Once the configuration environment is built, ADE can process real spreadsheets s
 * The engine streams rows from the uploaded file through your detectors, transforms, and hooks, using your logic to identify tables, map columns, and clean or validate data.
 * The result is a fully normalized Excel workbook, written along with a complete audit trail.
 
-**Worker command**
+**Manifest check (current CLI)**
 
 ```bash
-${ADE_VENVS_DIR}/<config_id>/bin/python -I -B -m ade_engine.worker <job_id>
+${ADE_VENVS_DIR}/<config_id>/bin/python -I -B -m ade_engine
 ```
+
+This placeholder command prints the engine version together with the installed
+`ade_config` manifest so you can verify a build without the UI. The production
+worker entry point will eventually accept a `job_id` argument once the job
+service orchestrator is in place.
 
 All results are written atomically inside the job folder so you always have a consistent, inspectable record:
 
@@ -294,13 +299,13 @@ data/.venv/<config_id>/bin/pip install packages/ade-engine/
 data/.venv/<config_id>/bin/pip install data/config_packages/<config_id>/
 data/.venv/<config_id>/bin/pip freeze > data/.venv/<config_id>/ade-runtime/packages.txt
 
-# 2) Seed a job and run it
-mkdir -p data/jobs/<job_id>/input
-cp examples/inputs/sample.xlsx data/jobs/<job_id>/input/
-data/.venv/<config_id>/bin/python -I -B -m ade_engine.worker <job_id>
+# 2) Smoke-test the installed manifest (placeholder runtime)
+data/.venv/<config_id>/bin/python -I -B -m ade_engine
 ```
 
-When the worker exits, `logs/artifact.json` explains each decision and its supporting scores, `output.xlsx` contains the cleaned workbook, and `logs/events.ndjson` shows a timestamped trail of the run.
+The CLI prints the ADE engine version plus the packaged `ade_config` manifest.
+The worker command that accepts `job_id` will replace this once the full job
+orchestrator lands.
 
 ## Troubleshooting and Reproducibility
 

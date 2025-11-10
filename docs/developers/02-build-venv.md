@@ -179,6 +179,11 @@ ${ADE_VENVS_DIR}/<workspace_id>/<config_id>/<build_id>/bin/python \
   -I -B -m ade_engine.worker <job_id>
 ```
 
+> This work package describes the production worker entry point. The current repo
+> ships a placeholder CLI exposed via `python -m ade_engine`, which prints the
+> installed manifest so you can smoke-test a build until the job service is wired
+> up.
+
 Jobs never install packages; they always run inside a verified venv.
 The job record stores the `build_id` used, for audit and reproducibility.
 

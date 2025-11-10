@@ -120,9 +120,13 @@ Use the UI to create a config package, **Build**, then **Run** a job with a file
 If you already have a **built config** (from Option 1/2), you can reproduce a job from the command line using the frozen environment:
 
 ```bash
-# Worker command (run inside the config's venv)
-${ADE_VENVS_DIR}/<config_id>/bin/python -I -B -m ade_engine.worker <job_id>
+# Inspect the installed config manifest (run inside the config's venv)
+${ADE_VENVS_DIR}/<config_id>/bin/python -I -B -m ade_engine
 ```
+
+> The placeholder CLI prints the engine version and config manifest so you can
+> confirm a build succeeded. The long‑running worker entry point (which will
+> accept a `job_id`) lands once the job service is wired up.
 
 Job folders are self‑contained:
 
