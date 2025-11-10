@@ -22,7 +22,6 @@ automatic-data-extractor/
 ├─ apps/                                   # Deployable applications (things you run/ship)
 │  ├─ api/                                 # FastAPI service (serves /api + static SPA)
 │  │  ├─ app/
-│  │  │  ├─ api/                           # exception handlers + FastAPI glue
 │  │  │  ├─ features/                      # domain-first modules; each owns its router/service/repo/schemas
 │  │  │  │  ├─ auth/
 │  │  │  │  │  ├─ router.py                # routes for this feature (mounted by api/router.py)
