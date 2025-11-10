@@ -6,13 +6,15 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Security, status
 
-from apps.api.app.features.auth.dependencies import require_authenticated
-from apps.api.app.features.roles.dependencies import require_global
+from apps.api.app.shared.dependency import (
+    get_users_service,
+    require_authenticated,
+    require_global,
+)
 from apps.api.app.shared.pagination import PageParams
 from apps.api.app.shared.sorting import make_sort_dependency
 from apps.api.app.shared.types import OrderBy
 
-from .dependencies import get_users_service
 from .filters import UserFilters
 from .models import User
 from .schemas import UserListResponse, UserProfile

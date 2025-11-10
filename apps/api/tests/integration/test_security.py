@@ -9,9 +9,9 @@ from starlette.requests import Request
 
 from apps.api.app.settings import get_settings
 from apps.api.app.shared.db.session import get_sessionmaker
-from apps.api.app.features.auth.dependencies import require_csrf
+from apps.api.app.shared.dependency import require_csrf
 from apps.api.app.features.auth.service import AuthenticatedIdentity
-from apps.api.app.features.roles.dependencies import require_global, require_workspace
+from apps.api.app.shared.dependency import require_global, require_workspace
 from apps.api.app.features.roles.service import ensure_user_principal
 from apps.api.app.features.users.models import User
 

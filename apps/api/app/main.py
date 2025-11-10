@@ -6,20 +6,20 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import APIRouter, FastAPI, HTTPException, Request, status
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .api import register_exception_handlers
-from .api.v1 import router as api_router
-from .features.auth.dependencies import configure_auth_dependencies
+from .shared.dependency import configure_auth_dependencies
 from .settings import Settings, get_settings
 from .shared.core.lifecycles import create_application_lifespan
 from .shared.core.logging import setup_logging
 from .shared.core.middleware import register_middleware
 
 API_PREFIX = "/api"
+API_VERSION_PREFIX = "/v1"
 SPA_CACHE_HEADERS = {"Cache-Control": "no-cache"}
 logger = logging.getLogger(__name__)
 
@@ -87,6 +87,7 @@ def _mount_static(app: FastAPI, *, web_static_dir: Path, spa_index: Path) -> Non
 
 
 def _register_routes(app: FastAPI, *, spa_index: Path) -> None:
+    api_router = _build_api_router()
     app.include_router(api_router, prefix=API_PREFIX)
 
     @app.get("/{full_path:path}", include_in_schema=False)
@@ -166,6 +167,28 @@ def _configure_openapi(app: FastAPI, settings: Settings) -> None:
 def _wants_html(request: Request) -> bool:
     accept = request.headers.get("accept", "")
     return "text/html" in accept.lower()
+
+
+def _build_api_router() -> APIRouter:
+    """Compose the versioned API router from feature modules."""
+
+    from .features.auth.router import router as auth_router
+    from .features.auth.router import setup_router
+    from .features.documents.router import router as documents_router
+    from .features.health.router import router as health_router
+    from .features.roles.router import router as roles_router
+    from .features.users.router import router as users_router
+    from .features.workspaces.router import router as workspaces_router
+
+    router = APIRouter(prefix=API_VERSION_PREFIX)
+    router.include_router(health_router, prefix="/health", tags=["health"])
+    router.include_router(setup_router)
+    router.include_router(auth_router)
+    router.include_router(users_router)
+    router.include_router(roles_router)
+    router.include_router(workspaces_router)
+    router.include_router(documents_router)
+    return router
 
 
 __all__ = [

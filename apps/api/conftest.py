@@ -31,7 +31,7 @@ from apps.api.app.features.roles.service import (
 from apps.api.app.features.users.models import User, UserCredential
 from apps.api.app.features.workspaces.models import Workspace, WorkspaceMembership
 from apps.api.app.shared.core.lifecycles import ensure_runtime_dirs
-from apps.api.app.features.auth.dependencies import configure_auth_dependencies
+from apps.api.app.shared.dependency import configure_auth_dependencies
 from apps.api.app.main import create_app
 
 
