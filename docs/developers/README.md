@@ -3,7 +3,7 @@
 ADE turns messy spreadsheets into consistent, auditable workbooks through a simple, repeatable flow:
 
 1. **Config** — define detection, mapping, and transformation rules ([`01-config-packages.md`](./01-config-packages.md))
-2. **Build** — set up a dedicated virtual environment (`venvs/<config_id>/`) with `ade_engine` and your `ade_config` installed
+2. **Build** — set up a dedicated virtual environment (`.venv/<config_id>/`) with `ade_engine` and your `ade_config` installed
 3. **Run** — use that frozen environment to process one or more input files deterministically
 
 At job runtime, the **ADE Engine** and your versioned **ADE Config** are installed in an isolated virtual environment (venv) and produce a normalized Excel workbook.
@@ -85,28 +85,23 @@ automatic-data-extractor/
 └─ .github/workflows/                       # CI: lint, test, build, publish
 ```
 
-Everything ADE produces (config_packages, venvs, jobs, logs, cache, etc..) is persisted under `ADE_DATA_DIR` (default `./data`). In production, this folder is typically mounted to an external file share so it persists across restarts.
+Everything ADE produces (config_packages, venvs, jobs, logs, cache, etc.) is persisted under `./data`. Individual subdirectories can be overridden via environment variables (`ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_JOBS_DIR`, etc.), but by default they are organized as subfolders under the data root. In production, this folder is typically mounted to an external file share so it persists across restarts.
 
 ```text
-${ADE_DATA_DIR}/
+./data/
 ├─ workspaces/
 │  └─ <workspace_id>/
 │     ├─ config_packages/           # GUI-managed installable config projects (source of truth)
 │     │  └─ <config_id>/
 │     │     ├─ pyproject.toml       # Distribution metadata (ade-config)
-│     │     ├─ requirements.txt     # Optional overlay pins (editable in GUI)
 │     │     └─ src/ade_config/
 │     │        ├─ column_detectors/ # detect → transform (opt) → validate (opt)
 │     │        ├─ row_detectors/    # header/data row heuristics
 │     │        ├─ hooks/            # on_job_start/after_mapping/before_save/on_job_end
 │     │        ├─ manifest.json     # read via importlib.resources
-│     │        └─ config.env        # optional env vars
-│     ├─ venvs/                     # One Python virtualenv per config_id
+│     ├─ .venv/                     # One Python virtualenv per config_id
 │     │  └─ <config_id>/
 │     │     ├─ bin/python
-│     │     ├─ ade-runtime/
-│     │     │  ├─ packages.txt      # pip freeze
-│     │     │  └─ build.json        # {config_version, engine_version, python_version, built_at}
 │     │     └─ <site-packages>/
 │     │        ├─ ade_engine/...    # Installed ADE engine
 │     │        └─ ade_config/...    # Installed config package
@@ -204,7 +199,7 @@ Each hook receives structured context objects (e.g., `job`, `table`, `book`) and
 ### Example Config Package Layout
 
 ```text
-${ADE_DATA_DIR}/                                          # Root folder for all ADE state (default: ./data)
+./data/                                                  # Default root for ADE state
 ├─ config_packages/                                       # Editable config packages you author in the UI (source of truth)
 │  └─ <config_id>/                                        # One folder per published config (immutable once published)
 │     ├─ manifest.json                                    # Config manifest: metadata, defaults, entrypoints
@@ -230,7 +225,7 @@ Click **Build** in the editor to lock your configuration into a self‑contained
 
 Behind the scenes ADE:
 
-1. Creates a fresh virtual environment at `venvs/<config_id>/` using Python’s built‑in `venv`.
+1. Creates a fresh virtual environment at `.venv/<config_id>/` using Python’s built‑in `venv`.
 2. Installs the custom python **`ade_engine`** (the runtime that executes jobs) and your custom configured **`ade_config`** (your rules created in step 1).
    If you declared dependencies in the config package `pyproject.toml`, those are installed here as well.
 
@@ -248,7 +243,7 @@ Once the configuration environment is built, ADE can process real spreadsheets s
 **Worker command**
 
 ```bash
-${ADE_DATA_DIR}/venvs/<config_id>/bin/python -I -B -m ade_engine.worker <job_id>
+${ADE_VENVS_DIR}/<config_id>/bin/python -I -B -m ade_engine.worker <job_id>
 ```
 
 All results are written atomically inside the job folder so you always have a consistent, inspectable record:
@@ -270,11 +265,11 @@ ADE is configured via environment variables so it remains simple and portable. D
 
 | Variable                  | Default                         | What it controls                                            |
 | ------------------------- | ------------------------------- | ----------------------------------------------------------- |
-| `ADE_DATA_DIR`            | `./data`                        | Root directory for all ADE state                            |
-| `ADE_CONFIGS_DIR`         | `$ADE_DATA_DIR/config_packages` | Where GUI‑managed, installable config projects live         |
-| `ADE_VENVS_DIR`           | `$ADE_DATA_DIR/venvs`           | Builds environments (one per `config_id`)                   |
-| `ADE_JOBS_DIR`            | `$ADE_DATA_DIR/jobs`            | Per‑job working directories                                 |
-| `ADE_PIP_CACHE_DIR`       | `$ADE_DATA_DIR/cache/pip`       | pip cache for wheels/sdists (speeds up building)            |
+| `ADE_DOCUMENTS_DIR`       | `./data/documents`              | Uploaded files + generated artifacts                        |
+| `ADE_CONFIGS_DIR`         | `./data/config_packages`        | Where GUI‑managed, installable config projects live         |
+| `ADE_VENVS_DIR`           | `./data/.venv`                  | Builds environments (one per `config_id`)                   |
+| `ADE_JOBS_DIR`            | `./data/jobs`                   | Per‑job working directories                                 |
+| `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`              | pip cache for wheels/sdists (speeds up building)            |
 | `ADE_MAX_CONCURRENCY`     | `2`                             | Backend dispatcher parallelism                              |
 | `ADE_QUEUE_SIZE`          | `10`                            | Max enqueued jobs before the API returns 429                |
 | `ADE_JOB_TIMEOUT_SECONDS` | `300`                           | Parent‑enforced wall‑clock timeout for a worker             |
@@ -292,15 +287,15 @@ You can exercise the complete path without the frontend. Copy the template to cr
 
 ```bash
 # 1) Create a per-config virtual environment and install engine + config (production installs)
-python -m venv data/venvs/<config_id>
-data/venvs/<config_id>/bin/pip install packages/ade-engine/
-data/venvs/<config_id>/bin/pip install data/config_packages/<config_id>/
-data/venvs/<config_id>/bin/pip freeze > data/venvs/<config_id>/ade-runtime/packages.txt
+python -m venv data/.venv/<config_id>
+data/.venv/<config_id>/bin/pip install packages/ade-engine/
+data/.venv/<config_id>/bin/pip install data/config_packages/<config_id>/
+data/.venv/<config_id>/bin/pip freeze > data/.venv/<config_id>/ade-runtime/packages.txt
 
 # 2) Seed a job and run it
 mkdir -p data/jobs/<job_id>/input
 cp examples/inputs/sample.xlsx data/jobs/<job_id>/input/
-data/venvs/<config_id>/bin/python -I -B -m ade_engine.worker <job_id>
+data/.venv/<config_id>/bin/python -I -B -m ade_engine.worker <job_id>
 ```
 
 When the worker exits, `logs/artifact.json` explains each decision and its supporting scores, `output.xlsx` contains the cleaned workbook, and `logs/events.ndjson` shows a timestamped trail of the run.
@@ -310,7 +305,7 @@ When the worker exits, `logs/artifact.json` explains each decision and its suppo
 If a build fails, re‑run the build action and check `packages.txt` to see the resolved dependency set. If imports fail inside the worker, verify that `ade_engine` and `ade_config` exist in the venv’s `site‑packages` and that this command succeeds:
 
 ```bash
-data/venvs/<config_id>/bin/python -I -B -c "import ade_engine, ade_config; print('ok')"
+data/.venv/<config_id>/bin/python -I -B -c "import ade_engine, ade_config; print('ok')"
 ```
 
 If mapping results look unexpected, open `artifact.json`; it records the winning scores and the rules that contributed to each decision. Performance issues usually trace back to heavy work in detectors; prefer sampling in detectors, move heavier cleanup into transforms, and keep validators light. Because every configuration has its own environment, installs are isolated; if you suspect a dependency clash, run `pip check` in the venv to diagnose.

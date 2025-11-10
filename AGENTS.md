@@ -22,7 +22,7 @@ npm run openapi-typescript # Generate TS types from OpenAPI
 npm run routes:frontend    # List React Router routes
 npm run routes:backend     # List FastAPI routes
 npm run workpackage        # Manage work packages (CLI JSON interface)
-npm run clean:force        # Force delete build/venvs
+npm run clean:force        # Force delete build/.venv
 npm run reset:force        # Clean + setup fresh
 npm run ci                 # Full CI pipeline (lint, test, build)
 
@@ -99,10 +99,10 @@ automatic-data-extractor/
 └─ .github/workflows/                       # CI (lint, test, build, publish)
 ```
 
-Everything ADE produces (config_packages, venvs, jobs, logs, cache, etc..) is persisted under `ADE_DATA_DIR` (default `./data`).
+Everything ADE produces (config_packages, venvs, jobs, logs, cache, etc..) is persisted under `./data/...` by default. Override `ADE_DOCUMENTS_DIR`, `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_JOBS_DIR`, or `ADE_PIP_CACHE_DIR` to relocate any storage area.
 
 ```text
-${ADE_DATA_DIR}/
+./data/
 ├─ workspaces/
 │  └─ <workspace_id>/
 │     ├─ config_packages/           # Source-of-truth configs (GUI-managed)
@@ -115,7 +115,7 @@ ${ADE_DATA_DIR}/
 │     │        ├─ hooks/
 │     │        ├─ manifest.json
 │     │        └─ config.env
-│     ├─ venvs/                     # One Python venv per config
+│     ├─ .venv/                     # One Python venv per config
 │     │  └─ <config_id>/
 │     │     ├─ bin/python
 │     │     ├─ ade-runtime/

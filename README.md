@@ -51,7 +51,7 @@ automatic-data-extractor/
 
 </details>
 
-Everything ADE produces (configs, venvs, jobs, logs, cache, …) lives under `ADE_DATA_DIR` (default `./data`). In production, this folder is typically mounted to an external file share so it persists across restarts.
+Everything ADE produces (documents, configs, venvs, jobs, cache, …) lands under `./data/...` by default. Each storage path (`ADE_DOCUMENTS_DIR`, `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_JOBS_DIR`, `ADE_PIP_CACHE_DIR`) can point anywhere so you can mount different volumes as needed.
 
 ---
 
@@ -121,13 +121,13 @@ If you already have a **built config** (from Option 1/2), you can reproduce a jo
 
 ```bash
 # Worker command (run inside the config's venv)
-${ADE_DATA_DIR}/venvs/<config_id>/bin/python -I -B -m ade_engine.worker <job_id>
+${ADE_VENVS_DIR}/<config_id>/bin/python -I -B -m ade_engine.worker <job_id>
 ```
 
 Job folders are self‑contained:
 
 ```
-${ADE_DATA_DIR}/jobs/<job_id>/
+${ADE_JOBS_DIR}/<job_id>/
   input/      # uploaded files
   output/     # output.xlsx (normalized workbook)
   logs/
@@ -140,7 +140,7 @@ ${ADE_DATA_DIR}/jobs/<job_id>/
 ## Concepts you’ll see in the UI
 
 * **Config package (`ade_config`)** — your Python package that defines detectors, transforms, validators, and lifecycle hooks.
-* **Build** — creates a dedicated virtualenv at `venvs/<config_id>/` and installs `ade_engine` + your `ade_config` (+ declared deps).
+* **Build** — creates a dedicated virtualenv at `.venv/<config_id>/` and installs `ade_engine` + your `ade_config` (+ declared deps).
 * **Run** — processes inputs using that frozen environment and writes `output.xlsx` + `artifact.json`.
 
 > Config packages are versioned so you can draft, test, roll back, and extend safely.
@@ -156,11 +156,11 @@ ADE is configured via environment variables; sensible defaults work for local us
 
 | Variable                  | Default                         | Purpose                                                   |
 | ------------------------- | ------------------------------- | --------------------------------------------------------- |
-| `ADE_DATA_DIR`            | `./data`                        | Root for all ADE state                                    |
-| `ADE_CONFIGS_DIR`         | `$ADE_DATA_DIR/config_packages` | Where installable config projects live                    |
-| `ADE_VENVS_DIR`           | `$ADE_DATA_DIR/venvs`           | One Python virtualenv per `config_id`                     |
-| `ADE_JOBS_DIR`            | `$ADE_DATA_DIR/jobs`            | Per‑job working directories                               |
-| `ADE_PIP_CACHE_DIR`       | `$ADE_DATA_DIR/cache/pip`       | pip download/build cache                                  |
+| `ADE_DOCUMENTS_DIR`       | `./data/documents`              | Uploaded files + generated artifacts                      |
+| `ADE_CONFIGS_DIR`         | `./data/config_packages`        | Where installable config projects live                    |
+| `ADE_VENVS_DIR`           | `./data/.venv`                  | One Python virtualenv per `config_id`                     |
+| `ADE_JOBS_DIR`            | `./data/jobs`                   | Per‑job working directories                               |
+| `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`              | pip download/build cache                                  |
 | `ADE_MAX_CONCURRENCY`     | `2`                             | Backend dispatcher parallelism                            |
 | `ADE_QUEUE_SIZE`          | `10`                            | Back‑pressure threshold before API returns HTTP 429       |
 | `ADE_JOB_TIMEOUT_SECONDS` | `300`                           | Wall‑clock timeout per worker                             |
