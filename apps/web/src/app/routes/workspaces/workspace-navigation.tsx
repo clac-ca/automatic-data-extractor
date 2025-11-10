@@ -62,7 +62,7 @@ const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
   {
     id: "configurations",
     path: "configs",
-    label: "Configurations",
+    label: "Config Builder",
     icon: ConfigureIcon,
   },
   {
