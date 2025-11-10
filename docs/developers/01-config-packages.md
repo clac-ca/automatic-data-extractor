@@ -180,6 +180,112 @@ def detect_value_shape(
 
 ---
 
+## Engine call signatures
+
+All ADE entrypoints are invoked with **keyword arguments only**. Accept a trailing `**_` so your functions stay compatible with future context the engine might pass along.
+
+### Row detectors (`row_detectors/*.py`)
+
+```python
+def detect_*(
+    *,
+    job,
+    state,
+    row_index: int,
+    row_values: list,
+    logger,
+    **_,
+) -> dict:
+    ...
+```
+
+- `job` — metadata for this run (job/workspace/config IDs, sheet info, etc.).
+- `state` — mutable dict that all detectors/transforms/validators share; great for caching derived info.
+- `row_index` — 1-based row number as streamed from the sheet.
+- `row_values` — raw cell values from that spreadsheet row.
+- `logger` — job-scoped `logging.Logger`.
+- Return `{"scores": {"header": float}}` or `{"scores": {"data": float}}` depending on what you are voting for.
+
+### Column detectors (`column_detectors/<field>.py`)
+
+```python
+def detect_*(
+    *,
+    job,
+    state,
+    field_name: str,
+    field_meta: dict,
+    header: str | None,
+    column_values_sample: list,
+    column_values: tuple,
+    table: dict,
+    column_index: int,
+    logger,
+    **_,
+) -> dict:
+    ...
+```
+
+- `field_name` — canonical field served by this file (e.g., `"email"`).
+- `field_meta` — manifest entry for that field (synonyms, required flag, default value, hints).
+- `header` — cleaned header text or `None`.
+- `column_values_sample` — stratified slice of the column (size chosen in the manifest); use this first for quick scoring.
+- `column_values` — tuple containing the entire column; only touch if absolutely needed (already materialized once).
+- `table` — detected table object (`{"headers": [...], "rows": [[...], ...]}`) for contextual rules.
+- `column_index` — 1-based index into `table["headers"]`.
+- `job`, `state`, `logger` — same as above.
+- Return `{"scores": {field_name: float}}`.
+
+### Column transforms (`transform()` inside `column_detectors/<field>.py`)
+
+```python
+def transform(
+    *,
+    job,
+    state,
+    row_index: int,
+    field_name: str,
+    value,
+    row: dict,
+    logger,
+    **_,
+) -> dict | None:
+    ...
+```
+
+- `value` — current cell value for `field_name`.
+- `row` — mutable dict of canonical fields for the current row; add/update values here.
+- Return a dict of updates (merged into `row`) or `None` to leave things untouched.
+- `job`, `state`, `row_index`, `logger` — same as earlier.
+
+### Validators (`validate()` inside `column_detectors/<field>.py`)
+
+```python
+def validate(
+    *,
+    job,
+    state,
+    row_index: int,
+    field_name: str,
+    value,
+    row: dict,
+    field_meta: dict | None,
+    logger,
+    **_,
+) -> list[dict]:
+    ...
+```
+
+- `field_meta` — manifest metadata for the field (can be `None` for synthetic fields).
+- `value` — the current canonical value for `field_name` (after any transforms).
+- `row` — the full canonical row (fields → values) so you can make cross-field checks.
+- Return a list of issue dicts (e.g., `{"row_index": row_index, "code": "required_missing", ...}`) or an empty list if the value is fine.
+- `job`, `state`, `row_index`, `value`, `row`, `logger` — same meanings as above.
+
+[Back to top](#top)
+
+---
+
 ## `pyproject.toml`
 
 <a id="pyprojecttoml"></a>

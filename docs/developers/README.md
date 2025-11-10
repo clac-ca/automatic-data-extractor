@@ -59,20 +59,15 @@ automatic-data-extractor/
 ├─ templates/                              # Starter content templates (user-facing seeds)
 │  └─ config-packages/
 │     ├─ default/
-│     │  ├─ template.manifest.json         # catalog metadata (name/description/tags/min engine)
-│     │  └─ src/ade_config/                # detectors/hooks + runtime manifest/env
+│     │  ├─ pyproject.toml
+│     │  └─ src/ade_config/
 │     │     ├─ manifest.json               # read via importlib.resources
-│     │     ├─ config.env                  # optional env vars for this config
 │     │     ├─ column_detectors/           # detect → transform (opt) → validate (opt)
 │     │     ├─ row_detectors/              # header/data row heuristics
-│     │     └─ hooks/                      # on_job_start/after_mapping/before_save/on_job_end
+│     │     └─ hooks/                      # on_job_start.py/after_mapping.py/before_save.py/on_job_end.py
 │     └─ <other-template>/
-│        ├─ template.manifest.json
+│        ├─ manifest.json
 │        └─ src/ade_config/...
-│
-├─ specs/                                   # JSON Schemas & other formal specs
-│  ├─ config-manifest.v1.json               # config package manifest schema
-│  └─ template-manifest.v1.json             # template catalog schema
 │
 ├─ examples/                                # sample inputs/outputs for docs/tests
 ├─ docs/                                    # Developer Guide, HOWTOs, operations runbooks
@@ -81,8 +76,7 @@ automatic-data-extractor/
 ├─ infra/                                   # deployment infra (container, compose, k8s, IaC)
 │  ├─ docker/
 │  │  └─ api.Dockerfile                     # multi-stage: build web → copy dist → apps/api/app/web/static
-│  ├─ compose.yaml                          # optional: local prod-style run
-│  └─ k8s/                                  # optional: manifests/helm when needed
+│  └─ compose.yaml                          # optional: local prod-style run
 │
 ├─ Makefile                                 # friendly entrypoints (setup/dev/build/run)
 ├─ .env.example                             # documented env vars for local/dev
