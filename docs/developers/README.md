@@ -209,7 +209,6 @@ ${ADE_DATA_DIR}/                                          # Root folder for all 
 ├─ config_packages/                                       # Editable config packages you author in the UI (source of truth)
 │  └─ <config_id>/                                        # One folder per published config (immutable once published)
 │     ├─ manifest.json                                    # Config manifest: metadata, defaults, entrypoints
-│     ├─ config.env?                                      # Optional environment file loaded before detectors/hooks
 │     ├─ pyproject.toml?                                  # Optional dependency list (supersedes requirements.txt)
 │     ├─ column_detectors/                                # Field logic: detect → transform (optional) → validate (optional)
 │     │  └─ <field>.py                                    # One Python file per target field (e.g., member_id.py)
@@ -283,8 +282,6 @@ ADE is configured via environment variables so it remains simple and portable. D
 | `ADE_WORKER_CPU_SECONDS`  | `60`                            | Best‑effort CPU limit per job (POSIX `rlimit`)              |
 | `ADE_WORKER_MEM_MB`       | `512`                           | Best‑effort address‑space ceiling per job (POSIX `rlimit`)  |
 | `ADE_WORKER_FSIZE_MB`     | `100`                           | Best‑effort max file size a job can create (POSIX `rlimit`) |
-
-If a configuration ships `ade_config/config.env`, the engine loads its variables at worker start *before* importing configuration code. If you need to override values for a single run later, add a job‑level mechanism in the backend and set env vars before spawning the worker.
 
 ## Excel and CSV Support
 
