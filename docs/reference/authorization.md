@@ -44,7 +44,7 @@ capabilities when reviewing a workspace.【F:apps/api/app/features/workspaces/se
 Shared dependencies wrap authentication, CSRF enforcement, and permission checks
 so routers declare their requirements with `Security(...)`. Denials surface the
 missing permission, scope type, and scope identifier in a structured JSON error
-body to simplify debugging and audits.【F:apps/api/app/features/roles/dependencies.py†L14-L109】
+body to simplify debugging and audits.【F:apps/api/app/shared/dependency.py†L34-L306】
 
 ## Public API
 

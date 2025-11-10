@@ -7,7 +7,7 @@ from collections.abc import Iterable
 
 from fastapi.routing import APIRoute
 
-from apps.api.app.features.auth.dependencies import require_csrf
+from apps.api.app.shared.dependency import require_csrf
 from apps.api.app.main import create_app
 
 app = create_app()

@@ -33,9 +33,7 @@ automatic-data-extractor/
 ├─ apps/                                   # Deployable applications
 │  ├─ api/                                 # FastAPI service (serves /api + static SPA)
 │  │  ├─ app/
-│  │  │  ├─ api/v1/                        # HTTP routers
-│  │  │  │  ├─ router.py                   # Root APIRouter; imports feature routers
-│  │  │  │  └─ deps.py                     # Global Depends providers
+│  │  │  ├─ api/                           # Exception handlers + API helpers
 │  │  │  ├─ features/                      # Domain-first modules (auth, configs, jobs, etc.)
 │  │  │  │  ├─ auth/                       # Example feature module
 │  │  │  │  │  ├─ router.py                # HTTP routes for this feature
@@ -44,6 +42,7 @@ automatic-data-extractor/
 │  │  │  │  │  └─ schemas.py               # Pydantic I/O models
 │  │  │  ├─ scripts/                       # App-scoped CLIs (seed, migrate, etc.)
 │  │  │  ├─ shared/                        # Cross-cutting infra (settings, db, logging)
+│  │  │  │  ├─ dependency.py               # Global FastAPI dependencies (auth, RBAC, services)
 │  │  │  ├─ web/static/                    # ← Built SPA copied here at image build time (DO NOT COMMIT)
 │  │  │  ├─ templates/                     # Optional: Jinja2 emails/server-rendered templates
 │  │  │  └─ main.py                        # Mounts /api routers; serves SPA from ./web/static

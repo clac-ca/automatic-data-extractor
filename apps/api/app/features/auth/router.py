@@ -19,8 +19,12 @@ from fastapi import (
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.app.features.auth.dependencies import require_authenticated, require_csrf
-from apps.api.app.features.roles.dependencies import require_global
+from apps.api.app.shared.dependency import (
+    get_current_identity,
+    require_authenticated,
+    require_csrf,
+    require_global,
+)
 from apps.api.app.settings import Settings, get_settings
 from apps.api.app.shared.core.schema import ErrorMessage
 from apps.api.app.shared.db.session import get_session
@@ -28,7 +32,6 @@ from apps.api.app.shared.db.session import get_session
 from ..users.models import User
 from ..users.schemas import UserProfile
 from ..users.service import UsersService
-from .dependencies import get_current_identity
 from .schemas import (
     APIKeyIssueRequest,
     APIKeyIssueResponse,

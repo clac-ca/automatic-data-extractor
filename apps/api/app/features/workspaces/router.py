@@ -5,8 +5,13 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends, Path, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.app.features.auth.dependencies import require_authenticated, require_csrf
-from apps.api.app.features.roles.dependencies import require_global, require_workspace
+from apps.api.app.shared.dependency import (
+    get_workspace_profile,
+    require_authenticated,
+    require_csrf,
+    require_global,
+    require_workspace,
+)
 from apps.api.app.shared.core.responses import DefaultResponse
 from apps.api.app.shared.core.schema import ErrorMessage
 from apps.api.app.shared.db.session import get_session
@@ -14,7 +19,6 @@ from apps.api.app.shared.db.session import get_session
 from ..roles.models import Role
 from ..roles.schemas import RoleCreate, RoleRead, RoleUpdate
 from ..users.models import User
-from .dependencies import get_workspace_profile
 from .schemas import (
     WorkspaceCreate,
     WorkspaceDefaultSelection,

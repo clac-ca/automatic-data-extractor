@@ -22,9 +22,7 @@ automatic-data-extractor/
 ├─ apps/                                   # Deployable applications (things you run/ship)
 │  ├─ api/                                 # FastAPI service (serves /api + static SPA)
 │  │  ├─ app/
-│  │  │  ├─ api/v1/                        # thin API entrypoints: compose/attach feature routers only
-│  │  │  │  ├─ router.py                   # APIRouter that mounts features.*.router; imported by main.py
-│  │  │  │  └─ deps.py                     # global Depends providers shared across endpoints
+│  │  │  ├─ api/                           # exception handlers + FastAPI glue
 │  │  │  ├─ features/                      # domain-first modules; each owns its router/service/repo/schemas
 │  │  │  │  ├─ auth/
 │  │  │  │  │  ├─ router.py                # routes for this feature (mounted by api/router.py)
@@ -34,6 +32,7 @@ automatic-data-extractor/
 │  │  │  │  ├─ etc..
 │  │  │  ├─ scripts/                       #
 │  │  │  ├─ shared/                        # cross-cutting infra used by all features
+│  │  │  │  ├─ dependency.py               # shared FastAPI dependencies (auth, RBAC, services)
 │  │  │  ├─ web/static/                    # ← SPA build copied here at image build time (DO NOT COMMIT)
 │  │  │  ├─ templates/                     # optional: server-rendered templates/emails
 │  │  │  └─ main.py                        # mounts: /api routers; serves / from ./web/static
