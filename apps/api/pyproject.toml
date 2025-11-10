@@ -57,6 +57,7 @@ include = ["apps*"]
 "apps.api.app" = [
   "py.typed",
   "web/**/*",
+  "templates/config_packages/**/*",
   "db/migrations/**/*",
 ]
 
