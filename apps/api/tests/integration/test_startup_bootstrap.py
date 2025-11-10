@@ -22,7 +22,6 @@ async def test_app_startup_bootstraps_database(tmp_path: Path) -> None:
     settings = Settings.model_validate(
         {
             "database_dsn": f"sqlite+aiosqlite:///{database_path}",
-            "data_dir": str(data_dir),
             "documents_dir": str(documents_dir),
         }
     )

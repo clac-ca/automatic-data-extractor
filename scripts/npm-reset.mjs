@@ -33,7 +33,7 @@ if (!autoForce) {
   const rl = createInterface({ input, output });
   console.log("This will:");
   console.log("  - Remove build artifacts and dependencies");
-  console.log("  - Delete the ./data directory");
+  console.log("  - Delete storage dirs: ./data/documents, config_packages, .venv, jobs, cache/pip");
   console.log("  - Reinstall API/web requirements");
   const answer = (await rl.question("Proceed? [y/N] ")).trim().toLowerCase();
   await rl.close();
@@ -44,8 +44,18 @@ if (!autoForce) {
   }
 }
 
-console.log("Removing ./data directory...");
-await rm("data", { recursive: true, force: true });
+const storageDirs = [
+  "data/documents",
+  "data/config_packages",
+  "data/.venv",
+  "data/jobs",
+  "data/cache/pip",
+];
+
+console.log("Removing configured storage directories...");
+for (const dir of storageDirs) {
+  await rm(dir, { recursive: true, force: true });
+}
 await run("npm", ["run", "clean:force"]);
 await run("npm", ["run", "setup"]);
 console.log("🔁 reset complete");

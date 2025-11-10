@@ -5,13 +5,13 @@ Standalone ADE smoke test aligned with the developer guide.
 This script exercises the end-to-end "prepare" flow described in
 docs/developers/README.md by:
 
-  1. Creating ADE_DATA_DIR subfolders (config_packages, venvs, jobs, documents, cache/pip).
+1. Creating ADE_DATA_DIR subfolders (config_packages, .venv, jobs, documents, cache/pip).
   2. Seeding config_packages/<config_id>/ with a realistic sample config (manifest, .env,
      site-packages/ade_config) if it is empty.
   3. Creating a dedicated virtual environment for that config (python -m venv).
   4. Installing requirements.txt (includes openpyxl) into the venv, sharing a pip cache,
      and capturing install.log for cache verification.
-  5. Copying manifest.json and .env into venvs/<config_id>/ade-runtime/ for diagnostics.
+5. Copying manifest.json and .env into .venv/<config_id>/ade-runtime/ for diagnostics.
   6. Copying everything under config_packages/<config_id>/site-packages/ into the venv's
      site-packages and marking it read-only.
   7. Emitting packages.txt (pip freeze) and build.json (hashes, versions, prepared_at metadata).
@@ -54,7 +54,7 @@ class ADEPaths:
 
     @property
     def venv_dir(self) -> Path:
-        return self.data_root / "venvs" / self.config_id
+        return self.data_root / ".venv" / self.config_id
 
     @property
     def runtime_dir(self) -> Path:
@@ -95,7 +95,7 @@ def _log(stage: str, message: str) -> None:
 
 
 def ensure_data_roots(paths: ADEPaths) -> None:
-    for sub in ("config_packages", "venvs", "jobs", "documents", "cache/pip"):
+    for sub in ("config_packages", ".venv", "jobs", "documents", "cache/pip"):
         target = paths.data_root / sub
         target.mkdir(parents=True, exist_ok=True)
 

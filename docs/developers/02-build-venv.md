@@ -1,386 +1,265 @@
-# Build — freeze a configuration into a reusable Python environment
+# 02 — Build: Freeze the Runtime (Virtual Environment)
 
-> **Goal in one sentence:**
-> Turn a human‑editable configuration (your detection, mapping, and cleanup rules) into a **frozen, reusable runtime** so every job runs the same way every time.
-
-ADE separates *authoring* from *execution*. You (or your users) write rules in an **ADE Config** package. When you click **Build**, ADE creates a dedicated, isolated **Python virtual environment** (a *venv*) that contains:
-
-* the ADE Engine (the software that reads spreadsheets and applies your rules), and
-* your exact config package (plus any optional dependencies it declares).
-
-Once built, that venv is reused for all jobs that reference that specific **config version**. This guarantees reproducible results.
+When you press **Build** in the frontend config builder, ADE takes your editable configuration and turns it into a **ready-to-run runtime environment**.
+This process—called a **build**—packages your configuration together with the ADE Engine in an isolated Python environment.
+That environment is then reused for every job that runs against that configuration version.
 
 ---
 
-## Table of contents
+## What a Build Does
 
-1. [What problem does “Build” solve?](#what-problem-does-build-solve)
-2. [Key terms (no Python knowledge required)](#key-terms-no-python-knowledge-required)
-3. [Where things live on disk](#where-things-live-on-disk)
-4. [The Build contract](#the-build-contract)
-5. [How a build works (step by step)](#how-a-build-works-step-by-step)
-6. [Running jobs after a build](#running-jobs-after-a-build)
-7. [API contract (trigger + poll)](#api-contract-trigger--poll)
-8. [Local quickstart (no frontend required)](#local-quickstart-no-frontend-required)
-9. [Reproducibility & idempotency](#reproducibility--idempotency)
-10. [Security & resource limits](#security--resource-limits)
-11. [Troubleshooting](#troubleshooting)
-12. [FAQ](#faq)
-13. [Glossary](#glossary)
+Each build creates a **virtual environment** (a “venv”)—a private folder containing:
 
-[Back to top](#build--freeze-a-configuration-into-a-reusable-python-environment)
+1. **A dedicated Python interpreter**, separate from the system one.
+2. **The ADE Engine** (`ade_engine`) — the runtime that knows how to process spreadsheets and apply your rules.
+3. **Your Config Package** (`ade_config`) — the detectors, transforms, validators, and hooks that define your logic.
+
+Once built, every job for that configuration runs inside this frozen environment, guaranteeing that results are **reproducible**, **auditable**, and **isolated** from other workspaces.
 
 ---
 
-## What problem does “Build” solve?
+## Where Builds Are Stored
 
-Spreadsheets vary wildly. You’ll tweak your rules (detectors, transforms, validators) while testing. If jobs pulled those rules directly from your working folder, two runs made a day apart might behave differently even when the input file hasn’t changed.
+The location of the virtual environments is controlled by the environment variable `ADE_VENVS_DIR`.
+If you don’t specify it, ADE defaults to `./data/.venv` (ignored by Git).
+If you do specify it—such as mounting a volume or network share—builds will automatically persist there.
 
-**Build** creates a **frozen runtime**:
-
-* Your rules are packaged as installable software.
-* The ADE Engine and your rules are installed together into a **virtual environment** (venv).
-* The exact dependency set is recorded.
-* Every subsequent run for that config version uses the **same** runtime.
-
-This makes results **reproducible** and **auditable**.
-
----
-
-## Key terms (no Python knowledge required)
-
-* **ADE Config** — your rules, written as a tiny project (files and folders) that can be installed. Think of it like a zip file of logic the engine can import.
-* **ADE Engine** — the runtime that opens spreadsheets, finds tables, maps columns, transforms/validates values, and writes a clean workbook.
-* **Virtual environment (venv)** — a private folder with its own Python and its own installed packages. It isolates one project from another so versions don’t collide.
-* **Build** — the act of creating a venv and installing the engine + your config into it.
-* **Run** — processing an input file with a previously built venv.
-
-You don’t need to write Python to use any of this. Builds and runs are managed by the ADE backend and the web UI.
-
----
-
-## Where things live on disk
-
-ADE stores all its state under a single **data directory**. In development, that default is `./data`. In production, it’s commonly a shared, persistent volume.
+Typical structure:
 
 ```text
-${ADE_DATA_DIR}/
-├─ workspaces/
-│  └─ <workspace_id>/
-│     ├─ config_packages/              # editable sources managed in the UI (truth)
-│     │  └─ <config_id>/               # e.g., "membership"
-│     │     ├─ pyproject.toml          # declares dependencies (optional but recommended)
-│     │     └─ src/ade_config/...      # your detectors, transforms, validators, hooks
-│     └─ venvs/
-│        └─ <config_id>/
-│           └─ <version>/              # one venv per config version
-│              ├─ bin/python           # Python interpreter inside the venv
-│              └─ ade-runtime/
-│                 ├─ packages.txt      # fully resolved dependency list (pip freeze)
-│                 └─ build.json        # metadata about this build
-├─ jobs/                                # one folder per job (inputs, output, logs)
-├─ cache/pip/                           # pip download/build cache (optional)
-└─ db/, logs/, etc.
+./data/.venv/
+└─ <workspace_id>/
+   └─ <config_id>/
+      ├─ bin/python
+      └─ <site-packages>/
+         ├─ ade_engine/...    # Installed ADE engine
+         └─ ade_config/...    # Installed config package
 ```
 
-> **Important:** The **source** under `config_packages/` is never modified by the build process. The venv is a separate, compiled/installed copy.
+This keeps builds separate from workspace data.
+Persist them if you want them to survive restarts, or let them live ephemerally if you prefer a stateless setup.
 
 ---
 
-## The Build contract
-
-A successful build must satisfy all of the following:
-
-1. **Isolation**
-   Each *config version* gets its **own venv**:
-   `venvs/<config_id>/<version>/…`
-
-2. **Engine + Config installed**
-   The venv contains:
-
-   * `ade_engine` (the runtime), and
-   * your config as an installable package named `ade_config` (plus any declared dependencies).
-
-3. **Frozen dependency record**
-   The venv contains:
-
-   * `ade-runtime/packages.txt` — the exact versions that were installed.
-   * `ade-runtime/build.json` — metadata like engine version, config version, Python version, and timestamp.
-
-4. **Reusable**
-   Job runs **reuse** this environment. No network or re‑install needed during a run.
-
-If any of these steps fail (e.g., a dependency can’t be resolved), the build is marked **failed** and the venv is not published.
-
----
-
-## How a build works (step by step)
-
-Behind the scenes, the backend performs these steps:
-
-1. **Resolve inputs**
-
-   * Identify the workspace, `config_id`, and **config version** to build.
-   * Locate the config source at
-     `workspaces/<workspace_id>/config_packages/<config_id>/`.
-
-2. **Create a fresh venv (temporary)**
-
-   * Use Python’s built‑in `venv` module to create an isolated environment in a temporary folder.
-
-3. **Install the engine and your config**
-
-   * Upgrade the venv’s installer tooling.
-   * Install `ade_engine` (editable in dev; pinned version in prod).
-   * Install your config package from its folder (this reads `pyproject.toml` if present).
-   * Optionally apply a `requirements.txt` overlay if your tooling exposes one.
-
-4. **Record the exact dependency set**
-
-   * Write `packages.txt` with `pip freeze` (all resolved versions).
-   * Write `build.json` with metadata, for example:
-
-     ```json
-     {
-       "build_id": "01HF4X4WJ4…",
-       "workspace_id": "ws-123",
-       "config_id": "membership",
-       "config_version": 12,
-       "engine_version": "0.4.2",
-       "python_version": "3.11.8",
-       "built_at": "2025-11-10T12:34:56Z"
-     }
-     ```
-
-5. **Publish atomically**
-
-   * Move the finished venv into `venvs/<config_id>/<version>/` in one step and mark it ready.
-
-If a build step fails, ADE captures the error message for inspection and leaves any existing, last‑known‑good venv untouched.
-
----
-
-## Running jobs after a build
-
-A job always runs inside the venv for its config version:
-
-```bash
-${ADE_DATA_DIR}/workspaces/<workspace_id>/venvs/<config_id>/<version>/bin/python \
-  -I -B -m ade_engine.worker <job_id>
-```
-
-* `-I` starts Python in *isolated* mode (ignores user‑wide settings).
-* `-B` avoids writing `.pyc` files during execution.
-
-The worker reads the job’s inputs, imports your `ade_config`, and writes a normalized Excel workbook along with an **audit artifact** that explains every important decision.
-
----
-
-## API contract (trigger + poll)
-
-The frontend (or any client) can request and track builds with simple endpoints:
-
-### Start a build
-
-```
-POST /api/v1/workspaces/{workspace_id}/configs/{config_id}/builds
-Content-Type: application/json
-
-{
-  "version": 12,
-  "force": false
-}
-```
-
-**Responses**
-
-* `201 Created` — a new build was accepted/started.
-* `200 OK` — a build for this fingerprint already exists and is **succeeded** (idempotent).
-* `409 Conflict` — a build is already **running** for the same fingerprint.
-* `400 Bad Request` — version or paths invalid.
-
-**Example response**
-
-```json
-{
-  "build_id": "01HF4X4WJ4…",
-  "workspace_id": "ws-123",
-  "config_id": "membership",
-  "config_version": 12,
-  "status": "queued",
-  "engine_version": "0.4.2",
-  "python_version": "3.11.8",
-  "venv_path": "/data/workspaces/ws-123/venvs/membership/12",
-  "created_at": "2025-11-10T12:34:12Z"
-}
-```
-
-### Poll build status
-
-```
-GET /api/v1/workspaces/{workspace_id}/configs/{config_id}/builds/{build_id}
-```
-
-**Statuses:** `queued`, `running`, `succeeded`, `failed`
-On `succeeded`, the payload includes the final `venv_path`. On `failed`, the payload includes a succinct `error` string.
-
-> **Pre‑run guard:** If you try to run a job for a config version that has no successful build, the API may respond with **`412 Precondition Required`**. The UI should offer a “Build now” action.
-
----
-
-## Local quickstart (no frontend required)
-
-You can try everything from a terminal. The example below uses generic IDs—feel free to change them.
-
-```bash
-# 0) Choose your folders
-export ADE_DATA_DIR=$(pwd)/data
-export WS=ws-123
-export CFG=membership
-export VER=12
-
-# 1) Create a config from the template (or use the web editor)
-mkdir -p "$ADE_DATA_DIR/workspaces/$WS/config_packages"
-cp -r templates/config-packages/default "$ADE_DATA_DIR/workspaces/$WS/config_packages/$CFG"
-
-# 2) Create a per-version venv
-python -m venv "$ADE_DATA_DIR/workspaces/$WS/venvs/$CFG/$VER"
-
-# 3) Install engine + your config into that venv
-"$ADE_DATA_DIR/workspaces/$WS/venvs/$CFG/$VER/bin/pip" install -U pip wheel
-"$ADE_DATA_DIR/workspaces/$WS/venvs/$CFG/$VER/bin/pip" install packages/ade-engine/
-"$ADE_DATA_DIR/workspaces/$WS/venvs/$CFG/$VER/bin/pip" install "$ADE_DATA_DIR/workspaces/$WS/config_packages/$CFG/"
-
-# 4) Freeze the set of packages (for auditability)
-"$ADE_DATA_DIR/workspaces/$WS/venvs/$CFG/$VER/bin/python" -m pip freeze \
-  > "$ADE_DATA_DIR/workspaces/$WS/venvs/$CFG/$VER/ade-runtime/packages.txt"
-
-# 5) Sanity check: imports work
-"$ADE_DATA_DIR/workspaces/$WS/venvs/$CFG/$VER/bin/python" -I -B -c \
-  "import ade_engine, ade_config; print('ok')"
-```
-
-Now your venv is ready for jobs.
-
----
-
-## Reproducibility & idempotency
-
-**Why builds are consistent**
-
-* **Per‑version venvs.** Changing your config creates or uses a *new* version → a *new* venv.
-* **`packages.txt`.** The full dependency set is recorded at build time, so you can reproduce the environment.
-
-**Why duplicate requests are safe**
-
-* The backend defines a **build fingerprint**:
-  `(workspace_id, config_id, config_version, python_version, engine_version)`
-* A build with the same fingerprint returns the existing successful build instead of doing the work again.
-
----
-
-## Security & resource limits
-
-Builds and runs are isolated and conservative:
-
-* **Isolated Python** (`-I -B`) for workers.
-* **Resource limits** (CPU seconds, memory ceiling, max file size, wall‑clock timeout) are applied to worker processes where supported.
-* **No source mutation.** The backend never edits files in `config_packages/` during build. It only installs them into a venv and records metadata.
-* **Network discipline.** Build steps only talk to Python package indexes to resolve dependencies. In production, you can pin or mirror indexes and cache wheels in `${ADE_DATA_DIR}/cache/pip/`.
-
----
-
-## Troubleshooting
-
-**Build failed: “Could not build wheels / dependency error.”**
-
-* Check your config’s `pyproject.toml` for typos or missing dependencies.
-* Try to install locally inside the venv to see the exact pip error:
-
-  ```bash
-  <venv>/bin/pip install -v <your-config-path>
-  ```
-
-**Worker import error: “No module named ade_config.”**
-
-* Verify the config actually installed into the venv:
-
-  ```bash
-  <venv>/bin/python -I -B -c "import ade_engine, ade_config; print('ok')"
-  ```
-
-**Run looks different after editing rules.**
-
-* Confirm you built the **new version** and that the job is pointing at that version’s venv.
-
-**Performance is sluggish.**
-
-* Large third‑party packages in your config will increase build time. Prefer smaller, focused dependencies.
-* Reuse the pip cache by setting `ADE_PIP_CACHE_DIR` (enabled by default under `${ADE_DATA_DIR}/cache/pip`).
-
----
-
-## FAQ
-
-**Do I need to know Python to use ADE?**
-No. You can author configs in the web editor, click **Build**, and run jobs. Knowing Python helps when writing detectors, but the build/run flow does not require Python expertise.
-
-**Why not run jobs directly from the editable source?**
-Because that would silently pick up changes and break reproducibility. Freezing into a venv ensures “same inputs → same outputs.”
-
-**Can multiple builds exist for the same config?**
-Yes—one per **version** (and Python/engine pair). Older builds remain available for rollback and comparison.
-
-**Are venvs portable between machines?**
-Treat them as **machine‑local** artifacts. Rebuild on the target environment (or ship containers) for portability.
-
----
-
-## Glossary
-
-* **Build** — Create an isolated venv with the engine + your config; record the dependency set.
-* **Run** — Execute a job inside a previously built venv.
-* **Config version** — A numbered snapshot of your rules; changing rules increments the version.
-* **Venv** — A self‑contained Python + packages folder used to isolate dependencies.
-* **`packages.txt`** — A text file listing all exact package versions installed in a build.
-* **`build.json`** — A small JSON file with metadata about the build (who/what/when).
-
----
-
-## Visual overview
+## How a Build Works (Step by Step)
 
 ```mermaid
 flowchart TD
-    A["Edit config in GUI"] --> B["Click Build"]
-    B --> C["Create fresh venv (temporary)"]
-    C --> D["Install ade_engine + your ade_config"]
-    D --> E["Record packages.txt + build.json"]
-    E --> F["Publish venv for this config version"]
-    F --> G["Run jobs (reuse the frozen venv)"]
+  A["Start build (config_id + version)"] --> B["Create temporary venv"]
+  B --> C["Install ADE Engine"]
+  C --> D["Install config package (+ dependencies)"]
+  D --> E["Verify imports (ade_engine, ade_config)"]
+  E --> F["Record build metadata in database"]
+  F --> G["Atomically publish venv"]
+  G --> H["Mark success and return build info"]
+```
+
+**Key points**
+
+* **Atomic:** a venv only appears once fully built and validated.
+* **Safe:** if any step fails, ADE keeps the previous build intact.
+* **Fast:** the pip cache (`ADE_PIP_CACHE_DIR`) accelerates rebuilds by reusing downloaded wheels.
+* **Centralized:** all metadata is recorded in the database—no additional runtime files are written to disk.
+
+---
+
+## Database Tracking
+
+Build metadata is stored in a small SQLite table, which makes it easy for the API and UI to check status without reading files.
+
+| Field            | Description                                  |
+| ---------------- | -------------------------------------------- |
+| `workspace_id`   | Workspace the build belongs to               |
+| `config_id`      | Config this build represents                 |
+| `config_version` | Version or digest used during build          |
+| `build_id`       | Unique identifier (ULID)                     |
+| `status`         | `building`, `active`, or `failed`            |
+| `engine_version` | ADE Engine version used                      |
+| `python_version` | Interpreter version                          |
+| `built_at`       | Timestamp when build completed               |
+| `expires_at`     | Optional expiration (if TTL policy enabled)  |
+| `last_used_at`   | Updated each time a job runs with this build |
+| `error`          | Failure message, if applicable               |
+
+This record acts as the single source of truth for build metadata.
+
+---
+
+## Change Detection & Rebuild Triggers
+
+ADE maintains **one active build per configuration** and rebuilds only when needed.
+
+A build is created or replaced automatically when any of the following is true:
+
+* No existing build exists for that configuration.
+* The configuration **version or digest** has changed.
+
+  * *Version:* if you keep a numeric `config_version` in the database.
+  * *Digest:* if you compute a content hash (e.g., of `pyproject.toml`, `src/ade_config/**`, `manifest.json`, `config.env`).
+* The ADE Engine **version** changed (e.g., engine upgrade).
+* The **Python interpreter** changed (e.g., 3.11 → 3.12).
+* The build has **expired** (`expires_at` passed, if TTL is enabled).
+* The user explicitly **forces** a rebuild.
+
+Otherwise, ADE reuses the existing build.
+The process is **idempotent**—repeated build requests simply return the active build’s metadata.
+
+---
+
+## Compatibility & Validation
+
+To avoid subtle runtime issues, ADE performs a small set of checks during build:
+
+* **Import check:** `import ade_engine, ade_config` must succeed.
+* **Engine compatibility (optional):** if your config declares a minimum engine version, the builder can verify it and fail fast with a clear error.
+* **Python version pinning (recommended):** standardize on a minor version (e.g., Python 3.11) to keep wheels consistent across environments.
+
+These checks keep builds predictable and errors easy to diagnose.
+
+---
+
+## Concurrency, Atomicity & Safety
+
+* **Exclusive build lock:** builds for a given configuration run under a simple file lock at
+  `${ADE_VENVS_DIR}/<workspace_id>/<config_id>/.build.lock`.
+  This prevents duplicate work and race conditions.
+* **Atomic publish:** ADE creates the venv in a temporary directory and **renames** it into place only after all steps succeed.
+* **Rebuild safety gate:** for the simplest, safest behavior, ADE rebuilds a configuration **only when no jobs for that configuration are running**.
+  If a job is active and a rebuild is requested, the API returns `409 Conflict` (unless you explicitly design for a pointer/symlink swap, which is more complex and not required here).
+* **Idempotent ensure:** the `ensure_build()` function returns the current build if it’s already valid, and only executes a build when truly needed.
+
+---
+
+## Jobs and Build Reuse
+
+Before each job starts, ADE ensures a valid build exists:
+
+1. The backend calls `ensure_build(workspace_id, config_id)`:
+
+   * Returns the current active build if valid.
+   * Otherwise, builds one immediately.
+2. The job runs inside that environment:
+
+```bash
+${ADE_VENVS_DIR}/<workspace_id>/<config_id>/bin/python \
+  -I -B -m ade_engine.worker <job_id>
+```
+
+Jobs do **not** install anything.
+They always execute inside a pre-built, verified runtime.
+
+---
+
+## API Endpoints
+
+Each configuration has a **single build resource**.
+
+### Get current build
+
+```
+GET /api/v1/workspaces/{workspace_id}/configurations/{config_id}/build
+```
+
+### Create or rebuild
+
+```
+PUT /api/v1/workspaces/{workspace_id}/configurations/{config_id}/build
+```
+
+Body:
+
+```json
+{ "force": false }
+```
+
+* If a valid build already exists, this returns it (idempotent).
+* If not, this builds synchronously and returns the result.
+* If jobs for the configuration are currently running and a rebuild would replace the venv, the route returns `409 Conflict`.
+
+### Delete build
+
+```
+DELETE /api/v1/workspaces/{workspace_id}/configurations/{config_id}/build
+```
+
+Removes the venv on disk and clears the DB record. The next job or `PUT /build` will recreate it.
+
+---
+
+## Environment Variables
+
+| Variable                  | Default            | Description                              |
+| ------------------------- | ------------------ | ---------------------------------------- |
+| `ADE_DOCUMENTS_DIR`       | `./data/documents` | Uploaded files + generated artifacts     |
+| `ADE_VENVS_DIR`           | `./data/.venv`     | Where virtual environments are created   |
+| `ADE_PIP_CACHE_DIR`       | `./data/cache/pip` | Cache for pip downloads (safe to delete) |
+| `ADE_BUILD_TTL_DAYS`      | —                  | Optional expiry for builds               |
+| `ADE_MAX_CONCURRENCY`     | `2`                | Maximum concurrent builds/jobs           |
+| `ADE_JOB_TIMEOUT_SECONDS` | `300`              | Hard timeout for jobs                    |
+| `ADE_WORKER_CPU_SECONDS`  | `60`               | CPU limit per job                        |
+| `ADE_WORKER_MEM_MB`       | `512`              | Memory limit per job                     |
+| `ADE_WORKER_FSIZE_MB`     | `100`              | Max file size a job may create           |
+
+**Operational tips**
+
+* A shared pip cache (`ADE_PIP_CACHE_DIR`) makes rebuilds much faster.
+* Pin dependency versions in `pyproject.toml` for stable, deterministic rebuilds.
+
+---
+
+## Backend Architecture Overview
+
+The build system fits naturally inside the **Configurations** feature:
+
+* **Router** — exposes REST endpoints (`GET`, `PUT`, `DELETE /build`).
+* **Service** — orchestrates logic (`ensure_build()`): checks the database and spawns a build if needed.
+* **Builder** — low-level runner that:
+
+  * Creates a venv (`python -m venv ...`)
+  * Installs `ade_engine` and the config package
+  * Verifies imports
+  * Publishes atomically
+  * Records metadata in the database
+* **Database** — the single source of truth for build metadata.
+
+Jobs invoke the same `ensure_build()` logic before execution, so they always run against a verified environment.
+If the venv disappears (for example, after a container restart), it’s transparently rebuilt on demand.
+
+---
+
+## Local Example (Manual Steps)
+
+```bash
+# Create venv
+python -m venv data/.venv/ws_local/my_config/
+
+# Install ADE Engine
+data/.venv/ws_local/my_config/bin/pip install ./packages/ade-engine/
+
+# Install config package
+data/.venv/ws_local/my_config/bin/pip install ./data/workspaces/ws_local/config_packages/my_config/
+
+# Verify
+data/.venv/ws_local/my_config/bin/python -I -B -c "import ade_engine, ade_config; print('ok')"
+```
+
+Then run a job:
+
+```bash
+data/.venv/ws_local/my_config/bin/python -I -B -m ade_engine.worker job_001
 ```
 
 ---
 
-## Environment variables (defaults for dev)
+## Implementation Notes & Checklist
 
-| Variable                  | Default                                         | Purpose                                   |
-| ------------------------- | ----------------------------------------------- | ----------------------------------------- |
-| `ADE_DATA_DIR`            | `./data`                                        | Root folder for all ADE state             |
-| `ADE_CONFIGS_DIR`         | `$ADE_DATA_DIR/workspaces/<ws>/config_packages` | Where editable config sources live        |
-| `ADE_VENVS_DIR`           | `$ADE_DATA_DIR/workspaces/<ws>/venvs`           | Where per‑version venvs are created       |
-| `ADE_PIP_CACHE_DIR`       | `$ADE_DATA_DIR/cache/pip`                       | Speeds up repeat builds                   |
-| `ADE_JOB_TIMEOUT_SECONDS` | `300`                                           | Max wall‑clock time per job (best‑effort) |
-| `ADE_WORKER_CPU_SECONDS`  | `60`                                            | CPU limit per job (best‑effort)           |
-| `ADE_WORKER_MEM_MB`       | `512`                                           | Memory ceiling per job (best‑effort)      |
-| `ADE_WORKER_FSIZE_MB`     | `100`                                           | Max file size a job can create            |
+These choices keep the system simple and safe while covering real-world edge cases:
 
-> In production, these live in your service environment or container runtime configuration.
-
----
-
-### Where to go next
-
-* **Config Packages** — how to write detectors, transforms, validators, and hooks.
-* **Job Orchestration** — queues, worker limits, and the audit artifact.
-
-[Back to top](#build--freeze-a-configuration-into-a-reusable-python-environment)
+* **Change detection:** Prefer a **config version** if you already maintain one; otherwise compute a **digest** of config sources to detect edits.
+* **Rebuild safety:** Only rebuild when **no jobs** for that configuration are running, or return `409`.
+* **Atomic publish:** Always build in a temp directory and **rename** into place.
+* **Locking:** Use a config-scoped **file lock** to serialize builds: `.../<ws>/<cfg>/.build.lock`.
+* **Compatibility:** Enforce engine/Python requirements during build; fail fast with clear errors.
+* **Observability (optional):** log build duration, success/failure counts, and cache hit rate; these help diagnose slow builds.
+* **Idempotency:** `PUT /build` should return the active build when nothing needs rebuilding.
+* **No disk metadata files:** All build metadata lives in SQLite. The venv contains only executables and installed packages.

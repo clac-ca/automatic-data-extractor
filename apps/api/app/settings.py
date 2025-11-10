@@ -22,10 +22,16 @@ DEFAULT_API_ROOT = MODULE_DIR.parent
 DEFAULT_WEB_DIR = MODULE_DIR / "web"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173"]
-DEFAULT_DATA_DIR = Path("./data")            # resolve later
+DEFAULT_STORAGE_ROOT = Path("./data")        # resolve later
 DEFAULT_DB_FILENAME = "ade.sqlite"
 DEFAULT_ALEMBIC_INI = DEFAULT_API_ROOT / "alembic.ini"
 DEFAULT_ALEMBIC_MIGRATIONS = DEFAULT_API_ROOT / "migrations"
+DEFAULT_DOCUMENTS_DIR = DEFAULT_STORAGE_ROOT / "documents"
+DEFAULT_CONFIGS_DIR = DEFAULT_STORAGE_ROOT / "config_packages"
+DEFAULT_VENVS_DIR = DEFAULT_STORAGE_ROOT / ".venv"
+DEFAULT_JOBS_DIR = DEFAULT_STORAGE_ROOT / "jobs"
+DEFAULT_PIP_CACHE_DIR = DEFAULT_STORAGE_ROOT / "cache" / "pip"
+DEFAULT_SQLITE_PATH = DEFAULT_STORAGE_ROOT / "db" / DEFAULT_DB_FILENAME
 
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 100
@@ -34,14 +40,6 @@ MIN_SEARCH_LEN = 2
 MAX_SEARCH_LEN = 128
 MAX_SET_SIZE = 50                  # cap for *_in lists
 COUNT_STATEMENT_TIMEOUT_MS: int | None = None  # optional (Postgres), e.g., 500
-
-DEFAULT_SUBDIRS = {
-    "documents_dir": "documents",
-    "configs_dir": "config_packages",
-    "venvs_dir": "venvs",
-    "jobs_dir": "jobs",
-    "pip_cache_dir": "cache/pip",
-}
 
 _LENIENT_LIST_FIELDS = {"server_cors_origins", "oidc_scopes"}
 
@@ -111,19 +109,6 @@ def _list_from_env(value: Any, *, default: list[str]) -> list[str]:
             seen.add(x)
             out.append(x)
     return out
-
-
-def _resolve_dir(base: Path, override: Path | None, default_subdir: str) -> Path:
-    """
-    If override is None -> <base>/<default_subdir>.
-    If override is absolute -> use as-is.
-    If override is relative -> <base>/<override>.
-    Return absolute, resolved path.
-    """
-    p = (base / default_subdir) if override is None else override.expanduser()
-    if not p.is_absolute():
-        p = base / p
-    return p.resolve()
 
 
 def _resolve_path(value: Path | str | None, *, default: Path) -> Path:
@@ -243,12 +228,11 @@ class Settings(BaseSettings):
     alembic_migrations_dir: Path = Field(default=DEFAULT_ALEMBIC_MIGRATIONS)
 
     # Storage
-    data_dir: Path = DEFAULT_DATA_DIR
-    documents_dir: Path | None = None
-    configs_dir: Path | None = None
-    venvs_dir: Path | None = None
-    jobs_dir: Path | None = None
-    pip_cache_dir: Path | None = None
+    documents_dir: Path = Field(default=DEFAULT_DOCUMENTS_DIR)
+    configs_dir: Path = Field(default=DEFAULT_CONFIGS_DIR)
+    venvs_dir: Path = Field(default=DEFAULT_VENVS_DIR)
+    jobs_dir: Path = Field(default=DEFAULT_JOBS_DIR)
+    pip_cache_dir: Path = Field(default=DEFAULT_PIP_CACHE_DIR)
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
     secret_key: SecretStr = Field(
@@ -404,15 +388,18 @@ class Settings(BaseSettings):
             self.alembic_migrations_dir, default=DEFAULT_ALEMBIC_MIGRATIONS
         )
 
-        base = self.data_dir.expanduser().resolve()
-        self.data_dir = base
-
-        for attr, subdir in DEFAULT_SUBDIRS.items():
-            override = getattr(self, attr)
-            setattr(self, attr, _resolve_dir(base, override, subdir))
+        self.documents_dir = _resolve_path(
+            self.documents_dir, default=DEFAULT_DOCUMENTS_DIR
+        )
+        self.configs_dir = _resolve_path(self.configs_dir, default=DEFAULT_CONFIGS_DIR)
+        self.venvs_dir = _resolve_path(self.venvs_dir, default=DEFAULT_VENVS_DIR)
+        self.jobs_dir = _resolve_path(self.jobs_dir, default=DEFAULT_JOBS_DIR)
+        self.pip_cache_dir = _resolve_path(
+            self.pip_cache_dir, default=DEFAULT_PIP_CACHE_DIR
+        )
 
         if not self.database_dsn:
-            sqlite = (base / "db" / DEFAULT_DB_FILENAME).resolve()
+            sqlite = _resolve_path(DEFAULT_SQLITE_PATH, default=DEFAULT_SQLITE_PATH)
             self.database_dsn = f"sqlite+aiosqlite:///{sqlite.as_posix()}"
 
         oidc_config = {
@@ -468,10 +455,8 @@ def reload_settings() -> Settings:
 
 __all__ = [
     "DEFAULT_CORS_ORIGINS",
-    "DEFAULT_DATA_DIR",
     "DEFAULT_DB_FILENAME",
     "DEFAULT_PUBLIC_URL",
-    "DEFAULT_SUBDIRS",
     "Settings",
     "get_settings",
     "reload_settings",
