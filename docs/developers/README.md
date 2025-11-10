@@ -99,13 +99,15 @@ Everything ADE produces (config_packages, venvs, jobs, logs, cache, etc.) is per
 │     │        ├─ row_detectors/    # header/data row heuristics
 │     │        ├─ hooks/            # on_job_start/after_mapping/before_save/on_job_end
 │     │        ├─ manifest.json     # read via importlib.resources
-│     ├─ .venv/                     # One Python virtualenv per config_id
-│     │  └─ <config_id>/
-│     │     ├─ bin/python
-│     │     └─ <site-packages>/
-│     │        ├─ ade_engine/...    # Installed ADE engine
-│     │        └─ ade_config/...    # Installed config package
-│     ├─ jobs/                      # One working directory per job (inputs, outputs, audit)
+│     ├─ .venv/                     # Python virtual environments organized by workspace
+│     │  └─ <workspace_id>/
+│     │     └─ <config_id>/
+│     │        └─ <build_id>/       # unique per build
+│     │           ├─ bin/python
+│     │           └─ <site-packages>/
+│     │              ├─ ade_engine/
+│     │              └─ ade_config/
+│     ├─ jobs/
 │     │  └─ <job_id>/
 │     │     ├─ input/               # Uploaded files
 │     │     ├─ output/              # Generated output files

@@ -1,6 +1,6 @@
 # 02 — Build: Freeze the Runtime (Virtual Environment)
 
-When you press **Build** in the frontend config builder, ADE takes your editable configuration and turns it into a **ready-to-run runtime environment**.
+When you press **Build** in the frontend config builder, ADE takes your editable configuration and turns it into a **ready‑to‑run runtime environment**.
 This process—called a **build**—packages your configuration together with the ADE Engine in an isolated Python environment.
 That environment is then reused for every job that runs against that configuration version.
 
@@ -20,24 +20,24 @@ Once built, every job for that configuration runs inside this frozen environment
 
 ## Where Builds Are Stored
 
-The location of the virtual environments is controlled by the environment variable `ADE_VENVS_DIR`.
-If you don’t specify it, ADE defaults to `./data/.venv` (ignored by Git).
-If you do specify it—such as mounting a volume or network share—builds will automatically persist there.
+The location of virtual environments is controlled by `ADE_VENVS_DIR`.
+If you don’t set it, ADE defaults to `./data/.venv` (ignored by Git).
+If you do set it—e.g., to a mounted volume—builds persist there.
 
-Typical structure:
+Each build gets its **own folder named by `build_id`**:
 
 ```text
 ./data/.venv/
 └─ <workspace_id>/
    └─ <config_id>/
-      ├─ bin/python
-      └─ <site-packages>/
-         ├─ ade_engine/...    # Installed ADE engine
-         └─ ade_config/...    # Installed config package
+      └─ <build_id>/           # unique per build
+         ├─ bin/python
+         └─ <site-packages>/
+            ├─ ade_engine/...  # installed engine
+            └─ ade_config/...  # installed config package
 ```
 
-This keeps builds separate from workspace data.
-Persist them if you want them to survive restarts, or let them live ephemerally if you prefer a stateless setup.
+ADE maintains **one active build per configuration**. The **database** stores which `build_id` is active. Older folders are removed when safe (see Cleanup).
 
 ---
 
@@ -45,27 +45,27 @@ Persist them if you want them to survive restarts, or let them live ephemerally 
 
 ```mermaid
 flowchart TD
-  A["Start build (config_id + version)"] --> B["Create temporary venv"]
+  A["Start build (config_id + version)"] --> B["Allocate build_id & create venv at .../<build_id>/"]
   B --> C["Install ADE Engine"]
   C --> D["Install config package (+ dependencies)"]
   D --> E["Verify imports (ade_engine, ade_config)"]
-  E --> F["Record build metadata in database"]
-  F --> G["Atomically publish venv"]
-  G --> H["Mark success and return build info"]
+  E --> F["Update database pointer → active build_id & venv_path"]
+  F --> G["Prune old build folders with no running jobs"]
+  G --> H["Return build info"]
 ```
 
 **Key points**
 
-* **Atomic:** a venv only appears once fully built and validated.
-* **Safe:** if any step fails, ADE keeps the previous build intact.
-* **Fast:** the pip cache (`ADE_PIP_CACHE_DIR`) accelerates rebuilds by reusing downloaded wheels.
-* **Centralized:** all metadata is recorded in the database—no additional runtime files are written to disk.
+* **Atomic by pointer:** ADE updates the **database pointer** only after a successful build and verification.
+* **No rename needed:** each build has its own folder; switching is a DB update.
+* **Safe on failure:** if the build fails, ADE **deletes** the partially built folder and leaves the previous active build unchanged.
+* **Fast installs:** the pip cache (`ADE_PIP_CACHE_DIR`) accelerates rebuilds by reusing downloaded wheels.
 
 ---
 
 ## Database Tracking
 
-Build metadata is stored in a small SQLite table, which makes it easy for the API and UI to check status without reading files.
+Build metadata is stored in a small SQLite table so the API/UI can check status quickly.
 
 | Field            | Description                                  |
 | ---------------- | -------------------------------------------- |
@@ -76,12 +76,14 @@ Build metadata is stored in a small SQLite table, which makes it easy for the AP
 | `status`         | `building`, `active`, or `failed`            |
 | `engine_version` | ADE Engine version used                      |
 | `python_version` | Interpreter version                          |
+| `venv_path`      | Full path including `<build_id>/`            |
+| `started_at`     | When this build began (only while building)  |
 | `built_at`       | Timestamp when build completed               |
 | `expires_at`     | Optional expiration (if TTL policy enabled)  |
 | `last_used_at`   | Updated each time a job runs with this build |
 | `error`          | Failure message, if applicable               |
 
-This record acts as the single source of truth for build metadata.
+The **DB pointer** (`build_id`, `venv_path`, `status`) is authoritative. Jobs use this pointer.
 
 ---
 
@@ -89,64 +91,96 @@ This record acts as the single source of truth for build metadata.
 
 ADE maintains **one active build per configuration** and rebuilds only when needed.
 
-A build is created or replaced automatically when any of the following is true:
+ADE (re)builds when any of the following change:
 
-* No existing build exists for that configuration.
-* The configuration **version or digest** has changed.
+* No active build exists for the configuration.
+* `config_version` (or content digest) changed.
+* `engine_version` changed.
+* `python_version` changed.
+* The build expired (`expires_at`), if TTL is enabled.
+* The request sets `force=true`.
 
-  * *Version:* if you keep a numeric `config_version` in the database.
-  * *Digest:* if you compute a content hash (e.g., of `pyproject.toml`, `src/ade_config/**`, `manifest.json`, `config.env`).
-* The ADE Engine **version** changed (e.g., engine upgrade).
-* The **Python interpreter** changed (e.g., 3.11 → 3.12).
-* The build has **expired** (`expires_at` passed, if TTL is enabled).
-* The user explicitly **forces** a rebuild.
-
-Otherwise, ADE reuses the existing build.
-The process is **idempotent**—repeated build requests simply return the active build’s metadata.
+Otherwise, ADE reuses the active build. Requests are **idempotent**—you get the current active pointer.
 
 ---
 
-## Compatibility & Validation
+## Concurrency & Safety
 
-To avoid subtle runtime issues, ADE performs a small set of checks during build:
+**Simple, DB‑based dedupe (no per‑config file locks):**
 
-* **Import check:** `import ade_engine, ade_config` must succeed.
-* **Engine compatibility (optional):** if your config declares a minimum engine version, the builder can verify it and fail fast with a clear error.
-* **Python version pinning (recommended):** standardize on a minor version (e.g., Python 3.11) to keep wheels consistent across environments.
+* **Single‑builder rule:** the first request sets a row to `status="building"`. A unique index guarantees **at most one building row** per `(workspace_id, config_id)`.
+  Subsequent requests **see** the `building` state and **do not** start another build.
 
-These checks keep builds predictable and errors easy to diagnose.
+* **Coalescing:**
+
+  * For the **Build** button (interactive UI), if a build is already in progress, `PUT /build` returns `200 OK` with `"status":"building"` so the client can poll `GET /build`.
+  * For **job submission** (server‑side), if a build is in progress, the server **waits briefly** for it to finish (see *Timeouts & Wait Behavior*) to avoid stampedes when many documents arrive at once.
+
+* **No half builds:** the active pointer is only updated after imports succeed.
+
+This keeps behavior correct and predictable without introducing filesystem locks.
 
 ---
 
-## Concurrency, Atomicity & Safety
+## Timeouts & Wait Behavior
 
-* **Exclusive build lock:** builds for a given configuration run under a simple file lock at
-  `${ADE_VENVS_DIR}/<workspace_id>/<config_id>/.build.lock`.
-  This prevents duplicate work and race conditions.
-* **Atomic publish:** ADE creates the venv in a temporary directory and **renames** it into place only after all steps succeed.
-* **Rebuild safety gate:** for the simplest, safest behavior, ADE rebuilds a configuration **only when no jobs for that configuration are running**.
-  If a job is active and a rebuild is requested, the API returns `409 Conflict` (unless you explicitly design for a pointer/symlink swap, which is more complex and not required here).
-* **Idempotent ensure:** the `ensure_build()` function returns the current build if it’s already valid, and only executes a build when truly needed.
+**Build timeout:**
+
+* A single build is capped by `ADE_BUILD_TIMEOUT_SECONDS`.
+* If exceeded (including crash/kill), the build is marked `failed` and any partial folder is deleted.
+
+**Ensure wait (server‑side jobs):**
+
+* When a job calls `ensure_build()` and finds `status="building"`, the server **waits up to `ADE_BUILD_ENSURE_WAIT_SECONDS`** for the active pointer to flip.
+* If it flips within that window, the job proceeds. Otherwise, the job submission returns a retriable error (e.g., `409 build_in_progress`) and can retry shortly.
+
+**UI behavior (Build button):**
+
+* `PUT /build` returns immediately with `"status":"building"` when another build is already running; the UI polls `GET /build` until `active` or `failed`.
+
+---
+
+## Crash Recovery & Stale Build Healing
+
+If the app crashes mid‑build, you won’t get stuck:
+
+* Every `building` row stores a `started_at` timestamp.
+* On **startup** and on every `ensure_build()` call, ADE checks for **stale** building rows:
+
+  * If `now - started_at > ADE_BUILD_TIMEOUT_SECONDS`, ADE marks the row `failed` and deletes the partial folder (if present).
+  * The next ensure will start a fresh build normally.
+
+This self‑healing logic guarantees that a crash during build does not permanently block new builds.
+
+---
+
+## Cleanup
+
+**On failure:** delete the just‑created `<build_id>/` folder and set `status=failed` with an error message.
+
+**On success:** after switching the pointer, **prune old build folders** that are **not** the active pointer and have **no running jobs**.
+Pruning can happen immediately after activation and/or via a periodic sweep.
+
+**On startup / periodic sweep:** remove any `<build_id>` folders that aren’t the active pointer and aren’t referenced by any job.
 
 ---
 
 ## Jobs and Build Reuse
 
-Before each job starts, ADE ensures a valid build exists:
+Before each job, the backend calls `ensure_build(workspace_id, config_id)`:
 
-1. The backend calls `ensure_build(workspace_id, config_id)`:
+* If a valid active build exists, it returns the **current pointer** (`build_id`, `venv_path`).
+* Otherwise, it builds a new one and then returns the pointer.
 
-   * Returns the current active build if valid.
-   * Otherwise, builds one immediately.
-2. The job runs inside that environment:
+Jobs launch using the venv from the pointer:
 
 ```bash
-${ADE_VENVS_DIR}/<workspace_id>/<config_id>/bin/python \
+${ADE_VENVS_DIR}/<workspace_id>/<config_id>/<build_id>/bin/python \
   -I -B -m ade_engine.worker <job_id>
 ```
 
-Jobs do **not** install anything.
-They always execute inside a pre-built, verified runtime.
+Jobs never install packages; they always run inside a verified venv.
+The job record stores the `build_id` used, for audit and reproducibility.
 
 ---
 
@@ -160,7 +194,7 @@ Each configuration has a **single build resource**.
 GET /api/v1/workspaces/{workspace_id}/configurations/{config_id}/build
 ```
 
-### Create or rebuild
+### Create or rebuild (idempotent)
 
 ```
 PUT /api/v1/workspaces/{workspace_id}/configurations/{config_id}/build
@@ -172,9 +206,9 @@ Body:
 { "force": false }
 ```
 
-* If a valid build already exists, this returns it (idempotent).
-* If not, this builds synchronously and returns the result.
-* If jobs for the configuration are currently running and a rebuild would replace the venv, the route returns `409 Conflict`.
+* `200 OK` — returned existing active build, or `{"status":"building"}` if a build is already in progress, or the newly built pointer when complete (server may wait for jobs path; UI may poll).
+* `409 Conflict` — optional strategy if you choose not to block for certain callers.
+* `5xx` — build failed; `error` contains the reason.
 
 ### Delete build
 
@@ -182,84 +216,47 @@ Body:
 DELETE /api/v1/workspaces/{workspace_id}/configurations/{config_id}/build
 ```
 
-Removes the venv on disk and clears the DB record. The next job or `PUT /build` will recreate it.
+Removes the **active** build folder and clears the DB record. The next job or `PUT` will rebuild as needed.
+
+> **Jobs API (submit):** clients provide `workspace_id` and `config_id`. The server resolves and records `build_id` at submit time. An optional `build_id` override may be supported for debugging.
 
 ---
 
 ## Environment Variables
 
-| Variable                  | Default            | Description                              |
-| ------------------------- | ------------------ | ---------------------------------------- |
-| `ADE_DOCUMENTS_DIR`       | `./data/documents` | Uploaded files + generated artifacts     |
-| `ADE_VENVS_DIR`           | `./data/.venv`     | Where virtual environments are created   |
-| `ADE_PIP_CACHE_DIR`       | `./data/cache/pip` | Cache for pip downloads (safe to delete) |
-| `ADE_BUILD_TTL_DAYS`      | —                  | Optional expiry for builds               |
-| `ADE_MAX_CONCURRENCY`     | `2`                | Maximum concurrent builds/jobs           |
-| `ADE_JOB_TIMEOUT_SECONDS` | `300`              | Hard timeout for jobs                    |
-| `ADE_WORKER_CPU_SECONDS`  | `60`               | CPU limit per job                        |
-| `ADE_WORKER_MEM_MB`       | `512`              | Memory limit per job                     |
-| `ADE_WORKER_FSIZE_MB`     | `100`              | Max file size a job may create           |
-
-**Operational tips**
-
-* A shared pip cache (`ADE_PIP_CACHE_DIR`) makes rebuilds much faster.
-* Pin dependency versions in `pyproject.toml` for stable, deterministic rebuilds.
-
----
-
-## Backend Architecture Overview
-
-The build system fits naturally inside the **Configurations** feature:
-
-* **Router** — exposes REST endpoints (`GET`, `PUT`, `DELETE /build`).
-* **Service** — orchestrates logic (`ensure_build()`): checks the database and spawns a build if needed.
-* **Builder** — low-level runner that:
-
-  * Creates a venv (`python -m venv ...`)
-  * Installs `ade_engine` and the config package
-  * Verifies imports
-  * Publishes atomically
-  * Records metadata in the database
-* **Database** — the single source of truth for build metadata.
-
-Jobs invoke the same `ensure_build()` logic before execution, so they always run against a verified environment.
-If the venv disappears (for example, after a container restart), it’s transparently rebuilt on demand.
+| Variable                        | Default                | Description                                     |
+| ------------------------------- | ---------------------- | ----------------------------------------------- |
+| `ADE_DOCUMENTS_DIR`             | `./data/documents`     | Uploaded files + generated artifacts            |
+| `ADE_VENVS_DIR`                 | `./data/.venv`         | Where virtual environments are created          |
+| `ADE_PIP_CACHE_DIR`             | `./data/cache/pip`     | Cache for pip downloads (safe to delete)        |
+| `ADE_BUILD_TTL_DAYS`            | —                      | Optional expiry for builds                      |
+| `ADE_ENGINE_SPEC`               | `packages/ade-engine/` | How to install the engine (path or pinned dist) |
+| `ADE_PYTHON_BIN`                | system default         | Python executable to use for `venv` (optional)  |
+| `ADE_BUILD_TIMEOUT_SECONDS`     | `600`                  | Max duration for a single build before failing  |
+| `ADE_BUILD_ENSURE_WAIT_SECONDS` | `30`                   | How long server waits for an in‑progress build  |
+| `ADE_MAX_CONCURRENCY`           | `2`                    | Maximum concurrent builds/jobs                  |
+| `ADE_JOB_TIMEOUT_SECONDS`       | `300`                  | Hard timeout for jobs                           |
+| `ADE_WORKER_CPU_SECONDS`        | `60`                   | CPU limit per job                               |
+| `ADE_WORKER_MEM_MB`             | `512`                  | Memory limit per job                            |
+| `ADE_WORKER_FSIZE_MB`           | `100`                  | Max file size a job may create                  |
 
 ---
 
-## Local Example (Manual Steps)
+## Backend Architecture (Essentials)
 
-```bash
-# Create venv
-python -m venv data/.venv/ws_local/my_config/
-
-# Install ADE Engine
-data/.venv/ws_local/my_config/bin/pip install ./packages/ade-engine/
-
-# Install config package
-data/.venv/ws_local/my_config/bin/pip install ./data/workspaces/ws_local/config_packages/my_config/
-
-# Verify
-data/.venv/ws_local/my_config/bin/python -I -B -c "import ade_engine, ade_config; print('ok')"
-```
-
-Then run a job:
-
-```bash
-data/.venv/ws_local/my_config/bin/python -I -B -m ade_engine.worker job_001
-```
+* **Router** — `GET/PUT/DELETE /build` per configuration.
+* **Service (`ensure_build`)** — checks the DB, computes the fingerprint, applies TTL/force rules, **uses DB `status="building"` to deduplicate concurrent requests** (coalescing), self‑heals stale `building` rows, and triggers the builder if needed.
+* **Builder** — creates `…/<build_id>/`, installs engine + config, verifies imports, **updates the DB pointer on success**, deletes the folder on failure, and triggers pruning of old builds with no running jobs.
+* **Jobs** — call `ensure_build()` then run the worker using the returned `venv_path`. Each job row stores `build_id`.
+* **Database** — one row per build; a unique constraint guarantees **one active** build per `(workspace_id, config_id)`.
 
 ---
 
-## Implementation Notes & Checklist
+## Summary
 
-These choices keep the system simple and safe while covering real-world edge cases:
-
-* **Change detection:** Prefer a **config version** if you already maintain one; otherwise compute a **digest** of config sources to detect edits.
-* **Rebuild safety:** Only rebuild when **no jobs** for that configuration are running, or return `409`.
-* **Atomic publish:** Always build in a temp directory and **rename** into place.
-* **Locking:** Use a config-scoped **file lock** to serialize builds: `.../<ws>/<cfg>/.build.lock`.
-* **Compatibility:** Enforce engine/Python requirements during build; fail fast with clear errors.
-* **Observability (optional):** log build duration, success/failure counts, and cache hit rate; these help diagnose slow builds.
-* **Idempotency:** `PUT /build` should return the active build when nothing needs rebuilding.
-* **No disk metadata files:** All build metadata lives in SQLite. The venv contains only executables and installed packages.
+* Keep it simple: **DB‑based dedupe** guarantees **one** build at a time per config—no filesystem locks.
+* **Coalesce** concurrent requests: UI returns `"building"` quickly; jobs wait briefly for the pointer to flip.
+* **Self‑heal** stale `building` rows after crashes using `started_at + ADE_BUILD_TIMEOUT_SECONDS`.
+* Allow **rebuilds while jobs run**; prune old builds only when unreferenced.
+* Jobs **don’t pass** `build_id`—the server chooses and **records** it for reproducibility.
+* No renames, no symlinks—just clean pointer updates, timeouts, and simple cleanup.
