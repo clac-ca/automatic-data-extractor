@@ -7,8 +7,11 @@ name = "ade-engine"
 version = "0.1.0"
 description = "ADE engine runtime package (scaffold)."
 requires-python = ">=3.12"
-readme = { text = "Placeholder runtime package; implementation forthcoming." }
+readme = { text = "Placeholder runtime package; implementation forthcoming.", content-type = "text/plain" }
 license = { text = "Proprietary" }
+dependencies = [
+    "openpyxl>=3.1",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
