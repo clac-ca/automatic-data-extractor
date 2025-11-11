@@ -5546,6 +5546,349 @@
           }
         }
       }
+    },
+    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/build": {
+      "get": {
+        "tags": [
+          "builds"
+        ],
+        "summary": "Get the active build pointer",
+        "operationId": "get_build_api_v1_workspaces__workspace_id__configurations__config_id__build_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "config_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Configuration identifier",
+              "title": "Config Id"
+            },
+            "description": "Configuration identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildRecord"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "builds"
+        ],
+        "summary": "Ensure the configuration build exists and is current",
+        "operationId": "ensure_build_api_v1_workspaces__workspace_id__configurations__config_id__build_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "config_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Configuration identifier",
+              "title": "Config Id"
+            },
+            "description": "Configuration identifier"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildEnsureRequest",
+                "description": "Options for ensuring the configuration build is up-to-date.",
+                "default": {
+                  "force": false
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildEnsureResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "builds"
+        ],
+        "summary": "Delete the active build and remove its virtual environment",
+        "operationId": "delete_build_api_v1_workspaces__workspace_id__configurations__config_id__build_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "config_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Configuration identifier",
+              "title": "Config Id"
+            },
+            "description": "Configuration identifier"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5844,6 +6187,243 @@
           "file"
         ],
         "title": "Body_upload_document_api_v1_workspaces__workspace_id__documents_post"
+      },
+      "BuildEnsureRequest": {
+        "properties": {
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "description": "Force rebuild even if fingerprint matches",
+            "default": false
+          },
+          "wait": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wait",
+            "description": "When true, wait up to ADE_BUILD_ENSURE_WAIT_SECONDS for an in-progress build to finish. When omitted, the default depends on the caller."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "BuildEnsureRequest",
+        "description": "Body accepted by PUT /build to trigger a rebuild."
+      },
+      "BuildEnsureResponse": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/BuildStatus",
+            "description": "Resulting build status"
+          },
+          "build": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuildRecord"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Active build pointer when available"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "BuildEnsureResponse",
+        "description": "Response returned by ensure_build endpoints."
+      },
+      "BuildRecord": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id",
+            "description": "Workspace identifier"
+          },
+          "config_id": {
+            "type": "string",
+            "title": "Config Id",
+            "description": "Configuration identifier"
+          },
+          "build_id": {
+            "type": "string",
+            "title": "Build Id",
+            "description": "Build identifier (ULID)"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BuildStatus",
+            "description": "Current lifecycle status"
+          },
+          "venv_path": {
+            "type": "string",
+            "title": "Venv Path",
+            "description": "Absolute path to the venv root"
+          },
+          "config_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Version",
+            "description": "Configuration version when built"
+          },
+          "content_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Digest",
+            "description": "Content fingerprint of the config"
+          },
+          "engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Version",
+            "description": "Installed ADE engine version"
+          },
+          "engine_spec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Spec",
+            "description": "Engine installation spec"
+          },
+          "python_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Python Version",
+            "description": "Interpreter version used"
+          },
+          "python_interpreter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Python Interpreter",
+            "description": "Path to the interpreter used for venv creation"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At",
+            "description": "When the build began"
+          },
+          "built_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Built At",
+            "description": "When the build completed"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At",
+            "description": "When the build expires, if set"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At",
+            "description": "Last time the build was used"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Error message, if build failed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "config_id",
+          "build_id",
+          "status",
+          "venv_path"
+        ],
+        "title": "BuildRecord",
+        "description": "Serialized representation of a configuration build pointer."
+      },
+      "BuildStatus": {
+        "type": "string",
+        "enum": [
+          "building",
+          "active",
+          "inactive",
+          "failed"
+        ],
+        "title": "BuildStatus",
+        "description": "Lifecycle states for configuration build records."
       },
       "ConfigSourceClone": {
         "properties": {
