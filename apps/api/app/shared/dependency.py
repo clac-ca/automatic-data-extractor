@@ -29,6 +29,7 @@ from fastapi.security import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
+    from apps.api.app.features.builds.service import BuildsService
     from apps.api.app.features.configs.service import ConfigurationsService
     from apps.api.app.features.documents.service import DocumentsService
     from apps.api.app.features.health.service import HealthService
@@ -94,6 +95,27 @@ def get_configs_service(
         configs_root=settings.configs_dir,
     )
     return ConfigurationsService(session=session, storage=storage)
+
+
+def get_builds_service(
+    session: SessionDep,
+    settings: SettingsDep,
+) -> BuildsService:
+    """Return a builds service for virtual environment lifecycle APIs."""
+
+    from apps.api.app.features.builds.service import BuildsService
+    from apps.api.app.features.configs.storage import ConfigStorage
+
+    if settings.configs_dir is None:
+        raise RuntimeError("ADE_CONFIGS_DIR is not configured")
+
+    module_root = FilePath(__file__).resolve().parents[1]
+    templates_root = module_root / "templates" / "config_packages"
+    storage = ConfigStorage(
+        templates_root=templates_root,
+        configs_root=settings.configs_dir,
+    )
+    return BuildsService(session=session, settings=settings, storage=storage)
 
 
 _bearer_scheme = HTTPBearer(auto_error=False)
