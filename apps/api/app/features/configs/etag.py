@@ -26,3 +26,13 @@ def format_etag(value: str | None) -> str | None:
 
 
 __all__ = ["canonicalize_etag", "format_etag"]
+
+
+def format_weak_etag(value: str | None) -> str | None:
+    token = canonicalize_etag(value)
+    if token is None:
+        return None
+    return f'W/"{token}"'
+
+
+__all__.append("format_weak_etag")

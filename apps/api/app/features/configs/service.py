@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import datetime as dt
+import fnmatch
 import io
 import mimetypes
 import os
 import secrets
 import shutil
 import zipfile
+from collections import defaultdict
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
@@ -194,10 +198,81 @@ class ConfigurationsService:
         return configuration
 
     async def list_files(
-        self, *, workspace_id: str, config_id: str
-    ) -> list[dict]:
+        self,
+        *,
+        workspace_id: str,
+        config_id: str,
+        prefix: str,
+        depth: str,
+        include: list[str] | None,
+        exclude: list[str] | None,
+        limit: int,
+        page_token: str | None,
+        sort: str,
+        order: str,
+    ) -> dict:
+        configuration = await self._require_configuration(
+            workspace_id=workspace_id,
+            config_id=config_id,
+        )
         config_path = await self._storage.ensure_config_path(workspace_id, config_id)
-        return await run_in_threadpool(_build_tree_listing, config_path)
+        index = await run_in_threadpool(_build_file_index, config_path)
+
+        normalized_prefix, prefix_is_file = _normalize_prefix_argument(
+            prefix,
+            index["dir_paths"],
+            index["file_paths"],
+        )
+
+        depth_limit = _coerce_depth(depth)
+        offset = _decode_page_token(page_token)
+
+        filtered = _filter_entries(
+            index["entries"],
+            normalized_prefix,
+            prefix_is_file,
+            depth_limit,
+            include or [],
+            exclude or [],
+        )
+
+        total_files = sum(1 for entry in filtered if entry["kind"] == "file")
+        total_dirs = sum(1 for entry in filtered if entry["kind"] == "dir")
+
+        sorted_entries = _sort_entries(filtered, sort, order)
+        window = sorted_entries[offset : offset + limit]
+
+        next_token = None
+        if offset + limit < len(sorted_entries):
+            next_token = _encode_page_token(offset + limit)
+
+        fileset_hash = _compute_fileset_hash(sorted_entries)
+
+        listing = {
+            "workspace_id": workspace_id,
+            "config_id": config_id,
+            "status": configuration.status,
+            "capabilities": {
+                "editable": configuration.status == "draft",
+                "can_create": configuration.status == "draft",
+                "can_delete": configuration.status == "draft",
+                "can_rename": configuration.status == "draft",
+            },
+            "root": normalized_prefix,
+            "prefix": normalized_prefix,
+            "depth": depth,
+            "generated_at": utc_now(),
+            "fileset_hash": fileset_hash,
+            "summary": {"files": total_files, "directories": total_dirs},
+            "limits": {
+                "code_max_bytes": _MAX_FILE_SIZE,
+                "asset_max_bytes": _MAX_ASSET_FILE_SIZE,
+            },
+            "count": len(window),
+            "next_token": next_token,
+            "entries": window,
+        }
+        return listing
 
     async def read_file(
         self,
@@ -205,13 +280,14 @@ class ConfigurationsService:
         workspace_id: str,
         config_id: str,
         relative_path: str,
+        include_content: bool = True,
     ) -> dict:
         config_path = await self._storage.ensure_config_path(workspace_id, config_id)
         rel_path = _normalize_editable_path(relative_path)
         file_path = _ensure_allowed_file_path(config_path, rel_path)
         if not file_path.is_file():
             raise FileNotFoundError(relative_path)
-        return await run_in_threadpool(_read_file_info, file_path, rel_path)
+        return await run_in_threadpool(_read_file_info, file_path, rel_path, include_content)
 
     async def write_file(
         self,
@@ -320,6 +396,71 @@ class ConfigurationsService:
         await self._session.flush()
         await self._session.refresh(configuration)
 
+    async def rename_entry(
+        self,
+        *,
+        workspace_id: str,
+        config_id: str,
+        source_path: str,
+        dest_path: str,
+        overwrite: bool,
+        dest_if_match: str | None,
+    ) -> dict:
+        configuration = await self._require_configuration(
+            workspace_id=workspace_id,
+            config_id=config_id,
+        )
+        _ensure_editable_status(configuration)
+        config_path = await self._storage.ensure_config_path(workspace_id, config_id)
+
+        src_rel = _normalize_editable_path(source_path)
+        dest_rel = _normalize_editable_path(dest_path)
+        src_abs = _resolve_entry_path(config_path, src_rel)
+
+        if not src_abs.exists():
+            raise FileNotFoundError(source_path)
+
+        src_is_dir = src_abs.is_dir()
+        if src_is_dir:
+            src_abs = _ensure_allowed_directory_path(config_path, src_rel)
+            dest_abs = _ensure_allowed_directory_path(config_path, dest_rel)
+        else:
+            src_abs = _ensure_allowed_file_path(config_path, src_rel)
+            dest_abs = _ensure_allowed_file_path(config_path, dest_rel)
+
+        if src_abs == dest_abs:
+            raise InvalidPathError("source_equals_destination")
+
+        if dest_abs.exists():
+            if src_is_dir or dest_abs.is_dir():
+                raise DestinationExistsError()
+            if not overwrite:
+                raise DestinationExistsError()
+            if not dest_if_match:
+                raise PreconditionRequiredError()
+            current_etag = _compute_file_etag(dest_abs) or ""
+            if canonicalize_etag(dest_if_match) != current_etag:
+                raise PreconditionFailedError(current_etag)
+            dest_abs.unlink()
+
+        dest_abs.parent.mkdir(parents=True, exist_ok=True)
+        src_abs.replace(dest_abs)
+
+        stat = dest_abs.stat()
+        etag = _compute_file_etag(dest_abs) if dest_abs.is_file() else ""
+
+        configuration.updated_at = utc_now()
+        await self._session.flush()
+        await self._session.refresh(configuration)
+
+        return {
+            "from": _stringify_path(src_rel, src_is_dir),
+            "to": _stringify_path(dest_rel, src_is_dir),
+            "size": stat.st_size if dest_abs.is_file() else 0,
+            "mtime": _format_mtime(stat.st_mtime),
+            "etag": etag,
+        }
+
     async def export_zip(
         self,
         *,
@@ -407,6 +548,18 @@ class PayloadTooLargeError(Exception):
         self.limit = limit
 
 
+class InvalidPageTokenError(Exception):
+    """Raised when pagination token cannot be decoded."""
+
+
+class InvalidDepthError(Exception):
+    """Raised when an unsupported depth parameter is supplied."""
+
+
+class DestinationExistsError(Exception):
+    """Raised when rename target exists without overwrite preconditions."""
+
+
 def _ensure_editable_status(configuration: Configuration) -> None:
     if configuration.status != "draft":
         raise ConfigStateError("config_not_editable")
@@ -467,45 +620,90 @@ def _ensure_allowed_directory_path(root: Path, rel_path: PurePosixPath) -> Path:
     return root / rel_path.as_posix()
 
 
-def _build_tree_listing(config_path: Path) -> list[dict]:
-    if not config_path.exists():
-        return []
+def _build_file_index(config_path: Path) -> dict:
     entries: list[dict] = []
-    # Include root-level files and directories explicitly
+    dir_paths: set[str] = set()
+    file_paths: set[str] = set()
+    child_counts: dict[str, int] = defaultdict(int)
+
+    def _register_entry(entry: dict) -> None:
+        entries.append(entry)
+        parent = entry["parent"]
+        child_counts[parent] += 1
+        if entry["kind"] == "dir":
+            dir_paths.add(entry["path"])
+            child_counts.setdefault(entry["path"], 0)
+        else:
+            file_paths.add(entry["path"])
+
+    def _add_directory(rel_path: PurePosixPath) -> None:
+        path_str = _format_directory_path(rel_path)
+        if path_str in dir_paths:
+            return
+        if path_str == "src/":
+            # do not expose the top-level src pseudo directory
+            return
+        full_path = config_path / rel_path.as_posix()
+        stat = full_path.stat()
+        entry = {
+            "path": path_str,
+            "name": _entry_name(path_str),
+            "parent": _entry_parent(path_str),
+            "kind": "dir",
+            "depth": _compute_depth_value(path_str),
+            "size": None,
+            "mtime": _format_mtime(stat.st_mtime),
+            "etag": None,
+            "content_type": "inode/directory",
+            "has_children": False,
+        }
+        _register_entry(entry)
+
+    def _add_file(rel_path: PurePosixPath) -> None:
+        path_str = rel_path.as_posix()
+        if path_str in file_paths:
+            return
+        full_path = config_path / path_str
+        if not full_path.is_file():
+            return
+        stat = full_path.stat()
+        entry = {
+            "path": path_str,
+            "name": _entry_name(path_str),
+            "parent": _entry_parent(path_str),
+            "kind": "file",
+            "depth": _compute_depth_value(path_str),
+            "size": stat.st_size,
+            "mtime": _format_mtime(stat.st_mtime),
+            "etag": _compute_file_etag(full_path) or "",
+            "content_type": mimetypes.guess_type(path_str)[0] or "application/octet-stream",
+            "has_children": False,
+        }
+        _register_entry(entry)
+
+    if not config_path.exists():
+        return {"entries": [], "dir_paths": dir_paths, "file_paths": file_paths}
+
     for name in sorted(_ROOT_FILE_WHITELIST):
-        file_path = config_path / name
-        if file_path.is_file():
-            stat = file_path.stat()
-            entries.append(
-                {
-                    "path": name,
-                    "type": "file",
-                    "size": stat.st_size,
-                    "mtime": _format_mtime(stat.st_mtime),
-                    "etag": format_etag(_compute_file_etag(file_path)) or '""',
-                }
-            )
+        rel = PurePosixPath(name)
+        _add_file(rel)
+
     for dir_name in sorted(_ROOT_DIR_WHITELIST):
-        dir_path = config_path / dir_name
+        rel_dir = PurePosixPath(dir_name)
+        dir_path = config_path / rel_dir.as_posix()
         if dir_path.exists():
-            entries.append({"path": dir_name, "type": "dir"})
+            _add_directory(rel_dir)
 
     for dirpath, dirnames, filenames in os.walk(config_path):
         rel_dir = PurePosixPath(os.path.relpath(dirpath, config_path))
         if rel_dir == PurePosixPath("."):
             rel_dir = PurePosixPath("")
-        # prune disallowed directories
         for name in list(dirnames):
             rel = (rel_dir / name) if rel_dir else PurePosixPath(name)
             if not _is_allowed_directory(rel) or name in _EXCLUDED_NAMES:
                 dirnames.remove(name)
-        if rel_dir and _is_allowed_directory(rel_dir) and rel_dir.as_posix() != "src":
-            entries.append(
-                {
-                    "path": rel_dir.as_posix(),
-                    "type": "dir",
-                }
-            )
+                continue
+            _add_directory(rel)
         for filename in filenames:
             rel = (rel_dir / filename) if rel_dir else PurePosixPath(filename)
             if not rel_dir and rel.as_posix() in _ROOT_FILE_WHITELIST:
@@ -519,27 +717,175 @@ def _build_tree_listing(config_path: Path) -> list[dict]:
                     continue
                 if rel.suffix in _EXCLUDED_SUFFIXES or rel.name == ".DS_Store":
                     continue
-                path = config_path / rel.as_posix()
-                if not path.is_file():
-                    continue
-                stat = path.stat()
-                entries.append(
-                    {
-                        "path": rel.as_posix(),
-                        "type": "file",
-                        "size": stat.st_size,
-                        "mtime": _format_mtime(stat.st_mtime),
-                        "etag": format_etag(_compute_file_etag(path)) or '""',
-                    }
-                )
+                _add_file(rel)
+
+    for entry in entries:
+        if entry["kind"] == "dir":
+            entry["has_children"] = child_counts.get(entry["path"], 0) > 0
+
     entries.sort(key=lambda item: item["path"])
-    return entries
+    return {"entries": entries, "dir_paths": dir_paths, "file_paths": file_paths}
 
 
-def _read_file_info(path: Path, rel_path: PurePosixPath) -> dict:
-    data = path.read_bytes()
+def _filter_entries(
+    entries: list[dict],
+    prefix: str,
+    prefix_is_file: bool,
+    depth_limit: int | None,
+    include_patterns: list[str],
+    exclude_patterns: list[str],
+) -> list[dict]:
+    if prefix_is_file:
+        subset = [entry for entry in entries if entry["path"] == prefix]
+    else:
+        subset = [entry for entry in entries if not prefix or entry["path"].startswith(prefix)]
+
+    if prefix and not prefix_is_file and prefix not in {entry["path"] for entry in subset}:
+        # ensure the prefix directory itself is represented if it exists
+        matching = [entry for entry in entries if entry["path"] == prefix]
+        subset = matching + subset
+
+    def _matches_include(path: str) -> bool:
+        if not include_patterns:
+            return True
+        return any(fnmatch.fnmatch(path, pattern) for pattern in include_patterns)
+
+    def _matches_exclude(path: str) -> bool:
+        return any(fnmatch.fnmatch(path, pattern) for pattern in exclude_patterns)
+
+    prefix_depth = -1 if prefix == "" else _compute_depth_value(prefix)
+
+    filtered: list[dict] = []
+    for entry in subset:
+        path = entry["path"]
+        if not _matches_include(path) or _matches_exclude(path):
+            continue
+        if depth_limit is not None and not prefix_is_file:
+            rel_depth = _relative_depth(entry["depth"], prefix_depth)
+            if rel_depth > depth_limit:
+                continue
+        filtered.append(entry)
+    return filtered
+
+
+def _sort_entries(entries: list[dict], sort: str, order: str) -> list[dict]:
+    reverse = order == "desc"
+
+    def _key(entry: dict):
+        if sort == "name":
+            return entry["name"]
+        if sort == "mtime":
+            return entry.get("mtime") or dt.datetime.fromtimestamp(0, tz=dt.UTC)
+        if sort == "size":
+            return entry.get("size") or 0
+        return entry["path"]
+
+    return sorted(entries, key=_key, reverse=reverse)
+
+
+def _compute_fileset_hash(entries: list[dict]) -> str:
+    digest = sha256()
+    for entry in sorted(entries, key=lambda item: item["path"]):
+        token = f"{entry['path']}\x00{entry.get('etag') or ''}\x00{entry.get('size') or 0}"
+        digest.update(token.encode("utf-8"))
+    return digest.hexdigest()
+
+
+def _normalize_prefix_argument(prefix: str, dir_paths: set[str], file_paths: set[str]) -> tuple[str, bool]:
+    candidate = (prefix or "").strip()
+    candidate = candidate.lstrip("/")
+    if not candidate:
+        return "", False
+    if not candidate.endswith("/") and f"{candidate}/" in dir_paths:
+        candidate = f"{candidate}/"
+    if candidate in dir_paths:
+        return candidate, False
+    if candidate in file_paths:
+        return candidate, True
+    return candidate, candidate.endswith("/") and candidate in dir_paths
+
+
+def _coerce_depth(value: str) -> int | None:
+    if value not in {"0", "1", "infinity"}:
+        raise InvalidDepthError
+    if value == "infinity":
+        return None
+    return int(value)
+
+
+def _encode_page_token(offset: int) -> str:
+    data = str(offset).encode("ascii")
+    return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
+
+
+def _decode_page_token(token: str | None) -> int:
+    if not token:
+        return 0
+    padding = "=" * (-len(token) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode(token + padding).decode("ascii")
+        value = int(decoded)
+    except (ValueError, binascii.Error) as exc:
+        raise InvalidPageTokenError from exc
+    if value < 0:
+        raise InvalidPageTokenError
+    return value
+
+
+def _relative_depth(entry_depth: int, prefix_depth: int) -> int:
+    return entry_depth - prefix_depth - 1
+
+
+def _format_directory_path(rel_path: PurePosixPath) -> str:
+    path = rel_path.as_posix()
+    if not path:
+        return ""
+    if not path.endswith("/"):
+        path = f"{path}/"
+    return path
+
+
+def _entry_name(path: str) -> str:
+    trimmed = path[:-1] if path.endswith("/") else path
+    if not trimmed:
+        return ""
+    return trimmed.split("/")[-1]
+
+
+def _entry_parent(path: str) -> str:
+    trimmed = path[:-1] if path.endswith("/") else path
+    if not trimmed or "/" not in trimmed:
+        return ""
+    parent = trimmed.rsplit("/", 1)[0]
+    if parent:
+        parent = f"{parent}/"
+    return parent
+
+
+def _compute_depth_value(path: str) -> int:
+    if not path:
+        return -1
+    trimmed = path[:-1] if path.endswith("/") else path
+    if not trimmed:
+        return 0
+    return trimmed.count("/")
+
+
+def _resolve_entry_path(root: Path, rel_path: PurePosixPath) -> Path:
+    return root / rel_path.as_posix()
+
+
+def _stringify_path(rel_path: PurePosixPath, is_dir: bool) -> str:
+    value = rel_path.as_posix()
+    if is_dir and value and not value.endswith("/"):
+        value = f"{value}/"
+    return value
+
+
+def _read_file_info(path: Path, rel_path: PurePosixPath, include_content: bool) -> dict:
+    data = path.read_bytes() if include_content else None
     stat = path.stat()
-    etag = _compute_hash(data)
+    etag = _compute_hash(data) if data is not None else _compute_file_etag(path)
     content_type = mimetypes.guess_type(rel_path.as_posix())[0] or "application/octet-stream"
     return {
         "path": rel_path.as_posix(),
@@ -605,9 +951,9 @@ def _delete_file_checked(path: Path, if_match: str | None) -> None:
 def _build_zip_bytes(config_path: Path) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
-        entries = _build_tree_listing(config_path)
-        for entry in entries:
-            if entry["type"] != "file":
+        index = _build_file_index(config_path)
+        for entry in index["entries"]:
+            if entry["kind"] != "file":
                 continue
             source = config_path / entry["path"]
             if source.is_file():
@@ -628,5 +974,5 @@ def _compute_hash(data: bytes) -> str:
     return f"sha256:{sha256(data).hexdigest()}"
 
 
-def _format_mtime(timestamp: float) -> str:
-    return dt.datetime.fromtimestamp(timestamp, tz=dt.UTC).isoformat()
+def _format_mtime(timestamp: float) -> dt.datetime:
+    return dt.datetime.fromtimestamp(timestamp, tz=dt.UTC)
