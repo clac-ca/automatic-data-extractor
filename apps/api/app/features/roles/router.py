@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.shared.core.security import forbidden_response
 from apps.api.app.shared.db.session import get_session
+from apps.api.app.shared.pagination import PageParams, paginate_sequence
 from apps.api.app.shared.dependency import (
     get_current_identity,
     require_authenticated,
@@ -46,10 +47,13 @@ from .schemas import (
     PermissionCheckRequest,
     PermissionCheckResponse,
     PermissionOut,
+    PermissionPage,
     RoleAssignmentCreate,
     RoleAssignmentOut,
+    RoleAssignmentPage,
     RoleCreate,
     RoleOut,
+    RolePage,
     RoleUpdate,
 )
 from .service import (
@@ -229,7 +233,7 @@ async def require_role_write_access(
 
 @router.get(
     "/roles",
-    response_model=list[RoleOut],
+    response_model=RolePage,
     response_model_exclude_none=True,
     summary="List global role definitions",
     responses={
@@ -251,12 +255,19 @@ async def list_global_roles(
             alias="scope",
         ),
     ] = ScopeType.GLOBAL,
+    page: Annotated[PageParams, Depends()],
     _actor: Annotated[User, Security(require_global("Roles.Read.All"))],
-) -> list[RoleOut]:
+) -> RolePage:
     """Return the catalog of global roles."""
 
     roles = await list_roles(session=session, scope_type=ScopeType.GLOBAL)
-    return [_serialize_role(role) for role in roles]
+    page_result = paginate_sequence(
+        [_serialize_role(role) for role in roles],
+        page=page.page,
+        page_size=page.page_size,
+        include_total=page.include_total,
+    )
+    return RolePage(**page_result.model_dump())
 
 
 @router.post(
@@ -486,7 +497,7 @@ async def delete_role_definition(
 
 @router.get(
     "/role-assignments",
-    response_model=list[RoleAssignmentOut],
+    response_model=RoleAssignmentPage,
     response_model_exclude_none=True,
     summary="List global role assignments",
     responses={
@@ -504,8 +515,9 @@ async def list_global_role_assignments(
     principal_id: Annotated[str | None, Query(min_length=1)] = None,
     user_id: Annotated[str | None, Query(min_length=1)] = None,
     role_id: Annotated[str | None, Query(min_length=1)] = None,
+    page: Annotated[PageParams, Depends()],
     _actor: Annotated[User, Security(require_global("Roles.Read.All"))],
-) -> list[RoleAssignmentOut]:
+) -> RoleAssignmentPage:
     """Return global role assignments filtered by optional identifiers."""
 
     if principal_id and user_id:
@@ -519,7 +531,15 @@ async def list_global_role_assignments(
     )
 
     if user_id and principal_filter is None:
-        return []
+        total = 0 if page.include_total else None
+        return RoleAssignmentPage(
+            items=[],
+            page=page.page,
+            page_size=page.page_size,
+            has_next=False,
+            has_previous=page.page > 1,
+            total=total,
+        )
 
     assignments = await list_role_assignments(
         session=session,
@@ -528,7 +548,14 @@ async def list_global_role_assignments(
         principal_id=principal_filter,
         role_id=role_id,
     )
-    return [_serialize_assignment(assignment) for assignment in assignments]
+    serialized = [_serialize_assignment(assignment) for assignment in assignments]
+    page_result = paginate_sequence(
+        serialized,
+        page=page.page,
+        page_size=page.page_size,
+        include_total=page.include_total,
+    )
+    return RoleAssignmentPage(**page_result.model_dump())
 
 
 @router.post(
@@ -648,7 +675,7 @@ async def delete_global_role_assignment(
 
 @router.get(
     "/workspaces/{workspace_id}/role-assignments",
-    response_model=list[RoleAssignmentOut],
+    response_model=RoleAssignmentPage,
     response_model_exclude_none=True,
     summary="List workspace role assignments",
     responses={
@@ -669,6 +696,7 @@ async def list_workspace_role_assignments(
     user_id: Annotated[str | None, Query(min_length=1)] = None,
     role_id: Annotated[str | None, Query(min_length=1)] = None,
     *,
+    page: Annotated[PageParams, Depends()],
     session: Annotated[AsyncSession, Depends(get_session)],
     _actor: Annotated[
         User,
@@ -677,7 +705,7 @@ async def list_workspace_role_assignments(
             scopes=["{workspace_id}"],
         ),
     ],
-) -> list[RoleAssignmentOut]:
+) -> RoleAssignmentPage:
     """Return workspace role assignments filtered by optional identifiers."""
 
     if principal_id and user_id:
@@ -691,7 +719,15 @@ async def list_workspace_role_assignments(
     )
 
     if user_id and principal_filter is None:
-        return []
+        total = 0 if page.include_total else None
+        return RoleAssignmentPage(
+            items=[],
+            page=page.page,
+            page_size=page.page_size,
+            has_next=False,
+            has_previous=page.page > 1,
+            total=total,
+        )
 
     assignments = await list_role_assignments(
         session=session,
@@ -700,7 +736,14 @@ async def list_workspace_role_assignments(
         principal_id=principal_filter,
         role_id=role_id,
     )
-    return [_serialize_assignment(assignment) for assignment in assignments]
+    serialized = [_serialize_assignment(assignment) for assignment in assignments]
+    page_result = paginate_sequence(
+        serialized,
+        page=page.page,
+        page_size=page.page_size,
+        include_total=page.include_total,
+    )
+    return RoleAssignmentPage(**page_result.model_dump())
 
 
 @router.post(
@@ -834,7 +877,7 @@ async def delete_workspace_role_assignment(
 
 @router.get(
     "/permissions",
-    response_model=list[PermissionOut],
+    response_model=PermissionPage,
     summary="List permission catalog entries",
     responses={
         status.HTTP_401_UNAUTHORIZED: {
@@ -861,6 +904,7 @@ async def list_permissions(
         ),
     ] = None,
     *,
+    page: Annotated[PageParams, Depends()],
     session: Annotated[AsyncSession, Depends(get_session)],
     actor: Annotated[
         User,
@@ -872,7 +916,7 @@ async def list_permissions(
             scopes=["{workspace_id}"],
         ),
     ],
-) -> list[PermissionOut]:
+) -> PermissionPage:
     """Return permission registry entries filtered by ``scope``."""
 
     if scope == ScopeType.WORKSPACE and workspace_id is not None:
@@ -885,8 +929,14 @@ async def list_permissions(
         .order_by(Permission.key)
     )
     result = await session.execute(stmt)
-    permissions = result.scalars().all()
-    return [PermissionOut.model_validate(permission) for permission in permissions]
+    permissions = [PermissionOut.model_validate(p) for p in result.scalars().all()]
+    page_result = paginate_sequence(
+        permissions,
+        page=page.page,
+        page_size=page.page_size,
+        include_total=page.include_total,
+    )
+    return PermissionPage(**page_result.model_dump())
 
 
 @router.get(

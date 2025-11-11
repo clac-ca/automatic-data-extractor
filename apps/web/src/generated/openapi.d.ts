@@ -1530,6 +1530,24 @@ export type components = {
             description: string;
         };
         /**
+         * PermissionPage
+         * @description Paginated permission registry response.
+         */
+        PermissionPage: {
+            /** Items */
+            items: components["schemas"]["PermissionOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Total */
+            total?: number | null;
+        };
+        /**
          * PrincipalType
          * @description Kinds of principals that can hold assignments.
          * @enum {string}
@@ -1633,6 +1651,24 @@ export type components = {
             created_at: string;
         };
         /**
+         * RoleAssignmentPage
+         * @description Paginated role assignment collection.
+         */
+        RoleAssignmentPage: {
+            /** Items */
+            items: components["schemas"]["RoleAssignmentOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Total */
+            total?: number | null;
+        };
+        /**
          * RoleCreate
          * @description Payload for creating a workspace or global role.
          */
@@ -1671,6 +1707,24 @@ export type components = {
             built_in: boolean;
             /** Editable */
             editable: boolean;
+        };
+        /**
+         * RolePage
+         * @description Paginated role collection.
+         */
+        RolePage: {
+            /** Items */
+            items: components["schemas"]["RoleOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Total */
+            total?: number | null;
         };
         /**
          * RoleUpdate
@@ -2579,6 +2633,9 @@ export interface operations {
             query?: {
                 /** @description Role scope to list (global only) */
                 scope?: components["schemas"]["ScopeType"];
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
             };
             header?: never;
             path?: never;
@@ -2592,7 +2649,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RoleOut"][];
+                    "application/json": components["schemas"]["RolePage"];
                 };
             };
             /** @description Authentication required to list roles. */
@@ -2865,6 +2922,9 @@ export interface operations {
                 principal_id?: string | null;
                 user_id?: string | null;
                 role_id?: string | null;
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
             };
             header?: never;
             path?: never;
@@ -2878,7 +2938,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RoleAssignmentOut"][];
+                    "application/json": components["schemas"]["RoleAssignmentPage"];
                 };
             };
             /** @description Authentication required to list role assignments. */
@@ -3014,6 +3074,9 @@ export interface operations {
                 principal_id?: string | null;
                 user_id?: string | null;
                 role_id?: string | null;
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
             };
             header?: never;
             path: {
@@ -3029,7 +3092,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RoleAssignmentOut"][];
+                    "application/json": components["schemas"]["RoleAssignmentPage"];
                 };
             };
             /** @description Authentication required to list assignments. */
@@ -3174,6 +3237,9 @@ export interface operations {
             query: {
                 scope: string;
                 workspace_id?: string | null;
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
             };
             header?: never;
             path?: never;
@@ -3187,7 +3253,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PermissionOut"][];
+                    "application/json": components["schemas"]["PermissionPage"];
                 };
             };
             /** @description Authentication required to list permissions. */
