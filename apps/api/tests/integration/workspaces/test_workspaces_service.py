@@ -132,7 +132,7 @@ async def test_workspace_settings_mutation_persists(seed_identity: dict[str, obj
 
         workspace.settings["notifications"] = {"email": True}
         await session.flush()
-        await session.expire(workspace)
+        await session.refresh(workspace)
 
         reloaded = await session.get(Workspace, workspace_id)
         assert reloaded is not None

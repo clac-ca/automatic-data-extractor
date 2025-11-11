@@ -22,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.api.app.shared.db import Base
 from apps.api.app.shared.db.mixins import TimestampMixin
+from apps.api.app.shared.db.enums import enum_values
 
 __all__ = ["BuildStatus", "ConfigurationBuild"]
 
@@ -54,6 +55,7 @@ class ConfigurationBuild(TimestampMixin, Base):
             name="build_status",
             native_enum=False,
             length=20,
+            values_callable=enum_values,
         ),
         nullable=False,
     )

@@ -189,13 +189,17 @@ def apply_document_filters(
     predicates = []
 
     if filters.status_in:
-        predicates.append(
-            Document.status.in_([status.value for status in sorted(filters.status_in)])
+        status_values = sorted(
+            status.value if isinstance(status, DocumentStatus) else str(status)
+            for status in filters.status_in
         )
+        predicates.append(Document.status.in_(status_values))
     if filters.source_in:
-        predicates.append(
-            Document.source.in_([source.value for source in sorted(filters.source_in)])
+        source_values = sorted(
+            source.value if isinstance(source, DocumentSource) else str(source)
+            for source in filters.source_in
         )
+        predicates.append(Document.source.in_(source_values))
     if filters.tags_in:
         predicates.append(Document.tags.any(DocumentTag.tag.in_(sorted(filters.tags_in))))
 

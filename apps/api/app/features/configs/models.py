@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.api.app.shared.db import Base
 from apps.api.app.shared.db.mixins import TimestampMixin, generate_ulid
+from apps.api.app.shared.db.enums import enum_values
 
 
 class ConfigurationStatus(str, Enum):
@@ -42,6 +43,7 @@ class Configuration(TimestampMixin, Base):
             name="configuration_status",
             native_enum=False,
             length=20,
+            values_callable=enum_values,
         ),
         nullable=False,
         default=ConfigurationStatus.DRAFT,

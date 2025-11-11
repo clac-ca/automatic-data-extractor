@@ -91,8 +91,8 @@ async def test_list_documents_applies_filters_and_sorting() -> None:
         service = DocumentsService(session=session, settings=settings)
 
         filters = DocumentFilters(
-            status_in=[DocumentStatus.PROCESSED.value],
-            tags_in=["finance"],
+            status_in={DocumentStatus.PROCESSED},
+            tags_in={"finance"},
             uploader="me",
             q="Uploader",
         )

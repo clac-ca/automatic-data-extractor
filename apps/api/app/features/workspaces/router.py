@@ -6,7 +6,7 @@ from fastapi import APIRouter, Body, Depends, Path, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.shared.core.responses import DefaultResponse
-from apps.api.app.shared.core.schema import ErrorMessage
+from apps.api.app.shared.core.errors import ProblemDetail
 from apps.api.app.shared.db.session import get_session
 from apps.api.app.shared.pagination import PageParams, paginate_sequence
 from apps.api.app.shared.dependency import (
@@ -65,23 +65,23 @@ def _serialize_role(role: Role) -> RoleOut:
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage workspaces.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Administrator role required to create workspaces.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Specified owner could not be found or is inactive.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_409_CONFLICT: {
             "description": "Workspace slug already exists.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_422_UNPROCESSABLE_ENTITY: {
             "description": "Workspace name or slug is invalid.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
     },
 )
@@ -113,11 +113,11 @@ async def create_workspace(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to list workspaces.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Service account credentials cannot access workspace listings.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
     },
 )
@@ -146,15 +146,15 @@ async def list_workspaces(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to view workspace context.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace access denied for the authenticated user.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Workspace not found.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
     },
 )
@@ -180,11 +180,11 @@ async def read_workspace(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to list workspace members.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow member access.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
     },
 )
@@ -221,11 +221,11 @@ async def list_members(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to list workspace roles.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow viewing role definitions.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
     },
 )
@@ -268,23 +268,23 @@ async def list_workspace_roles(
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "description": "System roles cannot be managed via this endpoint.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage workspace roles.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow managing roles.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_409_CONFLICT: {
             "description": "Role slug already exists or conflicts with a system role.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_422_UNPROCESSABLE_ENTITY: {
             "description": "Invalid role name, slug, or permissions.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
     },
 )
@@ -318,27 +318,27 @@ async def create_workspace_role(
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "description": "System roles cannot be modified.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage workspace roles.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow managing roles.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Role not found for this workspace.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_409_CONFLICT: {
             "description": "Operation would violate governor guardrails.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_422_UNPROCESSABLE_ENTITY: {
             "description": "Invalid role payload.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
     },
 )
@@ -373,23 +373,23 @@ async def update_workspace_role(
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "description": "System roles cannot be deleted.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage workspace roles.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow managing roles.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Role not found for this workspace.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_409_CONFLICT: {
             "description": "Role is assigned or would violate governor guardrails.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
     },
 )
@@ -421,19 +421,19 @@ async def delete_workspace_role(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage workspace members.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow member management.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Workspace or user not found.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_409_CONFLICT: {
             "description": "User is already a member of the workspace.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
     },
 )
@@ -469,23 +469,23 @@ async def add_member(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to update workspaces.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow settings management.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Workspace not found.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_409_CONFLICT: {
             "description": "Workspace slug already exists.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_422_UNPROCESSABLE_ENTITY: {
             "description": "Workspace name or slug is invalid.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
     },
 )
@@ -522,15 +522,15 @@ async def update_workspace(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to delete workspaces.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow workspace deletion.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Workspace not found.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
     },
 )
@@ -560,19 +560,19 @@ async def delete_workspace(
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "description": "Workspace must retain at least one owner.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage workspace members.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow member management.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Membership not found within the workspace.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
     },
 )
@@ -608,19 +608,19 @@ async def update_member(
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "description": "Workspace must retain at least one owner.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage workspace members.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow member management.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Membership not found within the workspace.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
     },
 )
@@ -652,11 +652,11 @@ async def remove_member(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to set the default workspace.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace access denied for the authenticated user.",
-            "model": ErrorMessage,
+            "model": ProblemDetail,
         },
     },
 )

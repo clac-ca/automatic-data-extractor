@@ -315,7 +315,8 @@ async def test_api_key_rotation_and_revocation(
 
     listing = await async_client.get("/api/v1/auth/api-keys")
     assert listing.status_code == 200
-    records = listing.json()
+    payload = listing.json()
+    records = payload["items"]
     assert len(records) == 2
     record_lookup = {record["token_prefix"]: record for record in records}
     first_record = record_lookup[first_prefix]
@@ -350,12 +351,13 @@ async def test_api_key_rotation_and_revocation(
 
     await _login(async_client, admin["email"], admin["password"])
     remaining = await async_client.get("/api/v1/auth/api-keys")
-    payload = remaining.json()
-    assert [record["token_prefix"] for record in payload] == [second_prefix]
-    assert payload[0]["principal_type"] == "user"
-    assert payload[0]["principal_label"] == admin["email"]
-    assert payload[0]["label"] == "Secondary key"
-    assert payload[0]["revoked_at"] is None
+    remaining_payload = remaining.json()
+    remaining_records = remaining_payload["items"]
+    assert [record["token_prefix"] for record in remaining_records] == [second_prefix]
+    assert remaining_records[0]["principal_type"] == "user"
+    assert remaining_records[0]["principal_label"] == admin["email"]
+    assert remaining_records[0]["label"] == "Secondary key"
+    assert remaining_records[0]["revoked_at"] is None
 
 
 async def test_api_key_issue_marks_service_account(
@@ -390,7 +392,7 @@ async def test_api_key_issue_marks_service_account(
     assert payload["label"] == "Robot"
 
     listing = await async_client.get("/api/v1/auth/api-keys")
-    records = listing.json()
+    records = listing.json()["items"]
     target = next(
         record for record in records if record["principal_id"] == service_account.id
     )

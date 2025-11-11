@@ -21,7 +21,7 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from apps.api.app.shared.core.schema import ErrorMessage
+from apps.api.app.shared.core.errors import ProblemDetail
 from apps.api.app.shared.pagination import PageParams, paginate_sequence
 from apps.api.app.shared.dependency import (
     get_configs_service,
@@ -144,8 +144,8 @@ def _parse_range_header(header_value: str, total_size: int) -> tuple[int, int]:
     response_model_exclude_none=True,
     summary="List configurations for a workspace",
     responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorMessage},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorMessage},
+        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
+        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
     },
 )
 async def list_configurations(
@@ -177,9 +177,9 @@ async def list_configurations(
     response_model_exclude_none=True,
     summary="Retrieve configuration metadata",
     responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorMessage},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorMessage},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
+        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
+        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
+        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
     },
 )
 async def read_configuration(
@@ -277,11 +277,11 @@ async def list_config_files(
     summary="Create a configuration from a template or clone",
     response_model_exclude_none=True,
     responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorMessage},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorMessage},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
-        status.HTTP_409_CONFLICT: {"model": ErrorMessage},
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {"model": ErrorMessage},
+        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
+        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
+        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
+        status.HTTP_409_CONFLICT: {"model": ProblemDetail},
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {"model": ProblemDetail},
     },
 )
 async def create_configuration(
@@ -330,10 +330,10 @@ async def create_configuration(
     summary="Validate the configuration on disk",
     response_model_exclude_none=True,
     responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorMessage},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorMessage},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
-        status.HTTP_409_CONFLICT: {"model": ErrorMessage},
+        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
+        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
+        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
+        status.HTTP_409_CONFLICT: {"model": ProblemDetail},
     },
 )
 async def validate_configuration(
@@ -377,9 +377,9 @@ async def validate_configuration(
     responses={
         status.HTTP_200_OK: {"content": {"application/octet-stream": {} }},
         status.HTTP_206_PARTIAL_CONTENT: {"content": {"application/octet-stream": {}}},
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorMessage},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorMessage},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
+        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
+        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
+        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
         status.HTTP_304_NOT_MODIFIED: {"model": None},
     },
 )
@@ -520,11 +520,11 @@ async def head_config_file(
     summary="Activate a configuration",
     response_model_exclude_none=True,
     responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorMessage},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorMessage},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
-        status.HTTP_409_CONFLICT: {"model": ErrorMessage},
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {"model": ErrorMessage},
+        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
+        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
+        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
+        status.HTTP_409_CONFLICT: {"model": ProblemDetail},
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {"model": ProblemDetail},
     },
 )
 async def activate_configuration_endpoint(
@@ -573,9 +573,9 @@ async def activate_configuration_endpoint(
     summary="Deactivate a configuration (was 'archive')",
     response_model_exclude_none=True,
     responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorMessage},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorMessage},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
+        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
+        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
+        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
     },
 )
 async def deactivate_configuration_endpoint(
@@ -604,9 +604,9 @@ async def deactivate_configuration_endpoint(
     "/configurations/{config_id}/export",
     responses={
         status.HTTP_200_OK: {"content": {"application/zip": {}}},
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorMessage},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorMessage},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
+        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
+        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
+        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
     },
 )
 async def export_config(
@@ -725,12 +725,12 @@ async def upsert_config_file(
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorMessage},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorMessage},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
-        status.HTTP_409_CONFLICT: {"model": ErrorMessage},
-        status.HTTP_412_PRECONDITION_FAILED: {"model": ErrorMessage},
-        status.HTTP_428_PRECONDITION_REQUIRED: {"model": ErrorMessage},
+        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
+        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
+        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
+        status.HTTP_409_CONFLICT: {"model": ProblemDetail},
+        status.HTTP_412_PRECONDITION_FAILED: {"model": ProblemDetail},
+        status.HTTP_428_PRECONDITION_REQUIRED: {"model": ProblemDetail},
     },
 )
 async def delete_config_file(
@@ -783,10 +783,10 @@ async def delete_config_file(
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_201_CREATED,
     responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorMessage},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorMessage},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
-        status.HTTP_409_CONFLICT: {"model": ErrorMessage},
+        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
+        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
+        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
+        status.HTTP_409_CONFLICT: {"model": ProblemDetail},
     },
 )
 async def create_config_directory(
@@ -826,10 +826,10 @@ async def create_config_directory(
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorMessage},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorMessage},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
-        status.HTTP_409_CONFLICT: {"model": ErrorMessage},
+        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
+        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
+        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
+        status.HTTP_409_CONFLICT: {"model": ProblemDetail},
     },
 )
 async def delete_config_directory(

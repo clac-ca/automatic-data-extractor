@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from apps.api.app.shared.core.ids import ULIDStr
 from apps.api.app.shared.core.schema import BaseSchema
@@ -124,6 +124,18 @@ class FileEntry(BaseSchema):
     etag: str
     content_type: str
     has_children: bool
+
+    @model_validator(mode="after")
+    def _validate_directory_constraints(self) -> FileEntry:
+        if self.kind == "dir":
+            if self.size not in (None, 0):
+                raise ValueError("Directory entries must omit size or set it to null")
+            if self.content_type != "inode/directory":
+                raise ValueError('Directory entries must use content_type="inode/directory"')
+        else:
+            if self.size is None:
+                raise ValueError("File entries must include a size value")
+        return self
 
 
 class FileListing(BaseSchema):
