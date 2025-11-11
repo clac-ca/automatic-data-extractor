@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from .features.auth.router import router as auth_router
 from .features.auth.router import setup_router
+from .features.configs.router import router as configs_router
 from .features.documents.router import router as documents_router
 from .features.health.router import router as health_router
 from .features.roles.router import router as roles_router
@@ -20,5 +21,6 @@ api_router.include_router(users_router)
 api_router.include_router(roles_router)
 api_router.include_router(workspaces_router)
 api_router.include_router(documents_router)
+api_router.include_router(configs_router)
 
 __all__ = ["api_router"]

@@ -7,7 +7,12 @@ from typing import Any
 _FIELD = "member_id"
 
 
-def detect(*, header: str | None, column_values_sample: list[Any], **_: Any) -> dict[str, dict[str, float]]:
+def detect(
+    *,
+    header: str | None,
+    column_values_sample: list[Any],
+    **_: Any,
+) -> dict[str, dict[str, float]]:
     """Return a confidence score for the member identifier column."""
 
     header_score = 0.7 if header and "id" in header.lower() else 0.0

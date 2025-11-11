@@ -10,4 +10,8 @@ def run(*, job_id: str | None = None, note=None, **_: Any) -> None:
     """Record a log entry in the artifact noting when execution began."""
 
     if note is not None:
-        note("job_start", f"Job {job_id or 'unknown'} started at {datetime.now(tz=UTC).isoformat()}")
+        message = (
+            f"Job {job_id or 'unknown'} started at "
+            f"{datetime.now(tz=UTC).isoformat()}"
+        )
+        note("job_start", message)

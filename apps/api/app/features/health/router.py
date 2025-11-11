@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, status
 
 from apps.api.app.shared.dependency import get_health_service
+
 from .schemas import HealthCheckResponse
 from .service import HealthService
 

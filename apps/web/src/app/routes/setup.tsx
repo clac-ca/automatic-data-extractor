@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { ApiError } from "@shared/api";
 import { buildLoginRedirect, chooseDestination, resolveRedirectParam } from "@shared/auth/utils/authNavigation";
-import { completeSetup, fetchSetupStatus, type SetupStatus } from "@shared/setup/api";
+import { completeSetup, fetchSetupStatus } from "@shared/setup/api";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { FormField } from "@ui/form-field";

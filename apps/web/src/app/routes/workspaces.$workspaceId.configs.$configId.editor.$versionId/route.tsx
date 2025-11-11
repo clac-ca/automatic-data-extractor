@@ -126,7 +126,7 @@ export default function WorkspaceConfigEditorRoute() {
   const versionIdParam = params.versionId ?? "";
 
   const configsQuery = useConfigsQuery({ workspaceId: workspace.id });
-  const configs = configsQuery.data ?? [];
+  const configs = useMemo(() => configsQuery.data ?? [], [configsQuery.data]);
   const activeConfig = useMemo<ConfigRecord | null>(
     () => configs.find((config) => config.config_id === configId) ?? null,
     [configs, configId],
@@ -193,7 +193,7 @@ export default function WorkspaceConfigEditorRoute() {
     versionId: selectedVersionId,
     enabled: Boolean(selectedVersionId),
   });
-  const scripts = scriptsQuery.data ?? [];
+  const scripts = useMemo(() => scriptsQuery.data ?? [], [scriptsQuery.data]);
 
   const fileEntries = useMemo(() => buildFileEntries(manifest.columns, manifest.table, scripts), [manifest, scripts]);
   const fileGroups = useMemo(() => buildFileGroups(fileEntries), [fileEntries]);
@@ -1847,8 +1847,11 @@ interface MappingMatrixToolProps {
   readonly state: TestState;
 }
 
+type MappingMatrixEntry =
+  NonNullable<NonNullable<ConfigVersionTestResponse["mapping_matrix"]>>[number];
+
 function MappingMatrixTool({ state }: MappingMatrixToolProps) {
-  const mapping = state.response?.mapping_matrix ?? [];
+  const mapping: readonly MappingMatrixEntry[] = state.response?.mapping_matrix ?? [];
   const hasData = Array.isArray(mapping) && mapping.length > 0;
   return (
     <section className="space-y-4 p-6">
@@ -1875,7 +1878,7 @@ function MappingMatrixTool({ state }: MappingMatrixToolProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
-              {mapping.map((entry: any, index: number) => (
+              {mapping.map((entry, index) => (
                 <tr key={index}>
                   <td className="px-3 py-2 font-mono text-[11px]">{entry.source ?? "–"}</td>
                   <td className="px-3 py-2">{entry.target ?? "–"}</td>
@@ -2621,27 +2624,27 @@ function createEmptyHarnessInput(): HarnessInputState {
 }
 
 function createColumnScriptTemplate(column: ColumnDescriptor): string {
-  return `"""Derive the ${column.label} (${column.key}) column."""\n\n\ndef transform(value, *, row):\n    \"\"\"Adjust the value for persistence.\"\"\"\n    return value\n`;
+  return `"""Derive the ${column.label} (${column.key}) column."""\n\n\ndef transform(value, *, row):\n    """Adjust the value for persistence."""\n    return value\n`;
 }
 
 function createStartupTemplate(): string {
-  return `\"\"\"Startup hooks for this configuration.\"\"\"\n\n\ndef bootstrap(context):\n    \"\"\"Run once when the configuration loads.\"\"\"\n    # Add initialization logic here.\n`;
+  return `"""Startup hooks for this configuration."""\n\n\ndef bootstrap(context):\n    """Run once when the configuration loads."""\n    # Add initialization logic here.\n`;
 }
 
 function createRunTemplate(): string {
-  return `\"\"\"Entry point for document processing.\"\"\"\n\n\ndef run(document):\n    \"\"\"Yield transformed rows for the provided document.\"\"\"\n    yield document\n`;
+  return `"""Entry point for document processing."""\n\n\ndef run(document):\n    """Yield transformed rows for the provided document."""\n    yield document\n`;
 }
 
 function createTableTransformTemplate(): string {
-  return `\"\"\"Row-level table transforms.\"\"\"\n\n\ndef transform(row):\n    \"\"\"Update the row before writing to the table.\"\"\"\n    return row\n`;
+  return `"""Row-level table transforms."""\n\n\ndef transform(row):\n    """Update the row before writing to the table."""\n    return row\n`;
 }
 
 function createTableValidatorsTemplate(): string {
-  return `\"\"\"Table validation hooks.\"\"\"\n\n\ndef validate(row):\n    \"\"\"Return a list of validation errors for the row.\"\"\"\n    return []\n`;
+  return `"""Table validation hooks."""\n\n\ndef validate(row):\n    """Return a list of validation errors for the row."""\n    return []\n`;
 }
 
 function createDefaultTemplate(path: string): string {
-  return `\"\"\"Scaffold for ${path}.\"\"\"\n\n\n# Add implementation details here.\n`;
+  return `"""Scaffold for ${path}."""\n\n\n# Add implementation details here.\n`;
 }
 
 function normalizeColumnKey(input: string): string {

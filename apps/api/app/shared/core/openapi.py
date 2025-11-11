@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from apps.api.app.settings import Settings
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
-
-from apps.api.app.settings import Settings
 
 
 def configure_openapi(app: FastAPI, settings: Settings) -> None:

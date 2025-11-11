@@ -22,5 +22,8 @@ export default defineConfig([
         ...globals.vitest,
       },
     },
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
   },
 ])

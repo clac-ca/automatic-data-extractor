@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import type { ReactElement, ReactNode } from "react";
 import { AppProviders } from "../app/AppProviders";
 import { render as rtlRender, type RenderOptions } from "@testing-library/react";

@@ -5,7 +5,8 @@ We return tiny score deltas; the engine sums them.
 Add new rules by defining more `detect_*` functions with the same signature.
 
 Signals we use:
-  1) KNOWN HEADER WORDS (strong): if a row contains common column names (id, name, email, date, etc.)
+  1) KNOWN HEADER WORDS (strong):
+     if a row contains common column names (id, name, email, date, etc.)
   2) MOSTLY TEXT (medium): headers are usually mostly short text values
   3) EARLY ROW (small): headers tend to be near the top
 """

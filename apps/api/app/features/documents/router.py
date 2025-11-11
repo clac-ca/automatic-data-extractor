@@ -19,14 +19,14 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
+from apps.api.app.shared.core.errors import ProblemDetail
+from apps.api.app.shared.core.schema import ErrorMessage
 from apps.api.app.shared.dependency import (
     get_documents_service,
     require_authenticated,
     require_csrf,
     require_workspace,
 )
-from apps.api.app.shared.core.errors import ProblemDetail
-from apps.api.app.shared.core.schema import ErrorMessage
 from apps.api.app.shared.pagination import PageParams
 from apps.api.app.shared.sorting import make_sort_dependency
 from apps.api.app.shared.types import OrderBy

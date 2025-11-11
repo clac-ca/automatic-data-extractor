@@ -9,12 +9,21 @@ _FIELD = "email"
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[a-z]{2,}$", re.IGNORECASE)
 
 
-def detect(*, header: str | None, column_values_sample: list[Any], **_: Any) -> dict[str, dict[str, float]]:
+def detect(
+    *,
+    header: str | None,
+    column_values_sample: list[Any],
+    **_: Any,
+) -> dict[str, dict[str, float]]:
     score = 0.0
     if header and "email" in header.lower():
         score = 0.85
     if column_values_sample:
-        matches = sum(1 for value in column_values_sample if value and _EMAIL_RE.match(str(value).strip()))
+        matches = sum(
+            1
+            for value in column_values_sample
+            if value and _EMAIL_RE.match(str(value).strip())
+        )
         score = max(score, matches / max(1, len(column_values_sample)))
     return {"scores": {_FIELD: round(min(score, 1.0), 2)}}
 
