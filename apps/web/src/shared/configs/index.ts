@@ -3,6 +3,8 @@ export * from "./hooks/useConfigsQuery";
 export * from "./hooks/useConfigVersionsQuery";
 export * from "./hooks/useConfigManifest";
 export * from "./hooks/useConfigScripts";
+export * from "./hooks/useConfigFiles";
+export * from "./hooks/useCreateConfigMutation";
 export * from "./manifest";
 export * from "./types";
 export * from "./keys";

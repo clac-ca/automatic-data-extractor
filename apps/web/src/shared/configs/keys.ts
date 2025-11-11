@@ -14,4 +14,8 @@ export const configsKeys = {
     [...configsKeys.scripts(workspaceId, configId, versionId), "script", path] as const,
   manifest: (workspaceId: string, configId: string, versionId: string) =>
     [...configsKeys.version(workspaceId, configId, versionId), "manifest"] as const,
+  files: (workspaceId: string, configId: string) =>
+    [...configsKeys.detail(workspaceId, configId), "files"] as const,
+  file: (workspaceId: string, configId: string, path: string) =>
+    [...configsKeys.files(workspaceId, configId), "file", path] as const,
 };

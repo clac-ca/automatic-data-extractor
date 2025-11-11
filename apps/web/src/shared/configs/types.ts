@@ -38,3 +38,33 @@ export interface ParsedManifest {
   readonly table?: ManifestTableSection;
   readonly raw: ConfigManifest;
 }
+
+export interface ConfigFileEntry {
+  readonly path: string;
+  readonly type: "file" | "dir";
+  readonly size?: number;
+  readonly mtime?: string;
+  readonly etag?: string;
+}
+
+export interface ConfigFileListing {
+  readonly root: string;
+  readonly entries: readonly ConfigFileEntry[];
+}
+
+export interface ConfigFileContent {
+  readonly path: string;
+  readonly encoding: "utf-8" | "base64";
+  readonly content: string;
+  readonly etag?: string | null;
+  readonly size?: number;
+  readonly mtime?: string;
+}
+
+export interface ConfigFileWriteResponse {
+  readonly path: string;
+  readonly size?: number;
+  readonly mtime?: string;
+  readonly etag?: string;
+  readonly created?: boolean;
+}
