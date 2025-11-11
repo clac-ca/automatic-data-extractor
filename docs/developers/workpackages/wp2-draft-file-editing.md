@@ -1,56 +1,64 @@
 # docs/developers/workpackages/wp2-draft-file-editing.md
 
-# WP‑2 — Config Builder File Editing (frontend‑first, standard REST)
+# WP‑2 — Config Builder: simplest standard REST for editing + validate + export
 
-## What we’re building (one paragraph)
+## Goal (one paragraph)
 
-A **draft** configuration is a small folder of files the user edits in the browser. The frontend renders the **entire tree** once, loads individual files on demand, keeps a **local cache** (content + ETag), and marks tabs **dirty** while the user types. On **Save**, the frontend issues **per‑file** `PUT`/`DELETE` requests guarded by **HTTP ETags** (`If‑Match` / `If‑None‑Match`) so we never overwrite someone else’s changes. The **Validate** endpoint (from WP‑1) remains a separate, explicit action to compute `content_digest` before any build.
-
----
-
-## Frontend mental model
-
-* **Initial load**: fetch config metadata (status, timestamps) and a **full recursive tree** in one call; render the sidebar.
-* **Open file**: GET content for a file; cache `{content, etag}`. Editing only changes local state and sets `dirty=true`.
-* **Save**: loop over dirty files and call `PUT` (or `DELETE`) **per file** with ETag preconditions. Update cached `etag` from the response; clear `dirty`.
-* **Conflict** (`412`): fetch the latest server version, show a diff/merge, retry with the new ETag.
-* **Validate**: when the user clicks Validate, call `POST /validate` to snapshot `content_digest` and surface issues.
-
-This is the same pattern used by GitHub’s Contents API and many web IDEs: small, predictable REST calls and standard caching headers.
+Expose a **minimal, conventional REST API** so the web editor can: list the **entire** draft tree in one call, fetch file bytes **on demand**, edit locally with a **dirty** cache, and save via **per‑file PUTs** guarded by **ETag**. Add **Validate** to compute a deterministic `content_digest` and return issues (Build will validate again), and **Export** to download a ZIP. Provide a tiny **create-directory** endpoint so the UI can create empty folders; otherwise directories are implied by file paths.
 
 ---
 
-## States & guardrails
+## Route index (all the UI needs)
 
-* **Only `draft` is writable.** Any write in `active` or `inactive` → `409 Conflict` (`code: "config_not_editable"`).
-* **Edits update** `configurations.updated_at`. They **do not** change `content_digest`/`validated_at` (only **Validate** does).
-* **Paths are safe**: POSIX‑relative, no `..`, no absolute paths; path must resolve under the config root; **deny symlinks**.
-
----
-
-## Resource layout (server)
-
-All routes are rooted at:
+Base prefix:
 
 ```
 /api/v1/workspaces/{workspace_id}/configurations/{config_id}
 ```
 
-**Editable set** (enforced server‑side):
+**Config**
 
-* Include: `src/ade_config/**`, `manifest.json`, `pyproject.toml?`, `config.env?`, `assets/**`
-* Exclude: `.git/`, `__pycache__/`, `*.pyc`, `.DS_Store`, `.venv/`, `venv/`, `env/`, `node_modules/`, `.idea/`, `.vscode/`, `dist/`, `build/`
-* Deny: any **symlink** (file/dir), traversal, or absolute paths.
+* `GET    /api/v1/workspaces/{ws}/configurations/{cfg}` — metadata (status, digest, updated_at)
 
-**Size caps** (defaults): code files ≤ **512 KiB**; `assets/**` ≤ **5 MiB**.
+**Files & directories**
+
+* `GET    /api/v1/workspaces/{ws}/configurations/{cfg}/files` — full tree (files + dirs), one call
+* `GET    /api/v1/workspaces/{ws}/configurations/{cfg}/files/{*path}` — read file (raw bytes; JSON optional)
+* `PUT    /api/v1/workspaces/{ws}/configurations/{cfg}/files/{*path}` — create/update file (raw bytes; parents auto‑create; ETag preconditions)
+* `DELETE /api/v1/workspaces/{ws}/configurations/{cfg}/files/{*path}` — delete file (ETag)
+* `POST   /api/v1/workspaces/{ws}/configurations/{cfg}/directories/{*path}` — create **empty** directory
+* `DELETE /api/v1/workspaces/{ws}/configurations/{cfg}/directories/{*path}` — delete directory (`?recursive=1` allowed)
+
+**Workflow helpers**
+
+* `POST   /api/v1/workspaces/{ws}/configurations/{cfg}/validate` — compute `content_digest`, return issues
+* `GET    /api/v1/workspaces/{ws}/configurations/{cfg}/export?format=zip` — ZIP of the editable tree
+
+> **Not required now:** import. Add later as `POST /…/import` with a ZIP body.
 
 ---
 
-## Standard endpoints (what the frontend will call)
+## Behavior & guardrails (consistent across routes)
 
-### 0) Get config metadata (status + timestamps)
+* **Editability:** only `status='draft'` is writable. Writes in `active`/`inactive` → `409 Conflict` (`code: "config_not_editable"`). Reads are allowed in any state.
+* **Root:** `${ADE_CONFIGS_DIR}/{workspace_id}/config_packages/{config_id}/`
+* **Editable set (include):** `src/ade_config/**`, `manifest.json`, `pyproject.toml` (optional), `config.env` (optional), `assets/**`
+* **Exclude:** `.git/`, `__pycache__/`, `*.pyc`, `.DS_Store`, `.venv/`, `venv/`, `env/`, `node_modules/`, `.idea/`, `.vscode/`, `dist/`, `build/`
+* **Path hygiene:** `path` is POSIX‑relative (no leading `/`), normalized, must remain under the config root **and** within the editable set. **Deny symlinks** (files or dirs).
+* **ETags:** strong per‑file ETag = `sha256(file bytes)` (quoted in HTTP headers).
 
-Used to gate editing and show “needs validate” badges.
+  * **Create:** `If-None-Match: *`
+  * **Update/Delete:** `If-Match: "<etag>"`
+  * On mismatch: `412 Precondition Failed` + `ETag` of current version.
+* **Writes:** atomic (temp → fsync → rename). On any successful write, bump `updated_at` in the config row.
+* **Sizes:** code/config files ≤ **512 KiB**; `assets/**` ≤ **5 MiB** → `413 Payload Too Large`.
+* **Validate:** returns `content_digest` + issues; we **do not** store a “last validated” timestamp. **Build** will always validate again internally.
+
+---
+
+## Endpoint details
+
+### 1) Config metadata
 
 ```http
 GET /api/v1/workspaces/{ws}/configurations/{cfg}
@@ -66,17 +74,14 @@ Accept: application/json
   "display_name": "Membership v2",
   "status": "draft",
   "config_version": 0,
-  "content_digest": null,
-  "validated_at": null,
+  "content_digest": "sha256:ab12cd34…",   // may be null before first validate
   "updated_at": "2025-11-10T14:20:31Z"
 }
 ```
 
 ---
 
-### 1) List full tree (one call, recursive)
-
-Returns **all** files and directories. Clients can build a nested view from this flat list.
+### 2) Full tree (one call)
 
 ```http
 GET /api/v1/workspaces/{ws}/configurations/{cfg}/files
@@ -89,134 +94,122 @@ Accept: application/json
 {
   "root": "",
   "entries": [
-    {"path":"manifest.json","type":"file","size":752,"mtime":"2025-11-10T14:24:03Z","etag":"\"3b1e…\""},
-    {"path":"pyproject.toml","type":"file","size":891,"mtime":"2025-11-10T14:24:03Z","etag":"\"a94a…\""},
+    {"path":"manifest.json","type":"file","size":752,"mtime":"2025-11-10T14:24:03Z","etag":"\"sha256:3b1e…\""},
     {"path":"src/ade_config","type":"dir"},
-    {"path":"src/ade_config/column_detectors","type":"dir"},
-    {"path":"src/ade_config/column_detectors/email.py","type":"file","size":3142,"mtime":"2025-11-10T14:24:03Z","etag":"\"7f6d…\""},
-    {"path":"assets","type":"dir"}
+    {"path":"src/ade_config/column_detectors/email.py","type":"file","size":3142,"mtime":"2025-11-10T14:24:03Z","etag":"\"sha256:7f6d…\""}
   ]
 }
 ```
 
-*Errors*: `400 invalid_path`, `404 config_not_found`. (Reads are allowed in any state.)
+> Frontend builds the sidebar from this flat list. Re‑list when needed (e.g., after Save/Import).
 
 ---
 
-### 2) Read a file (text by default; raw on request)
+### 3) Read file
 
-Default returns JSON with UTF‑8 text. To stream raw bytes, set `Accept: application/octet-stream`.
+**Raw bytes (canonical)**
 
 ```http
 GET /api/v1/workspaces/{ws}/configurations/{cfg}/files/{*path}
+Accept: application/octet-stream
+# Optional: If-None-Match: "<etag>" to allow 304
 ```
 
-**200 (JSON, text)**
+**200** with bytes. Headers: `ETag`, `Last-Modified`, `Content-Type`.
+**304** if unchanged.
 
+**JSON convenience (optional for SPAs)**
+
+```http
+GET /api/v1/workspaces/{ws}/configurations/{cfg}/files/{*path}?format=json
+Accept: application/json
 ```
-ETag: "7f6d…"
-Content-Type: application/json
-```
+
+**200**
 
 ```json
 {
   "path": "src/ade_config/column_detectors/email.py",
-  "encoding": "utf-8",
-  "content": "import re\nEMAIL = re.compile(r\"…\", re.I)\n",
+  "encoding": "utf-8",                // or "base64" when binary
+  "content": "import re\nEMAIL = ...\n",
+  "etag": "\"sha256:7f6d…\"",
   "size": 3142,
-  "mtime": "2025-11-10T14:24:03Z",
-  "etag": "\"7f6d…\""
+  "mtime": "2025-11-10T14:24:03Z"
 }
 ```
 
-**200 (raw)**
-
-```
-Accept: application/octet-stream
-ETag: "9f8e…"
-
-<bytes>
-```
-
-*Errors*: `400 invalid_path`, `403 path_not_allowed`, `404 not_found`.
-
 ---
 
-### 3) Create / Update a file (idempotent `PUT` with preconditions)
+### 4) Create / Update file (one verb, idempotent)
 
-Parents are auto‑created. Use **one of** the standard HTTP preconditions:
+Parents auto‑create inside the editable set via `?parents=1`.
 
-* **Create**: `If-None-Match: *`
-* **Update**: `If-Match: "<etag>"` (from last GET/PUT)
+**Create**
+
+```http
+PUT /api/v1/workspaces/{ws}/configurations/{cfg}/files/{*path}?parents=1
+If-None-Match: *
+Content-Type: application/octet-stream
+
+<file bytes>
+```
+
+**Update**
 
 ```http
 PUT /api/v1/workspaces/{ws}/configurations/{cfg}/files/{*path}
-Content-Type: application/json
-If-Match: "7f6d…"            # updating an existing file
-# or
-If-None-Match: *             # creating new
+If-Match: "sha256:OLD"
+Content-Type: application/octet-stream
+
+<file bytes>
 ```
 
-**Request (text)**
+**200 / 201** with headers `ETag`, `Last-Modified`. JSON body (optional):
 
 ```json
-{
-  "encoding": "utf-8",
-  "content": "import re\n# edited\n"
-}
+{ "path":"…", "size":3201, "mtime":"2025-11-10T14:36:52Z", "etag":"\"sha256:BEEF…\"" }
 ```
 
-**Request (binary)**
+**Errors:** `428 precondition_required`, `412 precondition_failed`, `409 config_not_editable`, `403 path_not_allowed`, `400 invalid_path`, `413 payload_too_large`.
 
-```json
-{
-  "encoding": "base64",
-  "content": "iVBORw0KGgoAAAANSUhEUgAA..."
-}
-```
-
-**200 OK** (updated) or **201 Created** (new)
-
-```
-ETag: "beef…"
-Content-Type: application/json
-```
-
-```json
-{
-  "path": "src/ade_config/column_detectors/email.py",
-  "size": 3201,
-  "mtime": "2025-11-10T14:36:52Z",
-  "etag": "\"beef…\""
-}
-```
-
-*Errors*:
-`428 Precondition Required` (missing `If-Match`/`If-None-Match`)
-`412 Precondition Failed` (ETag mismatch; include `current_etag` header/body)
-`409 config_not_editable` (not draft)
-`403 path_not_allowed` · `400 invalid_path` · `413 payload_too_large`
+> **Rename**: do `PUT` new path (create) then `DELETE` old path; no separate move API required.
 
 ---
 
-### 4) Delete a file (guarded by ETag)
+### 5) Delete file
 
 ```http
 DELETE /api/v1/workspaces/{ws}/configurations/{cfg}/files/{*path}
-If-Match: "7f6d…"
+If-Match: "sha256:OLD"
 ```
 
 **204 No Content**
 
-*Errors*: `428` (missing precondition), `412` (ETag mismatch), `404`, `409 config_not_editable`.
+---
 
-> **Renames:** perform **copy + delete**: `PUT` new path (with `If-None-Match: *`) then `DELETE` old path (with `If-Match`). No custom “move” verb needed.
+### 6) Create / Delete directory (tiny convenience)
+
+Empty directories don’t exist until a file is written. Provide these to support a “New Folder” and “Delete Folder” button:
+
+Create empty dir:
+
+```http
+POST /api/v1/workspaces/{ws}/configurations/{cfg}/directories/{*path}
+```
+
+**201 Created**
+
+Delete dir (defaults to empty‑only; allow recursive with `?recursive=1`):
+
+```http
+DELETE /api/v1/workspaces/{ws}/configurations/{cfg}/directories/{*path}?recursive=1
+```
+
+**204 No Content**
 
 ---
 
-### 5) Validate (snapshot digest, required before build)
-
-Same endpoint from WP‑1; included here so the editor can wire the button.
+### 7) Validate (digest + issues)
 
 ```http
 POST /api/v1/workspaces/{ws}/configurations/{cfg}/validate
@@ -226,89 +219,88 @@ POST /api/v1/workspaces/{ws}/configurations/{cfg}/validate
 
 ```json
 {
-  "workspace_id": "ws_123",
-  "config_id": "01JC0M8YH1Y7A6RNK3Q3JK22QX",
   "content_digest": "sha256:ab12cd34…",
-  "validated_at": "2025-11-10T15:03:12Z",
   "issues": []
 }
 ```
 
----
-
-## ETags & caching (how the frontend should use them)
-
-* Store the `etag` returned by every GET/PUT in your file cache.
-* On **Save**, send `If-Match` with that etag (or `If-None-Match: *` for new files).
-* On **412**, fetch the latest file to get the **server etag** + **server content**, show a diff/merge, then retry with the new ETag.
-* For **fast open**, you may issue GET with `If-None-Match: "<etag>"` to get `304 Not Modified`.
+> We don’t store “last validated”. **Build** always validates again internally.
 
 ---
 
-## Frontend data model (suggested)
+### 8) Export (ZIP)
 
-```ts
-type FileEntry = {
-  path: string;
-  type: 'file' | 'dir';
-  size?: number;
-  mtime?: string;
-  etag?: string;        // for files
-};
-
-type FileTab = {
-  path: string;
-  encoding: 'utf-8' | 'base64';
-  content: string;      // text or base64
-  etag: string;         // last known server etag
-  dirty: boolean;
-  lastFetchedAt: number;
-};
+```http
+GET /api/v1/workspaces/{ws}/configurations/{cfg}/export?format=zip
+Accept: application/zip
 ```
 
-**Save All (pseudo‑code):**
+**200** `application/zip`
+Headers: `Content-Disposition: attachment; filename="{config_id}.zip"`
 
-```ts
-for (const tab of openTabs.filter(t => t.dirty)) {
-  const hdrs = tab.isNew ? {'If-None-Match': '*'} : {'If-Match': tab.etag};
-  const body = { encoding: tab.encoding, content: tab.content };
-  const res = await fetch(PUT `/files/${encode(tab.path)}`, { headers: hdrs, body: JSON.stringify(body) });
-
-  if (res.status === 200 || res.status === 201) {
-    tab.etag = res.headers.get('ETag')!;
-    tab.dirty = false;
-  } else if (res.status === 412) {
-    const latest = await fetch(GET `/files/${encode(tab.path)}`).then(r => r.json());
-    // show diff (tab.content vs latest.content), user resolves, then retry with If-Match: latest.etag
-  } else {
-    // surface error toast; leave tab dirty
-  }
-}
-```
+ZIP contains only the **editable set** (same include/exclude rules), preserving relative paths.
 
 ---
 
-## Error responses (uniform JSON body)
+## Frontend flow (simple & standard)
 
-Return standard HTTP codes with a compact JSON payload:
+1. **Open builder**
+
+   * `GET /configurations/{cfg}` → check `status`.
+   * `GET /files` → render full tree (cache per‑file ETags).
+
+2. **Open a tab**
+
+   * `GET /files/{path}` → keep `{bytes, etag}` in local cache.
+
+3. **Edit locally**
+
+   * Mark tab **dirty**; no server calls while typing.
+
+4. **Save**
+
+   * For each dirty tab:
+
+     * New → `PUT` with `If-None-Match: *`
+     * Existing → `PUT` with `If-Match: "<etag>"`
+     * On `412`, fetch latest, show diff/merge, retry with new ETag.
+   * Re‑list `GET /files` if you want to refresh the sidebar.
+
+5. **Folders**
+
+   * “New Folder” → `POST /directories/{path}`
+   * “Delete Folder” → `DELETE /directories/{path}?recursive=1` (or ensure empty first)
+
+6. **Validate / Export**
+
+   * Validate on demand: `POST /validate`
+   * Export when needed: `GET /export?format=zip`
+
+---
+
+## Status codes (uniform)
+
+* **200 OK**, **201 Created**, **204 No Content**
+* **304 Not Modified** (GET file with `If-None-Match`)
+* **400 invalid_path**, **403 path_not_allowed**, **404 not_found**
+* **409 config_not_editable**
+* **412 precondition_failed** (ETag mismatch)
+* **413 payload_too_large**
+* **428 precondition_required** (missing `If‑Match` / `If‑None‑Match`)
+
+Error body format:
 
 ```json
-{ "code": "precondition_failed", "message": "ETag mismatch", "current_etag": "\"9f8e…\"" }
+{ "code": "precondition_failed", "message": "ETag mismatch", "current_etag": "\"sha256:…\"" }
 ```
-
-Common codes:
-`200/201/204`, `304`, `400 invalid_path`, `403 path_not_allowed`, `404 not_found`,
-`409 config_not_editable`, `412 precondition_failed`, `413 payload_too_large`, `428 precondition_required`.
 
 ---
 
-## Acceptance (for both sides)
+## Why this is the simplest thing that works
 
-* **Full tree** returns all paths (files + dirs) with sizes, mtimes, and file ETags.
-* **GET /files/{path}** returns text JSON by default and raw bytes when `Accept: application/octet-stream`.
-* **Per‑file PUT/DELETE** with ETag preconditions works; conflicts return `412` with the current ETag.
-* **Writes only in draft**; reads allowed in any state.
-* Paths are safe; no symlinks; excluded directories are never touched.
-* `updated_at` changes on successful writes; `content_digest` only changes on **Validate**.
+* **Three file verbs** (GET/PUT/DELETE) plus a **directory create** convenience cover “upload files, create folders, etc.” without custom protocols.
+* **Raw bytes** in `PUT`/`GET` match how browsers upload/download files (no base64 required). The JSON read format remains available for SPAs.
+* **ETag preconditions** are standard and prevent clobbering; no server locks or websockets needed.
+* A single **full‑tree listing** keeps the sidebar instant and avoids paginated recursion.
 
-This is a straight‑ahead, **non‑bespoke** REST interface that frontends already know how to use: list everything once, edit locally, and save each file back with standard HTTP preconditions.
+If you want this even leaner, you can *skip* the directory endpoints and rely on `PUT ?parents=1`—but most editors include a “New Folder” button, so keeping `POST /directories/{path}` is pragmatic and still simple.
