@@ -10,6 +10,7 @@ from pydantic import EmailStr, Field, SecretStr, field_validator, model_validato
 
 from apps.api.app.shared.core.ids import ULIDStr
 from apps.api.app.shared.core.schema import BaseSchema
+from apps.api.app.shared.pagination import Page
 
 from ..users.schemas import UserProfile
 from .utils import normalise_email
@@ -178,6 +179,10 @@ class APIKeySummary(BaseSchema):
     revoked_at: datetime | None = None
 
 
+class APIKeyPage(Page[APIKeySummary]):
+    """Paginated collection of API keys."""
+
+
 __all__ = [
     "SetupStatus",
     "SetupRequest",
@@ -187,5 +192,6 @@ __all__ = [
     "ProviderDiscoveryResponse",
     "APIKeyIssueRequest",
     "APIKeyIssueResponse",
+    "APIKeyPage",
     "APIKeySummary",
 ]
