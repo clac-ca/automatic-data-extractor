@@ -162,12 +162,13 @@ async def test_repeated_failed_logins_lock_account(
         json={"email": user["email"], "password": user["password"]},
     )
     assert locked.status_code == 403
-    payload = locked.json()["detail"]
-    assert isinstance(payload, dict)
-    assert payload.get("failedAttempts") == lock_threshold
-    assert isinstance(payload.get("lockedUntil"), str)
-    assert "temporarily locked" in payload.get("message", "")
-    assert isinstance(payload.get("retryAfterSeconds"), int)
+    problem = locked.json()
+    meta = problem.get("meta") or {}
+    assert problem["status"] == 403
+    assert meta.get("failedAttempts") == lock_threshold
+    assert isinstance(meta.get("lockedUntil"), str)
+    assert "temporarily locked" in (problem.get("detail") or "")
+    assert isinstance(meta.get("retryAfterSeconds"), int)
     retry_after_header = locked.headers.get("Retry-After")
     assert retry_after_header is not None
 
