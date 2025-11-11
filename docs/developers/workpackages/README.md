@@ -18,5 +18,6 @@ Follow the packages in order unless a prerequisite is already complete:
 | [WP5](./wp5-build-system.md) | Build System: DB & Builder | Persistent build records, venv creation, dedupe, healing, and pruning. |
 | [WP6](./wp6-jobs-integration.md) | Jobs Integration | Run jobs in ensured builds and store `build_id` on job rows. |
 | [WP7](./wp7-observability-housekeeping.md) | Observability & Housekeeping | Logging, sweeps, and documentation updates to close the loop. |
+| [WP8](./wp8-config-files-api-v2.md) | Config Files API v2 | Typed list, uniform writes, and atomic rename for a race‑safe, cache‑friendly builder API. |
 
 The intent is to keep each package independently testable while funneling all creation/edit/build flows through a single, auditable path rooted in the backend templates directory.
