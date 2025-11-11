@@ -20,7 +20,6 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 
 from apps.api.app.shared.core.errors import ProblemDetail
-from apps.api.app.shared.core.errors import ProblemDetail
 from apps.api.app.shared.dependency import (
     get_documents_service,
     require_authenticated,
