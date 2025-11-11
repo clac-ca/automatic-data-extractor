@@ -2767,6 +2767,39 @@
               "title": "Workspace Id"
             },
             "description": "Workspace identifier"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "include_total",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Total"
+            }
           }
         ],
         "responses": {
@@ -2775,11 +2808,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/RoleOut"
-                  },
-                  "title": "Response List Workspace Roles Api V1 Workspaces  Workspace Id  Roles Get"
+                  "$ref": "#/components/schemas/RolePage"
                 }
               }
             }

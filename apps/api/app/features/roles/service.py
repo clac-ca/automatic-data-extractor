@@ -16,6 +16,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from apps.api.app.shared.pagination import Page, paginate_sql
+
 from apps.api.app.features.users.models import User
 from apps.api.app.features.workspaces.models import Workspace
 
@@ -202,6 +204,24 @@ def _normalize_description(value: str | None) -> str | None:
         return None
     candidate = value.strip()
     return candidate or None
+
+
+def _roles_query(scope_type: ScopeType, scope_id: str | None):
+    if scope_type not in {ScopeType.GLOBAL, ScopeType.WORKSPACE}:
+        raise RoleValidationError("Unsupported scope_type")
+
+    stmt = (
+        select(Role)
+        .options(selectinload(Role.permissions))
+        .where(Role.scope_type == scope_type)
+    )
+    if scope_type == ScopeType.GLOBAL:
+        stmt = stmt.where(Role.scope_id.is_(None))
+    else:
+        if scope_id is None:
+            raise RoleValidationError("workspace_id is required for workspace roles")
+        stmt = stmt.where(or_(Role.scope_id.is_(None), Role.scope_id == scope_id))
+    return stmt
 
 
 def _normalize_permission_keys(
@@ -485,25 +505,63 @@ async def list_roles(
 ) -> list[Role]:
     """Return roles for the requested scope ordered by slug."""
 
-    if scope_type not in {ScopeType.GLOBAL, ScopeType.WORKSPACE}:
-        raise RoleValidationError("Unsupported scope_type")
-
-    stmt = (
-        select(Role)
-        .options(selectinload(Role.permissions))
-        .where(Role.scope_type == scope_type)
-    )
-
-    if scope_type == ScopeType.GLOBAL:
-        stmt = stmt.where(Role.scope_id.is_(None))
-    else:
-        if scope_id is None:
-            raise RoleValidationError("workspace_id is required for workspace roles")
-        stmt = stmt.where(or_(Role.scope_id.is_(None), Role.scope_id == scope_id))
-
-    stmt = stmt.order_by(Role.slug)
+    stmt = _roles_query(scope_type, scope_id).order_by(Role.slug)
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+async def paginate_roles(
+    *,
+    session: AsyncSession,
+    scope_type: ScopeType,
+    scope_id: str | None,
+    page: int,
+    page_size: int,
+    include_total: bool,
+) -> Page[Role]:
+    stmt = _roles_query(scope_type, scope_id)
+    return await paginate_sql(
+        session,
+        stmt,
+        page=page,
+        page_size=page_size,
+        include_total=include_total,
+        order_by=(Role.slug,),
+    )
+
+
+def _role_assignments_query(
+    *,
+    scope_type: ScopeType,
+    scope_id: str | None,
+    principal_id: str | None,
+    role_id: str | None,
+):
+    if scope_type == ScopeType.GLOBAL:
+        target_scope_id = None
+    else:
+        if scope_id is None:
+            raise RoleScopeMismatchError("Workspace assignments require scope_id")
+        target_scope_id = scope_id
+
+    stmt = (
+        select(RoleAssignment)
+        .options(
+            selectinload(RoleAssignment.role),
+            selectinload(RoleAssignment.principal).selectinload(Principal.user),
+        )
+        .where(
+            RoleAssignment.scope_type == scope_type,
+            RoleAssignment.scope_id.is_(None)
+            if target_scope_id is None
+            else RoleAssignment.scope_id == target_scope_id,
+        )
+    )
+    if principal_id:
+        stmt = stmt.where(RoleAssignment.principal_id == principal_id)
+    if role_id:
+        stmt = stmt.where(RoleAssignment.role_id == role_id)
+    return stmt
 
 
 async def create_global_role(
@@ -633,35 +691,41 @@ async def list_role_assignments(
 ) -> list[RoleAssignment]:
     """Return assignments for the requested scope filtered by optional criteria."""
 
-    if scope_type not in {ScopeType.GLOBAL, ScopeType.WORKSPACE}:
-        raise RoleScopeMismatchError("Unsupported scope_type")
-
-    conditions = [RoleAssignment.scope_type == scope_type]
-    if scope_type == ScopeType.GLOBAL:
-        if scope_id not in (None, ""):
-            raise RoleScopeMismatchError("Global assignments must omit scope_id")
-        conditions.append(RoleAssignment.scope_id.is_(None))
-    else:
-        if scope_id is None:
-            raise RoleScopeMismatchError("Workspace assignments require scope_id")
-        conditions.append(RoleAssignment.scope_id == scope_id)
-
-    if principal_id:
-        conditions.append(RoleAssignment.principal_id == principal_id)
-    if role_id:
-        conditions.append(RoleAssignment.role_id == role_id)
-
-    stmt = (
-        select(RoleAssignment)
-        .options(
-            selectinload(RoleAssignment.role),
-            selectinload(RoleAssignment.principal).selectinload(Principal.user),
-        )
-        .where(*conditions)
-        .order_by(RoleAssignment.created_at, RoleAssignment.id)
-    )
+    stmt = _role_assignments_query(
+        scope_type=scope_type,
+        scope_id=scope_id,
+        principal_id=principal_id,
+        role_id=role_id,
+    ).order_by(RoleAssignment.created_at, RoleAssignment.id)
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+async def paginate_role_assignments(
+    *,
+    session: AsyncSession,
+    scope_type: ScopeType,
+    scope_id: str | None,
+    principal_id: str | None = None,
+    role_id: str | None = None,
+    page: int,
+    page_size: int,
+    include_total: bool,
+) -> Page[RoleAssignment]:
+    stmt = _role_assignments_query(
+        scope_type=scope_type,
+        scope_id=scope_id,
+        principal_id=principal_id,
+        role_id=role_id,
+    )
+    return await paginate_sql(
+        session,
+        stmt,
+        page=page,
+        page_size=page_size,
+        include_total=include_total,
+        order_by=(RoleAssignment.created_at, RoleAssignment.id),
+    )
 
 
 async def get_role_assignment(
@@ -1001,6 +1065,8 @@ __all__ = [
     "get_workspace_permissions_for_user",
     "list_roles",
     "list_role_assignments",
+    "paginate_roles",
+    "paginate_role_assignments",
     "PrincipalNotFoundError",
     "RoleAssignmentError",
     "RoleAssignmentNotFoundError",

@@ -461,9 +461,6 @@ class WorkspacesService:
         )
         return self.build_member(membership, summary=summary)
 
-    async def list_workspace_roles(self, workspace_id: str) -> list[Role]:
-        return await self._repo.list_workspace_roles(workspace_id)
-
     async def _ensure_slug_available(
         self, *, workspace_id: str, slug: str
     ) -> None:

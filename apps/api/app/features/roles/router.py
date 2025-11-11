@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.shared.core.security import forbidden_response
 from apps.api.app.shared.db.session import get_session
-from apps.api.app.shared.pagination import PageParams, paginate_sequence
+from apps.api.app.shared.pagination import PageParams
 from apps.api.app.shared.dependency import (
     get_current_identity,
     require_authenticated,
@@ -79,6 +79,8 @@ from .service import (
     get_workspace_permissions_for_principal,
     list_role_assignments,
     list_roles,
+    paginate_role_assignments,
+    paginate_roles,
     update_global_role,
 )
 
@@ -105,7 +107,9 @@ def _serialize_assignment(assignment: RoleAssignment) -> RoleAssignmentOut:
     return RoleAssignmentOut(
         assignment_id=assignment.id,
         principal_id=assignment.principal_id,
-        principal_type=principal.principal_type if principal is not None else "user",
+        principal_type=(
+            principal.principal_type if principal is not None else PrincipalType.USER
+        ),
         user_id=user.id if user is not None else None,
         user_email=user.email if user is not None else None,
         user_display_name=user.display_name if user is not None else None,
@@ -260,14 +264,22 @@ async def list_global_roles(
 ) -> RolePage:
     """Return the catalog of global roles."""
 
-    roles = await list_roles(session=session, scope_type=ScopeType.GLOBAL)
-    page_result = paginate_sequence(
-        [_serialize_role(role) for role in roles],
+    role_page = await paginate_roles(
+        session=session,
+        scope_type=ScopeType.GLOBAL,
+        scope_id=None,
         page=page.page,
         page_size=page.page_size,
         include_total=page.include_total,
     )
-    return RolePage(**page_result.model_dump())
+    return RolePage(
+        items=[_serialize_role(role) for role in role_page.items],
+        page=role_page.page,
+        page_size=role_page.page_size,
+        has_next=role_page.has_next,
+        has_previous=role_page.has_previous,
+        total=role_page.total,
+    )
 
 
 @router.post(
@@ -541,21 +553,24 @@ async def list_global_role_assignments(
             total=total,
         )
 
-    assignments = await list_role_assignments(
+    assignments_page = await paginate_role_assignments(
         session=session,
         scope_type=ScopeType.GLOBAL,
         scope_id=None,
         principal_id=principal_filter,
         role_id=role_id,
-    )
-    serialized = [_serialize_assignment(assignment) for assignment in assignments]
-    page_result = paginate_sequence(
-        serialized,
         page=page.page,
         page_size=page.page_size,
         include_total=page.include_total,
     )
-    return RoleAssignmentPage(**page_result.model_dump())
+    return RoleAssignmentPage(
+        items=[_serialize_assignment(assignment) for assignment in assignments_page.items],
+        page=assignments_page.page,
+        page_size=assignments_page.page_size,
+        has_next=assignments_page.has_next,
+        has_previous=assignments_page.has_previous,
+        total=assignments_page.total,
+    )
 
 
 @router.post(
@@ -729,21 +744,24 @@ async def list_workspace_role_assignments(
             total=total,
         )
 
-    assignments = await list_role_assignments(
+    assignments_page = await paginate_role_assignments(
         session=session,
         scope_type=ScopeType.WORKSPACE,
         scope_id=workspace_id,
         principal_id=principal_filter,
         role_id=role_id,
-    )
-    serialized = [_serialize_assignment(assignment) for assignment in assignments]
-    page_result = paginate_sequence(
-        serialized,
         page=page.page,
         page_size=page.page_size,
         include_total=page.include_total,
     )
-    return RoleAssignmentPage(**page_result.model_dump())
+    return RoleAssignmentPage(
+        items=[_serialize_assignment(assignment) for assignment in assignments_page.items],
+        page=assignments_page.page,
+        page_size=assignments_page.page_size,
+        has_next=assignments_page.has_next,
+        has_previous=assignments_page.has_previous,
+        total=assignments_page.total,
+    )
 
 
 @router.post(
