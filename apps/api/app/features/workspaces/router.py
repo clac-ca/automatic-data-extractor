@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.app.shared.core.responses import DefaultResponse
 from apps.api.app.shared.core.schema import ErrorMessage
 from apps.api.app.shared.db.session import get_session
-from apps.api.app.shared.pagination import PageParams
+from apps.api.app.shared.pagination import PageParams, paginate_sequence
 from apps.api.app.shared.dependency import (
     get_workspace_profile,
     require_authenticated,
@@ -27,6 +27,8 @@ from .schemas import (
     WorkspaceMemberCreate,
     WorkspaceMemberRolesUpdate,
     WorkspaceOut,
+    WorkspaceMemberPage,
+    WorkspacePage,
     WorkspaceUpdate,
 )
 from .service import WorkspacesService
@@ -105,7 +107,7 @@ async def create_workspace(
 
 @router.get(
     "/workspaces",
-    response_model=list[WorkspaceOut],
+    response_model=WorkspacePage,
     status_code=status.HTTP_200_OK,
     summary="List workspaces for the authenticated user",
     responses={
@@ -121,11 +123,18 @@ async def create_workspace(
 )
 async def list_workspaces(
     current_user: Annotated[User, Security(require_authenticated)],
+    page: Annotated[PageParams, Depends()],
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> list[WorkspaceOut]:
+) -> WorkspacePage:
     service = WorkspacesService(session=session)
     memberships = await service.list_memberships(user=current_user)
-    return memberships
+    page_result = paginate_sequence(
+        memberships,
+        page=page.page,
+        page_size=page.page_size,
+        include_total=page.include_total,
+    )
+    return WorkspacePage(**page_result.model_dump())
 
 
 @router.get(
@@ -164,7 +173,7 @@ async def read_workspace(
 
 @router.get(
     "/workspaces/{workspace_id}/members",
-    response_model=list[WorkspaceMemberOut],
+    response_model=WorkspaceMemberPage,
     status_code=status.HTTP_200_OK,
     summary="List members within the workspace",
     response_model_exclude_none=True,
@@ -188,13 +197,20 @@ async def list_members(
             scopes=["{workspace_id}"],
         ),
     ],
+    page: Annotated[PageParams, Depends()],
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> list[WorkspaceMemberOut]:
+) -> WorkspaceMemberPage:
     service = WorkspacesService(session=session)
     memberships = await service.list_members(
         workspace_id=workspace.workspace_id
     )
-    return memberships
+    page_result = paginate_sequence(
+        memberships,
+        page=page.page,
+        page_size=page.page_size,
+        include_total=page.include_total,
+    )
+    return WorkspaceMemberPage(**page_result.model_dump())
 
 
 @router.get(

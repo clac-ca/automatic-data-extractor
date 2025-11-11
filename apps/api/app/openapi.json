@@ -367,48 +367,12 @@
       }
     },
     "/api/v1/auth/api-keys": {
-      "get": {
+      "post": {
         "tags": [
           "auth"
         ],
-        "summary": "List issued API keys",
-        "operationId": "list_api_keys_api_v1_auth_api_keys_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/APIKeySummary"
-                  },
-                  "type": "array",
-                  "title": "Response List Api Keys Api V1 Auth Api Keys Get"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required to list API keys.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorMessage"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Administrator role required to list API keys.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorMessage"
-                }
-              }
-            }
-          }
-        },
+        "summary": "Issue a new API key for a user",
+        "operationId": "create_api_key_api_v1_auth_api_keys_post",
         "security": [
           {
             "HTTPBearer": []
@@ -419,23 +383,16 @@
           {
             "SessionCookie": []
           }
-        ]
-      },
-      "post": {
-        "tags": [
-          "auth"
         ],
-        "summary": "Issue a new API key for a user",
-        "operationId": "create_api_key_api_v1_auth_api_keys_post",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/APIKeyIssueRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -498,7 +455,14 @@
               }
             }
           }
-        },
+        }
+      },
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "List issued API keys",
+        "operationId": "list_api_keys_api_v1_auth_api_keys_get",
         "security": [
           {
             "HTTPBearer": []
@@ -509,7 +473,96 @@
           {
             "SessionCookie": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "include_revoked",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include revoked API keys in the response.",
+              "default": false,
+              "title": "Include Revoked"
+            },
+            "description": "Include revoked API keys in the response."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "include_total",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Total"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIKeyPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to list API keys.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrator role required to list API keys.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/auth/api-keys/{api_key_id}": {
@@ -2080,48 +2133,12 @@
       }
     },
     "/api/v1/workspaces": {
-      "get": {
+      "post": {
         "tags": [
           "workspaces"
         ],
-        "summary": "List workspaces for the authenticated user",
-        "operationId": "list_workspaces_api_v1_workspaces_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/WorkspaceOut"
-                  },
-                  "type": "array",
-                  "title": "Response List Workspaces Api V1 Workspaces Get"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required to list workspaces.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorMessage"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Service account credentials cannot access workspace listings.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorMessage"
-                }
-              }
-            }
-          }
-        },
+        "summary": "Create a new workspace",
+        "operationId": "create_workspace_api_v1_workspaces_post",
         "security": [
           {
             "HTTPBearer": []
@@ -2132,23 +2149,16 @@
           {
             "SessionCookie": []
           }
-        ]
-      },
-      "post": {
-        "tags": [
-          "workspaces"
         ],
-        "summary": "Create a new workspace",
-        "operationId": "create_workspace_api_v1_workspaces_post",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/WorkspaceCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -2211,7 +2221,14 @@
               }
             }
           }
-        },
+        }
+      },
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "List workspaces for the authenticated user",
+        "operationId": "list_workspaces_api_v1_workspaces_get",
         "security": [
           {
             "HTTPBearer": []
@@ -2222,7 +2239,84 @@
           {
             "SessionCookie": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "include_total",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Total"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspacePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to list workspaces.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Service account credentials cannot access workspace listings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/workspaces/{workspace_id}": {
@@ -2565,6 +2659,39 @@
               "title": "Workspace Id"
             },
             "description": "Workspace identifier"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "include_total",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Total"
+            }
           }
         ],
         "responses": {
@@ -2573,11 +2700,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/WorkspaceMemberOut"
-                  },
-                  "title": "Response List Members Api V1 Workspaces  Workspace Id  Members Get"
+                  "$ref": "#/components/schemas/WorkspaceMemberPage"
                 }
               }
             }
@@ -6364,6 +6487,55 @@
         "title": "APIKeyIssueResponse",
         "description": "Representation of a freshly issued API key secret."
       },
+      "APIKeyPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/APIKeySummary"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "has_next": {
+            "type": "boolean",
+            "title": "Has Next"
+          },
+          "has_previous": {
+            "type": "boolean",
+            "title": "Has Previous"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "has_next",
+          "has_previous"
+        ],
+        "title": "APIKeyPage",
+        "description": "Paginated collection of API keys."
+      },
       "APIKeySummary": {
         "properties": {
           "api_key_id": {
@@ -9050,6 +9222,55 @@
         "title": "WorkspaceMemberOut",
         "description": "Representation of a workspace membership."
       },
+      "WorkspaceMemberPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceMemberOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "has_next": {
+            "type": "boolean",
+            "title": "Has Next"
+          },
+          "has_previous": {
+            "type": "boolean",
+            "title": "Has Previous"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "has_next",
+          "has_previous"
+        ],
+        "title": "WorkspaceMemberPage",
+        "description": "Paginated workspace member listing."
+      },
       "WorkspaceMemberRolesUpdate": {
         "properties": {
           "role_ids": {
@@ -9118,6 +9339,55 @@
         ],
         "title": "WorkspaceOut",
         "description": "Workspace information decorated with membership metadata."
+      },
+      "WorkspacePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "has_next": {
+            "type": "boolean",
+            "title": "Has Next"
+          },
+          "has_previous": {
+            "type": "boolean",
+            "title": "Has Previous"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "has_next",
+          "has_previous"
+        ],
+        "title": "WorkspacePage",
+        "description": "Paginated workspace listing."
       },
       "WorkspaceUpdate": {
         "properties": {

@@ -179,7 +179,8 @@ async def test_owner_can_list_members(
     )
     assert response.status_code == 200
     payload = response.json()
-    assert any(entry["roles"] == ["workspace-owner"] for entry in payload)
+    entries = payload["items"]
+    assert any(entry["roles"] == ["workspace-owner"] for entry in entries)
 
 
 async def test_owner_adds_member_with_default_role(
@@ -282,7 +283,7 @@ async def test_put_roles_blocks_last_governor_demotion(
     )
     owner_entry = next(
         entry
-        for entry in memberships_response.json()
+        for entry in memberships_response.json()["items"]
         if entry["roles"] == ["workspace-owner"]
     )
 
@@ -307,7 +308,7 @@ async def test_roles_listing_requires_read_scope(
     )
     assert response.status_code == 200
     payload = response.json()
-    slugs = {entry["slug"] for entry in payload}
+    slugs = {entry["slug"] for entry in payload["items"]}
     assert {"workspace-owner", "workspace-member"}.issubset(slugs)
 
 
@@ -436,7 +437,7 @@ async def test_delete_workspace_role_blocks_assignments(
     assert list_response.status_code == 200, list_response.text
     member_entry = next(
         entry
-        for entry in list_response.json()
+        for entry in list_response.json()["items"]
         if entry["user"]["user_id"] == member["id"]
     )
 

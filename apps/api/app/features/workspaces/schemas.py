@@ -8,6 +8,7 @@ from pydantic import Field
 
 from apps.api.app.shared.core.ids import ULIDStr
 from apps.api.app.shared.core.schema import BaseSchema
+from apps.api.app.shared.pagination import Page
 
 from ..users.schemas import UserOut
 
@@ -77,6 +78,14 @@ class WorkspaceDefaultSelectionOut(BaseSchema):
     is_default: bool
 
 
+class WorkspacePage(Page[WorkspaceOut]):
+    """Paginated workspace listing."""
+
+
+class WorkspaceMemberPage(Page[WorkspaceMemberOut]):
+    """Paginated workspace member listing."""
+
+
 __all__ = [
     "WorkspaceCreate",
     "WorkspaceDefaultSelectionOut",
@@ -85,4 +94,6 @@ __all__ = [
     "WorkspaceMemberRolesUpdate",
     "WorkspaceOut",
     "WorkspaceUpdate",
+    "WorkspacePage",
+    "WorkspaceMemberPage",
 ]

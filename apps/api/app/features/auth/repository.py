@@ -15,6 +15,15 @@ class APIKeysRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    def base_query(self):
+        return select(APIKey).options(selectinload(APIKey.user))
+
+    def query_api_keys(self, *, include_revoked: bool = False):
+        stmt = self.base_query().order_by(APIKey.created_at.desc())
+        if not include_revoked:
+            stmt = stmt.where(APIKey.revoked_at.is_(None))
+        return stmt
+
     async def create(
         self,
         *,
@@ -37,13 +46,7 @@ class APIKeysRepository:
         return api_key
 
     async def list_api_keys(self, *, include_revoked: bool = False) -> list[APIKey]:
-        stmt = (
-            select(APIKey)
-            .options(selectinload(APIKey.user))
-            .order_by(APIKey.created_at.desc())
-        )
-        if not include_revoked:
-            stmt = stmt.where(APIKey.revoked_at.is_(None))
+        stmt = self.query_api_keys(include_revoked=include_revoked)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 

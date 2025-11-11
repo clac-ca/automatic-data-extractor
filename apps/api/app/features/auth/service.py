@@ -26,6 +26,7 @@ from apps.api.app.features.roles.service import (
     sync_permission_registry,
 )
 from apps.api.app.settings import Settings
+from apps.api.app.shared.pagination import Page, paginate_sql
 
 from ..system_settings.repository import SystemSettingsRepository
 from ..users.models import User
@@ -689,6 +690,26 @@ class AuthService:
         """Return all issued API keys ordered by creation time."""
 
         return await self._api_keys.list_api_keys(include_revoked=include_revoked)
+
+    async def paginate_api_keys(
+        self,
+        *,
+        include_revoked: bool,
+        page: int,
+        page_size: int,
+        include_total: bool,
+    ) -> Page[APIKey]:
+        """Return paginated API keys."""
+
+        stmt = self._api_keys.query_api_keys(include_revoked=include_revoked)
+        return await paginate_sql(
+            self._session,
+            stmt,
+            page=page,
+            page_size=page_size,
+            include_total=include_total,
+            order_by=(APIKey.created_at.desc(),),
+        )
 
     async def revoke_api_key(self, api_key_id: str) -> None:
         """Remove the API key identified by ``api_key_id``."""

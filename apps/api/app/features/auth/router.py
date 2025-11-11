@@ -28,13 +28,16 @@ from apps.api.app.shared.dependency import (
     require_csrf,
     require_global,
 )
+from apps.api.app.shared.pagination import PageParams
 
 from ..users.models import User
 from ..users.schemas import UserProfile
 from ..users.service import UsersService
+from .models import APIKey
 from .schemas import (
     APIKeyIssueRequest,
     APIKeyIssueResponse,
+    APIKeyPage,
     APIKeySummary,
     AuthProvider,
     LoginRequest,
@@ -51,6 +54,31 @@ from .service import (
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 setup_router = APIRouter(prefix="/setup", tags=["setup"])
+
+
+def _serialize_api_key(record: APIKey) -> APIKeySummary:
+    principal_type = (
+        "service_account"
+        if record.user is not None and record.user.is_service_account
+        else "user"
+    )
+    principal_label = (
+        record.user.label if record.user is not None else record.label or ""
+    )
+    return APIKeySummary(
+        api_key_id=record.id,
+        principal_type=principal_type,
+        principal_id=record.user_id,
+        principal_label=principal_label,
+        token_prefix=record.token_prefix,
+        label=record.label,
+        created_at=record.created_at,
+        expires_at=record.expires_at,
+        last_seen_at=record.last_seen_at,
+        last_seen_ip=record.last_seen_ip,
+        last_seen_user_agent=record.last_seen_user_agent,
+        revoked_at=record.revoked_at,
+    )
 
 
 @router.get(
@@ -409,7 +437,7 @@ async def create_api_key(
 
 @router.get(
     "/api-keys",
-    response_model=list[APIKeySummary],
+    response_model=APIKeyPage,
     status_code=status.HTTP_200_OK,
     summary="List issued API keys",
     responses={
@@ -428,37 +456,32 @@ async def list_api_keys(
         User,
         Security(require_global("System.Settings.ReadWrite")),
     ],
+    page: Annotated[PageParams, Depends()],
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
-) -> list[APIKeySummary]:
+    include_revoked: Annotated[
+        bool,
+        Query(
+            description="Include revoked API keys in the response.",
+        ),
+    ] = False,
+) -> APIKeyPage:
     service = AuthService(session=session, settings=settings)
-    records = await service.list_api_keys()
-    return [
-        APIKeySummary(
-            api_key_id=record.id,
-            principal_type=(
-                "service_account"
-                if record.user is not None and record.user.is_service_account
-                else "user"
-            ),
-            principal_id=record.user_id,
-            principal_label=(
-                record.user.label
-                if record.user is not None
-                else record.label
-                or ""
-            ),
-            token_prefix=record.token_prefix,
-            label=record.label,
-            created_at=record.created_at,
-            expires_at=record.expires_at,
-            last_seen_at=record.last_seen_at,
-            last_seen_ip=record.last_seen_ip,
-            last_seen_user_agent=record.last_seen_user_agent,
-            revoked_at=record.revoked_at,
-        )
-        for record in records
-    ]
+    api_key_page = await service.paginate_api_keys(
+        include_revoked=include_revoked,
+        page=page.page,
+        page_size=page.page_size,
+        include_total=page.include_total,
+    )
+    summaries = [_serialize_api_key(record) for record in api_key_page.items]
+    return APIKeyPage(
+        items=summaries,
+        page=api_key_page.page,
+        page_size=api_key_page.page_size,
+        has_next=api_key_page.has_next,
+        has_previous=api_key_page.has_previous,
+        total=api_key_page.total,
+    )
 
 
 @router.delete(
