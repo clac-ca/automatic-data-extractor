@@ -8,6 +8,7 @@ from enum import Enum
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
+    Enum as SAEnum,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -47,7 +48,15 @@ class ConfigurationBuild(TimestampMixin, Base):
     config_id: Mapped[str] = mapped_column(String(26), nullable=False)
     build_id: Mapped[str] = mapped_column(String(26), nullable=False)
 
-    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[BuildStatus] = mapped_column(
+        SAEnum(
+            BuildStatus,
+            name="build_status",
+            native_enum=False,
+            length=20,
+        ),
+        nullable=False,
+    )
     venv_path: Mapped[str] = mapped_column(Text, nullable=False)
 
     config_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -92,3 +101,9 @@ class ConfigurationBuild(TimestampMixin, Base):
             postgresql_where=text("status = 'building'"),
         ),
     )
+
+    @property
+    def environment_ref(self) -> str:
+        """Return a stable reference for clients to identify the build environment."""
+
+        return f"{self.workspace_id}/{self.config_id}/{self.build_id}"

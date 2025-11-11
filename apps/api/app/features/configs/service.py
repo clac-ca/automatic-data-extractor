@@ -31,7 +31,7 @@ from .exceptions import (
     ConfigurationNotFoundError,
     ConfigValidationFailedError,
 )
-from .models import Configuration
+from .models import Configuration, ConfigurationStatus
 from .repository import ConfigurationsRepository
 from .schemas import (
     ConfigSource,
@@ -116,7 +116,7 @@ class ConfigurationsService:
             workspace_id=workspace_id,
             config_id=config_id,
             display_name=display_name,
-            status="draft",
+            status=ConfigurationStatus.DRAFT,
             config_version=0,
         )
         self._session.add(record)
@@ -162,7 +162,10 @@ class ConfigurationsService:
             workspace_id=workspace_id,
             config_id=config_id,
         )
-        if configuration.status not in {"draft", "inactive"}:
+        if configuration.status not in {
+            ConfigurationStatus.DRAFT,
+            ConfigurationStatus.INACTIVE,
+        }:
             raise ConfigStateError("Configuration is not activatable")
 
         config_path = await self._storage.ensure_config_path(workspace_id, config_id)
@@ -172,7 +175,7 @@ class ConfigurationsService:
 
         await self._demote_active(workspace_id=workspace_id, exclude=config_id)
 
-        configuration.status = "active"
+        configuration.status = ConfigurationStatus.ACTIVE
         configuration.config_version = max(configuration.config_version or 0, 0) + 1
         configuration.content_digest = digest
         configuration.activated_at = utc_now()
@@ -190,9 +193,9 @@ class ConfigurationsService:
             workspace_id=workspace_id,
             config_id=config_id,
         )
-        if configuration.status == "inactive":
+        if configuration.status == ConfigurationStatus.INACTIVE:
             return configuration
-        configuration.status = "inactive"
+        configuration.status = ConfigurationStatus.INACTIVE
         await self._session.flush()
         await self._session.refresh(configuration)
         return configuration
@@ -253,10 +256,10 @@ class ConfigurationsService:
             "config_id": config_id,
             "status": configuration.status,
             "capabilities": {
-                "editable": configuration.status == "draft",
-                "can_create": configuration.status == "draft",
-                "can_delete": configuration.status == "draft",
-                "can_rename": configuration.status == "draft",
+                "editable": configuration.status == ConfigurationStatus.DRAFT,
+                "can_create": configuration.status == ConfigurationStatus.DRAFT,
+                "can_delete": configuration.status == ConfigurationStatus.DRAFT,
+                "can_rename": configuration.status == ConfigurationStatus.DRAFT,
             },
             "root": normalized_prefix,
             "prefix": normalized_prefix,
@@ -499,7 +502,7 @@ class ConfigurationsService:
         existing = await self._repo.get_active(workspace_id)
         if existing is None or existing.config_id == exclude:
             return
-        existing.status = "inactive"
+        existing.status = ConfigurationStatus.INACTIVE
         await self._session.flush()
 
     async def _require_configuration(
@@ -561,7 +564,7 @@ class DestinationExistsError(Exception):
 
 
 def _ensure_editable_status(configuration: Configuration) -> None:
-    if configuration.status != "draft":
+    if configuration.status != ConfigurationStatus.DRAFT:
         raise ConfigStateError("config_not_editable")
 
 

@@ -7,10 +7,11 @@ from typing import Any
 
 from pydantic import Field
 
+from apps.api.app.shared.core.ids import ULIDStr
 from apps.api.app.shared.core.schema import BaseSchema
 from apps.api.app.shared.pagination import Page
 
-from .filters import DocumentSource, DocumentStatus, ULIDStr
+from .models import DocumentSource, DocumentStatus
 
 
 class UploaderSummary(BaseSchema):
@@ -56,7 +57,7 @@ class DocumentRecord(BaseSchema):
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
-    deleted_by: str | None = Field(
+    deleted_by: ULIDStr | None = Field(
         default=None,
         alias="deleted_by_user_id",
         serialization_alias="deleted_by",

@@ -6,6 +6,7 @@ export * from "./hooks/useConfigScripts";
 export * from "./hooks/useConfigFiles";
 export * from "./hooks/useCreateConfigMutation";
 export * from "./hooks/useValidateConfiguration";
+export * from "./hooks/useConfigLifecycle";
 export * from "./manifest";
 export * from "./types";
 export * from "./keys";

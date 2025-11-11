@@ -6,6 +6,7 @@ from datetime import datetime
 
 from pydantic import Field
 
+from apps.api.app.shared.core.ids import ULIDStr
 from apps.api.app.shared.core.schema import BaseSchema
 from apps.api.app.shared.pagination import Page
 
@@ -13,12 +14,12 @@ from apps.api.app.shared.pagination import Page
 class UserProfile(BaseSchema):
     """Minimal view of the authenticated user."""
 
-    user_id: str = Field(serialization_alias="user_id", validation_alias="id")
+    user_id: ULIDStr = Field(serialization_alias="user_id", validation_alias="id")
     email: str
     is_active: bool
     is_service_account: bool
     display_name: str | None = None
-    preferred_workspace_id: str | None = Field(
+    preferred_workspace_id: ULIDStr | None = Field(
         default=None,
         validation_alias="preferred_workspace_id",
     )

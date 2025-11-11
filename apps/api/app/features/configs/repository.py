@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Configuration
+from .models import Configuration, ConfigurationStatus
 
 
 class ConfigurationsRepository:
@@ -50,7 +50,7 @@ class ConfigurationsRepository:
             self.base_query()
             .where(
                 Configuration.workspace_id == workspace_id,
-                Configuration.status == "active",
+                Configuration.status == ConfigurationStatus.ACTIVE,
             )
             .limit(1)
         )

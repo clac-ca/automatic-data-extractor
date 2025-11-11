@@ -64,7 +64,7 @@ class ConfigurationBuildsRepository:
             .where(
                 ConfigurationBuild.workspace_id == workspace_id,
                 ConfigurationBuild.config_id == config_id,
-                ConfigurationBuild.status == BuildStatus.ACTIVE.value,
+                ConfigurationBuild.status == BuildStatus.ACTIVE,
             )
             .limit(1)
         )
@@ -79,7 +79,7 @@ class ConfigurationBuildsRepository:
             .where(
                 ConfigurationBuild.workspace_id == workspace_id,
                 ConfigurationBuild.config_id == config_id,
-                ConfigurationBuild.status == BuildStatus.BUILDING.value,
+                ConfigurationBuild.status == BuildStatus.BUILDING,
             )
             .limit(1)
         )
@@ -95,7 +95,7 @@ class ConfigurationBuildsRepository:
                 ConfigurationBuild.workspace_id == workspace_id,
                 ConfigurationBuild.config_id == config_id,
                 ConfigurationBuild.status.in_(
-                    [BuildStatus.INACTIVE.value, BuildStatus.FAILED.value]
+                    [BuildStatus.INACTIVE, BuildStatus.FAILED]
                 ),
             )
             .order_by(ConfigurationBuild.created_at.asc())
@@ -112,9 +112,9 @@ class ConfigurationBuildsRepository:
                 ConfigurationBuild.workspace_id == workspace_id,
                 ConfigurationBuild.config_id == config_id,
                 ConfigurationBuild.build_id != exclude_build_id,
-                ConfigurationBuild.status == BuildStatus.ACTIVE.value,
+                ConfigurationBuild.status == BuildStatus.ACTIVE,
             )
-            .values(status=BuildStatus.INACTIVE.value)
+            .values(status=BuildStatus.INACTIVE)
         )
         await self._session.execute(stmt)
 
@@ -135,7 +135,7 @@ class ConfigurationBuildsRepository:
                 ConfigurationBuild.build_id == build_id,
             )
             .values(
-                status=BuildStatus.FAILED.value,
+                status=BuildStatus.FAILED,
                 built_at=finished_at,
                 error=error,
             )
@@ -161,7 +161,7 @@ class ConfigurationBuildsRepository:
                 ConfigurationBuild.build_id == build_id,
             )
             .values(
-                status=BuildStatus.ACTIVE.value,
+                status=BuildStatus.ACTIVE,
                 built_at=built_at,
                 last_used_at=built_at,
                 python_version=python_version,

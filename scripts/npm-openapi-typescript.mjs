@@ -53,18 +53,7 @@ const outputPath = join("apps", "web", "src", "generated", "openapi.d.ts");
 
 await run(
   pythonExecutable,
-  [
-    "-c",
-    [
-      "import json",
-      "from pathlib import Path",
-      "from apps.api.app.main import create_app",
-      "app = create_app()",
-      "schema = app.openapi()",
-      `Path(r"${openapiRelativePath}").write_text(json.dumps(schema, indent=2))`,
-      `print('📝 wrote ${openapiRelativePath}')`,
-    ].join("; "),
-  ],
+  ["-m", "apps.api.app.scripts.generate_openapi", "--output", openapiRelativePath],
   { cwd: process.cwd() },
 );
 

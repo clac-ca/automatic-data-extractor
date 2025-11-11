@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.api.app.shared.db import Base
 from apps.api.app.shared.db.mixins import TimestampMixin, generate_ulid
+
+
+class ConfigurationStatus(str, Enum):
+    """Lifecycle states for workspace configuration packages."""
+
+    DRAFT = "draft"
+    ACTIVE = "active"
+    INACTIVE = "inactive"
 
 
 class Configuration(TimestampMixin, Base):
@@ -27,7 +36,16 @@ class Configuration(TimestampMixin, Base):
         default=generate_ulid,
     )
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    status: Mapped[ConfigurationStatus] = mapped_column(
+        SAEnum(
+            ConfigurationStatus,
+            name="configuration_status",
+            native_enum=False,
+            length=20,
+        ),
+        nullable=False,
+        default=ConfigurationStatus.DRAFT,
+    )
     config_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     content_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
     activated_at: Mapped[datetime | None] = mapped_column(
@@ -40,4 +58,4 @@ class Configuration(TimestampMixin, Base):
     )
 
 
-__all__ = ["Configuration"]
+__all__ = ["Configuration", "ConfigurationStatus"]

@@ -11,7 +11,13 @@ from sqlalchemy import select
 
 from apps.api.app.settings import get_settings
 from apps.api.app.shared.db.session import get_sessionmaker
-from apps.api.app.features.roles.models import Principal, Role, RoleAssignment, RolePermission
+from apps.api.app.features.roles.models import (
+    Principal,
+    Role,
+    RoleAssignment,
+    RolePermission,
+    ScopeType,
+)
 from apps.api.app.features.roles.service import assign_global_role
 from apps.api.app.features.workspaces.models import WorkspaceMembership
 
@@ -65,7 +71,7 @@ async def test_global_permission_allows_workspace_creation(
         role = Role(
             slug=role_slug,
             name="Workspace Creator",
-            scope_type="global",
+            scope_type=ScopeType.GLOBAL,
             scope_id=None,
             description="Allows workspace creation",
             built_in=False,
@@ -254,7 +260,7 @@ async def test_put_roles_replaces_assignments(
             .join(Principal, Principal.id == RoleAssignment.principal_id)
             .where(
                 Principal.user_id == membership.user_id,
-                RoleAssignment.scope_type == "workspace",
+                RoleAssignment.scope_type == ScopeType.WORKSPACE,
                 RoleAssignment.scope_id == workspace_id,
             )
         )
@@ -325,7 +331,7 @@ async def test_create_workspace_role(
     assert response.status_code == 201, response.text
     payload = response.json()
     assert payload["slug"] == "contributors"
-    assert payload["scope_type"] == "workspace"
+    assert payload["scope_type"] == ScopeType.WORKSPACE.value
     assert payload["scope_id"] == workspace_id
     assert payload["permissions"] == ["Workspace.Documents.Read"]
 

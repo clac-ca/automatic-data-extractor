@@ -14,7 +14,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from apps.api.app.features.roles.models import Principal, Role, RoleAssignment, RolePermission
+from apps.api.app.features.roles.models import (
+    Principal,
+    PrincipalType,
+    Role,
+    RoleAssignment,
+    RolePermission,
+    ScopeType,
+)
 from apps.api.app.features.roles.registry import PERMISSION_REGISTRY, SYSTEM_ROLES
 from apps.api.app.features.roles.service import (
     AuthorizationError,
@@ -462,7 +469,7 @@ class WorkspacesService:
     ) -> None:
         existing = await self._session.execute(
             select(Role.id).where(
-                Role.scope_type == "workspace",
+                Role.scope_type == ScopeType.WORKSPACE,
                 Role.scope_id == workspace_id,
                 Role.slug == slug,
             )
@@ -475,7 +482,7 @@ class WorkspacesService:
 
         system_conflict = await self._session.execute(
             select(Role.id).where(
-                Role.scope_type == "workspace",
+                Role.scope_type == ScopeType.WORKSPACE,
                 Role.scope_id.is_(None),
                 Role.slug == slug,
             )
@@ -511,7 +518,7 @@ class WorkspacesService:
         )
 
         role = Role(
-            scope_type="workspace",
+            scope_type=ScopeType.WORKSPACE,
             scope_id=workspace_id,
             slug=normalized_slug,
             name=normalized_name,
@@ -607,7 +614,7 @@ class WorkspacesService:
         assignment_exists = await self._session.execute(
             select(RoleAssignment.id).where(
                 RoleAssignment.role_id == role.id,
-                RoleAssignment.scope_type == "workspace",
+                RoleAssignment.scope_type == ScopeType.WORKSPACE,
             )
         )
         if assignment_exists.first() is not None:
@@ -775,7 +782,7 @@ class WorkspacesService:
     async def _get_system_workspace_role(self, slug: str) -> Role | None:
         stmt = select(Role).where(
             Role.slug == slug,
-            Role.scope_type == "workspace",
+            Role.scope_type == ScopeType.WORKSPACE,
             Role.scope_id.is_(None),
         )
         result = await self._session.execute(stmt)
@@ -848,9 +855,9 @@ class WorkspacesService:
             .join(Role, Role.id == RoleAssignment.role_id)
             .outerjoin(RolePermission, RolePermission.role_id == Role.id)
             .where(
-                RoleAssignment.scope_type == "workspace",
+                RoleAssignment.scope_type == ScopeType.WORKSPACE,
                 RoleAssignment.scope_id == workspace_id,
-                Principal.principal_type == "user",
+                Principal.principal_type == PrincipalType.USER,
                 Principal.user_id.in_(unique_user_ids),
             )
         )
@@ -912,7 +919,7 @@ class WorkspacesService:
             select(RoleAssignment.role_id)
             .where(
                 RoleAssignment.principal_id == principal.id,
-                RoleAssignment.scope_type == "workspace",
+                RoleAssignment.scope_type == ScopeType.WORKSPACE,
                 RoleAssignment.scope_id == workspace_id,
             )
         )
@@ -927,7 +934,7 @@ class WorkspacesService:
                 session=self._session,
                 principal_id=cast(str, principal.id),
                 role_id=role_id,
-                scope_type="workspace",
+                scope_type=ScopeType.WORKSPACE,
                 scope_id=workspace_id,
             )
 
@@ -936,7 +943,7 @@ class WorkspacesService:
                 session=self._session,
                 principal_id=cast(str, principal.id),
                 role_id=role_id,
-                scope_type="workspace",
+                scope_type=ScopeType.WORKSPACE,
                 scope_id=workspace_id,
             )
 
@@ -957,7 +964,7 @@ class WorkspacesService:
         await self._session.execute(
             delete(RoleAssignment).where(
                 RoleAssignment.principal_id == principal.id,
-                RoleAssignment.scope_type == "workspace",
+                RoleAssignment.scope_type == ScopeType.WORKSPACE,
                 RoleAssignment.scope_id == workspace_id,
             )
         )

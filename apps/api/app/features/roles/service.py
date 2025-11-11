@@ -19,7 +19,15 @@ from sqlalchemy.orm import selectinload
 from apps.api.app.features.users.models import User
 from apps.api.app.features.workspaces.models import Workspace
 
-from .models import Permission, Principal, Role, RoleAssignment, RolePermission
+from .models import (
+    Permission,
+    Principal,
+    PrincipalType,
+    Role,
+    RoleAssignment,
+    RolePermission,
+    ScopeType,
+)
 from .registry import (
     PERMISSION_REGISTRY,
     PERMISSIONS,
@@ -141,7 +149,7 @@ def _expand_implications(keys: frozenset[str], *, scope: PermissionScope) -> fro
         return keys
 
     mapping: Mapping[str, tuple[str, ...]]
-    if scope == "global":
+    if scope == ScopeType.GLOBAL:
         mapping = GLOBAL_IMPLICATIONS
     else:
         mapping = WORKSPACE_IMPLICATIONS
@@ -156,14 +164,14 @@ def _expand_implications(keys: frozenset[str], *, scope: PermissionScope) -> fro
                 expanded.add(implied)
                 queue.append(implied)
 
-        if scope == "workspace" and key.startswith("Workspace."):
+        if scope == ScopeType.WORKSPACE and key.startswith("Workspace."):
             if key.endswith(".ReadWrite"):
                 read_variant = f"{key.removesuffix('.ReadWrite')}.Read"
                 if read_variant in PERMISSION_REGISTRY and read_variant not in expanded:
                     expanded.add(read_variant)
                     queue.append(read_variant)
 
-    if scope == "workspace" and expanded:
+    if scope == ScopeType.WORKSPACE and expanded:
         workspace_read = "Workspace.Read"
         if workspace_read in PERMISSION_REGISTRY:
             expanded.add(workspace_read)
@@ -208,7 +216,7 @@ async def _ensure_global_slug_available(
     *, session: AsyncSession, slug: str
 ) -> None:
     stmt = select(Role.id).where(
-        Role.scope_type == "global",
+        Role.scope_type == ScopeType.GLOBAL,
         Role.scope_id.is_(None),
         Role.slug == slug,
     )
@@ -222,9 +230,9 @@ def authorize_workspace(
 ) -> AuthorizationDecision:
     """Authorize workspace-scoped permissions using the registry."""
 
-    granted_keys = _union_granted(granted, scope="workspace")
+    granted_keys = _union_granted(granted, scope=ScopeType.WORKSPACE)
     required_keys = collect_permission_keys(required)
-    _validate_scope(required_keys, scope="workspace")
+    _validate_scope(required_keys, scope=ScopeType.WORKSPACE)
     missing = tuple(sorted(set(required_keys) - granted_keys))
     return AuthorizationDecision(
         granted=granted_keys,
@@ -238,9 +246,9 @@ def authorize_global(
 ) -> AuthorizationDecision:
     """Authorize global permissions using the registry."""
 
-    granted_keys = _union_granted(granted, scope="global")
+    granted_keys = _union_granted(granted, scope=ScopeType.GLOBAL)
     required_keys = collect_permission_keys(required)
-    _validate_scope(required_keys, scope="global")
+    _validate_scope(required_keys, scope=ScopeType.GLOBAL)
     missing = tuple(sorted(set(required_keys) - granted_keys))
     return AuthorizationDecision(
         granted=granted_keys,
@@ -269,7 +277,7 @@ async def ensure_user_principal(*, session: AsyncSession, user: User) -> Princip
     if principal is not None:
         return principal
 
-    principal = Principal(principal_type="user", user_id=user.id)
+    principal = Principal(principal_type=PrincipalType.USER, user_id=user.id)
     session.add(principal)
     await session.flush([principal])
     await session.refresh(principal)
@@ -282,7 +290,7 @@ async def get_global_permissions_for_principal(
 ) -> frozenset[str]:
     """Return the flattened global permission set for ``principal``."""
 
-    if principal.principal_type != "user":
+    if principal.principal_type != PrincipalType.USER:
         return frozenset()
 
     user = principal.user
@@ -295,14 +303,14 @@ async def get_global_permissions_for_principal(
         .join(RoleAssignment, RoleAssignment.role_id == Role.id)
         .where(
             RoleAssignment.principal_id == principal.id,
-            RoleAssignment.scope_type == "global",
+            RoleAssignment.scope_type == ScopeType.GLOBAL,
         )
     )
     result = await session.execute(stmt)
     permissions = frozenset(result.scalars().all())
     if not permissions:
         return permissions
-    return _expand_implications(permissions, scope="global")
+    return _expand_implications(permissions, scope=ScopeType.GLOBAL)
 
 
 async def get_global_permissions_for_user(
@@ -327,7 +335,7 @@ async def get_workspace_permissions_for_principal(
 ) -> frozenset[str]:
     """Return the flattened workspace permission set for ``principal``."""
 
-    if principal.principal_type != "user":
+    if principal.principal_type != PrincipalType.USER:
         return frozenset()
 
     user = principal.user
@@ -340,14 +348,14 @@ async def get_workspace_permissions_for_principal(
         .join(RoleAssignment, RoleAssignment.role_id == Role.id)
         .where(
             RoleAssignment.principal_id == principal.id,
-            RoleAssignment.scope_type == "workspace",
+            RoleAssignment.scope_type == ScopeType.WORKSPACE,
             RoleAssignment.scope_id == workspace_id,
         )
     )
     result = await session.execute(stmt)
     permissions = frozenset(result.scalars().all())
     if permissions:
-        return _expand_implications(permissions, scope="workspace")
+        return _expand_implications(permissions, scope=ScopeType.WORKSPACE)
 
     global_permissions = await get_global_permissions_for_principal(
         session=session, principal=principal
@@ -356,10 +364,10 @@ async def get_workspace_permissions_for_principal(
         for definition in SYSTEM_ROLES:
             if (
                 definition.slug == "workspace-owner"
-                and definition.scope_type == "workspace"
+                and definition.scope_type == ScopeType.WORKSPACE
             ):
                 return _expand_implications(
-                    frozenset(definition.permissions), scope="workspace"
+                    frozenset(definition.permissions), scope=ScopeType.WORKSPACE
                 )
 
     return permissions
@@ -411,7 +419,7 @@ async def get_global_role_slugs_for_user(
         .join(RoleAssignment, RoleAssignment.role_id == Role.id)
         .where(
             RoleAssignment.principal_id == principal.id,
-            RoleAssignment.scope_type == "global",
+            RoleAssignment.scope_type == ScopeType.GLOBAL,
         )
     )
     result = await session.execute(stmt)
@@ -425,7 +433,7 @@ async def get_global_role_by_slug(
 
     stmt = (
         select(Role)
-        .where(Role.slug == slug, Role.scope_type == "global", Role.scope_id.is_(None))
+        .where(Role.slug == slug, Role.scope_type == ScopeType.GLOBAL, Role.scope_id.is_(None))
         .limit(1)
     )
     result = await session.execute(stmt)
@@ -443,9 +451,9 @@ async def count_users_with_global_role(
         .join(Role, Role.id == RoleAssignment.role_id)
         .join(Principal, Principal.id == RoleAssignment.principal_id)
         .where(
-            RoleAssignment.scope_type == "global",
+            RoleAssignment.scope_type == ScopeType.GLOBAL,
             Role.slug == slug,
-            Principal.principal_type == "user",
+            Principal.principal_type == PrincipalType.USER,
         )
     )
     result = await session.execute(stmt)
@@ -462,9 +470,9 @@ async def has_users_with_global_role(
         .join(Role, Role.id == RoleAssignment.role_id)
         .join(Principal, Principal.id == RoleAssignment.principal_id)
         .where(
-            RoleAssignment.scope_type == "global",
+            RoleAssignment.scope_type == ScopeType.GLOBAL,
             Role.slug == slug,
-            Principal.principal_type == "user",
+            Principal.principal_type == PrincipalType.USER,
         )
         .limit(1)
     )
@@ -473,11 +481,11 @@ async def has_users_with_global_role(
 
 
 async def list_roles(
-    *, session: AsyncSession, scope_type: str, scope_id: str | None = None
+    *, session: AsyncSession, scope_type: ScopeType, scope_id: str | None = None
 ) -> list[Role]:
     """Return roles for the requested scope ordered by slug."""
 
-    if scope_type not in {"global", "workspace"}:
+    if scope_type not in {ScopeType.GLOBAL, ScopeType.WORKSPACE}:
         raise RoleValidationError("Unsupported scope_type")
 
     stmt = (
@@ -486,7 +494,7 @@ async def list_roles(
         .where(Role.scope_type == scope_type)
     )
 
-    if scope_type == "global":
+    if scope_type == ScopeType.GLOBAL:
         stmt = stmt.where(Role.scope_id.is_(None))
     else:
         if scope_id is None:
@@ -513,13 +521,13 @@ async def create_global_role(
 
     try:
         permission_keys = _normalize_permission_keys(
-            payload.permissions, scope="global"
+            payload.permissions, scope=ScopeType.GLOBAL
         )
     except AuthorizationError as exc:
         raise RoleValidationError(str(exc)) from exc
 
     role = Role(
-        scope_type="global",
+        scope_type=ScopeType.GLOBAL,
         scope_id=None,
         slug=slug,
         name=normalized_name,
@@ -551,7 +559,7 @@ async def update_global_role(
     """Update an editable global role."""
 
     role = await session.get(Role, role_id)
-    if role is None or role.scope_type != "global":
+    if role is None or role.scope_type != ScopeType.GLOBAL:
         raise RoleNotFoundError("Role not found")
     if role.built_in or not role.editable:
         raise RoleImmutableError("System roles cannot be edited")
@@ -562,7 +570,7 @@ async def update_global_role(
 
     try:
         permission_keys = set(
-            _normalize_permission_keys(payload.permissions, scope="global")
+            _normalize_permission_keys(payload.permissions, scope=ScopeType.GLOBAL)
         )
     except AuthorizationError as exc:
         raise RoleValidationError(str(exc)) from exc
@@ -597,7 +605,7 @@ async def delete_global_role(*, session: AsyncSession, role_id: str) -> None:
     """Remove an editable global role when no assignments exist."""
 
     role = await session.get(Role, role_id)
-    if role is None or role.scope_type != "global":
+    if role is None or role.scope_type != ScopeType.GLOBAL:
         raise RoleNotFoundError("Role not found")
     if role.built_in or not role.editable:
         raise RoleImmutableError("System roles cannot be deleted")
@@ -605,7 +613,7 @@ async def delete_global_role(*, session: AsyncSession, role_id: str) -> None:
     assignment_exists = await session.execute(
         select(RoleAssignment.id).where(
             RoleAssignment.role_id == role.id,
-            RoleAssignment.scope_type == "global",
+            RoleAssignment.scope_type == ScopeType.GLOBAL,
         )
     )
     if assignment_exists.first() is not None:
@@ -618,18 +626,18 @@ async def delete_global_role(*, session: AsyncSession, role_id: str) -> None:
 async def list_role_assignments(
     *,
     session: AsyncSession,
-    scope_type: str,
+    scope_type: ScopeType,
     scope_id: str | None,
     principal_id: str | None = None,
     role_id: str | None = None,
 ) -> list[RoleAssignment]:
     """Return assignments for the requested scope filtered by optional criteria."""
 
-    if scope_type not in {"global", "workspace"}:
+    if scope_type not in {ScopeType.GLOBAL, ScopeType.WORKSPACE}:
         raise RoleScopeMismatchError("Unsupported scope_type")
 
     conditions = [RoleAssignment.scope_type == scope_type]
-    if scope_type == "global":
+    if scope_type == ScopeType.GLOBAL:
         if scope_id not in (None, ""):
             raise RoleScopeMismatchError("Global assignments must omit scope_id")
         conditions.append(RoleAssignment.scope_id.is_(None))
@@ -661,7 +669,7 @@ async def get_role_assignment(
     session: AsyncSession,
     principal_id: str,
     role_id: str,
-    scope_type: str,
+    scope_type: ScopeType,
     scope_id: str | None,
 ) -> RoleAssignment | None:
     """Return a single assignment for the provided identifiers."""
@@ -700,7 +708,7 @@ async def assign_role(
     session: AsyncSession,
     principal_id: str,
     role_id: str,
-    scope_type: str,
+    scope_type: ScopeType,
     scope_id: str | None,
 ) -> RoleAssignment:
     """Assign ``role_id`` to ``principal_id`` for the provided scope."""
@@ -719,17 +727,17 @@ async def assign_role(
         msg = "Role scope_type mismatch"
         raise RoleScopeMismatchError(msg)
 
-    if scope_type == "global" and scope_id is not None:
+    if scope_type == ScopeType.GLOBAL and scope_id is not None:
         msg = "Global assignments must not specify scope_id"
         raise RoleScopeMismatchError(msg)
-    if scope_type == "workspace" and scope_id is None:
+    if scope_type == ScopeType.WORKSPACE and scope_id is None:
         msg = "Workspace assignments require a scope_id"
         raise RoleScopeMismatchError(msg)
-    if scope_type == "workspace" and role.scope_id is not None and role.scope_id != scope_id:
+    if scope_type == ScopeType.WORKSPACE and role.scope_id is not None and role.scope_id != scope_id:
         msg = "Role is bound to a different workspace"
         raise RoleScopeMismatchError(msg)
 
-    if scope_type == "workspace" and scope_id is not None:
+    if scope_type == ScopeType.WORKSPACE and scope_id is not None:
         workspace = await session.get(Workspace, scope_id)
         if workspace is None:
             msg = f"Workspace '{scope_id}' not found"
@@ -817,7 +825,7 @@ async def assign_global_role(
         session=session,
         principal_id=principal.id,
         role_id=role_id,
-        scope_type="global",
+        scope_type=ScopeType.GLOBAL,
         scope_id=None,
     )
 
@@ -826,7 +834,7 @@ async def delete_role_assignment(
     *,
     session: AsyncSession,
     assignment_id: str,
-    scope_type: str,
+    scope_type: ScopeType,
     scope_id: str | None,
 ) -> None:
     """Delete a role assignment ensuring scope alignment."""
@@ -838,10 +846,10 @@ async def delete_role_assignment(
     if assignment.scope_type != scope_type:
         raise RoleAssignmentNotFoundError("Role assignment not found")
 
-    if scope_type == "global":
+    if scope_type == ScopeType.GLOBAL:
         if assignment.scope_id is not None:
             raise RoleAssignmentNotFoundError("Role assignment not found")
-    elif scope_type == "workspace":
+    elif scope_type == ScopeType.WORKSPACE:
         if scope_id is None or assignment.scope_id != scope_id:
             raise RoleAssignmentNotFoundError("Role assignment not found")
     else:
@@ -856,7 +864,7 @@ async def unassign_role(
     session: AsyncSession,
     principal_id: str,
     role_id: str,
-    scope_type: str,
+    scope_type: ScopeType,
     scope_id: str | None,
 ) -> None:
     """Remove a role assignment if present."""
