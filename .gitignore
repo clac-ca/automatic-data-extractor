@@ -38,9 +38,6 @@ apps/web/build/
 apps/web/coverage/
 apps/web/.eslintcache
 
-# Generated API types (adjust if you decide to commit them)
-apps/web/src/generated/
-
 # --- ADE runtime data (by default under ./data) ---
 # Persisted workspaces, jobs, logs, caches, etc. DO NOT COMMIT.
 data/
