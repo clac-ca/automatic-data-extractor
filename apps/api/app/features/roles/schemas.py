@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from apps.api.app.shared.core.ids import ULIDStr
 from apps.api.app.shared.core.schema import BaseSchema
+from apps.api.app.shared.pagination import Page
 
 from .models import PrincipalType, ScopeType
 
@@ -109,14 +110,29 @@ class PermissionCheckResponse(BaseSchema):
     results: dict[str, bool] = Field(default_factory=dict)
 
 
+class RolePage(Page[RoleOut]):
+    """Paginated role collection."""
+
+
+class RoleAssignmentPage(Page[RoleAssignmentOut]):
+    """Paginated role assignment collection."""
+
+
+class PermissionPage(Page[PermissionOut]):
+    """Paginated permission registry response."""
+
+
 __all__ = [
     "EffectivePermissionsResponse",
     "PermissionCheckRequest",
     "PermissionCheckResponse",
+    "PermissionPage",
     "PermissionOut",
     "RoleAssignmentCreate",
     "RoleAssignmentOut",
+    "RoleAssignmentPage",
     "RoleCreate",
     "RoleOut",
+    "RolePage",
     "RoleUpdate",
 ]
