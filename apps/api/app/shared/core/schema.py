@@ -50,10 +50,4 @@ class BaseSchema(BaseModel):
         return serialized.encode("utf-8")
 
 
-class ProblemDetail(BaseSchema):
-    """Standard error envelope mirroring FastAPI's ``{"detail": ...}`` payload."""
-
-    detail: str | dict[str, Any]
-
-
-__all__ = ["BaseSchema", "ProblemDetail"]
+__all__ = ["BaseSchema"]
