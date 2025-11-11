@@ -10,8 +10,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from apps.api.app.features.roles.models import Role, ScopeType
-
 from .models import Workspace, WorkspaceMembership
 
 
@@ -224,19 +222,6 @@ class WorkspacesRepository:
     async def delete_membership(self, membership: WorkspaceMembership) -> None:
         await self._session.delete(membership)
         await self._session.flush()
-
-    async def list_workspace_roles(self, workspace_id: str) -> list[Role]:
-        stmt = (
-            select(Role)
-            .options(selectinload(Role.permissions))
-            .where(
-                Role.scope_type == ScopeType.WORKSPACE,
-                sa.or_(Role.scope_id.is_(None), Role.scope_id == workspace_id),
-            )
-            .order_by(Role.slug)
-        )
-        result = await self._session.execute(stmt)
-        return list(result.scalars().all())
 
     async def clear_default_for_user(self, *, user_id: str) -> None:
         stmt = (

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.app.shared.core.responses import DefaultResponse
 from apps.api.app.shared.core.schema import ErrorMessage
 from apps.api.app.shared.db.session import get_session
+from apps.api.app.shared.pagination import PageParams
 from apps.api.app.shared.dependency import (
     get_workspace_profile,
     require_authenticated,
@@ -16,8 +17,8 @@ from apps.api.app.shared.dependency import (
     require_workspace,
 )
 
-from ..roles.models import Role
-from ..roles.schemas import RoleCreate, RoleOut, RoleUpdate
+from ..roles.models import Role, ScopeType
+from ..roles.schemas import RoleCreate, RoleOut, RolePage, RoleUpdate
 from ..users.models import User
 from .schemas import (
     WorkspaceCreate,
@@ -29,6 +30,7 @@ from .schemas import (
     WorkspaceUpdate,
 )
 from .service import WorkspacesService
+from ..roles.service import paginate_roles
 
 router = APIRouter(tags=["workspaces"], dependencies=[Security(require_authenticated)])
 
@@ -197,7 +199,7 @@ async def list_members(
 
 @router.get(
     "/workspaces/{workspace_id}/roles",
-    response_model=list[RoleOut],
+    response_model=RolePage,
     status_code=status.HTTP_200_OK,
     summary="List roles available to the workspace",
     responses={
@@ -220,11 +222,25 @@ async def list_workspace_roles(
             scopes=["{workspace_id}"],
         ),
     ],
+    page: Annotated[PageParams, Depends()],
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> list[RoleOut]:
-    service = WorkspacesService(session=session)
-    roles = await service.list_workspace_roles(workspace.workspace_id)
-    return [_serialize_role(role) for role in roles]
+) -> RolePage:
+    role_page = await paginate_roles(
+        session=session,
+        scope_type=ScopeType.WORKSPACE,
+        scope_id=workspace.workspace_id,
+        page=page.page,
+        page_size=page.page_size,
+        include_total=page.include_total,
+    )
+    return RolePage(
+        items=[_serialize_role(role) for role in role_page.items],
+        page=role_page.page,
+        page_size=role_page.page_size,
+        has_next=role_page.has_next,
+        has_previous=role_page.has_previous,
+        total=role_page.total,
+    )
 
 
 @router.post(
