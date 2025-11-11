@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router";
 import clsx from "clsx";
 
@@ -9,83 +9,52 @@ import { PageState } from "@ui/PageState";
 
 import { useWorkspaceContext } from "../workspaces.$workspaceId/WorkspaceContext";
 import {
-  useConfigFileQuery,
   useConfigFilesQuery,
-  useConfigsQuery,
-  useSaveConfigFileMutation,
+  useConfigQuery,
+  useValidateConfigurationMutation,
   type ConfigFileEntry,
-  type ConfigRecord,
+  type ConfigurationValidateResponse,
 } from "@shared/configs";
+
+import { useConfigEditorState, type EditorTab } from "./useConfigEditorState";
 
 export default function WorkspaceConfigRoute() {
   const { workspace } = useWorkspaceContext();
   const params = useParams<{ configId: string }>();
   const configId = params.configId ?? "";
 
-  const configsQuery = useConfigsQuery({ workspaceId: workspace.id });
-  const activeConfig = useMemo<ConfigRecord | null>(
-    () => configsQuery.data?.find((config) => config.config_id === configId) ?? null,
-    [configsQuery.data, configId],
-  );
-
+  const configQuery = useConfigQuery({ workspaceId: workspace.id, configId, enabled: Boolean(configId) });
   const filesQuery = useConfigFilesQuery({ workspaceId: workspace.id, configId, enabled: Boolean(configId) });
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!filesQuery.data) {
-      return;
-    }
-    const files = filesQuery.data.entries.filter((entry) => entry.type === "file");
-    if (files.length === 0) {
-      setSelectedPath(null);
-      return;
-    }
-    if (selectedPath && files.some((entry) => entry.path === selectedPath)) {
-      return;
-    }
-    const preferred = files.find((entry) => entry.path === "manifest.json") ?? files[0];
-    setSelectedPath(preferred?.path ?? null);
-  }, [filesQuery.data, selectedPath]);
-
-  const fileQuery = useConfigFileQuery({
+  const editor = useConfigEditorState({
     workspaceId: workspace.id,
     configId,
-    path: selectedPath,
-    enabled: Boolean(selectedPath),
+    onSaved: () => {
+      void filesQuery.refetch();
+    },
   });
 
-  const [editorValue, setEditorValue] = useState("");
-  const [currentEtag, setCurrentEtag] = useState<string | null>(null);
-  const [currentEncoding, setCurrentEncoding] = useState<"utf-8" | "base64" | null>(null);
+  const [validationResult, setValidationResult] = useState<ConfigurationValidateResponse | null>(null);
+  const validateConfig = useValidateConfigurationMutation(workspace.id, configId);
+  const initialFileOpened = useRef(false);
+
+  const { openTab, tabs, activePath, closeTab, setActivePath, updateContent, saveActiveTab, isSaving } = editor;
 
   useEffect(() => {
-    const info = fileQuery.data;
-    if (!info) {
-      setCurrentEncoding(null);
-      setEditorValue("");
-      setCurrentEtag(null);
+    if (!filesQuery.data || tabs.length > 0 || initialFileOpened.current) {
       return;
     }
-    setCurrentEncoding(info.encoding);
-    if (info.encoding === "utf-8") {
-      setEditorValue(info.content);
-    } else {
-      setEditorValue("");
+    const entries = filesQuery.data.entries.filter((entry) => entry.type === "file");
+    const preferred = entries.find((entry) => entry.path === "manifest.json") ?? entries[0];
+    if (preferred) {
+      initialFileOpened.current = true;
+      openTab(preferred.path);
     }
-    setCurrentEtag(info.etag ?? null);
-  }, [fileQuery.data]);
+  }, [filesQuery.data, openTab, tabs.length]);
 
-  const dirty = fileQuery.data && fileQuery.data.encoding === "utf-8" ? editorValue !== fileQuery.data.content : false;
-  const saveFile = useSaveConfigFileMutation(workspace.id, configId);
-
-  const handleSave = () => {
-    if (!selectedPath || currentEncoding !== "utf-8") {
-      return;
-    }
-    saveFile.mutate({
-      path: selectedPath,
-      content: editorValue,
-      etag: currentEtag,
+  const handleValidate = () => {
+    setValidationResult(null);
+    validateConfig.mutate(undefined, {
+      onSuccess: setValidationResult,
     });
   };
 
@@ -93,179 +62,351 @@ export default function WorkspaceConfigRoute() {
     return <PageState title="Select a configuration" description="Choose a configuration from the list to open the builder." />;
   }
 
-  if (configsQuery.isLoading || filesQuery.isLoading) {
+  if (configQuery.isLoading || filesQuery.isLoading) {
     return <PageState variant="loading" title="Loading configuration" description="Fetching configuration metadata and file tree…" />;
   }
 
-  if (configsQuery.isError) {
-    return <PageState variant="error" title="Unable to load configurations" description="Try refreshing the page or check your network connection." />;
-  }
-
-  if (!activeConfig) {
-    return <PageState variant="error" title="Configuration not found" description="This workspace does not include a configuration with that identifier." />;
+  if (configQuery.isError || !configQuery.data) {
+    return (
+      <PageState
+        variant="error"
+        title="Configuration not found"
+        description="This workspace does not include a configuration with that identifier."
+      />
+    );
   }
 
   if (filesQuery.isError) {
-    return <PageState variant="error" title="Unable to load files" description="Ensure the configuration exists on disk and try again." />;
+    return (
+      <PageState
+        variant="error"
+        title="Unable to load files"
+        description="Ensure this configuration exists on disk and try again."
+      />
+    );
   }
 
-  const hasFiles = (filesQuery.data?.entries ?? []).some((entry) => entry.type === "file");
+  const fileEntries = filesQuery.data?.entries ?? [];
+  const editable = configQuery.data.status === "draft";
 
   return (
     <div className="flex h-full flex-col gap-6">
-      <header className="space-y-1">
-        <p className="text-xs uppercase tracking-wide text-slate-500">Configuration</p>
-        <div className="flex flex-wrap items-baseline gap-3">
-          <h1 className="text-2xl font-semibold text-slate-900">{activeConfig.display_name}</h1>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
-            {activeConfig.status}
-          </span>
-          <p className="text-sm text-slate-500">Updated {formatTimestamp(activeConfig.updated_at)}</p>
-        </div>
-      </header>
+      <BuilderHeader
+        configName={configQuery.data.display_name}
+        status={configQuery.data.status}
+        updatedAt={configQuery.data.updated_at}
+        onValidate={handleValidate}
+        validating={validateConfig.isPending}
+      />
 
-      {!hasFiles ? (
-        <PageState
-          title="No editable files found"
-          description="Templates include manifest files and detectors under src/ade_config/. Ensure the configuration was copied correctly."
+      {!editable ? (
+        <Alert tone="warning" heading="Read-only configuration">
+          This configuration is {configQuery.data.status}. Duplicate or switch to a draft to continue editing.
+        </Alert>
+      ) : null}
+
+      <div className="flex flex-1 gap-4 overflow-hidden">
+        <FileTreePanel entries={fileEntries} activePath={activePath} onOpen={openTab} />
+        <EditorWorkspace
+          tabs={tabs}
+          activePath={activePath}
+          onSelectTab={setActivePath}
+          onCloseTab={closeTab}
+          onChangeContent={updateContent}
+          onSave={saveActiveTab}
+          isSaving={isSaving}
+          editable={editable}
         />
-      ) : (
-        <div className="flex min-h-[520px] flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <aside className="flex w-64 flex-col border-r border-slate-100 bg-slate-50">
-            <div className="border-b border-slate-200 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Files</p>
-            </div>
-            <FileList
-              entries={filesQuery.data?.entries ?? []}
-              selectedPath={selectedPath}
-              onSelect={(path) => setSelectedPath(path)}
-            />
-          </aside>
-
-          <section className="flex flex-1 flex-col">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-              <div>
-                {selectedPath ? (
-                  <>
-                    <p className="font-semibold text-slate-900">{selectedPath}</p>
-                    <p className="text-xs text-slate-500">
-                      {fileQuery.data?.mtime ? `Last modified ${formatTimestamp(fileQuery.data.mtime)}` : ""}
-                      {fileQuery.data?.size ? ` • ${formatBytes(fileQuery.data.size)}` : ""}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-sm text-slate-500">Select a file to view its contents.</p>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {saveFile.isError ? (
-                  <Alert tone="danger" className="px-3 py-2 text-xs" heading="Save failed">
-                    {(saveFile.error as Error).message ?? "Unable to save file."}
-                  </Alert>
-                ) : null}
-                <Button
-                  variant="primary"
-                  disabled={!dirty || saveFile.isPending || currentEncoding !== "utf-8"}
-                  isLoading={saveFile.isPending}
-                  onClick={handleSave}
-                >
-                  Save
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-hidden bg-slate-900/95">
-              {selectedPath ? (
-                fileQuery.isLoading ? (
-                  <div className="flex h-full items-center justify-center text-sm text-slate-300">Loading file…</div>
-                ) : fileQuery.isError ? (
-                  <div className="flex h-full items-center justify-center">
-                    <PageState
-                      variant="error"
-                      title="Unable to load file"
-                      description="The file may have been deleted or moved. Refresh the tree and try again."
-                    />
-                  </div>
-                ) : currentEncoding !== "utf-8" ? (
-                  <div className="flex h-full items-center justify-center px-6 text-center text-sm text-slate-200">
-                    Binary files (base64) aren’t editable in the browser. Download and modify them via the CLI.
-                  </div>
-                ) : (
-                  <CodeEditor
-                    value={editorValue}
-                    onChange={setEditorValue}
-                    language={detectLanguage(selectedPath)}
-                    onSaveShortcut={handleSave}
-                  />
-                )
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-slate-300">
-                  Choose a file from the sidebar to begin editing.
-                </div>
-              )}
-            </div>
-          </section>
-        </div>
-      )}
+        <InsightsPanel
+          validation={validationResult}
+          lastRunAt={validationResult?.content_digest ? new Date().toISOString() : null}
+          validationError={validateConfig.isError ? (validateConfig.error as Error).message : null}
+        />
+      </div>
     </div>
   );
 }
 
-function FileList({
+function BuilderHeader({
+  configName,
+  status,
+  updatedAt,
+  onValidate,
+  validating,
+}: {
+  readonly configName: string;
+  readonly status: string;
+  readonly updatedAt: string;
+  readonly onValidate: () => void;
+  readonly validating: boolean;
+}) {
+  return (
+    <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Configuration</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold text-slate-900">{configName}</h1>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+              {status}
+            </span>
+          </div>
+          <p className="text-sm text-slate-500">Updated {formatTimestamp(updatedAt)}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="secondary" size="sm" onClick={onValidate} isLoading={validating}>
+            Validate
+          </Button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function FileTreePanel({
   entries,
-  selectedPath,
-  onSelect,
+  activePath,
+  onOpen,
 }: {
   readonly entries: readonly ConfigFileEntry[];
-  readonly selectedPath: string | null;
-  readonly onSelect: (path: string) => void;
+  readonly activePath: string | null;
+  readonly onOpen: (path: string) => void;
 }) {
-  const ordered = useMemo(() => sortEntries(entries), [entries]);
+  const items = useMemo(() => buildTree(entries), [entries]);
+
+  if (items.length === 0) {
+    return (
+      <section className="w-64 rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-sm text-slate-500">
+        No editable files were found.
+      </section>
+    );
+  }
 
   return (
-    <div className="flex-1 overflow-y-auto px-2 py-2">
-      <ul className="space-y-1">
-        {ordered.map((entry) => {
-          const depth = Math.max(0, entry.path.split("/").length - 1);
-          const isSelected = entry.type === "file" && entry.path === selectedPath;
-          const label = entry.path.split("/").pop() ?? entry.path;
-          return (
-            <li key={entry.path}>
-              <button
-                type="button"
-                disabled={entry.type !== "file"}
-                onClick={() => entry.type === "file" && onSelect(entry.path)}
-                className={clsx(
-                  "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm transition",
-                  entry.type === "file"
-                    ? "text-slate-800 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                    : "text-slate-500",
-                  isSelected ? "bg-white shadow" : "",
-                )}
-                style={{ paddingLeft: `${12 + depth * 12}px` }}
-              >
-                <span className="text-xs uppercase text-slate-400">
-                  {entry.type === "dir" ? "DIR" : fileExtensionLabel(label)}
-                </span>
-                <span className="truncate font-medium">
-                  {entry.type === "dir" ? `${label}/` : label}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <section className="flex w-64 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 shadow-sm">
+      <div className="border-b border-slate-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Files
+      </div>
+      <div className="flex-1 overflow-y-auto px-2 py-3">
+        <ul className="space-y-1">
+          {items.map((item) => (
+            <FileTreeNode key={item.path} node={item} activePath={activePath} onOpen={onOpen} />
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }
 
-function sortEntries(entries: readonly ConfigFileEntry[]) {
-  return [...entries].sort((a, b) => {
-    if (a.type !== b.type) {
-      return a.type === "dir" ? -1 : 1;
-    }
-    return a.path.localeCompare(b.path);
-  });
+interface TreeNode {
+  readonly path: string;
+  readonly label: string;
+  readonly type: "file" | "dir";
+  readonly depth: number;
+}
+
+function buildTree(entries: readonly ConfigFileEntry[]): TreeNode[] {
+  return [...entries]
+    .filter((entry) => entry.type === "file" || entry.type === "dir")
+    .sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === "dir" ? -1 : 1;
+      }
+      return a.path.localeCompare(b.path);
+    })
+    .map((entry) => ({
+      path: entry.path,
+      label: entry.path.split("/").pop() ?? entry.path,
+      type: entry.type,
+      depth: Math.max(0, entry.path.split("/").length - 1),
+    }));
+}
+
+function FileTreeNode({
+  node,
+  activePath,
+  onOpen,
+}: {
+  readonly node: TreeNode;
+  readonly activePath: string | null;
+  readonly onOpen: (path: string) => void;
+}) {
+  const isActive = node.type === "file" && node.path === activePath;
+  return (
+    <li>
+      <button
+        type="button"
+        disabled={node.type !== "file"}
+        onClick={() => node.type === "file" && onOpen(node.path)}
+        className={clsx(
+          "flex w-full items-center gap-2 rounded-xl px-3 py-1.5 text-left text-sm transition",
+          node.type === "file"
+            ? "text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            : "text-slate-500",
+          isActive ? "bg-slate-100" : null,
+        )}
+        style={{ paddingLeft: `${node.type === "file" ? node.depth * 12 + 12 : 12}px` }}
+      >
+        <span className="text-xs uppercase text-slate-400">{node.type === "dir" ? "DIR" : fileExtensionLabel(node.label)}</span>
+        <span className="truncate font-medium">{node.type === "dir" ? `${node.label}/` : node.label}</span>
+      </button>
+    </li>
+  );
+}
+
+function EditorWorkspace({
+  tabs,
+  activePath,
+  onSelectTab,
+  onCloseTab,
+  onChangeContent,
+  onSave,
+  isSaving,
+  editable,
+}: {
+  readonly tabs: readonly EditorTab[];
+  readonly activePath: string | null;
+  readonly onSelectTab: (path: string | null) => void;
+  readonly onCloseTab: (path: string) => void;
+  readonly onChangeContent: (path: string, next: string) => void;
+  readonly onSave: () => void;
+  readonly isSaving: boolean;
+  readonly editable: boolean;
+}) {
+  const activeTab = tabs.find((tab) => tab.path === activePath) ?? null;
+  const dirty = activeTab && activeTab.encoding === "utf-8" && activeTab.content !== activeTab.originalContent;
+  const readOnly = !editable || activeTab?.encoding !== "utf-8";
+
+  return (
+    <section className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
+        <div className="flex flex-1 items-center gap-2 overflow-x-auto">
+          {tabs.length === 0 ? (
+            <p className="text-sm text-slate-500">Select a file from the sidebar to begin editing.</p>
+          ) : (
+            tabs.map((tab) => (
+              <EditorTabChip
+                key={tab.path}
+                tab={tab}
+                active={tab.path === activePath}
+                onSelect={() => onSelectTab(tab.path)}
+                onClose={() => onCloseTab(tab.path)}
+              />
+            ))
+          )}
+        </div>
+        <Button
+          size="sm"
+          onClick={onSave}
+          disabled={!activeTab || readOnly || !dirty || isSaving}
+          isLoading={isSaving}
+        >
+          Save
+        </Button>
+      </div>
+      <div className="flex-1 overflow-hidden bg-slate-950/95">
+        {!activeTab ? (
+          <div className="flex h-full items-center justify-center text-sm text-slate-300">
+            Choose a file to begin editing.
+          </div>
+        ) : activeTab.status === "loading" ? (
+          <div className="flex h-full items-center justify-center text-sm text-slate-300">Loading file…</div>
+        ) : activeTab.status === "error" ? (
+          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-slate-200">
+            {activeTab.error ?? "Unable to load this file."}
+          </div>
+        ) : activeTab.encoding === "base64" ? (
+          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-slate-200">
+            Binary files can’t be edited in the browser. Download and edit them locally.
+          </div>
+        ) : (
+          <CodeEditor
+            value={activeTab.content}
+            onChange={(value) => activeTab && onChangeContent(activeTab.path, value)}
+            language={detectLanguage(activeTab.path)}
+            readOnly={readOnly}
+            onSaveShortcut={onSave}
+          />
+        )}
+      </div>
+      {activeTab?.error ? (
+        <div className="border-t border-danger-200 bg-danger-50 px-4 py-2 text-sm text-danger-700">{activeTab.error}</div>
+      ) : null}
+    </section>
+  );
+}
+
+function EditorTabChip({
+  tab,
+  active,
+  onSelect,
+  onClose,
+}: {
+  readonly tab: EditorTab;
+  readonly active: boolean;
+  readonly onSelect: () => void;
+  readonly onClose: () => void;
+}) {
+  const dirty = tab.encoding === "utf-8" && tab.content !== tab.originalContent;
+  return (
+    <span
+      className={clsx(
+        "inline-flex items-center overflow-hidden rounded-full border px-3 py-1 text-xs font-medium",
+        active ? "border-brand-500 bg-brand-50 text-brand-700" : "border-transparent bg-slate-100 text-slate-600",
+      )}
+    >
+      <button type="button" onClick={onSelect} className="mr-2 truncate">
+        {tab.label}
+        {dirty ? "*" : null}
+      </button>
+      <button
+        type="button"
+        onClick={onClose}
+        className="rounded-full px-1 text-slate-500 hover:bg-black/10"
+        aria-label={`Close ${tab.label}`}
+      >
+        ×
+      </button>
+    </span>
+  );
+}
+
+function InsightsPanel({
+  validation,
+  lastRunAt,
+  validationError,
+}: {
+  readonly validation: ConfigurationValidateResponse | null;
+  readonly lastRunAt: string | null;
+  readonly validationError: string | null;
+}) {
+  return (
+    <section className="flex w-80 flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div>
+        <p className="text-xs uppercase tracking-wide text-slate-500">Validation</p>
+        {validation ? (
+          <div className="mt-2 space-y-1 text-sm text-slate-700">
+            <p className="font-semibold text-slate-900">Digest {validation.content_digest ?? "—"}</p>
+            {validation.issues.length === 0 ? (
+              <p className="text-sm text-success-700">No issues detected.</p>
+            ) : (
+              <ul className="list-disc space-y-1 pl-4 text-sm text-danger-700">
+                {validation.issues.map((issue) => (
+                  <li key={`${issue.path}:${issue.message}`}>
+                    <span className="font-medium">{issue.path}</span>: {issue.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-slate-500">Run validation to compute the digest and surface issues.</p>
+        )}
+      </div>
+      {lastRunAt ? <p className="text-xs text-slate-400">Last run {formatTimestamp(lastRunAt)}</p> : null}
+      {validationError ? <Alert tone="danger">{validationError}</Alert> : null}
+    </section>
+  );
 }
 
 function detectLanguage(path: string | null) {
@@ -302,17 +443,4 @@ function formatTimestamp(value?: string | null) {
   } catch {
     return value;
   }
-}
-
-function formatBytes(value?: number) {
-  if (!value) {
-    return "";
-  }
-  if (value < 1024) {
-    return `${value} B`;
-  }
-  if (value < 1024 * 1024) {
-    return `${(value / 1024).toFixed(1)} KB`;
-  }
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }

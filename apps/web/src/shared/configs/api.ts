@@ -8,6 +8,7 @@ import type {
   ConfigVersionRecord,
   ConfigVersionTestResponse,
   ConfigVersionValidateResponse,
+  ConfigurationValidateResponse,
   ManifestEnvelope,
   ManifestEnvelopeWithEtag,
   ManifestPatchRequest,
@@ -37,6 +38,37 @@ export async function listConfigs(
     signal,
   });
   return (data ?? []) as ConfigRecord[];
+}
+
+export async function readConfiguration(
+  workspaceId: string,
+  configId: string,
+  signal?: AbortSignal,
+): Promise<ConfigRecord | null> {
+  const { data } = await client.GET(
+    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}",
+    {
+      params: { path: { workspace_id: workspaceId, config_id: configId } },
+      signal,
+    },
+  );
+  return (data ?? null) as ConfigRecord | null;
+}
+
+export async function validateConfiguration(
+  workspaceId: string,
+  configId: string,
+): Promise<ConfigurationValidateResponse> {
+  const { data } = await client.POST(
+    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/validate",
+    {
+      params: { path: { workspace_id: workspaceId, config_id: configId } },
+    },
+  );
+  if (!data) {
+    throw new Error("Expected validation payload.");
+  }
+  return data as ConfigurationValidateResponse;
 }
 
 export async function listConfigFiles(
