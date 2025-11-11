@@ -17,7 +17,7 @@ from apps.api.app.shared.types import OrderBy
 
 from .filters import UserFilters
 from .models import User
-from .schemas import UserListResponse, UserProfile
+from .schemas import UserOut, UserPage, UserProfile
 from .service import UsersService
 from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
@@ -48,7 +48,7 @@ async def read_me(
 
 @router.get(
     "/users",
-    response_model=UserListResponse,
+    response_model=UserPage,
     status_code=status.HTTP_200_OK,
     summary="List all users (administrator only)",
     response_model_exclude_none=True,
@@ -59,7 +59,7 @@ async def list_users(
     filters: Annotated[UserFilters, Depends()],
     order_by: Annotated[OrderBy, Depends(get_sort_order)],
     service: Annotated[UsersService, Depends(get_users_service)],
-) -> UserListResponse:
+) -> UserPage:
     return await service.list_users(
         page=page.page,
         page_size=page.page_size,
