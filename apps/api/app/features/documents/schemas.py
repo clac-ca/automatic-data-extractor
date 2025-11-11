@@ -14,7 +14,7 @@ from apps.api.app.shared.pagination import Page
 from .models import DocumentSource, DocumentStatus
 
 
-class UploaderSummary(BaseSchema):
+class UploaderOut(BaseSchema):
     """Minimal representation of the user who uploaded the document."""
 
     id: ULIDStr = Field(
@@ -29,7 +29,7 @@ class UploaderSummary(BaseSchema):
     email: str = Field(description="Uploader email address.")
 
 
-class DocumentRecord(BaseSchema):
+class DocumentOut(BaseSchema):
     """Serialised representation of a stored document."""
 
     document_id: ULIDStr = Field(
@@ -68,7 +68,7 @@ class DocumentRecord(BaseSchema):
         serialization_alias="tags",
         description="Tags applied to the document (empty list when none).",
     )
-    uploader: UploaderSummary | None = Field(
+    uploader: UploaderOut | None = Field(
         default=None,
         alias="uploaded_by_user",
         serialization_alias="uploader",
@@ -82,8 +82,8 @@ class DocumentRecord(BaseSchema):
         return self.name
 
 
-class DocumentListResponse(Page[DocumentRecord]):
+class DocumentPage(Page[DocumentOut]):
     """Paginated envelope of document records."""
 
 
-__all__ = ["DocumentListResponse", "DocumentRecord", "UploaderSummary"]
+__all__ = ["DocumentPage", "DocumentOut", "UploaderOut"]

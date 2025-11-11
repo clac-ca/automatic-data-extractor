@@ -28,6 +28,12 @@ npm run ci                 # Full CI pipeline (lint, test, build)
 
 ```
 
+### Frontend API types
+
+- Generated TypeScript types live in `apps/web/src/generated/openapi.d.ts`. If that file is missing (or clearly stale), run `npm run openapi-typescript` to regenerate it before touching frontend API code.
+- Import API shapes from the generated module (`import type { components, paths } from "@openapi";`) instead of hand-writing interfaces—frontend changes must rely on these types for request/response payloads.
+- Treat manual types as view-model helpers only; when adding params or schemas, update the OpenAPI spec and rerun the generator instead of editing the generated file.
+
 ```text
 automatic-data-extractor/
 ├─ apps/                                   # Deployable applications

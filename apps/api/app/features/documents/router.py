@@ -39,7 +39,7 @@ from .exceptions import (
     InvalidDocumentExpirationError,
 )
 from .filters import DocumentFilters
-from .schemas import DocumentListResponse, DocumentRecord
+from .schemas import DocumentOut, DocumentPage
 from .service import DocumentsService
 from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
@@ -149,7 +149,7 @@ def _build_download_disposition(filename: str) -> str:
 @router.post(
     "/documents",
     dependencies=[Security(require_csrf)],
-    response_model=DocumentRecord,
+    response_model=DocumentOut,
     status_code=status.HTTP_201_CREATED,
     summary="Upload a document",
     response_model_exclude_none=True,
@@ -188,7 +188,7 @@ async def upload_document(
     file: Annotated[UploadFile, File(...)],
     metadata: Annotated[str | None, Form()] = None,
     expires_at: Annotated[str | None, Form()] = None,
-) -> DocumentRecord:
+) -> DocumentOut:
     payload = _parse_metadata(metadata)
     try:
         return await service.create_document(
@@ -206,7 +206,7 @@ async def upload_document(
 
 @router.get(
     "/documents",
-    response_model=DocumentListResponse,
+    response_model=DocumentPage,
     status_code=status.HTTP_200_OK,
     summary="List documents",
     response_model_exclude_none=True,
@@ -240,7 +240,7 @@ async def list_documents(
             scopes=["{workspace_id}"],
         ),
     ],
-) -> DocumentListResponse:
+) -> DocumentPage:
     return await service.list_documents(
         workspace_id=workspace_id,
         page=page.page,
@@ -254,7 +254,7 @@ async def list_documents(
 
 @router.get(
     "/documents/{document_id}",
-    response_model=DocumentRecord,
+    response_model=DocumentOut,
     status_code=status.HTTP_200_OK,
     summary="Retrieve document metadata",
     response_model_exclude_none=True,
@@ -288,7 +288,7 @@ async def read_document(
             scopes=["{workspace_id}"],
         ),
     ],
-) -> DocumentRecord:
+) -> DocumentOut:
     try:
         return await service.get_document(
             workspace_id=workspace_id,

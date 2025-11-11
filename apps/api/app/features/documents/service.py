@@ -25,7 +25,7 @@ from .exceptions import (
 from .filters import DocumentFilters, DocumentSource, DocumentStatus, apply_document_filters
 from .models import Document
 from .repository import DocumentsRepository
-from .schemas import DocumentListResponse, DocumentRecord
+from .schemas import DocumentOut, DocumentPage
 from .storage import DocumentStorage
 
 _FALLBACK_FILENAME = "upload"
@@ -53,7 +53,7 @@ class DocumentsService:
         metadata: Mapping[str, Any] | None = None,
         expires_at: str | None = None,
         actor: User | None = None,
-    ) -> DocumentRecord:
+    ) -> DocumentOut:
         """Persist ``upload`` to storage and return the resulting metadata record."""
 
         metadata_payload = dict(metadata or {})
@@ -93,7 +93,7 @@ class DocumentsService:
         result = await self._session.execute(stmt)
         hydrated = result.scalar_one()
 
-        return DocumentRecord.model_validate(hydrated)
+        return DocumentOut.model_validate(hydrated)
 
     async def list_documents(
         self,
@@ -105,7 +105,7 @@ class DocumentsService:
         order_by: OrderBy,
         filters: DocumentFilters,
         actor: User | None = None,
-    ) -> DocumentListResponse:
+    ) -> DocumentPage:
         """Return paginated documents with the shared envelope."""
 
         stmt = (
@@ -122,9 +122,9 @@ class DocumentsService:
             order_by=order_by,
             include_total=include_total,
         )
-        items = [DocumentRecord.model_validate(item) for item in page_result.items]
+        items = [DocumentOut.model_validate(item) for item in page_result.items]
 
-        return DocumentListResponse(
+        return DocumentPage(
             items=items,
             page=page_result.page,
             page_size=page_result.page_size,
@@ -133,15 +133,15 @@ class DocumentsService:
             total=page_result.total,
         )
 
-    async def get_document(self, *, workspace_id: str, document_id: str) -> DocumentRecord:
+    async def get_document(self, *, workspace_id: str, document_id: str) -> DocumentOut:
         """Return document metadata for ``document_id``."""
 
         document = await self._get_document(workspace_id, document_id)
-        return DocumentRecord.model_validate(document)
+        return DocumentOut.model_validate(document)
 
     async def stream_document(
         self, *, workspace_id: str, document_id: str
-    ) -> tuple[DocumentRecord, AsyncIterator[bytes]]:
+    ) -> tuple[DocumentOut, AsyncIterator[bytes]]:
         """Return a document record and async iterator for its bytes."""
 
         document = await self._get_document(workspace_id, document_id)
@@ -165,7 +165,7 @@ class DocumentsService:
                     stored_uri=document.stored_uri,
                 ) from exc
 
-        return DocumentRecord.model_validate(document), _guarded()
+        return DocumentOut.model_validate(document), _guarded()
 
     async def delete_document(
         self,

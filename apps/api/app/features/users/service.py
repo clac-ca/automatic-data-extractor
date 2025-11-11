@@ -18,7 +18,7 @@ from ..auth.security import hash_password
 from .filters import UserFilters, apply_user_filters
 from .models import User
 from .repository import UsersRepository
-from .schemas import UserListResponse, UserProfile, UserSummary
+from .schemas import UserOut, UserPage, UserProfile
 
 
 class UsersService:
@@ -41,7 +41,7 @@ class UsersService:
         include_total: bool,
         order_by: OrderBy,
         filters: UserFilters,
-    ) -> UserListResponse:
+    ) -> UserPage:
         """Return paginated users according to the supplied parameters."""
 
         stmt = select(User)
@@ -55,18 +55,18 @@ class UsersService:
             include_total=include_total,
         )
 
-        items: list[UserSummary] = []
+        items: list[UserOut] = []
         for user in page_result.items:
             profile = await self._build_profile(user)
             items.append(
-                UserSummary(
+                UserOut(
                     **profile.model_dump(),
                     created_at=user.created_at,
                     updated_at=user.updated_at,
                 )
             )
 
-        return UserListResponse(
+        return UserPage(
             items=items,
             page=page_result.page,
             page_size=page_result.page_size,

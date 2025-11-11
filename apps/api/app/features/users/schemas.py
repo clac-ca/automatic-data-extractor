@@ -27,15 +27,15 @@ class UserProfile(BaseSchema):
     permissions: list[str] = Field(default_factory=list)
 
 
-class UserSummary(UserProfile):
+class UserOut(UserProfile):
     """Extended representation with activation metadata."""
 
     created_at: datetime
     updated_at: datetime
 
 
-class UserListResponse(Page[UserSummary]):
+class UserPage(Page[UserOut]):
     """Paginated collection of users."""
 
 
-__all__ = ["UserListResponse", "UserProfile", "UserSummary"]
+__all__ = ["UserOut", "UserPage", "UserProfile"]
