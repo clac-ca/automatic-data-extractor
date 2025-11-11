@@ -310,12 +310,9 @@ export default function WorkspaceDocumentsRoute() {
     setRunDrawerDocument(document);
   }, []);
 
-  const handleRunSuccess = useCallback(
-    (_job: JobRecord) => {
-      void refetchDocuments();
-    },
-    [refetchDocuments],
-  );
+  const handleRunSuccess = useCallback(() => {
+    void refetchDocuments();
+  }, [refetchDocuments]);
 
   const handleRunError = useCallback((message: string) => {
     setBanner({ tone: "error", message });
@@ -1219,7 +1216,7 @@ function RunExtractionDrawerContent({
     documentRecord.document_id,
   );
 
-  const allConfigs = configsQuery.data ?? [];
+  const allConfigs = useMemo(() => configsQuery.data ?? [], [configsQuery.data]);
   const selectableConfigs = useMemo(
     () => allConfigs.filter((config) => !config.deleted_at && config.active_version),
     [allConfigs],

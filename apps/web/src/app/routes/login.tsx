@@ -1,9 +1,5 @@
 import { Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
-import type {
-  ClientActionFunctionArgs,
-  ClientLoaderFunctionArgs,
-  ShouldRevalidateFunctionArgs,
-} from "react-router";
+import type { ClientActionFunctionArgs, ClientLoaderFunctionArgs } from "react-router";
 import { z } from "zod";
 
 import { ApiError } from "@shared/api";
@@ -165,7 +161,7 @@ export default function LoginRoute() {
   );
 }
 
-export function clientShouldRevalidate(_: ShouldRevalidateFunctionArgs) {
+export function clientShouldRevalidate() {
   return false;
 }
 

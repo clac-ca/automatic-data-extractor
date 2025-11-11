@@ -17,6 +17,8 @@ from fastapi import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.api.app.shared.core.security import forbidden_response
+from apps.api.app.shared.db.session import get_session
 from apps.api.app.shared.dependency import (
     get_current_identity,
     require_authenticated,
@@ -25,8 +27,6 @@ from apps.api.app.shared.dependency import (
     require_permissions_catalog_access,
     require_workspace,
 )
-from apps.api.app.shared.core.security import forbidden_response
-from apps.api.app.shared.db.session import get_session
 
 from ..auth.service import AuthenticatedIdentity
 from ..users.models import User

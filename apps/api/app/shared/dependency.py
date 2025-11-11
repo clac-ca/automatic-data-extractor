@@ -3,19 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path as FilePath
 from typing import TYPE_CHECKING, Annotated
 
 import jwt
-from fastapi import Depends, HTTPException, Path, Request, Security, status
-from fastapi.security import (
-    APIKeyCookie,
-    APIKeyHeader,
-    HTTPAuthorizationCredentials,
-    HTTPBearer,
-    SecurityScopes,
-)
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from apps.api.app.features.auth.service import AuthenticatedIdentity, AuthService
 from apps.api.app.features.roles.authorization import authorize
 from apps.api.app.features.roles.service import ensure_user_principal
@@ -27,20 +18,29 @@ from apps.api.app.shared.core.security import (
     resolve_workspace_scope,
 )
 from apps.api.app.shared.db.session import get_session
+from fastapi import Depends, HTTPException, Path, Request, Security, status
+from fastapi.security import (
+    APIKeyCookie,
+    APIKeyHeader,
+    HTTPAuthorizationCredentials,
+    HTTPBearer,
+    SecurityScopes,
+)
+from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
+    from apps.api.app.features.configs.service import ConfigurationsService
     from apps.api.app.features.documents.service import DocumentsService
     from apps.api.app.features.health.service import HealthService
     from apps.api.app.features.system_settings.service import SystemSettingsService
     from apps.api.app.features.users.service import UsersService
-    from apps.api.app.features.workspaces.service import WorkspacesService
 
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
-def get_users_service(session: SessionDep) -> "UsersService":
+def get_users_service(session: SessionDep) -> UsersService:
     """Return a users service bound to the current database session."""
 
     from apps.api.app.features.users.service import UsersService
@@ -48,7 +48,7 @@ def get_users_service(session: SessionDep) -> "UsersService":
     return UsersService(session=session)
 
 
-def get_system_settings_service(session: SessionDep) -> "SystemSettingsService":
+def get_system_settings_service(session: SessionDep) -> SystemSettingsService:
     """Return a request-scoped system settings service."""
 
     from apps.api.app.features.system_settings.service import SystemSettingsService
@@ -59,7 +59,7 @@ def get_system_settings_service(session: SessionDep) -> "SystemSettingsService":
 def get_documents_service(
     session: SessionDep,
     settings: SettingsDep,
-) -> "DocumentsService":
+) -> DocumentsService:
     """Construct a ``DocumentsService`` for request-scoped operations."""
 
     from apps.api.app.features.documents.service import DocumentsService
@@ -67,12 +67,33 @@ def get_documents_service(
     return DocumentsService(session=session, settings=settings)
 
 
-def get_health_service(settings: SettingsDep) -> "HealthService":
+def get_health_service(settings: SettingsDep) -> HealthService:
     """Return a health service configured for the current request."""
 
     from apps.api.app.features.health.service import HealthService
 
     return HealthService(settings=settings)
+
+
+def get_configs_service(
+    session: SessionDep,
+    settings: SettingsDep,
+) -> ConfigurationsService:
+    """Return a configurations service for workspace config APIs."""
+
+    from apps.api.app.features.configs.service import ConfigurationsService
+    from apps.api.app.features.configs.storage import ConfigStorage
+
+    if settings.configs_dir is None:
+        raise RuntimeError("ADE_CONFIGS_DIR is not configured")
+
+    module_root = FilePath(__file__).resolve().parents[1]
+    templates_root = module_root / "templates" / "config_packages"
+    storage = ConfigStorage(
+        templates_root=templates_root,
+        configs_root=settings.configs_dir,
+    )
+    return ConfigurationsService(session=session, storage=storage)
 
 
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -342,6 +363,7 @@ __all__ = [
     "configure_auth_dependencies",
     "get_current_identity",
     "get_current_user",
+    "get_configs_service",
     "get_documents_service",
     "get_health_service",
     "get_system_settings_service",

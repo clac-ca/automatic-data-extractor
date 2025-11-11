@@ -1,10 +1,10 @@
-"""Config feature placeholders."""
+"""Configuration feature exports."""
 
 __all__ = [
     "router",
     "service",
+    "storage",
     "repository",
     "schemas",
-    "dependencies",
     "models",
 ]
