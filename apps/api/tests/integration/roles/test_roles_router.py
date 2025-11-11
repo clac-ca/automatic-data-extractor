@@ -8,6 +8,12 @@ from httpx import AsyncClient
 from apps.api.tests.utils import login
 
 
+def _items(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return payload
+    return payload["items"]
+
+
 
 @pytest.mark.asyncio
 async def test_permission_catalog_workspace(async_client: AsyncClient, seed_identity: dict[str, Any]) -> None:
@@ -25,7 +31,8 @@ async def test_permission_catalog_workspace(async_client: AsyncClient, seed_iden
 
     assert response.status_code == 200
     payload = response.json()
-    assert any(entry["key"] == "Workspace.Read" for entry in payload)
+    records = _items(payload)
+    assert any(entry["key"] == "Workspace.Read" for entry in records)
 
 
 @pytest.mark.asyncio
@@ -60,7 +67,8 @@ async def test_permission_catalog_global(async_client: AsyncClient, seed_identit
 
     assert response.status_code == 200
     payload = response.json()
-    assert any(entry["key"] == "Roles.Read.All" for entry in payload)
+    records = _items(payload)
+    assert any(entry["key"] == "Roles.Read.All" for entry in records)
 
 
 @pytest.mark.asyncio
@@ -94,7 +102,7 @@ async def test_list_global_roles_returns_catalog(
 
     assert response.status_code == 200
     payload = response.json()
-    slugs = {entry["slug"] for entry in payload}
+    slugs = {entry["slug"] for entry in _items(payload)}
     assert "global-administrator" in slugs
 
 
@@ -199,7 +207,7 @@ async def test_global_role_assignment_flow(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert roles_response.status_code == 200, roles_response.text
-    roles = roles_response.json()
+    roles = _items(roles_response.json())
     admin_role = next(
         (entry for entry in roles if entry["slug"] == "global-administrator"),
         None,
@@ -229,11 +237,11 @@ async def test_global_role_assignment_flow(
 
     list_response = await async_client.get(
         "/api/v1/role-assignments",
-        params={"role_id": admin_role_id},
+        params={"role_id": admin_role_id, "user_id": workspace_owner["id"]},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert list_response.status_code == 200, list_response.text
-    assignments = list_response.json()
+    assignments = _items(list_response.json())
     assert any(item["user_id"] == workspace_owner["id"] for item in assignments)
 
     delete_response = await async_client.delete(
@@ -244,11 +252,11 @@ async def test_global_role_assignment_flow(
 
     post_delete = await async_client.get(
         "/api/v1/role-assignments",
-        params={"role_id": admin_role_id},
+        params={"role_id": admin_role_id, "user_id": workspace_owner["id"]},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert post_delete.status_code == 200
-    remaining = post_delete.json()
+    remaining = _items(post_delete.json())
     assert all(item["user_id"] != workspace_owner["id"] for item in remaining)
 
 
@@ -281,7 +289,7 @@ async def test_workspace_role_assignment_flow(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert roles_response.status_code == 200, roles_response.text
-    roles = roles_response.json()
+    roles = _items(roles_response.json())
     owner_role = next(
         (entry for entry in roles if entry["slug"] == "workspace-owner"),
         None,
@@ -310,11 +318,11 @@ async def test_workspace_role_assignment_flow(
 
     list_response = await async_client.get(
         f"/api/v1/workspaces/{workspace_id}/role-assignments",
-        params={"role_id": owner_role_id},
+        params={"role_id": owner_role_id, "user_id": member_manage["id"]},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert list_response.status_code == 200, list_response.text
-    assignments = list_response.json()
+    assignments = _items(list_response.json())
     assert any(item["user_id"] == member_manage["id"] for item in assignments)
 
     delete_response = await async_client.delete(
@@ -325,11 +333,11 @@ async def test_workspace_role_assignment_flow(
 
     after_delete = await async_client.get(
         f"/api/v1/workspaces/{workspace_id}/role-assignments",
-        params={"role_id": owner_role_id},
+        params={"role_id": owner_role_id, "user_id": member_manage["id"]},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert after_delete.status_code == 200
-    remaining = after_delete.json()
+    remaining = _items(after_delete.json())
     assert all(item["user_id"] != member_manage["id"] for item in remaining)
 
 

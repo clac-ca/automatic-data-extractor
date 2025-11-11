@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.shared.core.security import forbidden_response
 from apps.api.app.shared.db.session import get_session
-from apps.api.app.shared.pagination import PageParams
+from apps.api.app.shared.pagination import PageParams, paginate_sequence
 from apps.api.app.shared.dependency import (
     get_current_identity,
     require_authenticated,

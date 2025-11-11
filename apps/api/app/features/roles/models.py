@@ -16,6 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from apps.api.app.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
+from apps.api.app.shared.db.enums import enum_values
 
 from ..users.models import User
 
@@ -45,6 +46,7 @@ class Principal(ULIDPrimaryKeyMixin, TimestampMixin, Base):
             name="principal_type",
             native_enum=False,
             length=20,
+            values_callable=enum_values,
         ),
         nullable=False,
         default=PrincipalType.USER,
@@ -84,6 +86,7 @@ class Permission(Base):
             name="permission_scope_type",
             native_enum=False,
             length=20,
+            values_callable=enum_values,
         ),
         nullable=False,
     )
@@ -109,6 +112,7 @@ class Role(ULIDPrimaryKeyMixin, TimestampMixin, Base):
             name="role_scope_type",
             native_enum=False,
             length=20,
+            values_callable=enum_values,
         ),
         nullable=False,
     )
@@ -175,6 +179,7 @@ class RoleAssignment(ULIDPrimaryKeyMixin, TimestampMixin, Base):
             name="assignment_scope_type",
             native_enum=False,
             length=20,
+            values_callable=enum_values,
         ),
         nullable=False,
     )

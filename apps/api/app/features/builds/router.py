@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Security, status
 
-from apps.api.app.shared.core.schema import ErrorMessage
+from apps.api.app.shared.core.errors import ProblemDetail
 from apps.api.app.shared.dependency import (
     get_builds_service,
     require_authenticated,
@@ -38,9 +38,9 @@ BUILD_BODY = Body(
     response_model_exclude_none=True,
     summary="Get the active build pointer",
     responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorMessage},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorMessage},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
+        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
+        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
+        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
     },
 )
 async def get_build(
@@ -72,11 +72,11 @@ async def get_build(
     dependencies=[Security(require_csrf)],
     summary="Ensure the configuration build exists and is current",
     responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorMessage},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorMessage},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
-        status.HTTP_409_CONFLICT: {"model": ErrorMessage},
-        status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorMessage},
+        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
+        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
+        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
+        status.HTTP_409_CONFLICT: {"model": ProblemDetail},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ProblemDetail},
     },
 )
 async def ensure_build(
@@ -123,9 +123,9 @@ async def ensure_build(
     dependencies=[Security(require_csrf)],
     summary="Delete the active build and remove its virtual environment",
     responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorMessage},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorMessage},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
+        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
+        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
+        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
     },
 )
 async def delete_build(

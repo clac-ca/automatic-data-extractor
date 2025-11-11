@@ -10,6 +10,7 @@ from apps.api.app.features.roles.models import Role, ScopeType
 from apps.api.app.features.roles.service import assign_global_role
 from apps.api.app.settings import get_settings
 from apps.api.app.shared.db.session import get_sessionmaker
+from apps.api.app.shared.db.mixins import generate_ulid
 
 
 pytestmark = pytest.mark.asyncio
@@ -43,7 +44,7 @@ async def test_initial_setup_creates_admin_and_sets_session(
     payload = {
         "email": "owner@example.test",
         "password": "ChangeMe123!",
-        "displayName": "Owner",
+        "display_name": "Owner",
     }
 
     response = await async_client.post("/api/v1/setup", json=payload)
@@ -87,6 +88,7 @@ async def test_initial_setup_rejected_when_admin_exists(
     async with session_factory() as session:
         await session.execute(text("DELETE FROM role_assignments"))
         await session.execute(text("DELETE FROM principals"))
+        existing_user_id = generate_ulid()
         user = await session.execute(
             text(
                 """
@@ -95,7 +97,7 @@ async def test_initial_setup_rejected_when_admin_exists(
                 RETURNING user_id
                 """
             ),
-            {"id": "user_existing", "email": "existing@example.test"},
+            {"id": existing_user_id, "email": "existing@example.test"},
         )
         user_id = user.scalar_one()
         role_result = await session.execute(
