@@ -6,7 +6,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select, text
 
-from apps.api.app.features.roles.models import Role
+from apps.api.app.features.roles.models import Role, ScopeType
 from apps.api.app.features.roles.service import assign_global_role
 from apps.api.app.settings import get_settings
 from apps.api.app.shared.db.session import get_sessionmaker
@@ -76,7 +76,7 @@ async def test_initial_setup_creates_admin_and_sets_session(
                 "SELECT principal_id, role_id, scope_type FROM role_assignments"
             )
         )
-        rows = [row for row in assignments.fetchall() if row.scope_type == "global"]
+        rows = [row for row in assignments.fetchall() if row.scope_type == ScopeType.GLOBAL]
         assert len(rows) == 1
 
 
@@ -100,7 +100,7 @@ async def test_initial_setup_rejected_when_admin_exists(
         user_id = user.scalar_one()
         role_result = await session.execute(
             select(Role).where(
-                Role.scope_type == "global",
+                Role.scope_type == ScopeType.GLOBAL,
                 Role.scope_id.is_(None),
                 Role.slug == "global-administrator",
             )

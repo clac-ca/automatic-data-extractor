@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from enum import Enum
+
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
-    Enum,
+    Enum as SAEnum,
     ForeignKey,
     String,
     Text,
@@ -17,20 +19,18 @@ from apps.api.app.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
 
 from ..users.models import User
 
-ScopeTypeEnum = Enum(
-    "global",
-    "workspace",
-    name="scopetype",
-    native_enum=False,
-    length=20,
-)
 
-PrincipalTypeEnum = Enum(
-    "user",
-    name="principaltype",
-    native_enum=False,
-    length=20,
-)
+class ScopeType(str, Enum):
+    """Scope dimensions supported by RBAC."""
+
+    GLOBAL = "global"
+    WORKSPACE = "workspace"
+
+
+class PrincipalType(str, Enum):
+    """Kinds of principals that can hold assignments."""
+
+    USER = "user"
 
 
 class Principal(ULIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -39,8 +39,15 @@ class Principal(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "principals"
     __ulid_field__ = "principal_id"
 
-    principal_type: Mapped[str] = mapped_column(
-        PrincipalTypeEnum, nullable=False, default="user"
+    principal_type: Mapped[PrincipalType] = mapped_column(
+        SAEnum(
+            PrincipalType,
+            name="principal_type",
+            native_enum=False,
+            length=20,
+        ),
+        nullable=False,
+        default=PrincipalType.USER,
     )
     user_id: Mapped[str | None] = mapped_column(
         String(26), ForeignKey("users.user_id", ondelete="CASCADE"), unique=True
@@ -57,7 +64,7 @@ class Principal(ULIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __table_args__ = (
         CheckConstraint(
-            "(principal_type = 'user' AND user_id IS NOT NULL)",
+            f"(principal_type = '{PrincipalType.USER.value}' AND user_id IS NOT NULL)",
             name="principals_user_fk_required",
         ),
     )
@@ -71,7 +78,15 @@ class Permission(Base):
     key: Mapped[str] = mapped_column(String(120), primary_key=True)
     resource: Mapped[str] = mapped_column(String(120), nullable=False)
     action: Mapped[str] = mapped_column(String(120), nullable=False)
-    scope_type: Mapped[str] = mapped_column(ScopeTypeEnum, nullable=False)
+    scope_type: Mapped[ScopeType] = mapped_column(
+        SAEnum(
+            ScopeType,
+            name="permission_scope_type",
+            native_enum=False,
+            length=20,
+        ),
+        nullable=False,
+    )
     label: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
@@ -88,7 +103,15 @@ class Role(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "roles"
     __ulid_field__ = "role_id"
 
-    scope_type: Mapped[str] = mapped_column(ScopeTypeEnum, nullable=False)
+    scope_type: Mapped[ScopeType] = mapped_column(
+        SAEnum(
+            ScopeType,
+            name="role_scope_type",
+            native_enum=False,
+            length=20,
+        ),
+        nullable=False,
+    )
     scope_id: Mapped[str | None] = mapped_column(
         String(26), ForeignKey("workspaces.workspace_id", ondelete="CASCADE"), nullable=True
     )
@@ -146,7 +169,15 @@ class RoleAssignment(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     role_id: Mapped[str] = mapped_column(
         String(26), ForeignKey("roles.role_id", ondelete="CASCADE"), nullable=False
     )
-    scope_type: Mapped[str] = mapped_column(ScopeTypeEnum, nullable=False)
+    scope_type: Mapped[ScopeType] = mapped_column(
+        SAEnum(
+            ScopeType,
+            name="assignment_scope_type",
+            native_enum=False,
+            length=20,
+        ),
+        nullable=False,
+    )
     scope_id: Mapped[str | None] = mapped_column(
         String(26), ForeignKey("workspaces.workspace_id", ondelete="CASCADE"), nullable=True
     )
@@ -159,8 +190,8 @@ class RoleAssignment(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("principal_id", "role_id", "scope_type", "scope_id"),
         CheckConstraint(
-            "(scope_type = 'global' AND scope_id IS NULL) OR"
-            " (scope_type = 'workspace' AND scope_id IS NOT NULL)",
+            f"(scope_type = '{ScopeType.GLOBAL.value}' AND scope_id IS NULL) OR"
+            f" (scope_type = '{ScopeType.WORKSPACE.value}' AND scope_id IS NOT NULL)",
             name="role_assignments_scope_consistency",
         ),
     )
@@ -169,8 +200,9 @@ class RoleAssignment(ULIDPrimaryKeyMixin, TimestampMixin, Base):
 __all__ = [
     "Permission",
     "Principal",
+    "PrincipalType",
     "Role",
     "RoleAssignment",
     "RolePermission",
+    "ScopeType",
 ]
-

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
-
 from fastapi import HTTPException
 from pydantic import Field, field_validator
 from sqlalchemy import and_, func, or_
@@ -11,6 +9,7 @@ from sqlalchemy.sql import Select
 
 from apps.api.app.settings import MAX_SEARCH_LEN, MAX_SET_SIZE, MIN_SEARCH_LEN
 from apps.api.app.shared.filters import FilterBase
+from apps.api.app.shared.core.ids import ULIDStr
 from apps.api.app.shared.validators import normalize_utc, parse_csv_or_repeated
 
 from ..users.models import User
@@ -22,17 +21,6 @@ from .models import (
     DocumentStatus,
     DocumentTag,
 )
-
-ULID_PATTERN = r"[0-9A-HJKMNP-TV-Z]{26}"
-ULIDStr = Annotated[
-    str,
-    Field(
-        min_length=26,
-        max_length=26,
-        pattern=ULID_PATTERN,
-        description="ULID (26-character string).",
-    ),
-]
 
 
 class DocumentFilters(FilterBase):
@@ -271,6 +259,5 @@ __all__ = [
     "DocumentFilters",
     "DocumentSource",
     "DocumentStatus",
-    "ULIDStr",
     "apply_document_filters",
 ]

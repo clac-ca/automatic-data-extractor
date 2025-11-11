@@ -71,6 +71,32 @@ export async function validateConfiguration(
   return data as ConfigurationValidateResponse;
 }
 
+export async function activateConfiguration(workspaceId: string, configId: string): Promise<ConfigRecord> {
+  const { data } = await client.POST(
+    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/activate",
+    {
+      params: { path: { workspace_id: workspaceId, config_id: configId } },
+    },
+  );
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigRecord;
+}
+
+export async function deactivateConfiguration(workspaceId: string, configId: string): Promise<ConfigRecord> {
+  const { data } = await client.POST(
+    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/deactivate",
+    {
+      params: { path: { workspace_id: workspaceId, config_id: configId } },
+    },
+  );
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigRecord;
+}
+
 export interface ListConfigFilesOptions {
   readonly prefix?: string;
   readonly depth?: "0" | "1" | "infinity";

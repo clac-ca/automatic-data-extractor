@@ -13,10 +13,24 @@ class BaseSchema(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         from_attributes=True,
+        extra="forbid",
         use_enum_values=True,
-        extra="ignore",
         ser_json_timedelta="iso8601",
     )
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[override]
+        """Ensure serialization defaults exclude ``None`` and honor aliases."""
+
+        kwargs.setdefault("exclude_none", True)
+        kwargs.setdefault("by_alias", True)
+        return super().model_dump(*args, **kwargs)
+
+    def model_dump_json(self, *args: Any, **kwargs: Any) -> str:  # type: ignore[override]
+        """JSON serialization with ADE defaults."""
+
+        kwargs.setdefault("exclude_none", True)
+        kwargs.setdefault("by_alias", True)
+        return super().model_dump_json(*args, **kwargs)
 
     def serializable_dict(
         self,
@@ -32,7 +46,8 @@ class BaseSchema(BaseModel):
     def json_bytes(self, *, exclude_none: bool = True, by_alias: bool = True) -> bytes:
         """Encode the schema as JSON bytes."""
 
-        return self.model_dump_json(exclude_none=exclude_none, by_alias=by_alias).encode("utf-8")
+        serialized = self.model_dump_json(exclude_none=exclude_none, by_alias=by_alias)
+        return serialized.encode("utf-8")
 
 
 class ErrorMessage(BaseSchema):
@@ -42,4 +57,3 @@ class ErrorMessage(BaseSchema):
 
 
 __all__ = ["BaseSchema", "ErrorMessage"]
-

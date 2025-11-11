@@ -21,7 +21,7 @@ from apps.api.app.settings import Settings, get_settings, reload_settings
 from apps.api.app.shared.db.engine import ensure_database_ready, render_sync_url, reset_database_state
 from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.auth.security import hash_password
-from apps.api.app.features.roles.models import Role
+from apps.api.app.features.roles.models import Role, ScopeType
 from apps.api.app.features.roles.service import (
     assign_global_role,
     assign_role,
@@ -198,7 +198,7 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
 
         global_roles = await session.execute(
             select(Role).where(
-                Role.scope_type == "global",
+                Role.scope_type == ScopeType.GLOBAL,
                 Role.scope_id.is_(None),
                 Role.slug.in_(["global-administrator", "global-user"]),
             )
@@ -280,7 +280,7 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
 
         result = await session.execute(
             select(Role).where(
-                Role.scope_type == "workspace",
+                Role.scope_type == ScopeType.WORKSPACE,
                 Role.scope_id.is_(None),
                 Role.slug.in_(["workspace-owner", "workspace-member"]),
             )
@@ -298,7 +298,7 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
                 session=session,
                 principal_id=principal.id,
                 role_id=role.id,
-                scope_type="workspace",
+                scope_type=ScopeType.WORKSPACE,
                 scope_id=membership.workspace_id,
             )
 

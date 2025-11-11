@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Annotated
 import jwt
 from apps.api.app.features.auth.service import AuthenticatedIdentity, AuthService
 from apps.api.app.features.roles.authorization import authorize
+from apps.api.app.features.roles.models import ScopeType
 from apps.api.app.features.roles.service import ensure_user_principal
 from apps.api.app.features.users.models import User
 from apps.api.app.features.workspaces.schemas import WorkspaceProfile
@@ -242,12 +243,12 @@ def require_global(
             session=session,
             principal_id=str(identity.principal.id),
             permission_key=permission,
-            scope_type="global",
+            scope_type=ScopeType.GLOBAL,
         )
         if not decision.is_authorized:
             raise forbidden_response(
                 permission=permission,
-                scope_type="global",
+                scope_type=ScopeType.GLOBAL,
                 scope_id=None,
             )
         return identity.user
@@ -278,13 +279,13 @@ def require_workspace(
             session=session,
             principal_id=str(identity.principal.id),
             permission_key=permission,
-            scope_type="workspace",
+            scope_type=ScopeType.WORKSPACE,
             scope_id=workspace_id,
         )
         if not decision.is_authorized:
             raise forbidden_response(
                 permission=permission,
-                scope_type="workspace",
+                scope_type=ScopeType.WORKSPACE,
                 scope_id=workspace_id,
             )
         return identity.user
@@ -311,17 +312,17 @@ def require_permissions_catalog_access(
         session: SessionDep,
         workspace_id: str | None = None,
     ) -> User:
-        if scope == "global":
+        if scope == ScopeType.GLOBAL:
             decision = await authorize(
                 session=session,
                 principal_id=str(identity.principal.id),
                 permission_key=global_permission,
-                scope_type="global",
+                scope_type=ScopeType.GLOBAL,
             )
             if not decision.is_authorized:
                 raise forbidden_response(
                     permission=global_permission,
-                    scope_type="global",
+                    scope_type=ScopeType.GLOBAL,
                     scope_id=None,
                 )
             return identity.user
@@ -336,13 +337,13 @@ def require_permissions_catalog_access(
             session=session,
             principal_id=str(identity.principal.id),
             permission_key=workspace_permission,
-            scope_type="workspace",
+            scope_type=ScopeType.WORKSPACE,
             scope_id=candidate,
         )
         if not decision.is_authorized:
             raise forbidden_response(
                 permission=workspace_permission,
-                scope_type="workspace",
+                scope_type=ScopeType.WORKSPACE,
                 scope_id=candidate,
             )
         return identity.user

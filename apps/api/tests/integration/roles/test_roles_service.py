@@ -11,6 +11,7 @@ from apps.api.app.features.roles.models import (
     Role,
     RoleAssignment,
     RolePermission,
+    ScopeType,
 )
 from apps.api.app.features.roles.service import (
     AuthorizationError,
@@ -128,7 +129,7 @@ async def test_role_updated_at_advances_on_update() -> None:
         role = Role(
             slug="test-role",
             name="Test Role",
-            scope_type="global",
+            scope_type=ScopeType.GLOBAL,
             scope_id=None,
             description="",
             built_in=False,
@@ -168,7 +169,7 @@ async def test_assign_global_role_rejects_workspace_role(
             await session.execute(
                 select(Role).where(
                     Role.slug == "workspace-owner",
-                    Role.scope_type == "workspace",
+                    Role.scope_type == ScopeType.WORKSPACE,
                 )
             )
         ).scalar_one()
@@ -194,7 +195,7 @@ async def test_assign_global_role_succeeds_for_global_scope(
             await session.execute(
                 select(Role).where(
                     Role.slug == "global-administrator",
-                    Role.scope_type == "global",
+                    Role.scope_type == ScopeType.GLOBAL,
                     Role.scope_id.is_(None),
                 )
             )
@@ -217,7 +218,7 @@ async def test_assign_global_role_succeeds_for_global_scope(
         result = await session.execute(
             select(RoleAssignment).where(
                 RoleAssignment.principal_id == principal.id,
-                RoleAssignment.scope_type == "global",
+                RoleAssignment.scope_type == ScopeType.GLOBAL,
             )
         )
         assignments = result.scalars().all()
@@ -247,7 +248,7 @@ async def test_assign_global_role_is_idempotent(
             await session.execute(
                 select(Role).where(
                     Role.slug == "global-administrator",
-                    Role.scope_type == "global",
+                    Role.scope_type == ScopeType.GLOBAL,
                     Role.scope_id.is_(None),
                 )
             )
@@ -273,7 +274,7 @@ async def test_assign_global_role_is_idempotent(
                 select(RoleAssignment).where(
                     RoleAssignment.principal_id == first_assignment.principal_id,
                     RoleAssignment.role_id == global_role.id,
-                    RoleAssignment.scope_type == "global",
+                    RoleAssignment.scope_type == ScopeType.GLOBAL,
                     RoleAssignment.scope_id.is_(None),
                 )
             )

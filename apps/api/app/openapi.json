@@ -949,11 +949,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "const": "global",
-              "type": "string",
+              "$ref": "#/components/schemas/ScopeType",
               "description": "Role scope to list (global only)",
-              "default": "global",
-              "title": "Scope"
+              "default": "global"
             },
             "description": "Role scope to list (global only)"
           }
@@ -1015,11 +1013,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "const": "global",
-              "type": "string",
+              "$ref": "#/components/schemas/ScopeType",
               "description": "Role scope to create (global only)",
-              "default": "global",
-              "title": "Scope"
+              "default": "global"
             },
             "description": "Role scope to create (global only)"
           }
@@ -6109,7 +6105,10 @@
             "anyOf": [
               {
                 "type": "string",
-                "minLength": 1
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
               },
               {
                 "type": "null"
@@ -6154,6 +6153,7 @@
             "title": "Label"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "APIKeyIssueRequest",
         "description": "Payload for issuing a new API key."
@@ -6174,7 +6174,11 @@
           },
           "principal_id": {
             "type": "string",
-            "title": "Principal Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Principal Id",
+            "description": "ULID (26-character string)."
           },
           "principal_label": {
             "type": "string",
@@ -6204,6 +6208,7 @@
             "title": "Label"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "api_key",
@@ -6218,7 +6223,11 @@
         "properties": {
           "api_key_id": {
             "type": "string",
-            "title": "Api Key Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Api Key Id",
+            "description": "ULID (26-character string)."
           },
           "principal_type": {
             "type": "string",
@@ -6230,7 +6239,11 @@
           },
           "principal_id": {
             "type": "string",
-            "title": "Principal Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Principal Id",
+            "description": "ULID (26-character string)."
           },
           "principal_label": {
             "type": "string",
@@ -6315,6 +6328,7 @@
             "title": "Revoked At"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "api_key_id",
@@ -6353,6 +6367,7 @@
             "title": "Icon Url"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
@@ -6454,16 +6469,25 @@
         "properties": {
           "workspace_id": {
             "type": "string",
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
             "title": "Workspace Id",
             "description": "Workspace identifier"
           },
           "config_id": {
             "type": "string",
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
             "title": "Config Id",
             "description": "Configuration identifier"
           },
           "build_id": {
             "type": "string",
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
             "title": "Build Id",
             "description": "Build identifier (ULID)"
           },
@@ -6471,10 +6495,10 @@
             "$ref": "#/components/schemas/BuildStatus",
             "description": "Current lifecycle status"
           },
-          "venv_path": {
+          "environment_ref": {
             "type": "string",
-            "title": "Venv Path",
-            "description": "Absolute path to the venv root"
+            "title": "Environment Ref",
+            "description": "Opaque identifier referencing the build's execution environment."
           },
           "config_version": {
             "anyOf": [
@@ -6613,13 +6637,14 @@
             "description": "Error message, if build failed"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "workspace_id",
           "config_id",
           "build_id",
           "status",
-          "venv_path"
+          "environment_ref"
         ],
         "title": "BuildRecord",
         "description": "Serialized representation of a configuration build pointer."
@@ -6645,10 +6670,13 @@
           "config_id": {
             "type": "string",
             "maxLength": 26,
-            "minLength": 1,
-            "title": "Config Id"
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Config Id",
+            "description": "ULID (26-character string)."
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "type",
@@ -6671,6 +6699,7 @@
             "title": "Template Id"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "type",
@@ -6690,6 +6719,7 @@
             "title": "Message"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "path",
@@ -6706,6 +6736,7 @@
             "default": false
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "ConfigurationActivateRequest",
         "description": "Activation control flags."
@@ -6750,19 +6781,26 @@
         "properties": {
           "workspace_id": {
             "type": "string",
-            "title": "Workspace Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Workspace Id",
+            "description": "ULID (26-character string)."
           },
           "config_id": {
             "type": "string",
-            "title": "Config Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Config Id",
+            "description": "ULID (26-character string)."
           },
           "display_name": {
             "type": "string",
             "title": "Display Name"
           },
           "status": {
-            "type": "string",
-            "title": "Status"
+            "$ref": "#/components/schemas/ConfigurationStatus"
           },
           "config_version": {
             "type": "integer",
@@ -6802,6 +6840,7 @@
             "title": "Activated At"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "workspace_id",
@@ -6815,19 +6854,36 @@
         "title": "ConfigurationRecord",
         "description": "Serialized configuration metadata."
       },
+      "ConfigurationStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "active",
+          "inactive"
+        ],
+        "title": "ConfigurationStatus",
+        "description": "Lifecycle states for workspace configuration packages."
+      },
       "ConfigurationValidateResponse": {
         "properties": {
           "workspace_id": {
             "type": "string",
-            "title": "Workspace Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Workspace Id",
+            "description": "ULID (26-character string)."
           },
           "config_id": {
             "type": "string",
-            "title": "Config Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Config Id",
+            "description": "ULID (26-character string)."
           },
           "status": {
-            "type": "string",
-            "title": "Status"
+            "$ref": "#/components/schemas/ConfigurationStatus"
           },
           "content_digest": {
             "anyOf": [
@@ -6848,6 +6904,7 @@
             "title": "Issues"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "workspace_id",
@@ -6881,6 +6938,7 @@
             "title": "Details"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "status",
@@ -6926,6 +6984,7 @@
             "title": "Total"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
@@ -7028,7 +7087,11 @@
           "deleted_by": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
               },
               {
                 "type": "null"
@@ -7056,6 +7119,7 @@
             "description": "Summary of the uploading user when available."
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "document_id",
@@ -7103,7 +7167,11 @@
           "workspace_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
               },
               {
                 "type": "null"
@@ -7119,6 +7187,7 @@
             "title": "Workspace Permissions"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "EffectivePermissionsResponse",
         "description": "Effective permissions for the authenticated principal."
@@ -7138,6 +7207,7 @@
             "title": "Detail"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "detail"
@@ -7164,6 +7234,7 @@
             "title": "Can Rename"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "editable",
@@ -7256,6 +7327,7 @@
             "title": "Has Children"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "path",
@@ -7270,15 +7342,22 @@
         "properties": {
           "workspace_id": {
             "type": "string",
-            "title": "Workspace Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Workspace Id",
+            "description": "ULID (26-character string)."
           },
           "config_id": {
             "type": "string",
-            "title": "Config Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Config Id",
+            "description": "ULID (26-character string)."
           },
           "status": {
-            "type": "string",
-            "title": "Status"
+            "$ref": "#/components/schemas/ConfigurationStatus"
           },
           "capabilities": {
             "$ref": "#/components/schemas/FileCapabilities"
@@ -7338,6 +7417,7 @@
             "title": "Entries"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "workspace_id",
@@ -7367,6 +7447,7 @@
             "title": "Directories"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "files",
@@ -7403,6 +7484,7 @@
             "title": "Dest If Match"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "to"
@@ -7433,6 +7515,7 @@
             "title": "Etag"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "from",
@@ -7454,6 +7537,7 @@
             "title": "Asset Max Bytes"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "code_max_bytes",
@@ -7485,6 +7569,7 @@
             "title": "Etag"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "path",
@@ -7534,6 +7619,7 @@
             "description": "Detailed component-level status information."
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "status",
@@ -7572,6 +7658,7 @@
             "description": "Optional human-readable note about the component state."
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "name",
@@ -7592,6 +7679,7 @@
             "writeOnly": true
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "email",
@@ -7613,7 +7701,11 @@
           "workspace_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
               },
               {
                 "type": "null"
@@ -7622,6 +7714,7 @@
             "title": "Workspace Id"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "permissions"
@@ -7639,6 +7732,7 @@
             "title": "Results"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "PermissionCheckResponse",
         "description": "Result map produced by the batch permission check."
@@ -7658,12 +7752,7 @@
             "title": "Action"
           },
           "scope_type": {
-            "type": "string",
-            "enum": [
-              "global",
-              "workspace"
-            ],
-            "title": "Scope Type"
+            "$ref": "#/components/schemas/ScopeType"
           },
           "label": {
             "type": "string",
@@ -7674,6 +7763,7 @@
             "title": "Description"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "key",
@@ -7685,6 +7775,14 @@
         ],
         "title": "PermissionRead",
         "description": "Serialized permission registry entry."
+      },
+      "PrincipalType": {
+        "type": "string",
+        "enum": [
+          "user"
+        ],
+        "title": "PrincipalType",
+        "description": "Kinds of principals that can hold assignments."
       },
       "ProblemDetail": {
         "properties": {
@@ -7737,6 +7835,7 @@
             "description": "Optional field-level validation errors."
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "title",
@@ -7759,6 +7858,7 @@
             "title": "Force Sso"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "providers",
@@ -7771,14 +7871,20 @@
         "properties": {
           "role_id": {
             "type": "string",
-            "minLength": 1,
-            "title": "Role Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Role Id",
+            "description": "ULID (26-character string)."
           },
           "principal_id": {
             "anyOf": [
               {
                 "type": "string",
-                "minLength": 1
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
               },
               {
                 "type": "null"
@@ -7790,7 +7896,10 @@
             "anyOf": [
               {
                 "type": "string",
-                "minLength": 1
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
               },
               {
                 "type": "null"
@@ -7799,6 +7908,7 @@
             "title": "User Id"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "role_id"
@@ -7810,21 +7920,31 @@
         "properties": {
           "assignment_id": {
             "type": "string",
-            "title": "Assignment Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Assignment Id",
+            "description": "ULID (26-character string)."
           },
           "principal_id": {
             "type": "string",
-            "title": "Principal Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Principal Id",
+            "description": "ULID (26-character string)."
           },
           "principal_type": {
-            "type": "string",
-            "const": "user",
-            "title": "Principal Type"
+            "$ref": "#/components/schemas/PrincipalType"
           },
           "user_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
               },
               {
                 "type": "null"
@@ -7856,24 +7976,27 @@
           },
           "role_id": {
             "type": "string",
-            "title": "Role Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Role Id",
+            "description": "ULID (26-character string)."
           },
           "role_slug": {
             "type": "string",
             "title": "Role Slug"
           },
           "scope_type": {
-            "type": "string",
-            "enum": [
-              "global",
-              "workspace"
-            ],
-            "title": "Scope Type"
+            "$ref": "#/components/schemas/ScopeType"
           },
           "scope_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
               },
               {
                 "type": "null"
@@ -7887,6 +8010,7 @@
             "title": "Created At"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "assignment_id",
@@ -7940,6 +8064,7 @@
             "title": "Permissions"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "name"
@@ -7951,7 +8076,11 @@
         "properties": {
           "role_id": {
             "type": "string",
-            "title": "Role Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Role Id",
+            "description": "ULID (26-character string)."
           },
           "slug": {
             "type": "string",
@@ -7973,17 +8102,16 @@
             "title": "Description"
           },
           "scope_type": {
-            "type": "string",
-            "enum": [
-              "global",
-              "workspace"
-            ],
-            "title": "Scope Type"
+            "$ref": "#/components/schemas/ScopeType"
           },
           "scope_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
               },
               {
                 "type": "null"
@@ -8007,6 +8135,7 @@
             "title": "Editable"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "role_id",
@@ -8047,12 +8176,22 @@
             "title": "Permissions"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "name"
         ],
         "title": "RoleUpdate",
         "description": "Payload for updating an existing role."
+      },
+      "ScopeType": {
+        "type": "string",
+        "enum": [
+          "global",
+          "workspace"
+        ],
+        "title": "ScopeType",
+        "description": "Scope dimensions supported by RBAC."
       },
       "SessionEnvelope": {
         "properties": {
@@ -8095,6 +8234,7 @@
             "title": "Return To"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "user"
@@ -8126,6 +8266,7 @@
             "title": "Display Name"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "email",
@@ -8158,6 +8299,7 @@
             "default": false
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "requires_setup"
@@ -8193,6 +8335,7 @@
             "description": "Uploader email address."
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
@@ -8238,6 +8381,7 @@
             "title": "Total"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
@@ -8253,7 +8397,11 @@
         "properties": {
           "user_id": {
             "type": "string",
-            "title": "User Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "User Id",
+            "description": "ULID (26-character string)."
           },
           "email": {
             "type": "string",
@@ -8281,7 +8429,11 @@
           "preferred_workspace_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
               },
               {
                 "type": "null"
@@ -8304,6 +8456,7 @@
             "title": "Permissions"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "user_id",
@@ -8318,7 +8471,11 @@
         "properties": {
           "user_id": {
             "type": "string",
-            "title": "User Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "User Id",
+            "description": "ULID (26-character string)."
           },
           "email": {
             "type": "string",
@@ -8346,7 +8503,11 @@
           "preferred_workspace_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
               },
               {
                 "type": "null"
@@ -8379,6 +8540,7 @@
             "title": "Updated At"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "user_id",
@@ -8448,7 +8610,11 @@
           "owner_user_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
               },
               {
                 "type": "null"
@@ -8469,6 +8635,7 @@
             "title": "Settings"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "name"
@@ -8480,13 +8647,18 @@
         "properties": {
           "workspace_id": {
             "type": "string",
-            "title": "Workspace Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Workspace Id",
+            "description": "ULID (26-character string)."
           },
           "is_default": {
             "type": "boolean",
             "title": "Is Default"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "workspace_id",
@@ -8499,11 +8671,19 @@
         "properties": {
           "workspace_membership_id": {
             "type": "string",
-            "title": "Workspace Membership Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Workspace Membership Id",
+            "description": "ULID (26-character string)."
           },
           "workspace_id": {
             "type": "string",
-            "title": "Workspace Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Workspace Id",
+            "description": "ULID (26-character string)."
           },
           "roles": {
             "items": {
@@ -8527,6 +8707,7 @@
             "$ref": "#/components/schemas/UserProfile"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "workspace_membership_id",
@@ -8543,13 +8724,21 @@
         "properties": {
           "user_id": {
             "type": "string",
-            "title": "User Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "User Id",
+            "description": "ULID (26-character string)."
           },
           "role_ids": {
             "anyOf": [
               {
                 "items": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 26,
+                  "minLength": 26,
+                  "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                  "description": "ULID (26-character string)."
                 },
                 "type": "array",
                 "minItems": 0
@@ -8561,6 +8750,7 @@
             "title": "Role Ids"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "user_id"
@@ -8572,12 +8762,17 @@
         "properties": {
           "role_ids": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 26,
+              "minLength": 26,
+              "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+              "description": "ULID (26-character string)."
             },
             "type": "array",
             "title": "Role Ids"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "WorkspaceMemberRolesUpdate",
         "description": "Payload used to replace the set of roles for a membership."
@@ -8586,7 +8781,11 @@
         "properties": {
           "workspace_id": {
             "type": "string",
-            "title": "Workspace Id"
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Workspace Id",
+            "description": "ULID (26-character string)."
           },
           "name": {
             "type": "string",
@@ -8615,6 +8814,7 @@
             "title": "Is Default"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "workspace_id",
@@ -8668,6 +8868,7 @@
             "title": "Settings"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "WorkspaceUpdate",
         "description": "Payload for updating workspace metadata."

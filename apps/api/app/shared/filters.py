@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from apps.api.app.shared.core.schema import BaseSchema
 
 
-class FilterBase(BaseModel):
+class FilterBase(BaseSchema):
     """Base model for query filter payloads.
 
     Unknown query parameters are rejected to surface typos quickly.
     """
-
-    model_config = {"extra": "forbid"}
 
 
 __all__ = ["FilterBase"]

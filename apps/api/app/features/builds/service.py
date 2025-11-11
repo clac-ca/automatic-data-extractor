@@ -120,7 +120,7 @@ class BuildsService:
             config_id=config_id,
         )
 
-        if active and active.status != BuildStatus.ACTIVE.value:
+        if active and active.status != BuildStatus.ACTIVE:
             active = None
 
         should_rebuild = force or active is None
@@ -175,7 +175,7 @@ class BuildsService:
             workspace_id=workspace_id,
             config_id=config_id,
             build_id=build_id,
-            status=BuildStatus.BUILDING.value,
+            status=BuildStatus.BUILDING,
             venv_path=str(target_path),
             config_version=configuration.config_version,
             content_digest=configuration.content_digest,
@@ -323,7 +323,7 @@ class BuildsService:
                     workspace_id=workspace_id,
                     config_id=config_id,
                 )
-                if latest is not None and latest.status == BuildStatus.FAILED.value:
+                if latest is not None and latest.status == BuildStatus.FAILED:
                     raise BuildExecutionError(
                         latest.error or "build_failed",
                         build_id=latest.build_id,

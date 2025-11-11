@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
+
+from apps.api.app.shared.core.ids import ULIDStr
+from apps.api.app.shared.core.schema import BaseSchema
 
 from .models import BuildStatus
 
@@ -15,16 +18,17 @@ __all__ = [
 ]
 
 
-class BuildRecord(BaseModel):
+class BuildRecord(BaseSchema):
     """Serialized representation of a configuration build pointer."""
 
-    model_config = ConfigDict(from_attributes=True)
-
-    workspace_id: str = Field(..., description="Workspace identifier")
-    config_id: str = Field(..., description="Configuration identifier")
-    build_id: str = Field(..., description="Build identifier (ULID)")
+    workspace_id: ULIDStr = Field(..., description="Workspace identifier")
+    config_id: ULIDStr = Field(..., description="Configuration identifier")
+    build_id: ULIDStr = Field(..., description="Build identifier (ULID)")
     status: BuildStatus = Field(..., description="Current lifecycle status")
-    venv_path: str = Field(..., description="Absolute path to the venv root")
+    environment_ref: str = Field(
+        ...,
+        description="Opaque identifier referencing the build's execution environment.",
+    )
 
     config_version: int | None = Field(None, description="Configuration version when built")
     content_digest: str | None = Field(None, description="Content fingerprint of the config")
@@ -42,10 +46,8 @@ class BuildRecord(BaseModel):
     error: str | None = Field(None, description="Error message, if build failed")
 
 
-class BuildEnsureRequest(BaseModel):
+class BuildEnsureRequest(BaseSchema):
     """Body accepted by PUT /build to trigger a rebuild."""
-
-    model_config = ConfigDict(extra="forbid")
 
     force: bool = Field(False, description="Force rebuild even if fingerprint matches")
     wait: bool | None = Field(
@@ -57,17 +59,11 @@ class BuildEnsureRequest(BaseModel):
     )
 
 
-class BuildEnsureResponse(BaseModel):
+class BuildEnsureResponse(BaseSchema):
     """Response returned by ensure_build endpoints."""
-
-    model_config = ConfigDict(extra="forbid")
 
     status: BuildStatus = Field(..., description="Resulting build status")
     build: BuildRecord | None = Field(
         None,
         description="Active build pointer when available",
     )
-
-    def model_dump(self, *args, **kwargs):  # type: ignore[override]
-        kwargs.setdefault("exclude_none", True)
-        return super().model_dump(*args, **kwargs)

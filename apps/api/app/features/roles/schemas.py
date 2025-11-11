@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
 
 from pydantic import Field, model_validator
 
+from apps.api.app.shared.core.ids import ULIDStr
 from apps.api.app.shared.core.schema import BaseSchema
+
+from .models import PrincipalType, ScopeType
 
 
 class PermissionRead(BaseSchema):
@@ -16,7 +18,7 @@ class PermissionRead(BaseSchema):
     key: str
     resource: str
     action: str
-    scope_type: Literal["global", "workspace"]
+    scope_type: ScopeType
     label: str
     description: str
 
@@ -41,12 +43,12 @@ class RoleUpdate(BaseSchema):
 class RoleRead(BaseSchema):
     """Serialized representation of a role definition."""
 
-    role_id: str = Field(serialization_alias="role_id", validation_alias="id")
+    role_id: ULIDStr = Field(serialization_alias="role_id", validation_alias="id")
     slug: str
     name: str
     description: str | None = None
-    scope_type: Literal["global", "workspace"]
-    scope_id: str | None = None
+    scope_type: ScopeType
+    scope_id: ULIDStr | None = None
     permissions: list[str]
     built_in: bool
     editable: bool
@@ -55,9 +57,9 @@ class RoleRead(BaseSchema):
 class RoleAssignmentCreate(BaseSchema):
     """Payload for creating a role assignment."""
 
-    role_id: str = Field(min_length=1)
-    principal_id: str | None = Field(default=None, min_length=1)
-    user_id: str | None = Field(default=None, min_length=1)
+    role_id: ULIDStr
+    principal_id: ULIDStr | None = None
+    user_id: ULIDStr | None = None
 
     @model_validator(mode="after")
     def _ensure_identifier(self) -> RoleAssignmentCreate:
@@ -71,18 +73,18 @@ class RoleAssignmentCreate(BaseSchema):
 class RoleAssignmentRead(BaseSchema):
     """Serialized representation of a role assignment."""
 
-    assignment_id: str = Field(
+    assignment_id: ULIDStr = Field(
         serialization_alias="assignment_id", validation_alias="id"
     )
-    principal_id: str
-    principal_type: Literal["user"]
-    user_id: str | None = None
+    principal_id: ULIDStr
+    principal_type: PrincipalType
+    user_id: ULIDStr | None = None
     user_email: str | None = None
     user_display_name: str | None = None
-    role_id: str
+    role_id: ULIDStr
     role_slug: str
-    scope_type: Literal["global", "workspace"]
-    scope_id: str | None = None
+    scope_type: ScopeType
+    scope_id: ULIDStr | None = None
     created_at: datetime
 
 
@@ -90,7 +92,7 @@ class EffectivePermissionsResponse(BaseSchema):
     """Effective permissions for the authenticated principal."""
 
     global_permissions: list[str] = Field(default_factory=list)
-    workspace_id: str | None = None
+    workspace_id: ULIDStr | None = None
     workspace_permissions: list[str] = Field(default_factory=list)
 
 
@@ -98,7 +100,7 @@ class PermissionCheckRequest(BaseSchema):
     """Batch permission check payload."""
 
     permissions: list[str] = Field(min_length=1)
-    workspace_id: str | None = None
+    workspace_id: ULIDStr | None = None
 
 
 class PermissionCheckResponse(BaseSchema):

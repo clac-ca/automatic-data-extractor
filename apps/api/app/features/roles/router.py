@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, cast
+from typing import Annotated, cast
 
 from fastapi import (
     APIRouter,
@@ -32,7 +32,14 @@ from ..auth.service import AuthenticatedIdentity
 from ..users.models import User
 from ..workspaces.service import WorkspacesService
 from .authorization import authorize
-from .models import Permission, Principal, Role, RoleAssignment
+from .models import (
+    Permission,
+    Principal,
+    PrincipalType,
+    Role,
+    RoleAssignment,
+    ScopeType,
+)
 from .registry import PERMISSION_REGISTRY, PermissionScope
 from .schemas import (
     EffectivePermissionsResponse,
@@ -153,16 +160,16 @@ async def _resolve_principal_filter(
 
 
 def _role_permission_requirements(role: Role, *, write: bool) -> tuple[str, str, str | None]:
-    if role.scope_type == "global":
+    if role.scope_type == ScopeType.GLOBAL:
         permission = "Roles.ReadWrite.All" if write else "Roles.Read.All"
-        return permission, "global", None
+        return permission, ScopeType.GLOBAL, None
 
     if role.scope_id is None:
         permission = "Roles.ReadWrite.All" if write else "Roles.Read.All"
-        return permission, "global", None
+        return permission, ScopeType.GLOBAL, None
 
     permission = "Workspace.Roles.ReadWrite" if write else "Workspace.Roles.Read"
-    return permission, "workspace", role.scope_id
+    return permission, ScopeType.WORKSPACE, role.scope_id
 
 
 async def _load_role(
@@ -238,17 +245,17 @@ async def list_global_roles(
     *,
     session: Annotated[AsyncSession, Depends(get_session)],
     scope: Annotated[
-        Literal["global"],
+        ScopeType,
         Query(
             description="Role scope to list (global only)",
             alias="scope",
         ),
-    ] = "global",
+    ] = ScopeType.GLOBAL,
     _actor: Annotated[User, Security(require_global("Roles.Read.All"))],
 ) -> list[RoleRead]:
     """Return the catalog of global roles."""
 
-    roles = await list_roles(session=session, scope_type="global")
+    roles = await list_roles(session=session, scope_type=ScopeType.GLOBAL)
     return [_serialize_role(role) for role in roles]
 
 
@@ -279,12 +286,12 @@ async def create_global_role_endpoint(
     *,
     session: Annotated[AsyncSession, Depends(get_session)],
     scope: Annotated[
-        Literal["global"],
+        ScopeType,
         Query(
             description="Role scope to create (global only)",
             alias="scope",
         ),
-    ] = "global",
+    ] = ScopeType.GLOBAL,
     actor: Annotated[User, Security(require_global("Roles.ReadWrite.All"))],
 ) -> RoleRead:
     """Create a new global role definition."""
@@ -371,7 +378,7 @@ async def update_role_definition(
 
     actor, role = actor_and_role
 
-    if role.scope_type == "global":
+    if role.scope_type == ScopeType.GLOBAL:
         try:
             updated = await update_global_role(
                 session=session, role_id=role_id, payload=payload, actor=actor
@@ -443,7 +450,7 @@ async def delete_role_definition(
 
     _actor, role = actor_and_role
 
-    if role.scope_type == "global":
+    if role.scope_type == ScopeType.GLOBAL:
         try:
             await delete_global_role(session=session, role_id=role_id)
         except RoleImmutableError as exc:
@@ -516,7 +523,7 @@ async def list_global_role_assignments(
 
     assignments = await list_role_assignments(
         session=session,
-        scope_type="global",
+        scope_type=ScopeType.GLOBAL,
         scope_id=None,
         principal_id=principal_filter,
         role_id=role_id,
@@ -565,7 +572,7 @@ async def create_global_role_assignment(
         session=session,
         principal_id=principal_identifier,
         role_id=payload.role_id,
-        scope_type="global",
+        scope_type=ScopeType.GLOBAL,
         scope_id=None,
     )
     if existing is not None:
@@ -576,7 +583,7 @@ async def create_global_role_assignment(
             session=session,
             principal_id=principal_identifier,
             role_id=payload.role_id,
-            scope_type="global",
+            scope_type=ScopeType.GLOBAL,
             scope_id=None,
         )
     except (PrincipalNotFoundError, RoleNotFoundError) as exc:
@@ -590,7 +597,7 @@ async def create_global_role_assignment(
         session=session,
         principal_id=principal_identifier,
         role_id=payload.role_id,
-        scope_type="global",
+        scope_type=ScopeType.GLOBAL,
         scope_id=None,
     )
     if assignment is None:  # pragma: no cover - defensive guard
@@ -632,7 +639,7 @@ async def delete_global_role_assignment(
         await delete_role_assignment(
             session=session,
             assignment_id=assignment_id,
-            scope_type="global",
+            scope_type=ScopeType.GLOBAL,
             scope_id=None,
         )
     except RoleAssignmentNotFoundError as exc:
@@ -688,7 +695,7 @@ async def list_workspace_role_assignments(
 
     assignments = await list_role_assignments(
         session=session,
-        scope_type="workspace",
+        scope_type=ScopeType.WORKSPACE,
         scope_id=workspace_id,
         principal_id=principal_filter,
         role_id=role_id,
@@ -744,7 +751,7 @@ async def create_workspace_role_assignment(
         session=session,
         principal_id=principal_identifier,
         role_id=payload.role_id,
-        scope_type="workspace",
+        scope_type=ScopeType.WORKSPACE,
         scope_id=workspace_id,
     )
     if existing is not None:
@@ -755,7 +762,7 @@ async def create_workspace_role_assignment(
             session=session,
             principal_id=principal_identifier,
             role_id=payload.role_id,
-            scope_type="workspace",
+            scope_type=ScopeType.WORKSPACE,
             scope_id=workspace_id,
         )
     except (PrincipalNotFoundError, RoleNotFoundError, WorkspaceNotFoundError) as exc:
@@ -769,7 +776,7 @@ async def create_workspace_role_assignment(
         session=session,
         principal_id=principal_identifier,
         role_id=payload.role_id,
-        scope_type="workspace",
+        scope_type=ScopeType.WORKSPACE,
         scope_id=workspace_id,
     )
     if assignment is None:  # pragma: no cover - defensive guard
@@ -818,7 +825,7 @@ async def delete_workspace_role_assignment(
         await delete_role_assignment(
             session=session,
             assignment_id=assignment_id,
-            scope_type="workspace",
+            scope_type=ScopeType.WORKSPACE,
             scope_id=workspace_id,
         )
     except RoleAssignmentNotFoundError as exc:
@@ -843,7 +850,7 @@ async def list_permissions(
         PermissionScope,
         Query(
             description="Permission scope to list",
-            examples={"default": {"value": "workspace"}},
+            examples={"default": {"value": ScopeType.WORKSPACE.value}},
         ),
     ],
     workspace_id: Annotated[
@@ -868,7 +875,7 @@ async def list_permissions(
 ) -> list[PermissionRead]:
     """Return permission registry entries filtered by ``scope``."""
 
-    if scope == "workspace" and workspace_id is not None:
+    if scope == ScopeType.WORKSPACE and workspace_id is not None:
         service = WorkspacesService(session=session)
         await service.get_workspace_profile(user=actor, workspace_id=workspace_id)
 
@@ -972,7 +979,7 @@ async def check_permissions(
         ) from exc
 
     requires_workspace = any(
-        PERMISSION_REGISTRY[key].scope == "workspace" for key in keys
+        PERMISSION_REGISTRY[key].scope == ScopeType.WORKSPACE for key in keys
     )
     workspace_permissions: frozenset[str] = frozenset()
     workspace_id = payload.workspace_id
@@ -1003,7 +1010,7 @@ async def check_permissions(
     results: dict[str, bool] = {}
     for key in keys:
         definition = PERMISSION_REGISTRY[key]
-        if definition.scope == "global":
+        if definition.scope == ScopeType.GLOBAL:
             results[key] = key in global_permissions
         else:
             results[key] = key in workspace_permissions

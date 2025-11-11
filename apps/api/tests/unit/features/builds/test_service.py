@@ -13,7 +13,7 @@ from apps.api.app.features.builds.builder import BuildArtifacts
 from apps.api.app.features.builds.exceptions import BuildAlreadyInProgressError
 from apps.api.app.features.builds.models import BuildStatus, ConfigurationBuild
 from apps.api.app.features.builds.service import BuildEnsureMode, BuildsService
-from apps.api.app.features.configs.models import Configuration
+from apps.api.app.features.configs.models import Configuration, ConfigurationStatus
 from apps.api.app.features.configs.storage import ConfigStorage
 from apps.api.app.features.workspaces.models import Workspace
 from apps.api.app.settings import Settings
@@ -144,7 +144,7 @@ async def _prepare_configuration(
     *,
     workspace_id: str | None = None,
     config_id: str | None = None,
-    status: str = "active",
+    status: ConfigurationStatus = ConfigurationStatus.ACTIVE,
     config_version: int = 1,
     content_digest: str | None = "digest",
 ) -> tuple[str, str]:
@@ -249,7 +249,7 @@ async def test_ensure_build_returns_building_when_in_progress(
         workspace_id=workspace_id,
         config_id=config_id,
         build_id=generate_ulid(),
-        status=BuildStatus.BUILDING.value,
+        status=BuildStatus.BUILDING,
         venv_path=str(tmp_path / "venvs" / workspace_id / config_id / "build"),
         config_version=1,
         content_digest="digest",
@@ -280,7 +280,7 @@ async def test_ensure_build_blocks_and_times_out(session: AsyncSession, tmp_path
         workspace_id=workspace_id,
         config_id=config_id,
         build_id=generate_ulid(),
-        status=BuildStatus.BUILDING.value,
+        status=BuildStatus.BUILDING,
         venv_path=str(tmp_path / "venvs" / workspace_id / config_id / "build"),
         config_version=1,
         content_digest="digest",

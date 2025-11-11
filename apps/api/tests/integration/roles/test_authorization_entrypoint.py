@@ -4,6 +4,7 @@ import pytest
 
 from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.roles.authorization import authorize
+from apps.api.app.features.roles.models import ScopeType
 from apps.api.app.features.roles.service import AuthorizationError, ensure_user_principal
 from apps.api.app.features.users.models import User
 
@@ -40,7 +41,7 @@ async def test_authorize_workspace_rejects_missing_scope(seed_identity: dict[str
                 session=session,
                 principal_id=principal_id,
                 permission_key="Workspace.Members.Read",
-                scope_type="workspace",
+                scope_type=ScopeType.WORKSPACE,
             )
 
 
@@ -55,7 +56,7 @@ async def test_authorize_workspace_checks_permissions(
             session=session,
             principal_id=owner_principal_id,
             permission_key="Workspace.Members.ReadWrite",
-            scope_type="workspace",
+            scope_type=ScopeType.WORKSPACE,
             scope_id=seed_identity["workspace_id"],  # type: ignore[index]
         )
     assert decision.is_authorized
@@ -67,7 +68,7 @@ async def test_authorize_workspace_checks_permissions(
             session=session,
             principal_id=member_principal_id,
             permission_key="Workspace.Members.ReadWrite",
-            scope_type="workspace",
+            scope_type=ScopeType.WORKSPACE,
             scope_id=seed_identity["workspace_id"],  # type: ignore[index]
         )
     assert not decision.is_authorized

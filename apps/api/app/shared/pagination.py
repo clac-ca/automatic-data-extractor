@@ -9,7 +9,8 @@ from apps.api.app.settings import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
 )
-from pydantic import BaseModel, Field, conint
+from apps.api.app.shared.core.schema import BaseSchema
+from pydantic import Field, conint
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
@@ -18,7 +19,7 @@ from sqlalchemy.sql.elements import ColumnElement
 T = TypeVar("T")
 
 
-class PageParams(BaseModel):
+class PageParams(BaseSchema):
     """Standard query parameters for paginated list endpoints."""
 
     page: conint(ge=1) = Field(1, description="1-based page number")
@@ -31,7 +32,7 @@ class PageParams(BaseModel):
     )
 
 
-class Page(BaseModel, Generic[T]):
+class Page(BaseSchema, Generic[T]):
     """Uniform response envelope for list endpoints."""
 
     items: Sequence[T]

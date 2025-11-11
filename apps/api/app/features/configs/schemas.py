@@ -5,10 +5,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import Field, field_validator
+
+from apps.api.app.shared.core.ids import ULIDStr
+from apps.api.app.shared.core.schema import BaseSchema
+from .models import ConfigurationStatus
 
 
-class ConfigSourceTemplate(BaseModel):
+class ConfigSourceTemplate(BaseSchema):
     """Reference to a bundled template."""
 
     type: Literal["template"]
@@ -20,11 +24,11 @@ class ConfigSourceTemplate(BaseModel):
         return value.strip()
 
 
-class ConfigSourceClone(BaseModel):
+class ConfigSourceClone(BaseSchema):
     """Reference to an existing workspace config."""
 
     type: Literal["clone"]
-    config_id: str = Field(min_length=1, max_length=26)
+    config_id: ULIDStr
 
     @field_validator("config_id", mode="before")
     @classmethod
@@ -38,10 +42,8 @@ ConfigSource = Annotated[
 ]
 
 
-class ConfigurationCreate(BaseModel):
+class ConfigurationCreate(BaseSchema):
     """Payload for creating a configuration."""
-
-    model_config = ConfigDict(extra="forbid")
 
     display_name: str = Field(min_length=1, max_length=255)
     source: ConfigSource
@@ -52,15 +54,13 @@ class ConfigurationCreate(BaseModel):
         return value.strip()
 
 
-class ConfigurationRecord(BaseModel):
+class ConfigurationRecord(BaseSchema):
     """Serialized configuration metadata."""
 
-    model_config = ConfigDict(from_attributes=True)
-
-    workspace_id: str
-    config_id: str
+    workspace_id: ULIDStr
+    config_id: ULIDStr
     display_name: str
-    status: str
+    status: ConfigurationStatus
     config_version: int
     content_digest: str | None = None
     created_at: datetime
@@ -68,47 +68,47 @@ class ConfigurationRecord(BaseModel):
     activated_at: datetime | None = None
 
 
-class ConfigValidationIssue(BaseModel):
+class ConfigValidationIssue(BaseSchema):
     """Description of a validation issue found on disk."""
 
     path: str
     message: str
 
 
-class ConfigurationValidateResponse(BaseModel):
+class ConfigurationValidateResponse(BaseSchema):
     """Result of running validation."""
 
-    workspace_id: str
-    config_id: str
-    status: str
+    workspace_id: ULIDStr
+    config_id: ULIDStr
+    status: ConfigurationStatus
     content_digest: str | None = None
     issues: list[ConfigValidationIssue]
 
 
-class ConfigurationActivateRequest(BaseModel):
+class ConfigurationActivateRequest(BaseSchema):
     """Activation control flags."""
 
     ensure_build: bool = False
 
 
-class FileCapabilities(BaseModel):
+class FileCapabilities(BaseSchema):
     editable: bool
     can_create: bool
     can_delete: bool
     can_rename: bool
 
 
-class FileSizeLimits(BaseModel):
+class FileSizeLimits(BaseSchema):
     code_max_bytes: int
     asset_max_bytes: int
 
 
-class FileListingSummary(BaseModel):
+class FileListingSummary(BaseSchema):
     files: int
     directories: int
 
 
-class FileEntry(BaseModel):
+class FileEntry(BaseSchema):
     path: str
     name: str
     parent: str
@@ -121,10 +121,10 @@ class FileEntry(BaseModel):
     has_children: bool | None = None
 
 
-class FileListing(BaseModel):
-    workspace_id: str
-    config_id: str
-    status: str
+class FileListing(BaseSchema):
+    workspace_id: ULIDStr
+    config_id: ULIDStr
+    status: ConfigurationStatus
     capabilities: FileCapabilities
     root: str
     prefix: str
@@ -138,7 +138,7 @@ class FileListing(BaseModel):
     entries: list[FileEntry]
 
 
-class FileReadJson(BaseModel):
+class FileReadJson(BaseSchema):
     path: str
     encoding: Literal["utf-8", "base64"]
     content: str
@@ -148,7 +148,7 @@ class FileReadJson(BaseModel):
     content_type: str
 
 
-class FileWriteResponse(BaseModel):
+class FileWriteResponse(BaseSchema):
     path: str
     created: bool
     size: int
@@ -156,16 +156,14 @@ class FileWriteResponse(BaseModel):
     etag: str
 
 
-class FileRenameRequest(BaseModel):
+class FileRenameRequest(BaseSchema):
     op: Literal["move"] = "move"
     to: str
     overwrite: bool = False
     dest_if_match: str | None = None
 
 
-class FileRenameResponse(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
+class FileRenameResponse(BaseSchema):
     src: str = Field(alias="from")
     dest: str = Field(alias="to")
     size: int

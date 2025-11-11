@@ -1,9 +1,9 @@
 """Jobs schema placeholders."""
 
-from pydantic import BaseModel
+from apps.api.app.shared.core.schema import BaseSchema
 
 
-class JobPlaceholder(BaseModel):
+class JobPlaceholder(BaseSchema):
     """Placeholder schema for job responses."""
 
     id: str
