@@ -34,17 +34,17 @@ from apps.api.app.features.roles.service import (
 
 from ..users.models import User
 from ..users.repository import UsersRepository
-from ..users.schemas import UserProfile
+from ..users.schemas import UserOut
 from .models import Workspace, WorkspaceMembership
 
 if TYPE_CHECKING:
     from apps.api.app.features.roles.schemas import RoleCreate, RoleUpdate
 from .repository import WorkspacesRepository
 from .schemas import (
-    WorkspaceDefaultSelection,
-    WorkspaceMember,
+    WorkspaceDefaultSelectionOut,
+    WorkspaceMemberOut,
     WorkspaceMemberRolesUpdate,
-    WorkspaceProfile,
+    WorkspaceOut,
 )
 
 _GOVERNOR_PERMISSIONS = frozenset(
@@ -98,7 +98,7 @@ class WorkspacesService:
         *,
         user: User,
         workspace_id: str | None,
-    ) -> WorkspaceProfile:
+    ) -> WorkspaceOut:
         """Return the workspace membership profile for ``user``."""
 
         global_permissions = await get_global_permissions_for_user(
@@ -148,7 +148,7 @@ class WorkspacesService:
         )
         return self.build_profile(membership, summary=summary)
 
-    async def list_memberships(self, *, user: User) -> list[WorkspaceProfile]:
+    async def list_memberships(self, *, user: User) -> list[WorkspaceOut]:
         """Return all workspace profiles associated with ``user`` in a stable order."""
 
         global_permissions = await get_global_permissions_for_user(
@@ -184,7 +184,7 @@ class WorkspacesService:
             else:
                 summaries_by_workspace[workspace_identifier] = {}
 
-        profiles: list[WorkspaceProfile] = []
+        profiles: list[WorkspaceOut] = []
         for membership in memberships:
             workspace_identifier = cast(str, membership.workspace_id)
             summary_map = summaries_by_workspace.get(workspace_identifier, {})
@@ -203,7 +203,7 @@ class WorkspacesService:
         slug: str | None = None,
         owner_user_id: str | None = None,
         settings: Mapping[str, Any] | None = None,
-    ) -> WorkspaceProfile:
+    ) -> WorkspaceOut:
         normalized_name = name.strip()
         if not normalized_name:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Name required")
@@ -268,7 +268,7 @@ class WorkspacesService:
         name: str | None = None,
         slug: str | None = None,
         settings: Mapping[str, Any] | None = None,
-    ) -> WorkspaceProfile:
+    ) -> WorkspaceOut:
         workspace_record = await self._ensure_workspace(workspace_id)
 
         updated_name: str | None = None
@@ -311,7 +311,7 @@ class WorkspacesService:
         workspace_record = await self._ensure_workspace(workspace_id)
         await self._repo.delete_workspace(workspace_record)
 
-    async def list_members(self, *, workspace_id: str) -> list[WorkspaceMember]:
+    async def list_members(self, *, workspace_id: str) -> list[WorkspaceMemberOut]:
         memberships = await self._repo.list_members(workspace_id)
         summaries = await self._summaries_for_workspace(workspace_id, memberships)
         return [
@@ -330,7 +330,7 @@ class WorkspacesService:
         workspace_id: str,
         membership_id: str,
         payload: WorkspaceMemberRolesUpdate,
-    ) -> WorkspaceMember:
+    ) -> WorkspaceMemberOut:
         membership = await self._repo.get_membership_for_workspace(
             membership_id=membership_id,
             workspace_id=workspace_id,
@@ -399,7 +399,7 @@ class WorkspacesService:
         *,
         workspace_id: str,
         user: User,
-    ) -> WorkspaceDefaultSelection:
+    ) -> WorkspaceDefaultSelectionOut:
         membership = await self._repo.get_membership(
             user_id=cast(str, user.id), workspace_id=workspace_id
         )
@@ -410,7 +410,7 @@ class WorkspacesService:
         membership.is_default = True
         await self._session.flush()
 
-        return WorkspaceDefaultSelection(workspace_id=workspace_id, is_default=True)
+        return WorkspaceDefaultSelectionOut(workspace_id=workspace_id, is_default=True)
 
     async def add_member(
         self,
@@ -418,7 +418,7 @@ class WorkspacesService:
         workspace_id: str,
         user_id: str,
         role_ids: Sequence[str] | None,
-    ) -> WorkspaceMember:
+    ) -> WorkspaceMemberOut:
         existing = await self._repo.get_membership(
             user_id=user_id, workspace_id=workspace_id
         )
@@ -705,7 +705,7 @@ class WorkspacesService:
         membership: WorkspaceMembership,
         *,
         summary: _MembershipRoleSummary = _EMPTY_SUMMARY,
-    ) -> WorkspaceProfile:
+    ) -> WorkspaceOut:
         workspace = membership.workspace
         if workspace is None:
             raise HTTPException(
@@ -714,7 +714,7 @@ class WorkspacesService:
 
         permissions = list(summary.permissions)
         role_slugs = list(summary.role_slugs)
-        return WorkspaceProfile(
+        return WorkspaceOut(
             workspace_id=workspace.id,
             name=workspace.name,
             slug=workspace.slug,
@@ -723,11 +723,11 @@ class WorkspacesService:
             is_default=bool(membership.is_default),
         )
 
-    def build_global_admin_profile(self, workspace: Workspace) -> WorkspaceProfile:
+    def build_global_admin_profile(self, workspace: Workspace) -> WorkspaceOut:
         """Return an owner-level profile used when a global admin inspects a workspace."""
 
         permissions = sorted(dict.fromkeys(_system_role_permissions("workspace-owner")))
-        return WorkspaceProfile(
+        return WorkspaceOut(
             workspace_id=workspace.id,
             name=workspace.name,
             slug=workspace.slug,
@@ -741,7 +741,7 @@ class WorkspacesService:
         membership: WorkspaceMembership,
         *,
         summary: _MembershipRoleSummary = _EMPTY_SUMMARY,
-    ) -> WorkspaceMember:
+    ) -> WorkspaceMemberOut:
         user = membership.user
         if user is None:
             raise HTTPException(
@@ -750,13 +750,13 @@ class WorkspacesService:
 
         permissions = list(summary.permissions)
         role_slugs = list(summary.role_slugs)
-        return WorkspaceMember(
+        return WorkspaceMemberOut(
             workspace_membership_id=membership.id,
             workspace_id=membership.workspace_id,
             roles=role_slugs,
             permissions=permissions,
             is_default=bool(membership.is_default),
-            user=UserProfile.model_validate(user),
+            user=UserOut.model_validate(user),
         )
 
     async def _ensure_workspace(self, workspace_id: str) -> Workspace:

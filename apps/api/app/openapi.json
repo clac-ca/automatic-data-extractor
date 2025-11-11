@@ -906,7 +906,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UserListResponse"
+                  "$ref": "#/components/schemas/UserPage"
                 }
               }
             }
@@ -1977,7 +1977,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/WorkspaceProfile"
+                    "$ref": "#/components/schemas/WorkspaceOut"
                   },
                   "type": "array",
                   "title": "Response List Workspaces Api V1 Workspaces Get"
@@ -2040,7 +2040,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkspaceProfile"
+                  "$ref": "#/components/schemas/WorkspaceOut"
                 }
               }
             }
@@ -2156,7 +2156,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkspaceProfile"
+                  "$ref": "#/components/schemas/WorkspaceOut"
                 }
               }
             }
@@ -2259,7 +2259,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkspaceProfile"
+                  "$ref": "#/components/schemas/WorkspaceOut"
                 }
               }
             }
@@ -2459,7 +2459,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/WorkspaceMember"
+                    "$ref": "#/components/schemas/WorkspaceMemberOut"
                   },
                   "title": "Response List Members Api V1 Workspaces  Workspace Id  Members Get"
                 }
@@ -2554,7 +2554,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkspaceMember"
+                  "$ref": "#/components/schemas/WorkspaceMemberOut"
                 }
               }
             }
@@ -3134,7 +3134,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkspaceMember"
+                  "$ref": "#/components/schemas/WorkspaceMemberOut"
                 }
               }
             }
@@ -3356,7 +3356,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkspaceDefaultSelection"
+                  "$ref": "#/components/schemas/WorkspaceDefaultSelectionOut"
                 }
               }
             }
@@ -3451,7 +3451,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DocumentRecord"
+                  "$ref": "#/components/schemas/DocumentOut"
                 }
               }
             }
@@ -3605,7 +3605,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DocumentListResponse"
+                  "$ref": "#/components/schemas/DocumentPage"
                 }
               }
             }
@@ -3712,7 +3712,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DocumentRecord"
+                  "$ref": "#/components/schemas/DocumentOut"
                 }
               }
             }
@@ -6947,56 +6947,7 @@
         "title": "DefaultResponse",
         "description": "Consistent envelope for success/failure acknowledgements."
       },
-      "DocumentListResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/DocumentRecord"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "page": {
-            "type": "integer",
-            "title": "Page"
-          },
-          "page_size": {
-            "type": "integer",
-            "title": "Page Size"
-          },
-          "has_next": {
-            "type": "boolean",
-            "title": "Has Next"
-          },
-          "has_previous": {
-            "type": "boolean",
-            "title": "Has Previous"
-          },
-          "total": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "items",
-          "page",
-          "page_size",
-          "has_next",
-          "has_previous"
-        ],
-        "title": "DocumentListResponse",
-        "description": "Paginated envelope of document records."
-      },
-      "DocumentRecord": {
+      "DocumentOut": {
         "properties": {
           "document_id": {
             "type": "string",
@@ -7110,7 +7061,7 @@
           "uploader": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/UploaderSummary"
+                "$ref": "#/components/schemas/UploaderOut"
               },
               {
                 "type": "null"
@@ -7132,8 +7083,57 @@
           "created_at",
           "updated_at"
         ],
-        "title": "DocumentRecord",
+        "title": "DocumentOut",
         "description": "Serialised representation of a stored document."
+      },
+      "DocumentPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "has_next": {
+            "type": "boolean",
+            "title": "Has Next"
+          },
+          "has_previous": {
+            "type": "boolean",
+            "title": "Has Previous"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "has_next",
+          "has_previous"
+        ],
+        "title": "DocumentPage",
+        "description": "Paginated envelope of document records."
       },
       "DocumentSource": {
         "type": "string",
@@ -8307,7 +8307,7 @@
         "title": "SetupStatus",
         "description": "Response payload describing the initial setup state."
       },
-      "UploaderSummary": {
+      "UploaderOut": {
         "properties": {
           "id": {
             "type": "string",
@@ -8341,133 +8341,10 @@
           "id",
           "email"
         ],
-        "title": "UploaderSummary",
+        "title": "UploaderOut",
         "description": "Minimal representation of the user who uploaded the document."
       },
-      "UserListResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/UserSummary"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "page": {
-            "type": "integer",
-            "title": "Page"
-          },
-          "page_size": {
-            "type": "integer",
-            "title": "Page Size"
-          },
-          "has_next": {
-            "type": "boolean",
-            "title": "Has Next"
-          },
-          "has_previous": {
-            "type": "boolean",
-            "title": "Has Previous"
-          },
-          "total": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "items",
-          "page",
-          "page_size",
-          "has_next",
-          "has_previous"
-        ],
-        "title": "UserListResponse",
-        "description": "Paginated collection of users."
-      },
-      "UserProfile": {
-        "properties": {
-          "user_id": {
-            "type": "string",
-            "maxLength": 26,
-            "minLength": 26,
-            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "User Id",
-            "description": "ULID (26-character string)."
-          },
-          "email": {
-            "type": "string",
-            "title": "Email"
-          },
-          "is_active": {
-            "type": "boolean",
-            "title": "Is Active"
-          },
-          "is_service_account": {
-            "type": "boolean",
-            "title": "Is Service Account"
-          },
-          "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          },
-          "preferred_workspace_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 26,
-                "minLength": 26,
-                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-                "description": "ULID (26-character string)."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Preferred Workspace Id"
-          },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Roles"
-          },
-          "permissions": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Permissions"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "user_id",
-          "email",
-          "is_active",
-          "is_service_account"
-        ],
-        "title": "UserProfile",
-        "description": "Minimal view of the authenticated user."
-      },
-      "UserSummary": {
+      "UserOut": {
         "properties": {
           "user_id": {
             "type": "string",
@@ -8550,8 +8427,131 @@
           "created_at",
           "updated_at"
         ],
-        "title": "UserSummary",
+        "title": "UserOut",
         "description": "Extended representation with activation metadata."
+      },
+      "UserPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "has_next": {
+            "type": "boolean",
+            "title": "Has Next"
+          },
+          "has_previous": {
+            "type": "boolean",
+            "title": "Has Previous"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "has_next",
+          "has_previous"
+        ],
+        "title": "UserPage",
+        "description": "Paginated collection of users."
+      },
+      "UserProfile": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "User Id",
+            "description": "ULID (26-character string)."
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "is_service_account": {
+            "type": "boolean",
+            "title": "Is Service Account"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "preferred_workspace_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Workspace Id"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Roles"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Permissions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "user_id",
+          "email",
+          "is_active",
+          "is_service_account"
+        ],
+        "title": "UserProfile",
+        "description": "Minimal view of the authenticated user."
       },
       "ValidationError": {
         "properties": {
@@ -8643,7 +8643,7 @@
         "title": "WorkspaceCreate",
         "description": "Payload for creating a workspace."
       },
-      "WorkspaceDefaultSelection": {
+      "WorkspaceDefaultSelectionOut": {
         "properties": {
           "workspace_id": {
             "type": "string",
@@ -8664,61 +8664,8 @@
           "workspace_id",
           "is_default"
         ],
-        "title": "WorkspaceDefaultSelection",
+        "title": "WorkspaceDefaultSelectionOut",
         "description": "Response indicating the caller's default workspace selection."
-      },
-      "WorkspaceMember": {
-        "properties": {
-          "workspace_membership_id": {
-            "type": "string",
-            "maxLength": 26,
-            "minLength": 26,
-            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Workspace Membership Id",
-            "description": "ULID (26-character string)."
-          },
-          "workspace_id": {
-            "type": "string",
-            "maxLength": 26,
-            "minLength": 26,
-            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Workspace Id",
-            "description": "ULID (26-character string)."
-          },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Roles"
-          },
-          "permissions": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Permissions"
-          },
-          "is_default": {
-            "type": "boolean",
-            "title": "Is Default"
-          },
-          "user": {
-            "$ref": "#/components/schemas/UserProfile"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "workspace_membership_id",
-          "workspace_id",
-          "roles",
-          "permissions",
-          "is_default",
-          "user"
-        ],
-        "title": "WorkspaceMember",
-        "description": "Representation of a workspace membership."
       },
       "WorkspaceMemberCreate": {
         "properties": {
@@ -8758,6 +8705,59 @@
         "title": "WorkspaceMemberCreate",
         "description": "Payload for adding a member to a workspace."
       },
+      "WorkspaceMemberOut": {
+        "properties": {
+          "workspace_membership_id": {
+            "type": "string",
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Workspace Membership Id",
+            "description": "ULID (26-character string)."
+          },
+          "workspace_id": {
+            "type": "string",
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Workspace Id",
+            "description": "ULID (26-character string)."
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Roles"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Permissions"
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserOut"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "workspace_membership_id",
+          "workspace_id",
+          "roles",
+          "permissions",
+          "is_default",
+          "user"
+        ],
+        "title": "WorkspaceMemberOut",
+        "description": "Representation of a workspace membership."
+      },
       "WorkspaceMemberRolesUpdate": {
         "properties": {
           "role_ids": {
@@ -8777,7 +8777,7 @@
         "title": "WorkspaceMemberRolesUpdate",
         "description": "Payload used to replace the set of roles for a membership."
       },
-      "WorkspaceProfile": {
+      "WorkspaceOut": {
         "properties": {
           "workspace_id": {
             "type": "string",
@@ -8824,7 +8824,7 @@
           "permissions",
           "is_default"
         ],
-        "title": "WorkspaceProfile",
+        "title": "WorkspaceOut",
         "description": "Workspace information decorated with membership metadata."
       },
       "WorkspaceUpdate": {

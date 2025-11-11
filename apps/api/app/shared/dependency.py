@@ -12,7 +12,7 @@ from apps.api.app.features.roles.authorization import authorize
 from apps.api.app.features.roles.models import ScopeType
 from apps.api.app.features.roles.service import ensure_user_principal
 from apps.api.app.features.users.models import User
-from apps.api.app.features.workspaces.schemas import WorkspaceProfile
+from apps.api.app.features.workspaces.schemas import WorkspaceOut
 from apps.api.app.settings import Settings, get_settings
 from apps.api.app.shared.core.security import (
     forbidden_response,
@@ -361,7 +361,7 @@ async def get_workspace_profile(
             description="Workspace identifier",
         ),
     ],
-) -> WorkspaceProfile:
+) -> WorkspaceOut:
     """Return the active workspace membership profile for the request."""
 
     normalized = workspace_id.strip()

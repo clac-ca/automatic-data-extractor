@@ -9,10 +9,10 @@ from pydantic import Field
 from apps.api.app.shared.core.ids import ULIDStr
 from apps.api.app.shared.core.schema import BaseSchema
 
-from ..users.schemas import UserProfile
+from ..users.schemas import UserOut
 
 
-class WorkspaceProfile(BaseSchema):
+class WorkspaceOut(BaseSchema):
     """Workspace information decorated with membership metadata."""
 
     workspace_id: ULIDStr = Field(
@@ -56,7 +56,7 @@ class WorkspaceMemberRolesUpdate(BaseSchema):
     role_ids: list[ULIDStr] = Field(default_factory=list)
 
 
-class WorkspaceMember(BaseSchema):
+class WorkspaceMemberOut(BaseSchema):
     """Representation of a workspace membership."""
 
     workspace_membership_id: ULIDStr = Field(
@@ -67,10 +67,10 @@ class WorkspaceMember(BaseSchema):
     roles: list[str]
     permissions: list[str]
     is_default: bool
-    user: UserProfile
+    user: UserOut
 
 
-class WorkspaceDefaultSelection(BaseSchema):
+class WorkspaceDefaultSelectionOut(BaseSchema):
     """Response indicating the caller's default workspace selection."""
 
     workspace_id: ULIDStr
@@ -79,10 +79,10 @@ class WorkspaceDefaultSelection(BaseSchema):
 
 __all__ = [
     "WorkspaceCreate",
-    "WorkspaceDefaultSelection",
-    "WorkspaceMember",
+    "WorkspaceDefaultSelectionOut",
+    "WorkspaceMemberOut",
     "WorkspaceMemberCreate",
     "WorkspaceMemberRolesUpdate",
-    "WorkspaceProfile",
+    "WorkspaceOut",
     "WorkspaceUpdate",
 ]
