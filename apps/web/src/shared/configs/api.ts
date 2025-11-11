@@ -12,10 +12,10 @@ import type {
   ManifestEnvelope,
   ManifestEnvelopeWithEtag,
   ManifestPatchRequest,
-  ConfigFileListing,
-  ConfigFileContent,
-  ConfigFileWriteResponse,
-  ConfigFileEntry,
+  FileListing,
+  FileReadJson,
+  FileWriteResponse,
+  FileRenameResponse,
 } from "./types";
 
 const textEncoder = new TextEncoder();
@@ -71,48 +71,63 @@ export async function validateConfiguration(
   return data as ConfigurationValidateResponse;
 }
 
+export interface ListConfigFilesOptions {
+  readonly prefix?: string;
+  readonly depth?: "0" | "1" | "infinity";
+  readonly include?: readonly string[];
+  readonly exclude?: readonly string[];
+  readonly limit?: number;
+  readonly pageToken?: string | null;
+  readonly sort?: "path" | "name" | "mtime" | "size";
+  readonly order?: "asc" | "desc";
+  readonly signal?: AbortSignal;
+}
+
 export async function listConfigFiles(
   workspaceId: string,
   configId: string,
-  signal?: AbortSignal,
-): Promise<ConfigFileListing> {
+  options: ListConfigFilesOptions = {},
+): Promise<FileListing> {
+  const { prefix, depth, include, exclude, limit, pageToken, sort, order, signal } = options;
   const { data } = await client.GET(
     "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/files",
     {
-      params: { path: { workspace_id: workspaceId, config_id: configId } },
+      params: {
+        path: { workspace_id: workspaceId, config_id: configId },
+        query: {
+          prefix: prefix ?? "",
+          depth: depth ?? "infinity",
+          include: include?.length ? [...include] : undefined,
+          exclude: exclude?.length ? [...exclude] : undefined,
+          limit,
+          page_token: pageToken ?? undefined,
+          sort,
+          order,
+        },
+      },
       signal,
     },
   );
-  const rawEntries = Array.isArray((data as { entries?: unknown })?.entries)
-    ? ((data as { entries: unknown[] }).entries ?? [])
-    : [];
-  const entries: ConfigFileEntry[] = rawEntries
-    .map((entry) => ({
-      path: typeof (entry as { path?: unknown }).path === "string" ? ((entry as { path: string }).path ?? "") : "",
-      type: (entry as { type?: string }).type === "dir" ? "dir" : "file",
-      size: typeof (entry as { size?: number }).size === "number" ? (entry as { size: number }).size : undefined,
-      mtime: typeof (entry as { mtime?: string }).mtime === "string" ? (entry as { mtime: string }).mtime : undefined,
-      etag: typeof (entry as { etag?: string }).etag === "string" ? (entry as { etag: string }).etag : undefined,
-    }))
-    .filter((entry) => entry.path.length > 0);
-  return {
-    root: typeof (data as { root?: unknown })?.root === "string" ? ((data as { root: string }).root ?? "") : "",
-    entries,
-  } satisfies ConfigFileListing;
+  if (!data) {
+    throw new Error("Expected file listing payload.");
+  }
+  return data as FileListing;
 }
 
-export async function readConfigFile(
+export async function readConfigFileJson(
   workspaceId: string,
   configId: string,
   filePath: string,
   signal?: AbortSignal,
-): Promise<ConfigFileContent> {
+): Promise<FileReadJson> {
   const { data } = await client.GET(
     "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}",
     {
       params: {
         path: { workspace_id: workspaceId, config_id: configId, file_path: filePath },
-        query: { format: "json" },
+      },
+      headers: {
+        Accept: "application/json",
       },
       signal,
     },
@@ -120,7 +135,7 @@ export async function readConfigFile(
   if (!data) {
     throw new Error("Expected file payload.");
   }
-  return data as ConfigFileContent;
+  return data as FileReadJson;
 }
 
 export interface UpsertConfigFilePayload {
@@ -135,7 +150,7 @@ export async function upsertConfigFile(
   workspaceId: string,
   configId: string,
   payload: UpsertConfigFilePayload,
-): Promise<ConfigFileWriteResponse> {
+): Promise<FileWriteResponse> {
   const encodedPath = encodeFilePath(payload.path);
   const query = payload.parents ? "?parents=1" : "";
   const response = await apiFetch(
@@ -156,12 +171,57 @@ export async function upsertConfigFile(
     throw new ApiError(message, response.status, problem);
   }
 
-  if (response.status === 201 || response.headers.get("content-length") === "0") {
-    return { path: payload.path };
+  const data = (await response.json().catch(() => ({}))) as FileWriteResponse;
+  if (!data || !data.path) {
+    throw new Error("Expected write response payload.");
   }
+  return data;
+}
 
-  const data = await response.json().catch(() => ({}));
-  return data as ConfigFileWriteResponse;
+export interface RenameConfigFilePayload {
+  readonly fromPath: string;
+  readonly toPath: string;
+  readonly overwrite?: boolean;
+  readonly destIfMatch?: string | null;
+}
+
+export async function renameConfigFile(
+  workspaceId: string,
+  configId: string,
+  payload: RenameConfigFilePayload,
+): Promise<FileRenameResponse> {
+  const { data } = await client.PATCH(
+    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}",
+    {
+      params: {
+        path: { workspace_id: workspaceId, config_id: configId, file_path: payload.fromPath },
+      },
+      body: {
+        op: "move",
+        to: payload.toPath,
+        overwrite: payload.overwrite ?? false,
+        dest_if_match: payload.destIfMatch ?? undefined,
+      },
+    },
+  );
+  if (!data) {
+    throw new Error("Expected rename payload.");
+  }
+  return data as FileRenameResponse;
+}
+
+export async function deleteConfigFile(
+  workspaceId: string,
+  configId: string,
+  filePath: string,
+  options: { etag?: string | null } = {},
+): Promise<void> {
+  await client.DELETE("/api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}", {
+    params: {
+      path: { workspace_id: workspaceId, config_id: configId, file_path: filePath },
+    },
+    headers: options.etag ? { "If-Match": options.etag } : undefined,
+  });
 }
 
 export type ConfigSourceInput =
