@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { readConfigFile } from "@shared/configs/api";
+import { readConfigFileJson } from "@shared/configs/api";
 import { useSaveConfigFileMutation } from "@shared/configs";
-import type { ConfigFileContent, ConfigFileWriteResponse } from "@shared/configs";
+import type { FileReadJson, FileWriteResponse } from "@shared/configs";
 
 interface UseConfigEditorStateOptions {
   readonly workspaceId: string;
@@ -58,7 +58,7 @@ export function useConfigEditorState({ workspaceId, configId, onSaved }: UseConf
   const fetchFile = useCallback(
     async (path: string) => {
       try {
-        const file = await readConfigFile(workspaceId, configId, path);
+        const file = await readConfigFileJson(workspaceId, configId, path);
         upsertTab(mapFileToTab(file));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unable to load file.";
@@ -122,6 +122,26 @@ export function useConfigEditorState({ workspaceId, configId, onSaved }: UseConf
 
   const activeTab = useMemo(() => tabs.find((tab) => tab.path === activePath) ?? null, [tabs, activePath]);
 
+  const renameTabPath = useCallback((fromPath: string, toPath: string) => {
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.path === fromPath
+          ? {
+              ...tab,
+              path: toPath,
+              label: extractLabel(toPath),
+            }
+          : tab,
+      ),
+    );
+    setActivePath((current) => {
+      if (current === fromPath) {
+        return toPath;
+      }
+      return current;
+    });
+  }, []);
+
   const saveActiveTab = useCallback(async () => {
     if (!activePath) {
       return;
@@ -167,6 +187,7 @@ export function useConfigEditorState({ workspaceId, configId, onSaved }: UseConf
     setActivePath,
     updateContent,
     saveActiveTab,
+    renameTabPath,
     isSaving: saveFile.isPending,
   } as const;
 }
@@ -176,7 +197,7 @@ function extractLabel(path: string) {
   return parts[parts.length - 1] || path;
 }
 
-function mapFileToTab(file: ConfigFileContent): EditorTab {
+function mapFileToTab(file: FileReadJson): EditorTab {
   return {
     path: file.path,
     label: extractLabel(file.path),
@@ -191,7 +212,7 @@ function mapFileToTab(file: ConfigFileContent): EditorTab {
   };
 }
 
-function resolveEtag(result: ConfigFileWriteResponse | undefined, previous: EditorTab) {
+function resolveEtag(result: FileWriteResponse | undefined, previous: EditorTab) {
   if (!result) {
     return previous.etag ?? null;
   }

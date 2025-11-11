@@ -40,32 +40,8 @@ export interface ParsedManifest {
   readonly raw: ConfigManifest;
 }
 
-export interface ConfigFileEntry {
-  readonly path: string;
-  readonly type: "file" | "dir";
-  readonly size?: number;
-  readonly mtime?: string;
-  readonly etag?: string;
-}
-
-export interface ConfigFileListing {
-  readonly root: string;
-  readonly entries: readonly ConfigFileEntry[];
-}
-
-export interface ConfigFileContent {
-  readonly path: string;
-  readonly encoding: "utf-8" | "base64";
-  readonly content: string;
-  readonly etag?: string | null;
-  readonly size?: number;
-  readonly mtime?: string;
-}
-
-export interface ConfigFileWriteResponse {
-  readonly path: string;
-  readonly size?: number;
-  readonly mtime?: string;
-  readonly etag?: string;
-  readonly created?: boolean;
-}
+export type FileEntry = components["schemas"]["FileEntry"];
+export type FileListing = components["schemas"]["FileListing"];
+export type FileReadJson = components["schemas"]["FileReadJson"];
+export type FileWriteResponse = components["schemas"]["FileWriteResponse"];
+export type FileRenameResponse = components["schemas"]["FileRenameResponse"];
