@@ -17,7 +17,7 @@ from apps.api.app.shared.dependency import (
 )
 
 from ..roles.models import Role
-from ..roles.schemas import RoleCreate, RoleRead, RoleUpdate
+from ..roles.schemas import RoleCreate, RoleOut, RoleUpdate
 from ..users.models import User
 from .schemas import (
     WorkspaceCreate,
@@ -38,8 +38,8 @@ WORKSPACE_UPDATE_BODY = Body(...)
 WORKSPACE_MEMBER_UPDATE_BODY = Body(...)
 
 
-def _serialize_role(role: Role) -> RoleRead:
-    return RoleRead(
+def _serialize_role(role: Role) -> RoleOut:
+    return RoleOut(
         role_id=role.id,
         slug=role.slug,
         name=role.name,
@@ -197,7 +197,7 @@ async def list_members(
 
 @router.get(
     "/workspaces/{workspace_id}/roles",
-    response_model=list[RoleRead],
+    response_model=list[RoleOut],
     status_code=status.HTTP_200_OK,
     summary="List roles available to the workspace",
     responses={
@@ -221,7 +221,7 @@ async def list_workspace_roles(
         ),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> list[RoleRead]:
+) -> list[RoleOut]:
     service = WorkspacesService(session=session)
     roles = await service.list_workspace_roles(workspace.workspace_id)
     return [_serialize_role(role) for role in roles]
@@ -230,7 +230,7 @@ async def list_workspace_roles(
 @router.post(
     "/workspaces/{workspace_id}/roles",
     dependencies=[Security(require_csrf)],
-    response_model=RoleRead,
+    response_model=RoleOut,
     status_code=status.HTTP_201_CREATED,
     summary="Create a workspace role",
     responses={
@@ -267,7 +267,7 @@ async def create_workspace_role(
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
     payload: RoleCreate,
-) -> RoleRead:
+) -> RoleOut:
     service = WorkspacesService(session=session)
     role = await service.create_workspace_role(
         workspace_id=workspace.workspace_id,
@@ -280,7 +280,7 @@ async def create_workspace_role(
 @router.put(
     "/workspaces/{workspace_id}/roles/{role_id}",
     dependencies=[Security(require_csrf)],
-    response_model=RoleRead,
+    response_model=RoleOut,
     status_code=status.HTTP_200_OK,
     summary="Update a workspace role",
     responses={
@@ -322,7 +322,7 @@ async def update_workspace_role(
     session: Annotated[AsyncSession, Depends(get_session)],
     role_id: Annotated[str, Path(min_length=1)],
     payload: RoleUpdate,
-) -> RoleRead:
+) -> RoleOut:
     service = WorkspacesService(session=session)
     role = await service.update_workspace_role(
         workspace_id=workspace.workspace_id,

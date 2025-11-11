@@ -964,7 +964,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/RoleRead"
+                    "$ref": "#/components/schemas/RoleOut"
                   },
                   "title": "Response List Global Roles Api V1 Roles Get"
                 }
@@ -1036,7 +1036,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoleRead"
+                  "$ref": "#/components/schemas/RoleOut"
                 }
               }
             }
@@ -1093,7 +1093,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoleRead"
+                  "$ref": "#/components/schemas/RoleOut"
                 }
               }
             }
@@ -1165,7 +1165,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoleRead"
+                  "$ref": "#/components/schemas/RoleOut"
                 }
               }
             }
@@ -1332,7 +1332,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/RoleAssignmentRead"
+                    "$ref": "#/components/schemas/RoleAssignmentOut"
                   },
                   "title": "Response List Global Role Assignments Api V1 Role Assignments Get"
                 }
@@ -1391,7 +1391,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoleAssignmentRead"
+                  "$ref": "#/components/schemas/RoleAssignmentOut"
                 }
               }
             }
@@ -1567,7 +1567,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/RoleAssignmentRead"
+                    "$ref": "#/components/schemas/RoleAssignmentOut"
                   },
                   "title": "Response List Workspace Role Assignments Api V1 Workspaces  Workspace Id  Role Assignments Get"
                 }
@@ -1650,7 +1650,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoleAssignmentRead"
+                  "$ref": "#/components/schemas/RoleAssignmentOut"
                 }
               }
             }
@@ -1809,7 +1809,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/PermissionRead"
+                    "$ref": "#/components/schemas/PermissionOut"
                   },
                   "title": "Response List Permissions Api V1 Permissions Get"
                 }
@@ -2661,7 +2661,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/RoleRead"
+                    "$ref": "#/components/schemas/RoleOut"
                   },
                   "title": "Response List Workspace Roles Api V1 Workspaces  Workspace Id  Roles Get"
                 }
@@ -2756,7 +2756,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoleRead"
+                  "$ref": "#/components/schemas/RoleOut"
                 }
               }
             }
@@ -2881,7 +2881,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoleRead"
+                  "$ref": "#/components/schemas/RoleOut"
                 }
               }
             }
@@ -7737,7 +7737,7 @@
         "title": "PermissionCheckResponse",
         "description": "Result map produced by the batch permission check."
       },
-      "PermissionRead": {
+      "PermissionOut": {
         "properties": {
           "key": {
             "type": "string",
@@ -7773,7 +7773,7 @@
           "label",
           "description"
         ],
-        "title": "PermissionRead",
+        "title": "PermissionOut",
         "description": "Serialized permission registry entry."
       },
       "PrincipalType": {
@@ -7916,7 +7916,7 @@
         "title": "RoleAssignmentCreate",
         "description": "Payload for creating a role assignment."
       },
-      "RoleAssignmentRead": {
+      "RoleAssignmentOut": {
         "properties": {
           "assignment_id": {
             "type": "string",
@@ -8021,7 +8021,7 @@
           "scope_type",
           "created_at"
         ],
-        "title": "RoleAssignmentRead",
+        "title": "RoleAssignmentOut",
         "description": "Serialized representation of a role assignment."
       },
       "RoleCreate": {
@@ -8072,7 +8072,7 @@
         "title": "RoleCreate",
         "description": "Payload for creating a workspace or global role."
       },
-      "RoleRead": {
+      "RoleOut": {
         "properties": {
           "role_id": {
             "type": "string",
@@ -8146,7 +8146,7 @@
           "built_in",
           "editable"
         ],
-        "title": "RoleRead",
+        "title": "RoleOut",
         "description": "Serialized representation of a role definition."
       },
       "RoleUpdate": {

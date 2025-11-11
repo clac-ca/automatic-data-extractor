@@ -45,11 +45,11 @@ from .schemas import (
     EffectivePermissionsResponse,
     PermissionCheckRequest,
     PermissionCheckResponse,
-    PermissionRead,
+    PermissionOut,
     RoleAssignmentCreate,
-    RoleAssignmentRead,
+    RoleAssignmentOut,
     RoleCreate,
-    RoleRead,
+    RoleOut,
     RoleUpdate,
 )
 from .service import (
@@ -81,8 +81,8 @@ from .service import (
 router = APIRouter(tags=["roles"], dependencies=[Security(require_authenticated)])
 
 
-def _serialize_role(role: Role) -> RoleRead:
-    return RoleRead(
+def _serialize_role(role: Role) -> RoleOut:
+    return RoleOut(
         role_id=role.id,
         slug=role.slug,
         name=role.name,
@@ -95,10 +95,10 @@ def _serialize_role(role: Role) -> RoleRead:
     )
 
 
-def _serialize_assignment(assignment: RoleAssignment) -> RoleAssignmentRead:
+def _serialize_assignment(assignment: RoleAssignment) -> RoleAssignmentOut:
     principal = assignment.principal
     user = principal.user if principal is not None else None
-    return RoleAssignmentRead(
+    return RoleAssignmentOut(
         assignment_id=assignment.id,
         principal_id=assignment.principal_id,
         principal_type=principal.principal_type if principal is not None else "user",
@@ -229,7 +229,7 @@ async def require_role_write_access(
 
 @router.get(
     "/roles",
-    response_model=list[RoleRead],
+    response_model=list[RoleOut],
     response_model_exclude_none=True,
     summary="List global role definitions",
     responses={
@@ -252,7 +252,7 @@ async def list_global_roles(
         ),
     ] = ScopeType.GLOBAL,
     _actor: Annotated[User, Security(require_global("Roles.Read.All"))],
-) -> list[RoleRead]:
+) -> list[RoleOut]:
     """Return the catalog of global roles."""
 
     roles = await list_roles(session=session, scope_type=ScopeType.GLOBAL)
@@ -261,7 +261,7 @@ async def list_global_roles(
 
 @router.post(
     "/roles",
-    response_model=RoleRead,
+    response_model=RoleOut,
     response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
     summary="Create a global role",
@@ -293,7 +293,7 @@ async def create_global_role_endpoint(
         ),
     ] = ScopeType.GLOBAL,
     actor: Annotated[User, Security(require_global("Roles.ReadWrite.All"))],
-) -> RoleRead:
+) -> RoleOut:
     """Create a new global role definition."""
 
     try:
@@ -316,7 +316,7 @@ async def create_global_role_endpoint(
 
 @router.get(
     "/roles/{role_id}",
-    response_model=RoleRead,
+    response_model=RoleOut,
     response_model_exclude_none=True,
     summary="Retrieve a role definition",
     responses={
@@ -334,7 +334,7 @@ async def create_global_role_endpoint(
 async def read_role_detail(
     role: Annotated[Role, Security(require_role_read_access)],
     role_id: str = Path(..., min_length=1),
-) -> RoleRead:
+) -> RoleOut:
     """Return a single role definition with permissions."""
 
     return _serialize_role(role)
@@ -342,7 +342,7 @@ async def read_role_detail(
 
 @router.patch(
     "/roles/{role_id}",
-    response_model=RoleRead,
+    response_model=RoleOut,
     response_model_exclude_none=True,
     summary="Update a role",
     dependencies=[Security(require_csrf)],
@@ -373,7 +373,7 @@ async def update_role_definition(
     role_id: Annotated[str, Path(..., min_length=1)],
     *,
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> RoleRead:
+) -> RoleOut:
     """Update the specified role in its scope."""
 
     actor, role = actor_and_role
@@ -486,7 +486,7 @@ async def delete_role_definition(
 
 @router.get(
     "/role-assignments",
-    response_model=list[RoleAssignmentRead],
+    response_model=list[RoleAssignmentOut],
     response_model_exclude_none=True,
     summary="List global role assignments",
     responses={
@@ -505,7 +505,7 @@ async def list_global_role_assignments(
     user_id: Annotated[str | None, Query(min_length=1)] = None,
     role_id: Annotated[str | None, Query(min_length=1)] = None,
     _actor: Annotated[User, Security(require_global("Roles.Read.All"))],
-) -> list[RoleAssignmentRead]:
+) -> list[RoleAssignmentOut]:
     """Return global role assignments filtered by optional identifiers."""
 
     if principal_id and user_id:
@@ -533,7 +533,7 @@ async def list_global_role_assignments(
 
 @router.post(
     "/role-assignments",
-    response_model=RoleAssignmentRead,
+    response_model=RoleAssignmentOut,
     response_model_exclude_none=True,
     status_code=status.HTTP_200_OK,
     summary="Assign a global role to a principal",
@@ -559,7 +559,7 @@ async def create_global_role_assignment(
     *,
     session: Annotated[AsyncSession, Depends(get_session)],
     _actor: Annotated[User, Security(require_global("Roles.ReadWrite.All"))],
-) -> RoleAssignmentRead:
+) -> RoleAssignmentOut:
     """Create or return an existing global role assignment."""
 
     principal_identifier = await _ensure_principal_identifier(
@@ -648,7 +648,7 @@ async def delete_global_role_assignment(
 
 @router.get(
     "/workspaces/{workspace_id}/role-assignments",
-    response_model=list[RoleAssignmentRead],
+    response_model=list[RoleAssignmentOut],
     response_model_exclude_none=True,
     summary="List workspace role assignments",
     responses={
@@ -677,7 +677,7 @@ async def list_workspace_role_assignments(
             scopes=["{workspace_id}"],
         ),
     ],
-) -> list[RoleAssignmentRead]:
+) -> list[RoleAssignmentOut]:
     """Return workspace role assignments filtered by optional identifiers."""
 
     if principal_id and user_id:
@@ -705,7 +705,7 @@ async def list_workspace_role_assignments(
 
 @router.post(
     "/workspaces/{workspace_id}/role-assignments",
-    response_model=RoleAssignmentRead,
+    response_model=RoleAssignmentOut,
     response_model_exclude_none=True,
     status_code=status.HTTP_200_OK,
     summary="Assign a workspace role to a principal",
@@ -738,7 +738,7 @@ async def create_workspace_role_assignment(
             scopes=["{workspace_id}"],
         ),
     ],
-) -> RoleAssignmentRead:
+) -> RoleAssignmentOut:
     """Create or return an existing workspace role assignment."""
 
     principal_identifier = await _ensure_principal_identifier(
@@ -834,7 +834,7 @@ async def delete_workspace_role_assignment(
 
 @router.get(
     "/permissions",
-    response_model=list[PermissionRead],
+    response_model=list[PermissionOut],
     summary="List permission catalog entries",
     responses={
         status.HTTP_401_UNAUTHORIZED: {
@@ -872,7 +872,7 @@ async def list_permissions(
             scopes=["{workspace_id}"],
         ),
     ],
-) -> list[PermissionRead]:
+) -> list[PermissionOut]:
     """Return permission registry entries filtered by ``scope``."""
 
     if scope == ScopeType.WORKSPACE and workspace_id is not None:
@@ -886,7 +886,7 @@ async def list_permissions(
     )
     result = await session.execute(stmt)
     permissions = result.scalars().all()
-    return [PermissionRead.model_validate(permission) for permission in permissions]
+    return [PermissionOut.model_validate(permission) for permission in permissions]
 
 
 @router.get(

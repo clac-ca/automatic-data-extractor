@@ -12,7 +12,7 @@ from apps.api.app.shared.core.schema import BaseSchema
 from .models import PrincipalType, ScopeType
 
 
-class PermissionRead(BaseSchema):
+class PermissionOut(BaseSchema):
     """Serialized permission registry entry."""
 
     key: str
@@ -40,7 +40,7 @@ class RoleUpdate(BaseSchema):
     permissions: list[str] = Field(default_factory=list)
 
 
-class RoleRead(BaseSchema):
+class RoleOut(BaseSchema):
     """Serialized representation of a role definition."""
 
     role_id: ULIDStr = Field(serialization_alias="role_id", validation_alias="id")
@@ -70,7 +70,7 @@ class RoleAssignmentCreate(BaseSchema):
         return self
 
 
-class RoleAssignmentRead(BaseSchema):
+class RoleAssignmentOut(BaseSchema):
     """Serialized representation of a role assignment."""
 
     assignment_id: ULIDStr = Field(
@@ -113,10 +113,10 @@ __all__ = [
     "EffectivePermissionsResponse",
     "PermissionCheckRequest",
     "PermissionCheckResponse",
-    "PermissionRead",
+    "PermissionOut",
     "RoleAssignmentCreate",
-    "RoleAssignmentRead",
+    "RoleAssignmentOut",
     "RoleCreate",
-    "RoleRead",
+    "RoleOut",
     "RoleUpdate",
 ]
