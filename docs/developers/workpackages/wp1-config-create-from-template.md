@@ -1,53 +1,144 @@
-# WP1 — Config Metadata & Create-from-Template / Clone
+# WP‑1 — Create Config (copy → draft) + Validate (digest + checks)
 
-## Goal
-Persist configuration metadata per workspace and allow the API to create new **draft** configs by copying either a bundled template or another config folder.
+## What we’re doing (in one paragraph)
 
-## Scope
-* Introduce a `configurations` table keyed by `(workspace_id, config_id)` with lifecycle metadata.
-* Implement `POST /api/v1/workspaces/{workspace_id}/configurations` with a discriminated `source` object.
-* Wire up filesystem copy → validate → promote (atomic rename) → insert DB row.
+A config package is a folder the engine imports (`ade_config`). To create one, we **copy** an existing folder—either a backend‑embedded **template** or a **clone** of another config by its **ULID**—into the workspace, validate its minimal shape, and publish it as a **draft** by an **atomic rename**. Drafts are editable via file endpoints (later work). **Validate** recomputes a deterministic **content digest** and returns issues; for WP‑1 every **build** simply re-runs validate first instead of relying on stored metadata. **Activate** locks the config and enforces “one active per workspace” (later WP).
 
-## Database
-Create table `configurations` with:
-* `workspace_id TEXT`, `config_id TEXT` (composite primary key)
-* `display_name TEXT`
-* `status TEXT CHECK IN ('draft','active','inactive') DEFAULT 'draft'`
-* `config_version INTEGER NOT NULL DEFAULT 0`
-* `content_digest TEXT NULL`
-* `created_at TEXT`, `updated_at TEXT`, `activated_at TEXT NULL`
-* `last_editor TEXT NULL`
-* Index on `(workspace_id, status)` for quick filters
-* Defer the “one active per workspace” unique index to WP3
+---
+
+## Identities & locations
+
+* **ID**: `config_id` is a **ULID** assigned by the server at creation.
+* **Templates (read‑only)**: `apps/api/app/templates/config_packages/<template_id>/`
+* **Destination**: `${ADE_CONFIGS_DIR}/{workspace_id}/config_packages/{config_id}/`
+
+---
+
+## States
+
+* **draft** — editable; can **validate** and later **build**; file changes happen via file APIs (WP‑2).
+* **active** — selected for the workspace; read‑only.
+* **inactive** — not selected; read‑only.
+  (Activate/inactivate come later.)
+
+---
+
+## Data model (enough for create + validate, future-proof for later)
+
+```sql
+TABLE configurations (
+  workspace_id    TEXT NOT NULL,
+  config_id       TEXT NOT NULL,              -- ULID (server-assigned)
+  display_name    TEXT NOT NULL,
+
+  status          TEXT NOT NULL DEFAULT 'draft',  -- draft | active | inactive
+  config_version  INTEGER NOT NULL DEFAULT 0,     -- bumps on activate (later)
+
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  activated_at    TEXT NULL,                      -- set on activate (later)
+
+  PRIMARY KEY (workspace_id, config_id)
+);
+CREATE INDEX IF NOT EXISTS idx_cfg_ws_status ON configurations(workspace_id, status);
+```
+
+> Activation will later add `CREATE UNIQUE INDEX idx_cfg_ws_active ON configurations(workspace_id) WHERE status = 'active'` to enforce “one active per workspace” without revisiting the schema added here. We deliberately keep the table minimal for WP‑1 because validation does not persist digests or timestamps yet; later work can introduce those columns when the flow needs them.
+
+**Digest rule (used by validate and later by build checks):**
+
+* Walk the **logical code set** (include/exclude rules below) in **sorted relative-path order**.
+* Hash `relative_path + 0x00 + file_bytes` for each file, then SHA-256 of the concatenation → `content_digest`.
+
+---
+
+## Minimal shape of a valid config folder
+
+* **Required files**: `manifest.json`, `pyproject.toml`.  We will enforce richer structure in later work packages.
+* **Digest include set**: during validate we only hash files under the config folder whose extension is `.py`, `.toml`, or `.json`. Everything else is ignored for WP‑1 to keep hashing fast and deterministic.
+
+---
 
 ## API
+
+### Create (copy → draft)
+
+The server **generates** the ULID `config_id` and returns it. Creation is a **copy**: resolve source → copy to staging with filters → validate minimal shape → atomic rename → insert draft row. There is no background validation; clients run `validate` whenever they want the latest feedback.
+
+```http
+POST /api/v1/workspaces/{workspace_id}/configurations
+Content-Type: application/json
 ```
-POST /api/v1/workspaces/{workspace}/configurations
-Body {
-  "config_id": "membership-v2",
+
+**From template**
+
+```json
+{
   "display_name": "Membership v2",
-  "source": {
-    "type": "template" | "existing",
-    "template_id"?: "default",
-    "config_id"?: "membership"
-  }
+  "source": { "type": "template", "template_id": "default" }
 }
 ```
 
-Responses:
-* `201 Created` → row metadata with `status="draft"` and `config_version=0`
-* `409 Conflict` → `(workspace_id, config_id)` already exists
-* `404`/`422` → bad source references
+**Clone (by ULID within same workspace)**
 
-## Key Behaviors
-* **Templates** come from `apps/api/app/templates/config_packages/{template_id}/`.
-* **Existing** clones source the workspace config folder at `${ADE_CONFIGS_DIR}/{workspace}/config_packages/{config_id}/`.
-* Copy filters: skip `.git/`, `__pycache__/`, `*.pyc`, `.DS_Store`, `.venv/`, `node_modules/`, IDE/build artifacts; reject symlinks.
-* Validation requires `src/ade_config/` plus a parseable `manifest.json`; warn (not fail) if `pyproject.toml` is missing.
-* Copy into `…/.creating-<ulid>` then atomically rename to the final path after validation succeeds.
+```json
+{
+  "display_name": "Membership (Copy)",
+  "source": { "type": "clone", "config_id": "01JC0M4G4K5W7QK1YW7W2W1Q7C" }
+}
+```
+
+Cloning is scoped to the same workspace: the API resolves `{workspace_id, config_id}` and copies from that path.
+
+**201 Created**
+
+```json
+{
+  "workspace_id": "ws_123",
+  "config_id": "01JC0M8YH1Y7A6RNK3Q3JK22QX",
+  "display_name": "Membership v2",
+  "status": "draft",
+  "config_version": 0,
+  "created_at": "2025-11-10T14:20:31Z",
+  "updated_at": "2025-11-10T14:20:31Z"
+}
+```
+
+Errors: `404 source_not_found`, `422 invalid_source_shape`, `409 publish_conflict` (rare race on rename).
+
+---
+
+### Validate (compute digest + fast checks)
+
+Validate is allowed **only for drafts**. It walks the canonical include set, recomputes the digest, performs shape checks, and returns the issues. WP‑1 purposely keeps this stateless: the API does not persist the digest or timestamps. Any workflow that needs a clean tree (e.g., `build`) simply calls `validate` immediately beforehand and fails fast if issues exist.
+
+```http
+POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/validate
+```
+
+**200 OK**
+
+```json
+{
+  "workspace_id": "ws_123",
+  "config_id": "01JC0M8YH1Y7A6RNK3Q3JK22QX",
+  "status": "draft",
+  "content_digest": "sha256:ab12cd34…",
+  "issues": []
+}
+```
+
+If issues are found (e.g., malformed `manifest.json`), return them in `issues` and omit `content_digest` from the payload. Build callers are expected to stop when issues are present and try again after fixes. A future WP can persist results or add status fields when the workflow needs historical data.
+
+Error: `409 config_not_editable` if state ≠ `draft`.
+
+---
 
 ## Acceptance
-* Drafts can be created from both templates and existing configs.
-* Duplicate IDs yield `409`.
-* Validation failures never leave partial folders at the final path.
-* Final tree contains a ready-to-edit config with readable manifest + package layout.
+
+* Create from **template** or **clone** produces a draft folder and row.
+* Validate recomputes the digest (limited to `.py/.toml/.json` files), reports issues, and does not persist anything; any caller that needs guarantees re-runs it ad hoc.
+* Drafts remain editable; whenever files change, rerun validate to confirm a clean state.
+* Activation and build are separate steps; each begins by invoking validate and only proceeds when the response contains `issues: []`.
+
+This keeps the flow intuitive: **copy → draft**, edit files freely, **validate** until clean, **build** as needed, then **activate** when ready.
