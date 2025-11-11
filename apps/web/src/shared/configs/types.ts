@@ -6,6 +6,7 @@ export type ConfigScriptSummary = components["schemas"]["ConfigScriptSummary"];
 export type ConfigScriptContent = components["schemas"]["ConfigScriptContent"];
 export type ConfigVersionValidateResponse = components["schemas"]["ConfigVersionValidateResponse"];
 export type ConfigVersionTestResponse = components["schemas"]["ConfigVersionTestResponse"];
+export type ConfigurationValidateResponse = components["schemas"]["ConfigurationValidateResponse"];
 export type ManifestResponse = components["schemas"]["ManifestResponse"];
 export type ManifestPatchRequest = components["schemas"]["ManifestPatchRequest"];
 

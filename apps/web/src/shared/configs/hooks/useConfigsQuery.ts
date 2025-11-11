@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { listConfigs } from "../api";
+import { listConfigs, readConfiguration } from "../api";
 import { configsKeys } from "../keys";
 import type { ConfigRecord } from "../types";
 
@@ -25,4 +25,24 @@ export function useInvalidateConfigs(workspaceId: string) {
   return () => {
     queryClient.invalidateQueries({ queryKey: configsKeys.root(workspaceId) });
   };
+}
+
+interface UseConfigQueryOptions {
+  readonly workspaceId: string;
+  readonly configId?: string;
+  readonly enabled?: boolean;
+}
+
+export function useConfigQuery({ workspaceId, configId, enabled = true }: UseConfigQueryOptions) {
+  return useQuery<ConfigRecord | null>({
+    queryKey: configsKeys.detail(workspaceId, configId ?? ""),
+    queryFn: ({ signal }) => {
+      if (!configId) {
+        return Promise.resolve(null);
+      }
+      return readConfiguration(workspaceId, configId, signal);
+    },
+    enabled: enabled && workspaceId.length > 0 && Boolean(configId),
+    staleTime: 10_000,
+  });
 }
