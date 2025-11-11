@@ -47,6 +47,7 @@ class VirtualEnvironmentBuilder:
         pip_cache_dir: Path | None,
         python_bin: str | None,
         timeout: float,
+        stream_output: bool = False,
     ) -> BuildArtifacts:
         """Create a virtual environment at ``target_path`` and install packages."""
 
@@ -57,6 +58,7 @@ class VirtualEnvironmentBuilder:
             await self._run(
                 [interpreter, "-m", "venv", str(target_path)],
                 timeout=timeout,
+                stream=stream_output,
             )
             venv_python = self._venv_python(target_path)
             await self._run(
@@ -72,6 +74,7 @@ class VirtualEnvironmentBuilder:
                 ],
                 timeout=timeout,
                 env=self._build_env(pip_cache_dir),
+                stream=stream_output,
             )
             await self._run(
                 [
@@ -85,6 +88,7 @@ class VirtualEnvironmentBuilder:
                 ],
                 timeout=timeout,
                 env=self._build_env(pip_cache_dir),
+                stream=stream_output,
             )
             await self._run(
                 [
@@ -98,12 +102,14 @@ class VirtualEnvironmentBuilder:
                 ],
                 timeout=timeout,
                 env=self._build_env(pip_cache_dir),
+                stream=stream_output,
             )
 
             await self._run(
                 [str(venv_python), "-I", "-B", "-c", "import ade_engine, ade_config"],
                 timeout=timeout,
                 env=self._build_env(pip_cache_dir),
+                stream=stream_output,
             )
 
             python_version = (
@@ -173,6 +179,7 @@ class VirtualEnvironmentBuilder:
         *,
         timeout: float,
         env: Mapping[str, str] | None = None,
+        stream: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         def _call() -> subprocess.CompletedProcess[str]:
             env_vars = os.environ.copy()
@@ -182,7 +189,7 @@ class VirtualEnvironmentBuilder:
                 command,
                 check=True,
                 text=True,
-                capture_output=True,
+                capture_output=not stream,
                 env=env_vars,
                 timeout=timeout,
             )
