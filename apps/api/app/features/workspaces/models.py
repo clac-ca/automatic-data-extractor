@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy import JSON, Boolean, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.ext.mutable import MutableDict
 
 from apps.api.app.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
 
@@ -20,7 +21,11 @@ class Workspace(ULIDPrimaryKeyMixin, TimestampMixin, Base):
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
-    settings: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    settings: Mapped[dict[str, Any]] = mapped_column(
+        MutableDict.as_mutable(JSON),
+        nullable=False,
+        default=dict,
+    )
     memberships: Mapped[list[WorkspaceMembership]] = relationship(
         "WorkspaceMembership",
         back_populates="workspace",

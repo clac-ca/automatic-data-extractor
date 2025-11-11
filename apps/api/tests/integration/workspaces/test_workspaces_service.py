@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.roles.models import Role
-from apps.api.app.features.workspaces.models import WorkspaceMembership
+from apps.api.app.features.workspaces.models import Workspace, WorkspaceMembership
 from apps.api.app.features.workspaces.schemas import WorkspaceMemberRolesUpdate
 from apps.api.app.features.workspaces.service import WorkspacesService
 
@@ -121,3 +121,19 @@ async def test_assign_member_roles_allows_replacing_when_other_governor(
             refreshed_owner, summary=summary
         )
         assert member_view.roles == ["workspace-member"]
+
+
+async def test_workspace_settings_mutation_persists(seed_identity: dict[str, object]) -> None:
+    session_factory = get_sessionmaker()
+    async with session_factory() as session:
+        workspace_id = seed_identity["workspace_id"]
+        workspace = await session.get(Workspace, workspace_id)
+        assert workspace is not None
+
+        workspace.settings["notifications"] = {"email": True}
+        await session.flush()
+        await session.expire(workspace)
+
+        reloaded = await session.get(Workspace, workspace_id)
+        assert reloaded is not None
+        assert reloaded.settings["notifications"]["email"] is True

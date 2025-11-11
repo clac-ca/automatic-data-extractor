@@ -22,6 +22,7 @@ from fastapi import (
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from apps.api.app.shared.core.schema import ErrorMessage
+from apps.api.app.shared.pagination import PageParams, paginate_sequence
 from apps.api.app.shared.dependency import (
     get_configs_service,
     require_authenticated,
@@ -43,6 +44,7 @@ from .exceptions import (
 from .schemas import (
     ConfigurationActivateRequest,
     ConfigurationCreate,
+    ConfigurationPage,
     ConfigurationRecord,
     ConfigurationValidateResponse,
     FileListing,
@@ -138,7 +140,7 @@ def _parse_range_header(header_value: str, total_size: int) -> tuple[int, int]:
 
 @router.get(
     "/configurations",
-    response_model=list[ConfigurationRecord],
+    response_model=ConfigurationPage,
     response_model_exclude_none=True,
     summary="List configurations for a workspace",
     responses={
@@ -149,6 +151,7 @@ def _parse_range_header(header_value: str, total_size: int) -> tuple[int, int]:
 async def list_configurations(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
     service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    page: Annotated[PageParams, Depends()],
     _actor: Annotated[
         User,
         Security(
@@ -156,9 +159,16 @@ async def list_configurations(
             scopes=["{workspace_id}"],
         ),
     ],
-) -> list[ConfigurationRecord]:
+) -> ConfigurationPage:
     records = await service.list_configurations(workspace_id=workspace_id)
-    return [ConfigurationRecord.model_validate(record) for record in records]
+    items = [ConfigurationRecord.model_validate(record) for record in records]
+    page_result = paginate_sequence(
+        items,
+        page=page.page,
+        page_size=page.page_size,
+        include_total=page.include_total,
+    )
+    return ConfigurationPage(**page_result.model_dump())
 
 
 @router.get(
