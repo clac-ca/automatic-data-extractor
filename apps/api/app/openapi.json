@@ -4328,6 +4328,127 @@
               "title": "Config Id"
             },
             "description": "Configuration identifier"
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Prefix"
+            }
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "0",
+                "1",
+                "infinity"
+              ],
+              "type": "string",
+              "default": "infinity",
+              "title": "Depth"
+            }
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include"
+            }
+          },
+          {
+            "name": "exclude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exclude"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 1000,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page Token"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "path",
+                "name",
+                "mtime",
+                "size"
+              ],
+              "type": "string",
+              "default": "path",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string",
+              "default": "asc",
+              "title": "Order"
+            }
           }
         ],
         "responses": {
@@ -4336,42 +4457,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response List Config Files Api V1 Workspaces  Workspace Id  Configurations  Config Id  Files Get"
+                  "$ref": "#/components/schemas/FileListing"
                 }
               }
             }
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorMessage"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorMessage"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorMessage"
-                }
-              }
-            },
-            "description": "Not Found"
           },
           "422": {
             "description": "Validation Error",
@@ -4591,6 +4680,12 @@
               "application/octet-stream": {}
             }
           },
+          "206": {
+            "content": {
+              "application/octet-stream": {}
+            },
+            "description": "Partial Content"
+          },
           "401": {
             "content": {
               "application/json": {
@@ -4623,6 +4718,88 @@
           },
           "304": {
             "description": "Not Modified"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "configs"
+        ],
+        "summary": "Head Config File",
+        "operationId": "head_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__head",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "config_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Configuration identifier",
+              "title": "Config Id"
+            },
+            "description": "Configuration identifier"
+          },
+          {
+            "name": "file_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -4712,82 +4889,21 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/FileWriteResponse"
+                }
               }
             }
           },
           "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileWriteResponse"
+                }
+              }
+            },
             "description": "Created"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorMessage"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorMessage"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorMessage"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorMessage"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "412": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorMessage"
-                }
-              }
-            },
-            "description": "Precondition Failed"
-          },
-          "428": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorMessage"
-                }
-              }
-            },
-            "description": "Precondition Required"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorMessage"
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
           },
           "422": {
             "description": "Validation Error",
@@ -4925,6 +5041,100 @@
               }
             },
             "description": "Precondition Required"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "configs"
+        ],
+        "summary": "Rename or move a file",
+        "operationId": "rename_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "config_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Configuration identifier",
+              "title": "Config Id"
+            },
+            "description": "Configuration identifier"
+          },
+          {
+            "name": "file_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Path"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileRenameRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileRenameResponse"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -6934,6 +7144,356 @@
         ],
         "title": "ErrorMessage",
         "description": "Standard error envelope mirroring FastAPI's ``{\"detail\": ...}`` payload."
+      },
+      "FileCapabilities": {
+        "properties": {
+          "editable": {
+            "type": "boolean",
+            "title": "Editable"
+          },
+          "can_create": {
+            "type": "boolean",
+            "title": "Can Create"
+          },
+          "can_delete": {
+            "type": "boolean",
+            "title": "Can Delete"
+          },
+          "can_rename": {
+            "type": "boolean",
+            "title": "Can Rename"
+          }
+        },
+        "type": "object",
+        "required": [
+          "editable",
+          "can_create",
+          "can_delete",
+          "can_rename"
+        ],
+        "title": "FileCapabilities"
+      },
+      "FileEntry": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "parent": {
+            "type": "string",
+            "title": "Parent"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "file",
+              "dir"
+            ],
+            "title": "Kind"
+          },
+          "depth": {
+            "type": "integer",
+            "title": "Depth"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "mtime": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mtime"
+          },
+          "etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Etag"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "has_children": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "name",
+          "parent",
+          "kind",
+          "depth"
+        ],
+        "title": "FileEntry"
+      },
+      "FileListing": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "config_id": {
+            "type": "string",
+            "title": "Config Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/FileCapabilities"
+          },
+          "root": {
+            "type": "string",
+            "title": "Root"
+          },
+          "prefix": {
+            "type": "string",
+            "title": "Prefix"
+          },
+          "depth": {
+            "type": "string",
+            "enum": [
+              "0",
+              "1",
+              "infinity"
+            ],
+            "title": "Depth"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "fileset_hash": {
+            "type": "string",
+            "title": "Fileset Hash"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/FileListingSummary"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/FileSizeLimits"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "next_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Token"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/FileEntry"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "config_id",
+          "status",
+          "capabilities",
+          "root",
+          "prefix",
+          "depth",
+          "generated_at",
+          "fileset_hash",
+          "summary",
+          "limits",
+          "count",
+          "entries"
+        ],
+        "title": "FileListing"
+      },
+      "FileListingSummary": {
+        "properties": {
+          "files": {
+            "type": "integer",
+            "title": "Files"
+          },
+          "directories": {
+            "type": "integer",
+            "title": "Directories"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files",
+          "directories"
+        ],
+        "title": "FileListingSummary"
+      },
+      "FileRenameRequest": {
+        "properties": {
+          "op": {
+            "type": "string",
+            "const": "move",
+            "title": "Op",
+            "default": "move"
+          },
+          "to": {
+            "type": "string",
+            "title": "To"
+          },
+          "overwrite": {
+            "type": "boolean",
+            "title": "Overwrite",
+            "default": false
+          },
+          "dest_if_match": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dest If Match"
+          }
+        },
+        "type": "object",
+        "required": [
+          "to"
+        ],
+        "title": "FileRenameRequest"
+      },
+      "FileRenameResponse": {
+        "properties": {
+          "from": {
+            "type": "string",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "title": "To"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "mtime": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Mtime"
+          },
+          "etag": {
+            "type": "string",
+            "title": "Etag"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "size",
+          "mtime",
+          "etag"
+        ],
+        "title": "FileRenameResponse"
+      },
+      "FileSizeLimits": {
+        "properties": {
+          "code_max_bytes": {
+            "type": "integer",
+            "title": "Code Max Bytes"
+          },
+          "asset_max_bytes": {
+            "type": "integer",
+            "title": "Asset Max Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code_max_bytes",
+          "asset_max_bytes"
+        ],
+        "title": "FileSizeLimits"
+      },
+      "FileWriteResponse": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "mtime": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Mtime"
+          },
+          "etag": {
+            "type": "string",
+            "title": "Etag"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "created",
+          "size",
+          "mtime",
+          "etag"
+        ],
+        "title": "FileWriteResponse"
       },
       "HTTPValidationError": {
         "properties": {

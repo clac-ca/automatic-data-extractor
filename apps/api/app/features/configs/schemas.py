@@ -91,6 +91,88 @@ class ConfigurationActivateRequest(BaseModel):
     ensure_build: bool = False
 
 
+class FileCapabilities(BaseModel):
+    editable: bool
+    can_create: bool
+    can_delete: bool
+    can_rename: bool
+
+
+class FileSizeLimits(BaseModel):
+    code_max_bytes: int
+    asset_max_bytes: int
+
+
+class FileListingSummary(BaseModel):
+    files: int
+    directories: int
+
+
+class FileEntry(BaseModel):
+    path: str
+    name: str
+    parent: str
+    kind: Literal["file", "dir"]
+    depth: int
+    size: int | None = None
+    mtime: datetime | None = None
+    etag: str | None = None
+    content_type: str | None = None
+    has_children: bool | None = None
+
+
+class FileListing(BaseModel):
+    workspace_id: str
+    config_id: str
+    status: str
+    capabilities: FileCapabilities
+    root: str
+    prefix: str
+    depth: Literal["0", "1", "infinity"]
+    generated_at: datetime
+    fileset_hash: str
+    summary: FileListingSummary
+    limits: FileSizeLimits
+    count: int
+    next_token: str | None = None
+    entries: list[FileEntry]
+
+
+class FileReadJson(BaseModel):
+    path: str
+    encoding: Literal["utf-8", "base64"]
+    content: str
+    size: int
+    mtime: datetime
+    etag: str
+    content_type: str
+
+
+class FileWriteResponse(BaseModel):
+    path: str
+    created: bool
+    size: int
+    mtime: datetime
+    etag: str
+
+
+class FileRenameRequest(BaseModel):
+    op: Literal["move"] = "move"
+    to: str
+    overwrite: bool = False
+    dest_if_match: str | None = None
+
+
+class FileRenameResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    src: str = Field(alias="from")
+    dest: str = Field(alias="to")
+    size: int
+    mtime: datetime
+    etag: str
+
+
 __all__ = [
     "ConfigSource",
     "ConfigSourceClone",
@@ -100,4 +182,13 @@ __all__ = [
     "ConfigurationActivateRequest",
     "ConfigurationRecord",
     "ConfigurationValidateResponse",
+    "FileCapabilities",
+    "FileSizeLimits",
+    "FileListingSummary",
+    "FileEntry",
+    "FileListing",
+    "FileReadJson",
+    "FileWriteResponse",
+    "FileRenameRequest",
+    "FileRenameResponse",
 ]
