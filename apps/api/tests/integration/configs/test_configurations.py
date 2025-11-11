@@ -471,7 +471,8 @@ async def test_list_and_read_configurations(
         headers=headers,
     )
     assert list_response.status_code == 200, list_response.text
-    items = list_response.json()
+    payload = list_response.json()
+    items = payload["items"]
     assert any(item["config_id"] == record["config_id"] for item in items)
 
     detail_response = await async_client.get(

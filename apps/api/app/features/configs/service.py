@@ -656,7 +656,7 @@ def _build_file_index(config_path: Path) -> dict:
             "depth": _compute_depth_value(path_str),
             "size": None,
             "mtime": _format_mtime(stat.st_mtime),
-            "etag": None,
+            "etag": "",
             "content_type": "inode/directory",
             "has_children": False,
         }

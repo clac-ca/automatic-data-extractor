@@ -9,6 +9,7 @@ from pydantic import Field, field_validator
 
 from apps.api.app.shared.core.ids import ULIDStr
 from apps.api.app.shared.core.schema import BaseSchema
+from apps.api.app.shared.pagination import Page
 from .models import ConfigurationStatus
 
 
@@ -75,6 +76,10 @@ class ConfigValidationIssue(BaseSchema):
     message: str
 
 
+class ConfigurationPage(Page[ConfigurationRecord]):
+    """Paginated configuration listing."""
+
+
 class ConfigurationValidateResponse(BaseSchema):
     """Result of running validation."""
 
@@ -115,10 +120,10 @@ class FileEntry(BaseSchema):
     kind: Literal["file", "dir"]
     depth: int
     size: int | None = None
-    mtime: datetime | None = None
-    etag: str | None = None
-    content_type: str | None = None
-    has_children: bool | None = None
+    mtime: datetime
+    etag: str
+    content_type: str
+    has_children: bool
 
 
 class FileListing(BaseSchema):
@@ -164,8 +169,8 @@ class FileRenameRequest(BaseSchema):
 
 
 class FileRenameResponse(BaseSchema):
-    src: str = Field(alias="from")
-    dest: str = Field(alias="to")
+    from_path: str = Field(alias="from")
+    to_path: str = Field(alias="to")
     size: int
     mtime: datetime
     etag: str
@@ -176,6 +181,7 @@ __all__ = [
     "ConfigSourceClone",
     "ConfigSourceTemplate",
     "ConfigValidationIssue",
+    "ConfigurationPage",
     "ConfigurationCreate",
     "ConfigurationActivateRequest",
     "ConfigurationRecord",
