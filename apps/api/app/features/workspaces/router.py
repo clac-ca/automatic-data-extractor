@@ -6,7 +6,6 @@ from fastapi import APIRouter, Body, Depends, Path, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.shared.core.responses import DefaultResponse
-from apps.api.app.shared.core.errors import ProblemDetail
 from apps.api.app.shared.db.session import get_session
 from apps.api.app.shared.pagination import PageParams, paginate_sequence
 from apps.api.app.shared.dependency import (
@@ -44,16 +43,21 @@ WORKSPACE_MEMBER_UPDATE_BODY = Body(...)
 
 def _serialize_role(role: Role) -> RoleOut:
     return RoleOut(
-        role_id=role.id,
+        id=role.id,
         slug=role.slug,
         name=role.name,
         description=role.description,
         scope_type=role.scope_type,
         scope_id=role.scope_id,
-        permissions=[permission.permission_key for permission in role.permissions],
+        permissions=[
+            permission.permission.key
+            for permission in role.permissions
+            if permission.permission is not None
+        ],
         built_in=role.built_in,
         editable=role.editable,
     )
+
 
 @router.post(
     "/workspaces",
@@ -65,23 +69,18 @@ def _serialize_role(role: Role) -> RoleOut:
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage workspaces.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Administrator role required to create workspaces.",
-            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Specified owner could not be found or is inactive.",
-            "model": ProblemDetail,
         },
         status.HTTP_409_CONFLICT: {
             "description": "Workspace slug already exists.",
-            "model": ProblemDetail,
         },
         status.HTTP_422_UNPROCESSABLE_ENTITY: {
             "description": "Workspace name or slug is invalid.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -113,11 +112,9 @@ async def create_workspace(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to list workspaces.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Service account credentials cannot access workspace listings.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -146,15 +143,12 @@ async def list_workspaces(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to view workspace context.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace access denied for the authenticated user.",
-            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Workspace not found.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -180,11 +174,9 @@ async def read_workspace(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to list workspace members.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow member access.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -202,7 +194,7 @@ async def list_members(
 ) -> WorkspaceMemberPage:
     service = WorkspacesService(session=session)
     memberships = await service.list_members(
-        workspace_id=workspace.workspace_id
+        workspace_id=workspace.id
     )
     page_result = paginate_sequence(
         memberships,
@@ -221,11 +213,9 @@ async def list_members(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to list workspace roles.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow viewing role definitions.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -244,7 +234,7 @@ async def list_workspace_roles(
     role_page = await paginate_roles(
         session=session,
         scope_type=ScopeType.WORKSPACE,
-        scope_id=workspace.workspace_id,
+        scope_id=workspace.id,
         page=page.page,
         page_size=page.page_size,
         include_total=page.include_total,
@@ -268,23 +258,18 @@ async def list_workspace_roles(
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "description": "System roles cannot be managed via this endpoint.",
-            "model": ProblemDetail,
         },
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage workspace roles.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow managing roles.",
-            "model": ProblemDetail,
         },
         status.HTTP_409_CONFLICT: {
             "description": "Role slug already exists or conflicts with a system role.",
-            "model": ProblemDetail,
         },
         status.HTTP_422_UNPROCESSABLE_ENTITY: {
             "description": "Invalid role name, slug, or permissions.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -302,7 +287,7 @@ async def create_workspace_role(
 ) -> RoleOut:
     service = WorkspacesService(session=session)
     role = await service.create_workspace_role(
-        workspace_id=workspace.workspace_id,
+        workspace_id=workspace.id,
         payload=payload,
         actor=actor,
     )
@@ -318,27 +303,21 @@ async def create_workspace_role(
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "description": "System roles cannot be modified.",
-            "model": ProblemDetail,
         },
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage workspace roles.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow managing roles.",
-            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Role not found for this workspace.",
-            "model": ProblemDetail,
         },
         status.HTTP_409_CONFLICT: {
             "description": "Operation would violate governor guardrails.",
-            "model": ProblemDetail,
         },
         status.HTTP_422_UNPROCESSABLE_ENTITY: {
             "description": "Invalid role payload.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -357,7 +336,7 @@ async def update_workspace_role(
 ) -> RoleOut:
     service = WorkspacesService(session=session)
     role = await service.update_workspace_role(
-        workspace_id=workspace.workspace_id,
+        workspace_id=workspace.id,
         role_id=role_id,
         payload=payload,
         actor=actor,
@@ -373,23 +352,18 @@ async def update_workspace_role(
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "description": "System roles cannot be deleted.",
-            "model": ProblemDetail,
         },
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage workspace roles.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow managing roles.",
-            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Role not found for this workspace.",
-            "model": ProblemDetail,
         },
         status.HTTP_409_CONFLICT: {
             "description": "Role is assigned or would violate governor guardrails.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -407,7 +381,7 @@ async def delete_workspace_role(
 ) -> None:
     service = WorkspacesService(session=session)
     await service.delete_workspace_role(
-        workspace_id=workspace.workspace_id, role_id=role_id
+        workspace_id=workspace.id, role_id=role_id
     )
 
 
@@ -421,19 +395,15 @@ async def delete_workspace_role(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage workspace members.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow member management.",
-            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Workspace or user not found.",
-            "model": ProblemDetail,
         },
         status.HTTP_409_CONFLICT: {
             "description": "User is already a member of the workspace.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -452,7 +422,7 @@ async def add_member(
 ) -> WorkspaceMemberOut:
     service = WorkspacesService(session=session)
     membership = await service.add_member(
-        workspace_id=workspace.workspace_id,
+        workspace_id=workspace.id,
         user_id=payload.user_id,
         role_ids=payload.role_ids or [],
     )
@@ -469,23 +439,18 @@ async def add_member(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to update workspaces.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow settings management.",
-            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Workspace not found.",
-            "model": ProblemDetail,
         },
         status.HTTP_409_CONFLICT: {
             "description": "Workspace slug already exists.",
-            "model": ProblemDetail,
         },
         status.HTTP_422_UNPROCESSABLE_ENTITY: {
             "description": "Workspace name or slug is invalid.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -505,7 +470,7 @@ async def update_workspace(
     service = WorkspacesService(session=session)
     workspace = await service.update_workspace(
         user=actor,
-        workspace_id=workspace.workspace_id,
+        workspace_id=workspace.id,
         name=payload.name,
         slug=payload.slug,
         settings=payload.settings,
@@ -522,15 +487,12 @@ async def update_workspace(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to delete workspaces.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow workspace deletion.",
-            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Workspace not found.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -546,7 +508,7 @@ async def delete_workspace(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> DefaultResponse:
     service = WorkspacesService(session=session)
-    await service.delete_workspace(workspace_id=workspace.workspace_id)
+    await service.delete_workspace(workspace_id=workspace.id)
     return DefaultResponse.success("Workspace deleted")
 
 
@@ -560,19 +522,15 @@ async def delete_workspace(
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "description": "Workspace must retain at least one owner.",
-            "model": ProblemDetail,
         },
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage workspace members.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow member management.",
-            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Membership not found within the workspace.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -592,7 +550,7 @@ async def update_member(
 ) -> WorkspaceMemberOut:
     service = WorkspacesService(session=session)
     membership = await service.assign_member_roles(
-        workspace_id=workspace.workspace_id,
+        workspace_id=workspace.id,
         membership_id=membership_id,
         payload=payload,
     )
@@ -608,19 +566,15 @@ async def update_member(
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "description": "Workspace must retain at least one owner.",
-            "model": ProblemDetail,
         },
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage workspace members.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow member management.",
-            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Membership not found within the workspace.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -638,7 +592,7 @@ async def remove_member(
 ) -> DefaultResponse:
     service = WorkspacesService(session=session)
     await service.remove_member(
-        workspace_id=workspace.workspace_id, membership_id=membership_id
+        workspace_id=workspace.id, membership_id=membership_id
     )
     return DefaultResponse.success("Workspace member removed")
 
@@ -652,11 +606,9 @@ async def remove_member(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to set the default workspace.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace access denied for the authenticated user.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -673,7 +625,7 @@ async def set_default_workspace(
 ) -> WorkspaceDefaultSelectionOut:
     service = WorkspacesService(session=session)
     selection = await service.set_default_workspace(
-        workspace_id=workspace.workspace_id,
+        workspace_id=workspace.id,
         user=actor,
     )
     return selection

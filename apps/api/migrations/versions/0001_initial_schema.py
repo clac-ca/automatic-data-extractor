@@ -69,7 +69,7 @@ def downgrade() -> None:  # pragma: no cover - intentionally not implemented
 def _create_users() -> None:
     op.create_table(
         "users",
-        sa.Column("user_id", sa.String(length=26), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("email", sa.String(length=320), nullable=False),
         sa.Column("email_canonical", sa.String(length=320), nullable=False, unique=True),
         sa.Column("display_name", sa.String(length=255), nullable=True),
@@ -91,13 +91,13 @@ def _create_users() -> None:
 def _create_user_credentials() -> None:
     op.create_table(
         "user_credentials",
-        sa.Column("credential_id", sa.String(length=26), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("user_id", sa.String(length=26), nullable=False),
         sa.Column("password_hash", sa.String(length=255), nullable=False),
         sa.Column("last_rotated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], ["users.user_id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("user_id"),
     )
     op.create_index(
@@ -111,14 +111,14 @@ def _create_user_credentials() -> None:
 def _create_user_identities() -> None:
     op.create_table(
         "user_identities",
-        sa.Column("identity_id", sa.String(length=26), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("user_id", sa.String(length=26), nullable=False),
         sa.Column("provider", sa.String(length=100), nullable=False),
         sa.Column("subject", sa.String(length=255), nullable=False),
         sa.Column("last_authenticated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], ["users.user_id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("provider", "subject"),
     )
     op.create_index(
@@ -132,7 +132,7 @@ def _create_user_identities() -> None:
 def _create_workspaces() -> None:
     op.create_table(
         "workspaces",
-        sa.Column("workspace_id", sa.String(length=26), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("slug", sa.String(length=100), nullable=False, unique=True),
         sa.Column("settings", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
@@ -144,14 +144,14 @@ def _create_workspaces() -> None:
 def _create_workspace_memberships() -> None:
     op.create_table(
         "workspace_memberships",
-        sa.Column("workspace_membership_id", sa.String(length=26), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("user_id", sa.String(length=26), nullable=False),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
         sa.Column("is_default", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], ["users.user_id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.workspace_id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("user_id", "workspace_id"),
     )
     op.create_index(
@@ -165,7 +165,8 @@ def _create_workspace_memberships() -> None:
 def _create_permissions() -> None:
     op.create_table(
         "permissions",
-        sa.Column("key", sa.String(length=120), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
+        sa.Column("key", sa.String(length=120), nullable=False, unique=True),
         sa.Column("resource", sa.String(length=120), nullable=False),
         sa.Column("action", sa.String(length=120), nullable=False),
         sa.Column("scope_type", SCOPETYPE, nullable=False),
@@ -183,12 +184,12 @@ def _create_permissions() -> None:
 def _create_roles(bind: sa.engine.Connection) -> None:
     op.create_table(
         "roles",
-        sa.Column("role_id", sa.String(length=26), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("scope_type", SCOPETYPE, nullable=False),
         sa.Column(
             "scope_id",
             sa.String(length=26),
-            sa.ForeignKey("workspaces.workspace_id", ondelete="CASCADE"),
+            sa.ForeignKey("workspaces.id", ondelete="CASCADE"),
             nullable=True,
         ),
         sa.Column("slug", sa.String(length=100), nullable=False),
@@ -235,24 +236,17 @@ def _create_roles(bind: sa.engine.Connection) -> None:
 def _create_role_permissions() -> None:
     op.create_table(
         "role_permissions",
-        sa.Column(
-            "role_id",
-            sa.String(length=26),
-            sa.ForeignKey("roles.role_id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        sa.Column(
-            "permission_key",
-            sa.String(length=120),
-            sa.ForeignKey("permissions.key", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        sa.PrimaryKeyConstraint("role_id", "permission_key"),
+        sa.Column("id", sa.String(length=26), primary_key=True),
+        sa.Column("role_id", sa.String(length=26), nullable=False),
+        sa.Column("permission_id", sa.String(length=26), nullable=False),
+        sa.ForeignKeyConstraint(["role_id"], ["roles.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["permission_id"], ["permissions.id"], ondelete="CASCADE"),
+        sa.UniqueConstraint("role_id", "permission_id"),
     )
     op.create_index(
-        "role_permissions_permission_key_idx",
+        "role_permissions_permission_id_idx",
         "role_permissions",
-        ["permission_key"],
+        ["permission_id"],
         unique=False,
     )
 
@@ -260,12 +254,12 @@ def _create_role_permissions() -> None:
 def _create_principals() -> None:
     op.create_table(
         "principals",
-        sa.Column("principal_id", sa.String(length=26), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("principal_type", PRINCIPALTYPE, nullable=False),
         sa.Column(
             "user_id",
             sa.String(length=26),
-            sa.ForeignKey("users.user_id", ondelete="CASCADE"),
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
             unique=True,
         ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
@@ -286,24 +280,24 @@ def _create_principals() -> None:
 def _create_role_assignments() -> None:
     op.create_table(
         "role_assignments",
-        sa.Column("assignment_id", sa.String(length=26), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column(
             "principal_id",
             sa.String(length=26),
-            sa.ForeignKey("principals.principal_id", ondelete="CASCADE"),
+            sa.ForeignKey("principals.id", ondelete="CASCADE"),
             nullable=False,
         ),
         sa.Column(
             "role_id",
             sa.String(length=26),
-            sa.ForeignKey("roles.role_id", ondelete="CASCADE"),
+            sa.ForeignKey("roles.id", ondelete="CASCADE"),
             nullable=False,
         ),
         sa.Column("scope_type", SCOPETYPE, nullable=False),
         sa.Column(
             "scope_id",
             sa.String(length=26),
-            sa.ForeignKey("workspaces.workspace_id", ondelete="CASCADE"),
+            sa.ForeignKey("workspaces.id", ondelete="CASCADE"),
             nullable=True,
         ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
@@ -336,7 +330,7 @@ def _create_role_assignments() -> None:
 def _create_documents() -> None:
     op.create_table(
         "documents",
-        sa.Column("document_id", sa.String(length=26), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
         sa.Column("original_filename", sa.String(length=255), nullable=False),
         sa.Column("content_type", sa.String(length=255), nullable=True),
@@ -363,10 +357,10 @@ def _create_documents() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("deleted_by_user_id", sa.String(length=26), nullable=True),
-        sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.workspace_id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["deleted_by_user_id"], ["users.user_id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["deleted_by_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(
-            ["uploaded_by_user_id"], ["users.user_id"], ondelete="SET NULL"
+            ["uploaded_by_user_id"], ["users.id"], ondelete="SET NULL"
         ),
         sa.CheckConstraint(
             "status IN ('uploaded','processing','processed','failed','archived')",
@@ -412,10 +406,11 @@ def _create_documents() -> None:
 def _create_document_tags() -> None:
     op.create_table(
         "document_tags",
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("document_id", sa.String(length=26), nullable=False),
         sa.Column("tag", sa.String(length=100), nullable=False),
-        sa.ForeignKeyConstraint(["document_id"], ["documents.document_id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("document_id", "tag"),
+        sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
+        sa.UniqueConstraint("document_id", "tag"),
     )
     op.create_index(
         "document_tags_document_id_idx",
@@ -432,7 +427,7 @@ def _create_document_tags() -> None:
 def _create_api_keys() -> None:
     op.create_table(
         "api_keys",
-        sa.Column("api_key_id", sa.String(length=26), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("user_id", sa.String(length=26), nullable=False),
         sa.Column("token_prefix", sa.String(length=12), nullable=False, unique=True),
         sa.Column("token_hash", sa.String(length=64), nullable=False, unique=True),
@@ -444,7 +439,7 @@ def _create_api_keys() -> None:
         sa.Column("last_seen_user_agent", sa.String(length=255), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], ["users.user_id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
     )
     op.create_index("api_keys_user_id_idx", "api_keys", ["user_id"], unique=False)
 
@@ -452,7 +447,8 @@ def _create_api_keys() -> None:
 def _create_system_settings() -> None:
     op.create_table(
         "system_settings",
-        sa.Column("key", sa.String(length=100), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
+        sa.Column("key", sa.String(length=100), nullable=False, unique=True),
         sa.Column("value", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
@@ -462,7 +458,7 @@ def _create_system_settings() -> None:
 def _create_configs() -> None:
     op.create_table(
         "configs",
-        sa.Column("config_id", sa.String(length=26), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
         sa.Column("slug", sa.String(length=100), nullable=False),
         sa.Column("title", sa.String(length=255), nullable=False),
@@ -475,22 +471,22 @@ def _create_configs() -> None:
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["workspace_id"],
-            ["workspaces.workspace_id"],
+            ["workspaces.id"],
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["created_by_user_id"],
-            ["users.user_id"],
+            ["users.id"],
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
             ["updated_by_user_id"],
-            ["users.user_id"],
+            ["users.id"],
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
             ["deleted_by_user_id"],
-            ["users.user_id"],
+            ["users.id"],
             ondelete="SET NULL",
         ),
         sa.UniqueConstraint("workspace_id", "slug"),
@@ -507,7 +503,7 @@ def _create_configs() -> None:
 def _create_config_versions() -> None:
     op.create_table(
         "config_versions",
-        sa.Column("config_version_id", sa.String(length=26), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("config_id", sa.String(length=26), nullable=False),
         sa.Column("sequence", sa.Integer(), nullable=False),
         sa.Column("label", sa.String(length=50), nullable=True),
@@ -523,17 +519,17 @@ def _create_config_versions() -> None:
         sa.Column("deleted_by_user_id", sa.String(length=26), nullable=True),
         sa.ForeignKeyConstraint(
             ["config_id"],
-            ["configs.config_id"],
+            ["configs.id"],
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["created_by_user_id"],
-            ["users.user_id"],
+            ["users.id"],
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
             ["deleted_by_user_id"],
-            ["users.user_id"],
+            ["users.id"],
             ondelete="SET NULL",
         ),
         sa.UniqueConstraint("config_id", "sequence"),
@@ -555,7 +551,8 @@ def _create_config_versions() -> None:
 def _create_workspace_config_states() -> None:
     op.create_table(
         "workspace_config_states",
-        sa.Column("workspace_id", sa.String(length=26), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
+        sa.Column("workspace_id", sa.String(length=26), nullable=False),
         sa.Column("config_id", sa.String(length=26), nullable=True),
         sa.Column("config_version_id", sa.String(length=26), nullable=True),
         sa.Column("updated_by_user_id", sa.String(length=26), nullable=True),
@@ -563,24 +560,25 @@ def _create_workspace_config_states() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
             ["workspace_id"],
-            ["workspaces.workspace_id"],
+            ["workspaces.id"],
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["config_id"],
-            ["configs.config_id"],
+            ["configs.id"],
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
             ["config_version_id"],
-            ["config_versions.config_version_id"],
+            ["config_versions.id"],
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
             ["updated_by_user_id"],
-            ["users.user_id"],
+            ["users.id"],
             ondelete="SET NULL",
         ),
+        sa.UniqueConstraint("workspace_id"),
         sa.UniqueConstraint("config_version_id"),
     )
     op.create_index(
@@ -600,6 +598,7 @@ def _create_workspace_config_states() -> None:
 def _create_configurations() -> None:
     op.create_table(
         "configurations",
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
         sa.Column("config_id", sa.String(length=26), nullable=False),
         sa.Column("display_name", sa.String(length=255), nullable=False),
@@ -619,12 +618,12 @@ def _create_configurations() -> None:
         sa.Column("activated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.PrimaryKeyConstraint("workspace_id", "config_id"),
         sa.ForeignKeyConstraint(
             ["workspace_id"],
-            ["workspaces.workspace_id"],
+            ["workspaces.id"],
             ondelete="CASCADE",
         ),
+        sa.UniqueConstraint("workspace_id", "config_id"),
     )
     op.create_index(
         "configurations_workspace_status_idx",
@@ -645,8 +644,10 @@ def _create_configurations() -> None:
 def _create_configuration_builds() -> None:
     op.create_table(
         "configuration_builds",
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
         sa.Column("config_id", sa.String(length=26), nullable=False),
+        sa.Column("configuration_id", sa.String(length=26), nullable=False),
         sa.Column("build_id", sa.String(length=26), nullable=False),
         sa.Column("status", sa.String(length=20), nullable=False),
         sa.Column("venv_path", sa.Text(), nullable=False),
@@ -663,17 +664,17 @@ def _create_configuration_builds() -> None:
         sa.Column("error", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.PrimaryKeyConstraint("workspace_id", "config_id", "build_id"),
         sa.ForeignKeyConstraint(
             ["workspace_id"],
-            ["workspaces.workspace_id"],
+            ["workspaces.id"],
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
-            ["workspace_id", "config_id"],
-            ["configurations.workspace_id", "configurations.config_id"],
+            ["configuration_id"],
+            ["configurations.id"],
             ondelete="CASCADE",
         ),
+        sa.UniqueConstraint("workspace_id", "config_id", "build_id"),
         sa.CheckConstraint(
             "status in ('building','active','inactive','failed')",
             name="configuration_builds_status_check",
@@ -682,7 +683,7 @@ def _create_configuration_builds() -> None:
     op.create_index(
         "configuration_builds_active_idx",
         "configuration_builds",
-        ["workspace_id", "config_id"],
+        ["configuration_id"],
         unique=True,
         sqlite_where=sa.text("status = 'active'"),
         postgresql_where=sa.text("status = 'active'"),
@@ -690,7 +691,7 @@ def _create_configuration_builds() -> None:
     op.create_index(
         "configuration_builds_building_idx",
         "configuration_builds",
-        ["workspace_id", "config_id"],
+        ["configuration_id"],
         unique=True,
         sqlite_where=sa.text("status = 'building'"),
         postgresql_where=sa.text("status = 'building'"),
@@ -700,7 +701,7 @@ def _create_configuration_builds() -> None:
 def _create_jobs() -> None:
     op.create_table(
         "jobs",
-        sa.Column("job_id", sa.String(length=26), primary_key=True),
+        sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
         sa.Column("config_id", sa.String(length=26), nullable=False),
         sa.Column("config_version_id", sa.String(length=26), nullable=False),
@@ -725,22 +726,22 @@ def _create_jobs() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
             ["workspace_id"],
-            ["workspaces.workspace_id"],
+            ["workspaces.id"],
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["config_id"],
-            ["configs.config_id"],
+            ["configs.id"],
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
             ["config_version_id"],
-            ["config_versions.config_version_id"],
+            ["config_versions.id"],
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
             ["submitted_by_user_id"],
-            ["users.user_id"],
+            ["users.id"],
             ondelete="SET NULL",
         ),
     )

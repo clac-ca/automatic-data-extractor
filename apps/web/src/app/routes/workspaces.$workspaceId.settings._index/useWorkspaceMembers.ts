@@ -30,13 +30,13 @@ export function useAddWorkspaceMemberMutation(workspaceId: string) {
 
   return useMutation<WorkspaceMember, Error, AddMemberInput, { previous?: WorkspaceMember[]; optimisticId: string }>({
     mutationFn: async ({ user, roleIds }: AddMemberInput) => {
-      return addWorkspaceMember(workspaceId, { user_id: user.user_id, role_ids: roleIds });
+      return addWorkspaceMember(workspaceId, { user_id: user.id, role_ids: roleIds });
     },
     onMutate: async ({ user, roleIds }) => {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<WorkspaceMember[]>(queryKey);
       const optimisticMember: WorkspaceMember = {
-        workspace_membership_id: `optimistic-${Date.now()}`,
+        id: `optimistic-${Date.now()}`,
         workspace_id: workspaceId,
         roles: Array.from(roleIds),
         permissions: [],
@@ -47,7 +47,7 @@ export function useAddWorkspaceMemberMutation(workspaceId: string) {
         const list = current ?? [];
         return [optimisticMember, ...list];
       });
-      return { previous, optimisticId: optimisticMember.workspace_membership_id };
+      return { previous, optimisticId: optimisticMember.id };
     },
     onError: (_error, _variables, context) => {
       if (context?.previous) {
@@ -64,9 +64,7 @@ export function useAddWorkspaceMemberMutation(workspaceId: string) {
       }
       queryClient.setQueryData<WorkspaceMember[]>(queryKey, (current) => {
         const list = current ?? [];
-        return list.map((entry) =>
-          entry.workspace_membership_id === context.optimisticId ? member : entry,
-        );
+        return list.map((entry) => (entry.id === context.optimisticId ? member : entry));
       });
     },
     onSettled: () => {
@@ -93,9 +91,7 @@ export function useUpdateWorkspaceMemberRolesMutation(workspaceId: string) {
       queryClient.setQueryData<WorkspaceMember[]>(queryKey, (current) => {
         const list = current ?? [];
         return list.map((member) =>
-          member.workspace_membership_id === membershipId
-            ? { ...member, roles: Array.from(roleIds) }
-            : member,
+          member.id === membershipId ? { ...member, roles: Array.from(roleIds) } : member,
         );
       });
       return { previous };
@@ -108,9 +104,7 @@ export function useUpdateWorkspaceMemberRolesMutation(workspaceId: string) {
     onSuccess: (member) => {
       queryClient.setQueryData<WorkspaceMember[]>(queryKey, (current) => {
         const list = current ?? [];
-        return list.map((entry) =>
-          entry.workspace_membership_id === member.workspace_membership_id ? member : entry,
-        );
+        return list.map((entry) => (entry.id === member.id ? member : entry));
       });
     },
     onSettled: () => {
@@ -130,7 +124,7 @@ export function useRemoveWorkspaceMemberMutation(workspaceId: string) {
       const previous = queryClient.getQueryData<WorkspaceMember[]>(queryKey);
       queryClient.setQueryData<WorkspaceMember[]>(queryKey, (current) => {
         const list = current ?? [];
-        return list.filter((member) => member.workspace_membership_id !== membershipId);
+        return list.filter((member) => member.id !== membershipId);
       });
       return { previous };
     },

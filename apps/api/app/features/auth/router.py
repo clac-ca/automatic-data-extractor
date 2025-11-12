@@ -20,7 +20,6 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.settings import Settings, get_settings
-from apps.api.app.shared.core.errors import ProblemDetail
 from apps.api.app.shared.db.session import get_session
 from apps.api.app.shared.dependency import (
     get_current_identity,
@@ -66,7 +65,7 @@ def _serialize_api_key(record: APIKey) -> APIKeySummary:
         record.user.label if record.user is not None else record.label or ""
     )
     return APIKeySummary(
-        api_key_id=record.id,
+        id=record.id,
         principal_type=principal_type,
         principal_id=record.user_id,
         principal_label=principal_label,
@@ -134,8 +133,7 @@ async def read_setup_status(
     openapi_extra={"security": []},
     responses={
         status.HTTP_409_CONFLICT: {
-            "description": "Initial setup already completed or email already in use.",
-            "model": ProblemDetail,
+            "description": "Initial setup already completed or email already in use."
         }
     },
 )
@@ -172,12 +170,10 @@ async def complete_setup(
     openapi_extra={"security": []},
     responses={
         status.HTTP_401_UNAUTHORIZED: {
-            "description": "Invalid credentials provided.",
-            "model": ProblemDetail,
+            "description": "Invalid credentials provided."
         },
         status.HTTP_403_FORBIDDEN: {
-            "description": "User account is inactive or locked.",
-            "model": ProblemDetail,
+            "description": "User account is inactive or locked."
         },
     },
 )
@@ -215,7 +211,6 @@ async def create_session(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to access the session profile.",
-            "model": ProblemDetail,
         }
     },
     dependencies=[Security(require_authenticated)],
@@ -273,11 +268,9 @@ async def read_session(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Refresh token missing or invalid.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "CSRF validation failed for the refresh request.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -320,11 +313,9 @@ async def refresh_session(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Session token is missing or invalid.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "CSRF validation failed for the logout request.",
-            "model": ProblemDetail,
         },
     },
     dependencies=[Security(require_authenticated), Security(require_csrf)],
@@ -352,11 +343,9 @@ async def delete_session(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to access the profile.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Service account credentials cannot access this endpoint.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -379,19 +368,15 @@ async def read_me(
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "description": "Email required or target user is inactive.",
-            "model": ProblemDetail,
         },
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage API keys.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Administrator role required to issue API keys.",
-            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Specified user could not be found.",
-            "model": ProblemDetail,
         },
     },
     dependencies=[Security(require_csrf)],
@@ -443,11 +428,9 @@ async def create_api_key(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to list API keys.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Administrator role required to list API keys.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -490,15 +473,12 @@ async def list_api_keys(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to revoke API keys.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Administrator role required to revoke API keys.",
-            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "API key not found.",
-            "model": ProblemDetail,
         },
     },
     dependencies=[Security(require_csrf)],
@@ -525,7 +505,6 @@ async def revoke_api_key(
     responses={
         status.HTTP_404_NOT_FOUND: {
             "description": "SSO login is not configured for this deployment.",
-            "model": ProblemDetail,
         }
     },
 )
@@ -561,15 +540,12 @@ async def start_sso_login(
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "description": "Callback parameters invalid or identity provider response rejected.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "User account associated with the SSO identity is disabled.",
-            "model": ProblemDetail,
         },
         status.HTTP_502_BAD_GATEWAY: {
             "description": "ADE could not reach the identity provider during the SSO exchange.",
-            "model": ProblemDetail,
         },
     },
 )

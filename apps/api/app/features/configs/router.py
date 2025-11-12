@@ -21,7 +21,6 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from apps.api.app.shared.core.errors import ProblemDetail
 from apps.api.app.shared.pagination import PageParams, paginate_sequence
 from apps.api.app.shared.dependency import (
     get_configs_service,
@@ -143,10 +142,6 @@ def _parse_range_header(header_value: str, total_size: int) -> tuple[int, int]:
     response_model=ConfigurationPage,
     response_model_exclude_none=True,
     summary="List configurations for a workspace",
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
-        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
-    },
 )
 async def list_configurations(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
@@ -176,11 +171,6 @@ async def list_configurations(
     response_model=ConfigurationRecord,
     response_model_exclude_none=True,
     summary="Retrieve configuration metadata",
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
-        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
-        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
-    },
 )
 async def read_configuration(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
@@ -276,13 +266,6 @@ async def list_config_files(
     status_code=status.HTTP_201_CREATED,
     summary="Create a configuration from a template or clone",
     response_model_exclude_none=True,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
-        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
-        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
-        status.HTTP_409_CONFLICT: {"model": ProblemDetail},
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {"model": ProblemDetail},
-    },
 )
 async def create_configuration(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
@@ -329,12 +312,6 @@ async def create_configuration(
     response_model=ConfigurationValidateResponse,
     summary="Validate the configuration on disk",
     response_model_exclude_none=True,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
-        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
-        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
-        status.HTTP_409_CONFLICT: {"model": ProblemDetail},
-    },
 )
 async def validate_configuration(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
@@ -363,6 +340,7 @@ async def validate_configuration(
         ) from exc
 
     payload = ConfigurationValidateResponse(
+        id=result.configuration.id,
         workspace_id=workspace_id,
         config_id=config_id,
         status=result.configuration.status,
@@ -377,9 +355,6 @@ async def validate_configuration(
     responses={
         status.HTTP_200_OK: {"content": {"application/octet-stream": {} }},
         status.HTTP_206_PARTIAL_CONTENT: {"content": {"application/octet-stream": {}}},
-        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
-        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
-        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
         status.HTTP_304_NOT_MODIFIED: {"model": None},
     },
 )
@@ -519,13 +494,6 @@ async def head_config_file(
     response_model=ConfigurationRecord,
     summary="Activate a configuration",
     response_model_exclude_none=True,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
-        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
-        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
-        status.HTTP_409_CONFLICT: {"model": ProblemDetail},
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {"model": ProblemDetail},
-    },
 )
 async def activate_configuration_endpoint(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
@@ -572,11 +540,6 @@ async def activate_configuration_endpoint(
     response_model=ConfigurationRecord,
     summary="Deactivate a configuration (was 'archive')",
     response_model_exclude_none=True,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
-        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
-        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
-    },
 )
 async def deactivate_configuration_endpoint(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
@@ -604,9 +567,6 @@ async def deactivate_configuration_endpoint(
     "/configurations/{config_id}/export",
     responses={
         status.HTTP_200_OK: {"content": {"application/zip": {}}},
-        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
-        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
-        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
     },
 )
 async def export_config(
@@ -724,14 +684,6 @@ async def upsert_config_file(
     "/configurations/{config_id}/files/{file_path:path}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
-        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
-        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
-        status.HTTP_409_CONFLICT: {"model": ProblemDetail},
-        status.HTTP_412_PRECONDITION_FAILED: {"model": ProblemDetail},
-        status.HTTP_428_PRECONDITION_REQUIRED: {"model": ProblemDetail},
-    },
 )
 async def delete_config_file(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
@@ -782,12 +734,6 @@ async def delete_config_file(
     "/configurations/{config_id}/directories/{directory_path:path}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_201_CREATED,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
-        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
-        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
-        status.HTTP_409_CONFLICT: {"model": ProblemDetail},
-    },
 )
 async def create_config_directory(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
@@ -825,12 +771,6 @@ async def create_config_directory(
     "/configurations/{config_id}/directories/{directory_path:path}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetail},
-        status.HTTP_403_FORBIDDEN: {"model": ProblemDetail},
-        status.HTTP_404_NOT_FOUND: {"model": ProblemDetail},
-        status.HTTP_409_CONFLICT: {"model": ProblemDetail},
-    },
 )
 async def delete_config_directory(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],

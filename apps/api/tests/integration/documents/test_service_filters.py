@@ -113,7 +113,7 @@ async def test_list_documents_applies_filters_and_sorting() -> None:
         )
 
         assert result.total == 1
-        assert [item.document_id for item in result.items] == [processed.id]
+        assert [item.id for item in result.items] == [processed.id]
 
         # Sorting by name ascending should place the draft before the report.
         name_order = resolve_sort(
@@ -131,7 +131,7 @@ async def test_list_documents_applies_filters_and_sorting() -> None:
             filters=DocumentFilters(),
             actor=uploader,
         )
-        assert [item.document_id for item in name_sorted.items] == [processed.id, uploaded.id]
+        assert [item.id for item in name_sorted.items] == [processed.id, uploaded.id]
 
 
 async def test_last_run_filters_include_nulls_in_upper_bound() -> None:
@@ -160,7 +160,7 @@ async def test_last_run_filters_include_nulls_in_upper_bound() -> None:
             actor=uploader,
         )
 
-        returned_ids = {item.document_id for item in result.items}
+        returned_ids = {item.id for item in result.items}
         assert uploaded.id in returned_ids  # null last_run_at treated as "never"
         assert processed.id in returned_ids
 
@@ -190,4 +190,4 @@ async def test_sorting_last_run_places_nulls_last() -> None:
             actor=uploader,
         )
 
-        assert [item.document_id for item in result.items] == [processed.id, uploaded.id]
+        assert [item.id for item in result.items] == [processed.id, uploaded.id]

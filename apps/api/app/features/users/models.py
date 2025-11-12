@@ -41,7 +41,6 @@ class User(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     """Single identity model for humans and service accounts."""
 
     __tablename__ = "users"
-    __ulid_field__ = "user_id"
 
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     email_canonical: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
@@ -104,10 +103,8 @@ class UserCredential(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     """Hashed password secret associated with a user."""
 
     __tablename__ = "user_credentials"
-    __ulid_field__ = "credential_id"
-
     user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     last_rotated_at: Mapped[datetime | None] = mapped_column(
@@ -123,10 +120,8 @@ class UserIdentity(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     """External identity mapping for SSO and federated logins."""
 
     __tablename__ = "user_identities"
-    __ulid_field__ = "identity_id"
-
     user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     provider: Mapped[str] = mapped_column(String(100), nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)

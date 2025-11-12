@@ -339,7 +339,7 @@ async def test_api_key_rotation_and_revocation(
 
     await _login(async_client, admin["email"], admin["password"])
     revoke = await async_client.delete(
-        f"/api/v1/auth/api-keys/{first_record['api_key_id']}",
+        f"/api/v1/auth/api-keys/{first_record['id']}",
         headers=_csrf_headers(async_client),
     )
     assert revoke.status_code == 204

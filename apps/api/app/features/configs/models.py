@@ -5,11 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, Integer, String
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.api.app.shared.db import Base
-from apps.api.app.shared.db.mixins import TimestampMixin, generate_ulid
+from apps.api.app.shared.db.mixins import TimestampMixin, ULIDPrimaryKeyMixin, generate_ulid
 from apps.api.app.shared.db.enums import enum_values
 
 
@@ -21,20 +21,20 @@ class ConfigurationStatus(str, Enum):
     INACTIVE = "inactive"
 
 
-class Configuration(TimestampMixin, Base):
+class Configuration(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     """Workspace-owned configuration package metadata."""
 
     __tablename__ = "configurations"
 
     workspace_id: Mapped[str] = mapped_column(
         String(26),
-        ForeignKey("workspaces.workspace_id", ondelete="CASCADE"),
-        primary_key=True,
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
     )
     config_id: Mapped[str] = mapped_column(
         String(26),
-        primary_key=True,
         default=generate_ulid,
+        nullable=False,
     )
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[ConfigurationStatus] = mapped_column(
@@ -56,6 +56,7 @@ class Configuration(TimestampMixin, Base):
     )
 
     __table_args__ = (
+        UniqueConstraint("workspace_id", "config_id"),
         Index("configurations_workspace_status_idx", "workspace_id", "status"),
     )
 

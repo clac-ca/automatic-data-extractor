@@ -89,13 +89,17 @@ router = APIRouter(tags=["roles"], dependencies=[Security(require_authenticated)
 
 def _serialize_role(role: Role) -> RoleOut:
     return RoleOut(
-        role_id=role.id,
+        id=role.id,
         slug=role.slug,
         name=role.name,
         description=role.description,
         scope_type=role.scope_type,
         scope_id=role.scope_id,
-        permissions=[permission.permission_key for permission in role.permissions],
+        permissions=[
+            permission.permission.key
+            for permission in role.permissions
+            if permission.permission is not None
+        ],
         built_in=role.built_in,
         editable=role.editable,
     )
@@ -105,7 +109,7 @@ def _serialize_assignment(assignment: RoleAssignment) -> RoleAssignmentOut:
     principal = assignment.principal
     user = principal.user if principal is not None else None
     return RoleAssignmentOut(
-        assignment_id=assignment.id,
+        id=assignment.id,
         principal_id=assignment.principal_id,
         principal_type=(
             principal.principal_type if principal is not None else PrincipalType.USER

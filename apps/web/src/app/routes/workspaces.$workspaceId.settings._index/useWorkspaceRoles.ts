@@ -39,7 +39,7 @@ export function useCreateWorkspaceRoleMutation(workspaceId: string) {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<RoleDefinition[]>(queryKey);
       const optimisticRole: RoleDefinition = {
-        role_id: `optimistic-${Date.now()}`,
+        id: `optimistic-${Date.now()}`,
         slug: payload.slug ?? payload.name.toLowerCase().replace(/\s+/g, "-"),
         name: payload.name,
         description: payload.description ?? null,
@@ -53,7 +53,7 @@ export function useCreateWorkspaceRoleMutation(workspaceId: string) {
         const list = current ?? [];
         return [optimisticRole, ...list];
       });
-      return { previous, optimisticId: optimisticRole.role_id };
+      return { previous, optimisticId: optimisticRole.id };
     },
     onError: (_error, _variables, context) => {
       if (context?.previous) {
@@ -67,7 +67,7 @@ export function useCreateWorkspaceRoleMutation(workspaceId: string) {
       }
       queryClient.setQueryData<RoleDefinition[]>(queryKey, (current) => {
         const list = current ?? [];
-        return list.map((entry) => (entry.role_id === context.optimisticId ? role : entry));
+        return list.map((entry) => (entry.id === context.optimisticId ? role : entry));
       });
     },
     onSettled: () => {
@@ -93,7 +93,7 @@ export function useUpdateWorkspaceRoleMutation(workspaceId: string) {
       queryClient.setQueryData<RoleDefinition[]>(queryKey, (current) => {
         const list = current ?? [];
         return list.map((role) =>
-          role.role_id === roleId
+          role.id === roleId
             ? {
                 ...role,
                 name: payload.name,
@@ -113,7 +113,7 @@ export function useUpdateWorkspaceRoleMutation(workspaceId: string) {
     onSuccess: (role) => {
       queryClient.setQueryData<RoleDefinition[]>(queryKey, (current) => {
         const list = current ?? [];
-        return list.map((entry) => (entry.role_id === role.role_id ? role : entry));
+        return list.map((entry) => (entry.id === role.id ? role : entry));
       });
     },
     onSettled: () => {
@@ -133,7 +133,7 @@ export function useDeleteWorkspaceRoleMutation(workspaceId: string) {
       const previous = queryClient.getQueryData<RoleDefinition[]>(queryKey);
       queryClient.setQueryData<RoleDefinition[]>(queryKey, (current) => {
         const list = current ?? [];
-        return list.filter((role) => role.role_id !== roleId);
+        return list.filter((role) => role.id !== roleId);
       });
       return { previous };
     },

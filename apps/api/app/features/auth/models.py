@@ -14,10 +14,8 @@ class APIKey(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     """Stored representation of an issued API key secret."""
 
     __tablename__ = "api_keys"
-    __ulid_field__ = "api_key_id"
-
     user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.user_id", ondelete="CASCADE"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
     token_prefix: Mapped[str] = mapped_column(String(12), nullable=False, unique=True)

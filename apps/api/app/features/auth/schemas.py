@@ -165,7 +165,7 @@ class APIKeyIssueResponse(BaseSchema):
 class APIKeySummary(BaseSchema):
     """Metadata describing an issued API key."""
 
-    api_key_id: ULIDStr
+    id: ULIDStr
     principal_type: Literal["user", "service_account"]
     principal_id: ULIDStr
     principal_label: str

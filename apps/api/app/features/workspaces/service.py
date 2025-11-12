@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from apps.api.app.features.roles.models import (
+    Permission,
     Principal,
     PrincipalType,
     Role,
@@ -29,6 +30,7 @@ from apps.api.app.features.roles.service import (
     collect_permission_keys,
     ensure_user_principal,
     get_global_permissions_for_user,
+    resolve_permission_ids,
     unassign_role,
 )
 
@@ -529,10 +531,12 @@ class WorkspacesService:
         await self._session.flush([role])
 
         if permission_keys:
+            permission_map = await resolve_permission_ids(self._session, permission_keys)
             self._session.add_all(
                 [
                     RolePermission(
-                        role_id=cast(str, role.id), permission_key=key
+                        role_id=cast(str, role.id),
+                        permission_id=permission_map[key],
                     )
                     for key in permission_keys
                 ]
@@ -564,28 +568,37 @@ class WorkspacesService:
         permission_keys = set(
             self._normalize_workspace_permission_keys(payload.permissions)
         )
-        current = {permission.permission_key for permission in role.permissions}
+        current_map = {
+            permission.permission.key: permission.permission_id
+            for permission in role.permissions
+            if permission.permission is not None
+        }
+        current = set(current_map)
 
         additions = sorted(permission_keys - current)
         removals = sorted(current - permission_keys)
 
         if additions:
+            permission_map = await resolve_permission_ids(self._session, additions)
             self._session.add_all(
                 [
                     RolePermission(
-                        role_id=cast(str, role.id), permission_key=key
+                        role_id=cast(str, role.id),
+                        permission_id=permission_map[key],
                     )
                     for key in additions
                 ]
             )
 
         if removals:
-            await self._session.execute(
-                delete(RolePermission).where(
-                    RolePermission.role_id == role.id,
-                    RolePermission.permission_key.in_(removals),
+            removal_ids = [current_map[key] for key in removals if key in current_map]
+            if removal_ids:
+                await self._session.execute(
+                    delete(RolePermission).where(
+                        RolePermission.role_id == role.id,
+                        RolePermission.permission_id.in_(removal_ids),
+                    )
                 )
-            )
 
         await self._session.flush()
 
@@ -712,7 +725,7 @@ class WorkspacesService:
         permissions = list(summary.permissions)
         role_slugs = list(summary.role_slugs)
         return WorkspaceOut(
-            workspace_id=workspace.id,
+            id=workspace.id,
             name=workspace.name,
             slug=workspace.slug,
             roles=role_slugs,
@@ -725,7 +738,7 @@ class WorkspacesService:
 
         permissions = sorted(dict.fromkeys(_system_role_permissions("workspace-owner")))
         return WorkspaceOut(
-            workspace_id=workspace.id,
+            id=workspace.id,
             name=workspace.name,
             slug=workspace.slug,
             roles=["workspace-owner"],
@@ -748,7 +761,7 @@ class WorkspacesService:
         permissions = list(summary.permissions)
         role_slugs = list(summary.role_slugs)
         return WorkspaceMemberOut(
-            workspace_membership_id=membership.id,
+            id=membership.id,
             workspace_id=membership.workspace_id,
             roles=role_slugs,
             permissions=permissions,
@@ -845,12 +858,13 @@ class WorkspacesService:
                 Principal.user_id,
                 RoleAssignment.role_id,
                 Role.slug,
-                RolePermission.permission_key,
+                Permission.key,
             )
             .select_from(RoleAssignment)
             .join(Principal, Principal.id == RoleAssignment.principal_id)
             .join(Role, Role.id == RoleAssignment.role_id)
             .outerjoin(RolePermission, RolePermission.role_id == Role.id)
+            .outerjoin(Permission, Permission.id == RolePermission.permission_id)
             .where(
                 RoleAssignment.scope_type == ScopeType.WORKSPACE,
                 RoleAssignment.scope_id == workspace_id,
@@ -993,7 +1007,11 @@ class WorkspacesService:
     def _permissions_from_roles(roles: Sequence[Role]) -> set[str]:
         permissions: list[str] = []
         for role in roles:
-            permissions.extend(permission.permission_key for permission in role.permissions)
+            permissions.extend(
+                permission.permission.key
+                for permission in role.permissions
+                if permission.permission is not None
+            )
         return set(permissions)
 
 __all__ = ["WorkspacesService"]

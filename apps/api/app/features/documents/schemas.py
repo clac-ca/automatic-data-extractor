@@ -32,11 +32,7 @@ class UploaderOut(BaseSchema):
 class DocumentOut(BaseSchema):
     """Serialised representation of a stored document."""
 
-    document_id: ULIDStr = Field(
-        alias="id",
-        serialization_alias="document_id",
-        description="Document ULID (26-character string).",
-    )
+    id: ULIDStr = Field(description="Document ULID (26-character string).")
     workspace_id: ULIDStr
     name: str = Field(
         alias="original_filename",

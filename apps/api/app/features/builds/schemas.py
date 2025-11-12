@@ -21,8 +21,10 @@ __all__ = [
 class BuildRecord(BaseSchema):
     """Serialized representation of a configuration build pointer."""
 
+    id: ULIDStr = Field(..., description="Primary identifier for the build record")
     workspace_id: ULIDStr = Field(..., description="Workspace identifier")
     config_id: ULIDStr = Field(..., description="Configuration identifier")
+    configuration_id: ULIDStr = Field(..., description="Configuration record identifier")
     build_id: ULIDStr = Field(..., description="Build identifier (ULID)")
     status: BuildStatus = Field(..., description="Current lifecycle status")
     environment_ref: str = Field(

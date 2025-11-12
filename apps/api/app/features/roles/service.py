@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections import deque
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from typing import cast
@@ -212,7 +212,7 @@ def _roles_query(scope_type: ScopeType, scope_id: str | None):
 
     stmt = (
         select(Role)
-        .options(selectinload(Role.permissions))
+        .options(selectinload(Role.permissions).selectinload(RolePermission.permission))
         .where(Role.scope_type == scope_type)
     )
     if scope_type == ScopeType.GLOBAL:
@@ -230,6 +230,26 @@ def _normalize_permission_keys(
     collected = collect_permission_keys(permissions)
     _validate_scope(collected, scope=scope)
     return tuple(dict.fromkeys(collected))
+
+
+async def resolve_permission_ids(
+    session: AsyncSession, keys: Collection[str]
+) -> dict[str, str]:
+    """Return a mapping of permission keys to their primary keys."""
+
+    if not keys:
+        return {}
+
+    stmt = select(Permission.key, Permission.id).where(
+        Permission.key.in_(tuple(keys))
+    )
+    result = await session.execute(stmt)
+    mapping = {key: permission_id for key, permission_id in result.all()}
+    missing = set(keys) - set(mapping)
+    if missing:
+        missing_list = ", ".join(sorted(missing))
+        raise RoleValidationError(f"Permissions not found: {missing_list}")
+    return mapping
 
 
 async def _ensure_global_slug_available(
@@ -318,7 +338,9 @@ async def get_global_permissions_for_principal(
         return frozenset()
 
     stmt: Select[str] = (
-        select(RolePermission.permission_key)
+        select(Permission.key)
+        .select_from(RolePermission)
+        .join(Permission, Permission.id == RolePermission.permission_id)
         .join(Role, Role.id == RolePermission.role_id)
         .join(RoleAssignment, RoleAssignment.role_id == Role.id)
         .where(
@@ -363,7 +385,9 @@ async def get_workspace_permissions_for_principal(
         return frozenset()
 
     stmt: Select[str] = (
-        select(RolePermission.permission_key)
+        select(Permission.key)
+        .select_from(RolePermission)
+        .join(Permission, Permission.id == RolePermission.permission_id)
         .join(Role, Role.id == RolePermission.role_id)
         .join(RoleAssignment, RoleAssignment.role_id == Role.id)
         .where(
@@ -547,7 +571,9 @@ def _role_assignments_query(
     stmt = (
         select(RoleAssignment)
         .options(
-            selectinload(RoleAssignment.role),
+            selectinload(RoleAssignment.role)
+            .selectinload(Role.permissions)
+            .selectinload(RolePermission.permission),
             selectinload(RoleAssignment.principal).selectinload(Principal.user),
         )
         .where(
@@ -599,9 +625,13 @@ async def create_global_role(
     await session.flush([role])
 
     if permission_keys:
+        permission_map = await resolve_permission_ids(session, permission_keys)
         session.add_all(
             [
-                RolePermission(role_id=cast(str, role.id), permission_key=key)
+                RolePermission(
+                    role_id=cast(str, role.id),
+                    permission_id=permission_map[key],
+                )
                 for key in permission_keys
             ]
         )
@@ -633,26 +663,37 @@ async def update_global_role(
     except AuthorizationError as exc:
         raise RoleValidationError(str(exc)) from exc
 
-    current = {permission.permission_key for permission in role.permissions}
+    current_map = {
+        permission.permission.key: permission.permission_id
+        for permission in role.permissions
+        if permission.permission is not None
+    }
+    current_keys = set(current_map)
 
-    additions = sorted(permission_keys - current)
-    removals = sorted(current - permission_keys)
+    additions = sorted(permission_keys - current_keys)
+    removals = sorted(current_keys - permission_keys)
 
     if additions:
+        permission_map = await resolve_permission_ids(session, additions)
         session.add_all(
             [
-                RolePermission(role_id=cast(str, role.id), permission_key=key)
+                RolePermission(
+                    role_id=cast(str, role.id),
+                    permission_id=permission_map[key],
+                )
                 for key in additions
             ]
         )
 
     if removals:
-        await session.execute(
-            delete(RolePermission).where(
-                RolePermission.role_id == role.id,
-                RolePermission.permission_key.in_(removals),
+        removal_ids = [current_map[key] for key in removals if key in current_map]
+        if removal_ids:
+            await session.execute(
+                delete(RolePermission).where(
+                    RolePermission.role_id == role.id,
+                    RolePermission.permission_id.in_(removal_ids),
+                )
             )
-        )
 
     await session.flush()
     await session.refresh(role, attribute_names=["permissions"])
@@ -758,7 +799,9 @@ async def get_role_assignment_by_id(
     stmt = (
         select(RoleAssignment)
         .options(
-            selectinload(RoleAssignment.role),
+            selectinload(RoleAssignment.role)
+            .selectinload(Role.permissions)
+            .selectinload(RolePermission.permission),
             selectinload(RoleAssignment.principal).selectinload(Principal.user),
         )
         .where(RoleAssignment.id == assignment_id)
@@ -1016,26 +1059,36 @@ async def sync_permission_registry(*, session: AsyncSession) -> None:
             role.editable = definition.editable
 
         result = await session.execute(
-            select(RolePermission.permission_key).where(
-                RolePermission.role_id == role.id
-            )
+            select(Permission.key, RolePermission.permission_id)
+            .join(RolePermission, RolePermission.permission_id == Permission.id)
+            .where(RolePermission.role_id == role.id)
         )
-        current_permissions = set(result.scalars().all())
+        current_permissions = {key: permission_id for key, permission_id in result.all()}
         desired_permissions = set(definition.permissions)
 
-        for permission_key in desired_permissions - current_permissions:
-            session.add(
-                RolePermission(role_id=role.id, permission_key=permission_key)
+        additions = desired_permissions - set(current_permissions)
+        if additions:
+            permission_map = await resolve_permission_ids(session, additions)
+            session.add_all(
+                [
+                    RolePermission(
+                        role_id=role.id,
+                        permission_id=permission_map[key],
+                    )
+                    for key in additions
+                ]
             )
 
-        extras = current_permissions - desired_permissions
+        extras = set(current_permissions) - desired_permissions
         if extras:
-            await session.execute(
-                delete(RolePermission).where(
-                    RolePermission.role_id == role.id,
-                    RolePermission.permission_key.in_(sorted(extras)),
+            removal_ids = [current_permissions[key] for key in extras]
+            if removal_ids:
+                await session.execute(
+                    delete(RolePermission).where(
+                        RolePermission.role_id == role.id,
+                        RolePermission.permission_id.in_(removal_ids),
+                    )
                 )
-            )
 
     await session.commit()
 
@@ -1054,6 +1107,7 @@ __all__ = [
     "has_users_with_global_role",
     "delete_global_role",
     "ensure_user_principal",
+    "resolve_permission_ids",
     "get_global_permissions_for_principal",
     "get_global_permissions_for_user",
     "get_global_role_by_slug",

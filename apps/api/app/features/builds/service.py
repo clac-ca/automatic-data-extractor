@@ -174,6 +174,7 @@ class BuildsService:
         record = ConfigurationBuild(
             workspace_id=workspace_id,
             config_id=config_id,
+            configuration_id=configuration.id,
             build_id=build_id,
             status=BuildStatus.BUILDING,
             venv_path=str(target_path),

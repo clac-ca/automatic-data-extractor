@@ -6,7 +6,6 @@ import logging
 
 from fastapi import FastAPI
 
-from .api import register_exception_handlers
 from .routers import api_router
 from .settings import Settings, get_settings
 from .shared.core.lifecycles import create_application_lifespan
@@ -53,7 +52,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_auth_dependencies(settings=settings)
 
     register_middleware(app)
-    register_exception_handlers(app)
     app.include_router(api_router, prefix="/api")
     mount_spa(app, api_prefix="/api", static_dir=settings.web_dir / "static")
     configure_openapi(app, settings)

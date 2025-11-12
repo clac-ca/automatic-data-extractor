@@ -71,7 +71,7 @@ export function WorkspaceRolesSection() {
 
   const startEditingRole = (role: RoleDefinition) => {
     setFeedbackMessage(null);
-    setEditingRoleId(role.role_id);
+    setEditingRoleId(role.id);
     setShowCreate(false);
   };
 
@@ -88,7 +88,7 @@ export function WorkspaceRolesSection() {
       return;
     }
     setFeedbackMessage(null);
-    deleteRole.mutate(role.role_id, {
+    deleteRole.mutate(role.id, {
       onSuccess: () => {
         setFeedbackMessage({ tone: "success", message: "Role deleted." });
       },
@@ -183,12 +183,12 @@ export function WorkspaceRolesSection() {
         ) : (
           <ul className="space-y-4" role="list">
             {roles.map((role) => {
-              const isEditing = editingRoleId === role.role_id;
+              const isEditing = editingRoleId === role.id;
               const permissionLabels = role.permissions.map(
                 (permission) => permissionLookup.get(permission)?.label ?? permission,
               );
               return (
-                <li key={role.role_id} className="rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+                <li key={role.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -239,7 +239,7 @@ export function WorkspaceRolesSection() {
                     {permissionLabels.length > 0 ? (
                       permissionLabels.map((label) => (
                         <span
-                          key={`${role.role_id}-${label}`}
+                          key={`${role.id}-${label}`}
                           className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm"
                         >
                           {label}
@@ -253,7 +253,7 @@ export function WorkspaceRolesSection() {
                   {isEditing ? (
                     <div className="mt-4">
                       <WorkspaceRoleForm
-                        key={role.role_id}
+                        key={role.id}
                         availablePermissions={permissions}
                         initialValues={{
                           name: role.name,
@@ -267,7 +267,7 @@ export function WorkspaceRolesSection() {
                           setFeedbackMessage(null);
                           updateRole.mutate(
                             {
-                              roleId: role.role_id,
+                              roleId: role.id,
                               payload: {
                                 name: values.name.trim(),
                                 description: values.description?.trim() ? values.description.trim() : undefined,

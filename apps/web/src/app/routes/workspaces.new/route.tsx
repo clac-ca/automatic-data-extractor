@@ -49,11 +49,11 @@ function WorkspaceCreateContent() {
   const usersQuery = useUsersQuery({ enabled: canSelectOwner, pageSize: 50 });
   const ownerOptions = useMemo<UserSummary[]>(() => usersQuery.users, [usersQuery.users]);
   const filteredOwnerOptions = useMemo(() => {
-    if (!session.user.user_id) {
+    if (!session.user.id) {
       return ownerOptions;
     }
-    return ownerOptions.filter((user) => user.user_id !== session.user.user_id);
-  }, [ownerOptions, session.user.user_id]);
+    return ownerOptions.filter((user) => user.id !== session.user.id);
+  }, [ownerOptions, session.user.id]);
 
   const {
     register,
@@ -68,7 +68,7 @@ function WorkspaceCreateContent() {
     defaultValues: {
       name: "",
       slug: "",
-      ownerUserId: session.user.user_id ?? "",
+      ownerUserId: session.user.id ?? "",
     },
   });
 
@@ -86,10 +86,10 @@ function WorkspaceCreateContent() {
   }, [dirtyFields.slug, nameValue, setValue, slugValue]);
 
   useEffect(() => {
-    if (!canSelectOwner && session.user.user_id) {
-      setValue("ownerUserId", session.user.user_id, { shouldDirty: false });
+    if (!canSelectOwner && session.user.id) {
+      setValue("ownerUserId", session.user.id, { shouldDirty: false });
     }
-  }, [canSelectOwner, session.user.user_id, setValue]);
+  }, [canSelectOwner, session.user.id, setValue]);
 
   const isSubmitting = createWorkspace.isPending;
   const usersLoading = usersQuery.isPending && usersQuery.users.length === 0;
@@ -198,9 +198,9 @@ function WorkspaceCreateContent() {
                 disabled={ownerSelectDisabled}
                 className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
               >
-                <option value={session.user.user_id ?? ""}>{currentUserLabel}</option>
+                <option value={session.user.id ?? ""}>{currentUserLabel}</option>
                 {filteredOwnerOptions.map((user) => (
-                  <option key={user.user_id} value={user.user_id}>
+                  <option key={user.id} value={user.id}>
                     {user.display_name ? `${user.display_name} (${user.email})` : user.email}
                   </option>
                 ))}

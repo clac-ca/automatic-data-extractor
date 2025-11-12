@@ -859,15 +859,33 @@ export type components = {
             label?: string | null;
         };
         /**
+         * APIKeyPage
+         * @description Paginated collection of API keys.
+         */
+        APIKeyPage: {
+            /** Items */
+            items: components["schemas"]["APIKeySummary"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Total */
+            total?: number | null;
+        };
+        /**
          * APIKeySummary
          * @description Metadata describing an issued API key.
          */
         APIKeySummary: {
             /**
-             * Api Key Id
+             * Id
              * @description ULID (26-character string).
              */
-            api_key_id: string;
+            id: string;
             /**
              * Principal Type
              * @enum {string}
@@ -959,6 +977,11 @@ export type components = {
          */
         BuildRecord: {
             /**
+             * Id
+             * @description Primary identifier for the build record
+             */
+            id: string;
+            /**
              * Workspace Id
              * @description Workspace identifier
              */
@@ -968,6 +991,11 @@ export type components = {
              * @description Configuration identifier
              */
             config_id: string;
+            /**
+             * Configuration Id
+             * @description Configuration record identifier
+             */
+            configuration_id: string;
             /**
              * Build Id
              * @description Build identifier (ULID)
@@ -1103,10 +1131,33 @@ export type components = {
             source: components["schemas"]["ConfigSourceTemplate"] | components["schemas"]["ConfigSourceClone"];
         };
         /**
+         * ConfigurationPage
+         * @description Paginated configuration listing.
+         */
+        ConfigurationPage: {
+            /** Items */
+            items: components["schemas"]["ConfigurationRecord"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Total */
+            total?: number | null;
+        };
+        /**
          * ConfigurationRecord
          * @description Serialized configuration metadata.
          */
         ConfigurationRecord: {
+            /**
+             * Id
+             * @description ULID (26-character string).
+             */
+            id: string;
             /**
              * Workspace Id
              * @description ULID (26-character string).
@@ -1149,6 +1200,11 @@ export type components = {
          */
         ConfigurationValidateResponse: {
             /**
+             * Id
+             * @description ULID (26-character string).
+             */
+            id: string;
+            /**
              * Workspace Id
              * @description ULID (26-character string).
              */
@@ -1184,10 +1240,10 @@ export type components = {
          */
         DocumentOut: {
             /**
-             * Document Id
+             * Id
              * @description Document ULID (26-character string).
              */
-            document_id: string;
+            id: string;
             /**
              * Workspace Id
              * @description ULID (26-character string).
@@ -1279,16 +1335,6 @@ export type components = {
             /** Workspace Permissions */
             workspace_permissions?: string[];
         };
-        /**
-         * ErrorMessage
-         * @description Standard error envelope mirroring FastAPI's ``{"detail": ...}`` payload.
-         */
-        ErrorMessage: {
-            /** Detail */
-            detail: string | {
-                [key: string]: unknown;
-            };
-        };
         /** FileCapabilities */
         FileCapabilities: {
             /** Editable */
@@ -1317,14 +1363,17 @@ export type components = {
             depth: number;
             /** Size */
             size?: number | null;
-            /** Mtime */
-            mtime?: string | null;
+            /**
+             * Mtime
+             * Format: date-time
+             */
+            mtime: string;
             /** Etag */
-            etag?: string | null;
+            etag: string;
             /** Content Type */
-            content_type?: string | null;
+            content_type: string;
             /** Has Children */
-            has_children?: boolean | null;
+            has_children: boolean;
         };
         /** FileListing */
         FileListing: {
@@ -1517,6 +1566,11 @@ export type components = {
          * @description Serialized permission registry entry.
          */
         PermissionOut: {
+            /**
+             * Id
+             * @description ULID (26-character string).
+             */
+            id: string;
             /** Key */
             key: string;
             /** Resource */
@@ -1554,40 +1608,6 @@ export type components = {
          */
         PrincipalType: "user";
         /**
-         * ProblemDetail
-         * @description Problem+JSON payload compatible with RFC 7807.
-         */
-        ProblemDetail: {
-            /**
-             * Type
-             * @description Problem type URI.
-             * @default about:blank
-             */
-            type: string;
-            /**
-             * Title
-             * @description Short, human-readable summary of the problem.
-             */
-            title: string;
-            /**
-             * Status
-             * @description HTTP status code generated.
-             */
-            status: number;
-            /**
-             * Detail
-             * @description Human-readable explanation for this occurrence of the problem.
-             */
-            detail?: string | null;
-            /**
-             * Errors
-             * @description Optional field-level validation errors.
-             */
-            errors?: {
-                [key: string]: string[];
-            } | null;
-        };
-        /**
          * ProviderDiscoveryResponse
          * @description Response payload returned by `/auth/providers`.
          */
@@ -1618,10 +1638,10 @@ export type components = {
          */
         RoleAssignmentOut: {
             /**
-             * Assignment Id
+             * Id
              * @description ULID (26-character string).
              */
-            assignment_id: string;
+            id: string;
             /**
              * Principal Id
              * @description ULID (26-character string).
@@ -1688,10 +1708,10 @@ export type components = {
          */
         RoleOut: {
             /**
-             * Role Id
+             * Id
              * @description ULID (26-character string).
              */
-            role_id: string;
+            id: string;
             /** Slug */
             slug: string;
             /** Name */
@@ -1814,10 +1834,10 @@ export type components = {
          */
         UserOut: {
             /**
-             * User Id
+             * Id
              * @description ULID (26-character string).
              */
-            user_id: string;
+            id: string;
             /** Email */
             email: string;
             /** Is Active */
@@ -1867,10 +1887,10 @@ export type components = {
          */
         UserProfile: {
             /**
-             * User Id
+             * Id
              * @description ULID (26-character string).
              */
-            user_id: string;
+            id: string;
             /** Email */
             email: string;
             /** Is Active */
@@ -1943,10 +1963,10 @@ export type components = {
          */
         WorkspaceMemberOut: {
             /**
-             * Workspace Membership Id
+             * Id
              * @description ULID (26-character string).
              */
-            workspace_membership_id: string;
+            id: string;
             /**
              * Workspace Id
              * @description ULID (26-character string).
@@ -1959,6 +1979,24 @@ export type components = {
             /** Is Default */
             is_default: boolean;
             user: components["schemas"]["UserOut"];
+        };
+        /**
+         * WorkspaceMemberPage
+         * @description Paginated workspace member listing.
+         */
+        WorkspaceMemberPage: {
+            /** Items */
+            items: components["schemas"]["WorkspaceMemberOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Total */
+            total?: number | null;
         };
         /**
          * WorkspaceMemberRolesUpdate
@@ -1974,10 +2012,10 @@ export type components = {
          */
         WorkspaceOut: {
             /**
-             * Workspace Id
+             * Id
              * @description ULID (26-character string).
              */
-            workspace_id: string;
+            id: string;
             /** Name */
             name: string;
             /** Slug */
@@ -1988,6 +2026,24 @@ export type components = {
             permissions: string[];
             /** Is Default */
             is_default: boolean;
+        };
+        /**
+         * WorkspacePage
+         * @description Paginated workspace listing.
+         */
+        WorkspacePage: {
+            /** Items */
+            items: components["schemas"]["WorkspaceOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Total */
+            total?: number | null;
         };
         /**
          * WorkspaceUpdate
@@ -2079,9 +2135,7 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2137,9 +2191,7 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
         };
     };
@@ -2170,18 +2222,14 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description User account is inactive or locked. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2215,18 +2263,14 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description CSRF validation failed for the logout request. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
         };
     };
@@ -2253,18 +2297,14 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description CSRF validation failed for the refresh request. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
         };
     };
@@ -2291,24 +2331,26 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Service account credentials cannot access this endpoint. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
         };
     };
     list_api_keys_api_v1_auth_api_keys_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Include revoked API keys in the response. */
+                include_revoked?: boolean;
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2321,7 +2363,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["APIKeySummary"][];
+                    "application/json": components["schemas"]["APIKeyPage"];
                 };
             };
             /** @description Authentication required to list API keys. */
@@ -2329,17 +2371,22 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Administrator role required to list API keys. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2371,36 +2418,28 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Authentication required to manage API keys. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Administrator role required to issue API keys. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Specified user could not be found. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2438,27 +2477,21 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Administrator role required to revoke API keys. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description API key not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2496,9 +2529,7 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2537,18 +2568,14 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description User account associated with the SSO identity is disabled. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2564,9 +2591,7 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
         };
     };
@@ -3388,7 +3413,11 @@ export interface operations {
     };
     list_workspaces_api_v1_workspaces_get: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3401,7 +3430,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkspaceOut"][];
+                    "application/json": components["schemas"]["WorkspacePage"];
                 };
             };
             /** @description Authentication required to list workspaces. */
@@ -3409,17 +3438,22 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Service account credentials cannot access workspace listings. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3451,45 +3485,35 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Administrator role required to create workspaces. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Specified owner could not be found or is inactive. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace slug already exists. */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace name or slug is invalid. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
         };
     };
@@ -3519,27 +3543,21 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace access denied for the authenticated user. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3578,27 +3596,21 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace permissions do not allow workspace deletion. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3641,51 +3653,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace permissions do not allow settings management. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace slug already exists. */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace name or slug is invalid. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
         };
     };
     list_members_api_v1_workspaces__workspace_id__members_get: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Workspace identifier */
@@ -3701,7 +3707,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkspaceMemberOut"][];
+                    "application/json": components["schemas"]["WorkspaceMemberPage"];
                 };
             };
             /** @description Authentication required to list workspace members. */
@@ -3709,18 +3715,14 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace permissions do not allow member access. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3763,36 +3765,28 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace permissions do not allow member management. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace or user not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description User is already a member of the workspace. */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3807,7 +3801,11 @@ export interface operations {
     };
     list_workspace_roles_api_v1_workspaces__workspace_id__roles_get: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Workspace identifier */
@@ -3823,7 +3821,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RoleOut"][];
+                    "application/json": components["schemas"]["RolePage"];
                 };
             };
             /** @description Authentication required to list workspace roles. */
@@ -3831,18 +3829,14 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace permissions do not allow viewing role definitions. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3885,45 +3879,35 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Authentication required to manage workspace roles. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace permissions do not allow managing roles. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Role slug already exists or conflicts with a system role. */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Invalid role name, slug, or permissions. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
         };
     };
@@ -3958,54 +3942,42 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Authentication required to manage workspace roles. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace permissions do not allow managing roles. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Role not found for this workspace. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Operation would violate governor guardrails. */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Invalid role payload. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
         };
     };
@@ -4034,45 +4006,35 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Authentication required to manage workspace roles. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace permissions do not allow managing roles. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Role not found for this workspace. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Role is assigned or would violate governor guardrails. */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -4117,36 +4079,28 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Authentication required to manage workspace members. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace permissions do not allow member management. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Membership not found within the workspace. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -4187,36 +4141,28 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Authentication required to manage workspace members. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace permissions do not allow member management. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Membership not found within the workspace. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -4255,18 +4201,14 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace access denied for the authenticated user. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -4311,27 +4253,21 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                };
+                content?: never;
             };
             /** @description Authentication required to list documents. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace permissions do not allow document access. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -4374,36 +4310,28 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Authentication required to upload documents. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace permissions do not allow document uploads. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Uploaded file exceeds the configured size limit. */
             413: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -4444,27 +4372,21 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace permissions do not allow document access. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Document not found within the workspace. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -4503,27 +4425,21 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace permissions do not allow document deletion. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Document not found within the workspace. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -4564,27 +4480,21 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Workspace permissions do not allow document downloads. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Document is missing or its stored file is unavailable. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -4599,7 +4509,11 @@ export interface operations {
     };
     list_configurations_api_v1_workspaces__workspace_id__configurations_get: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Workspace identifier */
@@ -4615,25 +4529,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConfigurationRecord"][];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
+                    "application/json": components["schemas"]["ConfigurationPage"];
                 };
             };
             /** @description Validation Error */
@@ -4672,49 +4568,13 @@ export interface operations {
                     "application/json": components["schemas"]["ConfigurationRecord"];
                 };
             };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Unprocessable Entity */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4740,33 +4600,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigurationRecord"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
                 };
             };
             /** @description Validation Error */
@@ -4846,42 +4679,6 @@ export interface operations {
                     "application/json": components["schemas"]["ConfigurationValidateResponse"];
                 };
             };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -4935,33 +4732,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
             };
             /** @description Validation Error */
             422: {
@@ -5042,51 +4812,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Precondition Failed */
-            412: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -5094,15 +4819,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Precondition Required */
-            428: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
                 };
             };
         };
@@ -5208,49 +4924,13 @@ export interface operations {
                     "application/json": components["schemas"]["ConfigurationRecord"];
                 };
             };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Unprocessable Entity */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5276,33 +4956,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigurationRecord"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
                 };
             };
             /** @description Validation Error */
@@ -5342,33 +4995,6 @@ export interface operations {
                     "application/zip": unknown;
                 };
             };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -5406,42 +5032,6 @@ export interface operations {
                     };
                 };
             };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -5477,42 +5067,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -5545,33 +5099,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BuildRecord"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
                 };
             };
             /** @description Validation Error */
@@ -5612,42 +5139,6 @@ export interface operations {
                     "application/json": components["schemas"]["BuildEnsureResponse"];
                 };
             };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -5655,15 +5146,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
                 };
             };
         };
@@ -5688,33 +5170,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorMessage"];
-                };
             };
             /** @description Validation Error */
             422: {
