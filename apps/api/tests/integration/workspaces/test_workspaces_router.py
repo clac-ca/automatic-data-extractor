@@ -113,7 +113,7 @@ async def test_member_profile_includes_permissions(
     )
     assert response.status_code == 200
     payload = response.json()
-    assert payload["workspace_id"] == seed_identity["workspace_id"]
+    assert payload["id"] == seed_identity["workspace_id"]
     assert payload["roles"] == ["workspace-member"]
     permissions = set(payload.get("permissions", []))
     assert "Workspace.Documents.ReadWrite" in permissions
@@ -199,14 +199,14 @@ async def test_owner_adds_member_with_default_role(
 
     token = await _login(async_client, owner["email"], owner["password"])
     response = await async_client.post(
-        f"/api/v1/workspaces/{created['workspace_id']}/members",
+        f"/api/v1/workspaces/{created['id']}/members",
         headers={"Authorization": f"Bearer {token}"},
         json={"user_id": invitee["id"]},
     )
     assert response.status_code == 201, response.text
     payload = response.json()
     assert payload["roles"] == ["workspace-member"]
-    assert payload["user"]["user_id"] == invitee["id"]
+    assert payload["user"]["id"] == invitee["id"]
 
 
 async def test_manage_scope_required_for_member_add(
@@ -384,7 +384,7 @@ async def test_update_workspace_role_blocks_governor_loss(
     )
     assert create_response.status_code == 201, create_response.text
     role_payload = create_response.json()
-    role_id = role_payload["role_id"]
+    role_id = role_payload["id"]
 
     session_factory = get_sessionmaker()
     async with session_factory() as session:
@@ -433,7 +433,7 @@ async def test_delete_workspace_role_blocks_assignments(
         },
     )
     assert create_response.status_code == 201, create_response.text
-    role_id = create_response.json()["role_id"]
+    role_id = create_response.json()["id"]
 
     list_response = await async_client.get(
         f"/api/v1/workspaces/{workspace_id}/members",
@@ -443,7 +443,7 @@ async def test_delete_workspace_role_blocks_assignments(
     member_entry = next(
         entry
         for entry in list_response.json()["items"]
-        if entry["user"]["user_id"] == member["id"]
+        if entry["user"]["id"] == member["id"]
     )
 
     assign_response = await async_client.put(
@@ -476,7 +476,7 @@ async def test_delete_workspace_role_succeeds_when_unassigned(
         },
     )
     assert create_response.status_code == 201, create_response.text
-    role_id = create_response.json()["role_id"]
+    role_id = create_response.json()["id"]
 
     delete_response = await async_client.delete(
         f"/api/v1/workspaces/{workspace_id}/roles/{role_id}",

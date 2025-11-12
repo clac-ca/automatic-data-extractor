@@ -18,7 +18,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { useWorkspaceContext } from "../workspaces.$workspaceId/WorkspaceContext";
 import { useConfigsQuery } from "@shared/configs";
 import { client } from "@shared/api/client";
-import { normalizePaginatedResponse, type PaginatedResult, useFlattenedPages } from "@shared/api/pagination";
+import { useFlattenedPages } from "@shared/api/pagination";
 import { createScopedStorage } from "@shared/storage";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import type { components, paths } from "@openapi";
@@ -30,11 +30,11 @@ import { Button } from "@ui/button";
 
 /* -------------------------------- Types & constants ------------------------------- */
 
-type DocumentListResponseWire = components["schemas"]["DocumentListResponse"];
 type DocumentStatus = components["schemas"]["DocumentStatus"];
-type DocumentRecord = components["schemas"]["DocumentRecord"];
+type DocumentRecord = components["schemas"]["DocumentOut"];
 type JobRecord = components["schemas"]["JobRecord"];
 type JobSubmissionPayload = components["schemas"]["JobSubmissionRequest"];
+type DocumentListPage = components["schemas"]["DocumentPage"];
 
 type ListDocumentsParameters = paths["/api/v1/workspaces/{workspace_id}/documents"]["get"]["parameters"];
 type ListDocumentsQuery = ListDocumentsParameters extends { query?: infer Q }
@@ -50,8 +50,6 @@ type JobStatus = JobRecord["status"];
 type StatusFilterInput = DocumentStatus | DocumentStatus[] | null | undefined;
 
 type StatusOptionValue = "all" | DocumentStatus;
-
-type DocumentListPage = PaginatedResult<DocumentRecord>;
 
 const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
   uploaded: "Uploaded",
@@ -478,7 +476,7 @@ function useWorkspaceDocuments(workspaceId: string, options: WorkspaceDocumentsO
         },
         signal,
       ),
-    getNextPageParam: (lastPage) => (lastPage.hasNext ? lastPage.page + 1 : undefined),
+    getNextPageParam: (lastPage) => (lastPage.has_next ? lastPage.page + 1 : undefined),
     enabled: workspaceId.length > 0,
     placeholderData: (previous) => previous,
     staleTime: 15_000,
@@ -613,10 +611,10 @@ async function fetchWorkspaceDocuments(
   if (options.search) query.q = options.search;
   if (options.sort) query.sort = options.sort;
   if (options.page && options.page > 0) {
-    (query as Record<string, unknown>).page = options.page;
+    query.page = options.page;
   }
   if (options.pageSize && options.pageSize > 0) {
-    (query as Record<string, unknown>).page_size = options.pageSize;
+    query.page_size = options.pageSize;
   }
 
   const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents", {
@@ -624,7 +622,11 @@ async function fetchWorkspaceDocuments(
     signal,
   });
 
-  return normalizePaginatedResponse<DocumentRecord>(data as DocumentListResponseWire | null | undefined);
+  if (!data) {
+    throw new Error("Expected document page payload.");
+  }
+
+  return data;
 }
 
 async function listWorkspaceJobs(
@@ -1216,7 +1218,7 @@ function RunExtractionDrawerContent({
     documentRecord.id,
   );
 
-  const allConfigs = useMemo(() => configsQuery.data ?? [], [configsQuery.data]);
+  const allConfigs = useMemo(() => configsQuery.data?.items ?? [], [configsQuery.data]);
   const selectableConfigs = useMemo(
     () => allConfigs.filter((config) => !config.deleted_at && config.active_version),
     [allConfigs],

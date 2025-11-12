@@ -39,7 +39,7 @@ function RootIndexContent() {
     );
   }
 
-  const workspaces = workspacesQuery.data ?? [];
+  const workspaces = workspacesQuery.data?.items ?? [];
 
   if (workspaces.length === 0) {
     return <Navigate to="/workspaces" replace />;

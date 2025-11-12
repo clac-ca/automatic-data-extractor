@@ -1,6 +1,6 @@
-import { get, post } from "@shared/api";
-import { normalizePaginatedResponse, type PaginatedResult } from "@shared/api/pagination";
-import type { components } from "@openapi";
+import { post } from "@shared/api";
+import { client } from "@shared/api/client";
+import type { components, paths } from "@openapi";
 
 export interface FetchUsersOptions {
   readonly page?: number;
@@ -10,29 +10,34 @@ export interface FetchUsersOptions {
   readonly signal?: AbortSignal;
 }
 
-export function fetchUsers(options: FetchUsersOptions = {}): Promise<UserListPage> {
+export async function fetchUsers(options: FetchUsersOptions = {}): Promise<UserListPage> {
   const { page, pageSize, search, includeTotal, signal } = options;
-  const params = new URLSearchParams();
+  const query: ListUsersQuery = {};
 
   if (typeof page === "number" && page > 0) {
-    params.set("page", String(page));
+    query.page = page;
   }
   if (typeof pageSize === "number" && pageSize > 0) {
-    params.set("page_size", String(pageSize));
+    query.page_size = pageSize;
   }
   if (includeTotal) {
-    params.set("include_total", "true");
+    query.include_total = true;
   }
-  if (search && search.trim().length > 0) {
-    params.set("q", search.trim());
+  const trimmedSearch = search?.trim();
+  if (trimmedSearch) {
+    query.q = trimmedSearch;
   }
 
-  const query = params.toString();
-  const path = query.length > 0 ? `/users?${query}` : "/users";
+  const { data } = await client.GET("/api/v1/users", {
+    params: { query },
+    signal,
+  });
 
-  return get<UserListResponseWire>(path, { signal }).then((response) =>
-    normalizePaginatedResponse<UserSummary>(response),
-  );
+  if (!data) {
+    throw new Error("Expected user page payload.");
+  }
+
+  return data;
 }
 
 export interface InviteUserPayload {
@@ -44,8 +49,9 @@ export function inviteUser(payload: InviteUserPayload) {
   return post<UserProfile>("/users/invitations", payload);
 }
 
-type UserSummary = components["schemas"]["UserSummary"];
-type UserListResponseWire = components["schemas"]["UserListResponse"];
+type ListUsersQuery = paths["/api/v1/users"]["get"]["parameters"]["query"];
+type UserListPage = components["schemas"]["UserPage"];
+type UserSummary = UserListPage["items"][number];
 type UserProfile = components["schemas"]["UserProfile"];
 
-export type UserListPage = PaginatedResult<UserSummary>;
+export type { UserListPage, UserSummary };

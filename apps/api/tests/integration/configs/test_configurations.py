@@ -424,8 +424,9 @@ async def test_activate_returns_422_when_validation_fails(
     )
     assert response.status_code == 422
     problem = response.json()
-    assert problem["code"] == "validation_failed"
-    assert problem["meta"]["issues"]
+    detail = problem.get("detail") or {}
+    assert detail.get("error") == "validation_failed"
+    assert detail.get("issues")
 
 
 async def test_deactivate_configuration_sets_inactive(

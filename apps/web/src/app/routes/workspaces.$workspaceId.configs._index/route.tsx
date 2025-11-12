@@ -29,7 +29,10 @@ export default function WorkspaceConfigsIndexRoute() {
   const [templateId, setTemplateId] = useState<string>(TEMPLATE_OPTIONS[0]?.value ?? "default");
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  const configs = useMemo(() => (configsQuery.data ?? []).filter((config) => !config.deleted_at), [configsQuery.data]);
+  const configs = useMemo(
+    () => (configsQuery.data?.items ?? []).filter((config) => !config.deleted_at),
+    [configsQuery.data],
+  );
 
   useEffect(() => {
     if (!configs || configs.length === 0) {

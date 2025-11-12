@@ -48,7 +48,8 @@ function WorkspacesIndexContent() {
     );
   }
 
-  const workspaces: WorkspaceProfile[] = workspacesQuery.data ?? [];
+  const workspacesPage = workspacesQuery.data;
+  const workspaces: WorkspaceProfile[] = workspacesPage?.items ?? [];
 
   const actions = canCreateWorkspace ? (
     <Button variant="primary" onClick={() => navigate("/workspaces/new")}>Create workspace</Button>

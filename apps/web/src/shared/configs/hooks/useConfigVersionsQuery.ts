@@ -7,19 +7,17 @@ import type { ConfigVersionRecord } from "../types";
 interface UseConfigVersionsOptions {
   readonly workspaceId: string;
   readonly configId: string;
-  readonly includeDeleted?: boolean;
   readonly enabled?: boolean;
 }
 
 export function useConfigVersionsQuery({
   workspaceId,
   configId,
-  includeDeleted = false,
   enabled = true,
 }: UseConfigVersionsOptions) {
   return useQuery<ConfigVersionRecord[]>({
-    queryKey: configsKeys.versions(workspaceId, configId, includeDeleted),
-    queryFn: ({ signal }) => listConfigVersions(workspaceId, configId, { includeDeleted, signal }),
+    queryKey: configsKeys.versions(workspaceId, configId),
+    queryFn: ({ signal }) => listConfigVersions(workspaceId, configId, { signal }),
     enabled: enabled && workspaceId.length > 0 && configId.length > 0,
     placeholderData: (previous) => previous ?? [],
     staleTime: 15_000,

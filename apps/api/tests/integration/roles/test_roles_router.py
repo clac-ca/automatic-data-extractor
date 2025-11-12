@@ -146,7 +146,7 @@ async def test_create_update_delete_global_role(
     assert create_response.status_code == 201, create_response.text
     created = create_response.json()
     assert created["slug"] == "data-steward"
-    role_id = created["role_id"]
+    role_id = created["id"]
 
     update_response = await async_client.patch(
         f"/api/v1/roles/{role_id}",
@@ -213,7 +213,7 @@ async def test_global_role_assignment_flow(
         None,
     )
     assert admin_role is not None
-    admin_role_id = admin_role["role_id"]
+    admin_role_id = admin_role["id"]
 
     create_response = await async_client.post(
         "/api/v1/role-assignments",
@@ -222,7 +222,7 @@ async def test_global_role_assignment_flow(
     )
     assert create_response.status_code == 201, create_response.text
     created = create_response.json()
-    assignment_id = created["assignment_id"]
+    assignment_id = created["id"]
     assert created["role_id"] == admin_role_id
     assert created["user_id"] == workspace_owner["id"]
 
@@ -233,7 +233,7 @@ async def test_global_role_assignment_flow(
     )
     assert duplicate_response.status_code == 200, duplicate_response.text
     duplicate = duplicate_response.json()
-    assert duplicate["assignment_id"] == assignment_id
+    assert duplicate["id"] == assignment_id
 
     list_response = await async_client.get(
         "/api/v1/role-assignments",
@@ -295,7 +295,7 @@ async def test_workspace_role_assignment_flow(
         None,
     )
     assert owner_role is not None
-    owner_role_id = owner_role["role_id"]
+    owner_role_id = owner_role["id"]
 
     create_response = await async_client.post(
         f"/api/v1/workspaces/{workspace_id}/role-assignments",
@@ -304,7 +304,7 @@ async def test_workspace_role_assignment_flow(
     )
     assert create_response.status_code == 201, create_response.text
     created = create_response.json()
-    assignment_id = created["assignment_id"]
+    assignment_id = created["id"]
     assert created["role_id"] == owner_role_id
     assert created["user_id"] == member_manage["id"]
 
@@ -314,7 +314,7 @@ async def test_workspace_role_assignment_flow(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert duplicate_response.status_code == 200, duplicate_response.text
-    assert duplicate_response.json()["assignment_id"] == assignment_id
+    assert duplicate_response.json()["id"] == assignment_id
 
     list_response = await async_client.get(
         f"/api/v1/workspaces/{workspace_id}/role-assignments",

@@ -92,9 +92,9 @@ async def test_initial_setup_rejected_when_admin_exists(
         user = await session.execute(
             text(
                 """
-                INSERT INTO users (user_id, email, email_canonical, is_active, is_service_account, failed_login_count, created_at, updated_at)
+                INSERT INTO users (id, email, email_canonical, is_active, is_service_account, failed_login_count, created_at, updated_at)
                 VALUES (:id, :email, :email, 1, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                RETURNING user_id
+                RETURNING id
                 """
             ),
             {"id": existing_user_id, "email": "existing@example.test"},
