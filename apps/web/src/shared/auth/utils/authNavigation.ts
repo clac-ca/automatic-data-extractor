@@ -1,4 +1,4 @@
-import type { Location } from "react-router";
+import type { LocationLike } from "@app/nav/history";
 
 export const DEFAULT_APP_HOME = "/workspaces";
 
@@ -22,11 +22,11 @@ export function isPublicPath(path: string): boolean {
   return false;
 }
 
-export function joinPath(location: Location): string {
+export function joinPath(location: LocationLike): string {
   return `${location.pathname}${location.search}${location.hash}`;
 }
 
-export function normalizeNextFromLocation(location: Location): string {
+export function normalizeNextFromLocation(location: LocationLike): string {
   const raw = joinPath(location) || "/";
   const sanitized = sanitizeNextPath(raw);
   return sanitized ?? DEFAULT_APP_HOME;

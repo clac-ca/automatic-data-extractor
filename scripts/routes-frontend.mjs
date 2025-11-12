@@ -92,55 +92,7 @@ const collectFrontendRoutes = async () => {
     return { status: "skipped", reason: "frontend missing" };
   }
 
-  const nodeModulesDir = join("apps", "web", "node_modules");
-  if (!existsSync(nodeModulesDir)) {
-    try {
-      console.error("frontend dependencies missing; running `npm ci` inside apps/web/");
-      await runCapture("npm", ["ci"], { cwd: join("apps", "web") });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        status: "failed",
-        error: `failed to install frontend dependencies: ${message}`,
-      };
-    }
-
-    if (!existsSync(nodeModulesDir)) {
-      return {
-        status: "failed",
-        error: "frontend dependencies still missing after install attempt",
-      };
-    }
-  }
-
-  const binary = process.platform === "win32" ? "react-router.cmd" : "react-router";
-  const localBin = join(nodeModulesDir, ".bin", binary);
-  const localBinAbsolute = join(process.cwd(), localBin);
-
-  try {
-    const { stdout } = existsSync(localBin)
-      ? await runCapture(localBinAbsolute, ["routes", "--json"], {
-          cwd: join("apps", "web"),
-          shell: process.platform === "win32",
-        })
-      : await runCapture("npx", ["react-router", "routes", "--json"], {
-          cwd: join("apps", "web"),
-          shell: process.platform === "win32",
-        });
-    const parsed = JSON.parse(stdout);
-    let routes;
-    if (Array.isArray(parsed)) {
-      routes = parsed;
-    } else if (Array.isArray(parsed?.routes)) {
-      routes = parsed.routes;
-    } else {
-      routes = [];
-    }
-    return { status: "ok", routes, raw: parsed };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { status: "failed", error: message };
-  }
+  return { status: "skipped", reason: "routerless frontend" };
 };
 
 const result = await collectFrontendRoutes();
