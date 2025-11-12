@@ -81,7 +81,7 @@ class UsersService:
         )
         roles = await get_global_role_slugs_for_user(session=self._session, user=user)
         return UserProfile(
-            user_id=str(user.id),
+            id=str(user.id),
             email=user.email,
             is_active=user.is_active,
             is_service_account=user.is_service_account,
