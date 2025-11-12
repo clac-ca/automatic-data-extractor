@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastNumber": 10,
+  "lastNumber": 14,
   "packages": [
     {
       "number": 1,
@@ -76,8 +76,8 @@
       "number": 8,
       "slug": "port-ade-backend-features",
       "title": "Port ADE backend features",
-      "status": "active",
-      "summary": "Incrementally migrate required backend capabilities from .old-codebase/ade into backend/app following backend/docs/backend_porting_guardrails.md.",
+      "status": "done",
+      "summary": "Incrementally migrate required backend capabilities from .old-codebase/ade into apps/api/app following backend/docs/backend_porting_guardrails.md.",
       "createdAt": "2025-10-20T03:14:38.973Z",
       "updatedAt": "2025-10-20T03:14:44.335Z",
       "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0008-port-ade-backend-features"
@@ -101,6 +101,46 @@
       "createdAt": "2025-10-22T04:50:21.161Z",
       "updatedAt": "2025-10-22T05:01:06.483Z",
       "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0010-harden-session-cookie-secure-detection"
+    },
+    {
+      "number": 11,
+      "slug": "backend-configurations-jobs-redesign",
+      "title": "Backend configurations/jobs redesign",
+      "status": "active",
+      "summary": "Define version-snapshot core: configs/config_versions/config_files with per-version manifest; draft→publish flow; jobs reference config_version_id.",
+      "createdAt": "2025-10-27T18:44:08.305Z",
+      "updatedAt": "2025-10-27T19:02:18.152Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0011-backend-configurations-jobs-redesign"
+    },
+    {
+      "number": 12,
+      "slug": "docs-parity-for-job-artifact-hooks",
+      "title": "Docs parity for job artifact & hooks",
+      "status": "active",
+      "summary": "Implement documented job artifact schema, hook lifecycle, and related behaviors.",
+      "createdAt": "2025-11-03T15:55:00.815Z",
+      "updatedAt": "2025-11-03T16:15:44.910Z",
+      "path": "/workspace/automatic-data-extractor/.workpackage/packages/0012-docs-parity-for-job-artifact-hooks"
+    },
+    {
+      "number": 13,
+      "slug": "ade-safe-mode-skip-config-execution",
+      "title": "ADE Safe Mode (Skip Config Execution)",
+      "status": "active",
+      "summary": "Add ADE_SAFE_MODE backend flag, health surface, job/orchestrator guards, and frontend banner.",
+      "createdAt": "2025-11-03T19:50:53.632Z",
+      "updatedAt": "2025-11-03T19:51:05.580Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0013-ade-safe-mode-skip-config-execution"
+    },
+    {
+      "number": 14,
+      "slug": "docs-code-parity-job-runtime",
+      "title": "Docs/code parity: job runtime",
+      "status": "draft",
+      "summary": "Implement the job orchestration + config dependency features promised in dev docs (queueing, requirements install, activation hooks) and adjust docs/tests accordingly.",
+      "createdAt": "2025-11-03T19:59:46.296Z",
+      "updatedAt": "2025-11-03T19:59:46.296Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0014-docs-code-parity-job-runtime"
     }
   ]
 }
