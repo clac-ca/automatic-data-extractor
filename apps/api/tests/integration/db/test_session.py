@@ -1,0 +1,91 @@
+"""Tests covering the asynchronous session dependency wiring."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Annotated
+
+import pytest
+from fastapi import Depends, Request
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from apps.api.app.shared.db.engine import get_engine
+from apps.api.app.shared.db.mixins import generate_ulid
+from apps.api.app.shared.db.session import get_session
+
+
+@pytest.mark.asyncio
+async def test_session_dependency_commits_and_populates_context(
+    app,
+    async_client,
+    seed_identity,
+):
+    """The session dependency should attach to the request and commit writes."""
+
+    route_path = "/__tests__/configs"
+    workspace_id = seed_identity["workspace_id"]
+
+    if not any(route.path == route_path for route in app.router.routes):
+
+        @app.post(route_path)
+        async def _create_config(
+            request: Request,
+            session: Annotated[AsyncSession, Depends(get_session)],
+        ) -> dict[str, bool | str]:
+            assert isinstance(session, AsyncSession)
+            assert request.state.db_session is session
+
+            config_id = generate_ulid()
+            now_iso = datetime.now(UTC).isoformat()
+            payload = {
+                "id": config_id,
+                "workspace_id": workspace_id,
+                "slug": "session-config",
+                "title": "Session Config",
+                "description": None,
+                "created_at": now_iso,
+                "updated_at": now_iso,
+                "deleted_at": None,
+            }
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO configs (
+                        id,
+                        workspace_id,
+                        slug,
+                        title,
+                        created_at,
+                        updated_at,
+                        description,
+                        deleted_at
+                    ) VALUES (
+                        :id,
+                        :workspace_id,
+                        :slug,
+                        :title,
+                        :created_at,
+                        :updated_at,
+                        :description,
+                        :deleted_at
+                    )
+                    """
+                ),
+                payload,
+            )
+            return {"session_attached": True, "config_id": config_id}
+
+    response = await async_client.post(route_path)
+    response.raise_for_status()
+    data = response.json()
+    config_id = data["config_id"]
+    assert data["session_attached"] is True
+
+    engine = get_engine()
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text("SELECT COUNT(1) FROM configs WHERE id = :config_id"),
+            {"config_id": config_id},
+        )
+        assert result.scalar_one() == 1

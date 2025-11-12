@@ -16,9 +16,11 @@ const run = (command, args = [], options = {}) =>
     });
   });
 
-const hasBackend = existsSync(join("backend", "app")) && existsSync("pyproject.toml");
+const hasBackend =
+  existsSync(join("apps", "api", "app")) &&
+  existsSync(join("apps", "api", "pyproject.toml"));
 const hasFrontend =
-  existsSync("frontend") && existsSync(join("frontend", "package.json"));
+  existsSync(join("apps", "web")) && existsSync(join("apps", "web", "package.json"));
 
 const copyIfExists = async (from, to) => {
   if (!existsSync(from)) return false;
@@ -27,14 +29,14 @@ const copyIfExists = async (from, to) => {
 };
 
 if (hasFrontend) {
-  await run("npm", ["run", "build"], { cwd: "frontend" });
+  await run("npm", ["run", "build"], { cwd: join("apps", "web") });
   if (hasBackend) {
     const copied = await copyIfExists(
-      join("frontend", "build", "client"),
-      join("backend", "app", "web", "static"),
+      join("apps", "web", "build", "client"),
+      join("apps", "api", "app", "web", "static"),
     );
     if (copied) {
-      console.log("📦 copied frontend/build/client → backend/app/web/static");
+      console.log("📦 copied apps/web/build/client → apps/api/app/web/static");
     }
   }
 }

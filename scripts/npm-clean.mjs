@@ -4,10 +4,10 @@ import { stdin as input, stdout as output, env } from "node:process";
 
 const targets = [
   ".venv",
-  "backend/app/web/static",
-  "frontend/node_modules",
-  "frontend/build",
-  "frontend/dist",
+  "apps/api/app/web/static",
+  "apps/web/node_modules",
+  "apps/web/build",
+  "apps/web/dist",
   "node_modules",
 ];
 

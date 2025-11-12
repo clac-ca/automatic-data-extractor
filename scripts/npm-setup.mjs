@@ -15,9 +15,11 @@ const run = (command, args = [], options = {}) =>
     });
   });
 
-const hasBackend = existsSync(join("backend", "app")) && existsSync("pyproject.toml");
+const hasBackend =
+  existsSync(join("apps", "api", "app")) &&
+  existsSync(join("apps", "api", "pyproject.toml"));
 const hasFrontend =
-  existsSync("frontend") && existsSync(join("frontend", "package.json"));
+  existsSync(join("apps", "web")) && existsSync(join("apps", "web", "package.json"));
 
 const launcher = process.platform === "win32" ? "py" : "python3";
 
@@ -39,11 +41,11 @@ if (hasBackend) {
   const pythonExecutable = pythonCandidates.find((candidate) => existsSync(candidate)) || launcher;
 
   await run(pythonExecutable, ["-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"]);
-  await run(pythonExecutable, ["-m", "pip", "install", "-e", ".[dev]"]);
+  await run(pythonExecutable, ["-m", "pip", "install", "-e", "apps/api[dev]"]);
 }
 
 if (hasFrontend) {
-  await run("npm", ["ci"], { cwd: "frontend" });
+  await run("npm", ["ci"], { cwd: join("apps", "web") });
 }
 
 console.log("✅ setup complete");

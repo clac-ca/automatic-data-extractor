@@ -15,9 +15,11 @@ const run = (command, args = [], options = {}) =>
     });
   });
 
-const hasBackend = existsSync(join("backend", "app")) && existsSync("pyproject.toml");
+const hasBackend =
+  existsSync(join("apps", "api", "app")) &&
+  existsSync(join("apps", "api", "pyproject.toml"));
 const hasFrontend =
-  existsSync("frontend") && existsSync(join("frontend", "package.json"));
+  existsSync(join("apps", "web")) && existsSync(join("apps", "web", "package.json"));
 
 if (!hasBackend) {
   console.log("⏭️  backend missing; skipping OpenAPI generation");
@@ -45,24 +47,13 @@ if (!pythonExecutable) {
   process.exit(1);
 }
 
-const openapiRelativePath = join("backend", "app", "openapi.json");
+const openapiRelativePath = join("apps", "api", "app", "openapi.json");
 const openapiPath = openapiRelativePath;
-const outputPath = join("frontend", "src", "generated", "openapi.d.ts");
+const outputPath = join("apps", "web", "src", "generated", "openapi.d.ts");
 
 await run(
   pythonExecutable,
-  [
-    "-c",
-    [
-      "import json",
-      "from pathlib import Path",
-      "from backend.app.main import create_app",
-      "app = create_app()",
-      "schema = app.openapi()",
-      `Path(r"${openapiRelativePath}").write_text(json.dumps(schema, indent=2))`,
-      `print('📝 wrote ${openapiRelativePath}')`,
-    ].join("; "),
-  ],
+  ["-m", "apps.api.app.scripts.generate_openapi", "--output", openapiRelativePath],
   { cwd: process.cwd() },
 );
 
@@ -71,7 +62,7 @@ if (!hasFrontend) {
   process.exit(0);
 }
 
-const generatedDir = join("frontend", "src", "generated");
+const generatedDir = join("apps", "web", "src", "generated");
 if (!existsSync(generatedDir)) {
   mkdirSync(generatedDir, { recursive: true });
 }
@@ -80,4 +71,4 @@ const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
 
 await run(npxCommand, ["openapi-typescript", openapiPath, "--output", outputPath, "--export-type"]);
 
-console.log("✅ generated frontend/src/generated/openapi.d.ts");
+console.log("✅ generated apps/web/src/generated/openapi.d.ts");

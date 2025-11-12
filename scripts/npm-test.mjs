@@ -16,9 +16,11 @@ const run = (command, args = [], options = {}) =>
     });
   });
 
-const backendPresent = existsSync(join("backend", "app")) && existsSync("pyproject.toml");
+const backendPresent =
+  existsSync(join("apps", "api", "app")) &&
+  existsSync(join("apps", "api", "pyproject.toml"));
 const frontendPresent =
-  existsSync("frontend") && existsSync(join("frontend", "package.json"));
+  existsSync(join("apps", "web")) && existsSync(join("apps", "web", "package.json"));
 
 if (backendPresent) {
   const pythonCandidates = process.platform === "win32"
@@ -33,13 +35,15 @@ if (backendPresent) {
   const pythonExecutable =
     pythonCandidates.find((candidate) => existsSync(candidate)) ||
     (process.platform === "win32" ? "python" : "python3");
-  await run(pythonExecutable, ["-m", "pytest", "-q"], { cwd: process.cwd() });
+  await run(pythonExecutable, ["-m", "pytest", "-q"], {
+    cwd: join(process.cwd(), "apps/api"),
+  });
 }
 
 let frontendHasTests = false;
 if (frontendPresent) {
   try {
-    const pkg = JSON.parse(await readFile("frontend/package.json", "utf8"));
+    const pkg = JSON.parse(await readFile("apps/web/package.json", "utf8"));
     frontendHasTests = typeof pkg?.scripts?.test === "string";
   } catch {
     frontendHasTests = false;
@@ -47,7 +51,7 @@ if (frontendPresent) {
 }
 
 if (frontendPresent && frontendHasTests) {
-  await run("npm", ["run", "test"], { cwd: "frontend" });
+  await run("npm", ["run", "test"], { cwd: join("apps", "web") });
 }
 
 console.log("✅ test complete");

@@ -16,22 +16,24 @@ const run = (command, args = [], options = {}) =>
   });
 
 const backendDir = ".";
-const hasBackend = existsSync(join("backend", "app")) && existsSync("pyproject.toml");
+const hasBackend =
+  existsSync(join("apps", "api", "app")) &&
+  existsSync(join("apps", "api", "pyproject.toml"));
 const hasFrontend =
-  existsSync("frontend") && existsSync(join("frontend", "package.json"));
+  existsSync(join("apps", "web")) && existsSync(join("apps", "web", "package.json"));
 
-const makeUvicornCommand = (extraArgs = []) => {
+const makeUvicornCommand = (port, extraArgs = []) => {
   const venvUvicorn =
     process.platform === "win32"
       ? join(backendDir, ".venv", "Scripts", "uvicorn.exe")
       : join(backendDir, ".venv", "bin", "uvicorn");
   const args = [
-    "backend.app.main:create_app",
+    "apps.api.app.main:create_app",
     "--factory",
     "--host",
     "0.0.0.0",
     "--port",
-    "8000",
+    `${port}`,
     ...extraArgs,
   ];
 
@@ -57,33 +59,45 @@ if (mode && !validModes.has(mode)) {
 }
 
 if (mode === "backend" && !hasBackend) {
-  console.error("Backend not found. Ensure backend/app/ and pyproject.toml exist before running backend mode.");
+  console.error(
+    "Backend not found. Ensure apps/api/app/ and apps/api/pyproject.toml exist before running backend mode.",
+  );
   process.exit(1);
 }
 
 if (mode === "frontend" && !hasFrontend) {
-  console.error("Frontend not found. Create frontend/ before running frontend mode.");
+  console.error("Frontend not found. Create apps/web/ before running frontend mode.");
   process.exit(1);
 }
 
+const runBackend = hasBackend && (!mode || mode === "backend");
+const runFrontend = hasFrontend && (!mode || mode === "frontend");
+const backendPort =
+  process.env.DEV_BACKEND_PORT ??
+  (runBackend && runFrontend ? "8001" : "8000");
+const frontendPort = process.env.DEV_FRONTEND_PORT ?? "8000";
+
+process.env.DEV_BACKEND_PORT = backendPort;
+process.env.DEV_FRONTEND_PORT = frontendPort;
+
 const tasks = [];
 
-if (hasBackend && (!mode || mode === "backend")) {
+if (runBackend) {
   tasks.push({
     name: "backend",
-    command: makeUvicornCommand(["--reload"]),
+    command: makeUvicornCommand(backendPort, ["--reload"]),
   });
 }
 
-if (hasFrontend && (!mode || mode === "frontend")) {
+if (runFrontend) {
   tasks.push({
     name: "frontend",
-    command: "npm --prefix frontend run dev",
+    command: `npm --prefix apps/web run dev -- --host 0.0.0.0 --port ${frontendPort}`,
   });
 }
 
 if (tasks.length === 0) {
-  console.log("Nothing to run yet. Add backend/app/ and/or frontend/ first.");
+  console.log("Nothing to run yet. Add apps/api/app/ and/or apps/web/ first.");
   process.exit(0);
 }
 
