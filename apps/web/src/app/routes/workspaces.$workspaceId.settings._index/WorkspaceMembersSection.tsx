@@ -57,7 +57,7 @@ export function WorkspaceMembersSection() {
   const roleLookup = useMemo(() => {
     const map = new Map<string, RoleDefinition>();
     for (const role of rolesQuery.data ?? []) {
-      map.set(role.role_id, role);
+      map.set(role.id, role);
     }
     return map;
   }, [rolesQuery.data]);
@@ -71,7 +71,7 @@ export function WorkspaceMembersSection() {
       return collator.compare(nameA ?? "", nameB ?? "");
     });
   }, [membersQuery.data]);
-  const memberIds = useMemo(() => new Set(members.map((member) => member.user.user_id)), [members]);
+  const memberIds = useMemo(() => new Set(members.map((member) => member.user.id)), [members]);
 
   const normalizedMemberSearch = memberSearch.trim().toLowerCase();
   const filteredMembers = useMemo(() => {
@@ -84,7 +84,7 @@ export function WorkspaceMembersSection() {
       return (
         name.toLowerCase().includes(normalizedMemberSearch) ||
         email.toLowerCase().includes(normalizedMemberSearch) ||
-        member.workspace_membership_id.toLowerCase().includes(normalizedMemberSearch)
+        member.id.toLowerCase().includes(normalizedMemberSearch)
       );
     });
   }, [members, normalizedMemberSearch]);
@@ -95,7 +95,7 @@ export function WorkspaceMembersSection() {
   const availableUsers: UserSummary[] = useMemo(() => {
     const collator = new Intl.Collator("en", { sensitivity: "base" });
     return usersQuery.users
-      .filter((user) => !memberIds.has(user.user_id))
+      .filter((user) => !memberIds.has(user.id))
       .sort((a, b) => {
         const nameA = a.display_name ?? a.email;
         const nameB = b.display_name ?? b.email;
@@ -123,7 +123,7 @@ export function WorkspaceMembersSection() {
   const selectedInviteUser = useMemo(
     () =>
       inviteOption === "existing"
-        ? availableUsers.find((user) => user.user_id === inviteUserId)
+        ? availableUsers.find((user) => user.id === inviteUserId)
         : undefined,
     [availableUsers, inviteOption, inviteUserId],
   );
@@ -154,7 +154,7 @@ export function WorkspaceMembersSection() {
   };
 
   const startEdit = (member: WorkspaceMember) => {
-    setEditingId(member.workspace_membership_id);
+    setEditingId(member.id);
     setRoleDraft(member.roles);
     setFeedbackMessage(null);
   };
@@ -194,7 +194,7 @@ export function WorkspaceMembersSection() {
       return;
     }
     setFeedbackMessage(null);
-    removeMember.mutate(member.workspace_membership_id, {
+    removeMember.mutate(member.id, {
       onSuccess: () => {
         setFeedbackMessage({ tone: "success", message: "Member removed." });
       },
@@ -222,7 +222,7 @@ export function WorkspaceMembersSection() {
           setFeedbackMessage({ tone: "danger", message: "Select a user to invite." });
           return;
         }
-        const user = availableUsers.find((candidate) => candidate.user_id === inviteUserId);
+        const user = availableUsers.find((candidate) => candidate.id === inviteUserId);
         if (!user) {
           setFeedbackMessage({ tone: "danger", message: "Selected user is no longer available." });
           return;
@@ -267,7 +267,7 @@ export function WorkspaceMembersSection() {
     if (inviteOption !== "existing" || !selectedInviteUser) {
       return;
     }
-    if (!filteredAvailableUsers.some((user) => user.user_id === selectedInviteUser.user_id)) {
+    if (!filteredAvailableUsers.some((user) => user.id === selectedInviteUser.id)) {
       setInviteSearch("");
     }
   }, [filteredAvailableUsers, inviteOption, selectedInviteUser]);
@@ -404,15 +404,15 @@ export function WorkspaceMembersSection() {
                     >
                       <option value="">Select a user</option>
                       {selectedInviteUser &&
-                      !filteredAvailableUsers.some((user) => user.user_id === selectedInviteUser.user_id) ? (
-                        <option value={selectedInviteUser.user_id}>
+                      !filteredAvailableUsers.some((user) => user.id === selectedInviteUser.id) ? (
+                        <option value={selectedInviteUser.id}>
                           {selectedInviteUser.display_name
                             ? `${selectedInviteUser.display_name} (${selectedInviteUser.email})`
                             : selectedInviteUser.email}
                         </option>
                       ) : null}
                       {filteredAvailableUsers.map((user) => (
-                        <option key={user.user_id} value={user.user_id}>
+                        <option key={user.id} value={user.id}>
                           {user.display_name ? `${user.display_name} (${user.email})` : user.email}
                         </option>
                       ))}
@@ -479,14 +479,14 @@ export function WorkspaceMembersSection() {
                 ) : (
                   availableRoles.map((role) => (
                     <label
-                      key={role.role_id}
+                      key={role.id}
                       className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
                     >
                       <input
                         type="checkbox"
                         className="h-4 w-4 rounded border-slate-300"
-                        checked={inviteRoleIds.includes(role.role_id)}
-                        onChange={(event) => handleToggleInviteRole(role.role_id, event.target.checked)}
+                        checked={inviteRoleIds.includes(role.id)}
+                        onChange={(event) => handleToggleInviteRole(role.id, event.target.checked)}
                         disabled={isInvitePending}
                       />
                       <span>{role.name}</span>
@@ -554,10 +554,10 @@ export function WorkspaceMembersSection() {
             {filteredMembers.map((member) => {
               const userLabel = member.user.display_name ?? member.user.email;
               const roleChips = member.roles.map((roleId) => roleLookup.get(roleId)?.name ?? roleId);
-              const isEditing = editingId === member.workspace_membership_id;
+              const isEditing = editingId === member.id;
               return (
                 <li
-                  key={member.workspace_membership_id}
+                  key={member.id}
                   className="rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
@@ -572,7 +572,7 @@ export function WorkspaceMembersSection() {
                               Default workspace
                             </span>
                           ) : null}
-                          <span>ID: {member.workspace_membership_id}</span>
+                          <span>ID: {member.id}</span>
                         </div>
                       </div>
                     </div>
@@ -608,7 +608,7 @@ export function WorkspaceMembersSection() {
                     {roleChips.length > 0 ? (
                       roleChips.map((roleName) => (
                         <span
-                          key={`${member.workspace_membership_id}-${roleName}`}
+                          key={`${member.id}-${roleName}`}
                           className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm"
                         >
                           {roleName}
@@ -625,14 +625,14 @@ export function WorkspaceMembersSection() {
                       <div className="flex flex-wrap gap-2">
                         {availableRoles.map((role) => (
                           <label
-                            key={role.role_id}
+                            key={role.id}
                             className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
                           >
                             <input
                               type="checkbox"
                               className="h-4 w-4 rounded border-slate-300"
-                              checked={roleDraft.includes(role.role_id)}
-                              onChange={(event) => handleToggleRoleDraft(role.role_id, event.target.checked)}
+                              checked={roleDraft.includes(role.id)}
+                              onChange={(event) => handleToggleRoleDraft(role.id, event.target.checked)}
                               disabled={updateMemberRoles.isPending}
                             />
                             <span>{role.name}</span>

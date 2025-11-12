@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import cast
-
 from sqlalchemy import (
     JSON,
     CheckConstraint,
@@ -14,6 +12,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.ext.mutable import MutableDict
@@ -49,11 +48,9 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     """Uploaded document metadata with deterministic storage paths."""
 
     __tablename__ = "documents"
-    __ulid_field__ = "document_id"
-
     workspace_id: Mapped[str] = mapped_column(
         String(26),
-        ForeignKey("workspaces.workspace_id", ondelete="CASCADE"),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
     )
     workspace: Mapped[Workspace] = relationship("Workspace", lazy="selectin")
@@ -70,7 +67,7 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         default=dict,
     )
     uploaded_by_user_id: Mapped[str | None] = mapped_column(
-        String(26), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
+        String(26), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     uploaded_by_user: Mapped[User | None] = relationship(
         "User",
@@ -95,7 +92,7 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_by_user_id: Mapped[str | None] = mapped_column(
-        String(26), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
+        String(26), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     tags: Mapped[list[DocumentTag]] = relationship(
         "DocumentTag",
@@ -136,29 +133,23 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     @property
-    def document_id(self) -> str:
-        """Expose a stable attribute for integrations expecting ``document_id``."""
-
-        return cast(str, self.id)
-
-    @property
     def tag_values(self) -> list[str]:
         """Return the tag strings associated with the document."""
 
         return [entry.tag for entry in getattr(self, "tags", [])]
 
 
-class DocumentTag(Base):
+class DocumentTag(ULIDPrimaryKeyMixin, Base):
     """Join table capturing string tags applied to documents."""
 
     __tablename__ = "document_tags"
 
     document_id: Mapped[str] = mapped_column(
         String(26),
-        ForeignKey("documents.document_id", ondelete="CASCADE"),
-        primary_key=True,
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
     )
-    tag: Mapped[str] = mapped_column(String(100), primary_key=True)
+    tag: Mapped[str] = mapped_column(String(100), nullable=False)
 
     document: Mapped[Document] = relationship(
         "Document",
@@ -167,6 +158,7 @@ class DocumentTag(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint("document_id", "tag"),
         Index("document_tags_document_id_idx", "document_id"),
         Index("document_tags_tag_idx", "tag"),
     )

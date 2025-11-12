@@ -58,6 +58,7 @@ class ConfigurationCreate(BaseSchema):
 class ConfigurationRecord(BaseSchema):
     """Serialized configuration metadata."""
 
+    id: ULIDStr
     workspace_id: ULIDStr
     config_id: ULIDStr
     display_name: str
@@ -83,6 +84,7 @@ class ConfigurationPage(Page[ConfigurationRecord]):
 class ConfigurationValidateResponse(BaseSchema):
     """Result of running validation."""
 
+    id: ULIDStr
     workspace_id: ULIDStr
     config_id: ULIDStr
     status: ConfigurationStatus

@@ -47,7 +47,7 @@ async def test_upload_list_download_document(
     )
     assert upload.status_code == 201, upload.text
     payload = upload.json()
-    document_id = payload["document_id"]
+    document_id = payload["id"]
     assert payload["byte_size"] == len(b"hello world")
     assert payload["metadata"] == {"source": "tests"}
     assert payload["tags"] == []
@@ -59,14 +59,14 @@ async def test_upload_list_download_document(
     assert payload["page_size"] == 25
     assert payload["has_next"] is False
     assert "total" not in payload
-    assert any(item["document_id"] == document_id for item in payload["items"])
+    assert any(item["id"] == document_id for item in payload["items"])
     assert all(isinstance(item.get("tags"), list) for item in payload["items"])
 
     detail = await async_client.get(
         f"{workspace_base}/documents/{document_id}", headers=headers
     )
     assert detail.status_code == 200
-    assert detail.json()["document_id"] == document_id
+    assert detail.json()["id"] == document_id
 
     download = await async_client.get(
         f"{workspace_base}/documents/{document_id}/download", headers=headers
@@ -144,7 +144,7 @@ async def test_delete_document_marks_deleted(
         headers=headers,
         files={"file": ("delete.txt", b"temporary", "text/plain")},
     )
-    document_id = upload.json()["document_id"]
+    document_id = upload.json()["id"]
 
     delete_response = await async_client.request(
         "DELETE",
@@ -189,7 +189,7 @@ async def test_download_missing_file_returns_404(
         files={"file": ("missing.txt", b"payload", "text/plain")},
     )
     payload = upload.json()
-    document_id = payload["document_id"]
+    document_id = payload["id"]
 
     session_factory = get_sessionmaker()
     async with session_factory() as session:
@@ -328,10 +328,10 @@ async def test_stream_document_handles_missing_file_mid_stream(
 
         _, stream = await service.stream_document(
             workspace_id=workspace_id,
-            document_id=record.document_id,
+            document_id=record.id,
         )
 
-        stored_row = await session.get(Document, record.document_id)
+        stored_row = await session.get(Document, record.id)
         assert stored_row is not None
         stored_path = settings.documents_dir / stored_row.stored_uri
         stored_path.unlink()

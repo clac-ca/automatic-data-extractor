@@ -16,10 +16,7 @@ from ..users.schemas import UserOut
 class WorkspaceOut(BaseSchema):
     """Workspace information decorated with membership metadata."""
 
-    workspace_id: ULIDStr = Field(
-        serialization_alias="workspace_id",
-        validation_alias="id",
-    )
+    id: ULIDStr
     name: str
     slug: str
     roles: list[str]
@@ -60,10 +57,7 @@ class WorkspaceMemberRolesUpdate(BaseSchema):
 class WorkspaceMemberOut(BaseSchema):
     """Representation of a workspace membership."""
 
-    workspace_membership_id: ULIDStr = Field(
-        serialization_alias="workspace_membership_id",
-        validation_alias="id",
-    )
+    id: ULIDStr
     workspace_id: ULIDStr
     roles: list[str]
     permissions: list[str]

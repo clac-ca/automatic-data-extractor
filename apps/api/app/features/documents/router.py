@@ -19,7 +19,6 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
-from apps.api.app.shared.core.errors import ProblemDetail
 from apps.api.app.shared.dependency import (
     get_documents_service,
     require_authenticated,
@@ -155,19 +154,15 @@ def _build_download_disposition(filename: str) -> str:
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "description": "Metadata payload or expiration timestamp is invalid.",
-            "model": ProblemDetail,
         },
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to upload documents.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow document uploads.",
-            "model": ProblemDetail,
         },
         status.HTTP_413_REQUEST_ENTITY_TOO_LARGE: {
             "description": "Uploaded file exceeds the configured size limit.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -212,15 +207,12 @@ async def upload_document(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to list documents.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow document access.",
-            "model": ProblemDetail,
         },
         status.HTTP_400_BAD_REQUEST: {
             "description": "Query parameters are invalid or unsupported.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -260,15 +252,12 @@ async def list_documents(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to access documents.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow document access.",
-            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Document not found within the workspace.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -303,15 +292,12 @@ async def read_document(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to download documents.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow document downloads.",
-            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Document is missing or its stored file is unavailable.",
-            "model": ProblemDetail,
         },
     },
 )
@@ -355,15 +341,12 @@ async def download_document(
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to delete documents.",
-            "model": ProblemDetail,
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow document deletion.",
-            "model": ProblemDetail,
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Document not found within the workspace.",
-            "model": ProblemDetail,
         },
     },
 )

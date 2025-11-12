@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import ClassVar
-
 from apps.api.app.shared.core.ids import generate_ulid
 from apps.api.app.shared.core.time import utc_now
 from sqlalchemy import DateTime, String
@@ -16,13 +14,10 @@ __all__ = ["generate_ulid", "TimestampMixin", "ULIDPrimaryKeyMixin"]
 class ULIDPrimaryKeyMixin:
     """Mixin that supplies a ULID-backed primary key column."""
 
-    __ulid_field__: ClassVar[str] = "id"
-
     @declared_attr.directive
     def id(cls) -> Mapped[str]:  # noqa: N805 - SQLAlchemy declared attr
-        column_name = getattr(cls, "__ulid_field__", "id")
         return mapped_column(
-            column_name,
+            "id",
             String(26),
             primary_key=True,
             default=generate_ulid,

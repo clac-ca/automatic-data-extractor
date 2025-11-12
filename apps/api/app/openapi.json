@@ -78,14 +78,7 @@
             }
           },
           "409": {
-            "description": "Initial setup already completed or email already in use.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Initial setup already completed or email already in use."
           },
           "422": {
             "description": "Validation Error",
@@ -142,14 +135,7 @@
             }
           },
           "401": {
-            "description": "Authentication required to access the session profile.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to access the session profile."
           }
         },
         "security": [
@@ -193,24 +179,10 @@
             }
           },
           "401": {
-            "description": "Invalid credentials provided.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Invalid credentials provided."
           },
           "403": {
-            "description": "User account is inactive or locked.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "User account is inactive or locked."
           },
           "422": {
             "description": "Validation Error",
@@ -237,24 +209,10 @@
             "description": "Successful Response"
           },
           "401": {
-            "description": "Session token is missing or invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Session token is missing or invalid."
           },
           "403": {
-            "description": "CSRF validation failed for the logout request.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "CSRF validation failed for the logout request."
           }
         },
         "security": [
@@ -290,24 +248,10 @@
             }
           },
           "401": {
-            "description": "Refresh token missing or invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Refresh token missing or invalid."
           },
           "403": {
-            "description": "CSRF validation failed for the refresh request.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "CSRF validation failed for the refresh request."
           }
         },
         "security": []
@@ -333,24 +277,10 @@
             }
           },
           "401": {
-            "description": "Authentication required to access the profile.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to access the profile."
           },
           "403": {
-            "description": "Service account credentials cannot access this endpoint.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Service account credentials cannot access this endpoint."
           }
         },
         "security": [
@@ -406,44 +336,16 @@
             }
           },
           "400": {
-            "description": "Email required or target user is inactive.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Email required or target user is inactive."
           },
           "401": {
-            "description": "Authentication required to manage API keys.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to manage API keys."
           },
           "403": {
-            "description": "Administrator role required to issue API keys.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Administrator role required to issue API keys."
           },
           "404": {
-            "description": "Specified user could not be found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Specified user could not be found."
           },
           "422": {
             "description": "Validation Error",
@@ -533,24 +435,10 @@
             }
           },
           "401": {
-            "description": "Authentication required to list API keys.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to list API keys."
           },
           "403": {
-            "description": "Administrator role required to list API keys.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Administrator role required to list API keys."
           },
           "422": {
             "description": "Validation Error",
@@ -604,34 +492,13 @@
             }
           },
           "401": {
-            "description": "Authentication required to revoke API keys.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to revoke API keys."
           },
           "403": {
-            "description": "Administrator role required to revoke API keys.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Administrator role required to revoke API keys."
           },
           "404": {
-            "description": "API key not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "API key not found."
           },
           "422": {
             "description": "Validation Error",
@@ -681,14 +548,7 @@
             }
           },
           "404": {
-            "description": "SSO login is not configured for this deployment.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "SSO login is not configured for this deployment."
           },
           "422": {
             "description": "Validation Error",
@@ -757,34 +617,13 @@
             }
           },
           "400": {
-            "description": "Callback parameters invalid or identity provider response rejected.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Callback parameters invalid or identity provider response rejected."
           },
           "403": {
-            "description": "User account associated with the SSO identity is disabled.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "User account associated with the SSO identity is disabled."
           },
           "502": {
-            "description": "ADE could not reach the identity provider during the SSO exchange.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "ADE could not reach the identity provider during the SSO exchange."
           },
           "422": {
             "description": "Validation Error",
@@ -2172,54 +2011,19 @@
             }
           },
           "401": {
-            "description": "Authentication required to manage workspaces.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to manage workspaces."
           },
           "403": {
-            "description": "Administrator role required to create workspaces.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Administrator role required to create workspaces."
           },
           "404": {
-            "description": "Specified owner could not be found or is inactive.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Specified owner could not be found or is inactive."
           },
           "409": {
-            "description": "Workspace slug already exists.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace slug already exists."
           },
           "422": {
-            "description": "Workspace name or slug is invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace name or slug is invalid."
           }
         }
       },
@@ -2287,24 +2091,10 @@
             }
           },
           "401": {
-            "description": "Authentication required to list workspaces.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to list workspaces."
           },
           "403": {
-            "description": "Service account credentials cannot access workspace listings.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Service account credentials cannot access workspace listings."
           },
           "422": {
             "description": "Validation Error",
@@ -2372,34 +2162,13 @@
             }
           },
           "401": {
-            "description": "Authentication required to view workspace context.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to view workspace context."
           },
           "403": {
-            "description": "Workspace access denied for the authenticated user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace access denied for the authenticated user."
           },
           "404": {
-            "description": "Workspace not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace not found."
           },
           "422": {
             "description": "Validation Error",
@@ -2475,54 +2244,19 @@
             }
           },
           "401": {
-            "description": "Authentication required to update workspaces.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to update workspaces."
           },
           "403": {
-            "description": "Workspace permissions do not allow settings management.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace permissions do not allow settings management."
           },
           "404": {
-            "description": "Workspace not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace not found."
           },
           "409": {
-            "description": "Workspace slug already exists.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace slug already exists."
           },
           "422": {
-            "description": "Workspace name or slug is invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace name or slug is invalid."
           }
         }
       },
@@ -2578,34 +2312,13 @@
             }
           },
           "401": {
-            "description": "Authentication required to delete workspaces.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to delete workspaces."
           },
           "403": {
-            "description": "Workspace permissions do not allow workspace deletion.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace permissions do not allow workspace deletion."
           },
           "404": {
-            "description": "Workspace not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace not found."
           },
           "422": {
             "description": "Validation Error",
@@ -2706,24 +2419,10 @@
             }
           },
           "401": {
-            "description": "Authentication required to list workspace members.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to list workspace members."
           },
           "403": {
-            "description": "Workspace permissions do not allow member access.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace permissions do not allow member access."
           },
           "422": {
             "description": "Validation Error",
@@ -2799,44 +2498,16 @@
             }
           },
           "401": {
-            "description": "Authentication required to manage workspace members.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to manage workspace members."
           },
           "403": {
-            "description": "Workspace permissions do not allow member management.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace permissions do not allow member management."
           },
           "404": {
-            "description": "Workspace or user not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace or user not found."
           },
           "409": {
-            "description": "User is already a member of the workspace.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "User is already a member of the workspace."
           },
           "422": {
             "description": "Validation Error",
@@ -2937,24 +2608,10 @@
             }
           },
           "401": {
-            "description": "Authentication required to list workspace roles.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to list workspace roles."
           },
           "403": {
-            "description": "Workspace permissions do not allow viewing role definitions.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace permissions do not allow viewing role definitions."
           },
           "422": {
             "description": "Validation Error",
@@ -3030,54 +2687,19 @@
             }
           },
           "400": {
-            "description": "System roles cannot be managed via this endpoint.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "System roles cannot be managed via this endpoint."
           },
           "401": {
-            "description": "Authentication required to manage workspace roles.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to manage workspace roles."
           },
           "403": {
-            "description": "Workspace permissions do not allow managing roles.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace permissions do not allow managing roles."
           },
           "409": {
-            "description": "Role slug already exists or conflicts with a system role.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Role slug already exists or conflicts with a system role."
           },
           "422": {
-            "description": "Invalid role name, slug, or permissions.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Invalid role name, slug, or permissions."
           }
         }
       }
@@ -3155,64 +2777,22 @@
             }
           },
           "400": {
-            "description": "System roles cannot be modified.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "System roles cannot be modified."
           },
           "401": {
-            "description": "Authentication required to manage workspace roles.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to manage workspace roles."
           },
           "403": {
-            "description": "Workspace permissions do not allow managing roles.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace permissions do not allow managing roles."
           },
           "404": {
-            "description": "Role not found for this workspace.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Role not found for this workspace."
           },
           "409": {
-            "description": "Operation would violate governor guardrails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Operation would violate governor guardrails."
           },
           "422": {
-            "description": "Invalid role payload.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Invalid role payload."
           }
         }
       },
@@ -3271,54 +2851,19 @@
             "description": "Successful Response"
           },
           "400": {
-            "description": "System roles cannot be deleted.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "System roles cannot be deleted."
           },
           "401": {
-            "description": "Authentication required to manage workspace roles.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to manage workspace roles."
           },
           "403": {
-            "description": "Workspace permissions do not allow managing roles.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace permissions do not allow managing roles."
           },
           "404": {
-            "description": "Role not found for this workspace.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Role not found for this workspace."
           },
           "409": {
-            "description": "Role is assigned or would violate governor guardrails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Role is assigned or would violate governor guardrails."
           },
           "422": {
             "description": "Validation Error",
@@ -3408,44 +2953,16 @@
             }
           },
           "400": {
-            "description": "Workspace must retain at least one owner.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace must retain at least one owner."
           },
           "401": {
-            "description": "Authentication required to manage workspace members.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to manage workspace members."
           },
           "403": {
-            "description": "Workspace permissions do not allow member management.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace permissions do not allow member management."
           },
           "404": {
-            "description": "Membership not found within the workspace.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Membership not found within the workspace."
           },
           "422": {
             "description": "Validation Error",
@@ -3525,44 +3042,16 @@
             }
           },
           "400": {
-            "description": "Workspace must retain at least one owner.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace must retain at least one owner."
           },
           "401": {
-            "description": "Authentication required to manage workspace members.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to manage workspace members."
           },
           "403": {
-            "description": "Workspace permissions do not allow member management.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace permissions do not allow member management."
           },
           "404": {
-            "description": "Membership not found within the workspace.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Membership not found within the workspace."
           },
           "422": {
             "description": "Validation Error",
@@ -3630,24 +3119,10 @@
             }
           },
           "401": {
-            "description": "Authentication required to set the default workspace.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to set the default workspace."
           },
           "403": {
-            "description": "Workspace access denied for the authenticated user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace access denied for the authenticated user."
           },
           "422": {
             "description": "Validation Error",
@@ -3725,44 +3200,16 @@
             }
           },
           "400": {
-            "description": "Metadata payload or expiration timestamp is invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Metadata payload or expiration timestamp is invalid."
           },
           "401": {
-            "description": "Authentication required to upload documents.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to upload documents."
           },
           "403": {
-            "description": "Workspace permissions do not allow document uploads.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace permissions do not allow document uploads."
           },
           "413": {
-            "description": "Uploaded file exceeds the configured size limit.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Uploaded file exceeds the configured size limit."
           },
           "422": {
             "description": "Validation Error",
@@ -3879,34 +3326,13 @@
             }
           },
           "401": {
-            "description": "Authentication required to list documents.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to list documents."
           },
           "403": {
-            "description": "Workspace permissions do not allow document access.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace permissions do not allow document access."
           },
           "400": {
-            "description": "Query parameters are invalid or unsupported.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Query parameters are invalid or unsupported."
           },
           "422": {
             "description": "Validation Error",
@@ -3986,34 +3412,13 @@
             }
           },
           "401": {
-            "description": "Authentication required to access documents.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to access documents."
           },
           "403": {
-            "description": "Workspace permissions do not allow document access.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace permissions do not allow document access."
           },
           "404": {
-            "description": "Document not found within the workspace.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Document not found within the workspace."
           },
           "422": {
             "description": "Validation Error",
@@ -4084,34 +3489,13 @@
             "description": "Successful Response"
           },
           "401": {
-            "description": "Authentication required to delete documents.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to delete documents."
           },
           "403": {
-            "description": "Workspace permissions do not allow document deletion.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace permissions do not allow document deletion."
           },
           "404": {
-            "description": "Document not found within the workspace.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Document not found within the workspace."
           },
           "422": {
             "description": "Validation Error",
@@ -4189,34 +3573,13 @@
             }
           },
           "401": {
-            "description": "Authentication required to download documents.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Authentication required to download documents."
           },
           "403": {
-            "description": "Workspace permissions do not allow document downloads.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Workspace permissions do not allow document downloads."
           },
           "404": {
-            "description": "Document is missing or its stored file is unavailable.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
+            "description": "Document is missing or its stored file is unavailable."
           },
           "422": {
             "description": "Validation Error",
@@ -4316,26 +3679,6 @@
               }
             }
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -4410,55 +3753,15 @@
               }
             }
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Unprocessable Entity"
+            }
           }
         }
       }
@@ -4526,36 +3829,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Not Found"
           },
           "422": {
             "description": "Validation Error",
@@ -4832,46 +4105,6 @@
               }
             }
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -4978,36 +4211,6 @@
               "application/octet-stream": {}
             },
             "description": "Partial Content"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Not Found"
           },
           "304": {
             "description": "Not Modified"
@@ -5275,66 +4478,6 @@
           "204": {
             "description": "Successful Response"
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "412": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Precondition Failed"
-          },
-          "428": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Precondition Required"
-          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -5519,55 +4662,15 @@
               }
             }
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Unprocessable Entity"
+            }
           }
         }
       }
@@ -5635,36 +4738,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Not Found"
           },
           "422": {
             "description": "Validation Error",
@@ -5751,36 +4824,6 @@
               },
               "application/zip": {}
             }
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Not Found"
           },
           "422": {
             "description": "Validation Error",
@@ -5870,46 +4913,6 @@
               }
             }
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -5997,46 +5000,6 @@
           "204": {
             "description": "Successful Response"
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -6113,36 +5076,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Not Found"
           },
           "422": {
             "description": "Validation Error",
@@ -6232,56 +5165,6 @@
               }
             }
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -6349,36 +5232,6 @@
         "responses": {
           "204": {
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Not Found"
           },
           "422": {
             "description": "Validation Error",
@@ -6567,12 +5420,12 @@
       },
       "APIKeySummary": {
         "properties": {
-          "api_key_id": {
+          "id": {
             "type": "string",
             "maxLength": 26,
             "minLength": 26,
             "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Api Key Id",
+            "title": "Id",
             "description": "ULID (26-character string)."
           },
           "principal_type": {
@@ -6677,7 +5530,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "api_key_id",
+          "id",
           "principal_type",
           "principal_id",
           "principal_label",
@@ -6813,6 +5666,14 @@
       },
       "BuildRecord": {
         "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Id",
+            "description": "Primary identifier for the build record"
+          },
           "workspace_id": {
             "type": "string",
             "maxLength": 26,
@@ -6828,6 +5689,14 @@
             "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
             "title": "Config Id",
             "description": "Configuration identifier"
+          },
+          "configuration_id": {
+            "type": "string",
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Configuration Id",
+            "description": "Configuration record identifier"
           },
           "build_id": {
             "type": "string",
@@ -6986,8 +5855,10 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "id",
           "workspace_id",
           "config_id",
+          "configuration_id",
           "build_id",
           "status",
           "environment_ref"
@@ -7174,6 +6045,14 @@
       },
       "ConfigurationRecord": {
         "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Id",
+            "description": "ULID (26-character string)."
+          },
           "workspace_id": {
             "type": "string",
             "maxLength": 26,
@@ -7238,6 +6117,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "id",
           "workspace_id",
           "config_id",
           "display_name",
@@ -7261,6 +6141,14 @@
       },
       "ConfigurationValidateResponse": {
         "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Id",
+            "description": "ULID (26-character string)."
+          },
           "workspace_id": {
             "type": "string",
             "maxLength": 26,
@@ -7302,6 +6190,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "id",
           "workspace_id",
           "config_id",
           "status",
@@ -7344,12 +6233,12 @@
       },
       "DocumentOut": {
         "properties": {
-          "document_id": {
+          "id": {
             "type": "string",
             "maxLength": 26,
             "minLength": 26,
             "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Document Id",
+            "title": "Id",
             "description": "Document ULID (26-character string)."
           },
           "workspace_id": {
@@ -7468,7 +6357,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "document_id",
+          "id",
           "workspace_id",
           "name",
           "byte_size",
@@ -8087,6 +6976,14 @@
       },
       "PermissionOut": {
         "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Id",
+            "description": "ULID (26-character string)."
+          },
           "key": {
             "type": "string",
             "title": "Key"
@@ -8114,6 +7011,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "id",
           "key",
           "resource",
           "action",
@@ -8180,103 +7078,6 @@
         ],
         "title": "PrincipalType",
         "description": "Kinds of principals that can hold assignments."
-      },
-      "ProblemDetail": {
-        "properties": {
-          "type": {
-            "type": "string",
-            "title": "Type",
-            "description": "Problem type URI.",
-            "default": "about:blank"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title",
-            "description": "Short, human-readable summary of the problem."
-          },
-          "status": {
-            "type": "integer",
-            "maximum": 599.0,
-            "minimum": 100.0,
-            "title": "Status",
-            "description": "HTTP status code generated."
-          },
-          "detail": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Detail",
-            "description": "Human-readable explanation for this occurrence of the problem."
-          },
-          "code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Code",
-            "description": "Application-specific error code."
-          },
-          "trace_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Trace Id",
-            "description": "Correlation identifier for tracing/logging purposes."
-          },
-          "meta": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Meta",
-            "description": "Additional metadata describing the problem."
-          },
-          "errors": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Errors",
-            "description": "Optional field-level validation errors."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "title",
-          "status"
-        ],
-        "title": "ProblemDetail",
-        "description": "Problem+JSON payload compatible with RFC 7807."
       },
       "ProviderDiscoveryResponse": {
         "properties": {
@@ -8352,12 +7153,12 @@
       },
       "RoleAssignmentOut": {
         "properties": {
-          "assignment_id": {
+          "id": {
             "type": "string",
             "maxLength": 26,
             "minLength": 26,
             "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Assignment Id",
+            "title": "Id",
             "description": "ULID (26-character string)."
           },
           "principal_id": {
@@ -8447,7 +7248,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "assignment_id",
+          "id",
           "principal_id",
           "principal_type",
           "role_id",
@@ -8557,12 +7358,12 @@
       },
       "RoleOut": {
         "properties": {
-          "role_id": {
+          "id": {
             "type": "string",
             "maxLength": 26,
             "minLength": 26,
             "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Role Id",
+            "title": "Id",
             "description": "ULID (26-character string)."
           },
           "slug": {
@@ -8621,7 +7422,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "role_id",
+          "id",
           "slug",
           "name",
           "scope_type",
@@ -8878,12 +7679,12 @@
       },
       "UserOut": {
         "properties": {
-          "user_id": {
+          "id": {
             "type": "string",
             "maxLength": 26,
             "minLength": 26,
             "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "User Id",
+            "title": "Id",
             "description": "ULID (26-character string)."
           },
           "email": {
@@ -8952,7 +7753,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "user_id",
+          "id",
           "email",
           "is_active",
           "is_service_account",
@@ -9013,12 +7814,12 @@
       },
       "UserProfile": {
         "properties": {
-          "user_id": {
+          "id": {
             "type": "string",
             "maxLength": 26,
             "minLength": 26,
             "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "User Id",
+            "title": "Id",
             "description": "ULID (26-character string)."
           },
           "email": {
@@ -9077,7 +7878,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "user_id",
+          "id",
           "email",
           "is_active",
           "is_service_account"
@@ -9239,12 +8040,12 @@
       },
       "WorkspaceMemberOut": {
         "properties": {
-          "workspace_membership_id": {
+          "id": {
             "type": "string",
             "maxLength": 26,
             "minLength": 26,
             "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Workspace Membership Id",
+            "title": "Id",
             "description": "ULID (26-character string)."
           },
           "workspace_id": {
@@ -9280,7 +8081,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "workspace_membership_id",
+          "id",
           "workspace_id",
           "roles",
           "permissions",
@@ -9360,12 +8161,12 @@
       },
       "WorkspaceOut": {
         "properties": {
-          "workspace_id": {
+          "id": {
             "type": "string",
             "maxLength": 26,
             "minLength": 26,
             "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Workspace Id",
+            "title": "Id",
             "description": "ULID (26-character string)."
           },
           "name": {
@@ -9398,7 +8199,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "workspace_id",
+          "id",
           "name",
           "slug",
           "roles",

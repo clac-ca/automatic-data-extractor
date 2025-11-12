@@ -10,18 +10,17 @@ from sqlalchemy import (
     DateTime,
     Enum as SAEnum,
     ForeignKey,
-    ForeignKeyConstraint,
     Index,
     Integer,
-    PrimaryKeyConstraint,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.api.app.shared.db import Base
-from apps.api.app.shared.db.mixins import TimestampMixin
+from apps.api.app.shared.db.mixins import TimestampMixin, ULIDPrimaryKeyMixin
 from apps.api.app.shared.db.enums import enum_values
 
 __all__ = ["BuildStatus", "ConfigurationBuild"]
@@ -36,17 +35,20 @@ class BuildStatus(str, Enum):
     FAILED = "failed"
 
 
-class ConfigurationBuild(TimestampMixin, Base):
+class ConfigurationBuild(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     """Track virtual environment builds for workspace configurations."""
 
     __tablename__ = "configuration_builds"
 
     workspace_id: Mapped[str] = mapped_column(
         String(26),
-        ForeignKey("workspaces.workspace_id", ondelete="CASCADE"),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
     )
     config_id: Mapped[str] = mapped_column(String(26), nullable=False)
+    configuration_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("configurations.id", ondelete="CASCADE"), nullable=False
+    )
     build_id: Mapped[str] = mapped_column(String(26), nullable=False)
 
     status: Mapped[BuildStatus] = mapped_column(
@@ -76,28 +78,21 @@ class ConfigurationBuild(TimestampMixin, Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
-        PrimaryKeyConstraint("workspace_id", "config_id", "build_id"),
-        ForeignKeyConstraint(
-            ["workspace_id", "config_id"],
-            ["configurations.workspace_id", "configurations.config_id"],
-            ondelete="CASCADE",
-        ),
+        UniqueConstraint("workspace_id", "config_id", "build_id"),
         CheckConstraint(
             "status in ('building','active','inactive','failed')",
             name="configuration_builds_status_check",
         ),
         Index(
             "configuration_builds_active_idx",
-            "workspace_id",
-            "config_id",
+            "configuration_id",
             unique=True,
             sqlite_where=text("status = 'active'"),
             postgresql_where=text("status = 'active'"),
         ),
         Index(
             "configuration_builds_building_idx",
-            "workspace_id",
-            "config_id",
+            "configuration_id",
             unique=True,
             sqlite_where=text("status = 'building'"),
             postgresql_where=text("status = 'building'"),

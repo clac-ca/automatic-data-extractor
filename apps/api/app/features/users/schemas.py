@@ -14,7 +14,7 @@ from apps.api.app.shared.pagination import Page
 class UserProfile(BaseSchema):
     """Minimal view of the authenticated user."""
 
-    user_id: ULIDStr = Field(serialization_alias="user_id", validation_alias="id")
+    id: ULIDStr
     email: str
     is_active: bool
     is_service_account: bool

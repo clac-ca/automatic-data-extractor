@@ -17,8 +17,6 @@ class Workspace(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     """Container grouping documents and workspace members."""
 
     __tablename__ = "workspaces"
-    __ulid_field__ = "workspace_id"
-
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     settings: Mapped[dict[str, Any]] = mapped_column(
@@ -36,14 +34,12 @@ class WorkspaceMembership(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     """Assignment of a user to a workspace with role/permission metadata."""
 
     __tablename__ = "workspace_memberships"
-    __ulid_field__ = "workspace_membership_id"
-
     user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.user_id", ondelete="CASCADE"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
     workspace_id: Mapped[str] = mapped_column(
-        ForeignKey("workspaces.workspace_id", ondelete="CASCADE"),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
     )
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

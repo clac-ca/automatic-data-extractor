@@ -147,7 +147,7 @@ async def _prepare_configuration(
     status: ConfigurationStatus = ConfigurationStatus.ACTIVE,
     config_version: int = 1,
     content_digest: str | None = "digest",
-) -> tuple[str, str]:
+) -> tuple[str, str, str]:
     workspace = Workspace(name="Acme", slug=f"acme-{generate_ulid().lower()}")
     session.add(workspace)
     await session.flush()
@@ -162,7 +162,7 @@ async def _prepare_configuration(
     )
     session.add(config)
     await session.flush()
-    return workspace_id, config.config_id
+    return workspace_id, config.config_id, config.id
 
 
 async def _ensure_config_path(root: Path, workspace_id: str, config_id: str) -> Path:
@@ -173,7 +173,7 @@ async def _ensure_config_path(root: Path, workspace_id: str, config_id: str) -> 
 
 @pytest.mark.asyncio()
 async def test_ensure_build_creates_new_build(session: AsyncSession, tmp_path: Path, service_factory) -> None:
-    workspace_id, config_id = await _prepare_configuration(session)
+    workspace_id, config_id, configuration_db_id = await _prepare_configuration(session)
     await _ensure_config_path(tmp_path / "configs", workspace_id, config_id)
 
     builder = FakeBuilder(engine_version="1.0.0", python_version="3.12.0")
@@ -198,7 +198,7 @@ async def test_ensure_build_creates_new_build(session: AsyncSession, tmp_path: P
 
 @pytest.mark.asyncio()
 async def test_ensure_build_reuses_active(session: AsyncSession, tmp_path: Path, service_factory) -> None:
-    workspace_id, config_id = await _prepare_configuration(session)
+    workspace_id, config_id, _ = await _prepare_configuration(session)
     await _ensure_config_path(tmp_path / "configs", workspace_id, config_id)
 
     builder = FakeBuilder()
@@ -217,7 +217,7 @@ async def test_ensure_build_reuses_active(session: AsyncSession, tmp_path: Path,
 
 @pytest.mark.asyncio()
 async def test_ensure_build_honours_ttl(session: AsyncSession, tmp_path: Path, service_factory) -> None:
-    workspace_id, config_id = await _prepare_configuration(session)
+    workspace_id, config_id, configuration_db_id = await _prepare_configuration(session)
     await _ensure_config_path(tmp_path / "configs", workspace_id, config_id)
 
     clock = TimeStub(datetime(2024, 1, 1, tzinfo=UTC))
@@ -242,12 +242,13 @@ async def test_ensure_build_honours_ttl(session: AsyncSession, tmp_path: Path, s
 async def test_ensure_build_returns_building_when_in_progress(
     session: AsyncSession, tmp_path: Path, service_factory
 ) -> None:
-    workspace_id, config_id = await _prepare_configuration(session)
+    workspace_id, config_id, configuration_db_id = await _prepare_configuration(session)
     await _ensure_config_path(tmp_path / "configs", workspace_id, config_id)
 
     building = ConfigurationBuild(
         workspace_id=workspace_id,
         config_id=config_id,
+        configuration_id=configuration_db_id,
         build_id=generate_ulid(),
         status=BuildStatus.BUILDING,
         venv_path=str(tmp_path / "venvs" / workspace_id / config_id / "build"),
@@ -273,12 +274,13 @@ async def test_ensure_build_returns_building_when_in_progress(
 
 @pytest.mark.asyncio()
 async def test_ensure_build_blocks_and_times_out(session: AsyncSession, tmp_path: Path, service_factory) -> None:
-    workspace_id, config_id = await _prepare_configuration(session)
+    workspace_id, config_id, _ = await _prepare_configuration(session)
     await _ensure_config_path(tmp_path / "configs", workspace_id, config_id)
 
     building = ConfigurationBuild(
         workspace_id=workspace_id,
         config_id=config_id,
+        configuration_id=configuration_db_id,
         build_id=generate_ulid(),
         status=BuildStatus.BUILDING,
         venv_path=str(tmp_path / "venvs" / workspace_id / config_id / "build"),
@@ -309,7 +311,7 @@ async def test_ensure_build_blocks_and_times_out(session: AsyncSession, tmp_path
 async def test_delete_active_build_removes_row_and_directory(
     session: AsyncSession, tmp_path: Path, service_factory
 ) -> None:
-    workspace_id, config_id = await _prepare_configuration(session)
+    workspace_id, config_id, _ = await _prepare_configuration(session)
     config_root = tmp_path / "configs"
     await _ensure_config_path(config_root, workspace_id, config_id)
 

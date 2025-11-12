@@ -16,6 +16,7 @@ from .models import PrincipalType, ScopeType
 class PermissionOut(BaseSchema):
     """Serialized permission registry entry."""
 
+    id: ULIDStr
     key: str
     resource: str
     action: str
@@ -44,7 +45,7 @@ class RoleUpdate(BaseSchema):
 class RoleOut(BaseSchema):
     """Serialized representation of a role definition."""
 
-    role_id: ULIDStr = Field(serialization_alias="role_id", validation_alias="id")
+    id: ULIDStr
     slug: str
     name: str
     description: str | None = None
@@ -74,9 +75,7 @@ class RoleAssignmentCreate(BaseSchema):
 class RoleAssignmentOut(BaseSchema):
     """Serialized representation of a role assignment."""
 
-    assignment_id: ULIDStr = Field(
-        serialization_alias="assignment_id", validation_alias="id"
-    )
+    id: ULIDStr
     principal_id: ULIDStr
     principal_type: PrincipalType
     user_id: ULIDStr | None = None

@@ -143,7 +143,7 @@ export default function WorkspaceDocumentsRoute() {
     sort: sortOrder,
   });
   const { refetch: refetchDocuments } = documentsQuery;
-  const getDocumentKey = useCallback((document: DocumentRecord) => document.document_id, []);
+  const getDocumentKey = useCallback((document: DocumentRecord) => document.id, []);
   const documents = useFlattenedPages(documentsQuery.data?.pages, getDocumentKey);
   const fetchingNextPage = documentsQuery.isFetchingNextPage;
   const backgroundFetch = documentsQuery.isFetching && !fetchingNextPage;
@@ -168,7 +168,7 @@ export default function WorkspaceDocumentsRoute() {
     setSelectedIds((current) => {
       if (current.size === 0) return current;
       const next = new Set<string>();
-      const valid = new Set(documents.map((d) => d.document_id));
+      const valid = new Set(documents.map((d) => d.id));
       let changed = false;
       for (const id of current) {
         if (valid.has(id)) next.add(id);
@@ -179,7 +179,7 @@ export default function WorkspaceDocumentsRoute() {
   }, [documents]);
 
   const firstSelectedDocument = useMemo(() => {
-    for (const d of documents) if (selectedIdsSet.has(d.document_id)) return d;
+    for (const d of documents) if (selectedIdsSet.has(d.id)) return d;
     return null;
   }, [documents, selectedIdsSet]);
 
@@ -212,7 +212,7 @@ export default function WorkspaceDocumentsRoute() {
 
   const renderJobStatus = useCallback(
     (documentItem: DocumentRecord) => (
-      <DocumentJobStatus workspaceId={workspace.id} documentId={documentItem.document_id} />
+      <DocumentJobStatus workspaceId={workspace.id} documentId={documentItem.id} />
     ),
     [workspace.id],
   );
@@ -253,7 +253,7 @@ export default function WorkspaceDocumentsRoute() {
   const handleToggleAll = () => {
     setSelectedIds((current) => {
       if (documents.length === 0) return new Set();
-      const allIds = documents.map((doc) => doc.document_id);
+      const allIds = documents.map((doc) => doc.id);
       if (current.size === documents.length && allIds.every((id) => current.has(id))) return new Set();
       return new Set(allIds);
     });
@@ -276,10 +276,10 @@ export default function WorkspaceDocumentsRoute() {
     async (document: DocumentRecord) => {
       setBanner(null);
       try {
-        await deleteDocuments.mutateAsync({ documentIds: [document.document_id] });
+        await deleteDocuments.mutateAsync({ documentIds: [document.id] });
         setSelectedIds((current) => {
           const next = new Set(current);
-          next.delete(document.document_id);
+          next.delete(document.id);
           return next;
         });
       } catch (error) {
@@ -293,8 +293,8 @@ export default function WorkspaceDocumentsRoute() {
   const handleDownloadDocument = useCallback(
     async (document: DocumentRecord) => {
       try {
-        setDownloadingId(document.document_id);
-        const { blob, filename } = await downloadDocument(workspace.id, document.document_id);
+        setDownloadingId(document.id);
+        const { blob, filename } = await downloadDocument(workspace.id, document.id);
         triggerBrowserDownload(blob, filename ?? document.name);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to download document.";
@@ -898,7 +898,7 @@ function DocumentsTable({
   const { allSelected, someSelected } = useMemo(() => {
     if (documents.length === 0) return { allSelected: false, someSelected: false };
     const selectedCount = documents.reduce(
-      (count, d) => (selectedIds.has(d.document_id) ? count + 1 : count),
+      (count, d) => (selectedIds.has(d.id) ? count + 1 : count),
       0,
     );
     return { allSelected: selectedCount === documents.length, someSelected: selectedCount > 0 && selectedCount < documents.length };
@@ -931,10 +931,10 @@ function DocumentsTable({
         </thead>
         <tbody>
           {documents.map((document) => {
-            const isSelected = selectedIds.has(document.document_id);
+            const isSelected = selectedIds.has(document.id);
             return (
               <tr
-                key={document.document_id}
+                key={document.id}
                 className={clsx(
                   "border-b border-slate-200 last:border-b-0 transition-colors hover:bg-slate-50",
                   isSelected ? "bg-brand-50/50" : "bg-white"
@@ -945,7 +945,7 @@ function DocumentsTable({
                     type="checkbox"
                     className="h-4 w-4 rounded border border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     checked={isSelected}
-                    onChange={() => onToggleDocument(document.document_id)}
+                    onChange={() => onToggleDocument(document.id)}
                     disabled={disableSelection}
                   />
                 </td>
@@ -982,7 +982,7 @@ function DocumentsTable({
                     onDelete={onDeleteDocument}
                     onRun={onRunDocument}
                     disabled={disableRowActions}
-                    downloading={downloadingId === document.document_id}
+                    downloading={downloadingId === document.id}
                     safeModeEnabled={safeModeEnabled}
                     safeModeMessage={safeModeMessage}
                     safeModeLoading={safeModeLoading}
@@ -1213,7 +1213,7 @@ function RunExtractionDrawerContent({
   const submitJob = useSubmitJob(workspaceId);
   const { preferences, setPreferences } = useDocumentRunPreferences(
     workspaceId,
-    documentRecord.document_id,
+    documentRecord.id,
   );
 
   const allConfigs = useMemo(() => configsQuery.data ?? [], [configsQuery.data]);
@@ -1318,7 +1318,7 @@ function RunExtractionDrawerContent({
     setErrorMessage(null);
     submitJob.mutate(
       {
-        input_document_id: documentRecord.document_id,
+        input_document_id: documentRecord.id,
         config_version_id: selectedVersionId,
       },
       {

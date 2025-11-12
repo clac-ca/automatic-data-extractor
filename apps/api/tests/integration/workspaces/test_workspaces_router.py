@@ -12,6 +12,7 @@ from sqlalchemy import select
 from apps.api.app.settings import get_settings
 from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.features.roles.models import (
+    Permission,
     Principal,
     Role,
     RoleAssignment,
@@ -79,8 +80,12 @@ async def test_global_permission_allows_workspace_creation(
         )
         session.add(role)
         await session.flush()
+        permission = await session.execute(
+            select(Permission).where(Permission.key == "Workspaces.Create")
+        )
+        permission_record = permission.scalar_one()
         session.add(
-            RolePermission(role_id=role.id, permission_key="Workspaces.Create")
+            RolePermission(role_id=role.id, permission_id=permission_record.id)
         )
         await assign_global_role(
             session=session, user_id=member["id"], role_id=role.id
@@ -235,7 +240,7 @@ async def test_put_roles_replaces_assignments(
         json={"user_id": invitee["id"]},
     )
     assert add_response.status_code == 201, add_response.text
-    membership_id = add_response.json()["workspace_membership_id"]
+    membership_id = add_response.json()["id"]
 
     session_factory = get_sessionmaker()
     async with session_factory() as session:
@@ -288,7 +293,7 @@ async def test_put_roles_blocks_last_governor_demotion(
     )
 
     update_response = await async_client.put(
-        f"/api/v1/workspaces/{workspace_id}/members/{owner_entry['workspace_membership_id']}/roles",
+        f"/api/v1/workspaces/{workspace_id}/members/{owner_entry['id']}/roles",
         headers={"Authorization": f"Bearer {token}"},
         json={"role_ids": []},
     )
@@ -442,7 +447,7 @@ async def test_delete_workspace_role_blocks_assignments(
     )
 
     assign_response = await async_client.put(
-        f"/api/v1/workspaces/{workspace_id}/members/{member_entry['workspace_membership_id']}/roles",
+        f"/api/v1/workspaces/{workspace_id}/members/{member_entry['id']}/roles",
         headers={"Authorization": f"Bearer {token}"},
         json={"role_ids": [role_id]},
     )

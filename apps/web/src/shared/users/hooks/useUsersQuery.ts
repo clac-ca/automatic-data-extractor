@@ -35,7 +35,7 @@ export function useUsersQuery(options: UseUsersQueryOptions = {}) {
     staleTime: 60_000,
   });
 
-  const getUserKey = useCallback((user: UserListPage["items"][number]) => user.user_id, []);
+  const getUserKey = useCallback((user: UserListPage["items"][number]) => user.id, []);
   const users = useFlattenedPages(query.data?.pages, getUserKey);
 
   return {
@@ -51,4 +51,3 @@ function normalizeFetchOptions(options: FetchUsersOptions): FetchUsersOptions {
   }
   return next;
 }
-

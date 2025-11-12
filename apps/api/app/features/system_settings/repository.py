@@ -17,7 +17,9 @@ class SystemSettingsRepository:
         self._session = session
 
     async def get(self, key: str) -> SystemSetting | None:
-        return await self._session.get(SystemSetting, key)
+        stmt = select(SystemSetting).where(SystemSetting.key == key).limit(1)
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def get_for_update(self, key: str) -> SystemSetting | None:
         stmt = (
