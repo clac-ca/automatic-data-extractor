@@ -2,6 +2,12 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 
 import Editor, { type OnMount } from "@monaco-editor/react";
 import clsx from "clsx";
 
+export interface CodeEditorMarker {
+  readonly lineNumber: number;
+  readonly message: string;
+  readonly severity?: "error" | "warning" | "info";
+}
+
 export interface CodeEditorHandle {
   focus: () => void;
   revealLine: (lineNumber: number) => void;
@@ -14,18 +20,26 @@ interface CodeEditorProps {
   readonly readOnly?: boolean;
   readonly onSaveShortcut?: () => void;
   readonly className?: string;
+  readonly markers?: readonly CodeEditorMarker[];
 }
 
 export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEditor(
-  { value, onChange, language = "plaintext", readOnly = false, onSaveShortcut, className }: CodeEditorProps,
+  { value, onChange, language = "plaintext", readOnly = false, onSaveShortcut, className, markers }: CodeEditorProps,
   ref,
 ) {
   const saveShortcutRef = useRef(onSaveShortcut);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
+  const ownerIdRef = useRef(`ade-code-editor-${Math.random().toString(36).slice(2)}`);
+  const markersRef = useRef<readonly CodeEditorMarker[]>(markers ?? []);
 
   useEffect(() => {
     saveShortcutRef.current = onSaveShortcut;
   }, [onSaveShortcut]);
+
+  useEffect(() => {
+    markersRef.current = markers ?? [];
+  }, [markers]);
 
   const handleChange = useCallback(
     (nextValue: string | undefined) => {
@@ -34,11 +48,61 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     [onChange],
   );
 
+  const applyMarkers = useCallback(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco) {
+      return;
+    }
+    const model = editor.getModel();
+    if (!model) {
+      return;
+    }
+    const severity = monaco.MarkerSeverity;
+    const normalized = markersRef.current.map((marker) => {
+      const clampedLine = Math.max(1, Math.min(model.getLineCount(), Math.floor(marker.lineNumber)));
+      return {
+        startLineNumber: clampedLine,
+        endLineNumber: clampedLine,
+        startColumn: 1,
+        endColumn: model.getLineLength(clampedLine) || 1,
+        message: marker.message,
+        severity:
+          marker.severity === "warning"
+            ? severity.Warning
+            : marker.severity === "info"
+              ? severity.Info
+              : severity.Error,
+      };
+    });
+    monaco.editor.setModelMarkers(model, ownerIdRef.current, normalized);
+  }, []);
+
   const handleMount = useCallback<OnMount>((editor, monaco) => {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       saveShortcutRef.current?.();
     });
     editorRef.current = editor;
+    monacoRef.current = monaco;
+    applyMarkers();
+  }, [applyMarkers]);
+
+  useEffect(() => {
+    applyMarkers();
+  }, [applyMarkers, markers]);
+
+  useEffect(() => {
+    return () => {
+      const editor = editorRef.current;
+      const monaco = monacoRef.current;
+      if (!editor || !monaco) {
+        return;
+      }
+      const model = editor.getModel();
+      if (model) {
+        monaco.editor.setModelMarkers(model, ownerIdRef.current, []);
+      }
+    };
   }, []);
 
   useImperativeHandle(

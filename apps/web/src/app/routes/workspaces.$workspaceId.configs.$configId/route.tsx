@@ -1,60 +1,60 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router";
 import clsx from "clsx";
 
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
-import { CodeEditor } from "@ui/code-editor";
+import { CodeEditor, type CodeEditorHandle, type CodeEditorMarker } from "@ui/code-editor";
+import { FormField } from "@ui/form-field";
 import { Input } from "@ui/input";
 import { PageState } from "@ui/PageState";
 
 import { useWorkspaceContext } from "../workspaces.$workspaceId/WorkspaceContext";
 import {
+  composeManifestPatch,
+  parseDocstringMetadata,
+  parseManifest,
   useActivateConfigurationMutation,
   useConfigFileQuery,
-  useConfigFilesQuery,
   useConfigQuery,
   useDeactivateConfigurationMutation,
-  useRenameConfigFileMutation,
+  useSaveConfigFileMutation,
   useValidateConfigurationMutation,
   type ConfigurationValidateResponse,
-  type FileEntry,
-  type FileReadJson,
+  type ManifestColumn,
+  type ParsedManifest,
 } from "@shared/configs";
-import { useConfigEditorState } from "./useConfigEditorState";
-import type { EditorTab } from "./useConfigEditorState";
 
-interface TreeNode {
-  readonly entry: FileEntry;
-  readonly children: TreeNode[];
-}
+const MANIFEST_PATH = "src/ade_config/manifest.json";
+const ENABLE_MONACO = (import.meta.env.VITE_ENABLE_NEW_CONFIG_EDITOR ?? "").toLowerCase() === "true";
 
-interface FlattenedNode {
-  readonly entry: FileEntry;
-  readonly depth: number;
-}
-
-interface ManifestColumnSummary {
+interface ColumnFormState {
+  readonly id: string;
   readonly key: string;
   readonly label: string;
   readonly path: string;
   readonly required: boolean;
   readonly enabled: boolean;
+  readonly depends_on: string[];
 }
 
-interface ManifestSummary {
-  readonly name: string;
-  readonly columns: readonly ManifestColumnSummary[];
-  readonly transformPath: string | null;
-  readonly validatorsPath: string | null;
-}
-
-interface ManifestParseResult {
-  readonly summary: ManifestSummary | null;
+interface ScriptEditorState {
+  readonly path: string;
+  readonly content: string;
+  readonly originalContent: string;
+  readonly etag: string | null;
+  readonly loading: boolean;
   readonly error: string | null;
+  readonly isNew: boolean;
+  readonly language: string;
+  readonly size: number | null;
+  readonly mtime: string | null;
 }
 
-const MANIFEST_PATH = "src/ade_config/manifest.json";
+interface LifecycleAlert {
+  readonly type: "success" | "error";
+  readonly message: string;
+}
 
 export default function WorkspaceConfigRoute() {
   const { workspace } = useWorkspaceContext();
@@ -62,245 +62,517 @@ export default function WorkspaceConfigRoute() {
   const configId = params.configId ?? "";
 
   const configQuery = useConfigQuery({ workspaceId: workspace.id, configId, enabled: Boolean(configId) });
-  const filesQuery = useConfigFilesQuery({ workspaceId: workspace.id, configId, depth: "infinity", enabled: Boolean(configId) });
   const manifestQuery = useConfigFileQuery({ workspaceId: workspace.id, configId, path: MANIFEST_PATH, enabled: Boolean(configId) });
 
-  const editor = useConfigEditorState({
-    workspaceId: workspace.id,
-    configId,
-    onSaved: () => {
-      void filesQuery.refetch();
-      void manifestQuery.refetch();
-    },
-  });
-
+  const saveManifestFile = useSaveConfigFileMutation(workspace.id, configId);
+  const saveScriptFile = useSaveConfigFileMutation(workspace.id, configId);
   const validateConfig = useValidateConfigurationMutation(workspace.id, configId);
   const activateConfig = useActivateConfigurationMutation(workspace.id, configId);
   const deactivateConfig = useDeactivateConfigurationMutation(workspace.id, configId);
-  const renameFile = useRenameConfigFileMutation(workspace.id, configId);
 
-  const [fileFilter, setFileFilter] = useState("");
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(["", "src/ade_config/", "assets/"]));
-  const [renameTarget, setRenameTarget] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-  const [renameError, setRenameError] = useState<string | null>(null);
-  const [lifecycleMessage, setLifecycleMessage] = useState<string | null>(null);
-  const [lifecycleError, setLifecycleError] = useState<string | null>(null);
+  const [parsedManifest, setParsedManifest] = useState<ParsedManifest | null>(null);
+  const [columns, setColumns] = useState<ColumnFormState[]>([]);
+  const [baselineColumns, setBaselineColumns] = useState<ColumnFormState[]>([]);
+  const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
+  const [manifestMeta, setManifestMeta] = useState<{ etag: string | null } | null>(null);
+  const [manifestMessage, setManifestMessage] = useState<string | null>(null);
+  const [manifestErrorMessage, setManifestErrorMessage] = useState<string | null>(null);
+  const [manifestParseError, setManifestParseError] = useState<string | null>(null);
+  const [activePane, setActivePane] = useState<"columns" | "scripts">("columns");
 
-  const configData = configQuery.data;
-  const listing = filesQuery.data;
+  const [scriptState, setScriptState] = useState<ScriptEditorState | null>(null);
+  const [scriptAlert, setScriptAlert] = useState<LifecycleAlert | null>(null);
+
+  const [lifecycleAlert, setLifecycleAlert] = useState<LifecycleAlert | null>(null);
+
+  const idCounter = useRef(0);
+
+  const selectedColumn = useMemo(
+    () => columns.find((column) => column.id === selectedColumnId) ?? null,
+    [columns, selectedColumnId],
+  );
+
+  const manifestFile = manifestQuery.data;
+
+  const columnFactory = useCallback((column: ManifestColumn): ColumnFormState => {
+    idCounter.current += 1;
+    return {
+      id: `column-${idCounter.current}`,
+      key: column.key ?? "",
+      label: column.label ?? "",
+      path: column.path ?? "",
+      required: column.required ?? false,
+      enabled: column.enabled ?? true,
+      depends_on: Array.isArray(column.depends_on)
+        ? column.depends_on.filter((value) => value != null && value.trim().length > 0)
+        : [],
+    };
+  }, []);
+
+  const manifestDirty = useMemo(() => {
+    if (!parsedManifest) {
+      return false;
+    }
+    return !columnsEqual(columns, baselineColumns);
+  }, [columns, baselineColumns, parsedManifest]);
 
   useEffect(() => {
-    if (!listing) {
+    if (manifestDirty) {
+      setManifestMessage(null);
+    }
+  }, [manifestDirty]);
+
+  useEffect(() => {
+    if (!manifestFile) {
       return;
     }
-    setExpanded((prev) => {
-      if (prev.size > 1) {
-        return prev;
-      }
-      const next = new Set(prev);
-      listing.entries
-        .filter((entry) => entry.kind === "dir" && entry.depth <= 1)
-        .forEach((entry) => next.add(entry.path));
-      return next;
-    });
-  }, [listing]);
-
-  const tree = useMemo(() => buildFileTree(listing?.entries ?? []), [listing?.entries]);
-  const visibleSet = useMemo(() => deriveVisibleSet(listing?.entries ?? [], fileFilter), [listing?.entries, fileFilter]);
-  const treeItems = useMemo(() => flattenTree(tree, expanded, visibleSet), [tree, expanded, visibleSet]);
-
-  const editable = configData?.status === "draft";
-  const activeTab = editor.activeTab;
-  const dirty = Boolean(activeTab && activeTab.encoding === "utf-8" && activeTab.content !== activeTab.originalContent);
-
-  const manifestDetails = useMemo(() => parseManifestFile(manifestQuery.data), [manifestQuery.data]);
-  const manifestError = manifestDetails.error ?? (manifestQuery.isError ? (manifestQuery.error as Error).message : null);
-
-  const handleToggleNode = (path: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) {
-        next.delete(path);
-      } else {
-        next.add(path);
-      }
-      return next;
-    });
-  };
-
-  const handleRenameSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!renameTarget) {
+    if (manifestFile.encoding !== "utf-8") {
+      setManifestParseError("Manifest file must be UTF-8 encoded.");
       return;
     }
-    setRenameError(null);
-    renameFile.mutate(
-      { fromPath: renameTarget, toPath: renameValue, overwrite: false },
-      {
-        onSuccess: (result) => {
-          editor.renameTabPath(renameTarget, result.to);
-          setRenameTarget(null);
-          filesQuery.refetch();
-        },
-        onError: (error) => {
-          setRenameError(error instanceof Error ? error.message : "Unable to rename file.");
-        },
-      },
+    if (manifestDirty) {
+      return;
+    }
+    try {
+      const payload = JSON.parse(manifestFile.content ?? "{}");
+      const parsed = parseManifest(payload);
+      idCounter.current = 0;
+      const mapped = parsed.columns.map(columnFactory);
+      setParsedManifest(parsed);
+      setColumns(mapped.map(cloneColumn));
+      setBaselineColumns(mapped.map(cloneColumn));
+      setManifestMeta({ etag: manifestFile.etag ?? null });
+      setManifestParseError(null);
+      setManifestMessage(null);
+      setManifestErrorMessage(null);
+      setSelectedColumnId((current) => {
+        if (current && mapped.some((column) => column.id === current)) {
+          return current;
+        }
+        const first = mapped[0];
+        return first ? first.id : null;
+      });
+    } catch (error) {
+      console.error("Unable to parse manifest", error);
+      setManifestParseError("Manifest JSON is invalid. Fix the file contents and try again.");
+      setParsedManifest(null);
+      setColumns([]);
+      setBaselineColumns([]);
+      setManifestMeta(null);
+    }
+  }, [manifestDirty, manifestFile, columnFactory]);
+
+  const scriptPath = selectedColumn?.path?.trim() ?? "";
+
+  const scriptFileQuery = useConfigFileQuery({
+    workspaceId: workspace.id,
+    configId,
+    path: scriptPath.length > 0 ? scriptPath : null,
+    enabled: Boolean(configId && scriptPath),
+  });
+
+  useEffect(() => {
+    if (!scriptPath) {
+      setScriptState(null);
+      return;
+    }
+    const file = scriptFileQuery.data;
+    const isFetching = scriptFileQuery.isFetching;
+    const missingMessage = scriptFileQuery.isError
+      ? scriptFileQuery.error instanceof Error
+        ? scriptFileQuery.error.message
+        : "Unable to load script file."
+      : "Script file not found. Save to create it.";
+
+    setScriptState((previous) => {
+      if (!file) {
+        if (isFetching) {
+          if (previous && previous.path === scriptPath) {
+            return { ...previous, loading: true };
+          }
+          return {
+            path: scriptPath,
+            content: previous && previous.path === scriptPath ? previous.content : "",
+            originalContent: previous && previous.path === scriptPath ? previous.originalContent : "",
+            etag: previous && previous.path === scriptPath ? previous.etag : null,
+            loading: true,
+            error: null,
+            isNew: true,
+            language: guessLanguage(scriptPath),
+            size: null,
+            mtime: null,
+          } satisfies ScriptEditorState;
+        }
+        if (previous && previous.path === scriptPath) {
+          if (previous.content !== previous.originalContent) {
+            return { ...previous, loading: false, error: previous.error ?? null };
+          }
+          return {
+            ...previous,
+            loading: false,
+            error: missingMessage,
+            isNew: true,
+          } satisfies ScriptEditorState;
+        }
+        return {
+          path: scriptPath,
+          content: "",
+          originalContent: "",
+          etag: null,
+          loading: false,
+          error: missingMessage,
+          isNew: true,
+          language: guessLanguage(scriptPath),
+          size: null,
+          mtime: null,
+        } satisfies ScriptEditorState;
+      }
+      if (file.encoding !== "utf-8") {
+        return {
+          path: scriptPath,
+          content: "",
+          originalContent: "",
+          etag: file.etag ?? null,
+          loading: false,
+          error: "Script file is not UTF-8 encoded.",
+          isNew: false,
+          language: guessLanguage(scriptPath),
+          size: file.size ?? null,
+          mtime: file.mtime ?? null,
+        } satisfies ScriptEditorState;
+      }
+      if (previous && previous.path === scriptPath && previous.content !== previous.originalContent) {
+        return previous;
+      }
+      return {
+        path: scriptPath,
+        content: file.content ?? "",
+        originalContent: file.content ?? "",
+        etag: file.etag ?? null,
+        loading: false,
+        error: null,
+        isNew: false,
+        language: guessLanguage(scriptPath),
+        size: file.size ?? null,
+        mtime: file.mtime ?? null,
+      } satisfies ScriptEditorState;
+    });
+  }, [
+    scriptPath,
+    scriptFileQuery.data,
+    scriptFileQuery.isFetching,
+    scriptFileQuery.isError,
+    scriptFileQuery.error,
+  ]);
+
+  const scriptDirty = Boolean(scriptState && scriptState.content !== scriptState.originalContent);
+
+  useEffect(() => {
+    if (scriptDirty) {
+      setScriptAlert(null);
+    }
+  }, [scriptDirty]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!manifestDirty && !scriptDirty) {
+        return;
+      }
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [manifestDirty, scriptDirty]);
+
+  const scriptMarkers: CodeEditorMarker[] = useMemo(() => {
+    if (!scriptState || !scriptState.path) {
+      return [];
+    }
+    return (validateConfig.data?.issues ?? [])
+      .filter((issue) => normalizePath(issue.path) === normalizePath(scriptState.path))
+      .map((issue) => ({
+        lineNumber: extractLineNumber(issue.message) ?? 1,
+        message: issue.message,
+        severity: "error" as const,
+      }));
+  }, [scriptState, validateConfig.data]);
+
+  const docstringMetadata = useMemo(() => parseDocstringMetadata(scriptState?.content ?? ""), [scriptState?.content]);
+
+  const lifecyclePending = activateConfig.isPending || deactivateConfig.isPending;
+
+  const configRecord = configQuery.data;
+
+  const handleColumnSelect = useCallback((columnId: string) => {
+    setSelectedColumnId(columnId);
+  }, []);
+
+  const handleAddColumn = useCallback(() => {
+    idCounter.current += 1;
+    const newColumn: ColumnFormState = {
+      id: `column-${idCounter.current}`,
+      key: "",
+      label: "",
+      path: "",
+      required: false,
+      enabled: true,
+      depends_on: [],
+    };
+    setColumns((prev) => [...prev, newColumn]);
+    setSelectedColumnId(newColumn.id);
+    setActivePane("columns");
+  }, []);
+
+  const handleRemoveColumn = useCallback((columnId: string) => {
+    setColumns((previous) => {
+      const index = previous.findIndex((column) => column.id === columnId);
+      if (index === -1) {
+        return previous;
+      }
+      const next = previous.filter((column) => column.id !== columnId);
+      setSelectedColumnId((current) => {
+        if (current !== columnId) {
+          return current;
+        }
+        const fallback = next[index] ?? next[index - 1] ?? next[0] ?? null;
+        return fallback ? fallback.id : null;
+      });
+      return next;
+    });
+  }, []);
+
+  const handleMoveColumn = useCallback((columnId: string, direction: "up" | "down") => {
+    setColumns((previous) => {
+      const index = previous.findIndex((column) => column.id === columnId);
+      if (index === -1) {
+        return previous;
+      }
+      const nextIndex = direction === "up" ? index - 1 : index + 1;
+      if (nextIndex < 0 || nextIndex >= previous.length) {
+        return previous;
+      }
+      const copy = [...previous];
+      const [item] = copy.splice(index, 1);
+      copy.splice(nextIndex, 0, item);
+      return copy;
+    });
+  }, []);
+
+  const handleColumnChange = useCallback((columnId: string, patch: Partial<ColumnFormState>) => {
+    setColumns((previous) =>
+      previous.map((column) =>
+        column.id === columnId
+          ? {
+              ...column,
+              ...patch,
+              depends_on: patch.depends_on ? [...patch.depends_on] : column.depends_on,
+            }
+          : column,
+      ),
     );
-  };
+  }, []);
 
-  const handleValidate = async () => {
-    setLifecycleMessage(null);
-    setLifecycleError(null);
+  const handleSaveManifest = useCallback(async () => {
+    if (!parsedManifest) {
+      return;
+    }
+    setManifestMessage(null);
+    setManifestErrorMessage(null);
+    try {
+      const manifestColumns = toManifestColumns(columns);
+      const content = `${JSON.stringify(composeManifestPatch(parsedManifest, manifestColumns), null, 2)}\n`;
+      const result = await saveManifestFile.mutateAsync({
+        path: MANIFEST_PATH,
+        content,
+        etag: manifestMeta?.etag ?? undefined,
+      });
+      setManifestMeta({ etag: result?.etag ?? null });
+      setBaselineColumns(columns.map(cloneColumn));
+      setManifestMessage("Manifest saved.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to save manifest.";
+      setManifestErrorMessage(message);
+    }
+  }, [columns, manifestMeta?.etag, parsedManifest, saveManifestFile]);
+
+  const handleScriptChange = useCallback((value: string) => {
+    setScriptState((previous) => (previous ? { ...previous, content: value } : previous));
+  }, []);
+
+  const handleSaveScript = useCallback(async () => {
+    if (!scriptState) {
+      return;
+    }
+    setScriptAlert(null);
+    try {
+      const result = await saveScriptFile.mutateAsync({
+        path: scriptState.path,
+        content: scriptState.content,
+        etag: scriptState.etag ?? undefined,
+        create: scriptState.isNew && !scriptState.etag ? true : undefined,
+      });
+      setScriptState((previous) => {
+        if (!previous || previous.path !== scriptState.path) {
+          return previous;
+        }
+        return {
+          ...previous,
+          originalContent: previous.content,
+          etag: result?.etag ?? previous.etag ?? null,
+          isNew: false,
+          size: result?.size ?? previous.size,
+          mtime: result?.mtime ?? previous.mtime,
+          error: null,
+        } satisfies ScriptEditorState;
+      });
+      setScriptAlert({ type: "success", message: "Script saved." });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to save script.";
+      setScriptAlert({ type: "error", message });
+      setScriptState((previous) =>
+        previous && previous.path === scriptState.path ? { ...previous, error: message } : previous,
+      );
+    }
+  }, [saveScriptFile, scriptState]);
+
+  const handleValidate = useCallback(async () => {
+    setLifecycleAlert(null);
     try {
       await validateConfig.mutateAsync();
-      setLifecycleMessage("Validation completed.");
+      setLifecycleAlert({ type: "success", message: "Validation completed." });
     } catch (error) {
-      setLifecycleError(error instanceof Error ? error.message : "Validation failed.");
+      const message = error instanceof Error ? error.message : "Validation failed.";
+      setLifecycleAlert({ type: "error", message });
     }
-  };
+  }, [validateConfig]);
 
-  const handleActivate = async () => {
-    setLifecycleMessage(null);
-    setLifecycleError(null);
+  const handleActivate = useCallback(async () => {
+    setLifecycleAlert(null);
     try {
       await activateConfig.mutateAsync();
       await configQuery.refetch();
-      setLifecycleMessage("Configuration activated.");
+      setLifecycleAlert({ type: "success", message: "Configuration activated." });
     } catch (error) {
-      setLifecycleError(error instanceof Error ? error.message : "Activate failed.");
+      const message = error instanceof Error ? error.message : "Activate failed.";
+      setLifecycleAlert({ type: "error", message });
     }
-  };
+  }, [activateConfig, configQuery]);
 
-  const handleDeactivate = async () => {
-    setLifecycleMessage(null);
-    setLifecycleError(null);
+  const handleDeactivate = useCallback(async () => {
+    setLifecycleAlert(null);
     try {
       await deactivateConfig.mutateAsync();
       await configQuery.refetch();
-      setLifecycleMessage("Configuration deactivated.");
+      setLifecycleAlert({ type: "success", message: "Configuration deactivated." });
     } catch (error) {
-      setLifecycleError(error instanceof Error ? error.message : "Deactivate failed.");
+      const message = error instanceof Error ? error.message : "Deactivate failed.";
+      setLifecycleAlert({ type: "error", message });
     }
-  };
-
-  const lifecyclePending = activateConfig.isPending || deactivateConfig.isPending;
+  }, [configQuery, deactivateConfig]);
 
   if (!configId) {
     return <PageState title="Select a configuration" description="Choose a configuration to open the builder." />;
   }
 
-  if (configQuery.isLoading || filesQuery.isLoading) {
-    return <PageState variant="loading" title="Loading configuration" description="Fetching file tree…" />;
+  if (configQuery.isLoading || manifestQuery.isLoading) {
+    return <PageState variant="loading" title="Loading configuration" description="Fetching configuration assets…" />;
   }
 
-  if (configQuery.isError || !configData) {
+  if (configQuery.isError || !configRecord) {
     return (
-      <PageState variant="error" title="Configuration not found" description="This workspace does not include that configuration." />
+      <PageState
+        variant="error"
+        title="Configuration not found"
+        description="This workspace does not include that configuration."
+      />
     );
   }
 
-  if (filesQuery.isError || !listing) {
-    return <PageState variant="error" title="Unable to load files" description="Ensure the configuration exists on disk and try again." />;
-  }
-
   return (
-    <div className="space-y-4">
-      <ConfigIDEHeader
-        configName={configData.display_name}
+    <div className="space-y-6">
+      <ConfigHeader
         workspaceName={workspace.name}
-        status={configData.status}
-        updatedAt={configData.updated_at}
+        configName={configRecord.display_name}
+        status={configRecord.status}
+        updatedAt={configRecord.updated_at}
         onValidate={handleValidate}
         validating={validateConfig.isPending}
         onActivate={handleActivate}
         onDeactivate={handleDeactivate}
         lifecyclePending={lifecyclePending}
-        canActivate={configData.status !== "active"}
-        canDeactivate={configData.status === "active"}
+        canActivate={configRecord.status !== "active"}
+        canDeactivate={configRecord.status === "active"}
       />
 
-      {lifecycleMessage ? <Alert tone="success">{lifecycleMessage}</Alert> : null}
-      {lifecycleError ? <Alert tone="danger">{lifecycleError}</Alert> : null}
+      {lifecycleAlert ? (
+        <Alert tone={lifecycleAlert.type === "success" ? "success" : "danger"}>{lifecycleAlert.message}</Alert>
+      ) : null}
 
-      {!editable ? (
+      {configRecord.status !== "draft" ? (
         <Alert tone="warning" heading="Read-only configuration">
-          This configuration is {configData.status}. Clone or switch to a draft to edit files.
+          This configuration is {configRecord.status}. Clone or switch to a draft to edit files.
         </Alert>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[260px,minmax(0,1fr),320px]">
-        <FileSidebar
-          filter={fileFilter}
-          onFilterChange={setFileFilter}
-          summary={listing.summary}
-          generatedAt={listing.generated_at}
-          onRefresh={() => void filesQuery.refetch()}
-          isRefreshing={filesQuery.isFetching}
-          items={treeItems}
-          expanded={expanded}
-          onToggle={handleToggleNode}
-          onSelect={(path) => editor.openTab(path)}
-          activePath={editor.activePath}
-        />
-
-        <EditorWorkspace
-          tabs={editor.tabs}
-          activeTab={activeTab}
-          activePath={editor.activePath}
-          onSelectTab={editor.setActivePath}
-          onCloseTab={editor.closeTab}
-          updateContent={editor.updateContent}
-          isSaving={editor.isSaving}
-          dirty={dirty}
-          editable={editable}
-          onSave={editor.saveActiveTab}
-          onRename={() => {
-            if (editor.activePath) {
-              setRenameTarget(editor.activePath);
-              setRenameValue(editor.activePath);
-            }
-          }}
-        />
-
-        <InspectorPanel
-          manifest={{ summary: manifestDetails.summary, error: manifestError, isLoading: manifestQuery.isLoading }}
-          manifestPath={MANIFEST_PATH}
-          onOpenManifest={() => editor.openTab(MANIFEST_PATH)}
-          onOpenFile={(path) => {
-            if (path) {
-              editor.openTab(path);
-            }
-          }}
-          validation={validateConfig.data ?? null}
-          validationError={validateConfig.isError ? (validateConfig.error as Error).message : null}
-          isValidationRunning={validateConfig.isPending}
-          onValidate={handleValidate}
-        />
-      </div>
-
-      {renameTarget ? (
-        <RenameDialog
-          path={renameTarget}
-          value={renameValue}
-          onChange={setRenameValue}
-          onClose={() => {
-            setRenameTarget(null);
-            setRenameError(null);
-          }}
-          onSubmit={handleRenameSubmit}
-          isSubmitting={renameFile.isPending}
-          error={renameError}
-        />
+      {manifestParseError ? <Alert tone="danger">{manifestParseError}</Alert> : null}
+      {manifestQuery.isError ? (
+        <Alert tone="danger">
+          {manifestQuery.error instanceof Error
+            ? manifestQuery.error.message
+            : "Unable to load the manifest file."}
+        </Alert>
       ) : null}
+
+      <PaneToggle activePane={activePane} onChange={setActivePane} hasScript={Boolean(scriptPath)} />
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,420px),minmax(0,1fr)]">
+        <div className={clsx(activePane === "columns" ? "block" : "hidden", "xl:block")}>
+        <ColumnsPanel
+          columns={columns}
+          selectedColumnId={selectedColumnId}
+          onSelect={handleColumnSelect}
+          onAdd={handleAddColumn}
+          onRemove={handleRemoveColumn}
+          onMove={handleMoveColumn}
+          onChange={handleColumnChange}
+          onSave={handleSaveManifest}
+          manifestDirty={manifestDirty}
+          saving={saveManifestFile.isPending}
+          message={manifestMessage}
+          error={manifestErrorMessage}
+          disabled={configRecord.status !== "draft"}
+          onOpenScript={() => setActivePane("scripts")}
+          manifest={parsedManifest}
+        />
+        </div>
+
+        <div className={clsx(activePane === "scripts" ? "block" : "hidden", "xl:block")}>
+          <ScriptPanel
+            column={selectedColumn}
+            script={scriptState}
+            onChange={handleScriptChange}
+            onSave={handleSaveScript}
+            saving={saveScriptFile.isPending}
+            dirty={scriptDirty}
+            alert={scriptAlert}
+            validation={validateConfig.data ?? null}
+            docstring={docstringMetadata}
+            markers={ENABLE_MONACO ? scriptMarkers : []}
+            enableMonaco={ENABLE_MONACO}
+            disabled={configRecord.status !== "draft"}
+            onShowColumns={() => setActivePane("columns")}
+          />
+        </div>
+      </div>
     </div>
   );
 }
 
-function ConfigIDEHeader({
-  configName,
+function ConfigHeader({
   workspaceName,
+  configName,
   status,
   updatedAt,
   onValidate,
@@ -311,8 +583,8 @@ function ConfigIDEHeader({
   canActivate,
   canDeactivate,
 }: {
-  readonly configName: string;
   readonly workspaceName: string;
+  readonly configName: string;
   readonly status: string;
   readonly updatedAt: string;
   readonly onValidate: () => void;
@@ -324,631 +596,771 @@ function ConfigIDEHeader({
   readonly canDeactivate: boolean;
 }) {
   return (
-    <header className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="space-y-1">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Workspace · {workspaceName}</p>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold text-slate-900">{configName}</h1>
-            <StatusBadge status={status} />
-          </div>
-          <p className="text-sm text-slate-500">Updated {formatTimestamp(updatedAt)}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={onValidate} isLoading={validating}>
-            Validate
-          </Button>
-          {canActivate ? (
-            <Button variant="primary" size="sm" onClick={onActivate} isLoading={lifecyclePending}>
-              Activate
-            </Button>
-          ) : null}
-          {canDeactivate ? (
-            <Button variant="ghost" size="sm" onClick={onDeactivate} isLoading={lifecyclePending}>
-              Deactivate
-            </Button>
-          ) : null}
-        </div>
+    <header className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+      <div className="space-y-1">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{workspaceName}</p>
+        <h1 className="text-xl font-semibold text-slate-900">{configName}</h1>
+        <p className="text-sm text-slate-600">
+          <span className="font-medium">Status:</span> {status}
+          <span className="mx-2 text-slate-400">•</span>
+          <span className="font-medium">Updated:</span> {formatDateTime(updatedAt)}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={onValidate} isLoading={validating}>
+          Run validation
+        </Button>
+        <Button variant="secondary" onClick={onActivate} disabled={!canActivate} isLoading={lifecyclePending}>
+          Activate
+        </Button>
+        <Button variant="ghost" onClick={onDeactivate} disabled={!canDeactivate} isLoading={lifecyclePending}>
+          Deactivate
+        </Button>
       </div>
     </header>
   );
 }
 
-function StatusBadge({ status }: { readonly status: string }) {
-  const normalized = status.toLowerCase();
-  const tone =
-    normalized === "active"
-      ? "bg-emerald-100 text-emerald-700"
-      : normalized === "draft"
-        ? "bg-amber-100 text-amber-700"
-        : "bg-slate-200 text-slate-700";
+function PaneToggle({
+  activePane,
+  onChange,
+  hasScript,
+}: {
+  readonly activePane: "columns" | "scripts";
+  readonly onChange: (pane: "columns" | "scripts") => void;
+  readonly hasScript: boolean;
+}) {
   return (
-    <span className={clsx("rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide", tone)}>{status}</span>
+    <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-1 text-sm shadow-sm xl:hidden">
+      <button
+        type="button"
+        className={clsx(
+          "flex-1 rounded-md px-3 py-2 font-semibold transition",
+          activePane === "columns" ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-100",
+        )}
+        onClick={() => onChange("columns")}
+      >
+        Columns
+      </button>
+      <button
+        type="button"
+        className={clsx(
+          "flex-1 rounded-md px-3 py-2 font-semibold transition",
+          activePane === "scripts" ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-100",
+          !hasScript ? "opacity-75" : null,
+        )}
+        onClick={() => onChange("scripts")}
+      >
+        Scripts
+      </button>
+    </div>
   );
 }
 
-function FileSidebar({
-  filter,
-  onFilterChange,
-  summary,
-  generatedAt,
-  onRefresh,
-  isRefreshing,
-  items,
-  expanded,
-  onToggle,
+function ColumnsPanel({
+  columns,
+  selectedColumnId,
   onSelect,
-  activePath,
+  onAdd,
+  onRemove,
+  onMove,
+  onChange,
+  onSave,
+  manifestDirty,
+  saving,
+  message,
+  error,
+  disabled,
+  onOpenScript,
+  manifest,
 }: {
-  readonly filter: string;
-  readonly onFilterChange: (value: string) => void;
-  readonly summary: { files: number; directories: number };
-  readonly generatedAt: string;
-  readonly onRefresh: () => void;
-  readonly isRefreshing: boolean;
-  readonly items: readonly FlattenedNode[];
-  readonly expanded: ReadonlySet<string>;
-  readonly onToggle: (path: string) => void;
-  readonly onSelect: (path: string) => void;
-  readonly activePath: string | null;
+  readonly columns: readonly ColumnFormState[];
+  readonly selectedColumnId: string | null;
+  readonly onSelect: (id: string) => void;
+  readonly onAdd: () => void;
+  readonly onRemove: (id: string) => void;
+  readonly onMove: (id: string, direction: "up" | "down") => void;
+  readonly onChange: (id: string, patch: Partial<ColumnFormState>) => void;
+  readonly onSave: () => void;
+  readonly manifestDirty: boolean;
+  readonly saving: boolean;
+  readonly message: string | null;
+  readonly error: string | null;
+  readonly disabled: boolean;
+  readonly onOpenScript: () => void;
+  readonly manifest: ParsedManifest | null;
 }) {
+  const selectedColumn = columns.find((column) => column.id === selectedColumnId) ?? null;
+  const dependsOnValue = selectedColumn?.depends_on.join(", ") ?? "";
+
   return (
-    <aside className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 px-4 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Files</p>
-          <Button variant="ghost" size="sm" onClick={onRefresh} isLoading={isRefreshing}>
-            Refresh
+    <div className="space-y-4">
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">Columns</h2>
+            <p className="text-xs text-slate-500">Manage manifest columns and their associated scripts.</p>
+          </div>
+          <Button size="sm" onClick={onAdd} disabled={disabled}>
+            Add column
           </Button>
         </div>
-        <Input
-          value={filter}
-          onChange={(event) => onFilterChange(event.target.value)}
-          placeholder="Filter files"
-          className="mt-3"
-        />
-        <p className="mt-2 text-xs text-slate-500">
-          {summary.files} files · {summary.directories} directories
-        </p>
-        <p className="text-[11px] text-slate-400">Generated {formatTimestamp(generatedAt)}</p>
+        {manifest ? <ManifestSummary manifest={manifest} /> : null}
+        <ul className="max-h-80 divide-y divide-slate-200 overflow-y-auto">
+          {columns.length === 0 ? (
+            <li className="px-4 py-6 text-center text-sm text-slate-500">No columns defined.</li>
+          ) : (
+            columns.map((column, index) => {
+              const isActive = column.id === selectedColumnId;
+              const displayLabel = column.label || column.key || `Column ${index + 1}`;
+              return (
+                <li key={column.id} className="flex items-center justify-between px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => onSelect(column.id)}
+                    className={clsx(
+                      "flex min-w-0 flex-1 flex-col text-left",
+                      isActive ? "text-brand-600" : "text-slate-700",
+                    )}
+                  >
+                    <span className="truncate text-sm font-medium">{displayLabel}</span>
+                    <span className="truncate text-xs text-slate-500">{column.path || "No script path"}</span>
+                  </button>
+                  <div className="ml-3 flex items-center gap-1">
+                    <IconButton
+                      label="Move up"
+                      onClick={() => onMove(column.id, "up")}
+                      disabled={index === 0 || disabled}
+                      icon="▲"
+                    />
+                    <IconButton
+                      label="Move down"
+                      onClick={() => onMove(column.id, "down")}
+                      disabled={index === columns.length - 1 || disabled}
+                      icon="▼"
+                    />
+                    <IconButton label="Remove" onClick={() => onRemove(column.id)} disabled={disabled} icon="✕" />
+                  </div>
+                </li>
+              );
+            })
+          )}
+        </ul>
+      </section>
+
+      <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-900">Column details</h3>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={onSave}
+            disabled={!manifestDirty || disabled}
+            isLoading={saving}
+          >
+            Save manifest
+          </Button>
+        </div>
+        {message ? <Alert tone="success">{message}</Alert> : null}
+        {error ? <Alert tone="danger">{error}</Alert> : null}
+
+        {selectedColumn ? (
+          <div className="space-y-4">
+            <FormField label="Column key" required>
+              <Input
+                value={selectedColumn.key}
+                onChange={(event) => onChange(selectedColumn.id, { key: event.target.value })}
+                placeholder="billing_cycle"
+                disabled={disabled}
+              />
+            </FormField>
+            <FormField label="Display label" hint="Shown in UI summaries and documentation.">
+              <Input
+                value={selectedColumn.label}
+                onChange={(event) => onChange(selectedColumn.id, { label: event.target.value })}
+                placeholder="Billing cycle"
+                disabled={disabled}
+              />
+            </FormField>
+            <FormField label="Script path" hint="Relative to the configuration package root.">
+              <Input
+                value={selectedColumn.path}
+                onChange={(event) => onChange(selectedColumn.id, { path: event.target.value })}
+                placeholder="src/ade_config/column_detectors/billing_cycle.py"
+                disabled={disabled}
+              />
+            </FormField>
+            <FormField label="Dependencies" hint="Comma-separated list of other column keys.">
+              <Input
+                value={dependsOnValue}
+                onChange={(event) =>
+                  onChange(selectedColumn.id, {
+                    depends_on: event.target.value
+                      .split(",")
+                      .map((value) => value.trim())
+                      .filter((value) => value.length > 0),
+                  })
+                }
+                placeholder="member_id, enrollment_id"
+                disabled={disabled}
+              />
+            </FormField>
+            <div className="flex flex-wrap gap-4 text-sm">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                  checked={selectedColumn.required}
+                  onChange={(event) => onChange(selectedColumn.id, { required: event.target.checked })}
+                  disabled={disabled}
+                />
+                <span className="text-slate-700">Required field</span>
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                  checked={selectedColumn.enabled}
+                  onChange={(event) => onChange(selectedColumn.id, { enabled: event.target.checked })}
+                  disabled={disabled}
+                />
+                <span className="text-slate-700">Enabled</span>
+              </label>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => onOpenScript()}
+                disabled={!selectedColumn.path}
+              >
+                Manage script
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-600">Select a column to edit its manifest details.</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ScriptPanel({
+  column,
+  script,
+  onChange,
+  onSave,
+  saving,
+  dirty,
+  alert,
+  validation,
+  docstring,
+  markers,
+  enableMonaco,
+  disabled,
+  onShowColumns,
+}: {
+  readonly column: ColumnFormState | null;
+  readonly script: ScriptEditorState | null;
+  readonly onChange: (value: string) => void;
+  readonly onSave: () => void;
+  readonly saving: boolean;
+  readonly dirty: boolean;
+  readonly alert: LifecycleAlert | null;
+  readonly validation: ConfigurationValidateResponse | null;
+  readonly docstring: ReturnType<typeof parseDocstringMetadata>;
+  readonly markers: readonly CodeEditorMarker[];
+  readonly enableMonaco: boolean;
+  readonly disabled: boolean;
+  readonly onShowColumns: () => void;
+}) {
+  const editorRef = useRef<CodeEditorHandle | null>(null);
+  const handleFocusIssue = useCallback(
+    (lineNumber: number | null) => {
+      if (!enableMonaco || lineNumber == null) {
+        return;
+      }
+      editorRef.current?.revealLine(lineNumber);
+    },
+    [enableMonaco],
+  );
+
+  if (!column) {
+    return (
+      <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
+        <p>Select a column to view or edit its script.</p>
+        <Button size="sm" variant="secondary" onClick={onShowColumns}>
+          Choose a column
+        </Button>
+      </section>
+    );
+  }
+
+  const scriptPath = column.path?.trim();
+
+  return (
+    <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-2 border-b border-slate-200 pb-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">{column.label || column.key || "Unnamed column"}</h2>
+          <p className="text-xs text-slate-500">{scriptPath || "No script linked."}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onClick={onSave} disabled={!dirty || disabled} isLoading={saving}>
+            Save script
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onShowColumns}>
+            Back to columns
+          </Button>
+        </div>
       </div>
-      <FileTree items={items} expanded={expanded} onToggle={onToggle} onSelect={onSelect} activePath={activePath} />
-    </aside>
-  );
-}
 
-function InspectorPanel({
-  manifest,
-  manifestPath,
-  onOpenManifest,
-  onOpenFile,
-  validation,
-  validationError,
-  isValidationRunning,
-  onValidate,
-}: {
-  readonly manifest: { summary: ManifestSummary | null; error: string | null; isLoading: boolean };
-  readonly manifestPath: string;
-  readonly onOpenManifest: () => void;
-  readonly onOpenFile: (path: string | null | undefined) => void;
-  readonly validation: ConfigurationValidateResponse | null;
-  readonly validationError: string | null;
-  readonly isValidationRunning: boolean;
-  readonly onValidate: () => void;
-}) {
-  return (
-    <aside className="flex h-full flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <ManifestPanel manifest={manifest} manifestPath={manifestPath} onOpenManifest={onOpenManifest} onOpenFile={onOpenFile} />
-      <ValidationPanel
-        validation={validation}
-        validationError={validationError}
-        isValidationRunning={isValidationRunning}
-        onValidate={onValidate}
-      />
-    </aside>
-  );
-}
+      {alert ? (
+        <Alert tone={alert.type === "success" ? "success" : "danger"}>{alert.message}</Alert>
+      ) : null}
 
-function ManifestPanel({
-  manifest,
-  manifestPath,
-  onOpenManifest,
-  onOpenFile,
-}: {
-  readonly manifest: { summary: ManifestSummary | null; error: string | null; isLoading: boolean };
-  readonly manifestPath: string;
-  readonly onOpenManifest: () => void;
-  readonly onOpenFile: (path: string | null | undefined) => void;
-}) {
-  return (
-    <section>
-      <header className="mb-3 flex items-center justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Manifest</p>
-          <p className="text-sm font-semibold text-slate-900">{manifest.summary?.name ?? "Configuration manifest"}</p>
-        </div>
-        <Button size="sm" variant="secondary" onClick={onOpenManifest}>
-          Open file
-        </Button>
-      </header>
-      {manifest.isLoading ? (
-        <p className="text-sm text-slate-500">Loading manifest…</p>
-      ) : manifest.error ? (
-        <Alert tone="danger">{manifest.error}</Alert>
-      ) : manifest.summary ? (
-        <div className="space-y-3 text-sm">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Columns</p>
-            {manifest.summary.columns.length === 0 ? (
-              <p className="text-sm text-slate-500">No columns defined.</p>
-            ) : (
-              <ul className="mt-2 max-h-48 space-y-1 overflow-auto">
-                {manifest.summary.columns.map((column) => (
-                  <li key={column.key} className="rounded-xl border border-slate-100 px-2 py-2 text-xs">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-slate-900">{column.label}</p>
-                        <p className="truncate text-slate-500">{column.path || "No path set"}</p>
-                      </div>
-                      <span className="text-[10px] uppercase text-slate-500">
-                        {column.required ? "Required" : "Optional"}
-                        {!column.enabled ? " · Disabled" : ""}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center gap-2 text-[11px]">
-                      <button
-                        type="button"
-                        className="font-semibold text-brand-700 hover:underline disabled:text-slate-400"
-                        onClick={() => onOpenFile(column.path)}
-                        disabled={!column.path}
-                      >
-                        Open
-                      </button>
-                      {!column.enabled ? <span className="text-[10px] uppercase text-amber-600">Disabled</span> : null}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div className="text-xs text-slate-600">
-            <p>
-              Transform:{" "}
-              {manifest.summary.transformPath ? (
-                <button
-                  type="button"
-                  className="text-brand-700 hover:underline"
-                  onClick={() => onOpenFile(manifest.summary.transformPath)}
-                >
-                  {manifest.summary.transformPath}
-                </button>
-              ) : (
-                "—"
-              )}
-            </p>
-            <p>
-              Validators:{" "}
-              {manifest.summary.validatorsPath ? (
-                <button
-                  type="button"
-                  className="text-brand-700 hover:underline"
-                  onClick={() => onOpenFile(manifest.summary.validatorsPath)}
-                >
-                  {manifest.summary.validatorsPath}
-                </button>
-              ) : (
-                "—"
-              )}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <p className="text-sm text-slate-500">Manifest file not found ({manifestPath}).</p>
-      )}
-    </section>
-  );
-}
-
-function ValidationPanel({
-  validation,
-  validationError,
-  isValidationRunning,
-  onValidate,
-}: {
-  readonly validation: ConfigurationValidateResponse | null;
-  readonly validationError: string | null;
-  readonly isValidationRunning: boolean;
-  readonly onValidate: () => void;
-}) {
-  const hasIssues = Boolean(validation?.issues?.length);
-  return (
-    <section>
-      <header className="mb-3 flex items-center justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Validation</p>
-          <p className="text-sm font-semibold text-slate-900">
-            {validation ? `Digest ${validation.content_digest ?? "—"}` : "No run yet"}
-          </p>
-        </div>
-        <Button size="sm" onClick={onValidate} isLoading={isValidationRunning}>
-          Run
-        </Button>
-      </header>
-      {validationError ? <Alert tone="danger">{validationError}</Alert> : null}
-      {isValidationRunning ? <p className="text-sm text-slate-500">Validation running…</p> : null}
-      {validation ? (
-        <div className="space-y-3 text-sm">
-          <p className="text-slate-600">Status: {validation.status}</p>
-          {hasIssues ? (
-            <div className="space-y-2">
-              {validation.issues.map((issue) => (
-                <article key={`${issue.path}:${issue.message}`} className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                  <p className="text-xs font-semibold text-amber-800">{issue.path}</p>
-                  <p className="text-sm text-amber-900">{issue.message}</p>
-                </article>
-              ))}
+      {script ? (
+        <div className="space-y-4">
+          {script.error ? <Alert tone="danger">{script.error}</Alert> : null}
+          {enableMonaco ? (
+            <div className="h-[400px] overflow-hidden rounded-lg border border-slate-200">
+              <CodeEditor
+                ref={editorRef}
+                value={script.content}
+                onChange={onChange}
+                language={script.language}
+                readOnly={disabled}
+                onSaveShortcut={onSave}
+                markers={markers}
+              />
             </div>
           ) : (
-            <p className="text-sm text-emerald-700">No issues reported.</p>
+            <textarea
+              value={script.content}
+              onChange={(event) => onChange(event.target.value)}
+              className="h-[400px] w-full rounded-lg border border-slate-200 bg-slate-950 p-4 font-mono text-sm text-slate-50"
+              spellCheck={false}
+              readOnly={disabled}
+            />
           )}
+
+          <DocstringPreview metadata={docstring} />
+
+          <ValidationResults
+            validation={validation}
+            scriptPath={script.path}
+            onFocusIssue={enableMonaco ? handleFocusIssue : undefined}
+          />
+
+          <ScriptMeta script={script} dirty={dirty} />
         </div>
       ) : (
-        <p className="text-sm text-slate-500">Run validation to populate this panel.</p>
+        <p className="text-sm text-slate-600">
+          {scriptPath
+            ? "Loading script contents…"
+            : "Add a script path to this column to enable code editing."}
+        </p>
       )}
     </section>
   );
 }
 
-function EditorWorkspace({
-  tabs,
-  activeTab,
-  activePath,
-  onSelectTab,
-  onCloseTab,
-  updateContent,
-  isSaving,
-  dirty,
-  editable,
-  onSave,
-  onRename,
-}: {
-  readonly tabs: readonly EditorTab[];
-  readonly activeTab: EditorTab | null;
-  readonly activePath: string | null;
-  readonly onSelectTab: (path: string | null) => void;
-  readonly onCloseTab: (path: string) => void;
-  readonly updateContent: (path: string, value: string) => void;
-  readonly isSaving: boolean;
-  readonly dirty: boolean;
-  readonly editable: boolean;
-  readonly onSave: () => void;
-  readonly onRename: () => void;
-}) {
+function DocstringPreview({ metadata }: { readonly metadata: ReturnType<typeof parseDocstringMetadata> }) {
+  const { name, description, version, summary } = metadata;
+
+  if (!name && !description && !version && !summary) {
+    return (
+      <div className="space-y-3">
+        <Alert tone="info">
+          Include a docstring at the top of the script with Name, Description, and Version fields to help reviewers understand
+          its purpose.
+        </Alert>
+        <DocstringChecklist metadata={metadata} />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-900/90 shadow-sm">
-      <div className="flex items-center gap-2 border-b border-slate-800/50 px-3 py-2">
-        <div className="flex flex-1 flex-wrap items-center gap-2 overflow-x-auto">
-          {tabs.length === 0 ? (
-            <p className="text-sm text-slate-300">Select a file to begin editing.</p>
-          ) : (
-            tabs.map((tab) => (
-              <TabChip key={tab.path} tab={tab} active={tab.path === activePath} onSelect={() => onSelectTab(tab.path)} onClose={() => onCloseTab(tab.path)} />
-            ))
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onRename} disabled={!activeTab}>
-            Rename
-          </Button>
-          <Button variant="primary" size="sm" disabled={!editable || !dirty || isSaving} isLoading={isSaving} onClick={onSave}>
-            Save
-          </Button>
-        </div>
+    <div className="space-y-3">
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Docstring preview</h3>
+        <dl className="mt-3 space-y-2">
+          {name ? (
+            <div>
+              <dt className="text-xs font-medium text-slate-500">Name</dt>
+              <dd className="text-sm text-slate-800">{name}</dd>
+            </div>
+          ) : null}
+          {summary ? (
+            <div>
+              <dt className="text-xs font-medium text-slate-500">Summary</dt>
+              <dd className="text-sm text-slate-800">{summary}</dd>
+            </div>
+          ) : null}
+          {description ? (
+            <div>
+              <dt className="text-xs font-medium text-slate-500">Description</dt>
+              <dd className="text-sm text-slate-800">{description}</dd>
+            </div>
+          ) : null}
+          {version ? (
+            <div>
+              <dt className="text-xs font-medium text-slate-500">Version</dt>
+              <dd className="text-sm text-slate-800">{version}</dd>
+            </div>
+          ) : null}
+        </dl>
       </div>
-      <div className="flex flex-col border-b border-slate-800/40 px-4 py-3 text-slate-200">
-        {activeTab ? (
-          <div>
-            <p className="text-sm font-semibold text-white">{activeTab.path}</p>
-            <p className="text-xs text-slate-400">
-              {activeTab.mtime ? `Last modified ${formatTimestamp(activeTab.mtime)}` : null}
-              {typeof activeTab.size === "number" ? ` • ${formatBytes(activeTab.size)}` : null}
-            </p>
-          </div>
-        ) : (
-          <p className="text-sm text-slate-400">Choose a file from the tree to load it into the editor.</p>
-        )}
-      </div>
-      <div className="flex-1 overflow-hidden">
-        {!activeTab ? (
-          <div className="flex h-full items-center justify-center text-sm text-slate-400">No file selected.</div>
-        ) : activeTab.status === "loading" ? (
-          <div className="flex h-full items-center justify-center text-sm text-slate-400">Loading file…</div>
-        ) : activeTab.status === "error" ? (
-          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-red-200">
-            {activeTab.error ?? "Unable to load this file."}
-          </div>
-        ) : activeTab.encoding !== "utf-8" ? (
-          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-slate-200">
-            Binary files cannot be edited in the browser.
-          </div>
-        ) : (
-          <CodeEditor
-            value={activeTab.content}
-            onChange={(value) => updateContent(activeTab.path, value)}
-            language={detectLanguage(activeTab.path)}
-            readOnly={!editable}
-            onSaveShortcut={onSave}
-          />
-        )}
-      </div>
-      {activeTab?.error && activeTab.status !== "error" ? (
-        <div className="border-t border-red-300/40 bg-red-900/20 px-4 py-2 text-sm text-red-200">{activeTab.error}</div>
+      <DocstringChecklist metadata={metadata} />
+    </div>
+  );
+}
+
+function ValidationResults({
+  validation,
+  scriptPath,
+  onFocusIssue,
+}: {
+  readonly validation: ConfigurationValidateResponse | null;
+  readonly scriptPath: string;
+  readonly onFocusIssue?: (lineNumber: number | null) => void;
+}) {
+  if (!validation) {
+    return null;
+  }
+
+  if (!validation.issues || validation.issues.length === 0) {
+    return <Alert tone="success">Validation passed without issues.</Alert>;
+  }
+
+  const normalizedPath = normalizePath(scriptPath);
+  const normalizedIssues = validation.issues.map((issue) => ({
+    ...issue,
+    lineNumber: extractLineNumber(issue.message),
+    isScriptIssue: normalizePath(issue.path) === normalizedPath,
+  }));
+
+  const scriptIssues = normalizedIssues.filter((issue) => issue.isScriptIssue);
+  const otherIssues = normalizedIssues.filter((issue) => !issue.isScriptIssue);
+  const mapIssue = (issue: typeof normalizedIssues[number]): IssueWithMetadata => ({
+    path: issue.path,
+    message: issue.message,
+    lineNumber: issue.lineNumber ?? null,
+  });
+  const focusable = typeof onFocusIssue === "function";
+
+  return (
+    <div className="space-y-3">
+      <Alert tone="warning" heading="Validation issues detected">
+        Review the issues below and update the script before activating this configuration.
+      </Alert>
+      <IssueList
+        title={scriptIssues.length > 0 ? "Issues for this script" : "Configuration issues"}
+        issues={(scriptIssues.length > 0 ? scriptIssues : normalizedIssues).map(mapIssue)}
+        onFocusIssue={focusable ? onFocusIssue : undefined}
+      />
+      {scriptIssues.length > 0 && otherIssues.length > 0 ? (
+        <IssueList title="Other configuration issues" issues={otherIssues.map(mapIssue)} />
       ) : null}
     </div>
   );
 }
 
-function TabChip({ tab, active, onSelect, onClose }: { readonly tab: EditorTab; readonly active: boolean; readonly onSelect: () => void; readonly onClose: () => void }) {
-  const dirty = tab.encoding === "utf-8" && tab.content !== tab.originalContent;
-  return (
-    <span
-      className={clsx(
-        "inline-flex items-center overflow-hidden rounded-full border px-3 py-1 text-xs font-medium",
-        active ? "border-white/40 bg-white/10 text-white" : "border-transparent bg-white/5 text-slate-200",
-      )}
-    >
-      <button type="button" onClick={onSelect} className="mr-2 truncate">
-        {tab.label}
-        {dirty ? "*" : null}
-      </button>
-      <button type="button" onClick={onClose} className="rounded-full px-1 text-slate-300 hover:bg-white/10" aria-label={`Close ${tab.label}`}>
-        ×
-      </button>
-    </span>
-  );
-}
-
-function FileTree({
-  items,
-  expanded,
-  onToggle,
-  onSelect,
-  activePath,
-}: {
-  readonly items: readonly FlattenedNode[];
-  readonly expanded: ReadonlySet<string>;
-  readonly onToggle: (path: string) => void;
-  readonly onSelect: (path: string) => void;
-  readonly activePath: string | null;
-}) {
-  if (items.length === 0) {
-    return <div className="flex flex-1 items-center justify-center px-3 py-6 text-sm text-slate-500">No files match this filter.</div>;
+function ScriptMeta({ script, dirty }: { readonly script: ScriptEditorState | null; readonly dirty: boolean }) {
+  if (!script) {
+    return null;
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-2 py-3">
-      <ul className="space-y-1">
-        {items.map(({ entry, depth }) => {
-          const isDir = entry.kind === "dir";
-          const isExpanded = isDir && expanded.has(entry.path);
-          const isActive = entry.path === activePath;
-          const padding = Math.max(depth, 0) * 12 + 8;
-          return (
-            <li key={entry.path}>
-              <button
-                type="button"
-                onClick={() => (isDir ? onToggle(entry.path) : onSelect(entry.path))}
-                className={clsx(
-                  "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm",
-                  isDir ? "text-slate-700 hover:bg-slate-100" : "text-slate-800 hover:bg-white",
-                  isActive ? "bg-slate-900/5" : null,
-                )}
-                style={{ paddingLeft: `${padding}px` }}
-              >
-                {isDir ? (
-                  <span className="text-xs text-slate-500">{isExpanded ? "▾" : entry.has_children ? "▸" : "•"}</span>
-                ) : (
-                  <span className="text-xs text-slate-400">•</span>
-                )}
-                <span className="truncate font-medium">{entry.name || entry.path || "(root)"}</span>
-              </button>
-            </li>
-          );
-        })}
+    <dl className="grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 md:grid-cols-2">
+      <div>
+        <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">File size</dt>
+        <dd>{script.size != null ? formatFileSize(script.size) : "Unknown"}</dd>
+      </div>
+      <div>
+        <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Last modified</dt>
+        <dd>{script.mtime ? formatDateTime(script.mtime) : "Unknown"}</dd>
+      </div>
+      <div>
+        <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Language</dt>
+        <dd className="font-mono text-xs uppercase text-slate-600">{script.language || "plain"}</dd>
+      </div>
+      <div>
+        <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Status</dt>
+        <dd className={clsx("font-medium", dirty ? "text-warning-700" : script.isNew ? "text-brand-700" : "text-emerald-700")}> 
+          {dirty ? "Unsaved changes" : script.isNew ? "New file" : "Saved"}
+        </dd>
+      </div>
+      <div className="md:col-span-2">
+        <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">ETag</dt>
+        <dd className="font-mono text-xs text-slate-500">{script.etag ?? "Not available"}</dd>
+      </div>
+    </dl>
+  );
+}
+
+function ManifestSummary({ manifest }: { readonly manifest: ParsedManifest }) {
+  return (
+    <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+      <dl className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Manifest name</dt>
+          <dd className="font-medium text-slate-900">{manifest.name}</dd>
+        </div>
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Columns</dt>
+          <dd className="font-medium text-slate-900">{manifest.columns.length}</dd>
+        </div>
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Files digest</dt>
+          <dd className="font-mono text-xs text-slate-500">{manifest.filesHash}</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+function DocstringChecklist({ metadata }: { readonly metadata: ReturnType<typeof parseDocstringMetadata> }) {
+  const fields = [
+    {
+      key: "name",
+      label: "Name",
+      present: Boolean(metadata.name),
+      description: "Shown in summaries and approvals.",
+    },
+    {
+      key: "description",
+      label: "Description",
+      present: Boolean(metadata.description),
+      description: "Explains what the script does.",
+    },
+    {
+      key: "version",
+      label: "Version",
+      present: Boolean(metadata.version),
+      description: "Track revisions for releases.",
+    },
+    {
+      key: "summary",
+      label: "Summary",
+      present: Boolean(metadata.summary),
+      description: "Used as a quick-glance tooltip.",
+    },
+  ];
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Docstring checklist</h3>
+      <ul className="mt-3 space-y-2">
+        {fields.map((field) => (
+          <li
+            key={field.key}
+            className="flex items-start justify-between gap-3 rounded-md border border-slate-200/70 bg-slate-50 px-3 py-2"
+          >
+            <div>
+              <p className="text-sm font-medium text-slate-800">{field.label}</p>
+              <p className="text-xs text-slate-500">{field.description}</p>
+            </div>
+            <span
+              className={clsx(
+                "text-xs font-semibold uppercase",
+                field.present ? "text-emerald-600" : "text-warning-600",
+              )}
+            >
+              {field.present ? "Ready" : "Missing"}
+            </span>
+          </li>
+        ))}
       </ul>
     </div>
   );
 }
 
-function RenameDialog({
-  path,
-  value,
-  onChange,
-  onClose,
-  onSubmit,
-  isSubmitting,
-  error,
-}: {
+interface IssueWithMetadata {
   readonly path: string;
-  readonly value: string;
-  readonly onChange: (value: string) => void;
-  readonly onClose: () => void;
-  readonly onSubmit: (event: React.FormEvent) => void;
-  readonly isSubmitting: boolean;
-  readonly error: string | null;
+  readonly message: string;
+  readonly lineNumber: number | null;
+}
+
+function IssueList({
+  title,
+  issues,
+  onFocusIssue,
+}: {
+  readonly title: string;
+  readonly issues: readonly IssueWithMetadata[];
+  readonly onFocusIssue?: (lineNumber: number | null) => void;
 }) {
+  if (issues.length === 0) {
+    return null;
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-      <form onSubmit={onSubmit} className="w-full max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-        <header>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Rename file</p>
-          <p className="text-sm text-slate-500">{path}</p>
-        </header>
-        <div>
-          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">New path</label>
-          <Input value={value} onChange={(event) => onChange(event.target.value)} className="mt-1" autoFocus />
-        </div>
-        {error ? <Alert tone="danger">{error}</Alert> : null}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" isLoading={isSubmitting} disabled={value.trim().length === 0}>
-            Rename
-          </Button>
-        </div>
-      </form>
+    <div className="space-y-2">
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h4>
+      <ul className="space-y-2 text-sm text-slate-700">
+        {issues.map((issue, index) => (
+          <li key={`${issue.path}-${index}`} className="space-y-2 rounded-lg border border-warning-200 bg-warning-50 p-3">
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-semibold text-warning-700">{issue.path}</p>
+              {issue.lineNumber != null ? (
+                <span className="text-xs font-medium uppercase text-warning-600">Line {issue.lineNumber}</span>
+              ) : null}
+            </div>
+            <p className="text-warning-700">{issue.message}</p>
+            {onFocusIssue && issue.lineNumber != null ? (
+              <button
+                type="button"
+                onClick={() => onFocusIssue(issue.lineNumber)}
+                className="text-xs font-semibold text-brand-700 underline-offset-2 hover:underline"
+              >
+                Jump to line {issue.lineNumber}
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
-function buildFileTree(entries: readonly FileEntry[]): TreeNode[] {
-  const map = new Map<string, TreeNode>();
-  entries.forEach((entry) => {
-    map.set(entry.path, { entry, children: [] });
-  });
-  const roots: TreeNode[] = [];
-  entries.forEach((entry) => {
-    const node = map.get(entry.path);
-    if (!node) {
-      return;
-    }
-    if (!entry.parent) {
-      roots.push(node);
-      return;
-    }
-    const parent = map.get(entry.parent);
-    if (!parent) {
-      roots.push(node);
-      return;
-    }
-    parent.children.push(node);
-  });
-  sortTreeNodes(roots);
-  return roots;
+function IconButton({
+  label,
+  onClick,
+  disabled,
+  icon,
+}: {
+  readonly label: string;
+  readonly onClick: () => void;
+  readonly disabled?: boolean;
+  readonly icon: string;
+}) {
+  return (
+    <button
+      type="button"
+      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-xs text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+    >
+      {icon}
+    </button>
+  );
 }
 
-function sortTreeNodes(nodes: TreeNode[]) {
-  nodes.sort((a, b) => {
-    if (a.entry.kind !== b.entry.kind) {
-      return a.entry.kind === "dir" ? -1 : 1;
-    }
-    return a.entry.name.localeCompare(b.entry.name);
-  });
-  nodes.forEach((node) => sortTreeNodes(node.children));
-}
-
-function flattenTree(nodes: readonly TreeNode[], expanded: ReadonlySet<string>, visibleSet: Set<string> | null): FlattenedNode[] {
-  const result: FlattenedNode[] = [];
-  const walk = (items: readonly TreeNode[]) => {
-    items.forEach((node) => {
-      if (visibleSet && !visibleSet.has(node.entry.path)) {
-        return;
-      }
-      result.push({ entry: node.entry, depth: Math.max(node.entry.depth, 0) });
-      if (node.entry.kind === "dir" && expanded.has(node.entry.path)) {
-        walk(node.children);
-      }
-    });
-  };
-  walk(nodes);
-  return result;
-}
-
-function deriveVisibleSet(entries: readonly FileEntry[], query: string): Set<string> | null {
-  const trimmed = query.trim().toLowerCase();
-  if (!trimmed) {
-    return null;
-  }
-  const matches = new Set<string>();
-  const parentMap = new Map(entries.map((entry) => [entry.path, entry.parent ?? ""]));
-  entries.forEach((entry) => {
-    if (entry.path.toLowerCase().includes(trimmed) || entry.name.toLowerCase().includes(trimmed)) {
-      matches.add(entry.path);
-      let parent = entry.parent ?? "";
-      while (parent) {
-        matches.add(parent);
-        parent = parentMap.get(parent) ?? "";
-      }
-    }
-  });
-  if (matches.size === 0) {
-    return new Set();
-  }
-  return matches;
-}
-
-function parseManifestFile(file: FileReadJson | null): ManifestParseResult {
-  if (!file) {
-    return { summary: null, error: null };
-  }
-  if (file.encoding !== "utf-8") {
-    return { summary: null, error: "Manifest file is not UTF-8 encoded." };
-  }
-  try {
-    const raw = JSON.parse(file.content ?? "{}");
-    const columns: ManifestColumnSummary[] = Array.isArray(raw.columns)
-      ? raw.columns.map((column: Record<string, unknown>) => ({
-          key: String(column.key ?? column.label ?? column.path ?? "column"),
-          label: String(column.label ?? column.key ?? column.path ?? "Column"),
-          path: String(column.path ?? ""),
-          required: Boolean(column.required),
-          enabled: column.enabled === undefined ? true : Boolean(column.enabled),
-        }))
-      : [];
-    const summary: ManifestSummary = {
-      name: typeof raw.name === "string" && raw.name.trim().length > 0 ? raw.name : "Configuration manifest",
-      columns,
-      transformPath: raw.table?.transform?.path ?? null,
-      validatorsPath: raw.table?.validators?.path ?? null,
-    };
-    return { summary, error: null };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to parse manifest.";
-    return { summary: null, error: message };
-  }
-}
-
-function detectLanguage(path: string | null) {
-  if (!path) {
-    return "plaintext";
-  }
-  if (path.endsWith(".py")) {
+function guessLanguage(path: string): string {
+  const normalized = path.toLowerCase();
+  if (normalized.endsWith(".py")) {
     return "python";
   }
-  if (path.endsWith(".json")) {
+  if (normalized.endsWith(".ts")) {
+    return "typescript";
+  }
+  if (normalized.endsWith(".js")) {
+    return "javascript";
+  }
+  if (normalized.endsWith(".json")) {
     return "json";
-  }
-  if (path.endsWith(".toml")) {
-    return "toml";
-  }
-  if (path.endsWith(".env")) {
-    return "shell";
   }
   return "plaintext";
 }
 
-function formatTimestamp(value?: string | Date | null) {
+function cloneColumn(column: ColumnFormState): ColumnFormState {
+  return {
+    ...column,
+    depends_on: [...column.depends_on],
+  };
+}
+
+function columnsEqual(a: readonly ColumnFormState[], b: readonly ColumnFormState[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let index = 0; index < a.length; index += 1) {
+    const first = a[index];
+    const second = b[index];
+    if (!first || !second) {
+      return false;
+    }
+    if (
+      first.key.trim() !== second.key.trim() ||
+      first.label.trim() !== second.label.trim() ||
+      first.path.trim() !== second.path.trim() ||
+      first.required !== second.required ||
+      first.enabled !== second.enabled
+    ) {
+      return false;
+    }
+    const firstDepends = first.depends_on.map((value) => value.trim()).filter((value) => value.length > 0);
+    const secondDepends = second.depends_on.map((value) => value.trim()).filter((value) => value.length > 0);
+    if (firstDepends.length !== secondDepends.length) {
+      return false;
+    }
+    for (let depIndex = 0; depIndex < firstDepends.length; depIndex += 1) {
+      if (firstDepends[depIndex] !== secondDepends[depIndex]) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function toManifestColumns(columns: readonly ColumnFormState[]): ManifestColumn[] {
+  return columns.map((column, index) => ({
+    key: column.key.trim(),
+    label: column.label.trim() || column.key.trim(),
+    path: column.path.trim(),
+    ordinal: index,
+    required: column.required,
+    enabled: column.enabled,
+    depends_on: column.depends_on
+      .map((value) => value.trim())
+      .filter((value, position, array) => value.length > 0 && array.indexOf(value) === position),
+  }));
+}
+
+function formatDateTime(value: string | null | undefined): string {
   if (!value) {
-    return "";
+    return "Unknown";
   }
   try {
-    const date = typeof value === "string" ? new Date(value) : value;
-    return date.toLocaleString();
-  } catch {
-    return String(value);
+    return new Intl.DateTimeFormat(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch (error) {
+    return value;
   }
 }
 
-function formatBytes(value?: number | null) {
-  if (!value || Number.isNaN(value)) {
-    return "";
+function formatFileSize(size: number): string {
+  if (!Number.isFinite(size) || size < 0) {
+    return "Unknown";
   }
-  if (value < 1024) {
-    return `${value} B`;
+  if (size < 1024) {
+    return `${size} B`;
   }
-  if (value < 1024 * 1024) {
-    return `${(value / 1024).toFixed(1)} KB`;
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
   }
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function extractLineNumber(message: string): number | null {
+  const match = /line\s+(\d+)/i.exec(message);
+  if (match) {
+    const parsed = Number.parseInt(match[1] ?? "", 10);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/").trim();
 }
