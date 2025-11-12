@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
-import { Navigate, Outlet, useLocation } from "react-router";
+import { useEffect } from "react";
+
+import { useLocation, useNavigate } from "@app/nav/history";
 
 import { SessionProvider } from "../context/SessionContext";
 import { useSessionQuery } from "../hooks/useSessionQuery";
 import { useSetupStatusQuery } from "../hooks/useSetupStatusQuery";
-import { buildLoginRedirect, normalizeNextFromLocation } from "../utils/authNavigation";
+import { buildLoginRedirect, buildSetupRedirect, normalizeNextFromLocation } from "../utils/authNavigation";
 
 interface RequireSessionProps {
   readonly children?: ReactNode;
@@ -12,6 +14,7 @@ interface RequireSessionProps {
 
 export function RequireSession({ children }: RequireSessionProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const sessionQuery = useSessionQuery();
   const { session, isLoading, isError, refetch } = sessionQuery;
   const shouldCheckSetup = !session && !isLoading && !isError;
@@ -22,6 +25,38 @@ export function RequireSession({ children }: RequireSessionProps) {
     isSuccess: isSetupSuccess,
     refetch: refetchSetupStatus,
   } = useSetupStatusQuery(shouldCheckSetup);
+
+  useEffect(() => {
+    if (session || isLoading || isError) {
+      return;
+    }
+
+    if (shouldCheckSetup) {
+      if (isSetupPending || isSetupError) {
+        return;
+      }
+
+      if (isSetupSuccess && setupStatus?.requires_setup) {
+        const next = normalizeNextFromLocation(location);
+        navigate(buildSetupRedirect(next), { replace: true });
+        return;
+      }
+    }
+
+    const next = normalizeNextFromLocation(location);
+    navigate(buildLoginRedirect(next), { replace: true });
+  }, [
+    isError,
+    isLoading,
+    isSetupError,
+    isSetupPending,
+    isSetupSuccess,
+    location,
+    navigate,
+    session,
+    setupStatus?.requires_setup,
+    shouldCheckSetup,
+  ]);
 
   if (isLoading) {
     return (
@@ -68,13 +103,7 @@ export function RequireSession({ children }: RequireSessionProps) {
       );
     }
 
-    if (isSetupSuccess && setupStatus?.requires_setup) {
-      return <Navigate to="/setup" replace />;
-    }
-
-    const next = normalizeNextFromLocation(location);
-
-    return <Navigate to={buildLoginRedirect(next)} replace />;
+    return null;
   }
 
   if (children) {
@@ -87,7 +116,7 @@ export function RequireSession({ children }: RequireSessionProps) {
 
   return (
     <SessionProvider session={session} refetch={refetch}>
-      <Outlet />
+      {children ?? null}
     </SessionProvider>
   );
 }

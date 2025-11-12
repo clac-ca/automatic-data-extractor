@@ -47,35 +47,7 @@ const collectFrontendRoutes = async () => {
     return { status: "skipped", reason: "frontend missing" };
   }
 
-  const nodeModulesDir = join("apps", "web", "node_modules");
-  if (!existsSync(nodeModulesDir)) {
-    return {
-      status: "skipped",
-      reason: "frontend dependencies not installed",
-    };
-  }
-
-  const binary = process.platform === "win32" ? "react-router.cmd" : "react-router";
-  const localBin = join(nodeModulesDir, ".bin", binary);
-  const localBinAbsolute = join(process.cwd(), localBin);
-
-  try {
-    const { stdout } = existsSync(localBin)
-      ? await runCapture(localBinAbsolute, ["routes", "--json"], {
-          cwd: join("apps", "web"),
-          shell: process.platform === "win32",
-        })
-      : await runCapture("npx", ["react-router", "routes", "--json"], {
-          cwd: join("apps", "web"),
-          shell: process.platform === "win32",
-        });
-    const parsed = JSON.parse(stdout);
-    const routes = Array.isArray(parsed?.routes) ? parsed.routes : [];
-    return { status: "ok", routes, raw: parsed };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { status: "failed", error: message };
-  }
+  return { status: "skipped", reason: "routerless frontend" };
 };
 
 const steps = [];

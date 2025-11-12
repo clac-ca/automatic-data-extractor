@@ -1,0 +1,39 @@
+import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+
+import { useNavigate } from "@app/nav/history";
+import { sessionKeys } from "@shared/auth/api";
+import { performLogout } from "@shared/auth/api/logout";
+
+export default function LogoutRoute() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const controller = new AbortController();
+    (async () => {
+      try {
+        await performLogout({ signal: controller.signal });
+      } finally {
+        if (cancelled) {
+          return;
+        }
+        queryClient.removeQueries({ queryKey: sessionKeys.root, exact: false });
+        navigate("/login", { replace: true });
+      }
+    })().catch(() => {
+      if (!cancelled) {
+        navigate("/login", { replace: true });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [navigate, queryClient]);
+
+  return null;
+}
