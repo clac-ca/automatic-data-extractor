@@ -10,7 +10,8 @@ import {
   useWorkspaceMembersQuery,
 } from "./useWorkspaceMembers";
 import { useWorkspaceRolesQuery } from "./useWorkspaceRoles";
-import type { components } from "@openapi";
+import type { WorkspaceMember, RoleDefinition } from "@app/routes/workspaces/workspaces-api";
+import type { UserSummary } from "@shared/users/api";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { FormField } from "@ui/form-field";
@@ -56,14 +57,14 @@ export function WorkspaceMembersSection() {
 
   const roleLookup = useMemo(() => {
     const map = new Map<string, RoleDefinition>();
-    for (const role of rolesQuery.data ?? []) {
+    for (const role of rolesQuery.data?.items ?? []) {
       map.set(role.id, role);
     }
     return map;
   }, [rolesQuery.data]);
 
   const members = useMemo(() => {
-    const list = membersQuery.data ?? [];
+    const list = membersQuery.data?.items ?? [];
     const collator = new Intl.Collator("en", { sensitivity: "base" });
     return Array.from(list).sort((a, b) => {
       const nameA = a.user.display_name ?? a.user.email;
@@ -130,7 +131,7 @@ export function WorkspaceMembersSection() {
 
   const availableRoles = useMemo(() => {
     const collator = new Intl.Collator("en", { sensitivity: "base" });
-    return (rolesQuery.data ?? [])
+    return (rolesQuery.data?.items ?? [])
       .filter((role) => role.scope_type === "workspace")
       .sort((a, b) => collator.compare(a.name, b.name));
   }, [rolesQuery.data]);
@@ -670,7 +671,3 @@ export function WorkspaceMembersSection() {
     </div>
   );
 }
-
-type WorkspaceMember = components["schemas"]["WorkspaceMember"];
-type RoleDefinition = components["schemas"]["RoleRead"];
-type UserSummary = components["schemas"]["UserSummary"];

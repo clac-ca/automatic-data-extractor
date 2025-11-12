@@ -163,12 +163,11 @@ async def test_repeated_failed_logins_lock_account(
     )
     assert locked.status_code == 403
     problem = locked.json()
-    meta = problem.get("meta") or {}
-    assert problem["status"] == 403
-    assert meta.get("failedAttempts") == lock_threshold
-    assert isinstance(meta.get("lockedUntil"), str)
-    assert "temporarily locked" in (problem.get("detail") or "")
-    assert isinstance(meta.get("retryAfterSeconds"), int)
+    detail = problem.get("detail") or {}
+    assert detail.get("failedAttempts") == lock_threshold
+    assert isinstance(detail.get("lockedUntil"), str)
+    assert "temporarily locked" in (detail.get("message") or "")
+    assert isinstance(detail.get("retryAfterSeconds"), int)
     retry_after_header = locked.headers.get("Retry-After")
     assert retry_after_header is not None
 

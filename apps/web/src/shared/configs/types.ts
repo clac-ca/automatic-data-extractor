@@ -1,6 +1,7 @@
 import type { components } from "@openapi";
 
-export type ConfigRecord = components["schemas"]["ConfigRecord"];
+export type ConfigurationPage = components["schemas"]["ConfigurationPage"];
+export type ConfigRecord = components["schemas"]["ConfigurationRecord"];
 export type ConfigVersionRecord = components["schemas"]["ConfigVersionRecord"];
 export type ConfigScriptSummary = components["schemas"]["ConfigScriptSummary"];
 export type ConfigScriptContent = components["schemas"]["ConfigScriptContent"];

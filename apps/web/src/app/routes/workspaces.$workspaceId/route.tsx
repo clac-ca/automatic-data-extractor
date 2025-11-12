@@ -7,7 +7,13 @@ import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
 import { ApiError } from "@shared/api";
 import { buildLoginRedirect } from "@shared/auth/utils/authNavigation";
-import { fetchWorkspaces, workspacesKeys, type WorkspaceProfile } from "../workspaces/workspaces-api";
+import {
+  fetchWorkspaces,
+  workspacesKeys,
+  type WorkspaceListPage,
+  type WorkspaceProfile,
+  WORKSPACE_LIST_DEFAULT_PARAMS,
+} from "../workspaces/workspaces-api";
 import { WorkspaceProvider } from "./WorkspaceContext";
 import { createScopedStorage } from "@shared/storage";
 import { writePreferredWorkspace } from "../workspaces/workspace-preferences";
@@ -21,6 +27,7 @@ import { Alert } from "@ui/alert";
 export interface WorkspaceLoaderData {
   readonly workspace: WorkspaceProfile;
   readonly workspaces: WorkspaceProfile[];
+  readonly workspacesPage: WorkspaceListPage;
 }
 
 export async function clientLoader({
@@ -28,7 +35,8 @@ export async function clientLoader({
   request,
 }: ClientLoaderFunctionArgs): Promise<WorkspaceLoaderData> {
   try {
-    const workspaces = await fetchWorkspaces(request.signal);
+    const workspacesPage = await fetchWorkspaces({ signal: request.signal });
+    const workspaces = workspacesPage.items;
 
     if (workspaces.length === 0) {
       throw redirectToDirectory();
@@ -45,7 +53,7 @@ export async function clientLoader({
       throw redirect(canonicalPath);
     }
 
-    return { workspace: resolved, workspaces };
+    return { workspace: resolved, workspaces, workspacesPage };
   } catch (error: unknown) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
       const url = new URL(request.url);
@@ -68,23 +76,23 @@ export function getDefaultWorkspacePath(workspaceId: string) {
 }
 
 export default function WorkspaceRoute() {
-  const { workspace, workspaces } = useLoaderData<WorkspaceLoaderData>();
+  const { workspace, workspaces, workspacesPage } = useLoaderData<WorkspaceLoaderData>();
 
   return (
     <RequireSession>
-      <WorkspaceContent workspace={workspace} workspaces={workspaces} />
+      <WorkspaceContent workspace={workspace} workspaces={workspaces} workspacesPage={workspacesPage} />
     </RequireSession>
   );
 }
 
 type WorkspaceContentProps = WorkspaceLoaderData;
 
-function WorkspaceContent({ workspace, workspaces }: WorkspaceContentProps) {
+function WorkspaceContent({ workspace, workspaces, workspacesPage }: WorkspaceContentProps) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    queryClient.setQueryData(workspacesKeys.list(), workspaces);
-  }, [queryClient, workspaces]);
+    queryClient.setQueryData(workspacesKeys.list(WORKSPACE_LIST_DEFAULT_PARAMS), workspacesPage);
+  }, [queryClient, workspacesPage]);
 
   useEffect(() => {
     writePreferredWorkspace(workspace);

@@ -2,21 +2,29 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { listConfigs, readConfiguration } from "../api";
 import { configsKeys } from "../keys";
-import type { ConfigRecord } from "../types";
+import type { ConfigRecord, ConfigurationPage } from "../types";
+
+const CONFIGS_PAGE_SIZE = 100;
 
 interface UseConfigsQueryOptions {
   readonly workspaceId: string;
-  readonly includeDeleted?: boolean;
   readonly enabled?: boolean;
+  readonly page?: number;
+  readonly pageSize?: number;
 }
 
-export function useConfigsQuery({ workspaceId, includeDeleted = false, enabled = true }: UseConfigsQueryOptions) {
-  return useQuery<ConfigRecord[]>({
-    queryKey: configsKeys.list(workspaceId, includeDeleted),
-    queryFn: ({ signal }) => listConfigs(workspaceId, { includeDeleted, signal }),
+export function useConfigsQuery({
+  workspaceId,
+  enabled = true,
+  page = 1,
+  pageSize = CONFIGS_PAGE_SIZE,
+}: UseConfigsQueryOptions) {
+  return useQuery<ConfigurationPage>({
+    queryKey: configsKeys.list(workspaceId, { page, pageSize }),
+    queryFn: ({ signal }) => listConfigs(workspaceId, { page, pageSize, signal }),
     enabled: enabled && workspaceId.length > 0,
     staleTime: 15_000,
-    placeholderData: (previous) => previous ?? [],
+    placeholderData: (previous) => previous,
   });
 }
 

@@ -11,7 +11,7 @@ import {
   useUpdateWorkspaceRoleMutation,
   useWorkspaceRolesQuery,
 } from "./useWorkspaceRoles";
-import type { components } from "@openapi";
+import type { RoleDefinition, PermissionDefinition, RoleCreatePayload, RoleUpdatePayload } from "@app/routes/workspaces/workspaces-api";
 import { Alert } from "@ui/alert";
 import { Button } from "@ui/button";
 import { Input } from "@ui/input";
@@ -46,7 +46,7 @@ export function WorkspaceRolesSection() {
   const [feedbackMessage, setFeedbackMessage] = useState<{ tone: "success" | "danger"; message: string } | null>(null);
 
   const permissions = useMemo(() => {
-    return (permissionsQuery.data ?? []).filter((permission) => permission.scope_type === "workspace");
+    return (permissionsQuery.data?.items ?? []).filter((permission) => permission.scope_type === "workspace");
   }, [permissionsQuery.data]);
 
   const permissionLookup = useMemo(() => {
@@ -57,7 +57,7 @@ export function WorkspaceRolesSection() {
     return map;
   }, [permissions]);
 
-  const roles = rolesQuery.data ?? [];
+  const roles = rolesQuery.data?.items ?? [];
 
   const openCreateForm = () => {
     setFeedbackMessage(null);
@@ -301,8 +301,6 @@ export function WorkspaceRolesSection() {
   );
 }
 
-type RoleDefinition = components["schemas"]["RoleRead"];
-type PermissionDefinition = components["schemas"]["PermissionRead"];
 
 interface WorkspaceRoleFormProps {
   readonly availablePermissions: readonly PermissionDefinition[];

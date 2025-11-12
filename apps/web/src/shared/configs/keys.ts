@@ -1,11 +1,11 @@
 export const configsKeys = {
   root: (workspaceId: string) => ["workspaces", workspaceId, "configs"] as const,
-  list: (workspaceId: string, includeDeleted: boolean | undefined = false) =>
-    [...configsKeys.root(workspaceId), "list", includeDeleted ? "with-archived" : "active"] as const,
+  list: (workspaceId: string, params: { page?: number; pageSize?: number } = {}) =>
+    [...configsKeys.root(workspaceId), "list", { ...params }] as const,
   detail: (workspaceId: string, configId: string) =>
     [...configsKeys.root(workspaceId), "detail", configId] as const,
-  versions: (workspaceId: string, configId: string, includeDeleted = false) =>
-    [...configsKeys.detail(workspaceId, configId), "versions", includeDeleted ? "with-archived" : "active"] as const,
+  versions: (workspaceId: string, configId: string) =>
+    [...configsKeys.detail(workspaceId, configId), "versions"] as const,
   version: (workspaceId: string, configId: string, versionId: string) =>
     [...configsKeys.detail(workspaceId, configId), "version", versionId] as const,
   scripts: (workspaceId: string, configId: string, versionId: string) =>

@@ -4,8 +4,10 @@ import { useRevalidator } from "react-router";
 import {
   workspacesKeys,
   updateWorkspace,
+  type WorkspaceListPage,
   type WorkspaceProfile,
   type WorkspaceUpdatePayload,
+  WORKSPACE_LIST_DEFAULT_PARAMS,
 } from "@app/routes/workspaces/workspaces-api";
 
 export function useUpdateWorkspaceMutation(workspaceId: string) {
@@ -15,9 +17,14 @@ export function useUpdateWorkspaceMutation(workspaceId: string) {
   return useMutation<WorkspaceProfile, Error, WorkspaceUpdatePayload>({
     mutationFn: (payload: WorkspaceUpdatePayload) => updateWorkspace(workspaceId, payload),
     onSuccess: (workspace) => {
-      queryClient.setQueryData<WorkspaceProfile[]>(workspacesKeys.list(), (current) => {
-        const list = current ?? [];
-        return list.map((entry) => (entry.id === workspace.id ? workspace : entry));
+      queryClient.setQueryData<WorkspaceListPage>(workspacesKeys.list(WORKSPACE_LIST_DEFAULT_PARAMS), (current) => {
+        if (!current) {
+          return current;
+        }
+        return {
+          ...current,
+          items: current.items.map((entry) => (entry.id === workspace.id ? workspace : entry)),
+        };
       });
       revalidator.revalidate();
     },

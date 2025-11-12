@@ -16,28 +16,51 @@ import type {
   FileReadJson,
   FileWriteResponse,
   FileRenameResponse,
+  ConfigurationPage,
 } from "./types";
+import type { paths } from "@openapi";
 
 const textEncoder = new TextEncoder();
 
+type ListConfigsQuery = paths["/api/v1/workspaces/{workspace_id}/configurations"]["get"]["parameters"]["query"];
+
 export interface ListConfigsOptions {
-  readonly includeDeleted?: boolean;
+  readonly page?: number;
+  readonly pageSize?: number;
+  readonly includeTotal?: boolean;
   readonly signal?: AbortSignal;
 }
 
 export async function listConfigs(
   workspaceId: string,
   options: ListConfigsOptions = {},
-): Promise<ConfigRecord[]> {
-  const { signal, includeDeleted } = options;
+): Promise<ConfigurationPage> {
+  const { signal, page, pageSize, includeTotal } = options;
+  const query: ListConfigsQuery = {};
+
+  if (typeof page === "number" && page > 0) {
+    query.page = page;
+  }
+  if (typeof pageSize === "number" && pageSize > 0) {
+    query.page_size = pageSize;
+  }
+  if (includeTotal) {
+    query.include_total = true;
+  }
+
   const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/configurations", {
     params: {
       path: { workspace_id: workspaceId },
-      query: includeDeleted ? { include_deleted: includeDeleted } : undefined,
+      query,
     },
     signal,
   });
-  return (data ?? []) as ConfigRecord[];
+
+  if (!data) {
+    throw new Error("Expected configuration page payload.");
+  }
+
+  return data;
 }
 
 export async function readConfiguration(
@@ -295,7 +318,6 @@ export async function createConfig(
 }
 
 export interface ListConfigVersionsOptions {
-  readonly includeDeleted?: boolean;
   readonly signal?: AbortSignal;
 }
 
@@ -304,13 +326,12 @@ export async function listConfigVersions(
   configId: string,
   options: ListConfigVersionsOptions = {},
 ): Promise<ConfigVersionRecord[]> {
-  const { includeDeleted, signal } = options;
+  const { signal } = options;
   const { data } = await client.GET(
     "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/versions",
     {
       params: {
         path: { workspace_id: workspaceId, config_id: configId },
-        query: includeDeleted ? { include_deleted: includeDeleted } : undefined,
       },
       signal,
     },

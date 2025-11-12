@@ -274,7 +274,7 @@ async def test_ensure_build_returns_building_when_in_progress(
 
 @pytest.mark.asyncio()
 async def test_ensure_build_blocks_and_times_out(session: AsyncSession, tmp_path: Path, service_factory) -> None:
-    workspace_id, config_id, _ = await _prepare_configuration(session)
+    workspace_id, config_id, configuration_db_id = await _prepare_configuration(session)
     await _ensure_config_path(tmp_path / "configs", workspace_id, config_id)
 
     building = ConfigurationBuild(
@@ -324,9 +324,6 @@ async def test_delete_active_build_removes_row_and_directory(
     assert venv_path.exists()
 
     await service.delete_active_build(workspace_id=workspace_id, config_id=config_id)
-    lookup = await session.get(
-        ConfigurationBuild,
-        (workspace_id, config_id, result.build.build_id),
-    )
+    lookup = await session.get(ConfigurationBuild, result.build.id)
     assert lookup is None
     assert not venv_path.exists()
