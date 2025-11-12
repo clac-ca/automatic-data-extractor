@@ -39,7 +39,7 @@ async def test_session_dependency_commits_and_populates_context(
             config_id = generate_ulid()
             now_iso = datetime.now(UTC).isoformat()
             payload = {
-                "config_id": config_id,
+                "id": config_id,
                 "workspace_id": workspace_id,
                 "slug": "session-config",
                 "title": "Session Config",
@@ -52,7 +52,7 @@ async def test_session_dependency_commits_and_populates_context(
                 text(
                     """
                     INSERT INTO configs (
-                        config_id,
+                        id,
                         workspace_id,
                         slug,
                         title,
@@ -61,7 +61,7 @@ async def test_session_dependency_commits_and_populates_context(
                         description,
                         deleted_at
                     ) VALUES (
-                        :config_id,
+                        :id,
                         :workspace_id,
                         :slug,
                         :title,
@@ -85,9 +85,7 @@ async def test_session_dependency_commits_and_populates_context(
     engine = get_engine()
     async with engine.connect() as connection:
         result = await connection.execute(
-            text(
-                "SELECT COUNT(1) FROM configs WHERE config_id = :config_id"
-            ),
+            text("SELECT COUNT(1) FROM configs WHERE id = :config_id"),
             {"config_id": config_id},
         )
         assert result.scalar_one() == 1
