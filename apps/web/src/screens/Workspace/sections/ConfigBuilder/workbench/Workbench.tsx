@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import clsx from "clsx";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@app/nav/history";
 
 import { ActivityBar, type ActivityBarView } from "./components/ActivityBar";
 import { BottomPanel } from "./components/BottomPanel";
@@ -71,6 +72,7 @@ interface WorkbenchProps {
 
 export function Workbench({ workspaceId, configId, configName, seed }: WorkbenchProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const {
     fileId,
     pane,
@@ -154,6 +156,9 @@ const validationLabel = validationState.lastRunAt ? `Last run ${formatRelative(v
   const [activityView, setActivityView] = useState<ActivityBarView>("explorer");
   const [settingsMenu, setSettingsMenu] = useState<{ x: number; y: number } | null>(null);
   const [windowMaximized, setWindowMaximized] = useState(false);
+  const handleCloseWorkbench = useCallback(() => {
+    navigate(`/workspaces/${workspaceId}/config-builder`);
+  }, [navigate, workspaceId]);
 
 const showExplorerPane = !explorer.collapsed;
 
@@ -538,6 +543,7 @@ const showExplorerPane = !explorer.collapsed;
           appearance={menuAppearance}
           windowMaximized={windowMaximized}
           onToggleWindow={() => setWindowMaximized((prev) => !prev)}
+          onCloseWindow={handleCloseWorkbench}
         />
         {consoleNotice ? (
           <div className="border-b border-brand-400/40 bg-brand-500/10 px-4 py-2 text-sm text-brand-100">
@@ -741,6 +747,7 @@ function WorkbenchChrome({
   appearance,
   windowMaximized,
   onToggleWindow,
+  onCloseWindow,
 }: {
   readonly configName: string;
   readonly workspaceLabel: string;
@@ -757,6 +764,7 @@ function WorkbenchChrome({
   readonly appearance: "light" | "dark";
   readonly windowMaximized: boolean;
   readonly onToggleWindow: () => void;
+  readonly onCloseWindow: () => void;
 }) {
   const dark = appearance === "dark";
   const surfaceClass = dark
@@ -783,7 +791,7 @@ function WorkbenchChrome({
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         {validationLabel ? <span className={clsx("text-xs", metaTextClass)}>{validationLabel}</span> : null}
         <button
           type="button"
@@ -820,13 +828,27 @@ function WorkbenchChrome({
             icon={<ConsoleIcon />}
           />
         </div>
-        <ChromeIconButton
-          ariaLabel={windowMaximized ? "Restore window" : "Maximize window"}
-          onClick={onToggleWindow}
-          appearance={appearance}
-          active={windowMaximized}
-          icon={windowMaximized ? <WindowRestoreIcon /> : <WindowMaximizeIcon />}
-        />
+        <div className="flex items-center gap-1 border-l border-slate-200/70 pl-2">
+          <ChromeIconButton
+            ariaLabel="Minimize workbench"
+            onClick={() => {}}
+            appearance={appearance}
+            icon={<MinimizeIcon />}
+          />
+          <ChromeIconButton
+            ariaLabel={windowMaximized ? "Restore window" : "Maximize window"}
+            onClick={onToggleWindow}
+            appearance={appearance}
+            active={windowMaximized}
+            icon={windowMaximized ? <WindowRestoreIcon /> : <WindowMaximizeIcon />}
+          />
+          <ChromeIconButton
+            ariaLabel="Close workbench"
+            onClick={onCloseWindow}
+            appearance={appearance}
+            icon={<CloseIcon />}
+          />
+        </div>
       </div>
     </div>
   );
@@ -860,6 +882,7 @@ function ChromeIconButton({
         baseClass,
         active && activeClass,
       )}
+      title={ariaLabel}
     >
       {icon}
     </button>
@@ -928,6 +951,22 @@ function WindowRestoreIcon() {
     <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
       <path d="M4.5 5.5h6v6h-6z" stroke="currentColor" strokeWidth="1.2" />
       <path d="M6 4h6v6" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function MinimizeIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M4 11h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M5 5l6 6M11 5l-6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }
