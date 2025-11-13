@@ -166,6 +166,7 @@ ADE is configured via environment variables; sensible defaults work for local us
 | `ADE_VENVS_DIR`           | `./data/.venv`                  | One Python virtualenv per `config_id`                     |
 | `ADE_JOBS_DIR`            | `./data/jobs`                   | Per‑job working directories                               |
 | `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`              | pip download/build cache                                  |
+| `ADE_SAFE_MODE`          | `false`                         | Skip engine execution while runs API returns safe-mode info |
 | `ADE_MAX_CONCURRENCY`     | `2`                             | Backend dispatcher parallelism                            |
 | `ADE_QUEUE_SIZE`          | `10`                            | Back‑pressure threshold before API returns HTTP 429       |
 | `ADE_JOB_TIMEOUT_SECONDS` | `300`                           | Wall‑clock timeout per worker                             |
