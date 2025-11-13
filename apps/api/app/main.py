@@ -16,6 +16,7 @@ from .shared.dependency import configure_auth_dependencies
 from .web.spa import mount_spa
 
 logger = logging.getLogger(__name__)
+API_PREFIX = "/api"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -52,13 +53,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_auth_dependencies(settings=settings)
 
     register_middleware(app)
-    app.include_router(api_router, prefix="/api")
-    mount_spa(app, api_prefix="/api", static_dir=settings.web_dir / "static")
+    app.include_router(api_router, prefix=API_PREFIX)
+    mount_spa(app, api_prefix=API_PREFIX, static_dir=settings.web_dir / "static")
     configure_openapi(app, settings)
     return app
 
 
 __all__ = [
+    "API_PREFIX",
     "create_app",
 ]
 

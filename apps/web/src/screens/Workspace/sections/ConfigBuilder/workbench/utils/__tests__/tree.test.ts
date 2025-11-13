@@ -103,4 +103,15 @@ describe("createWorkbenchTreeFromListing", () => {
       etag: "manifest",
     });
   });
+
+  it("creates a virtual root when listing root is empty", () => {
+    const listing = createListing();
+    listing.root = "";
+    listing.prefix = "";
+
+    const tree = createWorkbenchTreeFromListing(listing);
+    expect(tree).not.toBeNull();
+    expect(tree?.id).toBe("");
+    expect(tree?.children?.[0]?.name).toBe("ade_config");
+  });
 });
