@@ -75,7 +75,7 @@ describe("EditorArea keyboard shortcuts", () => {
         onUnpinTab={onUnpinTab}
         onContentChange={onContentChange}
         onSelectRecentTab={onSelectRecentTab}
-        editorTheme="vs-dark"
+        editorTheme="ade-dark"
         menuAppearance="dark"
       />,
     );
@@ -112,7 +112,7 @@ describe("EditorArea keyboard shortcuts", () => {
         onUnpinTab={onUnpinTab}
         onContentChange={onContentChange}
         onSelectRecentTab={onSelectRecentTab}
-        editorTheme="vs-dark"
+        editorTheme="ade-dark"
         menuAppearance="dark"
       />,
     );
@@ -149,7 +149,7 @@ describe("EditorArea keyboard shortcuts", () => {
         onUnpinTab={onUnpinTab}
         onContentChange={onContentChange}
         onSelectRecentTab={onSelectRecentTab}
-        editorTheme="vs-dark"
+        editorTheme="ade-dark"
         menuAppearance="dark"
       />,
     );
@@ -186,7 +186,7 @@ describe("EditorArea keyboard shortcuts", () => {
         onUnpinTab={onUnpinTab}
         onContentChange={onContentChange}
         onSelectRecentTab={onSelectRecentTab}
-        editorTheme="vs-dark"
+        editorTheme="ade-dark"
         menuAppearance="dark"
       />,
     );
@@ -223,7 +223,7 @@ describe("EditorArea keyboard shortcuts", () => {
         onUnpinTab={onUnpinTab}
         onContentChange={onContentChange}
         onSelectRecentTab={onSelectRecentTab}
-        editorTheme="vs-dark"
+        editorTheme="ade-dark"
         menuAppearance="dark"
       />,
     );

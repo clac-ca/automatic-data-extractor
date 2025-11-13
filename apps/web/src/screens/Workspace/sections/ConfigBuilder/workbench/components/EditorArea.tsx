@@ -470,7 +470,7 @@ export function EditorArea({
         </DndContext>
 
         {contentTabs.map((tab) => (
-          <TabsContent key={tab.id} value={tab.id} className="flex min-h-0 flex-1">
+          <TabsContent key={tab.id} value={tab.id} className="flex min-h-0 min-w-0 flex-1">
             {tab.status === "loading" ? (
               <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
                 Loading {tab.name}…
@@ -487,7 +487,12 @@ export function EditorArea({
                 </button>
               </div>
             ) : (
-              <div className={clsx("flex min-h-0 flex-1", draggingTabId && "pointer-events-none select-none")}>
+              <div
+                className={clsx(
+                  "flex min-h-0 min-w-0 flex-1",
+                  draggingTabId && "pointer-events-none select-none",
+                )}
+              >
                 <CodeEditor
                   value={tab.content}
                   language={tab.language ?? "plaintext"}

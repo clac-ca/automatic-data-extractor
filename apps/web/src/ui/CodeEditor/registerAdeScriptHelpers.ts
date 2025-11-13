@@ -1,5 +1,6 @@
 import type * as Monaco from "monaco-editor";
 
+import type { AdeFunctionSpec } from "./adeScriptApi";
 import { getHoverSpec, getSnippetSpecs, isAdeConfigFile } from "./adeScriptApi";
 
 type Registration = {
@@ -77,33 +78,31 @@ function registerCompletionProvider(
   languageId: string,
 ): Monaco.IDisposable {
   return monaco.languages.registerCompletionItemProvider(languageId, {
-    triggerCharacters: [" "],
+    triggerCharacters: [" ", "t", "_"],
     provideCompletionItems(model, position) {
       const filePath = getModelPath(model);
       if (!isAdeConfigFile(filePath)) {
-        return { suggestions: [] };
-      }
-      const context = getSnippetContext(monaco, model, position);
-      if (!context) {
-        return { suggestions: [] };
+        return EMPTY_COMPLETIONS;
       }
       const specs = getSnippetSpecs(filePath);
+      logCompletionDebug("ADE specs for file", {
+        filePath,
+        specs: specs.map((spec) => spec.name),
+      });
       if (specs.length === 0) {
-        return { suggestions: [] };
+        return EMPTY_COMPLETIONS;
       }
-
-      const suggestions = specs.map((spec, index) => ({
-        label: spec.label,
-        kind: monaco.languages.CompletionItemKind.Snippet,
-        insertText: spec.snippet,
-        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-        documentation: { value: spec.doc },
-        detail: spec.signature,
-        range: context.range,
-        sortText: `0${index}`,
-      }));
-
-      return { suggestions };
+      const context = getCompletionContext(monaco, model, position);
+      logCompletionDebug("ADE completion context", context);
+      if (!context) {
+        return EMPTY_COMPLETIONS;
+      }
+      const filteredSpecs = specs.filter((spec) => matchesTrigger(spec, context));
+      const suggestions = filteredSpecs.map((spec, index) => createSnippetSuggestion(monaco, spec, context, index));
+      logCompletionDebug("ADE suggestions", suggestions.map((s) => s.label));
+      return {
+        suggestions,
+      };
     },
   });
 }
@@ -160,7 +159,11 @@ function getModelPath(model: Monaco.editor.ITextModel | undefined): string | und
   if (!uri) {
     return undefined;
   }
-  return uri.path || uri.toString();
+  const rawPath = uri.path || uri.toString();
+  if (!rawPath) {
+    return undefined;
+  }
+  return rawPath.startsWith("/") ? rawPath.slice(1) : rawPath;
 }
 
 function computeActiveParameter(prefix: string): number {
@@ -175,20 +178,79 @@ function computeActiveParameter(prefix: string): number {
   return argsSoFar.split(",").length - 1;
 }
 
-function getSnippetContext(
+type SnippetContext = {
+  range: Monaco.Range;
+  typedName: string;
+  typedNameLower: string;
+};
+
+const EMPTY_COMPLETIONS = { suggestions: [] as Monaco.languages.CompletionItem[] };
+
+function getCompletionContext(
   monaco: typeof import("monaco-editor"),
   model: Monaco.editor.ITextModel,
   position: Monaco.Position,
-): { range: Monaco.Range } | null {
+): SnippetContext | null {
   const lineText = model.getLineContent(position.lineNumber);
   const beforeCursor = lineText.slice(0, Math.max(0, position.column - 1));
-  const withoutIndent = beforeCursor.replace(/^\s+/, "");
-  const trimmed = withoutIndent.replace(/\s+$/, "");
-  if (!trimmed.startsWith("def")) {
+  const trimmedBeforeCursor = beforeCursor.replace(/\s+$/, "");
+  const match = /^(\s*)def(?:\s+([A-Za-z_][\w]*))?/.exec(trimmedBeforeCursor);
+  if (!match) {
     return null;
   }
-  const indentLength = beforeCursor.length - withoutIndent.length;
-  const startColumn = indentLength + 1;
+  const indent = match[1] || "";
+  const typedName = (match[2] || "").trim();
+  const startColumn = indent.length + 1;
   const range = new monaco.Range(position.lineNumber, startColumn, position.lineNumber, position.column);
-  return { range };
+  return {
+    range,
+    typedName,
+    typedNameLower: typedName.toLowerCase(),
+  };
+}
+
+function matchesTrigger(spec: AdeFunctionSpec, context: SnippetContext): boolean {
+  if (!context.typedName) {
+    return true;
+  }
+  const triggers = getSnippetTriggers(spec);
+  return triggers.some((trigger) => {
+    return trigger.startsWith(context.typedNameLower) || context.typedNameLower.startsWith(trigger);
+  });
+}
+
+function getSnippetTriggers(spec: AdeFunctionSpec): string[] {
+  if (spec.name === "detect_*") {
+    return ["detect"];
+  }
+  return [spec.name.toLowerCase()];
+}
+
+function createSnippetSuggestion(
+  monaco: typeof import("monaco-editor"),
+  spec: AdeFunctionSpec,
+  context: SnippetContext,
+  index: number,
+): Monaco.languages.CompletionItem {
+  return {
+    label: spec.label,
+    kind: monaco.languages.CompletionItemKind.Snippet,
+    insertText: spec.snippet,
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    documentation: { value: spec.doc },
+    detail: spec.signature,
+    range: context.range,
+    sortText: `0${index}`,
+  };
+}
+
+const SHOULD_LOG_COMPLETIONS =
+  typeof import.meta !== "undefined" && !!import.meta.env && Boolean(import.meta.env.DEV);
+
+function logCompletionDebug(label: string, payload: unknown): void {
+  if (!SHOULD_LOG_COMPLETIONS) {
+    return;
+  }
+  // eslint-disable-next-line no-console -- intentional dev-only diagnostics
+  console.debug(`[ade-completions] ${label}`, payload);
 }
