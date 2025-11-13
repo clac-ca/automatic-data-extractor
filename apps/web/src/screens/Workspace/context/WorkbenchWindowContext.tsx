@@ -99,10 +99,13 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
     const intent = navigationIntent.current;
 
     if (onEditorRoute && editorRouteConfigId === session.configId) {
+      if (intent === "dock") {
+        return;
+      }
       if (focusMode === "docked") {
         setFocusMode("balanced");
       }
-      if (intent !== "dock") {
+      if (intent) {
         navigationIntent.current = null;
       }
       return;

@@ -1105,12 +1105,18 @@ function WorkbenchChrome({
             appearance === "dark" ? "border-white/20" : "border-slate-200/70",
           )}
         >
-          <FocusModeToggle focusMode={focusMode} appearance={appearance} onChangeMode={onChangeFocusMode} />
           <ChromeIconButton
-            ariaLabel="Dock workbench"
+            ariaLabel="Minimize workbench"
             onClick={onDockWorkbench}
             appearance={appearance}
-            icon={<DockMiniIcon />}
+            icon={<MinimizeIcon />}
+          />
+          <ChromeIconButton
+            ariaLabel={focusMode === "immersive" ? "Restore workbench" : "Maximize workbench"}
+            onClick={() => onChangeFocusMode(focusMode === "immersive" ? "balanced" : "immersive")}
+            appearance={appearance}
+            active={focusMode === "immersive"}
+            icon={focusMode === "immersive" ? <WindowRestoreIcon /> : <WindowMaximizeIcon />}
           />
           <ChromeIconButton
             ariaLabel="Close workbench"
@@ -1159,57 +1165,6 @@ function ChromeIconButton({
   );
 }
 
-function FocusModeToggle({
-  focusMode,
-  appearance,
-  onChangeMode,
-}: {
-  readonly focusMode: "balanced" | "immersive";
-  readonly appearance: "light" | "dark";
-  readonly onChangeMode: (mode: "balanced" | "immersive") => void;
-}) {
-  const dark = appearance === "dark";
-  const containerClass = dark
-    ? "border-white/20 bg-white/10 text-white/80"
-    : "border-slate-200 bg-slate-100 text-slate-600";
-  const activeClass = dark ? "bg-white/30 text-white shadow-[0_8px_20px_-12px_rgba(15,23,42,0.6)]" : "bg-white text-slate-900 shadow-[0_10px_25px_-18px_rgba(15,23,42,0.45)]";
-  const inactiveClass = dark ? "text-white/65" : "text-slate-600";
-
-  return (
-    <div
-      className={clsx(
-        "inline-flex flex-shrink-0 gap-1 rounded-full border px-1 py-0.5 text-[11px] font-semibold",
-        containerClass,
-      )}
-      role="group"
-      aria-label="Workbench focus mode"
-    >
-      {(["balanced", "immersive"] as const).map((mode) => (
-        <button
-          type="button"
-          key={mode}
-          onClick={() => onChangeMode(mode)}
-          className={clsx(
-            "px-3 py-1 rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
-            focusMode === mode ? activeClass : inactiveClass,
-          )}
-        >
-          {mode === "balanced" ? "Balanced" : "Immersive"}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function DockMiniIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <rect x="3" y="3" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M6 9h6" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  );
-}
-
 function WorkbenchBadgeIcon() {
   return (
     <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#4fc1ff] via-[#2d7dff] to-[#7c4dff] text-white shadow-lg shadow-[#10121f]">
@@ -1255,6 +1210,31 @@ function InspectorIcon() {
     <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
       <rect x="3" y="3" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
       <path d="M10 3v10" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function WindowMaximizeIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="3" y="3" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function WindowRestoreIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M4.5 5.5h6v6h-6z" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M6 4h6v6" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function MinimizeIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M4 11h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }
