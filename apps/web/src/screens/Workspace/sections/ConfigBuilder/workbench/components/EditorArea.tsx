@@ -1,5 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 import clsx from "clsx";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { SortableContext, useSortable, horizontalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 import { CodeEditor } from "@ui/CodeEditor";
 import { ContextMenu, type ContextMenuItem } from "@ui/ContextMenu";
@@ -39,11 +50,15 @@ export function EditorArea({
   const hasTabs = tabs.length > 0;
   const [contextMenu, setContextMenu] = useState<{ tabId: string; x: number; y: number } | null>(null);
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
-  const [dragOverState, setDragOverState] = useState<{ targetId: string; position: "before" | "after" } | null>(
-    null,
-  );
 
   const activeTab = useMemo(() => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0], [tabs, activeTabId]);
+  const contentTabs = useMemo(() => tabs.slice().sort((a, b) => a.id.localeCompare(b.id)), [tabs]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+  );
 
   useEffect(() => {
     if (!hasTabs) {
@@ -95,77 +110,31 @@ export function EditorArea({
     }
   }, [contextMenu, tabs]);
 
-  const resetDragState = () => {
+  const handleDragStart = (event: DragStartEvent) => {
+    setDraggingTabId(String(event.active.id));
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const activeId = event.active.id;
+    const overId = event.over?.id;
+    if (!overId) {
+      setDraggingTabId(null);
+      return;
+    }
+    if (activeId !== overId) {
+      const activeIndex = tabs.findIndex((tab) => tab.id === activeId);
+      const overIndex = tabs.findIndex((tab) => tab.id === overId);
+      if (activeIndex !== -1 && overIndex !== -1) {
+        const insertIndex = activeIndex < overIndex ? overIndex + 1 : overIndex;
+        onMoveTab(String(activeId), insertIndex);
+      }
+    }
     setDraggingTabId(null);
-    setDragOverState(null);
   };
 
-  const handleDragStart = (event: React.DragEvent<HTMLDivElement>, tabId: string) => {
-    event.stopPropagation();
-    setDraggingTabId(tabId);
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = "move";
-      if (event.dataTransfer.setData) {
-        event.dataTransfer.setData("text/plain", tabId);
-      }
-    }
+  const handleDragCancel = () => {
+    setDraggingTabId(null);
   };
-
-  const handleDragOverTab = (event: React.DragEvent<HTMLDivElement>, tabId: string) => {
-    if (!draggingTabId || draggingTabId === tabId) {
-      setDragOverState(null);
-      return;
-    }
-    event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const position = event.clientX - rect.left < rect.width / 2 ? "before" : "after";
-    setDragOverState((current) => {
-      if (current?.targetId === tabId && current.position === position) {
-        return current;
-      }
-      return { targetId: tabId, position };
-    });
-  };
-
-  const handleDropOnTab = (event: React.DragEvent<HTMLDivElement>, tabId: string) => {
-    event.preventDefault();
-    if (!draggingTabId || draggingTabId === tabId) {
-      resetDragState();
-      return;
-    }
-    const targetIndex = tabs.findIndex((tab) => tab.id === tabId);
-    if (targetIndex === -1) {
-      resetDragState();
-      return;
-    }
-    const rect = event.currentTarget.getBoundingClientRect();
-    const fallbackPosition = event.clientX - rect.left < rect.width / 2 ? "before" : "after";
-    const position =
-      dragOverState?.targetId === tabId ? dragOverState.position : fallbackPosition;
-    const insertIndex = position === "after" ? targetIndex + 1 : targetIndex;
-    onMoveTab(draggingTabId, insertIndex);
-    resetDragState();
-  };
-
-  const handleDropAtEnd = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    if (!draggingTabId) {
-      resetDragState();
-      return;
-    }
-    onMoveTab(draggingTabId, tabs.length);
-    resetDragState();
-  };
-
-  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>, tabId: string) => {
-    if (!dragOverState || dragOverState.targetId !== tabId) {
-      return;
-    }
-    if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-      setDragOverState(null);
-    }
-  };
-  const isDragOverEnd = dragOverState?.targetId === "__end__";
 
   const tabContextItems: ContextMenuItem[] = useMemo(() => {
     if (!contextMenu) {
@@ -175,25 +144,43 @@ export function EditorArea({
     const tabIndex = tabs.findIndex((tab) => tab.id === tabId);
     const hasTabsToRight = tabIndex >= 0 && tabIndex < tabs.length - 1;
     const hasMultipleTabs = tabs.length > 1;
+    const shortcuts = {
+      close: "Ctrl+W",
+      closeOthers: "Ctrl+K Ctrl+O",
+      closeRight: "Ctrl+K Ctrl+Right",
+      closeAll: "Ctrl+K Ctrl+W",
+    };
     return [
-      { id: "close", label: "Close", onSelect: () => onCloseTab(tabId) },
+      {
+        id: "close",
+        label: "Close",
+        icon: <MenuIconClose />,
+        shortcut: shortcuts.close,
+        onSelect: () => onCloseTab(tabId),
+      },
       {
         id: "close-others",
         label: "Close Others",
+        icon: <MenuIconCloseOthers />,
         disabled: !hasMultipleTabs,
+        shortcut: shortcuts.closeOthers,
         onSelect: () => onCloseOtherTabs(tabId),
       },
       {
         id: "close-right",
         label: "Close Tabs to the Right",
+        icon: <MenuIconCloseRight />,
         disabled: !hasTabsToRight,
+        shortcut: shortcuts.closeRight,
         onSelect: () => onCloseTabsToRight(tabId),
       },
       {
         id: "close-all",
         label: "Close All",
+        icon: <MenuIconCloseAll />,
         dividerAbove: true,
         disabled: tabs.length === 0,
+        shortcut: shortcuts.closeAll,
         onSelect: () => onCloseAllTabs(),
       },
     ];
@@ -210,112 +197,37 @@ export function EditorArea({
   return (
     <div className="flex min-h-0 flex-1 flex-col" style={minHeight ? { minHeight } : undefined}>
       <TabsRoot value={activeTab.id} onValueChange={onSelectTab}>
-        <TabsList className="flex min-h-[2.75rem] items-end gap-0 overflow-x-auto border-b border-slate-200 bg-slate-900/5 px-2">
-          {tabs.map((tab) => {
-            const isDirty = tab.status === "ready" && tab.content !== tab.initialContent;
-            const isActive = tab.id === activeTab.id;
-            const isDragging = draggingTabId === tab.id;
-            const isOverBefore = dragOverState?.targetId === tab.id && dragOverState.position === "before";
-            const isOverAfter = dragOverState?.targetId === tab.id && dragOverState.position === "after";
-            return (
-              <div
-                key={tab.id}
-                className={clsx(
-                  "group relative mr-1 flex min-w-0 items-stretch",
-                  isDragging && "opacity-60",
-                )}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  setContextMenu({ tabId: tab.id, x: event.clientX, y: event.clientY });
-                }}
-                draggable
-                onDragStart={(event) => handleDragStart(event, tab.id)}
-                onDragOver={(event) => handleDragOverTab(event, tab.id)}
-                onDrop={(event) => handleDropOnTab(event, tab.id)}
-                onDragEnd={resetDragState}
-                onDragLeave={(event) => handleDragLeave(event, tab.id)}
-              >
-                {isOverBefore ? (
-                  <span className="pointer-events-none absolute -left-1 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-brand-500 shadow-[0_0_6px_rgba(14,99,156,.6)]" />
-                ) : null}
-                {isOverAfter ? (
-                  <span className="pointer-events-none absolute -right-1 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-brand-500 shadow-[0_0_6px_rgba(14,99,156,.6)]" />
-                ) : null}
-                <TabsTrigger
-                  value={tab.id}
-                  title={tab.id}
-                  className={clsx(
-                    "relative flex min-w-[9rem] max-w-[16rem] items-center gap-2 overflow-hidden rounded-t-lg border px-3 py-1.5 pr-8 text-sm font-medium transition-[background-color,border-color,color] duration-150",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50",
-                    isActive
-                      ? "border-slate-200 border-b-white bg-white text-slate-900 shadow-[0_1px_0_rgba(15,23,42,0.08)]"
-                      : "border-transparent border-b-slate-200 text-slate-500 hover:border-slate-200 hover:bg-white/70 hover:text-slate-900",
-                  )}
-                >
-                  <span className="block min-w-0 flex-1 truncate text-left">{tab.name}</span>
-                  {tab.status === "loading" ? (
-                    <span
-                      className="flex-none text-[10px] font-semibold uppercase tracking-wide text-slate-400"
-                      aria-label="Loading"
-                    >
-                      ●
-                    </span>
-                  ) : null}
-                  {tab.status === "error" ? (
-                    <span
-                      className="flex-none text-[10px] font-semibold uppercase tracking-wide text-danger-600"
-                      aria-label="Load failed"
-                    >
-                      !
-                    </span>
-                  ) : null}
-                  {isDirty ? <span className="flex-none text-xs leading-none text-brand-600">●</span> : null}
-                </TabsTrigger>
-                <button
-                  type="button"
-                  className={clsx(
-                    "absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-xs transition focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white",
-                    isActive
-                      ? "text-slate-500 hover:bg-slate-200 hover:text-slate-900"
-                      : "text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-200 hover:text-slate-700",
-                  )}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onCloseTab(tab.id);
-                  }}
-                  aria-label={`Close ${tab.name}`}
-                >
-                  ×
-                </button>
-              </div>
-            );
-          })}
-          <div
-            className="ml-1 flex h-[2.75rem] w-4 flex-shrink-0 items-center justify-center"
-            onDragOver={(event) => {
-              if (!draggingTabId) {
-                return;
-              }
-              event.preventDefault();
-              setDragOverState((current) =>
-                current?.targetId === "__end__"
-                  ? current
-                  : { targetId: "__end__", position: "after" },
-              );
-            }}
-            onDragLeave={() => {
-              if (dragOverState?.targetId === "__end__") {
-                setDragOverState(null);
-              }
-            }}
-            onDrop={handleDropAtEnd}
-          >
-            {isDragOverEnd ? (
-              <span className="h-6 w-0.5 rounded-full bg-brand-500 shadow-[0_0_6px_rgba(14,99,156,.6)]" />
-            ) : null}
-          </div>
-        </TabsList>
-        {tabs.map((tab) => (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
+          <SortableContext items={tabs.map((tab) => tab.id)} strategy={horizontalListSortingStrategy}>
+            <TabsList className="flex min-h-[2.75rem] items-end gap-0 overflow-x-auto border-b border-slate-200 bg-slate-900/5 px-2">
+              {tabs.map((tab) => {
+                const isDirty = tab.status === "ready" && tab.content !== tab.initialContent;
+                const isActive = tab.id === activeTab.id;
+                return (
+                  <SortableTab
+                    key={tab.id}
+                    tab={tab}
+                    isActive={isActive}
+                    isDirty={isDirty}
+                    draggingId={draggingTabId}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setContextMenu({ tabId: tab.id, x: event.clientX, y: event.clientY });
+                    }}
+                    onCloseTab={onCloseTab}
+                  />
+                );
+              })}
+            </TabsList>
+          </SortableContext>
+        </DndContext>
+        {contentTabs.map((tab) => (
           <TabsContent key={tab.id} value={tab.id} className="flex min-h-0 flex-1">
             {tab.status === "loading" ? (
               <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
@@ -333,12 +245,14 @@ export function EditorArea({
                 </button>
               </div>
             ) : (
-              <CodeEditor
-                value={tab.content}
-                language={tab.language ?? "plaintext"}
-                theme={editorTheme}
-                onChange={(value) => onContentChange(tab.id, value ?? "")}
-              />
+              <div className={clsx("flex min-h-0 flex-1", draggingTabId && "pointer-events-none select-none")}>
+                <CodeEditor
+                  value={tab.content}
+                  language={tab.language ?? "plaintext"}
+                  theme={editorTheme}
+                  onChange={(value) => onContentChange(tab.id, value ?? "")}
+                />
+              </div>
             )}
           </TabsContent>
         ))}
@@ -351,5 +265,128 @@ export function EditorArea({
         appearance={menuAppearance}
       />
     </div>
+  );
+}
+interface SortableTabProps {
+  readonly tab: WorkbenchFileTab;
+  readonly isActive: boolean;
+  readonly isDirty: boolean;
+  readonly draggingId: string | null;
+  readonly onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
+  readonly onCloseTab: (tabId: string) => void;
+}
+
+function SortableTab({ tab, isActive, isDirty, draggingId, onContextMenu, onCloseTab }: SortableTabProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: tab.id,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  const showingDrag = isDragging || draggingId === tab.id;
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={clsx(
+        "group relative mr-1 flex min-w-0 items-stretch",
+        showingDrag && "opacity-60",
+      )}
+      data-editor-tab="true"
+      onContextMenu={onContextMenu}
+      {...attributes}
+      {...listeners}
+    >
+      <TabsTrigger
+        value={tab.id}
+        title={tab.id}
+        className={clsx(
+          "relative flex min-w-[9rem] max-w-[16rem] items-center gap-2 overflow-hidden rounded-t-lg border px-3 py-1.5 pr-8 text-sm font-medium transition-[background-color,border-color,color] duration-150",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50",
+          isActive
+            ? "border-slate-200 border-b-white bg-white text-slate-900 shadow-[0_1px_0_rgba(15,23,42,0.08)]"
+            : "border-transparent border-b-slate-200 text-slate-500 hover:border-slate-200 hover:bg-white/70 hover:text-slate-900",
+        )}
+      >
+        <span className="block min-w-0 flex-1 truncate text-left">{tab.name}</span>
+        {tab.status === "loading" ? (
+          <span
+            className="flex-none text-[10px] font-semibold uppercase tracking-wide text-slate-400"
+            aria-label="Loading"
+          >
+            ●
+          </span>
+        ) : null}
+        {tab.status === "error" ? (
+          <span
+            className="flex-none text-[10px] font-semibold uppercase tracking-wide text-danger-600"
+            aria-label="Load failed"
+          >
+            !
+          </span>
+        ) : null}
+        {isDirty ? <span className="flex-none text-xs leading-none text-brand-600">●</span> : null}
+      </TabsTrigger>
+      <button
+        type="button"
+        className={clsx(
+          "absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-xs transition focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white",
+          isActive
+            ? "text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+            : "text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-200 hover:text-slate-700",
+        )}
+        onClick={(event) => {
+          event.stopPropagation();
+          onCloseTab(tab.id);
+        }}
+        aria-label={`Close ${tab.name}`}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+const MENU_ICON_CLASS = "h-4 w-4 text-current opacity-80";
+
+function MenuIconClose() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <path d="M4 4l8 8m0-8l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MenuIconCloseOthers() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <rect x="2.5" y="3" width="8" height="10" rx="1.2" stroke="currentColor" strokeWidth="1.2" fill="none" />
+      <path d="M7 7l5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MenuIconCloseRight() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <path d="M5 3v10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M7 5l5 3-5 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 6v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MenuIconCloseAll() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <path
+        d="M3.5 4h3a1 1 0 0 1 1 1v7.5M12.5 12h-3a1 1 0 0 1-1-1V3.5"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+      <path d="M5 6l6 6m0-6-6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
   );
 }

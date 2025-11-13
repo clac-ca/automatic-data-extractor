@@ -114,4 +114,70 @@ describe("createWorkbenchTreeFromListing", () => {
     expect(tree?.id).toBe("");
     expect(tree?.children?.[0]?.name).toBe("ade_config");
   });
+
+  it("represents canonical directory parents without trailing slashes", () => {
+    const listing = createListing();
+    listing.root = "";
+    listing.prefix = "";
+    listing.entries = [
+      {
+        path: "src",
+        name: "src",
+        parent: "",
+        kind: "dir",
+        depth: 0,
+        size: null,
+        mtime: ISO,
+        etag: "src",
+        content_type: "inode/directory",
+        has_children: true,
+      },
+      {
+        path: "src/ade_config",
+        name: "ade_config",
+        parent: "src",
+        kind: "dir",
+        depth: 1,
+        size: null,
+        mtime: ISO,
+        etag: "ade-config",
+        content_type: "inode/directory",
+        has_children: true,
+      },
+      {
+        path: "src/ade_config/hooks",
+        name: "hooks",
+        parent: "src/ade_config",
+        kind: "dir",
+        depth: 2,
+        size: null,
+        mtime: ISO,
+        etag: "hooks",
+        content_type: "inode/directory",
+        has_children: true,
+      },
+      {
+        path: "src/ade_config/manifest.json",
+        name: "manifest.json",
+        parent: "src/ade_config",
+        kind: "file",
+        depth: 2,
+        size: 120,
+        mtime: ISO,
+        etag: "manifest",
+        content_type: "application/json",
+        has_children: false,
+      },
+    ];
+
+    const tree = createWorkbenchTreeFromListing(listing);
+    expect(tree?.children?.map((node) => node.id)).toEqual(["src"]);
+    const src = tree?.children?.[0];
+    expect(src?.children?.map((node) => node.id)).toEqual(["src/ade_config"]);
+    const adeConfig = src?.children?.[0];
+    expect(adeConfig?.children?.map((node) => node.id).sort()).toEqual([
+      "src/ade_config/hooks",
+      "src/ade_config/manifest.json",
+    ]);
+  });
 });
