@@ -303,7 +303,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const fullHeightLayout = section.fullHeight ?? false;
 
   return (
-    <div className="flex min-h-screen bg-slate-50 text-slate-900">
+    <div className="flex min-h-screen min-w-0 bg-slate-50 text-slate-900">
       {!immersiveWorkbenchActive ? (
         <WorkspaceNav
           workspace={workspace}
@@ -313,7 +313,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
           onGoToWorkspaces={() => navigate("/workspaces")}
         />
       ) : null}
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 min-w-0 flex-col">
         {!immersiveWorkbenchActive ? (
           <GlobalTopBar brand={topBarBrand} trailing={topBarTrailing} search={workspaceSearch} />
         ) : null}
@@ -362,13 +362,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
                   </Alert>
                 </div>
               ) : null}
-              <div
-                className={
-                  fullHeightLayout
-                    ? "flex flex-1 min-h-0 flex-col"
-                    : "rounded-2xl border border-slate-200 bg-white p-6 shadow-soft"
-                }
-              >
+              <div className={clsx(fullHeightLayout ? "flex min-h-0 min-w-0 flex-1 flex-col" : "flex min-w-0 flex-1 flex-col")}>
                 {section.element}
               </div>
             </div>

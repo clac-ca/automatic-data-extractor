@@ -400,7 +400,7 @@ export function EditorArea({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" style={minHeight ? { minHeight } : undefined}>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col" style={minHeight ? { minHeight } : undefined}>
       <TabsRoot value={activeTab.id} onValueChange={onSelectTab}>
         <DndContext
           sensors={sensors}
