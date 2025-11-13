@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.app.shared.core.time import utc_now
 from apps.api.app.shared.db.mixins import generate_ulid
 
-from .etag import canonicalize_etag, format_etag
+from .etag import canonicalize_etag
 from .exceptions import (
     ConfigSourceInvalidError,
     ConfigSourceNotFoundError,
@@ -791,7 +791,11 @@ def _compute_fileset_hash(entries: list[dict]) -> str:
     return digest.hexdigest()
 
 
-def _normalize_prefix_argument(prefix: str, dir_paths: set[str], file_paths: set[str]) -> tuple[str, bool]:
+def _normalize_prefix_argument(
+    prefix: str,
+    dir_paths: set[str],
+    file_paths: set[str],
+) -> tuple[str, bool]:
     candidate = (prefix or "").strip()
     candidate = candidate.lstrip("/")
     if not candidate:

@@ -17,7 +17,7 @@ from apps.api.app.shared.types import OrderBy
 
 from .filters import UserFilters
 from .models import User
-from .schemas import UserOut, UserPage, UserProfile
+from .schemas import UserPage, UserProfile
 from .service import UsersService
 from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 

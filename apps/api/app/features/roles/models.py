@@ -7,11 +7,13 @@ from enum import Enum
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
-    Enum as SAEnum,
     ForeignKey,
     String,
     Text,
     UniqueConstraint,
+)
+from sqlalchemy import (
+    Enum as SAEnum,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 

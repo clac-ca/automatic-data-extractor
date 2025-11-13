@@ -8,7 +8,6 @@ from enum import Enum
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
-    Enum as SAEnum,
     ForeignKey,
     Index,
     Integer,
@@ -16,6 +15,9 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     text,
+)
+from sqlalchemy import (
+    Enum as SAEnum,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -82,7 +84,7 @@ class Build(Base):
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    logs: Mapped[list["BuildLog"]] = relationship(
+    logs: Mapped[list[BuildLog]] = relationship(
         "BuildLog",
         back_populates="build",
         cascade="all, delete-orphan",

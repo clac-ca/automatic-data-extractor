@@ -7,7 +7,6 @@ import {
   listPermissions,
   listWorkspaceRoles,
   updateWorkspaceRole,
-  type PermissionDefinition,
   type PermissionListPage,
   type RoleDefinition,
   type RoleListPage,

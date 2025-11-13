@@ -21,13 +21,13 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from apps.api.app.shared.pagination import PageParams, paginate_sequence
 from apps.api.app.shared.dependency import (
     get_configs_service,
     require_authenticated,
     require_csrf,
     require_workspace,
 )
+from apps.api.app.shared.pagination import PageParams, paginate_sequence
 
 from ..users.models import User
 from .etag import canonicalize_etag, format_etag, format_weak_etag
@@ -239,7 +239,11 @@ async def list_config_files(
     except ConfigurationNotFoundError:
         _problem("config_not_found", status.HTTP_404_NOT_FOUND)
     except InvalidDepthError:
-        _problem("invalid_depth", status.HTTP_400_BAD_REQUEST, detail="depth must be 0, 1, or infinity")
+        _problem(
+            "invalid_depth",
+            status.HTTP_400_BAD_REQUEST,
+            detail="depth must be 0, 1, or infinity",
+        )
     except InvalidPageTokenError:
         _problem("invalid_page_token", status.HTTP_400_BAD_REQUEST, detail="page_token is invalid")
 
@@ -394,7 +398,14 @@ async def read_config_file(
     canon_requested = canonicalize_etag(request.headers.get("if-none-match"))
     etag_canonical = info["etag"]
     etag_header = format_etag(etag_canonical) or ""
-    headers = {"ETag": etag_header, "Last-Modified": info["mtime"].isoformat() if isinstance(info["mtime"], datetime) else str(info["mtime"])}
+    headers = {
+        "ETag": etag_header,
+        "Last-Modified": (
+            info["mtime"].isoformat()
+            if isinstance(info["mtime"], datetime)
+            else str(info["mtime"])
+        ),
+    }
 
     if canon_requested and etag_canonical and canon_requested == etag_canonical:
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
@@ -441,7 +452,12 @@ async def read_config_file(
         status_code = status.HTTP_206_PARTIAL_CONTENT
     headers["Content-Length"] = str(len(data))
     headers["Accept-Ranges"] = "bytes"
-    return Response(content=data, media_type=info["content_type"], headers=headers, status_code=status_code)
+    return Response(
+        content=data,
+        media_type=info["content_type"],
+        headers=headers,
+        status_code=status_code,
+    )
 
 
 @router.head(
@@ -481,7 +497,11 @@ async def head_config_file(
 
     headers = {
         "ETag": format_etag(info["etag"]) or "",
-        "Last-Modified": info["mtime"].isoformat() if isinstance(info["mtime"], datetime) else str(info["mtime"]),
+        "Last-Modified": (
+            info["mtime"].isoformat()
+            if isinstance(info["mtime"], datetime)
+            else str(info["mtime"])
+        ),
         "Content-Type": info["content_type"],
         "Content-Length": str(info["size"]),
     }

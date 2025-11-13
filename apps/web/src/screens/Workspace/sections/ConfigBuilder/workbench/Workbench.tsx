@@ -308,6 +308,33 @@ export function Workbench({
     persistence: tabPersistence ?? undefined,
   });
   const saveConfigFile = useSaveConfigFileMutation(workspaceId, configId);
+  const reloadFileFromServer = useCallback(
+    async (fileId: string) => {
+      if (usingSeed) {
+        return null;
+      }
+      const payload = await queryClient.fetchQuery({
+        queryKey: configsKeys.file(workspaceId, configId, fileId),
+        queryFn: ({ signal }) => readConfigFileJson(workspaceId, configId, fileId, signal),
+      });
+      const content = decodeFileContent(payload);
+      files.replaceTabContent(fileId, {
+        content,
+        etag: payload.etag ?? null,
+        metadata: {
+          size: payload.size ?? null,
+          modifiedAt: payload.mtime ?? null,
+          contentType:
+            payload.content_type ??
+            files.tabs.find((tab) => tab.id === fileId)?.metadata?.contentType ??
+            null,
+          etag: payload.etag ?? null,
+        },
+      });
+      return payload;
+    },
+    [usingSeed, queryClient, workspaceId, configId, files],
+  );
 
   useUnsavedChangesGuard({
     isDirty: files.isDirty,
@@ -381,25 +408,27 @@ export function Workbench({
         showConsoleBanner(`Saved ${tab.name}`, { intent: "success", duration: 4000 });
         return true;
       } catch (error) {
-        const concurrencyMessage =
-          "Save blocked because this file changed on the server. Reload the latest version to continue.";
-        const failure =
-          error instanceof ApiError && error.status === 412 ? new Error(concurrencyMessage) : error;
+        const isConcurrencyError = error instanceof ApiError && error.status === 412;
+        const failure = isConcurrencyError
+          ? new Error("Save blocked because this file changed on the server. Reloading latest version.")
+          : error;
         files.failSavingTab(tabId, failure instanceof Error ? failure.message : String(failure));
+        if (isConcurrencyError) {
+          try {
+            await reloadFileFromServer(tabId);
+            showConsoleBanner("File reloaded with the latest version from the server. Review before saving again.", {
+              intent: "warning",
+              duration: 6000,
+            });
+          } catch (reloadError) {
+            pushConsoleError(reloadError);
+          }
+        }
         pushConsoleError(failure);
         return false;
       }
     },
-    [
-      usingSeed,
-      files.tabs,
-      files.beginSavingTab,
-      files.completeSavingTab,
-      files.failSavingTab,
-      saveConfigFile,
-      showConsoleBanner,
-      pushConsoleError,
-    ],
+    [usingSeed, files, saveConfigFile, showConsoleBanner, reloadFileFromServer, pushConsoleError],
   );
 
   const saveTabsSequentially = useCallback(
@@ -695,7 +724,6 @@ export function Workbench({
     resetConsole,
     consoleStreamRef,
     setActiveStream,
-    streamRun,
     configId,
     appendConsoleLine,
     pushConsoleError,
@@ -819,7 +847,6 @@ export function Workbench({
       appendConsoleLine,
       consoleStreamRef,
       setActiveStream,
-      streamBuild,
       workspaceId,
       configId,
       pushConsoleError,
@@ -971,8 +998,7 @@ export function Workbench({
     );
     return items;
   }, [
-    editorTheme.preference,
-    editorTheme.setPreference,
+    editorTheme,
     explorer.collapsed,
     inspector.collapsed,
     outputCollapsed,

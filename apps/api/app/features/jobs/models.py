@@ -6,7 +6,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.api.app.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
@@ -54,7 +55,11 @@ class Job(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     retry_of_job_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
 
     input_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    input_documents: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    input_documents: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
     trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     artifact_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
     output_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)

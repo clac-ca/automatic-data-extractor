@@ -17,11 +17,10 @@ export default function LogoutRoute() {
       try {
         await performLogout({ signal: controller.signal });
       } finally {
-        if (cancelled) {
-          return;
+        if (!cancelled) {
+          queryClient.removeQueries({ queryKey: sessionKeys.root, exact: false });
+          navigate("/login", { replace: true });
         }
-        queryClient.removeQueries({ queryKey: sessionKeys.root, exact: false });
-        navigate("/login", { replace: true });
       }
     })().catch(() => {
       if (!cancelled) {

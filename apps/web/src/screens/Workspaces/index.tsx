@@ -30,34 +30,11 @@ function WorkspacesIndexContent() {
   const canCreateWorkspace = userPermissions.includes("Workspaces.Create");
   const [searchQuery, setSearchQuery] = useState("");
   const shortcutHint = useShortcutHint();
-
-  if (workspacesQuery.isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <PageState title="Loading workspaces" variant="loading" />
-      </div>
-    );
-  }
-
-  if (workspacesQuery.isError) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <PageState
-          title="We couldn't load your workspaces"
-          description="Refresh the page or try again later."
-          variant="error"
-          action={
-            <Button variant="secondary" onClick={() => workspacesQuery.refetch()}>
-              Retry
-            </Button>
-          }
-        />
-      </div>
-    );
-  }
-
   const workspacesPage = workspacesQuery.data;
-  const workspaces: WorkspaceProfile[] = workspacesPage?.items ?? [];
+  const workspaces: WorkspaceProfile[] = useMemo(
+    () => workspacesPage?.items ?? [],
+    [workspacesPage?.items],
+  );
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const visibleWorkspaces = useMemo(() => {
     if (!normalizedSearch) {
@@ -71,7 +48,9 @@ function WorkspacesIndexContent() {
   }, [workspaces, normalizedSearch]);
 
   const actions = canCreateWorkspace ? (
-    <Button variant="primary" onClick={() => navigate("/workspaces/new")}>Create workspace</Button>
+    <Button variant="primary" onClick={() => navigate("/workspaces/new")}>
+      Create workspace
+    </Button>
   ) : undefined;
 
   const handleWorkspaceSearchSubmit = useCallback(() => {
@@ -119,6 +98,31 @@ function WorkspacesIndexContent() {
     enableShortcut: false,
     variant: "minimal" as const,
   };
+
+  if (workspacesQuery.isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+        <PageState title="Loading workspaces" variant="loading" />
+      </div>
+    );
+  }
+
+  if (workspacesQuery.isError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+        <PageState
+          title="We couldn't load your workspaces"
+          description="Refresh the page or try again later."
+          variant="error"
+          action={
+            <Button variant="secondary" onClick={() => workspacesQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
 
   const mainContent =
     workspaces.length === 0 ? (

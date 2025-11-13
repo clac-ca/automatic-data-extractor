@@ -5,10 +5,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import AsyncIterator
 from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,15 +25,15 @@ from .models import Run, RunLog, RunStatus
 from .repository import RunsRepository
 from .schemas import (
     RunCompletedEvent,
-    RunCreateOptions,
     RunCreatedEvent,
+    RunCreateOptions,
     RunEvent,
     RunLogEntry,
     RunLogEvent,
     RunLogsResponse,
     RunResource,
-    RunStatusLiteral,
     RunStartedEvent,
+    RunStatusLiteral,
 )
 
 __all__ = [
@@ -70,7 +70,7 @@ class RunExecutionContext:
         }
 
     @classmethod
-    def from_dict(cls, payload: dict[str, str]) -> "RunExecutionContext":
+    def from_dict(cls, payload: dict[str, str]) -> RunExecutionContext:
         return cls(
             run_id=payload["run_id"],
             configuration_id=payload["configuration_id"],
@@ -359,7 +359,9 @@ class RunsService:
 
         return_code = await process.wait()
         status = RunStatus.SUCCEEDED if return_code == 0 else RunStatus.FAILED
-        error_message = None if status is RunStatus.SUCCEEDED else f"Process exited with {return_code}"
+        error_message = (
+            None if status is RunStatus.SUCCEEDED else f"Process exited with {return_code}"
+        )
         completion = await self._complete_run(
             run,
             status=status,

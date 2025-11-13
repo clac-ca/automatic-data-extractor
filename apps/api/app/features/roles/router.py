@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.shared.core.security import forbidden_response
 from apps.api.app.shared.db.session import get_session
-from apps.api.app.shared.pagination import PageParams, paginate_sequence
 from apps.api.app.shared.dependency import (
     get_current_identity,
     require_authenticated,
@@ -28,6 +27,7 @@ from apps.api.app.shared.dependency import (
     require_permissions_catalog_access,
     require_workspace,
 )
+from apps.api.app.shared.pagination import PageParams, paginate_sequence
 
 from ..auth.service import AuthenticatedIdentity
 from ..users.models import User
@@ -77,8 +77,6 @@ from .service import (
     get_role,
     get_role_assignment,
     get_workspace_permissions_for_principal,
-    list_role_assignments,
-    list_roles,
     paginate_role_assignments,
     paginate_roles,
     update_global_role,

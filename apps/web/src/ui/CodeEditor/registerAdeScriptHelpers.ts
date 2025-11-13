@@ -115,12 +115,10 @@ function registerCompletionProvider(
       );
 
       if (import.meta.env?.DEV) {
-        // eslint-disable-next-line no-console
         console.debug("[ade-completions] ADE specs for file", {
           filePath,
           specs: specs.map((s) => s.name),
         });
-        // eslint-disable-next-line no-console
         console.debug(
           "[ade-completions] ADE suggestions",
           suggestions.map((s) => s.label),
@@ -198,7 +196,6 @@ function getModelPath(model: Monaco.editor.ITextModel | undefined): string | und
   const normalized = rawPath.startsWith("/") ? rawPath.slice(1) : rawPath;
 
   if (import.meta.env?.DEV) {
-    // eslint-disable-next-line no-console
     console.debug("[ade] getModelPath", { rawPath, normalized });
   }
 

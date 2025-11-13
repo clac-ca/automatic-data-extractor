@@ -50,7 +50,10 @@ function WorkspaceContent() {
   const queryClient = useQueryClient();
   const workspacesQuery = useWorkspacesQuery();
 
-  const workspaces = workspacesQuery.data?.items ?? [];
+  const workspaces = useMemo(
+    () => workspacesQuery.data?.items ?? [],
+    [workspacesQuery.data?.items],
+  );
   const identifier = extractWorkspaceIdentifier(location.pathname);
   const workspace = useMemo(() => findWorkspace(workspaces, identifier), [workspaces, identifier]);
 
