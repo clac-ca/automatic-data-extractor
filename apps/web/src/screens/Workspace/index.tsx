@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
+import clsx from "clsx";
+
 import { useLocation, useNavigate } from "@app/nav/history";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -28,7 +30,7 @@ import WorkspaceSettingsRoute from "@screens/Workspace/sections/Settings";
 
 type WorkspaceSectionRender =
   | { readonly kind: "redirect"; readonly to: string }
-  | { readonly kind: "content"; readonly key: string; readonly element: JSX.Element };
+  | { readonly kind: "content"; readonly key: string; readonly element: JSX.Element; readonly fullHeight?: boolean };
 
 export default function WorkspaceScreen() {
   return (
@@ -204,13 +206,25 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
     return null;
   }
 
+  const fullHeightLayout = section.fullHeight ?? false;
+
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
       <GlobalTopBar leading={topBarLeading} trailing={topBarTrailing} />
       <div className="relative flex flex-1 overflow-hidden" key={`section-${section.key}`}>
         {primaryNav}
-        <main className="relative flex-1 overflow-y-auto">
-          <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-6">
+        <main
+          className={clsx(
+            "relative flex-1",
+            fullHeightLayout ? "flex min-h-0 flex-col overflow-hidden" : "overflow-y-auto",
+          )}
+        >
+          <div
+            className={clsx(
+              "mx-auto flex w-full max-w-7xl flex-col px-4 py-6",
+              fullHeightLayout && "flex-1 min-h-0 max-w-none",
+            )}
+          >
             {safeModeEnabled ? (
               <div className="mb-4">
                 <Alert tone="warning" heading="Safe mode active">
@@ -218,7 +232,14 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
                 </Alert>
               </div>
             ) : null}
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">{section.element}</div>
+            <div
+              className={clsx(
+                "rounded-2xl border border-slate-200 bg-white p-6 shadow-soft",
+                fullHeightLayout && "flex flex-1 min-h-0 flex-col",
+              )}
+            >
+              {section.element}
+            </div>
           </div>
         </main>
       </div>
@@ -303,6 +324,7 @@ export function resolveWorkspaceSection(
           kind: "content",
           key: `config-builder:${second}:editor`,
           element: <ConfigEditorWorkbenchRouteWithParams configId={decodeURIComponent(second)} />,
+          fullHeight: true,
         };
       }
       return {

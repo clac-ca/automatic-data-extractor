@@ -2,7 +2,14 @@ import { fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@ui/CodeEditor", () => ({
-  CodeEditor: ({ value, onChange }: { value: string; onChange?: (value: string | undefined) => void }) => (
+  CodeEditor: ({
+    value,
+    onChange,
+  }: {
+    value: string;
+    onChange?: (value: string | undefined) => void;
+    theme?: string;
+  }) => (
     <textarea
       data-testid="code-editor"
       value={value}
@@ -45,6 +52,10 @@ describe("EditorArea keyboard shortcuts", () => {
   it("cycles to the next tab with Ctrl+Tab", () => {
     const onSelectTab = vi.fn();
     const onCloseTab = vi.fn();
+    const onCloseOthers = vi.fn();
+    const onCloseRight = vi.fn();
+    const onCloseAll = vi.fn();
+    const onMoveTab = vi.fn();
     const onContentChange = vi.fn();
 
     const { unmount } = render(
@@ -53,7 +64,13 @@ describe("EditorArea keyboard shortcuts", () => {
         activeTabId="manifest.json"
         onSelectTab={onSelectTab}
         onCloseTab={onCloseTab}
+        onCloseOtherTabs={onCloseOthers}
+        onCloseTabsToRight={onCloseRight}
+        onCloseAllTabs={onCloseAll}
+        onMoveTab={onMoveTab}
         onContentChange={onContentChange}
+        editorTheme="vs-dark"
+        menuAppearance="dark"
       />,
     );
 
@@ -66,6 +83,10 @@ describe("EditorArea keyboard shortcuts", () => {
   it("cycles to the previous tab with Ctrl+Shift+Tab", () => {
     const onSelectTab = vi.fn();
     const onCloseTab = vi.fn();
+    const onCloseOthers = vi.fn();
+    const onCloseRight = vi.fn();
+    const onCloseAll = vi.fn();
+    const onMoveTab = vi.fn();
     const onContentChange = vi.fn();
 
     const { unmount } = render(
@@ -74,7 +95,13 @@ describe("EditorArea keyboard shortcuts", () => {
         activeTabId="src/data.py"
         onSelectTab={onSelectTab}
         onCloseTab={onCloseTab}
+        onCloseOtherTabs={onCloseOthers}
+        onCloseTabsToRight={onCloseRight}
+        onCloseAllTabs={onCloseAll}
+        onMoveTab={onMoveTab}
         onContentChange={onContentChange}
+        editorTheme="vs-dark"
+        menuAppearance="dark"
       />,
     );
 
@@ -87,6 +114,10 @@ describe("EditorArea keyboard shortcuts", () => {
   it("closes the active tab with Ctrl+W", () => {
     const onSelectTab = vi.fn();
     const onCloseTab = vi.fn();
+    const onCloseOthers = vi.fn();
+    const onCloseRight = vi.fn();
+    const onCloseAll = vi.fn();
+    const onMoveTab = vi.fn();
     const onContentChange = vi.fn();
 
     const { unmount } = render(
@@ -95,7 +126,13 @@ describe("EditorArea keyboard shortcuts", () => {
         activeTabId="manifest.json"
         onSelectTab={onSelectTab}
         onCloseTab={onCloseTab}
+        onCloseOtherTabs={onCloseOthers}
+        onCloseTabsToRight={onCloseRight}
+        onCloseAllTabs={onCloseAll}
+        onMoveTab={onMoveTab}
         onContentChange={onContentChange}
+        editorTheme="vs-dark"
+        menuAppearance="dark"
       />,
     );
 

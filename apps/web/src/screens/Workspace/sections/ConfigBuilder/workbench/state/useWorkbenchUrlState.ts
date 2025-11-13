@@ -12,6 +12,7 @@ interface WorkbenchUrlState {
   readonly fileId?: string;
   readonly pane: ConfigBuilderPane;
   readonly console: ConfigBuilderConsole;
+  readonly consoleExplicit: boolean;
   readonly setFileId: (fileId: string | undefined) => void;
   readonly setPane: (pane: ConfigBuilderPane) => void;
   readonly setConsole: (console: ConfigBuilderConsole) => void;
@@ -57,6 +58,7 @@ export function useWorkbenchUrlState(): WorkbenchUrlState {
     fileId: snapshot.file ?? DEFAULT_CONFIG_BUILDER_SEARCH.file,
     pane: snapshot.pane,
     console: snapshot.console,
+    consoleExplicit: snapshot.present.console,
     setFileId,
     setPane,
     setConsole,

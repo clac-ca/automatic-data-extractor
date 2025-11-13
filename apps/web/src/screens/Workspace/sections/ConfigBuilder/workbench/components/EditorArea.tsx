@@ -1,6 +1,8 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import clsx from "clsx";
 
 import { CodeEditor } from "@ui/CodeEditor";
+import { ContextMenu, type ContextMenuItem } from "@ui/ContextMenu";
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 
 import type { WorkbenchFileTab } from "../types";
@@ -10,7 +12,14 @@ interface EditorAreaProps {
   readonly activeTabId: string;
   readonly onSelectTab: (tabId: string) => void;
   readonly onCloseTab: (tabId: string) => void;
+  readonly onCloseOtherTabs: (tabId: string) => void;
+  readonly onCloseTabsToRight: (tabId: string) => void;
+  readonly onCloseAllTabs: () => void;
+  readonly onMoveTab: (tabId: string, targetIndex: number) => void;
   readonly onContentChange: (tabId: string, value: string) => void;
+  readonly editorTheme: string;
+  readonly menuAppearance: "light" | "dark";
+  readonly minHeight?: number;
 }
 
 export function EditorArea({
@@ -18,9 +27,21 @@ export function EditorArea({
   activeTabId,
   onSelectTab,
   onCloseTab,
+  onCloseOtherTabs,
+  onCloseTabsToRight,
+  onCloseAllTabs,
+  onMoveTab,
   onContentChange,
+  editorTheme,
+  menuAppearance,
+  minHeight,
 }: EditorAreaProps) {
   const hasTabs = tabs.length > 0;
+  const [contextMenu, setContextMenu] = useState<{ tabId: string; x: number; y: number } | null>(null);
+  const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
+  const [dragOverState, setDragOverState] = useState<{ targetId: string; position: "before" | "after" } | null>(
+    null,
+  );
 
   const activeTab = useMemo(() => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0], [tabs, activeTabId]);
 
@@ -65,6 +86,119 @@ export function EditorArea({
     };
   }, [hasTabs, tabs, activeTabId, onCloseTab, onSelectTab]);
 
+  useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+    if (!tabs.some((tab) => tab.id === contextMenu.tabId)) {
+      setContextMenu(null);
+    }
+  }, [contextMenu, tabs]);
+
+  const resetDragState = () => {
+    setDraggingTabId(null);
+    setDragOverState(null);
+  };
+
+  const handleDragStart = (event: React.DragEvent<HTMLDivElement>, tabId: string) => {
+    event.stopPropagation();
+    setDraggingTabId(tabId);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      if (event.dataTransfer.setData) {
+        event.dataTransfer.setData("text/plain", tabId);
+      }
+    }
+  };
+
+  const handleDragOverTab = (event: React.DragEvent<HTMLDivElement>, tabId: string) => {
+    if (!draggingTabId || draggingTabId === tabId) {
+      setDragOverState(null);
+      return;
+    }
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const position = event.clientX - rect.left < rect.width / 2 ? "before" : "after";
+    setDragOverState((current) => {
+      if (current?.targetId === tabId && current.position === position) {
+        return current;
+      }
+      return { targetId: tabId, position };
+    });
+  };
+
+  const handleDropOnTab = (event: React.DragEvent<HTMLDivElement>, tabId: string) => {
+    event.preventDefault();
+    if (!draggingTabId || draggingTabId === tabId) {
+      resetDragState();
+      return;
+    }
+    const targetIndex = tabs.findIndex((tab) => tab.id === tabId);
+    if (targetIndex === -1) {
+      resetDragState();
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const fallbackPosition = event.clientX - rect.left < rect.width / 2 ? "before" : "after";
+    const position =
+      dragOverState?.targetId === tabId ? dragOverState.position : fallbackPosition;
+    const insertIndex = position === "after" ? targetIndex + 1 : targetIndex;
+    onMoveTab(draggingTabId, insertIndex);
+    resetDragState();
+  };
+
+  const handleDropAtEnd = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (!draggingTabId) {
+      resetDragState();
+      return;
+    }
+    onMoveTab(draggingTabId, tabs.length);
+    resetDragState();
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>, tabId: string) => {
+    if (!dragOverState || dragOverState.targetId !== tabId) {
+      return;
+    }
+    if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+      setDragOverState(null);
+    }
+  };
+  const isDragOverEnd = dragOverState?.targetId === "__end__";
+
+  const tabContextItems: ContextMenuItem[] = useMemo(() => {
+    if (!contextMenu) {
+      return [];
+    }
+    const { tabId } = contextMenu;
+    const tabIndex = tabs.findIndex((tab) => tab.id === tabId);
+    const hasTabsToRight = tabIndex >= 0 && tabIndex < tabs.length - 1;
+    const hasMultipleTabs = tabs.length > 1;
+    return [
+      { id: "close", label: "Close", onSelect: () => onCloseTab(tabId) },
+      {
+        id: "close-others",
+        label: "Close Others",
+        disabled: !hasMultipleTabs,
+        onSelect: () => onCloseOtherTabs(tabId),
+      },
+      {
+        id: "close-right",
+        label: "Close Tabs to the Right",
+        disabled: !hasTabsToRight,
+        onSelect: () => onCloseTabsToRight(tabId),
+      },
+      {
+        id: "close-all",
+        label: "Close All",
+        dividerAbove: true,
+        disabled: tabs.length === 0,
+        onSelect: () => onCloseAllTabs(),
+      },
+    ];
+  }, [contextMenu, tabs, onCloseTab, onCloseOtherTabs, onCloseTabsToRight, onCloseAllTabs]);
+
   if (!hasTabs || !activeTab) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
@@ -74,30 +208,77 @@ export function EditorArea({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col" style={minHeight ? { minHeight } : undefined}>
       <TabsRoot value={activeTab.id} onValueChange={onSelectTab}>
-        <TabsList className="flex items-center gap-1 border-b border-slate-200 px-2 py-1">
+        <TabsList className="flex min-h-[2.75rem] items-end gap-0 overflow-x-auto border-b border-slate-200 bg-slate-900/5 px-2">
           {tabs.map((tab) => {
             const isDirty = tab.status === "ready" && tab.content !== tab.initialContent;
+            const isActive = tab.id === activeTab.id;
+            const isDragging = draggingTabId === tab.id;
+            const isOverBefore = dragOverState?.targetId === tab.id && dragOverState.position === "before";
+            const isOverAfter = dragOverState?.targetId === tab.id && dragOverState.position === "after";
             return (
-              <div key={tab.id} className="relative">
-                <TabsTrigger value={tab.id} className="flex items-center gap-2 rounded px-3 py-1 pr-6 text-sm">
-                  <span>{tab.name}</span>
+              <div
+                key={tab.id}
+                className={clsx(
+                  "group relative mr-1 flex min-w-0 items-stretch",
+                  isDragging && "opacity-60",
+                )}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setContextMenu({ tabId: tab.id, x: event.clientX, y: event.clientY });
+                }}
+                draggable
+                onDragStart={(event) => handleDragStart(event, tab.id)}
+                onDragOver={(event) => handleDragOverTab(event, tab.id)}
+                onDrop={(event) => handleDropOnTab(event, tab.id)}
+                onDragEnd={resetDragState}
+                onDragLeave={(event) => handleDragLeave(event, tab.id)}
+              >
+                {isOverBefore ? (
+                  <span className="pointer-events-none absolute -left-1 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-brand-500 shadow-[0_0_6px_rgba(14,99,156,.6)]" />
+                ) : null}
+                {isOverAfter ? (
+                  <span className="pointer-events-none absolute -right-1 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-brand-500 shadow-[0_0_6px_rgba(14,99,156,.6)]" />
+                ) : null}
+                <TabsTrigger
+                  value={tab.id}
+                  title={tab.id}
+                  className={clsx(
+                    "relative flex min-w-[9rem] max-w-[16rem] items-center gap-2 overflow-hidden rounded-t-lg border px-3 py-1.5 pr-8 text-sm font-medium transition-[background-color,border-color,color] duration-150",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50",
+                    isActive
+                      ? "border-slate-200 border-b-white bg-white text-slate-900 shadow-[0_1px_0_rgba(15,23,42,0.08)]"
+                      : "border-transparent border-b-slate-200 text-slate-500 hover:border-slate-200 hover:bg-white/70 hover:text-slate-900",
+                  )}
+                >
+                  <span className="block min-w-0 flex-1 truncate text-left">{tab.name}</span>
                   {tab.status === "loading" ? (
-                    <span className="text-xs text-slate-400" aria-label="Loading">
+                    <span
+                      className="flex-none text-[10px] font-semibold uppercase tracking-wide text-slate-400"
+                      aria-label="Loading"
+                    >
                       ●
                     </span>
                   ) : null}
                   {tab.status === "error" ? (
-                    <span className="text-xs text-danger-600" aria-label="Load failed">
+                    <span
+                      className="flex-none text-[10px] font-semibold uppercase tracking-wide text-danger-600"
+                      aria-label="Load failed"
+                    >
                       !
                     </span>
                   ) : null}
-                  {isDirty ? <span className="text-xs text-brand-600">●</span> : null}
+                  {isDirty ? <span className="flex-none text-xs leading-none text-brand-600">●</span> : null}
                 </TabsTrigger>
                 <button
                   type="button"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                  className={clsx(
+                    "absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-xs transition focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white",
+                    isActive
+                      ? "text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                      : "text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-200 hover:text-slate-700",
+                  )}
                   onClick={(event) => {
                     event.stopPropagation();
                     onCloseTab(tab.id);
@@ -109,6 +290,30 @@ export function EditorArea({
               </div>
             );
           })}
+          <div
+            className="ml-1 flex h-[2.75rem] w-4 flex-shrink-0 items-center justify-center"
+            onDragOver={(event) => {
+              if (!draggingTabId) {
+                return;
+              }
+              event.preventDefault();
+              setDragOverState((current) =>
+                current?.targetId === "__end__"
+                  ? current
+                  : { targetId: "__end__", position: "after" },
+              );
+            }}
+            onDragLeave={() => {
+              if (dragOverState?.targetId === "__end__") {
+                setDragOverState(null);
+              }
+            }}
+            onDrop={handleDropAtEnd}
+          >
+            {isDragOverEnd ? (
+              <span className="h-6 w-0.5 rounded-full bg-brand-500 shadow-[0_0_6px_rgba(14,99,156,.6)]" />
+            ) : null}
+          </div>
         </TabsList>
         {tabs.map((tab) => (
           <TabsContent key={tab.id} value={tab.id} className="flex min-h-0 flex-1">
@@ -131,12 +336,20 @@ export function EditorArea({
               <CodeEditor
                 value={tab.content}
                 language={tab.language ?? "plaintext"}
+                theme={editorTheme}
                 onChange={(value) => onContentChange(tab.id, value ?? "")}
               />
             )}
           </TabsContent>
         ))}
       </TabsRoot>
+      <ContextMenu
+        open={Boolean(contextMenu)}
+        position={contextMenu && { x: contextMenu.x, y: contextMenu.y }}
+        onClose={() => setContextMenu(null)}
+        items={tabContextItems}
+        appearance={menuAppearance}
+      />
     </div>
   );
 }
