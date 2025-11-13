@@ -25,9 +25,9 @@ export function BottomPanel({
   const fallbackMessage = describeValidationFallback(validation);
 
   return (
-    <section className="flex flex-col border-t border-slate-200 bg-slate-50" style={{ height }}>
+    <section className="flex min-h-0 flex-col overflow-hidden border-t border-slate-200 bg-slate-50" style={{ height }}>
       <TabsRoot value={activePane} onValueChange={(value) => onPaneChange(value as ConfigBuilderPane)}>
-        <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+        <div className="flex flex-none items-center justify-between border-b border-slate-200 px-3 py-2">
           <TabsList className="flex items-center gap-2">
             <TabsTrigger value="console" className="rounded px-2 py-1 text-xs uppercase tracking-wide">
               Console
@@ -37,9 +37,9 @@ export function BottomPanel({
             </TabsTrigger>
           </TabsList>
         </div>
-        <TabsContent value="console" className="flex h-full flex-col">
-          <div className="flex flex-1 flex-col overflow-hidden rounded-md border border-slate-900/80 bg-slate-950 font-mono text-[13px] leading-relaxed text-slate-100 shadow-inner shadow-black/30">
-            <div className="flex items-center gap-3 border-b border-white/5 bg-slate-950/80 px-4 py-2 text-[11px] uppercase tracking-[0.35em] text-slate-500">
+        <TabsContent value="console" className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-slate-900/80 bg-slate-950 font-mono text-[13px] leading-relaxed text-slate-100 shadow-inner shadow-black/30">
+            <div className="flex flex-none items-center gap-3 border-b border-white/5 bg-slate-950/80 px-4 py-2 text-[11px] uppercase tracking-[0.35em] text-slate-500">
               <span className="font-semibold tracking-[0.45em] text-slate-200">Terminal</span>
               <span className="text-[10px] tracking-[0.45em] text-emerald-400">live</span>
             </div>
@@ -77,7 +77,7 @@ export function BottomPanel({
             </div>
           </div>
         </TabsContent>
-        <TabsContent value="validation" className="flex-1 overflow-auto px-3 py-2 text-sm">
+        <TabsContent value="validation" className="flex min-h-0 flex-1 flex-col overflow-auto px-3 py-2 text-sm">
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
               <span>{statusLabel}</span>

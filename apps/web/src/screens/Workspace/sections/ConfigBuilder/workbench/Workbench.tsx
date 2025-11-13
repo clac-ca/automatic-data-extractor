@@ -18,9 +18,10 @@ import { clamp, trackPointerDrag } from "./utils/drag";
 import { createWorkbenchTreeFromListing } from "./utils/tree";
 
 import { ContextMenu, type ContextMenuItem } from "@ui/ContextMenu";
+import { SplitButton } from "@ui/SplitButton";
 import { PageState } from "@ui/PageState";
 
-import { useConfigFilesQuery } from "@shared/configs/hooks/useConfigFiles";
+import { useConfigFilesQuery, useSaveConfigFileMutation } from "@shared/configs/hooks/useConfigFiles";
 import { configsKeys } from "@shared/configs/keys";
 import { readConfigFileJson } from "@shared/configs/api";
 import type { FileReadJson } from "@shared/configs/types";
@@ -31,6 +32,7 @@ import { ApiError } from "@shared/api";
 import { streamBuild } from "@shared/builds/api";
 import { streamRun } from "@shared/runs/api";
 import { describeBuildEvent, describeRunEvent, formatConsoleTimestamp } from "./utils/console";
+import { useNotifications, type NotificationIntent } from "@shared/notifications";
 
 const EXPLORER_LIMITS = { min: 200, max: 420 } as const;
 const INSPECTOR_LIMITS = { min: 260, max: 420 } as const;
@@ -67,14 +69,23 @@ interface ConsolePanelPreferences {
   readonly state: ConfigBuilderConsole;
 }
 
+type BuildTriggerOptions = {
+  readonly force?: boolean;
+  readonly wait?: boolean;
+  readonly source?: "button" | "menu" | "shortcut";
+};
+
+type WorkbenchWindowState = "restored" | "maximized";
+
 interface WorkbenchProps {
   readonly workspaceId: string;
   readonly configId: string;
   readonly configName: string;
   readonly seed?: WorkbenchDataSeed;
-  readonly focusMode: "balanced" | "immersive";
-  readonly onChangeFocusMode: (mode: "balanced" | "immersive") => void;
-  readonly onDockWorkbench: () => void;
+  readonly windowState: WorkbenchWindowState;
+  readonly onMinimizeWindow: () => void;
+  readonly onMaximizeWindow: () => void;
+  readonly onRestoreWindow: () => void;
   readonly onCloseWorkbench: () => void;
   readonly shouldBypassUnsavedGuard?: () => boolean;
 }
@@ -84,9 +95,10 @@ export function Workbench({
   configId,
   configName,
   seed,
-  focusMode,
-  onChangeFocusMode,
-  onDockWorkbench,
+  windowState,
+  onMinimizeWindow,
+  onMaximizeWindow,
+  onRestoreWindow,
   onCloseWorkbench,
   shouldBypassUnsavedGuard,
 }: WorkbenchProps) {
@@ -145,6 +157,10 @@ export function Workbench({
   const [activeStream, setActiveStream] = useState<null | {
     readonly kind: "build" | "run";
     readonly startedAt: string;
+    readonly metadata?: {
+      readonly force?: boolean;
+      readonly wait?: boolean;
+    };
   }>(null);
 
   const resetConsole = useCallback(
@@ -169,18 +185,6 @@ export function Workbench({
       });
     },
     [setConsoleLines],
-  );
-
-  const pushConsoleError = useCallback(
-    (error: unknown) => {
-      if (!isMountedRef.current) {
-        return;
-      }
-      const message = describeError(error);
-      appendConsoleLine({ level: "error", message, timestamp: formatConsoleTimestamp(new Date()) });
-      setConsoleNotice(message);
-    },
-    [appendConsoleLine],
   );
 
   useEffect(() => {
@@ -230,13 +234,54 @@ export function Workbench({
   const [centerPaneEl, setCenterPaneEl] = useState<HTMLDivElement | null>(null);
   const [centerHeight, setCenterHeight] = useState(0);
   const [hasMeasuredCenter, setHasMeasuredCenter] = useState(false);
-  const [consoleNotice, setConsoleNotice] = useState<string | null>(null);
   const [activityView, setActivityView] = useState<ActivityBarView>("explorer");
   const [settingsMenu, setSettingsMenu] = useState<{ x: number; y: number } | null>(null);
-  const immersive = focusMode === "immersive";
+  const [buildMenu, setBuildMenu] = useState<{ x: number; y: number } | null>(null);
+  const [forceNextBuild, setForceNextBuild] = useState(false);
+  const [forceModifierActive, setForceModifierActive] = useState(false);
+  const { notifyBanner, dismissScope } = useNotifications();
+  const consoleBannerScope = useMemo(
+    () => `workbench-console:${workspaceId}:${configId}`,
+    [workspaceId, configId],
+  );
+  const showConsoleBanner = useCallback(
+    (message: string, options?: { intent?: NotificationIntent; duration?: number | null }) => {
+      notifyBanner({
+        title: message,
+        intent: options?.intent ?? "info",
+        duration: options?.duration ?? 6000,
+        dismissible: true,
+        scope: consoleBannerScope,
+        persistKey: consoleBannerScope,
+      });
+    },
+    [notifyBanner, consoleBannerScope],
+  );
+  const clearConsoleBanners = useCallback(() => {
+    dismissScope(consoleBannerScope, "banner");
+  }, [dismissScope, consoleBannerScope]);
+
+  const pushConsoleError = useCallback(
+    (error: unknown) => {
+      if (!isMountedRef.current) {
+        return;
+      }
+      const message = describeError(error);
+      appendConsoleLine({ level: "error", message, timestamp: formatConsoleTimestamp(new Date()) });
+      showConsoleBanner(message, { intent: "danger", duration: null });
+    },
+    [appendConsoleLine, showConsoleBanner],
+  );
+
+  const isMaximized = windowState === "maximized";
+  const isMacPlatform = typeof navigator !== "undefined" ? /mac/i.test(navigator.platform) : false;
   const handleCloseWorkbench = useCallback(() => {
     onCloseWorkbench();
   }, [onCloseWorkbench]);
+  const openBuildMenu = useCallback((position: { x: number; y: number }) => {
+    setBuildMenu(position);
+  }, []);
+  const closeBuildMenu = useCallback(() => setBuildMenu(null), []);
   const showExplorerPane = !explorer.collapsed;
 
   const loadFile = useCallback(
@@ -262,27 +307,35 @@ export function Workbench({
     loadFile,
     persistence: tabPersistence ?? undefined,
   });
+  const saveConfigFile = useSaveConfigFileMutation(workspaceId, configId);
 
   useUnsavedChangesGuard({
     isDirty: files.isDirty,
     shouldBypassNavigation: shouldBypassUnsavedGuard,
   });
 
-  const handleDockWorkbench = useCallback(() => {
-    onDockWorkbench();
-  }, [onDockWorkbench]);
+  const handleMinimizeWindow = useCallback(() => {
+    onMinimizeWindow();
+  }, [onMinimizeWindow]);
 
-  const handleFocusModeChange = useCallback(
-    (mode: "balanced" | "immersive") => {
-      if (mode === focusMode) {
-        return;
-      }
-      onChangeFocusMode(mode);
-    },
-    [focusMode, onChangeFocusMode],
-  );
+  const handleToggleMaximize = useCallback(() => {
+    if (isMaximized) {
+      onRestoreWindow();
+    } else {
+      onMaximizeWindow();
+    }
+  }, [isMaximized, onMaximizeWindow, onRestoreWindow]);
 
+  const handleToggleForceNextBuild = useCallback(() => {
+    setForceNextBuild((current) => !current);
+  }, []);
   const outputCollapsed = consoleState !== "open";
+  const dirtyTabs = useMemo(
+    () => files.tabs.filter((tab) => tab.status === "ready" && tab.content !== tab.initialContent),
+    [files.tabs],
+  );
+  const isSavingTabs = files.tabs.some((tab) => tab.saving);
+  const canSaveFiles = !usingSeed && dirtyTabs.length > 0;
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -292,7 +345,103 @@ export function Workbench({
       window.dispatchEvent(new Event("resize"));
       window.dispatchEvent(new Event("ade:workbench-layout"));
     });
-  }, [explorer.collapsed, explorer.width, inspector.collapsed, inspector.width, outputCollapsed, outputHeight, immersive]);
+  }, [explorer.collapsed, explorer.width, inspector.collapsed, inspector.width, outputCollapsed, outputHeight, isMaximized]);
+
+  const saveTab = useCallback(
+    async (tabId: string): Promise<boolean> => {
+      if (usingSeed) {
+        return false;
+      }
+      const tab = files.tabs.find((entry) => entry.id === tabId);
+      if (!tab || tab.status !== "ready") {
+        return false;
+      }
+      if (tab.content === tab.initialContent || tab.saving) {
+        return false;
+      }
+      files.beginSavingTab(tabId);
+      try {
+        const response = await saveConfigFile.mutateAsync({
+          path: tab.id,
+          content: tab.content,
+          etag: tab.etag ?? undefined,
+          create: !tab.etag,
+          parents: true,
+        });
+        const metadata = {
+          size: response.size ?? tab.metadata?.size ?? null,
+          modifiedAt: response.mtime ?? tab.metadata?.modifiedAt ?? null,
+          contentType: tab.metadata?.contentType ?? null,
+          etag: response.etag ?? tab.metadata?.etag ?? null,
+        };
+        files.completeSavingTab(tabId, {
+          etag: response.etag ?? tab.etag ?? null,
+          metadata,
+        });
+        showConsoleBanner(`Saved ${tab.name}`, { intent: "success", duration: 4000 });
+        return true;
+      } catch (error) {
+        const concurrencyMessage =
+          "Save blocked because this file changed on the server. Reload the latest version to continue.";
+        const failure =
+          error instanceof ApiError && error.status === 412 ? new Error(concurrencyMessage) : error;
+        files.failSavingTab(tabId, failure instanceof Error ? failure.message : String(failure));
+        pushConsoleError(failure);
+        return false;
+      }
+    },
+    [
+      usingSeed,
+      files.tabs,
+      files.beginSavingTab,
+      files.completeSavingTab,
+      files.failSavingTab,
+      saveConfigFile,
+      showConsoleBanner,
+      pushConsoleError,
+    ],
+  );
+
+  const saveTabsSequentially = useCallback(
+    async (tabIds: readonly string[]) => {
+      const saved: string[] = [];
+      for (const id of tabIds) {
+        const result = await saveTab(id);
+        if (result) {
+          saved.push(id);
+        }
+      }
+      return saved;
+    },
+    [saveTab],
+  );
+
+  const handleSaveTabShortcut = useCallback(
+    (tabId: string) => {
+      void saveTab(tabId);
+    },
+    [saveTab],
+  );
+
+  const handleSaveActiveTab = useCallback(() => {
+    if (!files.activeTab) {
+      return;
+    }
+    void saveTab(files.activeTab.id);
+  }, [files.activeTab, saveTab]);
+
+  const handleSaveAllTabs = useCallback(() => {
+    if (!canSaveFiles) {
+      return;
+    }
+    const ids = dirtyTabs.map((tab) => tab.id);
+    void (async () => {
+      const saved = await saveTabsSequentially(ids);
+      if (saved.length > 1) {
+        showConsoleBanner(`Saved ${saved.length} files`, { intent: "success", duration: 5000 });
+      }
+    })();
+  }, [canSaveFiles, dirtyTabs, saveTabsSequentially, showConsoleBanner]);
 
   useEffect(() => {
     if (!centerPaneEl) {
@@ -357,22 +506,40 @@ export function Workbench({
     setOutputHeight((current) => clampOutputHeight(current));
   }, [clampOutputHeight]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const updateModifierState = (event: KeyboardEvent) => {
+      setForceModifierActive(event.shiftKey || event.altKey);
+    };
+    const resetModifiers = () => setForceModifierActive(false);
+    window.addEventListener("keydown", updateModifierState);
+    window.addEventListener("keyup", updateModifierState);
+    window.addEventListener("blur", resetModifiers);
+    return () => {
+      window.removeEventListener("keydown", updateModifierState);
+      window.removeEventListener("keyup", updateModifierState);
+      window.removeEventListener("blur", resetModifiers);
+    };
+  }, []);
+
   const openConsole = useCallback(() => {
     if (consoleBounds.hasMeasurement && !consoleBounds.canFitMin) {
       setConsole("closed");
-      setConsoleNotice(CONSOLE_COLLAPSE_MESSAGE);
+      showConsoleBanner(CONSOLE_COLLAPSE_MESSAGE, { intent: "warning", duration: 10000 });
       return false;
     }
-    setConsoleNotice(null);
+    clearConsoleBanners();
     setConsole("open");
     setOutputHeight((current) => clampOutputHeight(current > 0 ? current : DEFAULT_CONSOLE_HEIGHT));
     return true;
-  }, [consoleBounds, clampOutputHeight, setConsole]);
+  }, [consoleBounds, clampOutputHeight, setConsole, showConsoleBanner, clearConsoleBanners]);
 
   const closeConsole = useCallback(() => {
     setConsole("closed");
-    setConsoleNotice(null);
-  }, [setConsole]);
+    clearConsoleBanners();
+  }, [setConsole, clearConsoleBanners]);
 
   useEffect(() => {
     if (hasHydratedConsoleState) {
@@ -405,19 +572,11 @@ export function Workbench({
     }
     if (!consoleBounds.canFitMin) {
       setConsole("closed");
-      setConsoleNotice(CONSOLE_COLLAPSE_MESSAGE);
+      showConsoleBanner(CONSOLE_COLLAPSE_MESSAGE, { intent: "warning", duration: 10000 });
       return;
     }
     setOutputHeight((current) => clampOutputHeight(current));
-  }, [consoleState, consoleBounds, clampOutputHeight, setConsole]);
-
-  useEffect(() => {
-    if (!consoleNotice || typeof window === "undefined") {
-      return;
-    }
-    const timeout = window.setTimeout(() => setConsoleNotice(null), 6000);
-    return () => window.clearTimeout(timeout);
-  }, [consoleNotice]);
+  }, [consoleState, consoleBounds, clampOutputHeight, setConsole, showConsoleBanner]);
 
   useEffect(() => {
     const activeId = files.activeTabId;
@@ -473,7 +632,13 @@ export function Workbench({
                 : event.status === "canceled"
                   ? "ADE run canceled."
                   : event.error_message?.trim() || "ADE run failed.";
-            setConsoleNotice(notice);
+            const intent: NotificationIntent =
+              event.status === "succeeded"
+                ? "success"
+                : event.status === "canceled"
+                  ? "info"
+                  : "danger";
+            showConsoleBanner(notice, { intent });
           }
         }
       } catch (error) {
@@ -534,84 +699,192 @@ export function Workbench({
     configId,
     appendConsoleLine,
     pushConsoleError,
+    showConsoleBanner,
   ]);
 
-  const handleBuildEnvironment = useCallback(() => {
-    if (
-      usingSeed ||
-      !tree ||
-      filesQuery.isLoading ||
-      filesQuery.isError ||
-      activeStream !== null
-    ) {
-      return;
-    }
-    if (!openConsole()) {
-      return;
-    }
+  const triggerBuild = useCallback(
+    (options?: BuildTriggerOptions) => {
+      closeBuildMenu();
+      if (
+        usingSeed ||
+        !tree ||
+        filesQuery.isLoading ||
+        filesQuery.isError ||
+        activeStream !== null
+      ) {
+        return;
+      }
+      if (!openConsole()) {
+        return;
+      }
 
-    const startedIso = new Date().toISOString();
-    setPane("console");
-    resetConsole("Starting configuration build…");
+      const resolvedForce = typeof options?.force === "boolean" ? options.force : forceModifierActive;
+      const resolvedWait = Boolean(options?.wait);
 
-    const controller = new AbortController();
-    consoleStreamRef.current?.abort();
-    consoleStreamRef.current = controller;
-    setActiveStream({ kind: "build", startedAt: startedIso });
+      const startedIso = new Date().toISOString();
+      setPane("console");
+      resetConsole(resolvedForce ? "Force rebuilding environment…" : "Starting configuration build…");
 
-    void (async () => {
-      try {
-        for await (const event of streamBuild(
-          workspaceId,
-          configId,
-          {},
-          controller.signal,
-        )) {
-          appendConsoleLine(describeBuildEvent(event));
-          if (!isMountedRef.current) {
+      const nowTimestamp = formatConsoleTimestamp(new Date());
+      if (resolvedForce) {
+        appendConsoleLine({
+          level: "warning",
+          message: "Force rebuild requested. ADE will recreate the environment from scratch.",
+          timestamp: nowTimestamp,
+        });
+      } else if (resolvedWait) {
+        appendConsoleLine({
+          level: "info",
+          message: "Waiting for any running build to finish before starting.",
+          timestamp: nowTimestamp,
+        });
+      }
+
+      const controller = new AbortController();
+      consoleStreamRef.current?.abort();
+      consoleStreamRef.current = controller;
+      setActiveStream({
+        kind: "build",
+        startedAt: startedIso,
+        metadata: { force: resolvedForce, wait: resolvedWait },
+      });
+
+      void (async () => {
+        try {
+          for await (const event of streamBuild(
+            workspaceId,
+            configId,
+            { force: resolvedForce, wait: resolvedWait },
+            controller.signal,
+          )) {
+            appendConsoleLine(describeBuildEvent(event));
+            if (!isMountedRef.current) {
+              return;
+            }
+            if (event.type === "build.completed") {
+              const summary = event.summary?.trim();
+              if (summary && /reused/i.test(summary)) {
+                appendConsoleLine({
+                  level: "info",
+                  message: "Environment reused. Hold Shift or open the build menu to force a rebuild.",
+                  timestamp: formatConsoleTimestamp(new Date()),
+                });
+                showConsoleBanner(
+                  "Environment already up to date. Hold Shift or use the menu to force rebuild.",
+                  { intent: "info" },
+                );
+              } else {
+                const notice =
+                  event.status === "active"
+                    ? summary || "Build completed successfully."
+                    : event.status === "canceled"
+                      ? "Build canceled."
+                      : event.error_message?.trim() || "Build failed.";
+                const intent: NotificationIntent =
+                  event.status === "active"
+                    ? "success"
+                    : event.status === "canceled"
+                      ? "info"
+                      : "danger";
+                showConsoleBanner(notice, { intent });
+              }
+            }
+          }
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") {
             return;
           }
-          if (event.type === "build.completed") {
-            const notice =
-              event.status === "active"
-                ? event.summary?.trim() || "Build completed successfully."
-                : event.status === "canceled"
-                  ? "Build canceled."
-                  : event.error_message?.trim() || "Build failed.";
-            setConsoleNotice(notice);
+          pushConsoleError(error);
+        } finally {
+          if (consoleStreamRef.current === controller) {
+            consoleStreamRef.current = null;
+          }
+          if (isMountedRef.current) {
+            setActiveStream(null);
           }
         }
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
+      })();
+    },
+    [
+      usingSeed,
+      tree,
+      filesQuery.isLoading,
+      filesQuery.isError,
+      activeStream,
+      closeBuildMenu,
+      openConsole,
+      forceModifierActive,
+      setPane,
+      resetConsole,
+      appendConsoleLine,
+      consoleStreamRef,
+      setActiveStream,
+      streamBuild,
+      workspaceId,
+      configId,
+      pushConsoleError,
+      showConsoleBanner,
+    ],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const handler = (event: KeyboardEvent) => {
+      const usesPrimary = isMacPlatform ? event.metaKey : event.ctrlKey;
+      if (!usesPrimary || event.altKey) {
+        return;
+      }
+      if (event.key.toLowerCase() !== "b") {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          (target as HTMLElement).isContentEditable
+        ) {
           return;
         }
-        pushConsoleError(error);
-      } finally {
-        if (consoleStreamRef.current === controller) {
-          consoleStreamRef.current = null;
-        }
-        if (isMountedRef.current) {
-          setActiveStream(null);
+      }
+      event.preventDefault();
+      triggerBuild({ force: event.shiftKey, source: "shortcut" });
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [triggerBuild, isMacPlatform]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const handler = (event: KeyboardEvent) => {
+      const usesPrimary = isMacPlatform ? event.metaKey : event.ctrlKey;
+      if (!usesPrimary || event.altKey) {
+        return;
+      }
+      if (event.key.toLowerCase() !== "s") {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) {
+          return;
         }
       }
-    })();
-  }, [
-    usingSeed,
-    tree,
-    filesQuery.isLoading,
-    filesQuery.isError,
-    activeStream,
-    openConsole,
-    setPane,
-    resetConsole,
-    consoleStreamRef,
-    setActiveStream,
-    streamBuild,
-    workspaceId,
-    configId,
-    appendConsoleLine,
-    pushConsoleError,
-  ]);
+      if (!canSaveFiles) {
+        return;
+      }
+      event.preventDefault();
+      handleSaveActiveTab();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isMacPlatform, canSaveFiles, handleSaveActiveTab]);
 
   const isStreamingRun = activeStream?.kind === "run";
   const isStreamingBuild = activeStream?.kind === "build";
@@ -707,7 +980,7 @@ export function Workbench({
   ]);
 
   useEffect(() => {
-    if (typeof document === "undefined" || !immersive) {
+    if (typeof document === "undefined" || !isMaximized) {
       return;
     }
     const previous = document.documentElement.style.overflow;
@@ -715,7 +988,37 @@ export function Workbench({
     return () => {
       document.documentElement.style.overflow = previous || "";
     };
-  }, [immersive]);
+  }, [isMaximized]);
+
+  const workspaceLabel = formatWorkspaceLabel(workspaceId);
+  const saveShortcutLabel = isMacPlatform ? "⌘S" : "Ctrl+S";
+  const buildShortcutLabel = isMacPlatform ? "⌘B" : "Ctrl+B";
+  const forceShortcutLabel = isMacPlatform ? "⇧⌘B" : "Ctrl+Shift+B";
+  const buildMenuItems = useMemo<ContextMenuItem[]>(() => {
+    const disabled = !canBuildEnvironment;
+    return [
+      {
+        id: "build-default",
+        label: "Build / reuse environment",
+        shortcut: buildShortcutLabel,
+        disabled,
+        onSelect: () => triggerBuild(),
+      },
+      {
+        id: "build-force",
+        label: "Force rebuild now",
+        shortcut: forceShortcutLabel,
+        disabled,
+        onSelect: () => triggerBuild({ force: true }),
+      },
+      {
+        id: "build-force-wait",
+        label: "Force rebuild after current build",
+        disabled,
+        onSelect: () => triggerBuild({ force: true, wait: true }),
+      },
+    ];
+  }, [buildShortcutLabel, forceShortcutLabel, canBuildEnvironment, triggerBuild]);
 
   if (!seed && filesQuery.isLoading) {
     return (
@@ -746,9 +1049,7 @@ export function Workbench({
       />
     );
   }
-
-  const workspaceLabel = formatWorkspaceLabel(workspaceId);
-  const rootSurfaceClass = immersive
+  const rootSurfaceClass = isMaximized
     ? menuAppearance === "dark"
       ? "bg-[#0f111a] text-white"
       : "bg-slate-50 text-slate-900"
@@ -757,7 +1058,7 @@ export function Workbench({
       : "bg-transparent text-slate-900";
   const editorSurface = menuAppearance === "dark" ? "#1b1f27" : "#ffffff";
   const editorText = menuAppearance === "dark" ? "#f5f6fb" : "#0f172a";
-  const windowFrameClass = immersive
+  const windowFrameClass = isMaximized
     ? clsx(
         "fixed inset-0 z-[90] flex flex-col",
         menuAppearance === "dark" ? "bg-[#0f111a] text-white" : "bg-white text-slate-900",
@@ -768,36 +1069,41 @@ export function Workbench({
       );
 
   return (
-    <div className={clsx("flex h-full min-h-0 w/full min-w-0 flex-1 flex-col overflow-hidden", rootSurfaceClass)}>
-      {immersive ? <div className="fixed inset-0 z-40 bg-slate-900/60" /> : null}
+    <div className={clsx("flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden", rootSurfaceClass)}>
+      {isMaximized ? <div className="fixed inset-0 z-40 bg-slate-900/60" /> : null}
       <div className={windowFrameClass}>
         <WorkbenchChrome
-          configName={configName}
-          workspaceLabel={workspaceLabel}
-          validationLabel={validationLabel}
-          canBuildEnvironment={canBuildEnvironment}
-          isBuildingEnvironment={isBuildingEnvironment}
-          onBuildEnvironment={handleBuildEnvironment}
-          canRunValidation={canRunValidation}
-          isRunningValidation={isRunningValidation}
-          onRunValidation={handleRunValidation}
-          explorerVisible={showExplorerPane}
-          onToggleExplorer={handleToggleExplorer}
-          consoleOpen={!outputCollapsed}
-          onToggleConsole={handleToggleOutput}
-          inspectorCollapsed={inspector.collapsed}
-          onToggleInspector={handleToggleInspectorVisibility}
-          appearance={menuAppearance}
-          focusMode={focusMode}
-          onChangeFocusMode={handleFocusModeChange}
-          onDockWorkbench={handleDockWorkbench}
-          onCloseWindow={handleCloseWorkbench}
-        />
-        {consoleNotice ? (
-          <div className="border-b border-brand-400/40 bg-brand-500/10 px-4 py-2 text-sm text-brand-100">
-            {consoleNotice}
-          </div>
-        ) : null}
+        configName={configName}
+        workspaceLabel={workspaceLabel}
+        validationLabel={validationLabel}
+        canSaveFiles={canSaveFiles}
+        isSavingFiles={isSavingTabs}
+        onSaveFile={handleSaveActiveTab}
+        saveShortcutLabel={saveShortcutLabel}
+        canBuildEnvironment={canBuildEnvironment}
+        isBuildingEnvironment={isBuildingEnvironment}
+        onBuildEnvironment={triggerBuild}
+        onOpenBuildMenu={openBuildMenu}
+        forceModifierActive={forceModifierActive}
+        buildShortcutLabel={buildShortcutLabel}
+        forceShortcutLabel={forceShortcutLabel}
+        canRunValidation={canRunValidation}
+        isRunningValidation={isRunningValidation}
+        onRunValidation={handleRunValidation}
+        explorerVisible={showExplorerPane}
+        onToggleExplorer={handleToggleExplorer}
+        consoleOpen={!outputCollapsed}
+        onToggleConsole={handleToggleOutput}
+        inspectorCollapsed={inspector.collapsed}
+        onToggleInspector={handleToggleInspectorVisibility}
+        appearance={menuAppearance}
+        forceNextBuild={forceNextBuild}
+        onToggleForceNextBuild={handleToggleForceNextBuild}
+        windowState={windowState}
+        onMinimizeWindow={handleMinimizeWindow}
+        onToggleMaximize={handleToggleMaximize}
+        onCloseWindow={handleCloseWorkbench}
+      />
         <div className="flex min-h-0 min-w-0 flex-1">
           <ActivityBar
             activeView={activityView}
@@ -862,12 +1168,15 @@ export function Workbench({
               onCloseTabsToRight={files.closeTabsToRight}
               onCloseAllTabs={files.closeAllTabs}
               onContentChange={files.updateContent}
+              onSaveTab={handleSaveTabShortcut}
+              onSaveAllTabs={handleSaveAllTabs}
               onMoveTab={files.moveTab}
               onPinTab={files.pinTab}
               onUnpinTab={files.unpinTab}
               onSelectRecentTab={files.selectRecentTab}
               editorTheme={editorTheme.resolvedTheme}
               menuAppearance={menuAppearance}
+              canSaveFiles={canSaveFiles}
               minHeight={MIN_EDITOR_HEIGHT}
             />
           ) : (
@@ -889,17 +1198,20 @@ export function Workbench({
                 }}
                 onCloseTab={files.closeTab}
                 onCloseOtherTabs={files.closeOtherTabs}
-                onCloseTabsToRight={files.closeTabsToRight}
-                onCloseAllTabs={files.closeAllTabs}
-                onContentChange={files.updateContent}
-                onMoveTab={files.moveTab}
-                onPinTab={files.pinTab}
-                onUnpinTab={files.unpinTab}
-                onSelectRecentTab={files.selectRecentTab}
-                editorTheme={editorTheme.resolvedTheme}
-                menuAppearance={menuAppearance}
-                minHeight={MIN_EDITOR_HEIGHT}
-              />
+              onCloseTabsToRight={files.closeTabsToRight}
+              onCloseAllTabs={files.closeAllTabs}
+              onContentChange={files.updateContent}
+              onSaveTab={handleSaveTabShortcut}
+              onSaveAllTabs={handleSaveAllTabs}
+              onMoveTab={files.moveTab}
+              onPinTab={files.pinTab}
+              onUnpinTab={files.unpinTab}
+              onSelectRecentTab={files.selectRecentTab}
+              editorTheme={editorTheme.resolvedTheme}
+              menuAppearance={menuAppearance}
+              canSaveFiles={canSaveFiles}
+              minHeight={MIN_EDITOR_HEIGHT}
+            />
               <PanelResizeHandle
                 orientation="horizontal"
                 onPointerDown={(event) => {
@@ -943,6 +1255,13 @@ export function Workbench({
       </div>
       </div>
       <ContextMenu
+        open={Boolean(buildMenu)}
+        position={buildMenu ?? undefined}
+        onClose={closeBuildMenu}
+        items={buildMenuItems}
+        appearance={menuAppearance}
+      />
+      <ContextMenu
         open={Boolean(settingsMenu)}
         position={settingsMenu}
         onClose={closeSettingsMenu}
@@ -983,9 +1302,18 @@ function WorkbenchChrome({
   configName,
   workspaceLabel,
   validationLabel,
+  canSaveFiles,
+  isSavingFiles,
+  onSaveFile,
+  saveShortcutLabel,
   canBuildEnvironment,
   isBuildingEnvironment,
   onBuildEnvironment,
+  onOpenBuildMenu,
+  forceNextBuild,
+  forceModifierActive,
+  buildShortcutLabel,
+  forceShortcutLabel,
   canRunValidation,
   isRunningValidation,
   onRunValidation,
@@ -996,17 +1324,26 @@ function WorkbenchChrome({
   inspectorCollapsed,
   onToggleInspector,
   appearance,
-  focusMode,
-  onChangeFocusMode,
-  onDockWorkbench,
+  windowState,
+  onMinimizeWindow,
+  onToggleMaximize,
   onCloseWindow,
 }: {
   readonly configName: string;
   readonly workspaceLabel: string;
   readonly validationLabel?: string;
+  readonly canSaveFiles: boolean;
+  readonly isSavingFiles: boolean;
+  readonly onSaveFile: () => void;
+  readonly saveShortcutLabel: string;
   readonly canBuildEnvironment: boolean;
   readonly isBuildingEnvironment: boolean;
-  readonly onBuildEnvironment: () => void;
+  readonly onBuildEnvironment: (options?: BuildTriggerOptions) => void;
+  readonly onOpenBuildMenu: (position: { x: number; y: number }) => void;
+  readonly forceNextBuild: boolean;
+  readonly forceModifierActive: boolean;
+  readonly buildShortcutLabel: string;
+  readonly forceShortcutLabel: string;
   readonly canRunValidation: boolean;
   readonly isRunningValidation: boolean;
   readonly onRunValidation: () => void;
@@ -1017,9 +1354,9 @@ function WorkbenchChrome({
   readonly inspectorCollapsed: boolean;
   readonly onToggleInspector: () => void;
   readonly appearance: "light" | "dark";
-  readonly focusMode: "balanced" | "immersive";
-  readonly onChangeFocusMode: (mode: "balanced" | "immersive") => void;
-  readonly onDockWorkbench: () => void;
+  readonly windowState: WorkbenchWindowState;
+  readonly onMinimizeWindow: () => void;
+  readonly onToggleMaximize: () => void;
   readonly onCloseWindow: () => void;
 }) {
   const dark = appearance === "dark";
@@ -1030,9 +1367,22 @@ function WorkbenchChrome({
   const buildButtonClass = dark
     ? "bg-white/10 text-white hover:bg-white/20 disabled:bg-white/10 disabled:text-white/40"
     : "bg-slate-100 text-slate-900 hover:bg-slate-200 disabled:bg-slate-50 disabled:text-slate-400";
+  const saveButtonClass = dark
+    ? "bg-emerald-400/20 text-emerald-50 hover:bg-emerald-400/30 disabled:bg-white/10 disabled:text-white/30"
+    : "bg-emerald-500 text-white hover:bg-emerald-400 disabled:bg-slate-200 disabled:text-slate-500";
   const runButtonClass = dark
     ? "bg-brand-500 text-white hover:bg-brand-400 disabled:bg-white/20 disabled:text-white/40"
     : "bg-brand-600 text-white hover:bg-brand-500 disabled:bg-slate-200 disabled:text-slate-500";
+  const isMaximized = windowState === "maximized";
+  const forceIntentActive = forceNextBuild || forceModifierActive;
+  const buildButtonLabel = isBuildingEnvironment
+    ? "Building…"
+    : forceIntentActive
+      ? "Force rebuild"
+      : "Build environment";
+  const buildButtonTitle = forceIntentActive
+    ? `Force rebuild (Shift+Click · ${forceShortcutLabel})`
+    : `Build environment (${buildShortcutLabel})`;
 
   return (
     <div className={clsx("flex items-center justify-between border-b px-4 py-2", surfaceClass)}>
@@ -1054,16 +1404,45 @@ function WorkbenchChrome({
         {validationLabel ? <span className={clsx("text-xs", metaTextClass)}>{validationLabel}</span> : null}
         <button
           type="button"
-          onClick={onBuildEnvironment}
-          disabled={!canBuildEnvironment}
+          onClick={onSaveFile}
+          disabled={!canSaveFiles}
           className={clsx(
             "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
-            buildButtonClass,
+            saveButtonClass,
           )}
+          title={`Save (${saveShortcutLabel})`}
         >
-          {isBuildingEnvironment ? <SpinnerIcon /> : <BuildIcon />}
-          {isBuildingEnvironment ? "Building…" : "Build environment"}
+          {isSavingFiles ? <SpinnerIcon /> : <SaveIcon />}
+          {isSavingFiles ? "Saving…" : "Save"}
         </button>
+        <SplitButton
+          label={buildButtonLabel}
+          icon={isBuildingEnvironment ? <SpinnerIcon /> : <BuildIcon />}
+          disabled={!canBuildEnvironment}
+          isLoading={isBuildingEnvironment}
+          highlight={forceIntentActive && !isBuildingEnvironment}
+          title={buildButtonTitle}
+          primaryClassName={clsx(
+            buildButtonClass,
+            "rounded-r-none focus-visible:ring-offset-0",
+          )}
+          menuClassName={clsx(
+            buildButtonClass,
+            "rounded-l-none px-2",
+            dark ? "border-white/20" : "border-slate-300",
+          )}
+          menuAriaLabel="Open build options"
+          onPrimaryClick={(event) =>
+            onBuildEnvironment({
+              force: event.shiftKey || event.altKey || forceModifierActive,
+            })
+          }
+          onOpenMenu={(position) => onOpenBuildMenu({ x: position.x, y: position.y })}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            onOpenBuildMenu({ x: event.clientX, y: event.clientY });
+          }}
+        />
         <button
           type="button"
           onClick={onRunValidation}
@@ -1107,16 +1486,16 @@ function WorkbenchChrome({
         >
           <ChromeIconButton
             ariaLabel="Minimize workbench"
-            onClick={onDockWorkbench}
+            onClick={onMinimizeWindow}
             appearance={appearance}
             icon={<MinimizeIcon />}
           />
           <ChromeIconButton
-            ariaLabel={focusMode === "immersive" ? "Restore workbench" : "Maximize workbench"}
-            onClick={() => onChangeFocusMode(focusMode === "immersive" ? "balanced" : "immersive")}
+            ariaLabel={isMaximized ? "Restore workbench" : "Maximize workbench"}
+            onClick={onToggleMaximize}
             appearance={appearance}
-            active={focusMode === "immersive"}
-            icon={focusMode === "immersive" ? <WindowRestoreIcon /> : <WindowMaximizeIcon />}
+            active={isMaximized}
+            icon={isMaximized ? <WindowRestoreIcon /> : <WindowMaximizeIcon />}
           />
           <ChromeIconButton
             ariaLabel="Close workbench"
@@ -1272,6 +1651,22 @@ function RunIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
       <path d="M4.5 3.5v9l7-4.5-7-4.5Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function SaveIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M4 2.5h7.25L13.5 4.8v8.7H4z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <path d="M6 2.5v4h4v-4" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M6 11h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }

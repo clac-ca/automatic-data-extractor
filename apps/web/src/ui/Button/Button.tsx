@@ -18,7 +18,7 @@ const VARIANT_STYLE: Record<ButtonVariant, string> = {
     "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus-visible:ring-slate-400 disabled:text-slate-400",
   ghost: "bg-transparent text-slate-700 hover:bg-slate-100 focus-visible:ring-slate-300",
   danger:
-    "bg-danger-600 text-white hover:bg-danger-700 focus-visible:ring-danger-500 disabled:bg-danger-300",
+    "bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-rose-500 disabled:bg-rose-300",
 };
 
 const SIZE_STYLE: Record<ButtonSize, string> = {

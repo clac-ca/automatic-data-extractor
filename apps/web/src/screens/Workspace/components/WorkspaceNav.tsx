@@ -5,7 +5,7 @@ import { getWorkspacePrimaryNavigation, type WorkspaceNavigationItem } from "@sc
 import type { WorkspaceProfile } from "@screens/Workspace/api/workspaces-api";
 
 const COLLAPSED_NAV_WIDTH = "4.25rem";
-const EXPANDED_NAV_WIDTH = "clamp(14rem, 20vw, 18.75rem)";
+const EXPANDED_NAV_WIDTH = "18.75rem";
 
 export interface WorkspaceNavProps {
   readonly workspace: WorkspaceProfile;
@@ -85,58 +85,71 @@ interface WorkspaceNavListProps {
   readonly showHeading?: boolean;
 }
 
-export function WorkspaceNavList({ items, collapsed = false, onNavigate, className }: WorkspaceNavListProps) {
+export function WorkspaceNavList({
+  items,
+  collapsed = false,
+  onNavigate,
+  className,
+  showHeading = true,
+}: WorkspaceNavListProps) {
   return (
-    <ul className={clsx("flex flex-col gap-2", collapsed ? "items-center" : undefined, className)} role="list">
-      {items.map((item) => (
-        <li key={item.id} className="w-full">
-          <NavLink
-            to={item.href}
-            end
-            title={collapsed ? item.label : undefined}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              clsx(
-                "group relative flex w-full items-center rounded-2xl border border-transparent text-sm font-medium text-slate-600 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
-                collapsed ? "h-12 justify-center px-0" : "gap-3 px-3 py-2.5",
-                isActive
-                  ? "border-brand-200/80 bg-gradient-to-r from-brand-50 via-white to-brand-50/70 text-brand-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
-                  : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/60",
-              )
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <span
-                  aria-hidden
-                  className={clsx(
-                    "absolute left-1.5 top-1.5 bottom-1.5 w-1 rounded-full bg-brand-400 transition-opacity",
-                    collapsed && "hidden",
-                    isActive ? "opacity-100" : "opacity-0 group-hover:opacity-60",
-                  )}
-                />
-                <span
-                  className={clsx(
-                    "flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition group-hover:bg-slate-100/80",
-                    isActive && "bg-white text-brand-700 shadow-inner shadow-brand-200/70",
-                    collapsed && "h-10 w-10",
-                  )}
-                >
-                  <item.icon
-                    className={clsx("h-5 w-5 flex-shrink-0 transition-colors", isActive ? "text-brand-600" : "text-slate-500")}
+    <>
+      {showHeading && !collapsed ? (
+        <p className="mb-3 px-1 text-[0.63rem] font-semibold uppercase tracking-[0.4em] text-slate-400/90">Workspace</p>
+      ) : null}
+      <ul className={clsx("flex flex-col gap-1.5", collapsed ? "items-center" : undefined, className)} role="list">
+        {items.map((item) => (
+          <li key={item.id} className="w-full">
+            <NavLink
+              to={item.href}
+              end
+              title={collapsed ? item.label : undefined}
+              onClick={onNavigate}
+              className={({ isActive }) =>
+                clsx(
+                  "group relative flex w-full items-center rounded-2xl border border-transparent text-sm font-medium text-slate-600 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white/80",
+                  collapsed ? "h-11 justify-center px-0" : "gap-3 px-3 py-2.5",
+                  isActive
+                    ? "border-brand-100 bg-white/90 text-slate-900 shadow-[0_12px_30px_-20px_rgba(79,70,229,0.55)]"
+                    : "border-transparent hover:border-slate-200 hover:bg-white/70",
+                )
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <span
                     aria-hidden
+                    className={clsx(
+                      "absolute left-1.5 top-2 bottom-2 w-1 rounded-full bg-gradient-to-b from-brand-400 to-brand-500 opacity-0 transition-opacity duration-150",
+                      collapsed && "hidden",
+                      isActive ? "opacity-100" : "group-hover:opacity-60",
+                    )}
                   />
-                </span>
-                <div className={clsx("flex min-w-0 flex-col text-left", collapsed && "sr-only")}>
-                  <span className="truncate text-sm font-semibold text-slate-900">{item.label}</span>
-                  <span className="text-xs text-slate-500">Jump to {item.label}</span>
-                </div>
-              </>
-            )}
-          </NavLink>
-        </li>
-      ))}
-    </ul>
+                  <span
+                    aria-hidden
+                    className={clsx(
+                      "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition",
+                      collapsed && "h-9 w-9 rounded-lg",
+                      isActive ? "bg-brand-50 text-brand-600" : "group-hover:bg-slate-100/80",
+                    )}
+                  >
+                    <item.icon
+                      className={clsx(
+                        "h-5 w-5 flex-shrink-0 transition-colors duration-150",
+                        isActive ? "text-brand-600" : "text-slate-500",
+                      )}
+                    />
+                  </span>
+                  <div className={clsx("flex min-w-0 flex-col text-left", collapsed && "sr-only")}>
+                    <span className="truncate text-sm font-semibold text-slate-900">{item.label}</span>
+                  </div>
+                </>
+              )}
+            </NavLink>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 

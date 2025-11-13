@@ -16,7 +16,7 @@ import {
   type SetSearchParamsOptions,
 } from "@app/nav/urlState";
 
-type WorkbenchFocusMode = "balanced" | "immersive" | "docked";
+type WorkbenchWindowState = "restored" | "maximized" | "minimized";
 
 interface WorkbenchSessionPayload {
   readonly workspaceId: string;
@@ -33,12 +33,12 @@ interface WorkbenchSessionState extends WorkbenchSessionPayload {
 
 interface WorkbenchWindowContextValue {
   readonly session: WorkbenchSessionState | null;
-  readonly focusMode: WorkbenchFocusMode;
+  readonly windowState: WorkbenchWindowState;
   openSession: (payload: WorkbenchSessionPayload) => void;
   closeSession: () => void;
-  setFocusMode: (mode: Exclude<WorkbenchFocusMode, "docked">) => void;
-  dockSession: () => void;
-  restoreSession: () => void;
+  minimizeWindow: () => void;
+  maximizeWindow: () => void;
+  restoreWindow: () => void;
   shouldBypassUnsavedGuard: () => boolean;
 }
 
@@ -61,7 +61,7 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
   const navigate = useNavigate();
   const location = useLocation();
   const [session, setSession] = useState<WorkbenchSessionState | null>(null);
-  const [focusMode, setFocusMode] = useState<WorkbenchFocusMode>("balanced");
+  const [windowState, setWindowState] = useState<WorkbenchWindowState>("restored");
   const instanceCounter = useRef(0);
   const navigationIntent = useRef<"dock" | "close" | null>(null);
   const guardBypassRef = useRef(false);
@@ -100,10 +100,9 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
 
     if (onEditorRoute && editorRouteConfigId === session.configId) {
       if (intent === "dock") {
+        navigationIntent.current = null;
+        setWindowState("minimized");
         return;
-      }
-      if (focusMode === "docked") {
-        setFocusMode("balanced");
       }
       if (intent) {
         navigationIntent.current = null;
@@ -122,9 +121,9 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
     }
 
     setSession(null);
-    setFocusMode("balanced");
+    setWindowState("restored");
     navigationIntent.current = null;
-  }, [session, onEditorRoute, editorRouteConfigId, focusMode]);
+  }, [session, onEditorRoute, editorRouteConfigId, windowState]);
 
   useEffect(() => {
     if (!session) {
@@ -188,7 +187,7 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
           instanceId: `${payload.workspaceId}:${payload.configId}:${instanceCounter.current}`,
         };
       });
-      setFocusMode("balanced");
+      setWindowState("restored");
     },
     [location.search],
   );
@@ -198,41 +197,40 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
       return;
     }
     setSession(null);
-    setFocusMode("balanced");
+    setWindowState("restored");
     navigationIntent.current = "close";
     navigate(ensureReturnPath());
   }, [session, navigate, ensureReturnPath]);
 
-  const dockSession = useCallback(() => {
+  const minimizeWindow = useCallback(() => {
     if (!session) {
       return;
     }
     guardBypassRef.current = true;
-    setFocusMode("docked");
+    setWindowState("minimized");
     navigationIntent.current = "dock";
     navigate(ensureReturnPath());
   }, [session, navigate, ensureReturnPath]);
 
-  const restoreSession = useCallback(() => {
+  const restoreWindow = useCallback(() => {
     if (!session) {
       return;
     }
-    setFocusMode("balanced");
+    setWindowState("restored");
     const target = buildEditorTarget(session.workspaceId, session.configId, session.editorSearch);
     if (`${location.pathname}${location.search}` !== target) {
       navigate(target);
     }
   }, [session, navigate, location.pathname, location.search]);
 
-  const changeFocusMode = useCallback(
-    (mode: Exclude<WorkbenchFocusMode, "docked">) => {
-      if (!session) {
-        return;
-      }
-      setFocusMode(mode);
-    },
-    [session],
-  );
+  const maximizeWindow = useCallback(() => {
+    if (!session) {
+      return;
+    }
+    setWindowState("maximized");
+  }, [session]);
+
+  const restoreFromMaximize = useCallback(() => setWindowState("restored"), []);
 
   const consumeGuardBypass = useCallback(() => {
     const bypass = guardBypassRef.current;
@@ -243,22 +241,22 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
   const contextValue = useMemo<WorkbenchWindowContextValue>(
     () => ({
       session,
-      focusMode,
+      windowState,
       openSession,
       closeSession,
-      setFocusMode: changeFocusMode,
-      dockSession,
-      restoreSession,
+      minimizeWindow,
+      maximizeWindow,
+      restoreWindow,
       shouldBypassUnsavedGuard: consumeGuardBypass,
     }),
     [
       session,
-      focusMode,
+      windowState,
       openSession,
       closeSession,
-      changeFocusMode,
-      dockSession,
-      restoreSession,
+      minimizeWindow,
+      maximizeWindow,
+      restoreWindow,
       consumeGuardBypass,
     ],
   );
@@ -282,17 +280,18 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
       <SearchParamsOverrideProvider value={searchParamsOverride}>
         <WorkbenchWindowLayer
           session={session}
-          focusMode={focusMode}
+          windowState={windowState}
           onClose={closeSession}
-          onChangeFocusMode={changeFocusMode}
-          onDock={dockSession}
+          onMinimize={minimizeWindow}
+          onMaximize={maximizeWindow}
+          onRestore={restoreWindow}
           shouldBypassUnsavedGuard={consumeGuardBypass}
         />
       </SearchParamsOverrideProvider>
-      {session && focusMode === "docked" ? (
+      {session && windowState === "minimized" ? (
         <WorkbenchDock
           configName={session.configName}
-          onRestore={restoreSession}
+          onRestore={restoreWindow}
           onDismiss={closeSession}
         />
       ) : null}
@@ -302,20 +301,22 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
 
 function WorkbenchWindowLayer({
   session,
-  focusMode,
+  windowState,
   onClose,
-  onChangeFocusMode,
-  onDock,
+  onMinimize,
+  onMaximize,
+  onRestore,
   shouldBypassUnsavedGuard,
 }: {
   readonly session: WorkbenchSessionState | null;
-  readonly focusMode: WorkbenchFocusMode;
+  readonly windowState: WorkbenchWindowState;
   readonly onClose: () => void;
-  readonly onChangeFocusMode: (mode: "balanced" | "immersive") => void;
-  readonly onDock: () => void;
+  readonly onMinimize: () => void;
+  readonly onMaximize: () => void;
+  readonly onRestore: () => void;
   readonly shouldBypassUnsavedGuard: () => boolean;
 }) {
-  if (!session || focusMode !== "immersive") {
+  if (!session || windowState !== "maximized") {
     return null;
   }
   return (
@@ -326,10 +327,11 @@ function WorkbenchWindowLayer({
         configId={session.configId}
         configName={session.configName}
         seed={session.seed}
-        focusMode="immersive"
+        windowState="maximized"
         onCloseWorkbench={onClose}
-        onChangeFocusMode={onChangeFocusMode}
-        onDockWorkbench={onDock}
+        onMinimizeWindow={onMinimize}
+        onMaximizeWindow={onMaximize}
+        onRestoreWindow={onRestore}
         shouldBypassUnsavedGuard={shouldBypassUnsavedGuard}
       />
     </div>

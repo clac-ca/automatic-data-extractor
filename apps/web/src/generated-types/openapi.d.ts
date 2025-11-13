@@ -1310,6 +1310,32 @@ export type components = {
             } | null;
         };
         /**
+         * DocumentLastRun
+         * @description Minimal representation of the last job run for a document.
+         */
+        DocumentLastRun: {
+            /**
+             * Job Id
+             * @description Latest job ULID.
+             */
+            job_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            /**
+             * Run At
+             * @description Timestamp for the latest job event (completion/start).
+             */
+            run_at?: string | null;
+            /**
+             * Message
+             * @description Optional status or error message associated with the job.
+             */
+            message?: string | null;
+        };
+        /**
          * DocumentOut
          * @description Serialised representation of a stored document.
          */
@@ -1367,6 +1393,8 @@ export type components = {
             tags?: string[];
             /** @description Summary of the uploading user when available. */
             uploader?: components["schemas"]["UploaderOut"] | null;
+            /** @description Latest job execution associated with the document when available. */
+            last_run?: components["schemas"]["DocumentLastRun"] | null;
         };
         /**
          * DocumentPage
