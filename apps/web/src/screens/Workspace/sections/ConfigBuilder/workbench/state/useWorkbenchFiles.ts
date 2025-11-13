@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { WorkbenchFileNode, WorkbenchFileTab } from "../types";
+import type { WorkbenchFileMetadata, WorkbenchFileNode, WorkbenchFileTab } from "../types";
 import { findFileNode, findFirstFile } from "../utils/tree";
 
 interface WorkbenchFilesPersistence {
@@ -50,6 +50,12 @@ interface WorkbenchFilesApi {
   readonly toggleTabPin: (fileId: string, pinned: boolean) => void;
   readonly selectRecentTab: (direction: "forward" | "backward") => void;
   readonly updateContent: (fileId: string, content: string) => void;
+  readonly beginSavingTab: (fileId: string) => void;
+  readonly completeSavingTab: (
+    fileId: string,
+    options?: { metadata?: WorkbenchFileMetadata; etag?: string | null },
+  ) => void;
+  readonly failSavingTab: (fileId: string, message: string) => void;
   readonly isDirty: boolean;
 }
 
@@ -196,6 +202,9 @@ export function useWorkbenchFiles({
           etag: null,
           metadata: node.metadata,
           pinned: false,
+          saving: false,
+          saveError: null,
+          lastSavedAt: null,
         };
         return [...current, nextTab];
       });
@@ -239,6 +248,9 @@ export function useWorkbenchFiles({
           etag: null,
           metadata: node.metadata,
           pinned: Boolean(entry.pinned),
+          saving: false,
+          saveError: null,
+          lastSavedAt: null,
         });
       }
 
@@ -499,6 +511,64 @@ export function useWorkbenchFiles({
               content,
               status: tab.status === "ready" ? tab.status : "ready",
               error: null,
+              saveError: null,
+            }
+          : tab,
+      ),
+    );
+  }, []);
+
+  const beginSavingTab = useCallback((fileId: string) => {
+    setTabs((current) =>
+      current.map((tab) =>
+        tab.id === fileId
+          ? {
+              ...tab,
+              saving: true,
+              saveError: null,
+            }
+          : tab,
+      ),
+    );
+  }, []);
+
+  const completeSavingTab = useCallback(
+    (fileId: string, options?: { metadata?: WorkbenchFileMetadata; etag?: string | null }) => {
+      setTabs((current) =>
+        current.map((tab) => {
+          if (tab.id !== fileId) {
+            return tab;
+          }
+          const resolvedMetadata = options?.metadata ?? tab.metadata ?? null;
+          const resolvedEtag = options?.etag ?? tab.etag ?? null;
+          return {
+            ...tab,
+            saving: false,
+            saveError: null,
+            initialContent: tab.content,
+            etag: resolvedEtag,
+            metadata: resolvedMetadata
+              ? {
+                  ...resolvedMetadata,
+                  etag: resolvedMetadata.etag ?? resolvedEtag ?? null,
+                }
+              : resolvedMetadata,
+            lastSavedAt: new Date().toISOString(),
+          };
+        }),
+      );
+    },
+    [],
+  );
+
+  const failSavingTab = useCallback((fileId: string, message: string) => {
+    setTabs((current) =>
+      current.map((tab) =>
+        tab.id === fileId
+          ? {
+              ...tab,
+              saving: false,
+              saveError: message,
             }
           : tab,
       ),
@@ -568,6 +638,9 @@ export function useWorkbenchFiles({
     toggleTabPin,
     selectRecentTab,
     updateContent,
+    beginSavingTab,
+    completeSavingTab,
+    failSavingTab,
     isDirty,
   };
 }

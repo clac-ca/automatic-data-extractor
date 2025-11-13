@@ -21,6 +21,7 @@ import { Alert } from "@ui/Alert";
 import { PageState } from "@ui/PageState";
 import { useShortcutHint } from "@shared/hooks/useShortcutHint";
 import type { GlobalSearchSuggestion } from "@app/shell/GlobalTopBar";
+import { NotificationsProvider } from "@shared/notifications";
 
 import WorkspaceOverviewRoute from "@screens/Workspace/sections/Overview";
 import WorkspaceDocumentsRoute from "@screens/Workspace/sections/Documents";
@@ -140,9 +141,11 @@ interface WorkspaceShellProps {
 
 function WorkspaceShell({ workspace }: WorkspaceShellProps) {
   return (
-    <WorkbenchWindowProvider workspaceId={workspace.id}>
-      <WorkspaceShellLayout workspace={workspace} />
-    </WorkbenchWindowProvider>
+    <NotificationsProvider>
+      <WorkbenchWindowProvider workspaceId={workspace.id}>
+        <WorkspaceShellLayout workspace={workspace} />
+      </WorkbenchWindowProvider>
+    </NotificationsProvider>
   );
 }
 
@@ -150,7 +153,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const session = useSession();
   const navigate = useNavigate();
   const location = useLocation();
-  const { session: workbenchSession, focusMode } = useWorkbenchWindow();
+  const { session: workbenchSession, windowState } = useWorkbenchWindow();
   const safeMode = useSafeModeStatus();
   const safeModeEnabled = safeMode.data?.enabled ?? false;
   const safeModeDetail = safeMode.data?.detail ?? DEFAULT_SAFE_MODE_MESSAGE;
@@ -162,7 +165,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState("");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const workspaceSearchNormalized = workspaceSearchQuery.trim().toLowerCase();
-  const immersiveWorkbenchActive = Boolean(workbenchSession && focusMode === "immersive");
+  const immersiveWorkbenchActive = Boolean(workbenchSession && windowState === "maximized");
   const workspaceSearchSuggestions = useMemo(
     () =>
       workspaceNavItems.map((item) => ({
@@ -289,6 +292,49 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
 
   const segments = extractSectionSegments(location.pathname, workspace.id);
   const section = resolveWorkspaceSection(workspace.id, segments, location.search, location.hash);
+  const isDocumentsSection = section?.kind === "content" && section.key.startsWith("documents");
+  const documentSearchValue = isDocumentsSection ? new URLSearchParams(location.search).get("q") ?? "" : "";
+  const handleDocumentSearchChange = useCallback(
+    (nextValue: string) => {
+      if (!isDocumentsSection) {
+        return;
+      }
+      const params = new URLSearchParams(location.search);
+      if (nextValue) {
+        params.set("q", nextValue);
+      } else {
+        params.delete("q");
+      }
+      const searchParams = params.toString();
+      navigate(
+        `${location.pathname}${searchParams ? `?${searchParams}` : ""}${location.hash}`,
+        { replace: true },
+      );
+    },
+    [isDocumentsSection, location.hash, location.pathname, location.search, navigate],
+  );
+  const handleDocumentSearchSubmit = useCallback(
+    (value: string) => {
+      handleDocumentSearchChange(value);
+    },
+    [handleDocumentSearchChange],
+  );
+  const handleDocumentSearchClear = useCallback(() => {
+    handleDocumentSearchChange("");
+  }, [handleDocumentSearchChange]);
+  const documentsSearch = isDocumentsSection
+    ? {
+        value: documentSearchValue,
+        onChange: handleDocumentSearchChange,
+        onSubmit: handleDocumentSearchSubmit,
+        onClear: handleDocumentSearchClear,
+        placeholder: "Search documents",
+        shortcutHint,
+        scopeLabel: "Documents",
+        enableShortcut: true,
+      }
+    : undefined;
+  const topBarSearch = documentsSearch ?? workspaceSearch;
 
   useEffect(() => {
     if (section?.kind === "redirect") {
@@ -315,7 +361,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
       ) : null}
       <div className="flex flex-1 min-w-0 flex-col">
         {!immersiveWorkbenchActive ? (
-          <GlobalTopBar brand={topBarBrand} trailing={topBarTrailing} search={workspaceSearch} />
+          <GlobalTopBar brand={topBarBrand} trailing={topBarTrailing} search={topBarSearch} />
         ) : null}
         {!immersiveWorkbenchActive && isMobileNavOpen ? (
           <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">

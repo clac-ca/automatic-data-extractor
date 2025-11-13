@@ -6409,6 +6409,62 @@
         "title": "DefaultResponse",
         "description": "Consistent envelope for success/failure acknowledgements."
       },
+      "DocumentLastRun": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Job Id",
+            "description": "Latest job ULID."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "run_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run At",
+            "description": "Timestamp for the latest job event (completion/start)."
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "description": "Optional status or error message associated with the job."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "job_id",
+          "status"
+        ],
+        "title": "DocumentLastRun",
+        "description": "Minimal representation of the last job run for a document."
+      },
       "DocumentOut": {
         "properties": {
           "id": {
@@ -6530,6 +6586,17 @@
               }
             ],
             "description": "Summary of the uploading user when available."
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentLastRun"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Latest job execution associated with the document when available."
           }
         },
         "additionalProperties": false,

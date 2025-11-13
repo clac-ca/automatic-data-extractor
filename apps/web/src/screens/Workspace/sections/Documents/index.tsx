@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
 import clsx from "clsx";
 
 import { useSearchParams } from "@app/nav/urlState";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
 import { useConfigsQuery } from "@shared/configs";
@@ -23,9 +23,9 @@ import { useFlattenedPages } from "@shared/api/pagination";
 import { createScopedStorage } from "@shared/storage";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import type { components, paths } from "@schema";
+import type { JobRecord, JobStatus } from "@shared/jobs";
 
 import { Alert } from "@ui/Alert";
-import { Input } from "@ui/Input";
 import { Select } from "@ui/Select";
 import { Button } from "@ui/Button";
 
@@ -33,7 +33,6 @@ import { Button } from "@ui/Button";
 
 type DocumentStatus = components["schemas"]["DocumentStatus"];
 type DocumentRecord = components["schemas"]["DocumentOut"];
-type JobRecord = components["schemas"]["JobRecord"];
 type JobSubmissionPayload = components["schemas"]["JobSubmissionRequest"];
 type DocumentListPage = components["schemas"]["DocumentPage"];
 
@@ -42,15 +41,8 @@ type ListDocumentsQuery = ListDocumentsParameters extends { query?: infer Q }
   ? (Q extends undefined ? Record<string, never> : Q)
   : Record<string, never>;
 
-type ListJobsParameters = paths["/api/v1/workspaces/{workspace_id}/jobs"]["get"]["parameters"];
-type ListJobsQuery = ListJobsParameters extends { query?: infer Q }
-  ? (Q extends undefined ? Record<string, never> : Q)
-  : Record<string, never>;
-
-type JobStatus = JobRecord["status"];
 type StatusFilterInput = DocumentStatus | DocumentStatus[] | null | undefined;
-
-type StatusOptionValue = "all" | DocumentStatus;
+type DocumentsView = "mine" | "team" | "attention" | "recent";
 
 const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
   uploaded: "Uploaded",
@@ -60,21 +52,71 @@ const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
   archived: "Archived",
 };
 
-const SORT_OPTIONS = ["-created_at", "created_at", "name", "-name", "status"] as const;
+const SORT_OPTIONS = [
+  "-created_at",
+  "created_at",
+  "-last_run_at",
+  "last_run_at",
+  "-byte_size",
+  "byte_size",
+  "name",
+  "-name",
+  "status",
+  "-status",
+  "source",
+  "-source",
+] as const;
 type SortOption = (typeof SORT_OPTIONS)[number];
 
-function parseStatus(value: string | null): StatusOptionValue {
-  const allowed = new Set<StatusOptionValue>([
-    "all",
-    "uploaded",
-    "processing",
-    "processed",
-    "failed",
-    "archived",
-  ]);
-  return allowed.has((value as StatusOptionValue) ?? "all")
-    ? ((value as StatusOptionValue) ?? "all")
-    : "all";
+const DEFAULT_VIEW: DocumentsView = "mine";
+const DOCUMENT_VIEW_PRESETS: Record<
+  DocumentsView,
+  {
+    readonly label: string;
+    readonly description: string;
+    readonly presetStatuses?: readonly DocumentStatus[];
+    readonly presetSort?: SortOption;
+    readonly uploader?: "me" | null;
+  }
+> = {
+  mine: {
+    label: "My uploads",
+    description: "Documents you uploaded",
+    uploader: "me",
+  },
+  team: {
+    label: "All documents",
+    description: "Everything in this workspace",
+  },
+  attention: {
+    label: "Needs attention",
+    description: "Failed or processing files",
+    presetStatuses: ["failed", "processing"],
+  },
+  recent: {
+    label: "Recently run",
+    description: "Latest run activity",
+    presetSort: "-last_run_at",
+  },
+};
+
+function parseView(value: string | null): DocumentsView {
+  if (!value) return DEFAULT_VIEW;
+  return (Object.keys(DOCUMENT_VIEW_PRESETS) as DocumentsView[]).includes(value as DocumentsView)
+    ? (value as DocumentsView)
+    : DEFAULT_VIEW;
+}
+
+function parseStatusParam(value: string | null): Set<DocumentStatus> {
+  if (!value) return new Set();
+  const tokens = value
+    .split(",")
+    .map((token) => token.trim())
+    .filter(Boolean) as DocumentStatus[];
+  const valid = tokens.filter((token): token is DocumentStatus =>
+    ["uploaded", "processing", "processed", "failed", "archived"].includes(token),
+  );
+  return new Set(valid);
 }
 
 function parseSort(value: string | null): SortOption {
@@ -90,17 +132,16 @@ const uploadedFormatter = new Intl.DateTimeFormat(undefined, {
 const documentsKeys = {
   all: () => ["documents"] as const,
   workspace: (workspaceId: string) => [...documentsKeys.all(), workspaceId] as const,
-  list: (workspaceId: string, status: DocumentStatus[] | null, search: string | null, sort: string | null) =>
-    [...documentsKeys.workspace(workspaceId), "list", { status, search, sort }] as const,
+  list: (
+    workspaceId: string,
+    status: DocumentStatus[] | null,
+    search: string | null,
+    sort: string | null,
+    uploader: string | null,
+  ) => [...documentsKeys.workspace(workspaceId), "list", { status, search, sort, uploader }] as const,
 };
 
 const DOCUMENTS_PAGE_SIZE = 50;
-
-const jobsKeys = {
-  root: (workspaceId: string) => ["jobs", workspaceId] as const,
-  document: (workspaceId: string, documentId: string, limit: number) =>
-    [...jobsKeys.root(workspaceId), "document", documentId, limit] as const,
-};
 /* -------------------------------- Route component -------------------------------- */
 
 export default function WorkspaceDocumentsRoute() {
@@ -108,10 +149,29 @@ export default function WorkspaceDocumentsRoute() {
 
   // URL-synced state
   const [searchParams, setSearchParams] = useSearchParams();
-  const [statusFilter, setStatusFilter] = useState<StatusOptionValue>(parseStatus(searchParams.get("status")));
-  const [sortOrder, setSortOrder] = useState<SortOption>(parseSort(searchParams.get("sort")));
+  const setSearchParamsRef = useRef(setSearchParams);
+  useEffect(() => {
+    setSearchParamsRef.current = setSearchParams;
+  }, [setSearchParams]);
+  const initialViewFromParams = parseView(searchParams.get("view"));
+  const [viewFilter, setViewFilter] = useState<DocumentsView>(initialViewFromParams);
+  const [statusFilters, setStatusFilters] = useState<Set<DocumentStatus>>(() => {
+    const statusParam = searchParams.get("status");
+    if (statusParam) return parseStatusParam(statusParam);
+    const preset = DOCUMENT_VIEW_PRESETS[initialViewFromParams].presetStatuses ?? [];
+    return new Set(preset);
+  });
+  const [sortOrder, setSortOrder] = useState<SortOption>(() => {
+    const sortParam = searchParams.get("sort");
+    if (sortParam) return parseSort(sortParam);
+    const presetSort = DOCUMENT_VIEW_PRESETS[initialViewFromParams].presetSort;
+    return presetSort ?? "-created_at";
+  });
   const [searchTerm, setSearchTerm] = useState(searchParams.get("q") ?? "");
   const [debouncedSearch, setDebouncedSearch] = useState(searchTerm.trim());
+  const statusFiltersArray = useMemo(() => Array.from(statusFilters), [statusFilters]);
+  const viewPreset = DOCUMENT_VIEW_PRESETS[viewFilter];
+  const uploaderFilter = viewPreset.uploader ?? null;
 
   // File input + selection
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -137,24 +197,34 @@ export default function WorkspaceDocumentsRoute() {
 
   // Query
   const documentsQuery = useWorkspaceDocuments(workspace.id, {
-    status: statusFilter,
+    statuses: statusFiltersArray,
     search: debouncedSearch,
     sort: sortOrder,
+    uploader: uploaderFilter,
   });
   const { refetch: refetchDocuments } = documentsQuery;
   const getDocumentKey = useCallback((document: DocumentRecord) => document.id, []);
   const documents = useFlattenedPages(documentsQuery.data?.pages, getDocumentKey);
   const fetchingNextPage = documentsQuery.isFetchingNextPage;
   const backgroundFetch = documentsQuery.isFetching && !fetchingNextPage;
+  const totalDocuments = documentsQuery.data?.pages?.[0]?.total ?? null;
 
   /* ----------------------------- URL sync ----------------------------- */
   useEffect(() => {
+    const paramValue = searchParams.get("q") ?? "";
+    setSearchTerm((current) => (current === paramValue ? current : paramValue));
+    const normalized = paramValue.trim();
+    setDebouncedSearch((current) => (current === normalized ? current : normalized));
+  }, [searchParams]);
+
+  useEffect(() => {
     const s = new URLSearchParams();
-    if (statusFilter !== "all") s.set("status", statusFilter);
+    if (statusFilters.size > 0) s.set("status", Array.from(statusFilters).join(","));
     if (sortOrder !== "-created_at") s.set("sort", sortOrder);
     if (debouncedSearch) s.set("q", debouncedSearch);
-    setSearchParams(s, { replace: true });
-  }, [statusFilter, sortOrder, debouncedSearch, setSearchParams]);
+    if (viewFilter !== DEFAULT_VIEW) s.set("view", viewFilter);
+    setSearchParamsRef.current(s, { replace: true });
+  }, [statusFilters, sortOrder, debouncedSearch, viewFilter]);
 
   /* --------------------------- Search debounce --------------------------- */
   useEffect(() => {
@@ -181,6 +251,28 @@ export default function WorkspaceDocumentsRoute() {
     for (const d of documents) if (selectedIdsSet.has(d.id)) return d;
     return null;
   }, [documents, selectedIdsSet]);
+
+  const handleSelectView = useCallback((nextView: DocumentsView) => {
+    const preset = DOCUMENT_VIEW_PRESETS[nextView];
+    setViewFilter(nextView);
+    setStatusFilters(new Set(preset.presetStatuses ?? []));
+    setSortOrder(preset.presetSort ?? "-created_at");
+    setSearchTerm("");
+    setDebouncedSearch("");
+  }, []);
+
+  const toggleStatusFilter = useCallback((status: DocumentStatus) => {
+    setStatusFilters((current) => {
+      const next = new Set(current);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  }, []);
+
+  const clearStatusFilters = useCallback(() => {
+    setStatusFilters(new Set());
+  }, []);
 
   /* --------------------------- Keyboard shortcuts --------------------------- */
   useEffect(() => {
@@ -209,12 +301,7 @@ export default function WorkspaceDocumentsRoute() {
     [],
   );
 
-  const renderJobStatus = useCallback(
-    (documentItem: DocumentRecord) => (
-      <DocumentJobStatus workspaceId={workspace.id} documentId={documentItem.id} />
-    ),
-    [workspace.id],
-  );
+  const renderJobStatus = useCallback((documentItem: DocumentRecord) => <DocumentJobStatus document={documentItem} />, []);
 
   const handleOpenFilePicker = useCallback(() => {
     fileInputRef.current?.click();
@@ -318,12 +405,15 @@ export default function WorkspaceDocumentsRoute() {
   }, []);
 
   const onResetFilters = () => {
+    setViewFilter(DEFAULT_VIEW);
     setSearchTerm("");
-    setStatusFilter("all");
+    setDebouncedSearch("");
+    setStatusFilters(new Set());
     setSortOrder("-created_at");
   };
 
-  const isDefaultFilters = statusFilter === "all" && sortOrder === "-created_at" && !debouncedSearch;
+  const isDefaultFilters =
+    viewFilter === DEFAULT_VIEW && statusFilters.size === 0 && sortOrder === "-created_at" && !debouncedSearch;
 
   /* -------------------------------- Render -------------------------------- */
 
@@ -338,7 +428,7 @@ export default function WorkspaceDocumentsRoute() {
         }}
       />
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {/* Hidden file input (paired with Upload) */}
         <input
           ref={fileInputRef}
@@ -349,14 +439,11 @@ export default function WorkspaceDocumentsRoute() {
           onChange={handleFileChange}
         />
 
-        {/* Compact Page Bar (title + filters + Upload) */}
-        <DocumentsToolbar
-          title="Documents"
-          subtitle={`Manage uploads and runs across ${workspace.name ?? "this workspace"}.`}
-          search={searchTerm}
-          onSearch={setSearchTerm}
-          status={statusFilter}
-          onStatus={setStatusFilter}
+        <DocumentsHeader
+          workspaceName={workspace.name}
+          totalDocuments={totalDocuments}
+          view={viewFilter}
+          onChangeView={handleSelectView}
           sort={sortOrder}
           onSort={setSortOrder}
           onReset={onResetFilters}
@@ -364,44 +451,51 @@ export default function WorkspaceDocumentsRoute() {
           isDefault={isDefaultFilters}
           onUploadClick={handleOpenFilePicker}
           uploadDisabled={isUploading}
+          selectedStatuses={statusFilters}
+          onToggleStatus={toggleStatusFilter}
+          onClearStatuses={clearStatusFilters}
         />
 
-        {/* Inline error banner */}
         {banner ? (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">
             {banner.message}
           </div>
         ) : null}
 
-        {/* Content panel */}
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700 sm:p-4">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white text-sm text-slate-700">
           {documentsQuery.isLoading ? (
-            <SkeletonList />
+            <div className="p-4">
+              <SkeletonList />
+            </div>
           ) : documentsQuery.isError ? (
-            <p className="text-rose-600">Failed to load documents.</p>
+            <p className="p-4 text-rose-600">Failed to load documents.</p>
           ) : documents.length === 0 ? (
-            <EmptyState onUploadClick={handleOpenFilePicker} />
+            <div className="p-6">
+              <EmptyState onUploadClick={handleOpenFilePicker} />
+            </div>
           ) : (
             <>
-              <DocumentsTable
-                documents={documents}
-                selectedIds={selectedIdsSet}
-                onToggleDocument={handleToggleDocument}
-                onToggleAll={handleToggleAll}
-                disableSelection={backgroundFetch || isDeleting || uploadDocuments.isPending}
-                disableRowActions={deleteDocuments.isPending}
-                formatStatusLabel={statusFormatter}
-                onDeleteDocument={handleDeleteSingle}
-                onDownloadDocument={handleDownloadDocument}
-                onRunDocument={handleOpenRunDrawer}
-                downloadingId={downloadingId}
-                renderJobStatus={renderJobStatus}
-                safeModeEnabled={safeModeEnabled}
-                safeModeMessage={safeModeDetail}
-                safeModeLoading={safeModeLoading}
-              />
+              <div className="overflow-x-auto p-2 sm:p-3">
+                <DocumentsTable
+                  documents={documents}
+                  selectedIds={selectedIdsSet}
+                  onToggleDocument={handleToggleDocument}
+                  onToggleAll={handleToggleAll}
+                  disableSelection={backgroundFetch || isDeleting || uploadDocuments.isPending}
+                  disableRowActions={deleteDocuments.isPending}
+                  formatStatusLabel={statusFormatter}
+                  onDeleteDocument={handleDeleteSingle}
+                  onDownloadDocument={handleDownloadDocument}
+                  onRunDocument={handleOpenRunDrawer}
+                  downloadingId={downloadingId}
+                  renderJobStatus={renderJobStatus}
+                  safeModeEnabled={safeModeEnabled}
+                  safeModeMessage={safeModeDetail}
+                  safeModeLoading={safeModeLoading}
+                />
+              </div>
               {documentsQuery.hasNextPage ? (
-                <div className="flex justify-center border-t border-slate-200 pt-3">
+                <div className="flex justify-center border-t border-slate-200 bg-slate-50/60 px-3 py-2">
                   <Button
                     type="button"
                     variant="ghost"
@@ -451,27 +545,29 @@ export default function WorkspaceDocumentsRoute() {
 /* ------------------------------- Data hooks ------------------------------- */
 
 interface WorkspaceDocumentsOptions {
-  readonly status: StatusOptionValue;
+  readonly statuses: readonly DocumentStatus[];
   readonly search: string;
   readonly sort: SortOption;
+  readonly uploader?: string | null;
 }
 
 function useWorkspaceDocuments(workspaceId: string, options: WorkspaceDocumentsOptions) {
-  const statusFilter = options.status === "all" ? undefined : options.status;
-  const normalizedStatus = normaliseStatusFilter(statusFilter) ?? null;
+  const normalizedStatus = normaliseStatusFilter(options.statuses ?? null) ?? null;
   const search = options.search.trim() || null;
   const sort = options.sort.trim() || null;
+  const uploader = options.uploader?.trim() || null;
 
   return useInfiniteQuery<DocumentListPage>({
-    queryKey: documentsKeys.list(workspaceId, normalizedStatus, search, sort),
+    queryKey: documentsKeys.list(workspaceId, normalizedStatus, search, sort, uploader),
     initialPageParam: 1,
     queryFn: ({ pageParam, signal }) =>
       fetchWorkspaceDocuments(
         workspaceId,
         {
-          status: normalizedStatus,
+          statuses: normalizedStatus,
           search,
           sort,
+          uploader,
           page: typeof pageParam === "number" ? pageParam : 1,
           pageSize: DOCUMENTS_PAGE_SIZE,
         },
@@ -540,21 +636,8 @@ function useSubmitJob(workspaceId: string) {
       return data as JobRecord;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: jobsKeys.root(workspaceId) });
       queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
     },
-  });
-}
-
-function useDocumentJobs(workspaceId: string, documentId: string, options?: { limit?: number; enabled?: boolean }) {
-  const { limit = 3, enabled = true } = options ?? {};
-
-  return useQuery<JobRecord[]>({
-    queryKey: jobsKeys.document(workspaceId, documentId, limit),
-    queryFn: ({ signal }) => listWorkspaceJobs(workspaceId, { inputDocumentId: documentId, limit }, signal),
-    enabled: enabled && workspaceId.length > 0 && documentId.length > 0,
-    staleTime: 10_000,
-    placeholderData: (previous) => previous ?? [],
   });
 }
 
@@ -599,18 +682,20 @@ type DocumentRunPreferences = {
 async function fetchWorkspaceDocuments(
   workspaceId: string,
   options: {
-    status: DocumentStatus[] | null;
+    statuses: DocumentStatus[] | null;
     search: string | null;
     sort: string | null;
+    uploader: string | null;
     page: number;
     pageSize: number;
   },
   signal?: AbortSignal,
 ): Promise<DocumentListPage> {
   const query: ListDocumentsQuery = {};
-  if (options.status && options.status.length > 0) query.status = Array.from(options.status);
+  if (options.statuses && options.statuses.length > 0) query.status = Array.from(options.statuses);
   if (options.search) query.q = options.search;
   if (options.sort) query.sort = options.sort;
+  if (options.uploader) query.uploader = options.uploader;
   if (options.page && options.page > 0) {
     query.page = options.page;
   }
@@ -628,25 +713,6 @@ async function fetchWorkspaceDocuments(
   }
 
   return data;
-}
-
-async function listWorkspaceJobs(
-  workspaceId: string,
-  options: { status?: JobStatus | "all" | null; inputDocumentId?: string | null; limit?: number | null; offset?: number | null },
-  signal?: AbortSignal,
-): Promise<JobRecord[]> {
-  const query: ListJobsQuery = {};
-  if (options.status && options.status !== "all") query.status = options.status;
-  if (options.inputDocumentId) query.input_document_id = options.inputDocumentId;
-  if (typeof options.limit === "number") query.limit = options.limit;
-  if (typeof options.offset === "number") query.offset = options.offset;
-
-  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/jobs", {
-    params: { path: { workspace_id: workspaceId }, query },
-    signal,
-  });
-
-  return (data ?? []) as JobRecord[];
 }
 
 async function downloadDocument(workspaceId: string, documentId: string) {
@@ -701,15 +767,13 @@ function readRunPreferences(
   }
   return { configId: null, configVersionId: null };
 }
-/* ------------------------- Compact Page Bar / Toolbar ------------------------- */
+/* ---------------------- Command header + filter rail ---------------------- */
 
-function DocumentsToolbar({
-  title,
-  subtitle,
-  search,
-  onSearch,
-  status,
-  onStatus,
+function DocumentsHeader({
+  workspaceName,
+  totalDocuments,
+  view,
+  onChangeView,
   sort,
   onSort,
   onReset,
@@ -717,13 +781,14 @@ function DocumentsToolbar({
   isDefault,
   onUploadClick,
   uploadDisabled,
+  selectedStatuses,
+  onToggleStatus,
+  onClearStatuses,
 }: {
-  title?: string;
-  subtitle?: string;
-  search: string;
-  onSearch: (v: string) => void;
-  status: StatusOptionValue;
-  onStatus: (v: StatusOptionValue) => void;
+  workspaceName?: string | null;
+  totalDocuments?: number | null;
+  view: DocumentsView;
+  onChangeView: (view: DocumentsView) => void;
   sort: SortOption;
   onSort: (v: SortOption) => void;
   onReset: () => void;
@@ -731,22 +796,16 @@ function DocumentsToolbar({
   isDefault: boolean;
   onUploadClick: () => void;
   uploadDisabled?: boolean;
+  selectedStatuses: ReadonlySet<DocumentStatus>;
+  onToggleStatus: (status: DocumentStatus) => void;
+  onClearStatuses: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const searchId = useId();
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const key = e.key.toLowerCase();
-      if ((key === "/" || ((e.metaKey || e.ctrlKey) && key === "k")) && document.activeElement !== inputRef.current) {
-        e.preventDefault();
-        inputRef.current?.focus();
-      }
-      if (key === "escape" && document.activeElement === inputRef.current && search) onSearch("");
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [search, onSearch]);
+  const subtitle =
+    typeof totalDocuments === "number"
+      ? `${totalDocuments.toLocaleString()} files`
+      : workspaceName
+        ? `Uploads and runs for ${workspaceName}`
+        : "Manage workspace uploads and runs";
 
   return (
     <section
@@ -754,109 +813,188 @@ function DocumentsToolbar({
       role="region"
       aria-label="Documents header and filters"
     >
-      {/* Top row: title on the left, Upload on the right */}
-      <div className="mb-2 flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold text-slate-900 sm:text-xl">
-            {title ?? "Documents"}
+            {workspaceName ? `${workspaceName} documents` : "Documents"}
           </h1>
-          {subtitle ? (
-            <p className="mt-0.5 hidden truncate text-xs text-slate-600 sm:block">{subtitle}</p>
-          ) : null}
+          <p className="text-xs text-slate-500">{subtitle}</p>
         </div>
-        <Button
-          className="shrink-0"
-          onClick={onUploadClick}
-          disabled={uploadDisabled}
-          isLoading={uploadDisabled}
-          aria-label="Upload documents"
-        >
-          Upload
-        </Button>
-      </div>
-
-      {/* Filters row */}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr,auto,auto,auto] sm:items-center sm:gap-3">
-        <div className="relative">
-          <Input
-            id={searchId}
-            ref={inputRef}
-            type="search"
-            placeholder="Search (⌘K or /)"
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-            className="w-full"
-            aria-label="Search documents"
-          />
-          {search ? (
-            <button
-              type="button"
-              onClick={() => onSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1 text-xs text-slate-500 hover:text-slate-800"
-              title="Clear (Esc)"
-              aria-label="Clear search"
-            >
-              ×
-            </button>
-          ) : null}
-        </div>
-
-        <Select
-          value={status}
-          onChange={(e) => onStatus(e.target.value as StatusOptionValue)}
-          className="w-full sm:w-[170px]"
-          aria-label="Filter by status"
-        >
-          <option value="all">All statuses</option>
-          <option value="processing">{DOCUMENT_STATUS_LABELS.processing}</option>
-          <option value="failed">{DOCUMENT_STATUS_LABELS.failed}</option>
-          <option value="uploaded">{DOCUMENT_STATUS_LABELS.uploaded}</option>
-          <option value="processed">{DOCUMENT_STATUS_LABELS.processed}</option>
-          <option value="archived">{DOCUMENT_STATUS_LABELS.archived}</option>
-        </Select>
-
-        <Select
-          value={sort}
-          onChange={(e) => onSort(e.target.value as SortOption)}
-          className="w-full sm:w-[170px]"
-          aria-label="Sort documents"
-        >
-          <option value="-created_at">Newest first</option>
-          <option value="created_at">Oldest first</option>
-          <option value="name">Name A–Z</option>
-          <option value="-name">Name Z–A</option>
-          <option value="status">Status</option>
-        </Select>
-
-        <div className="flex items-center gap-3 sm:justify-end">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={onReset}
             disabled={isDefault}
             className={clsx(
-              "rounded text-sm",
+              "rounded border border-transparent px-3 py-1 text-sm font-medium",
               isDefault
                 ? "cursor-default text-slate-300"
-                : "text-slate-600 underline underline-offset-4 hover:text-slate-900"
+                : "text-slate-600 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900",
             )}
-            title="Reset filters"
           >
             Reset
           </button>
-          <span
-            className={clsx(
-              "inline-flex items-center justify-end gap-1 text-xs text-slate-500",
-              isFetching ? "opacity-100" : "opacity-0"
-            )}
-            role="status"
-            aria-live="polite"
+          <Button
+            className="shrink-0"
+            onClick={onUploadClick}
+            disabled={uploadDisabled}
+            isLoading={uploadDisabled}
+            aria-label="Upload documents"
           >
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
-            Updating…
-          </span>
-        </div>
+            Upload
+          </Button>
+      </div>
+    </div>
+
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <DocumentsViewTabs view={view} onChange={onChangeView} />
+        <StatusFilterControl
+          selectedStatuses={selectedStatuses}
+          onToggleStatus={onToggleStatus}
+          onClearStatuses={onClearStatuses}
+        />
+        <Select
+          value={sort}
+          onChange={(e) => onSort(e.target.value as SortOption)}
+          className="w-40"
+          aria-label="Sort documents"
+        >
+          <option value="-created_at">Newest first</option>
+          <option value="created_at">Oldest first</option>
+          <option value="-last_run_at">Recent runs</option>
+          <option value="last_run_at">Least recently run</option>
+          <option value="-byte_size">Largest files</option>
+          <option value="byte_size">Smallest files</option>
+          <option value="name">Name A–Z</option>
+          <option value="-name">Name Z–A</option>
+        </Select>
+        <span
+          className={clsx(
+            "ml-auto inline-flex items-center gap-1 text-[11px] text-slate-500",
+            isFetching ? "opacity-100" : "opacity-0",
+          )}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
+          Updating…
+        </span>
       </div>
     </section>
+  );
+}
+
+function DocumentsViewTabs({ view, onChange }: { view: DocumentsView; onChange: (view: DocumentsView) => void }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {(Object.keys(DOCUMENT_VIEW_PRESETS) as DocumentsView[]).map((key) => {
+        const preset = DOCUMENT_VIEW_PRESETS[key];
+        const active = key === view;
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onChange(key)}
+            className={clsx(
+              "rounded-full px-3 py-1 text-xs font-medium transition",
+              active
+                ? "bg-brand-600 text-white shadow-sm"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900",
+            )}
+            title={preset.description}
+          >
+            {preset.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function StatusFilterControl({
+  selectedStatuses,
+  onToggleStatus,
+  onClearStatuses,
+}: {
+  selectedStatuses: ReadonlySet<DocumentStatus>;
+  onToggleStatus: (status: DocumentStatus) => void;
+  onClearStatuses: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const statusEntries = Object.entries(DOCUMENT_STATUS_LABELS) as [DocumentStatus, string][];
+  const hasSelection = selectedStatuses.size > 0;
+  const summaryLabel = hasSelection
+    ? `${selectedStatuses.size} ${selectedStatuses.size === 1 ? "status" : "statuses"}`
+    : "All statuses";
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onClickOutside);
+    return () => window.removeEventListener("mousedown", onClickOutside);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm hover:border-slate-300"
+        aria-haspopup="true"
+        aria-expanded={open}
+      >
+        Status: {summaryLabel}
+        <ChevronDownIcon className="h-3 w-3" />
+      </button>
+      {open ? (
+        <div className="absolute z-30 mt-2 w-60 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-xl">
+          <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <span>Status filters</span>
+            <button
+              type="button"
+              onClick={() => {
+                onClearStatuses();
+                setOpen(false);
+              }}
+              className={clsx(
+                "text-[11px]",
+                hasSelection ? "text-slate-500 underline underline-offset-4" : "text-slate-300",
+              )}
+            >
+              Clear
+            </button>
+          </div>
+          <ul className="space-y-1 text-xs text-slate-600">
+            {statusEntries.map(([status, label]) => {
+              const active = selectedStatuses.has(status);
+              return (
+                <li key={status}>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      checked={active}
+                      onChange={() => onToggleStatus(status)}
+                      className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                    />
+                      <span className="truncate">{label}</span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="mt-3 flex justify-end">
+            <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+              Done
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 /* ----------------------------- Documents table ----------------------------- */
@@ -914,9 +1052,9 @@ function DocumentsTable({
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full table-fixed border-separate border-spacing-0 text-sm text-slate-700">
-        <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm text-[11px] font-medium text-slate-500">
+        <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           <tr className="border-b border-slate-200">
-            <th scope="col" className="w-10 px-2.5 py-2">
+            <th scope="col" className="w-10 px-2 py-2">
               <input
                 ref={headerCheckboxRef}
                 type="checkbox"
@@ -926,10 +1064,13 @@ function DocumentsTable({
                 disabled={disableSelection || documents.length === 0}
               />
             </th>
-            <th scope="col" className="px-2.5 py-2 text-left">Name</th>
-            <th scope="col" className="px-2.5 py-2 text-left">Status</th>
-            <th scope="col" className="px-2.5 py-2 text-left">Uploaded</th>
-            <th scope="col" className="px-2.5 py-2 text-right">Actions</th>
+            <th scope="col" className="w-20 px-2 py-2 text-left">ID</th>
+            <th scope="col" className="px-2 py-2 text-left">Document</th>
+            <th scope="col" className="w-40 px-2 py-2 text-left">Uploaded</th>
+            <th scope="col" className="w-48 px-2 py-2 text-left">Uploader</th>
+            <th scope="col" className="w-48 px-2 py-2 text-left">Latest run</th>
+            <th scope="col" className="w-32 px-2 py-2 text-left">Status</th>
+            <th scope="col" className="w-36 px-2 py-2 text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -943,7 +1084,7 @@ function DocumentsTable({
                   isSelected ? "bg-brand-50/50" : "bg-white"
                 )}
               >
-                <td className="px-2.5 py-2 align-middle">
+                <td className="px-2 py-2 align-middle">
                   <input
                     type="checkbox"
                     className="h-4 w-4 rounded border border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
@@ -952,33 +1093,45 @@ function DocumentsTable({
                     disabled={disableSelection}
                   />
                 </td>
-                <td className="px-2.5 py-2 align-middle">
+                <td className="px-2 py-2 align-middle font-mono text-xs text-slate-500">
+                  {document.id.slice(-6)}
+                </td>
+                <td className="px-2 py-2 align-middle">
                   <div className="min-w-0">
-                    <div className="truncate font-medium text-slate-900" title={document.name}>{document.name}</div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
-                      <span className="truncate">{formatFileDescription(document)}</span>
-                      {renderJobStatus ? <span className="truncate">{renderJobStatus(document)}</span> : null}
+                    <div className="truncate font-semibold text-slate-900" title={document.name}>
+                      {document.name}
                     </div>
+                    <div className="text-xs text-slate-500">{formatFileDescription(document)}</div>
                   </div>
                 </td>
-                <td className="px-2.5 py-2 align-middle">
-                  <span className={clsx(
-                    "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
-                    statusBadgeClass(document.status)
-                  )}>
-                    {formatStatusLabel ? formatStatusLabel(document.status) : document.status}
-                  </span>
-                </td>
-                <td className="px-2.5 py-2 align-middle">
+                <td className="px-2 py-2 align-middle">
                   <time
                     dateTime={document.created_at}
-                    className="block truncate text-xs text-slate-600"
+                    className="block text-xs text-slate-600"
                     title={uploadedFormatter.format(new Date(document.created_at))}
                   >
                     {formatUploadedAt(document)}
                   </time>
                 </td>
-                <td className="px-2.5 py-2 align-middle text-right">
+                <td className="px-2 py-2 align-middle">
+                  <span className="block truncate text-xs text-slate-600">
+                    {document.uploader?.name ?? document.uploader?.email ?? "—"}
+                  </span>
+                </td>
+                <td className="px-2 py-2 align-middle">
+                  {renderJobStatus ? renderJobStatus(document) : null}
+                </td>
+                <td className="px-2 py-2 align-middle">
+                  <span
+                    className={clsx(
+                      "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
+                      statusBadgeClass(document.status),
+                    )}
+                  >
+                    {formatStatusLabel ? formatStatusLabel(document.status) : document.status}
+                  </span>
+                </td>
+                <td className="px-2 py-2 align-middle text-right">
                   <DocumentActionsMenu
                     document={document}
                     onDownload={onDownloadDocument}
@@ -1123,6 +1276,14 @@ function statusBadgeClass(status: DocumentRecord["status"]) {
 
 function formatUploadedAt(document: DocumentRecord) {
   return uploadedFormatter.format(new Date(document.created_at));
+}
+
+function ChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.8} className={className}>
+      <path d="M5 8l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 /* --------------------------------- Run Drawer --------------------------------- */
 
@@ -1579,10 +1740,14 @@ function BulkBar({
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 text-sm text-slate-700 shadow-lg backdrop-blur">
         <span className="mr-2"><strong>{count}</strong> selected</span>
         <Button variant="ghost" size="sm" onClick={onClear}>Clear</Button>
-        <Button size="sm" onClick={() => !runDisabled && onRun()} disabled={runDisabled} title={runTitle}>
-          Run extraction
-        </Button>
-        <Button size="sm" variant="danger" onClick={onDelete} disabled={busy} isLoading={busy}>Delete</Button>
+        <div className="ml-auto flex items-center gap-2">
+          <Button size="sm" onClick={() => !runDisabled && onRun()} disabled={runDisabled} title={runTitle}>
+            Run extraction
+          </Button>
+          <Button size="sm" variant="danger" onClick={onDelete} disabled={busy} isLoading={busy}>
+            Delete selected
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -1607,35 +1772,24 @@ function EmptyState({ onUploadClick }: { onUploadClick: () => void }) {
 
 /* ------------------------------ Job status chip ------------------------------ */
 
-function DocumentJobStatus({ workspaceId, documentId }: { workspaceId: string; documentId: string }) {
-  const jobsQuery = useDocumentJobs(workspaceId, documentId, { limit: 3 });
+function DocumentJobStatus({ document }: { document: DocumentRecord }) {
+  const lastRun = document.last_run;
+  if (!lastRun) return <span className="text-xs text-slate-400">No runs yet</span>;
 
-  if (jobsQuery.isLoading) return <span className="text-xs text-slate-400">Loading runs…</span>;
-  if (jobsQuery.isError) {
-    return (
-      <span className="text-xs text-rose-600">
-        {jobsQuery.error instanceof Error ? jobsQuery.error.message : "Unable to load runs."}
-      </span>
-    );
-  }
-
-  const jobs = jobsQuery.data ?? [];
-  if (jobs.length === 0) return <span className="text-xs text-slate-400">No runs yet</span>;
-
-  const latestJob = jobs[0];
-  const remaining = jobs.length - 1;
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-col gap-1">
       <span
         className={clsx(
           "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
-          jobStatusBadgeClass(latestJob.status),
+          jobStatusBadgeClass(lastRun.status as JobStatus),
         )}
       >
-        {formatJobStatus(latestJob.status)}
-        <span className="ml-1 font-normal text-slate-500">{formatRelativeTime(latestJob.updated_at)}</span>
+        {formatJobStatus(lastRun.status as JobStatus)}
+        {lastRun.run_at ? (
+          <span className="ml-1 font-normal text-slate-500">{formatRelativeTime(lastRun.run_at)}</span>
+        ) : null}
       </span>
-      {remaining > 0 ? <span className="text-[11px] text-slate-400">+{remaining} more</span> : null}
+      {lastRun.message ? <span className="text-[11px] text-slate-500">{lastRun.message}</span> : null}
     </div>
   );
 }
@@ -1658,7 +1812,8 @@ function formatJobStatus(status: JobStatus) {
 }
 
 const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
-function formatRelativeTime(value: string) {
+function formatRelativeTime(value?: string | null) {
+  if (!value) return "unknown";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "unknown";
   const diffMs = date.getTime() - Date.now();

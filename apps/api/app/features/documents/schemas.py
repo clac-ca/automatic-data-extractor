@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import Field
 
+from apps.api.app.features.jobs.schemas import JobStatusLiteral
 from apps.api.app.shared.core.ids import ULIDStr
 from apps.api.app.shared.core.schema import BaseSchema
 from apps.api.app.shared.pagination import Page
@@ -70,6 +71,10 @@ class DocumentOut(BaseSchema):
         serialization_alias="uploader",
         description="Summary of the uploading user when available.",
     )
+    last_run: DocumentLastRun | None = Field(
+        default=None,
+        description="Latest job execution associated with the document when available.",
+    )
 
     @property
     def original_filename(self) -> str:
@@ -78,8 +83,23 @@ class DocumentOut(BaseSchema):
         return self.name
 
 
+class DocumentLastRun(BaseSchema):
+    """Minimal representation of the last job run for a document."""
+
+    job_id: ULIDStr = Field(description="Latest job ULID.")
+    status: JobStatusLiteral
+    run_at: datetime | None = Field(
+        default=None,
+        description="Timestamp for the latest job event (completion/start).",
+    )
+    message: str | None = Field(
+        default=None,
+        description="Optional status or error message associated with the job.",
+    )
+
+
 class DocumentPage(Page[DocumentOut]):
     """Paginated envelope of document records."""
 
 
-__all__ = ["DocumentPage", "DocumentOut", "UploaderOut"]
+__all__ = ["DocumentLastRun", "DocumentOut", "DocumentPage", "UploaderOut"]

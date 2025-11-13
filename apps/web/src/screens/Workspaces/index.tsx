@@ -12,6 +12,7 @@ import { defaultWorkspaceSection } from "@screens/Workspace/components/workspace
 import { WorkspaceDirectoryLayout } from "@screens/Workspaces/components/WorkspaceDirectoryLayout";
 import { useShortcutHint } from "@shared/hooks/useShortcutHint";
 import type { GlobalSearchSuggestion } from "@app/shell/GlobalTopBar";
+import { GlobalSearchField } from "@app/shell/GlobalSearchField";
 
 export default function WorkspacesIndexRoute() {
   return (
@@ -109,6 +110,14 @@ function WorkspacesIndexContent() {
     scopeLabel: "Workspace directory",
     suggestions: searchSuggestions,
     onSelectSuggestion: handleWorkspaceSuggestionSelect,
+    onClear: handleResetSearch,
+  };
+  const inlineDirectorySearch = {
+    ...directorySearch,
+    shortcutHint: undefined,
+    onClear: handleResetSearch,
+    enableShortcut: false,
+    variant: "minimal" as const,
   };
 
   const mainContent =
@@ -147,6 +156,7 @@ function WorkspacesIndexContent() {
           </h1>
           <p className="mt-1 text-sm text-slate-500">Select a workspace to jump straight into documents.</p>
         </header>
+        <GlobalSearchField {...inlineDirectorySearch} className="w-full" />
         <section className="grid gap-5 lg:grid-cols-2">
           {visibleWorkspaces.map((workspace) => (
             <Link

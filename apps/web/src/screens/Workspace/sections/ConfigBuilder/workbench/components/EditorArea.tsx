@@ -44,9 +44,12 @@ interface EditorAreaProps {
   readonly onPinTab: (tabId: string) => void;
   readonly onUnpinTab: (tabId: string) => void;
   readonly onContentChange: (tabId: string, value: string) => void;
+  readonly onSaveTab?: (tabId: string) => void;
+  readonly onSaveAllTabs?: () => void;
   readonly onSelectRecentTab: (direction: "forward" | "backward") => void;
   readonly editorTheme: string;
   readonly menuAppearance: "light" | "dark";
+  readonly canSaveFiles?: boolean;
   readonly minHeight?: number;
 }
 
@@ -62,9 +65,12 @@ export function EditorArea({
   onPinTab,
   onUnpinTab,
   onContentChange,
+  onSaveTab,
+  onSaveAllTabs,
   onSelectRecentTab,
   editorTheme,
   menuAppearance,
+  canSaveFiles = false,
   minHeight,
 }: EditorAreaProps) {
   const hasTabs = tabs.length > 0;
@@ -85,6 +91,11 @@ export function EditorArea({
   const pinnedTabs = useMemo(() => tabs.filter((tab) => tab.pinned), [tabs]);
   const regularTabs = useMemo(() => tabs.filter((tab) => !tab.pinned), [tabs]);
   const contentTabs = useMemo(() => tabs.slice().sort((a, b) => a.id.localeCompare(b.id)), [tabs]);
+  const dirtyTabs = useMemo(
+    () => tabs.filter((tab) => tab.status === "ready" && tab.content !== tab.initialContent),
+    [tabs],
+  );
+  const hasDirtyTabs = dirtyTabs.length > 0;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -291,7 +302,12 @@ export function EditorArea({
     const tabIndex = tabs.findIndex((tab) => tab.id === contextMenu.tabId);
     const hasTabsToRight = tabIndex >= 0 && tabIndex < tabs.length - 1;
     const hasMultipleTabs = tabs.length > 1;
+    const isDirty = currentTab.status === "ready" && currentTab.content !== currentTab.initialContent;
+    const canSaveCurrent = Boolean(onSaveTab) && canSaveFiles && isDirty && !currentTab.saving;
+    const canSaveAny = Boolean(onSaveAllTabs) && canSaveFiles && hasDirtyTabs;
     const shortcuts = {
+      save: "Ctrl+S",
+      saveAll: "Ctrl+Shift+S",
       close: "Ctrl+W",
       closeOthers: "Ctrl+K Ctrl+O",
       closeRight: "Ctrl+K Ctrl+Right",
@@ -299,9 +315,26 @@ export function EditorArea({
     };
     return [
       {
+        id: "save",
+        label: currentTab.saving ? "Saving…" : "Save",
+        icon: <MenuIconSave />,
+        disabled: !canSaveCurrent,
+        shortcut: shortcuts.save,
+        onSelect: () => onSaveTab?.(currentTab.id),
+      },
+      {
+        id: "save-all",
+        label: "Save All",
+        icon: <MenuIconSaveAll />,
+        disabled: !canSaveAny,
+        shortcut: shortcuts.saveAll,
+        onSelect: () => onSaveAllTabs?.(),
+      },
+      {
         id: "pin",
         label: currentTab.pinned ? "Unpin" : "Pin",
         icon: currentTab.pinned ? <MenuIconUnpin /> : <MenuIconPin />,
+        dividerAbove: true,
         onSelect: () => (currentTab.pinned ? onUnpinTab(currentTab.id) : onPinTab(currentTab.id)),
       },
       {
@@ -341,12 +374,16 @@ export function EditorArea({
   }, [
     contextMenu,
     tabs,
+    hasDirtyTabs,
+    canSaveFiles,
     onPinTab,
     onUnpinTab,
     onCloseTab,
     onCloseOtherTabs,
     onCloseTabsToRight,
     onCloseAllTabs,
+    onSaveTab,
+    onSaveAllTabs,
   ]);
 
   const tabCatalogItems: ContextMenuItem[] = useMemo(() => {
@@ -499,6 +536,12 @@ export function EditorArea({
                   path={tab.id}
                   theme={editorTheme}
                   onChange={(value) => onContentChange(tab.id, value ?? "")}
+                  onSaveShortcut={() => {
+                    if (!canSaveFiles) {
+                      return;
+                    }
+                    onSaveTab?.(tab.id);
+                  }}
                 />
               </div>
             )}
@@ -597,6 +640,20 @@ function SortableTab({ tab, isActive, isDirty, draggingId, onContextMenu, onClos
             !
           </span>
         ) : null}
+        {tab.saving ? (
+          <span className="flex-none" aria-label="Saving" title="Saving changes…">
+            <TabSavingSpinner />
+          </span>
+        ) : null}
+        {tab.saveError ? (
+          <span
+            className="flex-none text-[10px] font-semibold uppercase tracking-wide text-danger-600"
+            aria-label="Save failed"
+            title={tab.saveError}
+          >
+            !
+          </span>
+        ) : null}
         {isDirty ? <span className="flex-none text-xs leading-none text-brand-600">●</span> : null}
       </TabsTrigger>
       <button
@@ -684,6 +741,59 @@ function PinGlyph({ filled }: { readonly filled: boolean }) {
 }
 
 const MENU_ICON_CLASS = "h-4 w-4 text-current opacity-80";
+
+function TabSavingSpinner() {
+  return (
+    <svg className="h-3 w-3 animate-spin text-brand-500" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" opacity="0.3" />
+      <path
+        d="M14 8a6 6 0 0 0-6-6"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function MenuIconSave() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <path
+        d="M4 2.5h7.5L13.5 5v8.5H4z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <path d="M6 2.5v4h4v-4" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M6 11h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MenuIconSaveAll() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <path
+        d="M3.5 3.5h6l3 3v5.5h-9z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <path d="M6 3.5v3.5h3.5v-3.5" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M5 11h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path
+        d="M6.5 6.5h6l1.5 1.5v4"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+        opacity="0.6"
+      />
+    </svg>
+  );
+}
 
 function MenuIconClose() {
   return (

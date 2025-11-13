@@ -16,19 +16,26 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
   const { workspace } = useWorkspaceContext();
   const {
     session,
-    focusMode,
+    windowState,
     openSession,
     closeSession,
-    setFocusMode,
-    dockSession,
+    minimizeWindow,
+    maximizeWindow,
+    restoreWindow,
     shouldBypassUnsavedGuard,
   } = useWorkbenchWindow();
   const configId = params?.configId;
   const configQuery = useConfigQuery({ workspaceId: workspace.id, configId });
 
   useEffect(() => {
+    if (configId) {
+      return;
+    }
+    closeSession();
+  }, [configId, closeSession]);
+
+  useEffect(() => {
     if (!configId) {
-      closeSession();
       return;
     }
     const resolvedName = configQuery.data?.display_name ?? configId;
@@ -37,7 +44,7 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
       configId,
       configName: `${workspace.name} · ${resolvedName}`,
     });
-  }, [configId, configQuery.data?.display_name, workspace.id, workspace.name, openSession, closeSession]);
+  }, [configId, configQuery.data?.display_name, workspace.id, workspace.name, openSession]);
 
   if (!configId) {
     return (
@@ -50,9 +57,9 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
   }
 
   const activeSession = session && session.configId === configId ? session : null;
-  const isDocked = Boolean(activeSession && focusMode === "docked");
-  const showWorkbenchInline = Boolean(activeSession && focusMode === "balanced");
-  const showImmersiveNotice = Boolean(activeSession && focusMode === "immersive");
+  const isDocked = Boolean(activeSession && windowState === "minimized");
+  const showWorkbenchInline = Boolean(activeSession && windowState === "restored");
+  const showMaximizedNotice = Boolean(activeSession && windowState === "maximized");
 
   if (showWorkbenchInline && activeSession) {
     return (
@@ -61,9 +68,10 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
           workspaceId={workspace.id}
           configId={activeSession.configId}
           configName={activeSession.configName}
-          focusMode={focusMode}
-          onChangeFocusMode={setFocusMode}
-          onDockWorkbench={dockSession}
+          windowState="restored"
+          onMinimizeWindow={minimizeWindow}
+          onMaximizeWindow={maximizeWindow}
+          onRestoreWindow={restoreWindow}
           onCloseWorkbench={closeSession}
           shouldBypassUnsavedGuard={shouldBypassUnsavedGuard}
         />
@@ -71,7 +79,7 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
     );
   }
 
-  if (showImmersiveNotice) {
+  if (showMaximizedNotice) {
     return (
       <div className="flex h-full min-h-0 flex-1 items-center justify-center px-6 py-8">
         <PageState
