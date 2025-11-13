@@ -55,6 +55,7 @@ function Harness({ tree, loadFile, persistence }: HarnessProps) {
       <div data-testid="tab-statuses">{files.tabs.map((tab) => tab.status).join(",")}</div>
       <button type="button" onClick={() => files.openFile("manifest.json")}>Open manifest</button>
       <button type="button" onClick={() => files.openFile("src/data.py")}>Open data</button>
+      <button type="button" onClick={() => files.selectTab("manifest.json")}>Select manifest</button>
       <button type="button" onClick={() => files.closeTab(files.activeTabId)} disabled={!files.activeTabId}>
         Close active
       </button>
@@ -71,7 +72,8 @@ describe("useWorkbenchFiles", () => {
 
     await waitFor(() => expect(screen.getByTestId("open-tabs").textContent).toBe("manifest.json,src/data.py"));
     expect(screen.getByTestId("active-tab").textContent).toBe("src/data.py");
-    await waitFor(() => expect(screen.getByTestId("tab-statuses").textContent).toContain("loading"));
+    await waitFor(() => expect(loadFile).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByTestId("tab-statuses").textContent).toBe("ready,ready"));
   });
 
   it("persists tab mutations to storage", async () => {
@@ -104,5 +106,29 @@ describe("useWorkbenchFiles", () => {
     await waitFor(() =>
       expect(storage.setMock).toHaveBeenLastCalledWith({ openTabs: [], activeTabId: null }),
     );
+  });
+
+  it("loads file content when opening a tab", async () => {
+    const loadFile = vi.fn(async (id: string) => ({ content: `content:${id}`, etag: null }));
+    render(<Harness tree={tree} loadFile={loadFile} />);
+
+    fireEvent.click(screen.getByText("Open manifest"));
+    await waitFor(() => expect(loadFile).toHaveBeenCalledWith("manifest.json"));
+  });
+
+  it("retries loading when a tab errors and is re-selected", async () => {
+    const loadFile = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValue({ content: "new content", etag: null });
+
+    render(<Harness tree={tree} loadFile={loadFile} />);
+
+    fireEvent.click(screen.getByText("Open manifest"));
+    await waitFor(() => expect(loadFile).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId("tab-statuses").textContent).toContain("error"));
+
+    fireEvent.click(screen.getByText("Select manifest"));
+    await waitFor(() => expect(loadFile).toHaveBeenCalledTimes(2));
   });
 });
