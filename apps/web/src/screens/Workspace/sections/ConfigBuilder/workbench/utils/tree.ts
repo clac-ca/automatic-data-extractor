@@ -18,8 +18,9 @@ const LANGUAGE_BY_EXTENSION: Record<string, string> = {
 
 export function createWorkbenchTreeFromListing(listing: FileListing): WorkbenchFileNode | null {
   const rootId = listing.root || listing.prefix || listing.entries[0]?.parent || "";
+  const hasEntries = listing.entries.length > 0;
 
-  if (!rootId) {
+  if (!rootId && !hasEntries) {
     return null;
   }
 
