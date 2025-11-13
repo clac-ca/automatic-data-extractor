@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from apps.api.app.features.configs.service import ConfigurationsService
     from apps.api.app.features.documents.service import DocumentsService
     from apps.api.app.features.health.service import HealthService
+    from apps.api.app.features.runs.service import RunsService
     from apps.api.app.features.system_settings.service import SystemSettingsService
     from apps.api.app.features.users.service import UsersService
 
@@ -122,7 +123,7 @@ def get_builds_service(
 def get_runs_service(
     session: SessionDep,
     settings: SettingsDep,
-) -> "RunsService":
+) -> RunsService:
     """Return a runs service wired to the current request dependencies."""
 
     from apps.api.app.features.runs.service import RunsService

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Literal
 
 from pydantic import Field
 
@@ -60,8 +60,14 @@ class BuildResource(BaseSchema):
 class BuildCreateOptions(BaseSchema):
     """Options controlling build orchestration."""
 
-    force: bool = Field(False, description="Force rebuild even if fingerprints match")
-    wait: bool = Field(False, description="Wait for in-progress builds to complete before starting a new one")
+    force: bool = Field(
+        False,
+        description="Force rebuild even if fingerprints match",
+    )
+    wait: bool = Field(
+        False,
+        description="Wait for in-progress builds to complete before starting a new one",
+    )
 
 
 class BuildCreateRequest(BaseSchema):
@@ -114,7 +120,7 @@ class BuildCompletedEvent(BuildEventBase):
 
 
 BuildEvent = Annotated[
-    Union[BuildCreatedEvent, BuildStepEvent, BuildLogEvent, BuildCompletedEvent],
+    BuildCreatedEvent | BuildStepEvent | BuildLogEvent | BuildCompletedEvent,
     Field(discriminator="type"),
 ]
 
@@ -135,4 +141,3 @@ class BuildLogsResponse(BaseSchema):
     build_id: str
     entries: list[BuildLogEntry]
     next_after_id: int | None = None
-

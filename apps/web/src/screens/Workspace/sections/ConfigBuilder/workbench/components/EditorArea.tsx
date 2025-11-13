@@ -408,7 +408,7 @@ export function EditorArea({
         onSelect: () => onSelectTab(tab.id),
       });
     };
-    pinnedTabs.forEach((tab, index) => appendItem(tab, false));
+    pinnedTabs.forEach((tab) => appendItem(tab, false));
     regularTabs.forEach((tab, index) => appendItem(tab, index === 0 && pinnedTabs.length > 0));
     return items;
   }, [hasTabs, pinnedTabs, regularTabs, activeTabId, onSelectTab]);

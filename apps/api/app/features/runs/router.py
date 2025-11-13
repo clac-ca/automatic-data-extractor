@@ -3,19 +3,29 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, Security, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    Security,
+    status,
+)
 from fastapi.responses import StreamingResponse
 
 from apps.api.app.features.configs.exceptions import ConfigurationNotFoundError
 from apps.api.app.settings import Settings
+from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.shared.dependency import (
     get_runs_service,
     require_authenticated,
     require_csrf,
 )
-from apps.api.app.shared.db.session import get_sessionmaker
 
 from .schemas import RunCreateOptions, RunCreateRequest, RunEvent, RunLogsResponse, RunResource
 from .service import (
@@ -30,6 +40,7 @@ router = APIRouter(
     tags=["runs"],
     dependencies=[Security(require_authenticated)],
 )
+runs_service_dependency = Depends(get_runs_service)
 logger = logging.getLogger(__name__)
 
 
@@ -66,7 +77,7 @@ async def create_run_endpoint(
     config_id: Annotated[str, Path(min_length=1, description="Configuration identifier")],
     payload: RunCreateRequest,
     background_tasks: BackgroundTasks,
-    service: RunsService = Depends(get_runs_service),
+    service: RunsService = runs_service_dependency,
 ) -> RunResource | StreamingResponse:
     """Create a run for ``config_id`` and optionally stream execution events."""
 
@@ -103,7 +114,7 @@ async def create_run_endpoint(
 @router.get("/runs/{run_id}", response_model=RunResource)
 async def get_run_endpoint(
     run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
-    service: RunsService = Depends(get_runs_service),
+    service: RunsService = runs_service_dependency,
 ) -> RunResource:
     run = await service.get_run(run_id)
     if run is None:
@@ -116,7 +127,7 @@ async def get_run_logs_endpoint(
     run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
     after_id: int | None = Query(default=None, ge=0),
     limit: int = Query(default=DEFAULT_STREAM_LIMIT, ge=1, le=DEFAULT_STREAM_LIMIT),
-    service: RunsService = Depends(get_runs_service),
+    service: RunsService = runs_service_dependency,
 ) -> RunLogsResponse:
     run = await service.get_run(run_id)
     if run is None:

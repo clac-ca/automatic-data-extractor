@@ -7,10 +7,10 @@ import json
 import os
 import shutil
 import sys
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import AsyncIterator, Mapping
 
 from fastapi.concurrency import run_in_threadpool
 
@@ -154,7 +154,10 @@ class VirtualEnvironmentBuilder:
             ):
                 yield event
 
-            yield BuilderStepEvent(BuildStep.VERIFY_IMPORTS, "Verifying ade_engine and ade_config imports")
+            yield BuilderStepEvent(
+                BuildStep.VERIFY_IMPORTS,
+                "Verifying ade_engine and ade_config imports",
+            )
             async for event in self._stream_command(
                 [str(venv_python), "-I", "-B", "-c", "import ade_engine, ade_config"],
                 timeout=timeout,
@@ -257,7 +260,7 @@ class VirtualEnvironmentBuilder:
             async with asyncio.timeout(timeout):
                 async for event in reader:
                     yield event
-        except asyncio.TimeoutError as exc:  # pragma: no cover - should be prevented by caller
+        except TimeoutError as exc:  # pragma: no cover - should be prevented by caller
             process.kill()
             await process.wait()
             raise BuildExecutionError(
@@ -290,7 +293,7 @@ class VirtualEnvironmentBuilder:
         try:
             async with asyncio.timeout(timeout):
                 output = await process.stdout.read()
-        except asyncio.TimeoutError as exc:  # pragma: no cover - defensive
+        except TimeoutError as exc:  # pragma: no cover - defensive
             process.kill()
             await process.wait()
             raise BuildExecutionError(
@@ -331,4 +334,3 @@ class VirtualEnvironmentBuilder:
         merged = os.environ.copy()
         merged.update(env)
         return merged
-

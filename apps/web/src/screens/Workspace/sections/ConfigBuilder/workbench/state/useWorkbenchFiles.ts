@@ -56,6 +56,10 @@ interface WorkbenchFilesApi {
     options?: { metadata?: WorkbenchFileMetadata; etag?: string | null },
   ) => void;
   readonly failSavingTab: (fileId: string, message: string) => void;
+  readonly replaceTabContent: (
+    fileId: string,
+    payload: { content: string; metadata?: WorkbenchFileMetadata; etag?: string | null },
+  ) => void;
   readonly isDirty: boolean;
 }
 
@@ -164,6 +168,8 @@ export function useWorkbenchFiles({
                   status: "ready",
                   error: null,
                   etag: payload.etag ?? null,
+                  saving: false,
+                  saveError: null,
                 }
               : tab,
           ),
@@ -575,6 +581,30 @@ export function useWorkbenchFiles({
     );
   }, []);
 
+  const replaceTabContent = useCallback(
+    (fileId: string, payload: { content: string; metadata?: WorkbenchFileMetadata; etag?: string | null }) => {
+      setTabs((current) =>
+        current.map((tab) => {
+          if (tab.id !== fileId) {
+            return tab;
+          }
+          return {
+            ...tab,
+            content: payload.content,
+            initialContent: payload.content,
+            status: "ready",
+            error: null,
+            saving: false,
+            saveError: null,
+            etag: payload.etag ?? tab.etag ?? null,
+            metadata: payload.metadata ?? tab.metadata,
+          };
+        }),
+      );
+    },
+    [],
+  );
+
   const isDirty = useMemo(
     () => tabs.some((tab) => tab.status === "ready" && tab.content !== tab.initialContent),
     [tabs],
@@ -641,6 +671,7 @@ export function useWorkbenchFiles({
     beginSavingTab,
     completeSavingTab,
     failSavingTab,
+    replaceTabContent,
     isDirty,
   };
 }

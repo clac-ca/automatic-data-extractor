@@ -44,7 +44,7 @@ def detect_\${1:name}(
     logger,
     **_,
 ) -> dict:
-    \"\"\"\${2:Explain what this detector scores.}\"\"\"
+    """\${2:Explain what this detector scores.}"""
     score = 0.0
     return {"scores": {"\${3:label}": score}}
 `.trim(),
@@ -87,7 +87,7 @@ def detect_\${1:value_shape}(
     logger,
     **_,
 ) -> dict:
-    \"\"\"\${2:Describe your heuristic for this field.}\"\"\"
+    """\${2:Describe your heuristic for this field.}"""
     score = 0.0
     # TODO: inspect header, column_values_sample, etc.
     return {"scores": {field_name: score}}
@@ -136,7 +136,7 @@ def transform(
     logger,
     **_,
 ) -> dict | None:
-    \"\"\"\${1:Normalize or expand the value for this row.}\"\"\"
+    """\${1:Normalize or expand the value for this row.}"""
     if value in (None, ""):
         return None
     normalized = value
@@ -177,7 +177,7 @@ def validate(
     logger,
     **_,
 ) -> list[dict]:
-    \"\"\"\${1:Return validation issues for this field/row.}\"\"\"
+    """\${1:Return validation issues for this field/row.}"""
     issues: list[dict] = []
     if field_meta and field_meta.get("required") and value in (None, ""):
         issues.append({
@@ -226,7 +226,7 @@ def on_job_start(
     logger=None,
     **_,
 ) -> None:
-    \"\"\"\${1:Log or hydrate state before the job starts.}\"\"\"
+    """\${1:Log or hydrate state before the job starts.}"""
     if logger:
         logger.info("job_start id=%s", job_id)
     return None
@@ -258,7 +258,7 @@ def after_mapping(
     logger=None,
     **_,
 ) -> dict:
-    \"\"\"\${1:Adjust headers/rows before transforms run.}\"\"\"
+    """\${1:Adjust headers/rows before transforms run.}"""
     # Example: rename a header
     table["headers"] = [h if h != "Work Email" else "Email" for h in table["headers"]]
     return table
@@ -288,7 +288,7 @@ def before_save(
     logger=None,
     **_,
 ):
-    \"\"\"\${1:Style or summarize the workbook before it is saved.}\"\"\"
+    """\${1:Style or summarize the workbook before it is saved.}"""
     ws = workbook.active
     ws.title = "Normalized"
     if logger:
@@ -318,7 +318,7 @@ def on_job_end(
     logger=None,
     **_,
 ) -> None:
-    \"\"\"\${1:Log a completion summary.}\"\"\"
+    """\${1:Log a completion summary.}"""
     if logger:
         total_sheets = len((artifact or {}).get("sheets", []))
         logger.info("job_end: sheets=%s", total_sheets)

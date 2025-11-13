@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .models import (
     Build,
     BuildLog,
-    BuildStatus,
     ConfigurationBuild,
     ConfigurationBuildStatus,
 )

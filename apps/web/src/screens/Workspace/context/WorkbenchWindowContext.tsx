@@ -13,7 +13,6 @@ import {
   SearchParamsOverrideProvider,
   toURLSearchParams,
   type SetSearchParamsInit,
-  type SetSearchParamsOptions,
 } from "@app/nav/urlState";
 
 type WorkbenchWindowState = "restored" | "maximized" | "minimized";
@@ -149,7 +148,7 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
   }, [returnPathStorage, defaultReturnPath]);
 
   const setOverrideSearchParams = useCallback(
-    (init: SetSearchParamsInit, _options?: SetSearchParamsOptions) => {
+    (init: SetSearchParamsInit) => {
       setSession((current) => {
         if (!current) {
           return current;
@@ -170,16 +169,27 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
   const openSession = useCallback(
     (payload: WorkbenchSessionPayload) => {
       const normalizedSearch = normalizeSearchString(payload.editorSearch ?? location.search);
+      let shouldRestoreWindow = windowState === "minimized";
       setSession((current) => {
         if (current && current.workspaceId === payload.workspaceId && current.configId === payload.configId) {
+          const nextSeed = payload.seed ?? current.seed;
+          const nextEditorSearch =
+            payload.editorSearch !== undefined ? normalizedSearch : current.editorSearch;
+          if (
+            current.configName === payload.configName &&
+            current.seed === nextSeed &&
+            current.editorSearch === nextEditorSearch
+          ) {
+            return current;
+          }
           return {
             ...current,
             configName: payload.configName,
-            seed: payload.seed ?? current.seed,
-            editorSearch:
-              payload.editorSearch !== undefined ? normalizedSearch : current.editorSearch,
+            seed: nextSeed,
+            editorSearch: nextEditorSearch,
           };
         }
+        shouldRestoreWindow = true;
         instanceCounter.current += 1;
         return {
           ...payload,
@@ -187,9 +197,11 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
           instanceId: `${payload.workspaceId}:${payload.configId}:${instanceCounter.current}`,
         };
       });
-      setWindowState("restored");
+      if (shouldRestoreWindow) {
+        setWindowState("restored");
+      }
     },
-    [location.search],
+    [location.search, windowState],
   );
 
   const closeSession = useCallback(() => {
@@ -229,8 +241,6 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
     }
     setWindowState("maximized");
   }, [session]);
-
-  const restoreFromMaximize = useCallback(() => setWindowState("restored"), []);
 
   const consumeGuardBypass = useCallback(() => {
     const bypass = guardBypassRef.current;
