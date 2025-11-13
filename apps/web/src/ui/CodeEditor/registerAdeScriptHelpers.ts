@@ -184,7 +184,7 @@ function getSnippetContext(
   const beforeCursor = lineText.slice(0, Math.max(0, position.column - 1));
   const withoutIndent = beforeCursor.replace(/^\s+/, "");
   const trimmed = withoutIndent.replace(/\s+$/, "");
-  if (!/^def(?:\s+[A-Za-z_][\w]*)?$/.test(trimmed)) {
+  if (!trimmed.startsWith("def")) {
     return null;
   }
   const indentLength = beforeCursor.length - withoutIndent.length;
