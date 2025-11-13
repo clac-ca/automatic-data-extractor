@@ -1,50 +1,57 @@
 import { NavLink } from "@app/nav/Link";
 import clsx from "clsx";
 
-import { getWorkspacePrimaryNavigation } from "@screens/Workspace/components/workspace-navigation";
+import { getWorkspacePrimaryNavigation, type WorkspaceNavigationItem } from "@screens/Workspace/components/workspace-navigation";
 import type { WorkspaceProfile } from "@screens/Workspace/api/workspaces-api";
 
 export interface WorkspaceNavProps {
   readonly workspace: WorkspaceProfile;
   readonly collapsed: boolean;
   readonly onToggleCollapse: () => void;
+  readonly items?: readonly WorkspaceNavigationItem[];
 }
 
-export function WorkspaceNav({ workspace, collapsed, onToggleCollapse }: WorkspaceNavProps) {
-  const items = getWorkspacePrimaryNavigation(workspace);
+export function WorkspaceNav({ workspace, collapsed, onToggleCollapse, items }: WorkspaceNavProps) {
+  const navItems = items ?? getWorkspacePrimaryNavigation(workspace);
 
   return (
     <aside
-      className="hidden h-full flex-shrink-0 border-r border-slate-200 bg-white transition-[width] duration-200 ease-out lg:block"
-      style={{ width: collapsed ? "4.5rem" : "15rem" }}
+      className="hidden h-full flex-shrink-0 border-r border-white/70 bg-white/85 pb-4 pt-2 shadow-[inset_-1px_0_0_rgba(15,23,42,0.04)] backdrop-blur supports-[backdrop-filter]:backdrop-blur-xl transition-[width] duration-200 ease-out lg:flex"
+      style={{ width: collapsed ? "4.5rem" : "16.25rem" }}
       aria-label="Primary workspace navigation"
       aria-expanded={!collapsed}
     >
-      <div className={clsx("flex h-full flex-col", collapsed ? "items-center" : "items-stretch")}>
-        <div className={clsx("flex items-center justify-end px-2 py-3", collapsed ? "w-full justify-center" : undefined)}>
+      <div className={clsx("flex h-full w-full flex-col", collapsed ? "items-center" : "items-stretch")}>
+        <div className={clsx("flex w-full items-center px-3 py-3", collapsed ? "justify-center" : "justify-between")}>
+          {!collapsed ? (
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Workspace</p>
+          ) : (
+            <span className="sr-only">Workspace navigation</span>
+          )}
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-brand-200 hover:text-brand-600"
+            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/60 bg-white/80 text-slate-500 shadow-sm transition hover:border-brand-200 hover:text-brand-600"
             aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
           >
             {collapsed ? <ExpandIcon /> : <CollapseIcon />}
           </button>
         </div>
-        <nav className="flex-1 overflow-y-auto px-2 py-4" aria-label="Workspace sections">
+        <nav className="flex-1 overflow-y-auto px-2 py-2" aria-label="Workspace sections">
           <ul className={clsx("flex flex-col gap-1", collapsed ? "items-center" : undefined)} role="list">
-            {items.map((item) => (
+            {navItems.map((item) => (
               <li key={item.id} className={collapsed ? "w-full" : undefined}>
                 <NavLink
                   to={item.href}
                   end
+                  title={collapsed ? item.label : undefined}
                   className={({ isActive }) =>
                     clsx(
-                      "flex h-11 items-center rounded-lg text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
-                      collapsed ? "w-11 justify-center" : "gap-3 px-3",
+                      "flex h-11 items-center rounded-xl border border-transparent text-sm font-medium text-slate-500 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+                      collapsed ? "w-12 justify-center" : "gap-3 px-3",
                       isActive
-                        ? "bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-200"
-                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                        ? "border-brand-200 bg-brand-50 text-brand-700 shadow-[0_8px_20px_-16px_rgba(79,70,229,0.8)]"
+                        : "hover:border-slate-200/80 hover:bg-white hover:text-slate-900",
                     )
                   }
                 >

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import clsx from "clsx";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@app/nav/history";
 
 import { ActivityBar, type ActivityBarView } from "./components/ActivityBar";
 import { BottomPanel } from "./components/BottomPanel";
@@ -14,7 +13,6 @@ import { useWorkbenchUrlState } from "./state/useWorkbenchUrlState";
 import { useUnsavedChangesGuard } from "./state/useUnsavedChangesGuard";
 import { useEditorThemePreference } from "./state/useEditorThemePreference";
 import type { EditorThemePreference } from "./state/useEditorThemePreference";
-import { getMinimizedWorkbenchStorageKey, getWorkbenchReturnPathStorageKey, type MinimizedWorkbenchState } from "./state/workbenchWindowState";
 import type { WorkbenchConsoleLine, WorkbenchDataSeed, WorkbenchValidationState } from "./types";
 import { clamp, trackPointerDrag } from "./utils/drag";
 import { createWorkbenchTreeFromListing } from "./utils/tree";
@@ -74,11 +72,19 @@ interface WorkbenchProps {
   readonly configId: string;
   readonly configName: string;
   readonly seed?: WorkbenchDataSeed;
+  readonly onCloseWorkbench: () => void;
+  readonly onMinimizeWorkbench: () => void;
 }
 
-export function Workbench({ workspaceId, configId, configName, seed }: WorkbenchProps) {
+export function Workbench({
+  workspaceId,
+  configId,
+  configName,
+  seed,
+  onCloseWorkbench,
+  onMinimizeWorkbench,
+}: WorkbenchProps) {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const {
     fileId,
     pane,
@@ -221,33 +227,13 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
   const [activityView, setActivityView] = useState<ActivityBarView>("explorer");
   const [settingsMenu, setSettingsMenu] = useState<{ x: number; y: number } | null>(null);
   const [windowMaximized, setWindowMaximized] = useState(false);
-  const minimizedStorageKey = useMemo(() => getMinimizedWorkbenchStorageKey(workspaceId), [workspaceId]);
-  const minimizedStorage = useMemo(() => createScopedStorage(minimizedStorageKey), [minimizedStorageKey]);
-  const returnPathStorageKey = useMemo(() => getWorkbenchReturnPathStorageKey(workspaceId), [workspaceId]);
-  const returnPathStorage = useMemo(() => createScopedStorage(returnPathStorageKey), [returnPathStorageKey]);
-  const unmountDisposition = useRef<"idle" | "minimize" | "close">("idle");
-  useEffect(() => {
-    minimizedStorage.clear();
-  }, [minimizedStorage]);
-  useEffect(() => {
-    return () => {
-      if (unmountDisposition.current === "idle") {
-        minimizedStorage.set<MinimizedWorkbenchState>({ configId, configName });
-      }
-    };
-  }, [configId, configName, minimizedStorage]);
   const handleCloseWorkbench = useCallback(() => {
-    unmountDisposition.current = "close";
-    minimizedStorage.clear();
-    navigate(`/workspaces/${workspaceId}/config-builder`);
-  }, [minimizedStorage, navigate, workspaceId]);
+    onCloseWorkbench();
+  }, [onCloseWorkbench]);
   const handleMinimizeWorkbench = useCallback(() => {
-    unmountDisposition.current = "minimize";
-    minimizedStorage.set<MinimizedWorkbenchState>({ configId, configName });
     setWindowMaximized(false);
-    const target = returnPathStorage.get<string>() ?? `/workspaces/${workspaceId}/config-builder`;
-    navigate(target);
-  }, [configId, configName, minimizedStorage, navigate, returnPathStorage, workspaceId]);
+    onMinimizeWorkbench();
+  }, [onMinimizeWorkbench]);
 
   const showExplorerPane = !explorer.collapsed;
 

@@ -46,18 +46,11 @@ function WorkspaceContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const shortcutHint = useShortcutHint();
   const workspacesQuery = useWorkspacesQuery();
 
   const workspaces = workspacesQuery.data?.items ?? [];
   const identifier = extractWorkspaceIdentifier(location.pathname);
   const workspace = useMemo(() => findWorkspace(workspaces, identifier), [workspaces, identifier]);
-  const workspaceNavItems = useMemo(
-    () => (workspace ? getWorkspacePrimaryNavigation(workspace) : []),
-    [workspace],
-  );
-  const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState("");
-  const workspaceSearchNormalized = workspaceSearchQuery.trim().toLowerCase();
 
   useEffect(() => {
     if (workspacesQuery.data) {
@@ -101,12 +94,6 @@ function WorkspaceContent() {
     }
   }, [workspace]);
 
-  useEffect(() => {
-    if (!workspace?.id) {
-      return;
-    }
-    setWorkspaceSearchQuery("");
-  }, [workspace?.id]);
 
   if (workspacesQuery.isLoading) {
     return (
@@ -157,6 +144,13 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
   const safeMode = useSafeModeStatus();
   const safeModeEnabled = safeMode.data?.enabled ?? false;
   const safeModeDetail = safeMode.data?.detail ?? DEFAULT_SAFE_MODE_MESSAGE;
+  const shortcutHint = useShortcutHint();
+  const workspaceNavItems = useMemo(
+    () => getWorkspacePrimaryNavigation(workspace),
+    [workspace],
+  );
+  const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState("");
+  const workspaceSearchNormalized = workspaceSearchQuery.trim().toLowerCase();
 
   const navStorage = useMemo(
     () => createScopedStorage(`ade.ui.workspace.${workspace.id}.navCollapsed`),
@@ -176,7 +170,23 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
     navStorage.set(isNavCollapsed);
   }, [isNavCollapsed, navStorage]);
 
-  const topBarLeading = (
+  useEffect(() => {
+    setWorkspaceSearchQuery("");
+  }, [workspace.id]);
+
+  const handleWorkspaceSearchSubmit = useCallback(() => {
+    if (!workspaceSearchNormalized) {
+      return;
+    }
+    const match =
+      workspaceNavItems.find((item) => item.label.toLowerCase().includes(workspaceSearchNormalized)) ??
+      workspaceNavItems.find((item) => item.id.toLowerCase().includes(workspaceSearchNormalized));
+    if (match) {
+      navigate(match.href);
+    }
+  }, [workspaceSearchNormalized, workspaceNavItems, navigate]);
+
+  const topBarBrand = (
     <button
       type="button"
       className="focus-ring inline-flex items-center gap-3 rounded-xl border border-transparent bg-white px-3 py-2 text-left text-sm font-semibold text-slate-900 shadow-sm transition hover:border-slate-200"
@@ -200,10 +210,18 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
       <ProfileDropdown displayName={displayName} email={email} />
     </div>
   );
+  const workspaceSearch = {
+    value: workspaceSearchQuery,
+    onChange: setWorkspaceSearchQuery,
+    onSubmit: handleWorkspaceSearchSubmit,
+    placeholder: `Search ${workspace.name} or jump to a section`,
+    shortcutHint,
+  };
 
   const primaryNav = (
     <WorkspaceNav
       workspace={workspace}
+      items={workspaceNavItems}
       collapsed={isNavCollapsed}
       onToggleCollapse={() => setIsNavCollapsed((current) => !current)}
     />
@@ -227,7 +245,7 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
   return (
     <WorkbenchWindowProvider workspaceId={workspace.id}>
       <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
-        <GlobalTopBar leading={topBarLeading} trailing={topBarTrailing} />
+        <GlobalTopBar brand={topBarBrand} trailing={topBarTrailing} search={workspaceSearch} />
         <div className="relative flex flex-1 overflow-hidden" key={`section-${section.key}`}>
           {primaryNav}
           <main

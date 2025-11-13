@@ -75,7 +75,14 @@ const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
 
 export const defaultWorkspaceSection = workspaceSections[0];
 
-export function getWorkspacePrimaryNavigation(workspace: WorkspaceProfile) {
+export interface WorkspaceNavigationItem {
+  readonly id: WorkspaceSectionId;
+  readonly label: string;
+  readonly href: string;
+  readonly icon: ComponentType<SVGProps<SVGSVGElement>>;
+}
+
+export function getWorkspacePrimaryNavigation(workspace: WorkspaceProfile): WorkspaceNavigationItem[] {
   return workspaceSections.map((section) => ({
     id: section.id,
     label: section.label,
