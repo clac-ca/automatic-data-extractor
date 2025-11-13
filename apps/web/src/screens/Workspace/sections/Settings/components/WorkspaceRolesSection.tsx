@@ -10,7 +10,7 @@ import {
   usePermissionsQuery,
   useUpdateWorkspaceRoleMutation,
   useWorkspaceRolesQuery,
-} from "./useWorkspaceRoles";
+} from "../hooks/useWorkspaceRoles";
 import type { RoleDefinition, PermissionDefinition, RoleCreatePayload, RoleUpdatePayload } from "@screens/Workspace/api/workspaces-api";
 import { Alert } from "@ui/Alert";
 import { Button } from "@ui/Button";

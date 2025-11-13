@@ -301,7 +301,7 @@ export function resolveWorkspaceSection(
       if (third === "editor") {
         return {
           kind: "content",
-          key: `config-builder:${second}:editor${suffix}`,
+          key: `config-builder:${second}:editor`,
           element: <ConfigEditorWorkbenchRouteWithParams configId={decodeURIComponent(second)} />,
         };
       }

@@ -797,7 +797,7 @@ function DocumentsToolbar({
               aria-label="Clear search"
             >
               ×
-            </>
+            </button>
           ) : null}
         </div>
 
@@ -842,7 +842,7 @@ function DocumentsToolbar({
             title="Reset filters"
           >
             Reset
-          </>
+          </button>
           <span
             className={clsx(
               "inline-flex items-center justify-end gap-1 text-xs text-slate-500",
@@ -1058,7 +1058,7 @@ function DocumentActionsMenu({
         disabled={disabled || downloading}
       >
         {downloading ? "Downloading…" : "Download"}
-      </>
+      </button>
 
       <button
         type="button"
@@ -1067,7 +1067,7 @@ function DocumentActionsMenu({
         disabled={disabled}
       >
         Delete
-      </>
+      </button>
     </div>
   );
 }

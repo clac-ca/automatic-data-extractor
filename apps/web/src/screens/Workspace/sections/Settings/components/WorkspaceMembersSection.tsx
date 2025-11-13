@@ -8,8 +8,8 @@ import {
   useRemoveWorkspaceMemberMutation,
   useUpdateWorkspaceMemberRolesMutation,
   useWorkspaceMembersQuery,
-} from "./useWorkspaceMembers";
-import { useWorkspaceRolesQuery } from "./useWorkspaceRoles";
+} from "../hooks/useWorkspaceMembers";
+import { useWorkspaceRolesQuery } from "../hooks/useWorkspaceRoles";
 import type { WorkspaceMember, RoleDefinition } from "@screens/Workspace/api/workspaces-api";
 import type { UserSummary } from "@shared/users/api";
 import { Alert } from "@ui/Alert";
