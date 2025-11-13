@@ -1,3 +1,5 @@
+// /apps/web/src/ui/CodeEditor/registerAdeScriptHelpers.ts
+
 import type * as Monaco from "monaco-editor";
 
 import type { AdeFunctionSpec } from "./adeScriptApi";
@@ -33,15 +35,15 @@ export function registerAdeScriptHelpers(
 export function disposeAdeScriptHelpers(languageId = "python"): void {
   const lang = languageId || "python";
   const registration = registrations.get(lang);
-  if (!registration) {
-    return;
-  }
+  if (!registration) return;
   registration.refCount -= 1;
   if (registration.refCount <= 0) {
     registration.disposables.forEach((disposable) => disposable.dispose());
     registrations.delete(lang);
   }
 }
+
+/* ---------- Hover ---------- */
 
 function registerHoverProvider(
   monaco: typeof import("monaco-editor"),
@@ -50,18 +52,21 @@ function registerHoverProvider(
   return monaco.languages.registerHoverProvider(languageId, {
     provideHover(model, position) {
       const filePath = getModelPath(model);
-      if (!isAdeConfigFile(filePath)) {
-        return null;
-      }
+      if (!isAdeConfigFile(filePath)) return null;
+
       const word = model.getWordAtPosition(position);
-      if (!word) {
-        return null;
-      }
+      if (!word) return null;
+
       const spec = getHoverSpec(word.word, filePath);
-      if (!spec) {
-        return null;
-      }
-      const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
+      if (!spec) return null;
+
+      const range = new monaco.Range(
+        position.lineNumber,
+        word.startColumn,
+        position.lineNumber,
+        word.endColumn,
+      );
+
       return {
         range,
         contents: [
@@ -73,39 +78,61 @@ function registerHoverProvider(
   });
 }
 
+/* ---------- Completion: minimal, file-scoped, always on in ADE files ---------- */
+
 function registerCompletionProvider(
   monaco: typeof import("monaco-editor"),
   languageId: string,
 ): Monaco.IDisposable {
+  const EMPTY_COMPLETIONS = { suggestions: [] as Monaco.languages.CompletionItem[] };
+
   return monaco.languages.registerCompletionItemProvider(languageId, {
-    triggerCharacters: [" ", "t", "_"],
+    // Helpful but not critical; Ctrl+Space always works
+    triggerCharacters: [" ", "d", "t", "_"],
+
     provideCompletionItems(model, position) {
       const filePath = getModelPath(model);
       if (!isAdeConfigFile(filePath)) {
         return EMPTY_COMPLETIONS;
       }
+
       const specs = getSnippetSpecs(filePath);
-      logCompletionDebug("ADE specs for file", {
-        filePath,
-        specs: specs.map((spec) => spec.name),
-      });
-      if (specs.length === 0) {
+      if (!specs || specs.length === 0) {
         return EMPTY_COMPLETIONS;
       }
-      const context = getCompletionContext(monaco, model, position);
-      logCompletionDebug("ADE completion context", context);
-      if (!context) {
-        return EMPTY_COMPLETIONS;
+
+      const lineNumber = position.lineNumber;
+      const word = model.getWordUntilPosition(position);
+
+      // If there's a current word, replace just that; otherwise replace from the caret.
+      const range =
+        word && word.word
+          ? new monaco.Range(lineNumber, word.startColumn, lineNumber, word.endColumn)
+          : new monaco.Range(lineNumber, position.column, lineNumber, position.column);
+
+      const suggestions = specs.map((spec, index) =>
+        createSnippetSuggestion(monaco, spec, range, index),
+      );
+
+      if (import.meta.env?.DEV) {
+        // eslint-disable-next-line no-console
+        console.debug("[ade-completions] ADE specs for file", {
+          filePath,
+          specs: specs.map((s) => s.name),
+        });
+        // eslint-disable-next-line no-console
+        console.debug(
+          "[ade-completions] ADE suggestions",
+          suggestions.map((s) => s.label),
+        );
       }
-      const filteredSpecs = specs.filter((spec) => matchesTrigger(spec, context));
-      const suggestions = filteredSpecs.map((spec, index) => createSnippetSuggestion(monaco, spec, context, index));
-      logCompletionDebug("ADE suggestions", suggestions.map((s) => s.label));
-      return {
-        suggestions,
-      };
+
+      return { suggestions };
     },
   });
 }
+
+/* ---------- Signature help ---------- */
 
 function registerSignatureProvider(
   monaco: typeof import("monaco-editor"),
@@ -119,18 +146,22 @@ function registerSignatureProvider(
       if (!isAdeConfigFile(filePath)) {
         return null;
       }
+
       const lineContent = model.getLineContent(position.lineNumber);
       const prefix = lineContent.slice(0, position.column);
       const match = /([A-Za-z_][\w]*)\s*\($/.exec(prefix);
       if (!match) {
         return null;
       }
+
       const spec = getHoverSpec(match[1], filePath);
       if (!spec) {
         return null;
       }
+
       const activeParameter = computeActiveParameter(prefix);
       const parameters = spec.parameters.map((param) => ({ label: param }));
+
       return {
         value: {
           signatures: [
@@ -141,7 +172,10 @@ function registerSignatureProvider(
             },
           ],
           activeSignature: 0,
-          activeParameter: Math.min(Math.max(activeParameter, 0), Math.max(parameters.length - 1, 0)),
+          activeParameter: Math.min(
+            Math.max(activeParameter, 0),
+            Math.max(parameters.length - 1, 0),
+          ),
         },
         dispose: () => {
           // nothing to clean up for one-off signature hints
@@ -151,85 +185,40 @@ function registerSignatureProvider(
   });
 }
 
+/* ---------- Shared helpers ---------- */
+
 function getModelPath(model: Monaco.editor.ITextModel | undefined): string | undefined {
-  if (!model) {
-    return undefined;
-  }
+  if (!model) return undefined;
   const uri = model.uri;
-  if (!uri) {
-    return undefined;
-  }
+  if (!uri) return undefined;
+
   const rawPath = uri.path || uri.toString();
-  if (!rawPath) {
-    return undefined;
+  if (!rawPath) return undefined;
+
+  const normalized = rawPath.startsWith("/") ? rawPath.slice(1) : rawPath;
+
+  if (import.meta.env?.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug("[ade] getModelPath", { rawPath, normalized });
   }
-  return rawPath.startsWith("/") ? rawPath.slice(1) : rawPath;
+
+  return normalized;
 }
 
 function computeActiveParameter(prefix: string): number {
   const parenIndex = prefix.lastIndexOf("(");
-  if (parenIndex === -1) {
-    return 0;
-  }
+  if (parenIndex === -1) return 0;
   const argsSoFar = prefix.slice(parenIndex + 1);
-  if (!argsSoFar.trim()) {
-    return 0;
-  }
+  if (!argsSoFar.trim()) return 0;
   return argsSoFar.split(",").length - 1;
 }
 
-type SnippetContext = {
-  range: Monaco.Range;
-  typedName: string;
-  typedNameLower: string;
-};
-
-const EMPTY_COMPLETIONS = { suggestions: [] as Monaco.languages.CompletionItem[] };
-
-function getCompletionContext(
-  monaco: typeof import("monaco-editor"),
-  model: Monaco.editor.ITextModel,
-  position: Monaco.Position,
-): SnippetContext | null {
-  const lineText = model.getLineContent(position.lineNumber);
-  const beforeCursor = lineText.slice(0, Math.max(0, position.column - 1));
-  const trimmedBeforeCursor = beforeCursor.replace(/\s+$/, "");
-  const match = /^(\s*)def(?:\s+([A-Za-z_][\w]*))?/.exec(trimmedBeforeCursor);
-  if (!match) {
-    return null;
-  }
-  const indent = match[1] || "";
-  const typedName = (match[2] || "").trim();
-  const startColumn = indent.length + 1;
-  const range = new monaco.Range(position.lineNumber, startColumn, position.lineNumber, position.column);
-  return {
-    range,
-    typedName,
-    typedNameLower: typedName.toLowerCase(),
-  };
-}
-
-function matchesTrigger(spec: AdeFunctionSpec, context: SnippetContext): boolean {
-  if (!context.typedName) {
-    return true;
-  }
-  const triggers = getSnippetTriggers(spec);
-  return triggers.some((trigger) => {
-    return trigger.startsWith(context.typedNameLower) || context.typedNameLower.startsWith(trigger);
-  });
-}
-
-function getSnippetTriggers(spec: AdeFunctionSpec): string[] {
-  if (spec.name === "detect_*") {
-    return ["detect"];
-  }
-  return [spec.name.toLowerCase()];
-}
+/* ---------- Snippet suggestion creation ---------- */
 
 function createSnippetSuggestion(
   monaco: typeof import("monaco-editor"),
   spec: AdeFunctionSpec,
-  context: SnippetContext,
+  range: Monaco.Range,
   index: number,
 ): Monaco.languages.CompletionItem {
   return {
@@ -239,18 +228,7 @@ function createSnippetSuggestion(
     insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
     documentation: { value: spec.doc },
     detail: spec.signature,
-    range: context.range,
+    range,
     sortText: `0${index}`,
   };
-}
-
-const SHOULD_LOG_COMPLETIONS =
-  typeof import.meta !== "undefined" && !!import.meta.env && Boolean(import.meta.env.DEV);
-
-function logCompletionDebug(label: string, payload: unknown): void {
-  if (!SHOULD_LOG_COMPLETIONS) {
-    return;
-  }
-  // eslint-disable-next-line no-console -- intentional dev-only diagnostics
-  console.debug(`[ade-completions] ${label}`, payload);
 }
