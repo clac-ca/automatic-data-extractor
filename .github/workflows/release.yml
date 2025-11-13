@@ -11,6 +11,11 @@ concurrency:
 
 permissions:
   contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: clac-ca/automatic-data-extractor
 
 jobs:
   changelog-release:
@@ -44,9 +49,14 @@ jobs:
               r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
           )
 
+          TARGET_FILE = "apps/api/pyproject.toml"
+
           def version_for_ref(ref: str) -> str:
               try:
-                  output = subprocess.check_output(["git", "show", f"{ref}:pyproject.toml"], text=True)
+                  output = subprocess.check_output(
+                      ["git", "show", f"{ref}:{TARGET_FILE}"],
+                      text=True,
+                  )
               except subprocess.CalledProcessError:
                   return ""
 
@@ -129,3 +139,31 @@ jobs:
             echo "## Release" >> "$GITHUB_STEP_SUMMARY";
             echo "- Tag: ${{ steps.versions.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY";
           }
+
+      - name: Set up QEMU
+        if: steps.versions.outputs.is_semver == 'true' && steps.versions.outputs.tag_exists == 'false'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.versions.outputs.is_semver == 'true' && steps.versions.outputs.tag_exists == 'false'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.versions.outputs.is_semver == 'true' && steps.versions.outputs.tag_exists == 'false'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish release image
+        if: steps.versions.outputs.is_semver == 'true' && steps.versions.outputs.tag_exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.versions.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

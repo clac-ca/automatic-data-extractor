@@ -6,13 +6,23 @@ import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext
 import { useWorkbenchWindow } from "@screens/Workspace/context/WorkbenchWindowContext";
 import { useConfigQuery } from "@shared/configs/hooks/useConfigsQuery";
 
+import { Workbench } from "./Workbench";
+
 interface ConfigEditorWorkbenchRouteProps {
   readonly params?: { readonly configId?: string };
 }
 
 export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkbenchRouteProps = {}) {
   const { workspace } = useWorkspaceContext();
-  const { openSession, closeSession } = useWorkbenchWindow();
+  const {
+    session,
+    focusMode,
+    openSession,
+    closeSession,
+    setFocusMode,
+    dockSession,
+    shouldBypassUnsavedGuard,
+  } = useWorkbenchWindow();
   const configId = params?.configId;
   const configQuery = useConfigQuery({ workspaceId: workspace.id, configId });
 
@@ -34,13 +44,59 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
       <PageState
         variant="error"
         title="Select a configuration"
-        description="Choose a configuration from the list to open the new workbench."
+        description="Choose a configuration from the list to open the workbench."
       />
     );
   }
 
+  const activeSession = session && session.configId === configId ? session : null;
+  const isDocked = Boolean(activeSession && focusMode === "docked");
+  const showWorkbenchInline = Boolean(activeSession && focusMode === "balanced");
+  const showImmersiveNotice = Boolean(activeSession && focusMode === "immersive");
+
+  if (showWorkbenchInline && activeSession) {
+    return (
+      <div className="flex h-full min-h-0 flex-1 flex-col">
+        <Workbench
+          workspaceId={workspace.id}
+          configId={activeSession.configId}
+          configName={activeSession.configName}
+          focusMode={focusMode}
+          onChangeFocusMode={setFocusMode}
+          onDockWorkbench={dockSession}
+          onCloseWorkbench={closeSession}
+          shouldBypassUnsavedGuard={shouldBypassUnsavedGuard}
+        />
+      </div>
+    );
+  }
+
+  if (showImmersiveNotice) {
+    return (
+      <div className="flex h-full min-h-0 flex-1 items-center justify-center px-6 py-8">
+        <PageState
+          variant="info"
+          title="Immersive focus active"
+          description="Exit immersive mode from the workbench focus menu to return here."
+        />
+      </div>
+    );
+  }
+
+  if (isDocked) {
+    return (
+      <div className="flex h-full min-h-0 flex-1 items-center justify-center px-6 py-8">
+        <PageState
+          variant="info"
+          title="Workbench docked"
+          description="Use the dock at the bottom of the screen to resume editing."
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col items-center justify-center px-4 py-6">
+    <div className="flex h-full min-h-0 flex-1 items-center justify-center px-6 py-8">
       <PageState
         variant="loading"
         title="Launching config workbench"

@@ -1,5 +1,8 @@
 # ADE — Automatic Data Extractor
 
+[![CI](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci.yml/badge.svg)](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci.yml)
+[![Release](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/release.yml/badge.svg)](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/release.yml)
+
 *Turn messy spreadsheets into consistent, auditable workbooks — automatically.*
 
 ADE is a lightweight, configurable engine for normalizing Excel/CSV files at scale. It finds tables, recognizes columns, cleans and validates values, and produces a standardized workbook **with a full audit trail**. Teams use ADE to replace one‑off spreadsheet hacks with a **repeatable, deterministic** process that anyone can run.
@@ -70,7 +73,7 @@ cd automatic-data-extractor
 cp .env.example .env
 
 # Start the stack (API + built SPA)
-docker compose -f infra/compose.yaml up --build
+docker compose up --build
 ```
 
 Now:
@@ -82,6 +85,21 @@ Now:
 5. Download `output.xlsx` and inspect the per‑job audit at `logs/artifact.json`.
 
 > By design, each built config has its own frozen virtualenv to ensure reproducible runs.
+
+#### Use the published container image
+
+Every successful push to `main` builds and publishes `ghcr.io/clac-ca/automatic-data-extractor:latest`, and tagged releases add a semantic version tag. To run the prebuilt image directly:
+
+```bash
+docker pull ghcr.io/clac-ca/automatic-data-extractor:latest
+mkdir -p data
+docker run -d \
+  --name ade \
+  -p 8000:8000 \
+  -v "$(pwd)/data:/app/data" \
+  --env-file .env \
+  ghcr.io/clac-ca/automatic-data-extractor:latest
+```
 
 ---
 
@@ -186,6 +204,19 @@ ADE is configured via environment variables; sensible defaults work for local us
 * **Job Orchestration** — queues, workers, resource limits, atomic writes: `docs/02-job-orchestration.md`
 * **Artifact Reference** — schema & examples for the per‑job audit trail: `docs/14-job_artifact_json.md`
 * **Glossary** — common terms and system vocabulary: `docs/12-glossary.md`
+
+---
+
+## CI & releases
+
+* `.github/workflows/ci.yml` installs dependencies via `npm run setup`, executes the full `npm run ci` pipeline (OpenAPI generation, lint, test, build), and builds the Docker image. Commits that land on `main` publish `ghcr.io/clac-ca/automatic-data-extractor:latest` (plus a commit‑sha tag) so you always have a tested container.
+* `.github/workflows/release.yml` reads the authoritative version from `apps/api/pyproject.toml`, extracts the matching changelog entry, opens a GitHub release, and republishes the image with both `latest` and semantic version tags (for example `ghcr.io/clac-ca/automatic-data-extractor:0.1.0`).
+
+Pull a specific artifact at any time with:
+
+```bash
+docker pull ghcr.io/clac-ca/automatic-data-extractor:<tag>
+```
 
 ---
 

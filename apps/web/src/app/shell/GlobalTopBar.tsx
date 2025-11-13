@@ -43,6 +43,7 @@ export function GlobalTopBar({
   secondaryContent,
 }: GlobalTopBarProps) {
   const generatedSearchId = useId();
+  const suggestionsListId = useId();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isSearchControlled = search?.value !== undefined;
   const controlledSearchValue = search?.value;
@@ -199,47 +200,54 @@ export function GlobalTopBar({
                       onKeyDown={handleSearchKeyDown}
                       placeholder={searchPlaceholder}
                       className="w-full border-0 bg-transparent text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none"
+                      aria-expanded={showSuggestions}
+                      aria-controls={showSuggestions ? suggestionsListId : undefined}
                     />
                   </div>
                   <span className="hidden items-center gap-1 rounded-full border border-slate-200/80 bg-white/80 px-2 py-1 text-xs font-semibold text-slate-500 shadow-inner shadow-white/60 md:inline-flex">
                     {searchShortcutHint}
                   </span>
                 </form>
-                {showSuggestions ? (
-                  <div className="border-t border-slate-200/70 bg-white/95">
-                    <ul role="listbox" aria-label="Search suggestions" className="divide-y divide-slate-100/80">
-                      {suggestions.map((suggestion, index) => (
-                        <li key={suggestion.id}>
-                          <button
-                            type="button"
-                            role="option"
-                            aria-selected={index === highlightedSuggestion}
-                            onMouseEnter={() => setHighlightedSuggestion(index)}
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={() => handleSuggestionSelection(suggestion)}
-                            className={clsx(
-                              "flex w-full items-start gap-3 px-5 py-3 text-left transition",
-                              index === highlightedSuggestion ? "bg-brand-50/60" : "hover:bg-slate-50/80",
-                            )}
-                          >
-                            {suggestion.icon ? (
-                              <span className="mt-0.5 text-slate-400">{suggestion.icon}</span>
-                            ) : (
-                              <span className="mt-1 h-2.5 w-2.5 rounded-full bg-slate-200" aria-hidden />
-                            )}
-                            <span className="flex min-w-0 flex-col">
-                              <span className="text-sm font-semibold text-slate-900">{suggestion.label}</span>
-                              {suggestion.description ? (
-                                <span className="text-xs text-slate-500">{suggestion.description}</span>
-                              ) : null}
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
               </div>
+              {showSuggestions ? (
+                <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/95 shadow-[0_35px_80px_-40px_rgba(79,70,229,0.55)] ring-1 ring-inset ring-white/80">
+                  <ul
+                    id={suggestionsListId}
+                    role="listbox"
+                    aria-label="Search suggestions"
+                    className="divide-y divide-slate-100/80"
+                  >
+                    {suggestions.map((suggestion, index) => (
+                      <li key={suggestion.id}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={index === highlightedSuggestion}
+                          onMouseEnter={() => setHighlightedSuggestion(index)}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => handleSuggestionSelection(suggestion)}
+                          className={clsx(
+                            "flex w-full items-start gap-3 px-5 py-3 text-left transition",
+                            index === highlightedSuggestion ? "bg-brand-50/60" : "hover:bg-slate-50/80",
+                          )}
+                        >
+                          {suggestion.icon ? (
+                            <span className="mt-0.5 text-slate-400">{suggestion.icon}</span>
+                          ) : (
+                            <span className="mt-1 h-2.5 w-2.5 rounded-full bg-slate-200" aria-hidden />
+                          )}
+                          <span className="flex min-w-0 flex-col">
+                            <span className="text-sm font-semibold text-slate-900">{suggestion.label}</span>
+                            {suggestion.description ? (
+                              <span className="text-xs text-slate-500">{suggestion.description}</span>
+                            ) : null}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           ) : null}
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none">

@@ -32,11 +32,11 @@ if (hasFrontend) {
   await run("npm", ["run", "build"], { cwd: join("apps", "web") });
   if (hasBackend) {
     const copied = await copyIfExists(
-      join("apps", "web", "build", "client"),
+      join("apps", "web", "dist"),
       join("apps", "api", "app", "web", "static"),
     );
     if (copied) {
-      console.log("📦 copied apps/web/build/client → apps/api/app/web/static");
+      console.log("📦 copied apps/web/dist → apps/api/app/web/static");
     }
   }
 }

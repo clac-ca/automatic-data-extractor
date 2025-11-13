@@ -16,7 +16,7 @@ import {
   type SetSearchParamsOptions,
 } from "@app/nav/urlState";
 
-type WorkbenchWindowMode = "maximized" | "minimized";
+type WorkbenchFocusMode = "balanced" | "immersive" | "docked";
 
 interface WorkbenchSessionPayload {
   readonly workspaceId: string;
@@ -33,11 +33,13 @@ interface WorkbenchSessionState extends WorkbenchSessionPayload {
 
 interface WorkbenchWindowContextValue {
   readonly session: WorkbenchSessionState | null;
-  readonly mode: WorkbenchWindowMode;
+  readonly focusMode: WorkbenchFocusMode;
   openSession: (payload: WorkbenchSessionPayload) => void;
   closeSession: () => void;
-  minimizeSession: () => void;
+  setFocusMode: (mode: Exclude<WorkbenchFocusMode, "docked">) => void;
+  dockSession: () => void;
   restoreSession: () => void;
+  shouldBypassUnsavedGuard: () => boolean;
 }
 
 const WorkbenchWindowContext = createContext<WorkbenchWindowContextValue | null>(null);
@@ -59,9 +61,9 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
   const navigate = useNavigate();
   const location = useLocation();
   const [session, setSession] = useState<WorkbenchSessionState | null>(null);
-  const [mode, setMode] = useState<WorkbenchWindowMode>("maximized");
+  const [focusMode, setFocusMode] = useState<WorkbenchFocusMode>("balanced");
   const instanceCounter = useRef(0);
-  const navigationIntent = useRef<"minimize" | "close" | null>(null);
+  const navigationIntent = useRef<"dock" | "close" | null>(null);
   const guardBypassRef = useRef(false);
 
   const returnPathStorage = useMemo(
@@ -97,27 +99,29 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
     const intent = navigationIntent.current;
 
     if (onEditorRoute && editorRouteConfigId === session.configId) {
-      if (intent !== "minimize") {
-        setMode("maximized");
+      if (focusMode === "docked") {
+        setFocusMode("balanced");
       }
-      if (intent !== "minimize") {
+      if (intent !== "dock") {
         navigationIntent.current = null;
       }
       return;
     }
 
-    if (!onEditorRoute) {
-      if (intent === "minimize") {
-        navigationIntent.current = null;
-        return;
-      }
-      if (mode === "maximized" && intent === null) {
-        setSession(null);
-        return;
-      }
+    if (intent === "dock") {
       navigationIntent.current = null;
+      return;
     }
-  }, [session, onEditorRoute, editorRouteConfigId, mode]);
+
+    if (intent === "close") {
+      navigationIntent.current = null;
+      return;
+    }
+
+    setSession(null);
+    setFocusMode("balanced");
+    navigationIntent.current = null;
+  }, [session, onEditorRoute, editorRouteConfigId, focusMode]);
 
   useEffect(() => {
     if (!session) {
@@ -181,7 +185,7 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
           instanceId: `${payload.workspaceId}:${payload.configId}:${instanceCounter.current}`,
         };
       });
-      setMode("maximized");
+      setFocusMode("balanced");
     },
     [location.search],
   );
@@ -191,18 +195,18 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
       return;
     }
     setSession(null);
-    setMode("maximized");
+    setFocusMode("balanced");
     navigationIntent.current = "close";
     navigate(ensureReturnPath());
   }, [session, navigate, ensureReturnPath]);
 
-  const minimizeSession = useCallback(() => {
+  const dockSession = useCallback(() => {
     if (!session) {
       return;
     }
     guardBypassRef.current = true;
-    setMode("minimized");
-    navigationIntent.current = "minimize";
+    setFocusMode("docked");
+    navigationIntent.current = "dock";
     navigate(ensureReturnPath());
   }, [session, navigate, ensureReturnPath]);
 
@@ -210,23 +214,50 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
     if (!session) {
       return;
     }
-    setMode("maximized");
+    setFocusMode("balanced");
     const target = buildEditorTarget(session.workspaceId, session.configId, session.editorSearch);
     if (`${location.pathname}${location.search}` !== target) {
       navigate(target);
     }
   }, [session, navigate, location.pathname, location.search]);
 
+  const changeFocusMode = useCallback(
+    (mode: Exclude<WorkbenchFocusMode, "docked">) => {
+      if (!session) {
+        return;
+      }
+      setFocusMode(mode);
+    },
+    [session],
+  );
+
+  const consumeGuardBypass = useCallback(() => {
+    const bypass = guardBypassRef.current;
+    guardBypassRef.current = false;
+    return bypass;
+  }, []);
+
   const contextValue = useMemo<WorkbenchWindowContextValue>(
     () => ({
       session,
-      mode,
+      focusMode,
       openSession,
       closeSession,
-      minimizeSession,
+      setFocusMode: changeFocusMode,
+      dockSession,
       restoreSession,
+      shouldBypassUnsavedGuard: consumeGuardBypass,
     }),
-    [session, mode, openSession, closeSession, minimizeSession, restoreSession],
+    [
+      session,
+      focusMode,
+      openSession,
+      closeSession,
+      changeFocusMode,
+      dockSession,
+      restoreSession,
+      consumeGuardBypass,
+    ],
   );
 
   const shouldOverrideSearch =
@@ -242,25 +273,20 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
     [shouldOverrideSearch, session, setOverrideSearchParams],
   );
 
-  const consumeGuardBypass = useCallback(() => {
-    const bypass = guardBypassRef.current;
-    guardBypassRef.current = false;
-    return bypass;
-  }, []);
-
   return (
     <WorkbenchWindowContext.Provider value={contextValue}>
       {children}
       <SearchParamsOverrideProvider value={searchParamsOverride}>
         <WorkbenchWindowLayer
           session={session}
-          mode={mode}
+          focusMode={focusMode}
           onClose={closeSession}
-          onMinimize={minimizeSession}
+          onChangeFocusMode={changeFocusMode}
+          onDock={dockSession}
           shouldBypassUnsavedGuard={consumeGuardBypass}
         />
       </SearchParamsOverrideProvider>
-      {session && mode === "minimized" ? (
+      {session && focusMode === "docked" ? (
         <WorkbenchDock
           configName={session.configName}
           onRestore={restoreSession}
@@ -273,37 +299,34 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
 
 function WorkbenchWindowLayer({
   session,
-  mode,
+  focusMode,
   onClose,
-  onMinimize,
+  onChangeFocusMode,
+  onDock,
   shouldBypassUnsavedGuard,
 }: {
   readonly session: WorkbenchSessionState | null;
-  readonly mode: WorkbenchWindowMode;
+  readonly focusMode: WorkbenchFocusMode;
   readonly onClose: () => void;
-  readonly onMinimize: () => void;
+  readonly onChangeFocusMode: (mode: "balanced" | "immersive") => void;
+  readonly onDock: () => void;
   readonly shouldBypassUnsavedGuard: () => boolean;
 }) {
-  if (!session) {
+  if (!session || focusMode !== "immersive") {
     return null;
   }
-  const hidden = mode === "minimized";
   return (
-    <div
-      className={clsx(
-        "fixed inset-0 z-40 flex flex-col bg-slate-50 transition-[opacity,transform] duration-200 ease-out",
-        hidden ? "pointer-events-none opacity-0 translate-y-4" : "pointer-events-auto opacity-100 translate-y-0",
-      )}
-      aria-hidden={hidden}
-    >
+    <div className="fixed inset-0 z-40 flex flex-col bg-slate-50">
       <Workbench
         key={session.instanceId}
         workspaceId={session.workspaceId}
         configId={session.configId}
         configName={session.configName}
         seed={session.seed}
+        focusMode="immersive"
         onCloseWorkbench={onClose}
-        onMinimizeWorkbench={onMinimize}
+        onChangeFocusMode={onChangeFocusMode}
+        onDockWorkbench={onDock}
         shouldBypassUnsavedGuard={shouldBypassUnsavedGuard}
       />
     </div>
