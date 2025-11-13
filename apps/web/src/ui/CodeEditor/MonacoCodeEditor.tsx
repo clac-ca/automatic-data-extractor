@@ -154,7 +154,7 @@ const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function 
   }, []);
 
   return (
-    <div ref={containerRef} className={clsx("relative h-full w-full", className)}>
+    <div ref={containerRef} className={clsx("relative h-full w-full min-w-0 overflow-hidden", className)}>
       <Editor
         value={value}
         onChange={handleChange}

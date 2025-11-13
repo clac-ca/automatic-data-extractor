@@ -763,12 +763,12 @@ export function Workbench({
         menuAppearance === "dark" ? "bg-[#0f111a] text-white" : "bg-white text-slate-900",
       )
     : clsx(
-        "flex w-full min-h-0 flex-1 flex-col overflow-hidden",
+        "flex w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
         menuAppearance === "dark" ? "bg-[#101322] text-white" : "bg-white text-slate-900",
       );
 
   return (
-    <div className={clsx("flex h-full min-h-0 w-full flex-1 flex-col", rootSurfaceClass)}>
+    <div className={clsx("flex h-full min-h-0 w/full min-w-0 flex-1 flex-col overflow-hidden", rootSurfaceClass)}>
       {immersive ? <div className="fixed inset-0 z-40 bg-slate-900/60" /> : null}
       <div className={windowFrameClass}>
         <WorkbenchChrome
@@ -872,7 +872,7 @@ export function Workbench({
             />
           ) : (
             <div
-              className="grid min-h-0 flex-1"
+              className="grid min-h-0 min-w-0 flex-1"
               style={{
                 gridTemplateRows: `minmax(${MIN_EDITOR_HEIGHT}px, 1fr) ${OUTPUT_HANDLE_THICKNESS}px ${Math.max(
                   0,
