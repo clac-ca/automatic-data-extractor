@@ -116,6 +116,12 @@ async def read_setup_status(
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> SetupStatus:
+    if settings.auth_disabled:
+        return SetupStatus(
+            requires_setup=False,
+            completed_at=None,
+            force_sso=settings.auth_force_sso,
+        )
     service = AuthService(session=session, settings=settings)
     requires_setup, completed_at = await service.get_initial_setup_status()
     return SetupStatus(
@@ -144,6 +150,11 @@ async def complete_setup(
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> SessionEnvelope:
+    if settings.auth_disabled:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Interactive setup is disabled because ADE_AUTH_DISABLED is enabled.",
+        )
     service = AuthService(session=session, settings=settings)
     user = await service.complete_initial_setup(
         email=payload.email,

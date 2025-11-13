@@ -82,6 +82,7 @@ interface ExplorerProps {
   readonly onCloseOtherFiles: (fileId: string) => void;
   readonly onCloseTabsToRight: (fileId: string) => void;
   readonly onCloseAllFiles: () => void;
+  readonly onHide: () => void;
 }
 
 export function Explorer({
@@ -95,6 +96,7 @@ export function Explorer({
   onCloseOtherFiles,
   onCloseTabsToRight,
   onCloseAllFiles,
+  onHide,
 }: ExplorerProps) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set([tree.id]));
   const [contextMenu, setContextMenu] = useState<{
@@ -221,7 +223,7 @@ export function Explorer({
           label: "Close All",
           dividerAbove: true,
           disabled: openCount === 0,
-           icon: <MenuIconCloseAll />,
+          icon: <MenuIconCloseAll />,
           shortcut: shortcuts.closeAll,
           onSelect: () => onCloseAllFiles(),
         },
@@ -284,22 +286,34 @@ export function Explorer({
     <>
       <aside
         className="flex h-full min-h-0 flex-col border-r text-[13px]"
-        style={{ width, backgroundColor: tokens.surface, borderColor: tokens.border, color: tokens.textPrimary }}
+        style={{
+          width,
+          backgroundColor: tokens.surface,
+          borderColor: tokens.border,
+          color: tokens.textPrimary,
+        }}
         aria-label="Config files explorer"
       >
         <div
-          className="flex items-center justify-between border-b px-3 py-3"
-          style={{ borderColor: tokens.border }}
+          className="flex items-center justify-between border-b px-3 py-2"
+          style={{ borderColor: tokens.border, backgroundColor: theme === "dark" ? "#181818" : "#ececec" }}
         >
-          <h2
-            className="text-[11px] font-semibold uppercase tracking-[0.2em]"
-            style={{ color: tokens.heading }}
-          >
+          <div className="text-[11px] font-semibold uppercase tracking-[0.3em]" style={{ color: tokens.heading }}>
             Explorer
-          </h2>
-          <span className="text-[11px] uppercase tracking-wide" style={{ color: tokens.label }}>
-            Config
-          </span>
+          </div>
+          <button
+            type="button"
+            onClick={onHide}
+            aria-label="Hide explorer"
+            className={clsx(
+              "flex h-7 w-7 items-center justify-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007acc]",
+              theme === "dark"
+                ? "text-slate-300 hover:bg-white/10 hover:text-white"
+                : "text-slate-600 hover:bg-black/10 hover:text-slate-900",
+            )}
+          >
+            <HideSidebarIcon />
+          </button>
         </div>
         <nav className="flex-1 overflow-auto px-2 py-2" aria-label="Workspace files tree">
           <ul className="space-y-0.5">
@@ -525,6 +539,17 @@ function FileIcon({ className }: { readonly className?: string }) {
         strokeLinejoin="round"
       />
       <path d="M10 3v4h4" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function HideSidebarIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M3 3h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M3 13h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M3 8h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M11 5l2 3-2 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

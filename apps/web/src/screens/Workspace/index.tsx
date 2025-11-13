@@ -222,11 +222,11 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
           <div
             className={clsx(
               "mx-auto flex w-full max-w-7xl flex-col px-4 py-6",
-              fullHeightLayout && "flex-1 min-h-0 max-w-none",
+              fullHeightLayout && "flex-1 min-h-0 max-w-none px-0 py-0",
             )}
           >
             {safeModeEnabled ? (
-              <div className="mb-4">
+              <div className={clsx("mb-4", fullHeightLayout ? "px-6 pt-4" : "")}>
                 <Alert tone="warning" heading="Safe mode active">
                   {safeModeDetail}
                 </Alert>
@@ -235,7 +235,7 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
             <div
               className={clsx(
                 "rounded-2xl border border-slate-200 bg-white p-6 shadow-soft",
-                fullHeightLayout && "flex flex-1 min-h-0 flex-col",
+                fullHeightLayout && "flex flex-1 min-h-0 flex-col rounded-none border-0 bg-transparent p-0 shadow-none",
               )}
             >
               {section.element}

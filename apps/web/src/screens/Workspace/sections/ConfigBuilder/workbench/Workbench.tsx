@@ -1,21 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import clsx from "clsx";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { ActivityBar, type ActivityBarView } from "./components/ActivityBar";
 import { BottomPanel } from "./components/BottomPanel";
 import { EditorArea } from "./components/EditorArea";
 import { Explorer } from "./components/Explorer";
 import { Inspector } from "./components/Inspector";
 import { PanelResizeHandle } from "./components/PanelResizeHandle";
-import { WorkbenchHeader } from "./components/WorkbenchHeader";
 import { useWorkbenchFiles } from "./state/useWorkbenchFiles";
 import { useWorkbenchUrlState } from "./state/useWorkbenchUrlState";
 import { useUnsavedChangesGuard } from "./state/useUnsavedChangesGuard";
 import { useEditorThemePreference } from "./state/useEditorThemePreference";
+import type { EditorThemePreference } from "./state/useEditorThemePreference";
 import type { WorkbenchDataSeed, WorkbenchValidationState } from "./types";
 import { clamp, trackPointerDrag } from "./utils/drag";
 import { createWorkbenchTreeFromListing } from "./utils/tree";
 
-import { Alert } from "@ui/Alert";
+import { ContextMenu, type ContextMenuItem } from "@ui/ContextMenu";
 import { PageState } from "@ui/PageState";
 
 import { useConfigFilesQuery } from "@shared/configs/hooks/useConfigFiles";
@@ -41,6 +43,19 @@ const buildConsoleStorageKey = (workspaceId: string, configId: string) =>
   `ade.ui.workspace.${workspaceId}.config.${configId}.console`;
 const buildEditorThemeStorageKey = (workspaceId: string, configId: string) =>
   `ade.ui.workspace.${workspaceId}.config.${configId}.editor-theme`;
+
+const THEME_MENU_OPTIONS: Array<{ value: EditorThemePreference; label: string }> = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
+
+const ACTIVITY_LABELS: Record<ActivityBarView, string> = {
+  explorer: "",
+  search: "Search coming soon",
+  scm: "Source Control coming soon",
+  extensions: "Extensions coming soon",
+};
 
 interface ConsolePanelPreferences {
   readonly height: number;
@@ -124,6 +139,22 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
   }
   const editorTheme = useEditorThemePreference(buildEditorThemeStorageKey(workspaceId, configId));
   const menuAppearance = editorTheme.resolvedTheme === "vs-dark" ? "dark" : "light";
+  const validationLabel = validationState.lastRunAt ? `Last run ${formatRelative(validationState.lastRunAt)}` : undefined;
+
+  const [explorer, setExplorer] = useState({ collapsed: false, width: 280 });
+  const [inspector, setInspector] = useState({ collapsed: true, width: 300 });
+  const [outputHeight, setOutputHeight] = useState(
+    () => initialConsolePrefsRef.current?.height ?? DEFAULT_CONSOLE_HEIGHT,
+  );
+  const [hasHydratedConsoleState, setHasHydratedConsoleState] = useState(false);
+  const [centerPaneEl, setCenterPaneEl] = useState<HTMLDivElement | null>(null);
+  const [centerHeight, setCenterHeight] = useState(0);
+  const [hasMeasuredCenter, setHasMeasuredCenter] = useState(false);
+  const [consoleNotice, setConsoleNotice] = useState<string | null>(null);
+  const [activityView, setActivityView] = useState<ActivityBarView>("explorer");
+  const [settingsMenu, setSettingsMenu] = useState<{ x: number; y: number } | null>(null);
+
+  const showExplorerPane = !explorer.collapsed;
 
   const loadFile = useCallback(
     async (path: string) => {
@@ -150,17 +181,6 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
   });
 
   useUnsavedChangesGuard({ isDirty: files.isDirty });
-
-  const [explorer, setExplorer] = useState({ collapsed: false, width: 280 });
-  const [inspector, setInspector] = useState({ collapsed: true, width: 300 });
-  const [outputHeight, setOutputHeight] = useState(
-    () => initialConsolePrefsRef.current?.height ?? DEFAULT_CONSOLE_HEIGHT,
-  );
-  const [hasHydratedConsoleState, setHasHydratedConsoleState] = useState(false);
-  const [centerPaneEl, setCenterPaneEl] = useState<HTMLDivElement | null>(null);
-  const [centerHeight, setCenterHeight] = useState(0);
-  const [hasMeasuredCenter, setHasMeasuredCenter] = useState(false);
-  const [consoleNotice, setConsoleNotice] = useState<string | null>(null);
 
   const outputCollapsed = consoleState !== "open";
 
@@ -358,6 +378,21 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
   const canRunValidation =
     !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !isRunningValidation;
 
+  const handleSelectActivityView = useCallback((view: ActivityBarView) => {
+    setActivityView(view);
+    if (view === "explorer") {
+      setExplorer((prev) => ({ ...prev, collapsed: false }));
+    }
+  }, []);
+
+  const handleOpenSettingsMenu = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setSettingsMenu({ x: rect.right + 8, y: rect.top });
+  }, []);
+
+  const closeSettingsMenu = useCallback(() => setSettingsMenu(null), []);
+
   const handleToggleOutput = useCallback(() => {
     if (outputCollapsed) {
       void openConsole();
@@ -365,6 +400,57 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
       closeConsole();
     }
   }, [outputCollapsed, openConsole, closeConsole]);
+
+  const handleToggleExplorer = useCallback(() => {
+    setExplorer((prev) => ({ ...prev, collapsed: !prev.collapsed }));
+  }, []);
+
+  const handleHideExplorer = useCallback(() => {
+    setExplorer((prev) => ({ ...prev, collapsed: true }));
+  }, []);
+
+  const handleToggleInspectorVisibility = useCallback(() => {
+    setInspector((prev) => ({ ...prev, collapsed: !prev.collapsed }));
+  }, []);
+
+  const settingsMenuItems = useMemo<ContextMenuItem[]>(() => {
+    const blankIcon = <span className="inline-block h-4 w-4 opacity-0" />;
+    const items: ContextMenuItem[] = THEME_MENU_OPTIONS.map((option) => ({
+      id: `theme-${option.value}`,
+      label: `${option.label} theme`,
+      icon: editorTheme.preference === option.value ? <MenuIconCheck /> : blankIcon,
+      onSelect: () => editorTheme.setPreference(option.value),
+    }));
+    items.push(
+      {
+        id: "toggle-explorer",
+        label: explorer.collapsed ? "Show Explorer" : "Hide Explorer",
+        dividerAbove: true,
+        icon: explorer.collapsed ? blankIcon : <MenuIconCheck />,
+        onSelect: () => setExplorer((prev) => ({ ...prev, collapsed: !prev.collapsed })),
+      },
+      {
+        id: "toggle-inspector",
+        label: inspector.collapsed ? "Show Inspector" : "Hide Inspector",
+        icon: inspector.collapsed ? blankIcon : <MenuIconCheck />,
+        onSelect: () => setInspector((prev) => ({ ...prev, collapsed: !prev.collapsed })),
+      },
+      {
+        id: "toggle-console",
+        label: outputCollapsed ? "Show Console" : "Hide Console",
+        icon: outputCollapsed ? blankIcon : <MenuIconCheck />,
+        onSelect: handleToggleOutput,
+      },
+    );
+    return items;
+  }, [
+    editorTheme.preference,
+    editorTheme.setPreference,
+    explorer.collapsed,
+    inspector.collapsed,
+    outputCollapsed,
+    handleToggleOutput,
+  ]);
 
   if (!seed && filesQuery.isLoading) {
     return (
@@ -396,48 +482,65 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
     );
   }
 
+  const workspaceLabel = formatWorkspaceLabel(workspaceId);
+  const rootSurfaceClass =
+    menuAppearance === "dark" ? "bg-[#0f111a] text-white" : "bg-slate-50 text-slate-900";
+  const editorSurface = menuAppearance === "dark" ? "#1b1f27" : "#ffffff";
+  const editorText = menuAppearance === "dark" ? "#f5f6fb" : "#0f172a";
+
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
-      <WorkbenchHeader
+    <div className={clsx("flex h-full min-h-0 flex-col", rootSurfaceClass)}>
+      <WorkbenchChrome
         configName={configName}
-        explorerCollapsed={explorer.collapsed}
+        workspaceLabel={workspaceLabel}
+        validationLabel={validationLabel}
+        canRunValidation={canRunValidation}
+        isRunningValidation={isRunningValidation}
+        onRunValidation={handleRunValidation}
+        explorerVisible={showExplorerPane}
+        onToggleExplorer={handleToggleExplorer}
+        consoleOpen={!outputCollapsed}
+        onToggleConsole={handleToggleOutput}
         inspectorCollapsed={inspector.collapsed}
-        outputCollapsed={outputCollapsed}
-        onToggleExplorer={() => setExplorer((prev) => ({ ...prev, collapsed: !prev.collapsed }))}
-        onToggleInspector={() => setInspector((prev) => ({ ...prev, collapsed: !prev.collapsed }))}
-        onToggleOutput={handleToggleOutput}
-        onValidate={handleRunValidation}
-        isValidating={isRunningValidation}
-        canValidate={canRunValidation}
-        lastValidatedAt={validationState.lastRunAt}
-        editorThemePreference={editorTheme.preference}
-        onChangeEditorThemePreference={editorTheme.setPreference}
+        onToggleInspector={handleToggleInspectorVisibility}
+        appearance={menuAppearance}
       />
-
       {consoleNotice ? (
-        <Alert tone="info" className="text-sm">
+        <div className="border-b border-brand-400/40 bg-brand-500/10 px-4 py-2 text-sm text-brand-100">
           {consoleNotice}
-        </Alert>
+        </div>
       ) : null}
-
-      <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {!explorer.collapsed && files.tree ? (
+      <div className="flex min-h-0 flex-1">
+        <ActivityBar
+          activeView={activityView}
+          onSelectView={handleSelectActivityView}
+          onOpenSettings={handleOpenSettingsMenu}
+          appearance={menuAppearance}
+        />
+        {showExplorerPane ? (
           <>
-            <Explorer
-              width={explorer.width}
-              tree={files.tree}
-              activeFileId={files.activeTab?.id ?? ""}
-              openFileIds={files.tabs.map((tab) => tab.id)}
-              onSelectFile={(fileId) => {
-                files.openFile(fileId);
-                setFileId(fileId);
-              }}
-              theme={menuAppearance}
-              onCloseFile={files.closeTab}
-              onCloseOtherFiles={files.closeOtherTabs}
-              onCloseTabsToRight={files.closeTabsToRight}
-              onCloseAllFiles={files.closeAllTabs}
-            />
+            <div className="flex min-h-0" style={{ width: explorer.width }}>
+              {activityView === "explorer" && files.tree ? (
+                <Explorer
+                  width={explorer.width}
+                  tree={files.tree}
+                  activeFileId={files.activeTab?.id ?? ""}
+                  openFileIds={files.tabs.map((tab) => tab.id)}
+                  onSelectFile={(fileId) => {
+                    files.openFile(fileId);
+                    setFileId(fileId);
+                  }}
+                  theme={menuAppearance}
+                  onCloseFile={files.closeTab}
+                  onCloseOtherFiles={files.closeOtherTabs}
+                  onCloseTabsToRight={files.closeTabsToRight}
+                  onCloseAllFiles={files.closeAllTabs}
+                  onHide={handleHideExplorer}
+                />
+              ) : (
+                <SidePanelPlaceholder width={explorer.width} view={activityView} />
+              )}
+            </div>
             <PanelResizeHandle
               orientation="vertical"
               onPointerDown={(event) => {
@@ -453,7 +556,11 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
           </>
         ) : null}
 
-        <div ref={setCenterPaneEl} className="flex min-h-0 flex-1 flex-col">
+        <div
+          ref={setCenterPaneEl}
+          className="flex min-h-0 flex-1 flex-col"
+          style={{ backgroundColor: editorSurface, color: editorText }}
+        >
           {outputCollapsed ? (
             <EditorArea
               tabs={files.tabs}
@@ -468,6 +575,9 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
               onCloseAllTabs={files.closeAllTabs}
               onContentChange={files.updateContent}
               onMoveTab={files.moveTab}
+              onPinTab={files.pinTab}
+              onUnpinTab={files.unpinTab}
+              onSelectRecentTab={files.selectRecentTab}
               editorTheme={editorTheme.resolvedTheme}
               menuAppearance={menuAppearance}
               minHeight={MIN_EDITOR_HEIGHT}
@@ -495,6 +605,9 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
                 onCloseAllTabs={files.closeAllTabs}
                 onContentChange={files.updateContent}
                 onMoveTab={files.moveTab}
+                onPinTab={files.pinTab}
+                onUnpinTab={files.unpinTab}
+                onSelectRecentTab={files.selectRecentTab}
                 editorTheme={editorTheme.resolvedTheme}
                 menuAppearance={menuAppearance}
                 minHeight={MIN_EDITOR_HEIGHT}
@@ -540,8 +653,256 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
           </>
         ) : null}
       </div>
+
+      <ContextMenu
+        open={Boolean(settingsMenu)}
+        position={settingsMenu}
+        onClose={closeSettingsMenu}
+        items={settingsMenuItems}
+        appearance={menuAppearance}
+      />
     </div>
   );
+}
+
+interface SidePanelPlaceholderProps {
+  readonly width: number;
+  readonly view: ActivityBarView;
+}
+
+function SidePanelPlaceholder({ width, view }: SidePanelPlaceholderProps) {
+  const label = ACTIVITY_LABELS[view] || "Coming soon";
+  return (
+    <div
+      className="flex h-full min-h-0 flex-col items-center justify-center border-r border-[#111111] bg-[#1e1e1e] px-4 text-center text-[11px] uppercase tracking-wide text-slate-400"
+      style={{ width }}
+      aria-live="polite"
+    >
+      {label}
+    </div>
+  );
+}
+
+function MenuIconCheck() {
+  return (
+    <svg className="h-4 w-4 text-[#4fc1ff]" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M4 8l3 3 5-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function WorkbenchChrome({
+  configName,
+  workspaceLabel,
+  validationLabel,
+  canRunValidation,
+  isRunningValidation,
+  onRunValidation,
+  explorerVisible,
+  onToggleExplorer,
+  consoleOpen,
+  onToggleConsole,
+  inspectorCollapsed,
+  onToggleInspector,
+  appearance,
+}: {
+  readonly configName: string;
+  readonly workspaceLabel: string;
+  readonly validationLabel?: string;
+  readonly canRunValidation: boolean;
+  readonly isRunningValidation: boolean;
+  readonly onRunValidation: () => void;
+  readonly explorerVisible: boolean;
+  readonly onToggleExplorer: () => void;
+  readonly consoleOpen: boolean;
+  readonly onToggleConsole: () => void;
+  readonly inspectorCollapsed: boolean;
+  readonly onToggleInspector: () => void;
+  readonly appearance: "light" | "dark";
+}) {
+  const dark = appearance === "dark";
+  const surfaceClass = dark
+    ? "border-white/10 bg-[#151821] text-white"
+    : "border-slate-200 bg-white text-slate-900";
+  const metaTextClass = dark ? "text-white/60" : "text-slate-500";
+  const runButtonClass = dark
+    ? "bg-brand-500 text-white hover:bg-brand-400 disabled:bg-white/20 disabled:text-white/40"
+    : "bg-brand-600 text-white hover:bg-brand-500 disabled:bg-slate-200 disabled:text-slate-500";
+
+  return (
+    <div className={clsx("flex items-center justify-between border-b px-4 py-2", surfaceClass)}>
+      <div className="flex min-w-0 items-center gap-3">
+        <WorkbenchBadgeIcon />
+        <div className="min-w-0 leading-tight">
+          <div className={clsx("text-[10px] font-semibold uppercase tracking-[0.35em]", metaTextClass)}>
+            Config Workbench
+          </div>
+          <div className="truncate text-sm font-semibold" title={configName}>
+            {configName}
+          </div>
+          <div className={clsx("text-[11px]", metaTextClass)} title={workspaceLabel}>
+            Workspace · {workspaceLabel}
+          </div>
+        </div>
+        <div className="ml-4 flex items-center gap-1 text-xs">
+          <ChromeIconButton
+            ariaLabel={explorerVisible ? "Hide explorer" : "Show explorer"}
+            onClick={onToggleExplorer}
+            appearance={appearance}
+            active={explorerVisible}
+            icon={<SidebarIcon active={explorerVisible} />}
+          />
+          <ChromeIconButton
+            ariaLabel={inspectorCollapsed ? "Show inspector" : "Hide inspector"}
+            onClick={onToggleInspector}
+            appearance={appearance}
+            active={!inspectorCollapsed}
+            icon={<InspectorIcon />}
+          />
+          <ChromeIconButton
+            ariaLabel={consoleOpen ? "Hide console" : "Show console"}
+            onClick={onToggleConsole}
+            appearance={appearance}
+            active={consoleOpen}
+            icon={<ConsoleIcon />}
+          />
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        {validationLabel ? <span className={clsx("text-xs", metaTextClass)}>{validationLabel}</span> : null}
+        <button
+          type="button"
+          onClick={onRunValidation}
+          disabled={!canRunValidation}
+          className={clsx(
+            "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
+            runButtonClass,
+          )}
+        >
+          {isRunningValidation ? <SpinnerIcon /> : <RunIcon />}
+          {isRunningValidation ? "Running…" : "Run validation"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ChromeIconButton({
+  ariaLabel,
+  onClick,
+  icon,
+  appearance,
+  active = false,
+}: {
+  readonly ariaLabel: string;
+  readonly onClick: () => void;
+  readonly icon: JSX.Element;
+  readonly appearance: "light" | "dark";
+  readonly active?: boolean;
+}) {
+  const dark = appearance === "dark";
+  const baseClass = dark
+    ? "border-white/10 text-white/70 hover:border-white/30 hover:text-white focus-visible:ring-white/40"
+    : "border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-900 focus-visible:ring-slate-400/60";
+  const activeClass = dark ? "bg-white/15 text-white" : "bg-slate-200 text-slate-900";
+  return (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      onClick={onClick}
+      className={clsx(
+        "flex h-8 w-8 items-center justify-center rounded-md border text-sm transition focus-visible:outline-none focus-visible:ring-2",
+        baseClass,
+        active && activeClass,
+      )}
+    >
+      {icon}
+    </button>
+  );
+}
+
+function WorkbenchBadgeIcon() {
+  return (
+    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#4fc1ff] via-[#2d7dff] to-[#7c4dff] text-white shadow-lg shadow-[#10121f]">
+      <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none">
+        <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />
+        <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />
+        <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />
+        <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />
+      </svg>
+    </span>
+  );
+}
+
+function SidebarIcon({ active }: { readonly active: boolean }) {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden>
+      <rect
+        x="3"
+        y="4"
+        width="14"
+        height="12"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        opacity={active ? 1 : 0.6}
+      />
+      <path d="M7 4v12" stroke="currentColor" strokeWidth="1.4" opacity={active ? 1 : 0.6} />
+    </svg>
+  );
+}
+
+function ConsoleIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="3" y="3" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M3 10.5h10" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function InspectorIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="3" y="3" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M10 3v10" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function SpinnerIcon() {
+  return (
+    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="2" opacity="0.35" />
+      <path d="M20 12a8 8 0 0 0-8-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function RunIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M4.5 3.5v9l7-4.5-7-4.5Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function formatRelative(timestamp?: string): string {
+  if (!timestamp) {
+    return "";
+  }
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return timestamp;
+  }
+  return date.toLocaleString();
+}
+
+function formatWorkspaceLabel(workspaceId: string): string {
+  if (workspaceId.length <= 12) {
+    return workspaceId;
+  }
+  return `${workspaceId.slice(0, 6)}…${workspaceId.slice(-4)}`;
 }
 
 function decodeFileContent(payload: FileReadJson): string {

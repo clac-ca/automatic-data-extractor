@@ -23,25 +23,6 @@ function RootIndexContent() {
   const session = useSession();
   const workspacesQuery = useWorkspacesQuery();
 
-  if (workspacesQuery.isLoading) {
-    return <PageState title="Loading workspaces" variant="loading" />;
-  }
-
-  if (workspacesQuery.isError) {
-    return (
-      <PageState
-        title="Unable to load workspaces"
-        description="Refresh the page or try again later."
-        variant="error"
-        action={
-          <Button variant="secondary" onClick={() => workspacesQuery.refetch()}>
-            Try again
-          </Button>
-        }
-      />
-    );
-  }
-
   const workspaces = workspacesQuery.data?.items ?? [];
 
   const preferredIds = [readPreferredWorkspaceId(), session.user.preferred_workspace_id]
@@ -77,6 +58,25 @@ function RootIndexContent() {
     workspacesQuery.isError,
     workspacesQuery.isLoading,
   ]);
+
+  if (workspacesQuery.isLoading) {
+    return <PageState title="Loading workspaces" variant="loading" />;
+  }
+
+  if (workspacesQuery.isError) {
+    return (
+      <PageState
+        title="Unable to load workspaces"
+        description="Refresh the page or try again later."
+        variant="error"
+        action={
+          <Button variant="secondary" onClick={() => workspacesQuery.refetch()}>
+            Try again
+          </Button>
+        }
+      />
+    );
+  }
 
   return null;
 }

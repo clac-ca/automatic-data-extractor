@@ -4,7 +4,13 @@ import { describe, expect, it, vi } from "vitest";
 import type { WorkbenchFileNode } from "../../types";
 import { useWorkbenchFiles } from "../useWorkbenchFiles";
 
-type PersistedState = { openTabs: string[]; activeTabId?: string | null } | null;
+type PersistedState =
+  | {
+      openTabs: Array<string | { id: string; pinned?: boolean }>;
+      activeTabId?: string | null;
+      mru?: string[];
+    }
+  | null;
 
 const tree: WorkbenchFileNode = {
   id: "root",
@@ -84,28 +90,48 @@ describe("useWorkbenchFiles", () => {
 
     fireEvent.click(screen.getByText("Open manifest"));
     await waitFor(() => expect(screen.getByTestId("tab-statuses").textContent).toContain("loading"));
-    await waitFor(() =>
-      expect(storage.setMock).toHaveBeenLastCalledWith({ openTabs: ["manifest.json"], activeTabId: "manifest.json" }),
-    );
+    await waitFor(() => {
+      const lastCall = storage.setMock.mock.calls.at(-1)?.[0];
+      expect(lastCall).toMatchObject({
+        openTabs: [{ id: "manifest.json", pinned: false }],
+        activeTabId: "manifest.json",
+        mru: ["manifest.json"],
+      });
+    });
 
     fireEvent.click(screen.getByText("Open data"));
     await waitFor(() => expect(screen.getByTestId("tab-statuses").textContent).toContain("loading"));
-    await waitFor(() =>
-      expect(storage.setMock).toHaveBeenLastCalledWith({
-        openTabs: ["manifest.json", "src/data.py"],
+    await waitFor(() => {
+      const lastCall = storage.setMock.mock.calls.at(-1)?.[0];
+      expect(lastCall).toMatchObject({
+        openTabs: [
+          { id: "manifest.json", pinned: false },
+          { id: "src/data.py", pinned: false },
+        ],
         activeTabId: "src/data.py",
-      }),
-    );
+        mru: ["src/data.py", "manifest.json"],
+      });
+    });
 
     fireEvent.click(screen.getByText("Close active"));
-    await waitFor(() =>
-      expect(storage.setMock).toHaveBeenLastCalledWith({ openTabs: ["manifest.json"], activeTabId: "manifest.json" }),
-    );
+    await waitFor(() => {
+      const lastCall = storage.setMock.mock.calls.at(-1)?.[0];
+      expect(lastCall).toMatchObject({
+        openTabs: [{ id: "manifest.json", pinned: false }],
+        activeTabId: "manifest.json",
+        mru: ["manifest.json"],
+      });
+    });
 
     fireEvent.click(screen.getByText("Close active"));
-    await waitFor(() =>
-      expect(storage.setMock).toHaveBeenLastCalledWith({ openTabs: [], activeTabId: null }),
-    );
+    await waitFor(() => {
+      const lastCall = storage.setMock.mock.calls.at(-1)?.[0];
+      expect(lastCall).toMatchObject({
+        openTabs: [],
+        activeTabId: null,
+        mru: [],
+      });
+    });
   });
 
   it("loads file content when opening a tab", async () => {

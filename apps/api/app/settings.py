@@ -275,6 +275,9 @@ class Settings(BaseSettings):
     # Auth policy
     failed_login_lock_threshold: int = Field(5, ge=1)
     failed_login_lock_duration: timedelta = Field(default=timedelta(minutes=5))
+    auth_disabled: bool = False
+    auth_disabled_user_email: str = "developer@example.test"
+    auth_disabled_user_name: str | None = "Development User"
 
     # Jobs & workers
     max_concurrency: int | None = Field(default=None, ge=1)

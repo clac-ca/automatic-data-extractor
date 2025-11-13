@@ -50,6 +50,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "ADE safe mode enabled; user-submitted configuration code will not execute.",
             extra={"safe_mode": True},
         )
+    if settings.auth_disabled:
+        logger.warning(
+            "ADE authentication disabled; all requests bypass login and authorization checks.",
+            extra={"auth_disabled": True},
+        )
     configure_auth_dependencies(settings=settings)
 
     register_middleware(app)

@@ -283,6 +283,16 @@ ADE is configured via environment variables so it remains simple and portable. D
 | `ADE_WORKER_MEM_MB`       | `512`                           | Best‑effort address‑space ceiling per job (POSIX `rlimit`)  |
 | `ADE_WORKER_FSIZE_MB`     | `100`                           | Best‑effort max file size a job can create (POSIX `rlimit`) |
 
+### Bypass authentication for local debugging
+
+When you need to poke around the UI or APIs without creating accounts, set
+`ADE_AUTH_DISABLED=true` in your `.env`. ADE will auto‑provision a development
+user (default `developer@example.test`) with the `global-administrator` role and
+skip every authentication/authorization gate. Never enable this in a shared or
+production environment: every request is treated as trusted and CSRF checks are
+ignored. You can customize the injected user with `ADE_AUTH_DISABLED_USER_EMAIL`
+and `ADE_AUTH_DISABLED_USER_NAME`.
+
 ## Excel and CSV Support
 
 ADE reads `.xlsx` and `.csv` inputs and always writes a normalized `.xlsx` workbook as the final output. Excel is handled by `openpyxl` in streaming mode (`read_only=True`, `data_only=True`); CSV uses the Python standard library with UTF‑8 as the default encoding. Other formats can be added later as pluggable readers without changing how configurations are authored.

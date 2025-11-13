@@ -57,6 +57,9 @@ describe("EditorArea keyboard shortcuts", () => {
     const onCloseAll = vi.fn();
     const onMoveTab = vi.fn();
     const onContentChange = vi.fn();
+    const onPinTab = vi.fn();
+    const onUnpinTab = vi.fn();
+    const onSelectRecentTab = vi.fn();
 
     const { unmount } = render(
       <EditorArea
@@ -68,14 +71,17 @@ describe("EditorArea keyboard shortcuts", () => {
         onCloseTabsToRight={onCloseRight}
         onCloseAllTabs={onCloseAll}
         onMoveTab={onMoveTab}
+        onPinTab={onPinTab}
+        onUnpinTab={onUnpinTab}
         onContentChange={onContentChange}
+        onSelectRecentTab={onSelectRecentTab}
         editorTheme="vs-dark"
         menuAppearance="dark"
       />,
     );
 
     fireEvent.keyDown(window, { key: "Tab", ctrlKey: true });
-    expect(onSelectTab).toHaveBeenCalledWith("src/data.py");
+    expect(onSelectRecentTab).toHaveBeenCalledWith("forward");
 
     unmount();
   });
@@ -88,6 +94,9 @@ describe("EditorArea keyboard shortcuts", () => {
     const onCloseAll = vi.fn();
     const onMoveTab = vi.fn();
     const onContentChange = vi.fn();
+    const onPinTab = vi.fn();
+    const onUnpinTab = vi.fn();
+    const onSelectRecentTab = vi.fn();
 
     const { unmount } = render(
       <EditorArea
@@ -99,13 +108,90 @@ describe("EditorArea keyboard shortcuts", () => {
         onCloseTabsToRight={onCloseRight}
         onCloseAllTabs={onCloseAll}
         onMoveTab={onMoveTab}
+        onPinTab={onPinTab}
+        onUnpinTab={onUnpinTab}
         onContentChange={onContentChange}
+        onSelectRecentTab={onSelectRecentTab}
         editorTheme="vs-dark"
         menuAppearance="dark"
       />,
     );
 
     fireEvent.keyDown(window, { key: "Tab", ctrlKey: true, shiftKey: true });
+    expect(onSelectRecentTab).toHaveBeenCalledWith("backward");
+
+    unmount();
+  });
+
+  it("cycles visually with Ctrl+PageDown", () => {
+    const onSelectTab = vi.fn();
+    const onCloseTab = vi.fn();
+    const onCloseOthers = vi.fn();
+    const onCloseRight = vi.fn();
+    const onCloseAll = vi.fn();
+    const onMoveTab = vi.fn();
+    const onContentChange = vi.fn();
+    const onPinTab = vi.fn();
+    const onUnpinTab = vi.fn();
+    const onSelectRecentTab = vi.fn();
+
+    const { unmount } = render(
+      <EditorArea
+        tabs={tabs}
+        activeTabId="manifest.json"
+        onSelectTab={onSelectTab}
+        onCloseTab={onCloseTab}
+        onCloseOtherTabs={onCloseOthers}
+        onCloseTabsToRight={onCloseRight}
+        onCloseAllTabs={onCloseAll}
+        onMoveTab={onMoveTab}
+        onPinTab={onPinTab}
+        onUnpinTab={onUnpinTab}
+        onContentChange={onContentChange}
+        onSelectRecentTab={onSelectRecentTab}
+        editorTheme="vs-dark"
+        menuAppearance="dark"
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: "PageDown", ctrlKey: true });
+    expect(onSelectTab).toHaveBeenCalledWith("src/data.py");
+
+    unmount();
+  });
+
+  it("cycles visually backwards with Ctrl+PageUp", () => {
+    const onSelectTab = vi.fn();
+    const onCloseTab = vi.fn();
+    const onCloseOthers = vi.fn();
+    const onCloseRight = vi.fn();
+    const onCloseAll = vi.fn();
+    const onMoveTab = vi.fn();
+    const onContentChange = vi.fn();
+    const onPinTab = vi.fn();
+    const onUnpinTab = vi.fn();
+    const onSelectRecentTab = vi.fn();
+
+    const { unmount } = render(
+      <EditorArea
+        tabs={tabs}
+        activeTabId="src/data.py"
+        onSelectTab={onSelectTab}
+        onCloseTab={onCloseTab}
+        onCloseOtherTabs={onCloseOthers}
+        onCloseTabsToRight={onCloseRight}
+        onCloseAllTabs={onCloseAll}
+        onMoveTab={onMoveTab}
+        onPinTab={onPinTab}
+        onUnpinTab={onUnpinTab}
+        onContentChange={onContentChange}
+        onSelectRecentTab={onSelectRecentTab}
+        editorTheme="vs-dark"
+        menuAppearance="dark"
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: "PageUp", ctrlKey: true });
     expect(onSelectTab).toHaveBeenCalledWith("manifest.json");
 
     unmount();
@@ -119,6 +205,9 @@ describe("EditorArea keyboard shortcuts", () => {
     const onCloseAll = vi.fn();
     const onMoveTab = vi.fn();
     const onContentChange = vi.fn();
+    const onPinTab = vi.fn();
+    const onUnpinTab = vi.fn();
+    const onSelectRecentTab = vi.fn();
 
     const { unmount } = render(
       <EditorArea
@@ -130,7 +219,10 @@ describe("EditorArea keyboard shortcuts", () => {
         onCloseTabsToRight={onCloseRight}
         onCloseAllTabs={onCloseAll}
         onMoveTab={onMoveTab}
+        onPinTab={onPinTab}
+        onUnpinTab={onUnpinTab}
         onContentChange={onContentChange}
+        onSelectRecentTab={onSelectRecentTab}
         editorTheme="vs-dark"
         menuAppearance="dark"
       />,
