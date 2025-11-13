@@ -9,10 +9,10 @@ import { useAuthProvidersQuery } from "@shared/auth/hooks/useAuthProvidersQuery"
 import { useSessionQuery } from "@shared/auth/hooks/useSessionQuery";
 import { useSetupStatusQuery } from "@shared/auth/hooks/useSetupStatusQuery";
 import { buildSetupRedirect, chooseDestination, resolveRedirectParam } from "@shared/auth/utils/authNavigation";
-import { Alert } from "@ui/alert";
-import { Button } from "@ui/button";
-import { FormField } from "@ui/form-field";
-import { Input } from "@ui/input";
+import { Alert } from "@ui/Alert";
+import { Button } from "@ui/Button";
+import { FormField } from "@ui/FormField";
+import { Input } from "@ui/Input";
 
 const loginSchema = z.object({
   email: z

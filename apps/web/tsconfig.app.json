@@ -13,8 +13,7 @@
       "@screens/*": ["screens/*"],
       "@shared/*": ["shared/*"],
       "@schema/*": ["schema/*"],
-      "@generated/*": ["generated/*"],
-      "@openapi": ["generated/openapi.d.ts"],
+      "@generated-types/*": ["generated-types/*"],
       "@ui/*": ["ui/*"],
       "@test/*": ["test/*"]
     },

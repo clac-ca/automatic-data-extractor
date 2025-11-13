@@ -11,7 +11,7 @@ import {
   type WorkspaceMemberRolesUpdatePayload,
   type WorkspaceMemberCreatePayload,
 } from "@screens/Workspace/api/workspaces-api";
-import type { components } from "@openapi";
+import type { components } from "@schema";
 
 const MEMBERS_PAGE_SIZE = 200;
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useSearchParams } from "@app/nav/urlState";
 import { useForm } from "react-hook-form";
@@ -7,10 +7,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 
 import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
 import { useUpdateWorkspaceMutation } from "./useUpdateWorkspaceMutation";
-import { Alert } from "@ui/alert";
-import { Button } from "@ui/button";
-import { FormField } from "@ui/form-field";
-import { Input } from "@ui/input";
+import { Alert } from "@ui/Alert";
+import { Button } from "@ui/Button";
+import { FormField } from "@ui/FormField";
+import { Input } from "@ui/Input";
+import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 import { WorkspaceMembersSection } from "./WorkspaceMembersSection";
 import { WorkspaceRolesSection } from "./WorkspaceRolesSection";
 
@@ -24,59 +25,66 @@ const SETTINGS_VIEWS = [
 
 type SettingsViewId = typeof SETTINGS_VIEWS[number]["id"];
 
+const SETTINGS_VIEW_IDS = new Set<SettingsViewId>(SETTINGS_VIEWS.map((view) => view.id));
+
+const isSettingsViewId = (value: string | null): value is SettingsViewId =>
+  Boolean(value && SETTINGS_VIEW_IDS.has(value as SettingsViewId));
+
 export default function WorkspaceSettingsRoute() {
   useWorkspaceContext();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const currentView = (searchParams.get("view") as SettingsViewId | null) ?? "general";
+  const rawViewParam = searchParams.get("view");
+  const currentView: SettingsViewId = isSettingsViewId(rawViewParam) ? rawViewParam : "general";
 
   useEffect(() => {
-    if (!SETTINGS_VIEWS.some((view) => view.id === currentView)) {
+    if (rawViewParam && !isSettingsViewId(rawViewParam)) {
       const next = new URLSearchParams(searchParams);
       next.set("view", "general");
       setSearchParams(next, { replace: true });
     }
-  }, [currentView, searchParams, setSearchParams]);
+  }, [rawViewParam, searchParams, setSearchParams]);
 
-  const handleChangeView = (viewId: SettingsViewId) => {
+  const handleChangeView = (viewId: string) => {
+    if (!isSettingsViewId(viewId)) {
+      return;
+    }
     const next = new URLSearchParams(searchParams);
     next.set("view", viewId);
     setSearchParams(next, { replace: true });
   };
 
-  const content = useMemo(() => {
-    switch (currentView) {
-      case "general":
-        return <WorkspaceGeneralSettings />;
-      case "members":
-        return <WorkspaceMembersSection />;
-      case "roles":
-        return <WorkspaceRolesSection />;
-      default:
-        return null;
-    }
-  }, [currentView]);
-
   return (
-    <div className="space-y-6">
-      <nav className="flex gap-2 rounded-full border border-slate-200 bg-white p-1 shadow-soft">
-        {SETTINGS_VIEWS.map((option) => {
-          const isActive = option.id === currentView;
-          return (
-            <Button
-              key={option.id}
-              variant={isActive ? "primary" : "ghost"}
-              size="sm"
-              onClick={() => handleChangeView(option.id)}
-            >
-              {option.label}
-            </Button>
-          );
-        })}
-      </nav>
+    <TabsRoot value={currentView} onValueChange={handleChangeView}>
+      <div className="space-y-6">
+        <TabsList className="flex gap-2 rounded-full border border-slate-200 bg-white p-1 shadow-soft" aria-label="Workspace settings views">
+          {SETTINGS_VIEWS.map((option) => {
+            const isActive = option.id === currentView;
+            return (
+              <TabsTrigger
+                key={option.id}
+                value={option.id}
+                className={`rounded-full px-4 py-1 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ${
+                  isActive ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {option.label}
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
 
-      <section aria-live="polite">{content}</section>
-    </div>
+        <TabsContent value="general" aria-live="polite">
+          {currentView === "general" ? <WorkspaceGeneralSettings /> : null}
+        </TabsContent>
+        <TabsContent value="members" aria-live="polite">
+          {currentView === "members" ? <WorkspaceMembersSection /> : null}
+        </TabsContent>
+        <TabsContent value="roles" aria-live="polite">
+          {currentView === "roles" ? <WorkspaceRolesSection /> : null}
+        </TabsContent>
+      </div>
+    </TabsRoot>
   );
 }
 

@@ -14,8 +14,7 @@
       "@ui/*": ["ui/*"],
       "@shared/*": ["shared/*"],
       "@schema/*": ["schema/*"],
-      "@generated/*": ["generated/*"],
-      "@openapi": ["generated/openapi.d.ts"],
+      "@generated-types/*": ["generated-types/*"],
       "@test/*": ["test/*"]
     },
     "esModuleInterop": true,

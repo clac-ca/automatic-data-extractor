@@ -1,4 +1,4 @@
-import { NavProvider } from "@app/nav/history";
+import { NavProvider, useLocation } from "@app/nav/history";
 
 import { AppProviders } from "./AppProviders";
 import HomeScreen from "@screens/Home";
@@ -10,7 +10,6 @@ import WorkspaceCreateScreen from "@screens/Workspaces/New";
 import WorkspaceScreen from "@screens/Workspace";
 import LogoutScreen from "@screens/Logout";
 import NotFoundScreen from "@screens/NotFound";
-import { useLocation } from "@app/nav/history";
 
 export function App() {
   return (
@@ -22,7 +21,7 @@ export function App() {
   );
 }
 
-function ScreenSwitch() {
+export function ScreenSwitch() {
   const location = useLocation();
   const normalized = normalizePathname(location.pathname);
   const segments = normalized.split("/").filter(Boolean);
@@ -60,7 +59,7 @@ function ScreenSwitch() {
   return <NotFoundScreen />;
 }
 
-function normalizePathname(pathname: string) {
+export function normalizePathname(pathname: string) {
   if (!pathname || pathname === "/") {
     return "/";
   }

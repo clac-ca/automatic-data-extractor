@@ -18,7 +18,7 @@ import type {
   FileRenameResponse,
   ConfigurationPage,
 } from "./types";
-import type { paths } from "@openapi";
+import type { paths } from "@schema";
 
 const textEncoder = new TextEncoder();
 

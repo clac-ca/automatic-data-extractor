@@ -1,6 +1,6 @@
 import { ApiError } from "@shared/api";
 import { client } from "@shared/api/client";
-import type { components } from "@openapi";
+import type { components } from "@schema";
 
 export const sessionKeys = {
   root: ["auth"] as const,
