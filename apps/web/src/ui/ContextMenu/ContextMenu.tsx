@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
 } from "react";
 
 import clsx from "clsx";
@@ -15,6 +16,7 @@ export interface ContextMenuItem {
   readonly label: string;
   readonly onSelect: () => void;
   readonly shortcut?: string;
+  readonly icon?: ReactNode;
   readonly disabled?: boolean;
   readonly danger?: boolean;
   readonly dividerAbove?: boolean;
@@ -28,9 +30,9 @@ export interface ContextMenuProps {
   readonly appearance?: "light" | "dark";
 }
 
-const MENU_WIDTH = 224;
-const MENU_ITEM_HEIGHT = 32;
-const MENU_PADDING = 8;
+const MENU_WIDTH = 232;
+const MENU_ITEM_HEIGHT = 30;
+const MENU_PADDING = 6;
 
 export function ContextMenu({
   open,
@@ -156,20 +158,24 @@ export function ContextMenu({
   const palette =
     appearance === "dark"
       ? {
-          bg: "bg-[#252526]/95 text-slate-100",
+          bg: "bg-[#1f1f1f] text-[#f3f3f3]",
           border: "border-[#3c3c3c]",
-          item: "hover:bg-[#094771]/70 focus-visible:bg-[#094771]/70",
-          disabled: "text-slate-500",
-          danger: "text-danger-300 hover:text-white hover:bg-danger-600/80 focus-visible:bg-danger-600/80",
-          shortcut: "text-slate-400",
+          shadow: "shadow-[0_12px_28px_rgba(0,0,0,0.55)]",
+          item: "hover:bg-[#094771] focus-visible:bg-[#094771]",
+          disabled: "text-[#7a7a7a]",
+          danger: "text-[#f48771] hover:text-white hover:bg-[#be1a1a] focus-visible:bg-[#be1a1a]",
+          shortcut: "text-[#9f9f9f]",
+          separator: "border-[#3f3f3f]",
         }
       : {
-          bg: "bg-white text-slate-900",
-          border: "border-slate-200",
-          item: "hover:bg-slate-100 focus-visible:bg-slate-100",
-          disabled: "text-slate-400",
-          danger: "text-danger-600 hover:bg-danger-50 focus-visible:bg-danger-50",
-          shortcut: "text-slate-500",
+          bg: "bg-[#fdfdfd] text-[#1f1f1f]",
+          border: "border-[#cfcfcf]",
+          shadow: "shadow-[0_12px_28px_rgba(0,0,0,0.15)]",
+          item: "hover:bg-[#dfe9f6] focus-visible:bg-[#dfe9f6]",
+          disabled: "text-[#9c9c9c]",
+          danger: "text-[#b02020] hover:bg-[#fde7e7] focus-visible:bg-[#fde7e7]",
+          shortcut: "text-[#6d6d6d]",
+          separator: "border-[#e0e0e0]",
         };
 
   return createPortal(
@@ -177,9 +183,10 @@ export function ContextMenu({
       ref={menuRef}
       role="menu"
       className={clsx(
-        "z-[60] min-w-[200px] rounded-md border shadow-xl backdrop-blur-sm",
+        "z-[60] min-w-[200px] rounded-sm border backdrop-blur-sm",
         palette.bg,
         palette.border,
+        palette.shadow,
       )}
       style={{ top: coords.y, left: coords.x, position: "fixed" }}
     >
@@ -190,7 +197,7 @@ export function ContextMenu({
           return (
             <Fragment key={item.id}>
               {item.dividerAbove ? (
-                <li role="separator" className="my-1 border-t border-white/10" />
+                <li role="separator" className={clsx("mx-2 my-1 border-t", palette.separator)} />
               ) : null}
               <li role="none">
                 <button
@@ -200,7 +207,7 @@ export function ContextMenu({
                   type="button"
                   role="menuitem"
                   className={clsx(
-                    "flex w-full items-center justify-between gap-8 px-3 py-1.5 text-sm outline-none transition",
+                    "flex w-full items-center justify-between gap-6 px-3 py-1.5 text-[13px] leading-5 outline-none transition",
                     palette.item,
                     disabled && palette.disabled,
                     danger && !disabled && palette.danger,
@@ -221,9 +228,16 @@ export function ContextMenu({
                   }}
                   disabled={disabled}
                 >
-                  <span>{item.label}</span>
+                  <span className="flex min-w-0 items-center gap-3">
+                    {item.icon ? (
+                      <span className="text-base opacity-80">{item.icon}</span>
+                    ) : (
+                      <span className="inline-block h-4 w-4" />
+                    )}
+                    <span className="truncate">{item.label}</span>
+                  </span>
                   {item.shortcut ? (
-                    <span className={clsx("text-xs uppercase tracking-wide", palette.shortcut)}>
+                    <span className={clsx("text-[11px] uppercase tracking-wide", palette.shortcut)}>
                       {item.shortcut}
                     </span>
                   ) : null}

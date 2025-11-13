@@ -220,6 +220,15 @@ async def test_file_editor_endpoints(
     assert resp.status_code == 200
     tree = resp.json()
     assert tree["entries"], "expected file listing to contain entries"
+    dir_entries = [entry for entry in tree["entries"] if entry["kind"] == "dir"]
+    assert all(not entry["path"].endswith("/") for entry in dir_entries)
+    paths = {entry["path"]: entry for entry in tree["entries"]}
+    assert "src" in paths
+    assert paths["src"]["parent"] == ""
+    assert paths["src"]["kind"] == "dir"
+    assert "src/ade_config" in paths
+    assert paths["src/ade_config"]["parent"] == "src"
+    assert paths["src/ade_config"]["kind"] == "dir"
 
     create_headers = dict(headers)
     create_headers["If-None-Match"] = "*"

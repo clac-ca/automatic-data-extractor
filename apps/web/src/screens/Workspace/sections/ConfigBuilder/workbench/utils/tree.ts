@@ -24,6 +24,8 @@ export function createWorkbenchTreeFromListing(listing: FileListing): WorkbenchF
     return null;
   }
 
+  const canonicalRootId = canonicalizePath(rootId);
+
   const rootNode: WorkbenchFileNode = {
     id: rootId,
     name: extractName(rootId),
@@ -37,19 +39,20 @@ export function createWorkbenchTreeFromListing(listing: FileListing): WorkbenchF
     if (path.length === 0) {
       return rootNode;
     }
-    const normalized = normalizeFolderId(path, rootId);
-    const existing = nodes.get(normalized);
+    const normalizedPath = canonicalizePath(path);
+    const nodeId = normalizedPath === canonicalRootId ? rootId : normalizedPath;
+    const existing = nodes.get(nodeId);
     if (existing) {
       return existing;
     }
     const folder: WorkbenchFileNode = {
-      id: normalized,
-      name: extractName(normalized),
+      id: nodeId,
+      name: extractName(nodeId),
       kind: "folder",
       children: [],
     };
-    nodes.set(normalized, folder);
-    const parentPath = normalized === rootId ? "" : deriveParent(normalized) ?? rootId;
+    nodes.set(nodeId, folder);
+    const parentPath = nodeId === rootId ? "" : deriveParent(nodeId) ?? rootId;
     const parentNode = ensureFolder(parentPath);
     addChild(parentNode, folder);
     return folder;
@@ -63,7 +66,7 @@ export function createWorkbenchTreeFromListing(listing: FileListing): WorkbenchF
   });
 
   for (const entry of sortedEntries) {
-    const parentPath = entry.parent && entry.parent.length > 0 ? entry.parent : rootId;
+    const parentPath = entry.parent && entry.parent.length > 0 ? canonicalizePath(entry.parent) : rootId;
     const parentNode = ensureFolder(parentPath);
 
     if (entry.kind === "dir") {
@@ -126,37 +129,30 @@ function inferLanguage(path: string): string | undefined {
 }
 
 function extractName(path: string): string {
-  const trimmed = trimTrailingSlash(path);
-  const index = trimmed.lastIndexOf("/");
-  return index >= 0 ? trimmed.slice(index + 1) : trimmed;
+  const normalized = canonicalizePath(path);
+  if (!normalized) {
+    return "";
+  }
+  const index = normalized.lastIndexOf("/");
+  return index >= 0 ? normalized.slice(index + 1) : normalized;
 }
 
 function deriveParent(path: string): string | undefined {
-  const trimmed = trimTrailingSlash(path);
-  if (!trimmed) {
+  const normalized = canonicalizePath(path);
+  if (!normalized) {
     return undefined;
   }
-  const index = trimmed.lastIndexOf("/");
+  const index = normalized.lastIndexOf("/");
   if (index === -1) {
     return "";
   }
-  const base = trimmed.slice(0, index);
-  return base.length > 0 ? `${base}/` : "";
+  return normalized.slice(0, index);
 }
 
-function normalizeFolderId(path: string, rootId: string): string {
-  if (path === rootId) {
-    return rootId;
+function canonicalizePath(path: string): string {
+  if (!path) {
+    return "";
   }
-  const normalizedPath = trimTrailingSlash(path);
-  const normalizedRoot = trimTrailingSlash(rootId);
-  if (normalizedPath === normalizedRoot) {
-    return rootId;
-  }
-  return path;
-}
-
-function trimTrailingSlash(path: string): string {
   return path.replace(/\/+$/, "");
 }
 

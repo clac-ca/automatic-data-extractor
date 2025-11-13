@@ -176,29 +176,44 @@ export function Explorer({
       return [];
     }
     const node = contextMenu.node;
+    const shortcuts = {
+      open: "Enter",
+      close: "Ctrl+W",
+      closeOthers: "Ctrl+K Ctrl+O",
+      closeRight: "Ctrl+K Ctrl+Right",
+      closeAll: "Ctrl+K Ctrl+W",
+      copyPath: "Ctrl+K Ctrl+C",
+      collapseAll: "Ctrl+K Ctrl+0",
+    };
     if (node.kind === "file") {
       const isOpen = openFileIds.includes(node.id);
       const openCount = openFileIds.length;
       const tabIndex = openFileIds.indexOf(node.id);
       const hasTabsToRight = tabIndex >= 0 && tabIndex < openCount - 1;
       return [
-        { id: "open-file", label: "Open", onSelect: () => onSelectFile(node.id) },
+        { id: "open-file", label: "Open", icon: <MenuIconOpenFile />, shortcut: shortcuts.open, onSelect: () => onSelectFile(node.id) },
         {
           id: "close-file",
           label: "Close",
+          icon: <MenuIconClose />,
           disabled: !isOpen,
+          shortcut: shortcuts.close,
           onSelect: () => onCloseFile(node.id),
         },
         {
           id: "close-file-others",
           label: "Close Others",
+          icon: <MenuIconCloseOthers />,
           disabled: !isOpen || openCount <= 1,
+          shortcut: shortcuts.closeOthers,
           onSelect: () => onCloseOtherFiles(node.id),
         },
         {
           id: "close-file-right",
           label: "Close Tabs to the Right",
+          icon: <MenuIconCloseRight />,
           disabled: !isOpen || !hasTabsToRight,
+          shortcut: shortcuts.closeRight,
           onSelect: () => onCloseTabsToRight(node.id),
         },
         {
@@ -206,12 +221,16 @@ export function Explorer({
           label: "Close All",
           dividerAbove: true,
           disabled: openCount === 0,
+           icon: <MenuIconCloseAll />,
+          shortcut: shortcuts.closeAll,
           onSelect: () => onCloseAllFiles(),
         },
         {
           id: "copy-path",
           label: "Copy Path",
           dividerAbove: true,
+          icon: <MenuIconCopyPath />,
+          shortcut: shortcuts.copyPath,
           onSelect: () => {
             void handleCopyPath(node.id);
           },
@@ -223,11 +242,14 @@ export function Explorer({
       {
         id: "toggle-folder",
         label: isExpanded ? "Collapse Folder" : "Expand Folder",
+        icon: isExpanded ? <MenuIconCollapse /> : <MenuIconExpand />,
         onSelect: () => setFolderExpanded(node.id, !isExpanded),
       },
       {
         id: "collapse-all",
         label: "Collapse All",
+        icon: <MenuIconCollapseAll />,
+        shortcut: shortcuts.collapseAll,
         dividerAbove: true,
         onSelect: () => collapseAll(),
       },
@@ -235,6 +257,8 @@ export function Explorer({
         id: "copy-path",
         label: "Copy Path",
         dividerAbove: true,
+        icon: <MenuIconCopyPath />,
+        shortcut: shortcuts.copyPath,
         onSelect: () => {
           void handleCopyPath(node.id);
         },
@@ -501,6 +525,102 @@ function FileIcon({ className }: { readonly className?: string }) {
         strokeLinejoin="round"
       />
       <path d="M10 3v4h4" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+const MENU_ICON_CLASS = "h-4 w-4 text-current opacity-80";
+
+function MenuIconOpenFile() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <path
+        d="M3 4.5h3l1 1H13a1 1 0 0 1 1 1V12.5a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
+function MenuIconCopyPath() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <path
+        d="M6 4.5h5.5a1 1 0 0 1 1 1V13"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        strokeLinecap="round"
+      />
+      <rect x="3.5" y="2.5" width="6" height="9" rx="1" stroke="currentColor" strokeWidth="1.1" fill="none" />
+    </svg>
+  );
+}
+
+function MenuIconCollapse() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <path d="M5 6l3 3 3-3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function MenuIconExpand() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <path d="M5 10l3-3 3 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function MenuIconCollapseAll() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <path d="M3 5h10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M3 8h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M3 11h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MenuIconClose() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <path d="M4 4l8 8m0-8l-8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MenuIconCloseOthers() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <rect x="2.5" y="3" width="8" height="10" rx="1.2" stroke="currentColor" strokeWidth="1.2" fill="none" />
+      <path d="M7 7l5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MenuIconCloseRight() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <path d="M5 3v10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M7 5l5 3-5 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 6v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MenuIconCloseAll() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <path
+        d="M3.5 4.5h3.5a1 1 0 0 1 1 1V13M12.5 11.5h-3.5a1 1 0 0 1-1-1V3"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        strokeLinecap="round"
+      />
+      <path d="M4.5 6.5l7 7m0-7-7 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }
