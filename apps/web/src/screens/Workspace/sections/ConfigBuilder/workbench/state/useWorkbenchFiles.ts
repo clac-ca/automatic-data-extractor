@@ -9,9 +9,15 @@ interface WorkbenchFilesPersistence {
   readonly clear: () => void;
 }
 
+interface PersistedWorkbenchTabEntry {
+  readonly id: string;
+  readonly pinned?: boolean;
+}
+
 interface PersistedWorkbenchTabs {
-  readonly openTabs: readonly string[];
+  readonly openTabs: readonly (string | PersistedWorkbenchTabEntry)[];
   readonly activeTabId?: string | null;
+  readonly mru?: readonly string[];
 }
 
 interface UseWorkbenchFilesOptions {
@@ -19,6 +25,12 @@ interface UseWorkbenchFilesOptions {
   readonly initialActiveFileId?: string;
   readonly loadFile: (fileId: string) => Promise<{ content: string; etag?: string | null }>;
   readonly persistence?: WorkbenchFilesPersistence | null;
+}
+
+type WorkbenchTabZone = "pinned" | "regular";
+
+interface MoveTabOptions {
+  readonly zone?: WorkbenchTabZone;
 }
 
 interface WorkbenchFilesApi {
@@ -32,7 +44,11 @@ interface WorkbenchFilesApi {
   readonly closeOtherTabs: (fileId: string) => void;
   readonly closeTabsToRight: (fileId: string) => void;
   readonly closeAllTabs: () => void;
-  readonly moveTab: (fileId: string, targetIndex: number) => void;
+  readonly moveTab: (fileId: string, targetIndex: number, options?: MoveTabOptions) => void;
+  readonly pinTab: (fileId: string) => void;
+  readonly unpinTab: (fileId: string) => void;
+  readonly toggleTabPin: (fileId: string, pinned: boolean) => void;
+  readonly selectRecentTab: (direction: "forward" | "backward") => void;
   readonly updateContent: (fileId: string, content: string) => void;
   readonly isDirty: boolean;
 }
@@ -45,15 +61,39 @@ export function useWorkbenchFiles({
 }: UseWorkbenchFilesOptions): WorkbenchFilesApi {
   const [tabs, setTabs] = useState<WorkbenchFileTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>("");
+  const [recentOrder, setRecentOrder] = useState<string[]>([]);
   const [hasHydratedPersistence, setHasHydratedPersistence] = useState(() => !persistence);
   const [hasOpenedInitialTab, setHasOpenedInitialTab] = useState(false);
   const pendingLoadsRef = useRef<Set<string>>(new Set());
   const tabsRef = useRef<WorkbenchFileTab[]>([]);
+  const activeTabIdRef = useRef<string>("");
+  const recentOrderRef = useRef<string[]>([]);
+
+  const setActiveTab = useCallback((nextActiveId: string) => {
+    setActiveTabId((prev) => (prev === nextActiveId ? prev : nextActiveId));
+    setRecentOrder((current) => {
+      const sanitized = current.filter((id) => tabsRef.current.some((tab) => tab.id === id));
+      if (!nextActiveId) {
+        return sanitized;
+      }
+      const withoutNext = sanitized.filter((id) => id !== nextActiveId);
+      return [nextActiveId, ...withoutNext];
+    });
+  }, []);
+
+  useEffect(() => {
+    activeTabIdRef.current = activeTabId;
+  }, [activeTabId]);
+
+  useEffect(() => {
+    recentOrderRef.current = recentOrder;
+  }, [recentOrder]);
 
   useEffect(() => {
     if (!tree) {
       setTabs([]);
       setActiveTabId("");
+      setRecentOrder([]);
       return;
     }
     setTabs((current) =>
@@ -72,13 +112,11 @@ export function useWorkbenchFiles({
           };
         }),
     );
-    setActiveTabId((prev) => {
-      if (prev && findFileNode(tree, prev)) {
-        return prev;
-      }
-      return "";
-    });
-  }, [tree]);
+    const prevActive = activeTabIdRef.current;
+    if (!prevActive || !findFileNode(tree, prevActive)) {
+      setActiveTab("");
+    }
+  }, [tree, setActiveTab]);
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? null,
@@ -157,36 +195,36 @@ export function useWorkbenchFiles({
           error: null,
           etag: null,
           metadata: node.metadata,
+          pinned: false,
         };
         return [...current, nextTab];
       });
       if (options?.activate ?? true) {
-        setActiveTabId(fileId);
+        setActiveTab(fileId);
       }
     },
-    [tree],
+    [tree, setActiveTab],
   );
 
   useEffect(() => {
-    if (hasHydratedPersistence) {
-      return;
-    }
-    if (!persistence) {
-      setHasHydratedPersistence(true);
-      return;
-    }
-    if (!tree) {
+    if (hasHydratedPersistence || !persistence || !tree) {
+      if (!persistence) {
+        setHasHydratedPersistence(true);
+      }
       return;
     }
 
     const snapshot = persistence.get<PersistedWorkbenchTabs>();
-    const candidateIds = snapshot?.openTabs ?? [];
+    const candidateEntries = snapshot?.openTabs ?? [];
+    const normalizedEntries = candidateEntries
+      .map((entry) => (typeof entry === "string" ? { id: entry, pinned: false } : entry))
+      .filter((entry): entry is PersistedWorkbenchTabEntry => Boolean(entry && entry.id));
 
-    if (candidateIds.length > 0) {
+    if (normalizedEntries.length > 0) {
       const nextTabs: WorkbenchFileTab[] = [];
 
-      for (const id of candidateIds) {
-        const node = findFileNode(tree, id);
+      for (const entry of normalizedEntries) {
+        const node = findFileNode(tree, entry.id);
         if (!node || node.kind !== "file") {
           continue;
         }
@@ -200,6 +238,7 @@ export function useWorkbenchFiles({
           error: null,
           etag: null,
           metadata: node.metadata,
+          pinned: Boolean(entry.pinned),
         });
       }
 
@@ -210,12 +249,16 @@ export function useWorkbenchFiles({
             ? snapshot.activeTabId
             : nextTabs[0]?.id) ?? "";
         setActiveTabId(preferredActiveId);
+        const preferredMru =
+          snapshot?.mru && snapshot.mru.length > 0 ? snapshot.mru : nextTabs.map((tab) => tab.id);
+        const normalizedMru = preferredMru.filter((id) => nextTabs.some((tab) => tab.id === id));
+        setRecentOrder(normalizedMru);
         setHasOpenedInitialTab(true);
       }
     }
 
     setHasHydratedPersistence(true);
-  }, [hasHydratedPersistence, persistence, tree, loadIntoTab]);
+  }, [hasHydratedPersistence, persistence, tree]);
 
   useEffect(() => {
     if (!tree || !hasHydratedPersistence) {
@@ -253,84 +296,199 @@ export function useWorkbenchFiles({
     [ensureFileOpen],
   );
 
-  const selectTab = useCallback((fileId: string) => {
-    setActiveTabId(fileId);
-    setTabs((current) =>
-      current.map((tab) =>
-        tab.id === fileId && tab.status === "error" ? { ...tab, status: "loading", error: null } : tab,
-      ),
-    );
-  }, []);
+  const selectTab = useCallback(
+    (fileId: string) => {
+      setActiveTab(fileId);
+      setTabs((current) =>
+        current.map((tab) =>
+          tab.id === fileId && tab.status === "error" ? { ...tab, status: "loading", error: null } : tab,
+        ),
+      );
+    },
+    [setActiveTab],
+  );
 
-  const closeTab = useCallback((fileId: string) => {
-    setTabs((current) => {
-      const remaining = current.filter((tab) => tab.id !== fileId);
-      setActiveTabId((prev) => {
-        if (prev === fileId) {
-          return remaining[remaining.length - 1]?.id ?? "";
-        }
-        if (prev && remaining.some((tab) => tab.id === prev)) {
-          return prev;
-        }
-        return remaining[remaining.length - 1]?.id ?? "";
+  const closeTab = useCallback(
+    (fileId: string) => {
+      setTabs((current) => {
+        const remaining = current.filter((tab) => tab.id !== fileId);
+        const prevActive = activeTabIdRef.current;
+        const nextActiveId =
+          prevActive === fileId
+            ? remaining[remaining.length - 1]?.id ?? ""
+            : remaining.some((tab) => tab.id === prevActive)
+              ? prevActive
+              : remaining[remaining.length - 1]?.id ?? "";
+        setActiveTab(nextActiveId);
+        return remaining;
       });
-      return remaining;
-    });
-  }, []);
+    },
+    [setActiveTab],
+  );
 
-  const closeOtherTabs = useCallback((fileId: string) => {
-    setTabs((current) => {
-      if (!current.some((tab) => tab.id === fileId) || current.length <= 1) {
-        return current;
-      }
-      setActiveTabId(fileId);
-      return current.filter((tab) => tab.id === fileId);
-    });
-  }, []);
-
-  const closeTabsToRight = useCallback((fileId: string) => {
-    setTabs((current) => {
-      const targetIndex = current.findIndex((tab) => tab.id === fileId);
-      if (targetIndex === -1 || targetIndex === current.length - 1) {
-        return current;
-      }
-      const next = current.slice(0, targetIndex + 1);
-      setActiveTabId((prev) => {
-        if (next.some((tab) => tab.id === prev)) {
-          return prev;
+  const closeOtherTabs = useCallback(
+    (fileId: string) => {
+      setTabs((current) => {
+        if (!current.some((tab) => tab.id === fileId) || current.length <= 1) {
+          return current;
         }
-        return fileId;
+        setActiveTab(fileId);
+        return current.filter((tab) => tab.id === fileId);
       });
-      return next;
-    });
-  }, []);
+    },
+    [setActiveTab],
+  );
+
+  const closeTabsToRight = useCallback(
+    (fileId: string) => {
+      setTabs((current) => {
+        const targetIndex = current.findIndex((tab) => tab.id === fileId);
+        if (targetIndex === -1 || targetIndex === current.length - 1) {
+          return current;
+        }
+        const next = current.slice(0, targetIndex + 1);
+        const nextActiveId = next.some((tab) => tab.id === activeTabIdRef.current)
+          ? activeTabIdRef.current
+          : fileId;
+        setActiveTab(nextActiveId);
+        return next;
+      });
+    },
+    [setActiveTab],
+  );
 
   const closeAllTabs = useCallback(() => {
     setTabs([]);
     setActiveTabId("");
+    setRecentOrder([]);
   }, []);
 
-  const moveTab = useCallback((fileId: string, targetIndex: number) => {
+  const moveTab = useCallback(
+    (fileId: string, targetIndex: number, options?: MoveTabOptions) => {
+      setTabs((current) => {
+        if (current.length <= 1) {
+          return current;
+        }
+        const fromIndex = current.findIndex((tab) => tab.id === fileId);
+        if (fromIndex === -1) {
+          return current;
+        }
+        const boundedTarget = Math.max(0, Math.min(targetIndex, current.length));
+        let insertIndex = boundedTarget;
+        if (fromIndex < boundedTarget) {
+          insertIndex -= 1;
+        }
+        const pinned: WorkbenchFileTab[] = [];
+        const regular: WorkbenchFileTab[] = [];
+        let moving: WorkbenchFileTab | null = null;
+        current.forEach((tab, index) => {
+          if (index === fromIndex) {
+            moving = tab;
+            return;
+          }
+          if (tab.pinned) {
+            pinned.push(tab);
+          } else {
+            regular.push(tab);
+          }
+        });
+        if (!moving) {
+          return current;
+        }
+        const zone: WorkbenchTabZone =
+          options?.zone ?? (insertIndex <= pinned.length ? "pinned" : "regular");
+        if (zone === "pinned") {
+          const clampedIndex = Math.max(0, Math.min(insertIndex, pinned.length));
+          pinned.splice(clampedIndex, 0, { ...moving, pinned: true });
+        } else {
+          const relativeIndex = Math.max(0, Math.min(insertIndex - pinned.length, regular.length));
+          regular.splice(relativeIndex, 0, { ...moving, pinned: false });
+        }
+        return [...pinned, ...regular];
+      });
+    },
+    [],
+  );
+
+  const pinTab = useCallback((fileId: string) => {
     setTabs((current) => {
-      const fromIndex = current.findIndex((tab) => tab.id === fileId);
-      if (fromIndex === -1) {
+      const pinned: WorkbenchFileTab[] = [];
+      const regular: WorkbenchFileTab[] = [];
+      let target: WorkbenchFileTab | null = null;
+      for (const tab of current) {
+        if (tab.id === fileId) {
+          target = tab;
+          continue;
+        }
+        if (tab.pinned) {
+          pinned.push(tab);
+        } else {
+          regular.push(tab);
+        }
+      }
+      if (!target || target.pinned) {
         return current;
       }
-      const boundedTarget = Math.max(0, Math.min(targetIndex, current.length));
-      if (fromIndex === boundedTarget || fromIndex + 1 === boundedTarget) {
-        return current;
-      }
-      const next = current.slice();
-      const [tab] = next.splice(fromIndex, 1);
-      let insertIndex = boundedTarget;
-      if (fromIndex < boundedTarget) {
-        insertIndex -= 1;
-      }
-      insertIndex = Math.max(0, Math.min(insertIndex, next.length));
-      next.splice(insertIndex, 0, tab);
-      return next;
+      const updated = { ...target, pinned: true };
+      return [...pinned, updated, ...regular];
     });
   }, []);
+
+  const unpinTab = useCallback((fileId: string) => {
+    setTabs((current) => {
+      const pinned: WorkbenchFileTab[] = [];
+      const regular: WorkbenchFileTab[] = [];
+      let target: WorkbenchFileTab | null = null;
+      for (const tab of current) {
+        if (tab.id === fileId) {
+          target = tab;
+          continue;
+        }
+        if (tab.pinned) {
+          pinned.push(tab);
+        } else {
+          regular.push(tab);
+        }
+      }
+      if (!target || !target.pinned) {
+        return current;
+      }
+      const updated = { ...target, pinned: false };
+      return [...pinned, updated, ...regular];
+    });
+  }, []);
+
+  const toggleTabPin = useCallback(
+    (fileId: string, pinned: boolean) => {
+      if (pinned) {
+        pinTab(fileId);
+      } else {
+        unpinTab(fileId);
+      }
+    },
+    [pinTab, unpinTab],
+  );
+
+  const selectRecentTab = useCallback(
+    (direction: "forward" | "backward") => {
+      const ordered = recentOrderRef.current.filter((id) =>
+        tabsRef.current.some((tab) => tab.id === id),
+      );
+      if (ordered.length <= 1) {
+        return;
+      }
+      const activeId = activeTabIdRef.current || ordered[0];
+      const currentIndex = ordered.indexOf(activeId);
+      const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+      const delta = direction === "forward" ? 1 : -1;
+      const nextIndex = (safeIndex + delta + ordered.length) % ordered.length;
+      const nextId = ordered[nextIndex];
+      if (nextId && nextId !== activeId) {
+        setActiveTab(nextId);
+      }
+    },
+    [setActiveTab],
+  );
 
   const updateContent = useCallback((fileId: string, content: string) => {
     setTabs((current) =>
@@ -357,6 +515,13 @@ export function useWorkbenchFiles({
   }, [tabs]);
 
   useEffect(() => {
+    setRecentOrder((current) => {
+      const filtered = current.filter((id) => tabs.some((tab) => tab.id === id));
+      return filtered.length === current.length ? current : filtered;
+    });
+  }, [tabs]);
+
+  useEffect(() => {
     const visibleTabIds = new Set(tabs.map((tab) => tab.id));
     for (const pendingId of pendingLoadsRef.current) {
       if (!visibleTabIds.has(pendingId)) {
@@ -380,10 +545,11 @@ export function useWorkbenchFiles({
       return;
     }
     persistence.set<PersistedWorkbenchTabs>({
-      openTabs: tabs.map((tab) => tab.id),
+      openTabs: tabs.map((tab) => ({ id: tab.id, pinned: Boolean(tab.pinned) })),
       activeTabId: activeTabId || null,
+      mru: recentOrder,
     });
-  }, [persistence, tabs, activeTabId, hasHydratedPersistence]);
+  }, [persistence, tabs, activeTabId, recentOrder, hasHydratedPersistence]);
 
   return {
     tree,
@@ -397,6 +563,10 @@ export function useWorkbenchFiles({
     closeTabsToRight,
     closeAllTabs,
     moveTab,
+    pinTab,
+    unpinTab,
+    toggleTabPin,
+    selectRecentTab,
     updateContent,
     isDirty,
   };

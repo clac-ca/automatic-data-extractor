@@ -28,6 +28,7 @@ export interface WorkbenchFileTab {
   readonly error?: string | null;
   readonly etag?: string | null;
   readonly metadata?: WorkbenchFileMetadata;
+  readonly pinned?: boolean;
 }
 
 export type WorkbenchConsoleLevel = "info" | "success" | "warning" | "error";

@@ -127,6 +127,9 @@ _session_cookie_scheme = APIKeyCookie(
     auto_error=False,
 )
 
+def _is_dev_identity(identity: AuthenticatedIdentity) -> bool:
+    return identity.credentials == "development"
+
 
 def configure_auth_dependencies(*, settings: Settings) -> None:
     """Configure authentication dependency state for the application lifecycle."""
@@ -147,6 +150,9 @@ async def get_current_identity(
     """Resolve the authenticated identity for the request."""
 
     service = AuthService(session=session, settings=settings)
+    if settings.auth_disabled:
+        return await service.ensure_dev_identity()
+
     if credentials is not None:
         try:
             payload = service.decode_token(
@@ -239,6 +245,8 @@ def require_global(
         identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
         session: SessionDep,
     ) -> User:
+        if _is_dev_identity(identity):
+            return identity.user
         decision = await authorize(
             session=session,
             principal_id=str(identity.principal.id),
@@ -269,6 +277,8 @@ def require_workspace(
         identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
         session: SessionDep,
     ) -> User:
+        if _is_dev_identity(identity):
+            return identity.user
         workspace_id = resolve_workspace_scope(
             request=request,
             security_scopes=security_scopes,
@@ -312,6 +322,8 @@ def require_permissions_catalog_access(
         session: SessionDep,
         workspace_id: str | None = None,
     ) -> User:
+        if _is_dev_identity(identity):
+            return identity.user
         if scope == ScopeType.GLOBAL:
             decision = await authorize(
                 session=session,
