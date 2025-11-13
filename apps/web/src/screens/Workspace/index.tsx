@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import clsx from "clsx";
 
@@ -8,8 +8,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
 import { useWorkspacesQuery, workspacesKeys, WORKSPACE_LIST_DEFAULT_PARAMS, type WorkspaceProfile } from "@screens/Workspace/api/workspaces-api";
-import { getMinimizedWorkbenchStorageKey, getWorkbenchReturnPathStorageKey, type MinimizedWorkbenchState } from "@screens/Workspace/sections/ConfigBuilder/workbench/state/workbenchWindowState";
 import { WorkspaceProvider } from "@screens/Workspace/context/WorkspaceContext";
+import { WorkbenchWindowProvider } from "@screens/Workspace/context/WorkbenchWindowContext";
 import { createScopedStorage } from "@shared/storage";
 import { writePreferredWorkspace } from "@screens/Workspace/state/workspace-preferences";
 import { GlobalTopBar } from "@app/shell/GlobalTopBar";
@@ -161,54 +161,6 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
     navStorage.set(isNavCollapsed);
   }, [isNavCollapsed, navStorage]);
 
-  const workbenchReturnPathStorage = useMemo(
-    () => createScopedStorage(getWorkbenchReturnPathStorageKey(workspace.id)),
-    [workspace.id],
-  );
-  useEffect(() => {
-    if (!workbenchReturnPathStorage.get<string>()) {
-      workbenchReturnPathStorage.set(`/workspaces/${workspace.id}/config-builder`);
-    }
-  }, [workbenchReturnPathStorage, workspace.id]);
-
-  const minimizedWorkbenchStorageKey = useMemo(
-    () => getMinimizedWorkbenchStorageKey(workspace.id),
-    [workspace.id],
-  );
-  const minimizedWorkbenchStorage = useMemo(
-    () => createScopedStorage(minimizedWorkbenchStorageKey),
-    [minimizedWorkbenchStorageKey],
-  );
-  const [minimizedWorkbench, setMinimizedWorkbench] = useState<MinimizedWorkbenchState | null>(() =>
-    minimizedWorkbenchStorage.get<MinimizedWorkbenchState>(),
-  );
-  useEffect(() => {
-    setMinimizedWorkbench(minimizedWorkbenchStorage.get<MinimizedWorkbenchState>());
-  }, [minimizedWorkbenchStorage, location.pathname, location.search]);
-  useEffect(() => {
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === minimizedWorkbenchStorageKey) {
-        setMinimizedWorkbench(event.newValue ? (JSON.parse(event.newValue) as MinimizedWorkbenchState) : null);
-      }
-    };
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, [minimizedWorkbenchStorageKey]);
-  const handleRestoreWorkbench = useCallback(() => {
-    if (!minimizedWorkbench) {
-      return;
-    }
-    minimizedWorkbenchStorage.clear();
-    setMinimizedWorkbench(null);
-    navigate(
-      `/workspaces/${workspace.id}/config-builder/${encodeURIComponent(minimizedWorkbench.configId)}/editor`,
-    );
-  }, [minimizedWorkbench, minimizedWorkbenchStorage, navigate, workspace.id]);
-  const handleDismissWorkbenchDock = useCallback(() => {
-    minimizedWorkbenchStorage.clear();
-    setMinimizedWorkbench(null);
-  }, [minimizedWorkbenchStorage]);
-
   const topBarLeading = (
     <button
       type="button"
@@ -244,14 +196,6 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
 
   const segments = extractSectionSegments(location.pathname, workspace.id);
   const section = resolveWorkspaceSection(workspace.id, segments, location.search, location.hash);
-  const isWorkbenchRoute =
-    segments.length >= 3 && segments[0] === "config-builder" && segments[2] === "editor";
-
-  useEffect(() => {
-    if (!isWorkbenchRoute) {
-      workbenchReturnPathStorage.set(`${location.pathname}${location.search}${location.hash}`);
-    }
-  }, [isWorkbenchRoute, location.pathname, location.search, location.hash, workbenchReturnPathStorage]);
 
   useEffect(() => {
     if (section?.kind === "redirect") {
