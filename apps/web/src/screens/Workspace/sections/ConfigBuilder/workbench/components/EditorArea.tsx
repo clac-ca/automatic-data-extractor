@@ -84,6 +84,7 @@ export function EditorArea({
 
   const pinnedTabs = useMemo(() => tabs.filter((tab) => tab.pinned), [tabs]);
   const regularTabs = useMemo(() => tabs.filter((tab) => !tab.pinned), [tabs]);
+  const contentTabs = useMemo(() => tabs.slice().sort((a, b) => a.id.localeCompare(b.id)), [tabs]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -468,7 +469,7 @@ export function EditorArea({
           </SortableContext>
         </DndContext>
 
-        {tabs.map((tab) => (
+        {contentTabs.map((tab) => (
           <TabsContent key={tab.id} value={tab.id} className="flex min-h-0 flex-1">
             {tab.status === "loading" ? (
               <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
@@ -490,6 +491,7 @@ export function EditorArea({
                 <CodeEditor
                   value={tab.content}
                   language={tab.language ?? "plaintext"}
+                  path={tab.id}
                   theme={editorTheme}
                   onChange={(value) => onContentChange(tab.id, value ?? "")}
                 />

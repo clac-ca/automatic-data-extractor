@@ -1,23 +1,18 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import clsx from "clsx";
 
 import type { CodeEditorHandle, CodeEditorProps } from "./CodeEditor.types";
+import { disposeAdeScriptHelpers, registerAdeScriptHelpers } from "./registerAdeScriptHelpers";
 
 const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function MonacoCodeEditor(
-  {
-    value,
-    onChange,
-    language = "plaintext",
-    readOnly = false,
-    onSaveShortcut,
-    className,
-    theme = "vs-dark",
-  }: CodeEditorProps,
+  { value, onChange, language = "plaintext", path, readOnly = false, onSaveShortcut, className, theme = "vs-dark" }: CodeEditorProps,
   ref,
 ) {
   const saveShortcutRef = useRef(onSaveShortcut);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  const adeLanguageRef = useRef<string | null>(null);
+  const editorPath = useMemo(() => toEditorPath(path), [path]);
 
   useEffect(() => {
     saveShortcutRef.current = onSaveShortcut;
@@ -30,12 +25,27 @@ const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function 
     [onChange],
   );
 
-  const handleMount = useCallback<OnMount>((editor, monaco) => {
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+  const handleMount = useCallback<OnMount>((editor, monacoInstance) => {
+    const modelLanguage = editor.getModel()?.getLanguageId() ?? language;
+    if (modelLanguage === "python") {
+      registerAdeScriptHelpers(monacoInstance, modelLanguage);
+      adeLanguageRef.current = modelLanguage;
+    }
+    editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
       saveShortcutRef.current?.();
     });
     editorRef.current = editor;
-  }, []);
+  }, [language]);
+
+  useEffect(
+    () => () => {
+      if (adeLanguageRef.current) {
+        disposeAdeScriptHelpers(adeLanguageRef.current);
+        adeLanguageRef.current = null;
+      }
+    },
+    [],
+  );
 
   useImperativeHandle(
     ref,
@@ -63,6 +73,7 @@ const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function 
         value={value}
         onChange={handleChange}
         language={language}
+        path={editorPath}
         theme={theme}
         height="100%"
         width="100%"
@@ -75,6 +86,11 @@ const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function 
           smoothScrolling: true,
           automaticLayout: true,
           lineNumbersMinChars: 3,
+          hover: { enabled: true },
+          wordBasedSuggestions: "on",
+          quickSuggestions: { other: true, comments: false, strings: true },
+          suggestOnTriggerCharacters: true,
+          snippetSuggestions: "inline",
         }}
         loading={<div className="flex h-full items-center justify-center text-xs text-slate-400">Loading editor…</div>}
         onMount={handleMount}
@@ -84,3 +100,14 @@ const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function 
 });
 
 export default MonacoCodeEditor;
+
+function toEditorPath(rawPath: string | undefined): string | undefined {
+  if (!rawPath) {
+    return undefined;
+  }
+  if (rawPath.includes("://")) {
+    return rawPath;
+  }
+  const normalized = rawPath.startsWith("/") ? rawPath.slice(1) : rawPath;
+  return `inmemory://ade/${normalized}`;
+}

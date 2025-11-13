@@ -7,6 +7,7 @@ export interface CodeEditorProps {
   readonly value: string;
   readonly onChange: (value: string) => void;
   readonly language?: string;
+  readonly path?: string;
   readonly readOnly?: boolean;
   readonly onSaveShortcut?: () => void;
   readonly className?: string;
