@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { WorkbenchFileNode, WorkbenchFileTab } from "../types";
 import { findFileNode, findFirstFile } from "../utils/tree";
@@ -43,6 +43,8 @@ export function useWorkbenchFiles({
   const [activeTabId, setActiveTabId] = useState<string>("");
   const [hasHydratedPersistence, setHasHydratedPersistence] = useState(() => !persistence);
   const [hasOpenedInitialTab, setHasOpenedInitialTab] = useState(false);
+  const pendingLoadsRef = useRef<Set<string>>(new Set());
+  const tabsRef = useRef<WorkbenchFileTab[]>([]);
 
   useEffect(() => {
     if (!tree) {
@@ -81,14 +83,15 @@ export function useWorkbenchFiles({
 
   const loadIntoTab = useCallback(
     async (fileId: string) => {
-      let found = false;
+      if (!tabsRef.current.some((tab) => tab.id === fileId)) {
+        return;
+      }
       let alreadyReady = false;
       setTabs((current) =>
         current.map((tab) => {
           if (tab.id !== fileId) {
             return tab;
           }
-          found = true;
           if (tab.status === "ready") {
             alreadyReady = true;
             return tab;
@@ -97,7 +100,7 @@ export function useWorkbenchFiles({
         }),
       );
 
-      if (!found || alreadyReady) {
+      if (alreadyReady) {
         return;
       }
 
@@ -156,11 +159,8 @@ export function useWorkbenchFiles({
       if (options?.activate ?? true) {
         setActiveTabId(fileId);
       }
-      window.setTimeout(() => {
-        void loadIntoTab(fileId);
-      }, 0);
     },
-    [tree, loadIntoTab],
+    [tree],
   );
 
   useEffect(() => {
@@ -207,12 +207,6 @@ export function useWorkbenchFiles({
             : nextTabs[0]?.id) ?? "";
         setActiveTabId(preferredActiveId);
         setHasOpenedInitialTab(true);
-        const idsToLoad = nextTabs.map((tab) => tab.id);
-        window.setTimeout(() => {
-          idsToLoad.forEach((id) => {
-            void loadIntoTab(id);
-          });
-        }, 0);
       }
     }
 
@@ -255,13 +249,14 @@ export function useWorkbenchFiles({
     [ensureFileOpen],
   );
 
-  const selectTab = useCallback(
-    (fileId: string) => {
-      setActiveTabId(fileId);
-      void loadIntoTab(fileId);
-    },
-    [loadIntoTab],
-  );
+  const selectTab = useCallback((fileId: string) => {
+    setActiveTabId(fileId);
+    setTabs((current) =>
+      current.map((tab) =>
+        tab.id === fileId && tab.status === "error" ? { ...tab, status: "loading", error: null } : tab,
+      ),
+    );
+  }, []);
 
   const closeTab = useCallback((fileId: string) => {
     setTabs((current) => {
@@ -298,6 +293,29 @@ export function useWorkbenchFiles({
     () => tabs.some((tab) => tab.status === "ready" && tab.content !== tab.initialContent),
     [tabs],
   );
+
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
+
+  useEffect(() => {
+    const visibleTabIds = new Set(tabs.map((tab) => tab.id));
+    for (const pendingId of pendingLoadsRef.current) {
+      if (!visibleTabIds.has(pendingId)) {
+        pendingLoadsRef.current.delete(pendingId);
+      }
+    }
+    for (const tab of tabs) {
+      if (tab.status !== "loading" || pendingLoadsRef.current.has(tab.id)) {
+        continue;
+      }
+      pendingLoadsRef.current.add(tab.id);
+      const pending = loadIntoTab(tab.id);
+      pending.finally(() => {
+        pendingLoadsRef.current.delete(tab.id);
+      });
+    }
+  }, [tabs, loadIntoTab]);
 
   useEffect(() => {
     if (!persistence || !hasHydratedPersistence) {
