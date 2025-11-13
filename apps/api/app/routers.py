@@ -11,6 +11,7 @@ from .features.configs.router import router as configs_router
 from .features.documents.router import router as documents_router
 from .features.health.router import router as health_router
 from .features.roles.router import router as roles_router
+from .features.runs.router import router as runs_router
 from .features.users.router import router as users_router
 from .features.workspaces.router import router as workspaces_router
 
@@ -24,5 +25,6 @@ api_router.include_router(workspaces_router)
 api_router.include_router(documents_router)
 api_router.include_router(configs_router)
 api_router.include_router(builds_router)
+api_router.include_router(runs_router)
 
 __all__ = ["api_router"]

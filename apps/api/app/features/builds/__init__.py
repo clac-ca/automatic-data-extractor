@@ -1,23 +1,19 @@
 """Virtual environment build management for configurations."""
 
-from .exceptions import (
-    BuildAlreadyInProgressError,
-    BuildNotFoundError,
-    BuildWorkspaceMismatchError,
-)
-from .schemas import BuildRecord
-from .service import (
-    BuildEnsureMode,
-    BuildEnsureResult,
-    BuildsService,
-)
+from .exceptions import BuildAlreadyInProgressError, BuildExecutionError, BuildNotFoundError, BuildWorkspaceMismatchError
+from .schemas import BuildCreateOptions, BuildCreateRequest, BuildEvent, BuildLogsResponse, BuildResource
+from .service import BuildExecutionContext, BuildsService
 
 __all__ = [
     "BuildAlreadyInProgressError",
-    "BuildEnsureMode",
-    "BuildEnsureResult",
+    "BuildExecutionContext",
+    "BuildExecutionError",
     "BuildNotFoundError",
-    "BuildRecord",
     "BuildWorkspaceMismatchError",
+    "BuildCreateOptions",
+    "BuildCreateRequest",
+    "BuildResource",
+    "BuildEvent",
+    "BuildLogsResponse",
     "BuildsService",
 ]

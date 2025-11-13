@@ -1,18 +1,23 @@
-from __future__ import annotations
-
-import sys
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable
+from typing import AsyncIterator, Callable
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from apps.api.app.features.builds.builder import BuildArtifacts
-from apps.api.app.features.builds.exceptions import BuildAlreadyInProgressError
-from apps.api.app.features.builds.models import BuildStatus, ConfigurationBuild
-from apps.api.app.features.builds.service import BuildEnsureMode, BuildsService
+from apps.api.app.features.builds.builder import (
+    BuildArtifacts,
+    BuildStep,
+    BuilderArtifactsEvent,
+    BuilderEvent,
+    BuilderLogEvent,
+    BuilderStepEvent,
+)
+from apps.api.app.features.builds.models import BuildStatus, ConfigurationBuild, ConfigurationBuildStatus
+from apps.api.app.features.builds.schemas import BuildCreateOptions
+from apps.api.app.features.builds.service import BuildExecutionContext, BuildsService
 from apps.api.app.features.configs.models import Configuration, ConfigurationStatus
 from apps.api.app.features.configs.storage import ConfigStorage
 from apps.api.app.features.workspaces.models import Workspace
@@ -22,23 +27,11 @@ from apps.api.app.shared.db import Base
 from apps.api.app.shared.db.mixins import generate_ulid
 
 
-@dataclass
-class BuilderCall:
-    build_id: str
-    workspace_id: str
-    config_id: str
-    target_path: Path
-
-
+@dataclass(slots=True)
 class FakeBuilder:
-    """Test double for ``VirtualEnvironmentBuilder`` that avoids pip installs."""
+    events: list[BuilderEvent]
 
-    def __init__(self, *, engine_version: str = "0.1.0", python_version: str = "3.12.1") -> None:
-        self.engine_version = engine_version
-        self.python_version = python_version
-        self.calls: list[BuilderCall] = []
-
-    async def build(
+    async def build_stream(
         self,
         *,
         build_id: str,
@@ -50,25 +43,13 @@ class FakeBuilder:
         pip_cache_dir: Path | None,
         python_bin: str | None,
         timeout: float,
-    ) -> BuildArtifacts:
+    ) -> AsyncIterator[BuilderEvent]:
         target_path.mkdir(parents=True, exist_ok=True)
-        self.calls.append(
-            BuilderCall(
-                build_id=build_id,
-                workspace_id=workspace_id,
-                config_id=config_id,
-                target_path=target_path,
-            )
-        )
-        return BuildArtifacts(
-            python_version=self.python_version,
-            engine_version=self.engine_version,
-        )
+        for event in self.events:
+            yield event
 
 
 class TimeStub:
-    """Mutable callable returning deterministic timestamps for the service."""
-
     def __init__(self, initial: datetime | None = None) -> None:
         self.current = initial or datetime.now(tz=UTC)
 
@@ -91,10 +72,9 @@ async def session() -> AsyncSession:
 
 
 @pytest.fixture()
-def service_factory(tmp_path: Path) -> Callable[[AsyncSession, dict[str, Any], FakeBuilder, Callable[[], datetime]], BuildsService]:
+def service_factory(tmp_path: Path) -> Callable[[AsyncSession, FakeBuilder | None, Callable[[], datetime]], BuildsService]:
     def _factory(
         session: AsyncSession,
-        overrides: dict[str, Any] | None = None,
         builder: FakeBuilder | None = None,
         now: Callable[[], datetime] = utc_now,
     ) -> BuildsService:
@@ -110,24 +90,24 @@ version = "0.1.0"
             encoding="utf-8",
         )
         configs_dir = tmp_path / "configs"
+        configs_dir.mkdir(parents=True, exist_ok=True)
         venvs_dir = tmp_path / "venvs"
         pip_cache_dir = tmp_path / "pip-cache"
-        overrides = overrides or {}
         settings = base_settings.model_copy(
             update={
                 "configs_dir": configs_dir,
                 "venvs_dir": venvs_dir,
                 "pip_cache_dir": pip_cache_dir,
                 "engine_spec": str(engine_dir),
-                **overrides,
             }
         )
-        (tmp_path / "templates").mkdir(parents=True, exist_ok=True)
+        templates_root = tmp_path / "templates"
+        templates_root.mkdir(parents=True, exist_ok=True)
         storage = ConfigStorage(
-            templates_root=tmp_path / "templates",
+            templates_root=templates_root,
             configs_root=settings.configs_dir,
         )
-        builder = builder or FakeBuilder()
+        builder = builder or FakeBuilder(events=[])
         return BuildsService(
             session=session,
             settings=settings,
@@ -139,191 +119,95 @@ version = "0.1.0"
     return _factory
 
 
-async def _prepare_configuration(
+async def _create_configuration(
     session: AsyncSession,
-    *,
-    workspace_id: str | None = None,
-    config_id: str | None = None,
-    status: ConfigurationStatus = ConfigurationStatus.ACTIVE,
-    config_version: int = 1,
-    content_digest: str | None = "digest",
-) -> tuple[str, str, str]:
+) -> tuple[Workspace, Configuration]:
     workspace = Workspace(name="Acme", slug=f"acme-{generate_ulid().lower()}")
     session.add(workspace)
     await session.flush()
-    workspace_id = workspace.id if workspace_id is None else workspace_id
-    config = Configuration(
-        workspace_id=workspace_id,
-        config_id=config_id or generate_ulid(),
+    configuration = Configuration(
+        workspace_id=workspace.id,
+        config_id=generate_ulid(),
         display_name="Config",
-        status=status,
-        config_version=config_version,
-        content_digest=content_digest,
+        status=ConfigurationStatus.ACTIVE,
+        config_version=1,
+        content_digest="digest",
     )
-    session.add(config)
+    session.add(configuration)
     await session.flush()
-    return workspace_id, config.config_id, config.id
+    return workspace, configuration
 
 
-async def _ensure_config_path(root: Path, workspace_id: str, config_id: str) -> Path:
-    config_path = root / workspace_id / "config_packages" / config_id
+async def test_prepare_build_reuses_active(session: AsyncSession, tmp_path: Path, service_factory) -> None:
+    workspace, configuration = await _create_configuration(session)
+    builder = FakeBuilder(events=[])
+    service = service_factory(session, builder=builder)
+
+    config_path = service.storage.config_path(workspace.id, configuration.config_id)
     config_path.mkdir(parents=True, exist_ok=True)
-    return config_path
 
-
-@pytest.mark.asyncio()
-async def test_ensure_build_creates_new_build(session: AsyncSession, tmp_path: Path, service_factory) -> None:
-    workspace_id, config_id, configuration_db_id = await _prepare_configuration(session)
-    await _ensure_config_path(tmp_path / "configs", workspace_id, config_id)
-
-    builder = FakeBuilder(engine_version="1.0.0", python_version="3.12.0")
-    service = service_factory(
-        session,
-        builder=builder,
-        now=utc_now,
-    )
-
-    result = await service.ensure_build(
-        workspace_id=workspace_id,
-        config_id=config_id,
-    )
-
-    assert result.status is BuildStatus.ACTIVE
-    assert result.just_built is True
-    assert result.build is not None
-    assert result.build.engine_version == "1.0.0"
-    assert result.build.python_version == "3.12.0"
-    assert builder.calls and builder.calls[0].build_id == result.build.build_id
-
-
-@pytest.mark.asyncio()
-async def test_ensure_build_reuses_active(session: AsyncSession, tmp_path: Path, service_factory) -> None:
-    workspace_id, config_id, _ = await _prepare_configuration(session)
-    await _ensure_config_path(tmp_path / "configs", workspace_id, config_id)
-
-    builder = FakeBuilder()
-    service = service_factory(session, builder=builder)
-
-    first = await service.ensure_build(workspace_id=workspace_id, config_id=config_id)
-    assert first.just_built is True
-    assert len(builder.calls) == 1
-
-    second = await service.ensure_build(workspace_id=workspace_id, config_id=config_id)
-    assert second.just_built is False
-    assert second.build is not None
-    assert second.build.build_id == first.build.build_id
-    assert len(builder.calls) == 1
-
-
-@pytest.mark.asyncio()
-async def test_ensure_build_honours_ttl(session: AsyncSession, tmp_path: Path, service_factory) -> None:
-    workspace_id, config_id, configuration_db_id = await _prepare_configuration(session)
-    await _ensure_config_path(tmp_path / "configs", workspace_id, config_id)
-
-    clock = TimeStub(datetime(2024, 1, 1, tzinfo=UTC))
-    builder = FakeBuilder()
-    service = service_factory(
-        session,
-        overrides={"build_ttl": timedelta(seconds=30)},
-        builder=builder,
-        now=clock,
-    )
-
-    first = await service.ensure_build(workspace_id=workspace_id, config_id=config_id)
-    assert first.just_built is True
-    clock.advance(timedelta(seconds=31))
-
-    second = await service.ensure_build(workspace_id=workspace_id, config_id=config_id)
-    assert second.just_built is True
-    assert len(builder.calls) == 2
-
-
-@pytest.mark.asyncio()
-async def test_ensure_build_returns_building_when_in_progress(
-    session: AsyncSession, tmp_path: Path, service_factory
-) -> None:
-    workspace_id, config_id, configuration_db_id = await _prepare_configuration(session)
-    await _ensure_config_path(tmp_path / "configs", workspace_id, config_id)
-
-    building = ConfigurationBuild(
-        workspace_id=workspace_id,
-        config_id=config_id,
-        configuration_id=configuration_db_id,
+    pointer = ConfigurationBuild(
+        workspace_id=workspace.id,
+        config_id=configuration.config_id,
+        configuration_id=configuration.id,
         build_id=generate_ulid(),
-        status=BuildStatus.BUILDING,
-        venv_path=str(tmp_path / "venvs" / workspace_id / config_id / "build"),
-        config_version=1,
-        content_digest="digest",
-        engine_spec="spec",
+        status=ConfigurationBuildStatus.ACTIVE,
+        venv_path=str(tmp_path / "venvs" / workspace.id / configuration.config_id / "existing"),
+        config_version=configuration.config_version,
+        content_digest=configuration.content_digest,
+        engine_spec=service.settings.engine_spec,
         engine_version="0.1.0",
-        python_interpreter=str(Path(sys.executable).resolve()),
-        started_at=datetime.now(tz=UTC),
+        python_interpreter=service.settings.python_bin,
+        built_at=utc_now(),
     )
-    session.add(building)
+    session.add(pointer)
     await session.commit()
 
-    service = service_factory(session)
-    result = await service.ensure_build(
-        workspace_id=workspace_id,
-        config_id=config_id,
-        mode=BuildEnsureMode.INTERACTIVE,
+    build, context = await service.prepare_build(
+        workspace_id=workspace.id,
+        config_id=configuration.config_id,
+        options=BuildCreateOptions(force=False, wait=False),
     )
-    assert result.status is BuildStatus.BUILDING
-    assert result.build is None
+
+    assert context.should_run is False
+    assert build.status is BuildStatus.ACTIVE
+    assert build.summary == "Reused existing build"
+    assert build.build_ref == pointer.build_id
 
 
 @pytest.mark.asyncio()
-async def test_ensure_build_blocks_and_times_out(session: AsyncSession, tmp_path: Path, service_factory) -> None:
-    workspace_id, config_id, configuration_db_id = await _prepare_configuration(session)
-    await _ensure_config_path(tmp_path / "configs", workspace_id, config_id)
-
-    building = ConfigurationBuild(
-        workspace_id=workspace_id,
-        config_id=config_id,
-        configuration_id=configuration_db_id,
-        build_id=generate_ulid(),
-        status=BuildStatus.BUILDING,
-        venv_path=str(tmp_path / "venvs" / workspace_id / config_id / "build"),
-        config_version=1,
-        content_digest="digest",
-        engine_spec="spec",
-        engine_version="0.1.0",
-        python_interpreter=str(Path(sys.executable).resolve()),
-        started_at=datetime.now(tz=UTC),
+async def test_stream_build_success(session: AsyncSession, tmp_path: Path, service_factory) -> None:
+    workspace, configuration = await _create_configuration(session)
+    builder = FakeBuilder(
+        events=[
+            BuilderStepEvent(step=BuildStep.CREATE_VENV, message="venv"),
+            BuilderLogEvent(message="log 1"),
+            BuilderStepEvent(step=BuildStep.INSTALL_ENGINE, message="install"),
+            BuilderLogEvent(message="log 2"),
+            BuilderArtifactsEvent(
+                artifacts=BuildArtifacts(python_version="3.12.1", engine_version="0.1.0")
+            ),
+        ]
     )
-    session.add(building)
-    await session.commit()
-
-    service = service_factory(
-        session,
-        overrides={"build_ensure_wait": timedelta(seconds=0)},
-    )
-
-    with pytest.raises(BuildAlreadyInProgressError):
-        await service.ensure_build(
-            workspace_id=workspace_id,
-            config_id=config_id,
-            mode=BuildEnsureMode.BLOCKING,
-        )
-
-
-@pytest.mark.asyncio()
-async def test_delete_active_build_removes_row_and_directory(
-    session: AsyncSession, tmp_path: Path, service_factory
-) -> None:
-    workspace_id, config_id, _ = await _prepare_configuration(session)
-    config_root = tmp_path / "configs"
-    await _ensure_config_path(config_root, workspace_id, config_id)
-
-    builder = FakeBuilder()
     service = service_factory(session, builder=builder)
 
-    result = await service.ensure_build(workspace_id=workspace_id, config_id=config_id)
-    assert result.build is not None
-    venv_path = Path(result.build.venv_path)
-    assert venv_path.exists()
+    config_path = service.storage.config_path(workspace.id, configuration.config_id)
+    config_path.mkdir(parents=True, exist_ok=True)
 
-    await service.delete_active_build(workspace_id=workspace_id, config_id=config_id)
-    lookup = await session.get(ConfigurationBuild, result.build.id)
-    assert lookup is None
-    assert not venv_path.exists()
+    build, context = await service.prepare_build(
+        workspace_id=workspace.id,
+        config_id=configuration.config_id,
+        options=BuildCreateOptions(force=True, wait=False),
+    )
+    events = []
+    async for event in service.stream_build(context=context, options=BuildCreateOptions(force=True, wait=False)):
+        events.append(event)
+
+    refreshed = await service.get_build(build.id)
+    assert refreshed is not None
+    assert refreshed.status is BuildStatus.ACTIVE
+    assert refreshed.summary == "Build succeeded"
+    logs = await service.get_logs(build_id=build.id)
+    assert [entry.message for entry in logs.entries] == ["log 1", "log 2"]
+    assert logs.next_after_id is None
+    assert any(getattr(evt, "type", "") == "build.completed" for evt in events)

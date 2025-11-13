@@ -191,37 +191,44 @@ The job record stores the `build_id` used, for audit and reproducibility.
 
 ## API Endpoints
 
-Each configuration has a **single build resource**.
+Build orchestration now mirrors the runs contract with dedicated build resources and streaming events.
 
-### Get current build
-
-```
-GET /api/v1/workspaces/{workspace_id}/configurations/{config_id}/build
-```
-
-### Create or rebuild (idempotent)
+### Create or rebuild (supports streaming)
 
 ```
-PUT /api/v1/workspaces/{workspace_id}/configurations/{config_id}/build
+POST /api/v1/workspaces/{workspace_id}/configs/{config_id}/builds
 ```
 
 Body:
 
 ```json
-{ "force": false }
+{
+  "stream": false,
+  "options": {
+    "force": false,
+    "wait": false
+  }
+}
 ```
 
-* `200 OK` — returned existing active build, or `{"status":"building"}` if a build is already in progress, or the newly built pointer when complete (server may wait for jobs path; UI may poll).
-* `409 Conflict` — optional strategy if you choose not to block for certain callers.
-* `5xx` — build failed; `error` contains the reason.
+* `stream: false` — enqueue a background build and return a `Build` snapshot immediately. Poll the status/log endpoints for progress.
+* `stream: true` — execute inline and receive `application/x-ndjson` `BuildEvent` payloads (`build.created`, `build.step`, `build.log`, `build.completed`).
 
-### Delete build
+### Get build status
 
 ```
-DELETE /api/v1/workspaces/{workspace_id}/configurations/{config_id}/build
+GET /api/v1/builds/{build_id}
 ```
 
-Removes the **active** build folder and clears the DB record. The next job or `PUT` will rebuild as needed.
+Returns the persisted `Build` resource including timestamps, status, and exit metadata.
+
+### Fetch build logs
+
+```
+GET /api/v1/builds/{build_id}/logs?after_id=<cursor>&limit=<count>
+```
+
+Returns a paginated list of log entries and the `next_after_id` cursor for subsequent requests.
 
 > **Jobs API (submit):** clients provide `workspace_id` and `config_id`. The server resolves and records `build_id` at submit time. An optional `build_id` override may be supported for debugging.
 
@@ -249,7 +256,7 @@ Removes the **active** build folder and clears the DB record. The next job or `P
 
 ## Backend Architecture (Essentials)
 
-* **Router** — `GET/PUT/DELETE /build` per configuration.
+* **Router** — `POST /workspaces/{workspace_id}/configs/{config_id}/builds` plus status/log polling endpoints under `/builds/{build_id}`.
 * **Service (`ensure_build`)** — checks the DB, computes the fingerprint, applies TTL/force rules, **uses DB `status="building"` to deduplicate concurrent requests** (coalescing), self‑heals stale `building` rows, and triggers the builder if needed.
 * **Builder** — creates `…/<build_id>/`, installs engine + config, verifies imports, **updates the DB pointer on success**, deletes the folder on failure, and triggers pruning of old builds with no running jobs.
 * **Jobs** — call `ensure_build()` then run the worker using the returned `venv_path`. Each job row stores `build_id`.
