@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { createContext, createElement, useCallback, useContext, useMemo, type ReactNode } from "react";
 
 import { useLocation, useNavigate } from "./history";
 
@@ -16,7 +16,7 @@ export type SearchParamsInit =
   | URLSearchParams
   | SearchParamsRecord;
 
-function toURLSearchParams(init: SearchParamsInit): URLSearchParams {
+export function toURLSearchParams(init: SearchParamsInit): URLSearchParams {
   if (init instanceof URLSearchParams) {
     return new URLSearchParams(init);
   }
@@ -66,10 +66,28 @@ export function setParams(url: URL, patch: Record<string, ParamPatchValue>) {
   return `${next.pathname}${next.search}${next.hash}`;
 }
 
-type SetSearchParamsInit = SearchParamsInit | ((prev: URLSearchParams) => SearchParamsInit);
-type SetSearchParamsOptions = { replace?: boolean };
+export type SetSearchParamsInit = SearchParamsInit | ((prev: URLSearchParams) => SearchParamsInit);
+export type SetSearchParamsOptions = { replace?: boolean };
+
+interface SearchParamsOverrideValue {
+  readonly params: URLSearchParams;
+  readonly setSearchParams: (init: SetSearchParamsInit, options?: SetSearchParamsOptions) => void;
+}
+
+const SearchParamsOverrideContext = createContext<SearchParamsOverrideValue | null>(null);
+
+export function SearchParamsOverrideProvider({
+  value,
+  children,
+}: {
+  readonly value: SearchParamsOverrideValue | null;
+  readonly children: ReactNode;
+}) {
+  return createElement(SearchParamsOverrideContext.Provider, { value }, children);
+}
 
 export function useSearchParams(): [URLSearchParams, (init: SetSearchParamsInit, options?: SetSearchParamsOptions) => void] {
+  const override = useContext(SearchParamsOverrideContext);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -86,7 +104,7 @@ export function useSearchParams(): [URLSearchParams, (init: SetSearchParamsInit,
     [location.hash, location.pathname, navigate, params],
   );
 
-  return [params, setSearchParams];
+  return [override?.params ?? params, override?.setSearchParams ?? setSearchParams];
 }
 
 export type ConfigBuilderTab = "editor";

@@ -14,12 +14,13 @@ import { createScopedStorage } from "@shared/storage";
 import { writePreferredWorkspace } from "@screens/Workspace/state/workspace-preferences";
 import { GlobalTopBar } from "@app/shell/GlobalTopBar";
 import { ProfileDropdown } from "@app/shell/ProfileDropdown";
-import { WorkspaceNav } from "@screens/Workspace/components/WorkspaceNav";
+import { WorkspaceNav, WorkspaceNavList } from "@screens/Workspace/components/WorkspaceNav";
 import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@screens/Workspace/components/workspace-navigation";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import { Alert } from "@ui/Alert";
 import { PageState } from "@ui/PageState";
 import { useShortcutHint } from "@shared/hooks/useShortcutHint";
+import type { GlobalSearchSuggestion } from "@app/shell/GlobalTopBar";
 
 import WorkspaceOverviewRoute from "@screens/Workspace/sections/Overview";
 import WorkspaceDocumentsRoute from "@screens/Workspace/sections/Documents";
@@ -150,7 +151,18 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
     [workspace],
   );
   const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState("");
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const workspaceSearchNormalized = workspaceSearchQuery.trim().toLowerCase();
+  const workspaceSearchSuggestions = useMemo(
+    () =>
+      workspaceNavItems.map((item) => ({
+        id: item.id,
+        label: item.label,
+        description: `Jump to ${item.label}`,
+        icon: <item.icon className="h-4 w-4 text-slate-400" aria-hidden />,
+      })),
+    [workspaceNavItems],
+  );
 
   const navStorage = useMemo(
     () => createScopedStorage(`ade.ui.workspace.${workspace.id}.navCollapsed`),
@@ -174,6 +186,34 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
     setWorkspaceSearchQuery("");
   }, [workspace.id]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setIsMobileNavOpen(false);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    const originalOverflow = document.body.style.overflow;
+    if (isMobileNavOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = originalOverflow || "";
+    }
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isMobileNavOpen]);
+
   const handleWorkspaceSearchSubmit = useCallback(() => {
     if (!workspaceSearchNormalized) {
       return;
@@ -185,21 +225,44 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
       navigate(match.href);
     }
   }, [workspaceSearchNormalized, workspaceNavItems, navigate]);
+  const handleWorkspaceSuggestionSelect = useCallback(
+    (suggestion: GlobalSearchSuggestion) => {
+      const match = workspaceNavItems.find((item) => item.id === suggestion.id);
+      if (match) {
+        navigate(match.href);
+        setWorkspaceSearchQuery("");
+      }
+    },
+    [workspaceNavItems, navigate],
+  );
+
+  const openMobileNav = useCallback(() => setIsMobileNavOpen(true), []);
+  const closeMobileNav = useCallback(() => setIsMobileNavOpen(false), []);
 
   const topBarBrand = (
-    <button
-      type="button"
-      className="focus-ring inline-flex items-center gap-3 rounded-xl border border-transparent bg-white px-3 py-2 text-left text-sm font-semibold text-slate-900 shadow-sm transition hover:border-slate-200"
-      onClick={() => navigate("/workspaces")}
-    >
-      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm">
-        ADE
-      </span>
-      <span className="flex flex-col leading-tight">
-        <span className="text-sm font-semibold text-slate-900">{workspace.name}</span>
-        <span className="text-xs text-slate-400">Workspace</span>
-      </span>
-    </button>
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={openMobileNav}
+        className="focus-ring inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200/80 bg-white text-slate-600 shadow-sm lg:hidden"
+        aria-label="Open workspace navigation"
+      >
+        <MenuIcon />
+      </button>
+      <button
+        type="button"
+        className="focus-ring inline-flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2 text-left text-sm font-semibold text-slate-900 shadow-sm transition hover:border-brand-200/70"
+        onClick={() => navigate("/workspaces")}
+      >
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm">
+          ADE
+        </span>
+        <span className="flex flex-col leading-tight">
+          <span className="text-sm font-semibold text-slate-900">{workspace.name}</span>
+          <span className="text-xs text-slate-400">Workspace</span>
+        </span>
+      </button>
+    </div>
   );
 
   const displayName = session.user.display_name || session.user.email || "Signed in";
@@ -216,6 +279,9 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
     onSubmit: handleWorkspaceSearchSubmit,
     placeholder: `Search ${workspace.name} or jump to a section`,
     shortcutHint,
+    scopeLabel: workspace.name,
+    suggestions: workspaceSearchSuggestions,
+    onSelectSuggestion: handleWorkspaceSuggestionSelect,
   };
 
   const primaryNav = (
@@ -246,6 +312,30 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
     <WorkbenchWindowProvider workspaceId={workspace.id}>
       <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
         <GlobalTopBar brand={topBarBrand} trailing={topBarTrailing} search={workspaceSearch} />
+        {isMobileNavOpen ? (
+          <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={closeMobileNav} />
+            <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-slate-100/70 bg-gradient-to-b from-white via-slate-50 to-white/95 shadow-[0_45px_90px_-50px_rgba(15,23,42,0.85)]">
+              <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                <div className="flex flex-col leading-tight">
+                  <span className="text-sm font-semibold text-slate-900">{workspace.name}</span>
+                  <span className="text-xs text-slate-400">Workspace navigation</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeMobileNav}
+                  className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/80 bg-white text-slate-500"
+                  aria-label="Close navigation"
+                >
+                  <CloseIcon />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-3 py-4">
+                <WorkspaceNavList items={workspaceNavItems} onNavigate={closeMobileNav} showHeading={false} />
+              </div>
+            </div>
+          </div>
+        ) : null}
         <div className="relative flex flex-1 overflow-hidden" key={`section-${section.key}`}>
           {primaryNav}
           <main
@@ -319,6 +409,25 @@ function buildCanonicalPath(pathname: string, search: string, resolvedId: string
   const trailing = pathname.startsWith(base) ? pathname.slice(base.length) : "";
   const normalized = trailing && trailing !== "/" ? trailing : `/${defaultWorkspaceSection.path}`;
   return `/workspaces/${resolvedId}${normalized}${search}`;
+}
+
+function MenuIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <path d="M4 6h12" strokeLinecap="round" />
+      <path d="M4 10h12" strokeLinecap="round" />
+      <path d="M4 14h8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <path d="M6 6l8 8" strokeLinecap="round" />
+      <path d="M14 6l-8 8" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 export function resolveWorkspaceSection(

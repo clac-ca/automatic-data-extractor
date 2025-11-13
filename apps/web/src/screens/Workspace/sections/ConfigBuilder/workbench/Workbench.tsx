@@ -74,6 +74,7 @@ interface WorkbenchProps {
   readonly seed?: WorkbenchDataSeed;
   readonly onCloseWorkbench: () => void;
   readonly onMinimizeWorkbench: () => void;
+  readonly shouldBypassUnsavedGuard?: () => boolean;
 }
 
 export function Workbench({
@@ -83,6 +84,7 @@ export function Workbench({
   seed,
   onCloseWorkbench,
   onMinimizeWorkbench,
+  shouldBypassUnsavedGuard,
 }: WorkbenchProps) {
   const queryClient = useQueryClient();
   const {
@@ -190,6 +192,7 @@ export function Workbench({
   }, [seed?.validation]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
       consoleStreamRef.current?.abort();
@@ -230,11 +233,6 @@ export function Workbench({
   const handleCloseWorkbench = useCallback(() => {
     onCloseWorkbench();
   }, [onCloseWorkbench]);
-  const handleMinimizeWorkbench = useCallback(() => {
-    setWindowMaximized(false);
-    onMinimizeWorkbench();
-  }, [onMinimizeWorkbench]);
-
   const showExplorerPane = !explorer.collapsed;
 
   const loadFile = useCallback(
@@ -261,7 +259,15 @@ export function Workbench({
     persistence: tabPersistence ?? undefined,
   });
 
-  useUnsavedChangesGuard({ isDirty: files.isDirty });
+  useUnsavedChangesGuard({
+    isDirty: files.isDirty,
+    shouldBypassNavigation: shouldBypassUnsavedGuard,
+  });
+
+  const handleMinimizeWorkbench = useCallback(() => {
+    setWindowMaximized(false);
+    onMinimizeWorkbench();
+  }, [onMinimizeWorkbench]);
 
   const outputCollapsed = consoleState !== "open";
 
