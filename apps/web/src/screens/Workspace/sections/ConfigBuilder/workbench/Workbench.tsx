@@ -1099,7 +1099,12 @@ function WorkbenchChrome({
             icon={<ConsoleIcon />}
           />
         </div>
-        <div className="flex items-center gap-1 border-l border-slate-200/70 pl-2">
+        <div
+          className={clsx(
+            "flex items-center gap-2 border-l pl-3",
+            appearance === "dark" ? "border-white/20" : "border-slate-200/70",
+          )}
+        >
           <FocusModeToggle focusMode={focusMode} appearance={appearance} onChangeMode={onChangeFocusMode} />
           <ChromeIconButton
             ariaLabel="Dock workbench"
@@ -1165,15 +1170,15 @@ function FocusModeToggle({
 }) {
   const dark = appearance === "dark";
   const containerClass = dark
-    ? "border-white/15 bg-white/5 text-white/70"
+    ? "border-white/20 bg-white/10 text-white/80"
     : "border-slate-200 bg-slate-100 text-slate-600";
-  const activeClass = dark ? "bg-white/25 text-white" : "bg-white text-slate-900 shadow-sm shadow-slate-200";
-  const inactiveClass = dark ? "text-white/60" : "text-slate-600";
+  const activeClass = dark ? "bg-white/30 text-white shadow-[0_8px_20px_-12px_rgba(15,23,42,0.6)]" : "bg-white text-slate-900 shadow-[0_10px_25px_-18px_rgba(15,23,42,0.45)]";
+  const inactiveClass = dark ? "text-white/65" : "text-slate-600";
 
   return (
     <div
       className={clsx(
-        "inline-flex gap-1 rounded-full border px-1 py-0.5 text-[11px] font-semibold",
+        "inline-flex flex-shrink-0 gap-1 rounded-full border px-1 py-0.5 text-[11px] font-semibold",
         containerClass,
       )}
       role="group"
@@ -1185,7 +1190,7 @@ function FocusModeToggle({
           key={mode}
           onClick={() => onChangeMode(mode)}
           className={clsx(
-            "px-2.5 py-1 rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
+            "px-3 py-1 rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
             focusMode === mode ? activeClass : inactiveClass,
           )}
         >
