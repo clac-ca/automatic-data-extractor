@@ -142,7 +142,7 @@ curl http://localhost:8000/health
 
 The bundled FastAPI server serves both the API and the compiled React frontend from the same container, so reverse proxies only need to forward requests to port 8000.
 
-When you deploy the frontend in production, compile it once (`npm run build` followed by copying `apps/web/build/client/` into `apps/api/app/web/static/`). FastAPI serves those files directly, so your reverse proxy only needs to forward requests to the backend.
+When you deploy the frontend in production, compile it once (`npm run build` followed by copying `apps/web/dist/` into `apps/api/app/web/static/`). FastAPI serves those files directly, so your reverse proxy only needs to forward requests to the backend.
 
 To stop and remove the container:
 
@@ -173,5 +173,5 @@ administrators through the API while the frontend experience is completed.
 ## 8. Troubleshooting
 - **`uvicorn` exits immediately:** ensure the Python dependencies are installed (`pip install -e apps/api[dev]`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn apps.api.app.main:create_app --factory`).
 - **Port conflicts on 8000:** choose another port with `uvicorn ... --port 9000` or stop the conflicting process.
-- **Frontend shows a blank page:** rebuild assets with `npm run build` and copy `apps/web/build/client/` into `apps/api/app/web/static/`).
+- **Frontend shows a blank page:** rebuild assets with `npm run build` and copy `apps/web/dist/` into `apps/api/app/web/static/`).
 - **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api` prefix.

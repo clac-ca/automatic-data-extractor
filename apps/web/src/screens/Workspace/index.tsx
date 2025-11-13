@@ -9,7 +9,7 @@ import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
 import { useWorkspacesQuery, workspacesKeys, WORKSPACE_LIST_DEFAULT_PARAMS, type WorkspaceProfile } from "@screens/Workspace/api/workspaces-api";
 import { WorkspaceProvider } from "@screens/Workspace/context/WorkspaceContext";
-import { WorkbenchWindowProvider } from "@screens/Workspace/context/WorkbenchWindowContext";
+import { WorkbenchWindowProvider, useWorkbenchWindow } from "@screens/Workspace/context/WorkbenchWindowContext";
 import { createScopedStorage } from "@shared/storage";
 import { writePreferredWorkspace } from "@screens/Workspace/state/workspace-preferences";
 import { GlobalTopBar } from "@app/shell/GlobalTopBar";
@@ -139,9 +139,18 @@ interface WorkspaceShellProps {
 }
 
 function WorkspaceShell({ workspace }: WorkspaceShellProps) {
+  return (
+    <WorkbenchWindowProvider workspaceId={workspace.id}>
+      <WorkspaceShellLayout workspace={workspace} />
+    </WorkbenchWindowProvider>
+  );
+}
+
+function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const session = useSession();
   const navigate = useNavigate();
   const location = useLocation();
+  const { session: workbenchSession, focusMode } = useWorkbenchWindow();
   const safeMode = useSafeModeStatus();
   const safeModeEnabled = safeMode.data?.enabled ?? false;
   const safeModeDetail = safeMode.data?.detail ?? DEFAULT_SAFE_MODE_MESSAGE;
@@ -153,6 +162,7 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
   const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState("");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const workspaceSearchNormalized = workspaceSearchQuery.trim().toLowerCase();
+  const immersiveWorkbenchActive = Boolean(workbenchSession && focusMode === "immersive");
   const workspaceSearchSuggestions = useMemo(
     () =>
       workspaceNavItems.map((item) => ({
@@ -214,6 +224,12 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
     };
   }, [isMobileNavOpen]);
 
+  useEffect(() => {
+    if (immersiveWorkbenchActive) {
+      setIsMobileNavOpen(false);
+    }
+  }, [immersiveWorkbenchActive]);
+
   const handleWorkspaceSearchSubmit = useCallback(() => {
     if (!workspaceSearchNormalized) {
       return;
@@ -249,19 +265,6 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
       >
         <MenuIcon />
       </button>
-      <button
-        type="button"
-        className="focus-ring inline-flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2 text-left text-sm font-semibold text-slate-900 shadow-sm transition hover:border-brand-200/70"
-        onClick={() => navigate("/workspaces")}
-      >
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm">
-          ADE
-        </span>
-        <span className="flex flex-col leading-tight">
-          <span className="text-sm font-semibold text-slate-900">{workspace.name}</span>
-          <span className="text-xs text-slate-400">Workspace</span>
-        </span>
-      </button>
     </div>
   );
 
@@ -284,15 +287,6 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
     onSelectSuggestion: handleWorkspaceSuggestionSelect,
   };
 
-  const primaryNav = (
-    <WorkspaceNav
-      workspace={workspace}
-      items={workspaceNavItems}
-      collapsed={isNavCollapsed}
-      onToggleCollapse={() => setIsNavCollapsed((current) => !current)}
-    />
-  );
-
   const segments = extractSectionSegments(location.pathname, workspace.id);
   const section = resolveWorkspaceSection(workspace.id, segments, location.search, location.hash);
 
@@ -309,10 +303,21 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
   const fullHeightLayout = section.fullHeight ?? false;
 
   return (
-    <WorkbenchWindowProvider workspaceId={workspace.id}>
-      <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
-        <GlobalTopBar brand={topBarBrand} trailing={topBarTrailing} search={workspaceSearch} />
-        {isMobileNavOpen ? (
+    <div className="flex min-h-screen bg-slate-50 text-slate-900">
+      {!immersiveWorkbenchActive ? (
+        <WorkspaceNav
+          workspace={workspace}
+          items={workspaceNavItems}
+          collapsed={isNavCollapsed}
+          onToggleCollapse={() => setIsNavCollapsed((current) => !current)}
+          onGoToWorkspaces={() => navigate("/workspaces")}
+        />
+      ) : null}
+      <div className="flex flex-1 flex-col">
+        {!immersiveWorkbenchActive ? (
+          <GlobalTopBar brand={topBarBrand} trailing={topBarTrailing} search={workspaceSearch} />
+        ) : null}
+        {!immersiveWorkbenchActive && isMobileNavOpen ? (
           <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={closeMobileNav} />
             <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-slate-100/70 bg-gradient-to-b from-white via-slate-50 to-white/95 shadow-[0_45px_90px_-50px_rgba(15,23,42,0.85)]">
@@ -336,11 +341,10 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
             </div>
           </div>
         ) : null}
-        <div className="relative flex flex-1 overflow-hidden" key={`section-${section.key}`}>
-          {primaryNav}
+        <div className="relative flex flex-1 min-w-0 overflow-hidden" key={`section-${section.key}`}>
           <main
             className={clsx(
-              "relative flex-1",
+              "relative flex-1 min-w-0",
               fullHeightLayout ? "flex min-h-0 flex-col overflow-hidden" : "overflow-y-auto",
             )}
           >
@@ -371,7 +375,7 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
           </main>
         </div>
       </div>
-    </WorkbenchWindowProvider>
+    </div>
   );
 }
 

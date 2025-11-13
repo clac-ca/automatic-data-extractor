@@ -72,8 +72,10 @@ interface WorkbenchProps {
   readonly configId: string;
   readonly configName: string;
   readonly seed?: WorkbenchDataSeed;
+  readonly focusMode: "balanced" | "immersive";
+  readonly onChangeFocusMode: (mode: "balanced" | "immersive") => void;
+  readonly onDockWorkbench: () => void;
   readonly onCloseWorkbench: () => void;
-  readonly onMinimizeWorkbench: () => void;
   readonly shouldBypassUnsavedGuard?: () => boolean;
 }
 
@@ -82,8 +84,10 @@ export function Workbench({
   configId,
   configName,
   seed,
+  focusMode,
+  onChangeFocusMode,
+  onDockWorkbench,
   onCloseWorkbench,
-  onMinimizeWorkbench,
   shouldBypassUnsavedGuard,
 }: WorkbenchProps) {
   const queryClient = useQueryClient();
@@ -229,7 +233,7 @@ export function Workbench({
   const [consoleNotice, setConsoleNotice] = useState<string | null>(null);
   const [activityView, setActivityView] = useState<ActivityBarView>("explorer");
   const [settingsMenu, setSettingsMenu] = useState<{ x: number; y: number } | null>(null);
-  const [windowMaximized, setWindowMaximized] = useState(false);
+  const immersive = focusMode === "immersive";
   const handleCloseWorkbench = useCallback(() => {
     onCloseWorkbench();
   }, [onCloseWorkbench]);
@@ -264,10 +268,19 @@ export function Workbench({
     shouldBypassNavigation: shouldBypassUnsavedGuard,
   });
 
-  const handleMinimizeWorkbench = useCallback(() => {
-    setWindowMaximized(false);
-    onMinimizeWorkbench();
-  }, [onMinimizeWorkbench]);
+  const handleDockWorkbench = useCallback(() => {
+    onDockWorkbench();
+  }, [onDockWorkbench]);
+
+  const handleFocusModeChange = useCallback(
+    (mode: "balanced" | "immersive") => {
+      if (mode === focusMode) {
+        return;
+      }
+      onChangeFocusMode(mode);
+    },
+    [focusMode, onChangeFocusMode],
+  );
 
   const outputCollapsed = consoleState !== "open";
 
@@ -279,7 +292,7 @@ export function Workbench({
       window.dispatchEvent(new Event("resize"));
       window.dispatchEvent(new Event("ade:workbench-layout"));
     });
-  }, [explorer.collapsed, explorer.width, inspector.collapsed, inspector.width, outputCollapsed, outputHeight, windowMaximized]);
+  }, [explorer.collapsed, explorer.width, inspector.collapsed, inspector.width, outputCollapsed, outputHeight, immersive]);
 
   useEffect(() => {
     if (!centerPaneEl) {
@@ -694,19 +707,15 @@ export function Workbench({
   ]);
 
   useEffect(() => {
-    if (typeof document === "undefined") {
+    if (typeof document === "undefined" || !immersive) {
       return;
     }
     const previous = document.documentElement.style.overflow;
-    if (windowMaximized) {
-      document.documentElement.style.overflow = "hidden";
-    } else {
-      document.documentElement.style.overflow = previous || "";
-    }
+    document.documentElement.style.overflow = "hidden";
     return () => {
       document.documentElement.style.overflow = previous || "";
     };
-  }, [windowMaximized]);
+  }, [immersive]);
 
   if (!seed && filesQuery.isLoading) {
     return (
@@ -739,28 +748,28 @@ export function Workbench({
   }
 
   const workspaceLabel = formatWorkspaceLabel(workspaceId);
-  const rootSurfaceClass = windowMaximized
+  const rootSurfaceClass = immersive
     ? menuAppearance === "dark"
       ? "bg-[#0f111a] text-white"
       : "bg-slate-50 text-slate-900"
-    : "bg-transparent text-slate-900";
+    : menuAppearance === "dark"
+      ? "bg-transparent text-white"
+      : "bg-transparent text-slate-900";
   const editorSurface = menuAppearance === "dark" ? "#1b1f27" : "#ffffff";
   const editorText = menuAppearance === "dark" ? "#f5f6fb" : "#0f172a";
-  const windowFrameClass = windowMaximized
+  const windowFrameClass = immersive
     ? clsx(
         "fixed inset-0 z-[90] flex flex-col",
         menuAppearance === "dark" ? "bg-[#0f111a] text-white" : "bg-white text-slate-900",
       )
     : clsx(
-        "flex min-h-0 flex-1 flex-col overflow-hidden border shadow-[0_25px_60px_rgba(15,23,42,0.12)]",
-        menuAppearance === "dark"
-          ? "border-white/15 bg-[#0f111a] text-white shadow-[0_40px_80px_rgba(0,0,0,0.65)]"
-          : "border-slate-200 bg-white text-slate-900",
+        "flex w-full min-h-0 flex-1 flex-col overflow-hidden",
+        menuAppearance === "dark" ? "bg-[#101322] text-white" : "bg-white text-slate-900",
       );
 
   return (
     <div className={clsx("flex h-full min-h-0 w-full flex-1 flex-col", rootSurfaceClass)}>
-      {windowMaximized ? <div className="fixed inset-0 z-40 bg-slate-900/60" /> : null}
+      {immersive ? <div className="fixed inset-0 z-40 bg-slate-900/60" /> : null}
       <div className={windowFrameClass}>
         <WorkbenchChrome
           configName={configName}
@@ -779,10 +788,10 @@ export function Workbench({
           inspectorCollapsed={inspector.collapsed}
           onToggleInspector={handleToggleInspectorVisibility}
           appearance={menuAppearance}
-          windowMaximized={windowMaximized}
-          onToggleWindow={() => setWindowMaximized((prev) => !prev)}
+          focusMode={focusMode}
+          onChangeFocusMode={handleFocusModeChange}
+          onDockWorkbench={handleDockWorkbench}
           onCloseWindow={handleCloseWorkbench}
-          onMinimizeWindow={handleMinimizeWorkbench}
         />
         {consoleNotice ? (
           <div className="border-b border-brand-400/40 bg-brand-500/10 px-4 py-2 text-sm text-brand-100">
@@ -987,10 +996,10 @@ function WorkbenchChrome({
   inspectorCollapsed,
   onToggleInspector,
   appearance,
-  windowMaximized,
-  onToggleWindow,
+  focusMode,
+  onChangeFocusMode,
+  onDockWorkbench,
   onCloseWindow,
-  onMinimizeWindow,
 }: {
   readonly configName: string;
   readonly workspaceLabel: string;
@@ -1008,10 +1017,10 @@ function WorkbenchChrome({
   readonly inspectorCollapsed: boolean;
   readonly onToggleInspector: () => void;
   readonly appearance: "light" | "dark";
-  readonly windowMaximized: boolean;
-  readonly onToggleWindow: () => void;
+  readonly focusMode: "balanced" | "immersive";
+  readonly onChangeFocusMode: (mode: "balanced" | "immersive") => void;
+  readonly onDockWorkbench: () => void;
   readonly onCloseWindow: () => void;
-  readonly onMinimizeWindow: () => void;
 }) {
   const dark = appearance === "dark";
   const surfaceClass = dark
@@ -1091,18 +1100,12 @@ function WorkbenchChrome({
           />
         </div>
         <div className="flex items-center gap-1 border-l border-slate-200/70 pl-2">
+          <FocusModeToggle focusMode={focusMode} appearance={appearance} onChangeMode={onChangeFocusMode} />
           <ChromeIconButton
-            ariaLabel="Minimize workbench"
-            onClick={onMinimizeWindow}
+            ariaLabel="Dock workbench"
+            onClick={onDockWorkbench}
             appearance={appearance}
-            icon={<MinimizeIcon />}
-          />
-          <ChromeIconButton
-            ariaLabel={windowMaximized ? "Restore window" : "Maximize window"}
-            onClick={onToggleWindow}
-            appearance={appearance}
-            active={windowMaximized}
-            icon={windowMaximized ? <WindowRestoreIcon /> : <WindowMaximizeIcon />}
+            icon={<DockMiniIcon />}
           />
           <ChromeIconButton
             ariaLabel="Close workbench"
@@ -1151,6 +1154,57 @@ function ChromeIconButton({
   );
 }
 
+function FocusModeToggle({
+  focusMode,
+  appearance,
+  onChangeMode,
+}: {
+  readonly focusMode: "balanced" | "immersive";
+  readonly appearance: "light" | "dark";
+  readonly onChangeMode: (mode: "balanced" | "immersive") => void;
+}) {
+  const dark = appearance === "dark";
+  const containerClass = dark
+    ? "border-white/15 bg-white/5 text-white/70"
+    : "border-slate-200 bg-slate-100 text-slate-600";
+  const activeClass = dark ? "bg-white/25 text-white" : "bg-white text-slate-900 shadow-sm shadow-slate-200";
+  const inactiveClass = dark ? "text-white/60" : "text-slate-600";
+
+  return (
+    <div
+      className={clsx(
+        "inline-flex gap-1 rounded-full border px-1 py-0.5 text-[11px] font-semibold",
+        containerClass,
+      )}
+      role="group"
+      aria-label="Workbench focus mode"
+    >
+      {(["balanced", "immersive"] as const).map((mode) => (
+        <button
+          type="button"
+          key={mode}
+          onClick={() => onChangeMode(mode)}
+          className={clsx(
+            "px-2.5 py-1 rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
+            focusMode === mode ? activeClass : inactiveClass,
+          )}
+        >
+          {mode === "balanced" ? "Balanced" : "Immersive"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function DockMiniIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="3" y="3" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M6 9h6" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
 function WorkbenchBadgeIcon() {
   return (
     <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#4fc1ff] via-[#2d7dff] to-[#7c4dff] text-white shadow-lg shadow-[#10121f]">
@@ -1196,31 +1250,6 @@ function InspectorIcon() {
     <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
       <rect x="3" y="3" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
       <path d="M10 3v10" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  );
-}
-
-function WindowMaximizeIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <rect x="3" y="3" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  );
-}
-
-function WindowRestoreIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M4.5 5.5h6v6h-6z" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M6 4h6v6" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  );
-}
-
-function MinimizeIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M4 11h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }

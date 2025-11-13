@@ -28,7 +28,7 @@ WORKDIR /app
 COPY --from=backend-build /install /usr/local
 COPY apps ./apps
 COPY packages ./packages
-COPY --from=web-build /app/web/build/client ./apps/api/app/web/static
+COPY --from=web-build /app/web/dist ./apps/api/app/web/static
 RUN mkdir -p /app/data/db /app/data/documents
 VOLUME ["/app/data"]
 EXPOSE 8000
