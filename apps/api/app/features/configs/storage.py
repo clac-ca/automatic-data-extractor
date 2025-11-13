@@ -44,6 +44,14 @@ class ConfigStorage:
         self._templates_root = templates_root.expanduser().resolve()
         self._configs_root = configs_root.expanduser().resolve()
 
+    @property
+    def templates_root(self) -> Path:
+        return self._templates_root
+
+    @property
+    def configs_root(self) -> Path:
+        return self._configs_root
+
     def workspace_root(self, workspace_id: str) -> Path:
         return self._configs_root / workspace_id / "config_packages"
 

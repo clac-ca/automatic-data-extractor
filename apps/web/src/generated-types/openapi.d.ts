@@ -797,20 +797,106 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/build": {
+    "/api/v1/workspaces/{workspace_id}/configs/{config_id}/builds": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get the active build pointer */
-        get: operations["get_build_api_v1_workspaces__workspace_id__configurations__config_id__build_get"];
-        /** Ensure the configuration build exists and is current */
-        put: operations["ensure_build_api_v1_workspaces__workspace_id__configurations__config_id__build_put"];
+        get?: never;
+        put?: never;
+        /** Create Build Endpoint */
+        post: operations["create_build_endpoint_api_v1_workspaces__workspace_id__configs__config_id__builds_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/builds/{build_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Build Endpoint */
+        get: operations["get_build_endpoint_api_v1_builds__build_id__get"];
+        put?: never;
         post?: never;
-        /** Delete the active build and remove its virtual environment */
-        delete: operations["delete_build_api_v1_workspaces__workspace_id__configurations__config_id__build_delete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/builds/{build_id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Build Logs Endpoint */
+        get: operations["get_build_logs_endpoint_api_v1_builds__build_id__logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/configs/{config_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Run Endpoint
+         * @description Create a run for ``config_id`` and optionally stream execution events.
+         */
+        post: operations["create_run_endpoint_api_v1_configs__config_id__runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Endpoint */
+        get: operations["get_run_endpoint_api_v1_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Logs Endpoint */
+        get: operations["get_run_logs_endpoint_api_v1_runs__run_id__logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -945,131 +1031,120 @@ export type components = {
             expires_at?: string | null;
         };
         /**
-         * BuildEnsureRequest
-         * @description Body accepted by PUT /build to trigger a rebuild.
+         * BuildCreateOptions
+         * @description Options controlling build orchestration.
          */
-        BuildEnsureRequest: {
+        BuildCreateOptions: {
             /**
              * Force
-             * @description Force rebuild even if fingerprint matches
+             * @description Force rebuild even if fingerprints match
              * @default false
              */
             force: boolean;
             /**
              * Wait
-             * @description When true, wait up to ADE_BUILD_ENSURE_WAIT_SECONDS for an in-progress build to finish. When omitted, the default depends on the caller.
+             * @description Wait for in-progress builds to complete before starting a new one
+             * @default false
              */
-            wait?: boolean | null;
+            wait: boolean;
         };
         /**
-         * BuildEnsureResponse
-         * @description Response returned by ensure_build endpoints.
+         * BuildCreateRequest
+         * @description Request body for POST /builds.
          */
-        BuildEnsureResponse: {
-            /** @description Resulting build status */
-            status: components["schemas"]["BuildStatus"];
-            /** @description Active build pointer when available */
-            build?: components["schemas"]["BuildRecord"] | null;
-        };
-        /**
-         * BuildRecord
-         * @description Serialized representation of a configuration build pointer.
-         */
-        BuildRecord: {
+        BuildCreateRequest: {
             /**
-             * Id
-             * @description Primary identifier for the build record
+             * Stream
+             * @default false
              */
+            stream: boolean;
+            options?: components["schemas"]["BuildCreateOptions"];
+        };
+        /**
+         * BuildLogEntry
+         * @description Single build log row returned by polling endpoints.
+         */
+        BuildLogEntry: {
+            /** Id */
+            id: number;
+            /** Created */
+            created: number;
+            /** Stream */
+            stream: string;
+            /** Message */
+            message: string;
+        };
+        /**
+         * BuildLogsResponse
+         * @description Envelope returned by GET /builds/{id}/logs.
+         */
+        BuildLogsResponse: {
+            /**
+             * Object
+             * @default ade.build.logs
+             * @constant
+             */
+            object: "ade.build.logs";
+            /** Build Id */
+            build_id: string;
+            /** Entries */
+            entries: components["schemas"]["BuildLogEntry"][];
+            /** Next After Id */
+            next_after_id?: number | null;
+        };
+        /**
+         * BuildResource
+         * @description API representation of a build row.
+         */
+        BuildResource: {
+            /** Id */
             id: string;
             /**
-             * Workspace Id
-             * @description Workspace identifier
+             * Object
+             * @default ade.build
+             * @constant
              */
+            object: "ade.build";
+            /** Workspace Id */
             workspace_id: string;
-            /**
-             * Config Id
-             * @description Configuration identifier
-             */
+            /** Config Id */
             config_id: string;
-            /**
-             * Configuration Id
-             * @description Configuration record identifier
-             */
+            /** Configuration Id */
             configuration_id: string;
+            /** Configuration Build Id */
+            configuration_build_id?: string | null;
             /**
-             * Build Id
-             * @description Build identifier (ULID)
+             * Build Ref
+             * @description Underlying configuration_builds.build_id value when present
              */
-            build_id: string;
-            /** @description Current lifecycle status */
-            status: components["schemas"]["BuildStatus"];
+            build_ref?: string | null;
             /**
-             * Environment Ref
-             * @description Opaque identifier referencing the build's execution environment.
+             * Status
+             * @enum {string}
              */
-            environment_ref: string;
+            status: "queued" | "building" | "active" | "failed" | "canceled";
             /**
-             * Config Version
-             * @description Configuration version when built
+             * Created
+             * @description Unix timestamp when the build request was created
              */
-            config_version?: number | null;
+            created: number;
             /**
-             * Content Digest
-             * @description Content fingerprint of the config
+             * Started
+             * @description Unix timestamp when execution started
              */
-            content_digest?: string | null;
+            started?: number | null;
             /**
-             * Engine Version
-             * @description Installed ADE engine version
+             * Finished
+             * @description Unix timestamp when execution completed
              */
-            engine_version?: string | null;
-            /**
-             * Engine Spec
-             * @description Engine installation spec
-             */
-            engine_spec?: string | null;
-            /**
-             * Python Version
-             * @description Interpreter version used
-             */
-            python_version?: string | null;
-            /**
-             * Python Interpreter
-             * @description Path to the interpreter used for venv creation
-             */
-            python_interpreter?: string | null;
-            /**
-             * Started At
-             * @description When the build began
-             */
-            started_at?: string | null;
-            /**
-             * Built At
-             * @description When the build completed
-             */
-            built_at?: string | null;
-            /**
-             * Expires At
-             * @description When the build expires, if set
-             */
-            expires_at?: string | null;
-            /**
-             * Last Used At
-             * @description Last time the build was used
-             */
-            last_used_at?: string | null;
-            /**
-             * Error
-             * @description Error message, if build failed
-             */
-            error?: string | null;
+            finished?: number | null;
+            /** Exit Code */
+            exit_code?: number | null;
+            /** Summary */
+            summary?: string | null;
+            /** Error Message */
+            error_message?: string | null;
         };
-        /**
-         * BuildStatus
-         * @description Lifecycle states for configuration build records.
-         * @enum {string}
-         */
-        BuildStatus: "building" | "active" | "inactive" | "failed";
         /**
          * ConfigSourceClone
          * @description Reference to an existing workspace config.
@@ -1757,6 +1832,102 @@ export type components = {
             description?: string | null;
             /** Permissions */
             permissions?: string[];
+        };
+        /**
+         * RunCreateOptions
+         * @description Optional execution toggles for ADE runs.
+         */
+        RunCreateOptions: {
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+            /**
+             * Validate Only
+             * @default false
+             */
+            validate_only: boolean;
+        };
+        /**
+         * RunCreateRequest
+         * @description Payload accepted by the run creation endpoint.
+         */
+        RunCreateRequest: {
+            /**
+             * Stream
+             * @default false
+             */
+            stream: boolean;
+            options?: components["schemas"]["RunCreateOptions"];
+        };
+        /**
+         * RunLogEntry
+         * @description Single run log entry returned by the logs endpoint.
+         */
+        RunLogEntry: {
+            /** Id */
+            id: number;
+            /** Created */
+            created: number;
+            /**
+             * Stream
+             * @enum {string}
+             */
+            stream: "stdout" | "stderr";
+            /** Message */
+            message: string;
+        };
+        /**
+         * RunLogsResponse
+         * @description Envelope for run log fetch responses.
+         */
+        RunLogsResponse: {
+            /** Run Id */
+            run_id: string;
+            /**
+             * Object
+             * @default ade.run.logs
+             * @constant
+             */
+            object: "ade.run.logs";
+            /** Entries */
+            entries: components["schemas"]["RunLogEntry"][];
+            /** Next After Id */
+            next_after_id?: number | null;
+        };
+        /**
+         * RunResource
+         * @description API representation of a persisted ADE run.
+         */
+        RunResource: {
+            /** Id */
+            id: string;
+            /**
+             * Object
+             * @default ade.run
+             * @constant
+             */
+            object: "ade.run";
+            /** Config Id */
+            config_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed" | "canceled";
+            /** Created */
+            created: number;
+            /** Started */
+            started?: number | null;
+            /** Finished */
+            finished?: number | null;
+            /** Exit Code */
+            exit_code?: number | null;
+            /** Summary */
+            summary?: string | null;
+            /** Error Message */
+            error_message?: string | null;
         };
         /**
          * ScopeType
@@ -5078,7 +5249,7 @@ export interface operations {
             };
         };
     };
-    get_build_api_v1_workspaces__workspace_id__configurations__config_id__build_get: {
+    create_build_endpoint_api_v1_workspaces__workspace_id__configs__config_id__builds_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -5090,53 +5261,19 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BuildRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    ensure_build_api_v1_workspaces__workspace_id__configurations__config_id__build_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                config_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
+        requestBody: {
             content: {
-                "application/json": components["schemas"]["BuildEnsureRequest"];
+                "application/json": components["schemas"]["BuildCreateRequest"];
             };
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BuildEnsureResponse"];
+                    "application/json": components["schemas"]["BuildResource"];
                 };
             };
             /** @description Validation Error */
@@ -5150,26 +5287,164 @@ export interface operations {
             };
         };
     };
-    delete_build_api_v1_workspaces__workspace_id__configurations__config_id__build_delete: {
+    get_build_endpoint_api_v1_builds__build_id__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                config_id: string;
+                /** @description Build identifier */
+                build_id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["BuildResource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_build_logs_endpoint_api_v1_builds__build_id__logs_get: {
+        parameters: {
+            query?: {
+                after_id?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Build identifier */
+                build_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildLogsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_run_endpoint_api_v1_configs__config_id__runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Configuration identifier */
+                config_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_endpoint_api_v1_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_logs_endpoint_api_v1_runs__run_id__logs_get: {
+        parameters: {
+            query?: {
+                after_id?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunLogsResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

@@ -119,6 +119,17 @@ def get_builds_service(
     return BuildsService(session=session, settings=settings, storage=storage)
 
 
+def get_runs_service(
+    session: SessionDep,
+    settings: SettingsDep,
+) -> "RunsService":
+    """Return a runs service wired to the current request dependencies."""
+
+    from apps.api.app.features.runs.service import RunsService
+
+    return RunsService(session=session, settings=settings)
+
+
 _bearer_scheme = HTTPBearer(auto_error=False)
 _api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 _session_cookie_scheme = APIKeyCookie(
@@ -401,6 +412,7 @@ __all__ = [
     "get_configs_service",
     "get_documents_service",
     "get_health_service",
+    "get_runs_service",
     "get_system_settings_service",
     "get_users_service",
     "get_workspace_profile",

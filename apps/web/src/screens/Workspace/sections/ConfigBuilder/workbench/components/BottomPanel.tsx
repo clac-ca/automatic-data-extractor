@@ -47,8 +47,8 @@ export function BottomPanel({
             </ul>
           ) : (
             <p className="max-w-prose text-xs leading-relaxed text-slate-500">
-              Console streaming endpoints are not available yet. We'll surface validation logs, engine output, and ADE runtime
-              events here once the backend routes ship.
+              Trigger a build or ADE run to stream live output into this console. Logs and status updates will appear here as
+              soon as execution starts.
             </p>
           )}
         </TabsContent>
