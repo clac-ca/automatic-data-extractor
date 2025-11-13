@@ -12,10 +12,10 @@ import {
   resolveRedirectParam,
 } from "@shared/auth/utils/authNavigation";
 import { completeSetup } from "@shared/setup/api";
-import { Alert } from "@ui/alert";
-import { Button } from "@ui/button";
-import { FormField } from "@ui/form-field";
-import { Input } from "@ui/input";
+import { Alert } from "@ui/Alert";
+import { Button } from "@ui/Button";
+import { FormField } from "@ui/FormField";
+import { Input } from "@ui/Input";
 
 const setupSchema = z
   .object({

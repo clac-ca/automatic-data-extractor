@@ -12,12 +12,12 @@ import {
 import { useWorkspaceRolesQuery } from "./useWorkspaceRoles";
 import type { WorkspaceMember, RoleDefinition } from "@screens/Workspace/api/workspaces-api";
 import type { UserSummary } from "@shared/users/api";
-import { Alert } from "@ui/alert";
-import { Button } from "@ui/button";
-import { FormField } from "@ui/form-field";
-import { Input } from "@ui/input";
-import { Select } from "@ui/select";
-import { Avatar } from "@ui/avatar";
+import { Alert } from "@ui/Alert";
+import { Button } from "@ui/Button";
+import { FormField } from "@ui/FormField";
+import { Input } from "@ui/Input";
+import { Select } from "@ui/Select";
+import { Avatar } from "@ui/Avatar";
 
 export function WorkspaceMembersSection() {
   const { workspace, hasPermission } = useWorkspaceContext();

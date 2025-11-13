@@ -19,7 +19,7 @@ npm run test               # Run all tests
 npm run build              # Build SPA → apps/api/app/web/static
 npm run start              # Serve API + SPA
 npm run openapi-typescript # Generate TS types from OpenAPI
-npm run routes:frontend    # List React Router routes
+npm run routes             # List FastAPI routes (no dedicated frontend router CLI)
 npm run routes:backend     # List FastAPI routes
 npm run workpackage        # Manage work packages (CLI JSON interface)
 npm run clean:force        # Force delete build/.venv
@@ -30,8 +30,8 @@ npm run ci                 # Full CI pipeline (lint, test, build)
 
 ### Frontend API types
 
-- Generated TypeScript types live in `apps/web/src/generated/openapi.d.ts`. If that file is missing (or clearly stale), run `npm run openapi-typescript` to regenerate it before touching frontend API code.
-- Import API shapes from the generated module (`import type { components, paths } from "@openapi";`) instead of hand-writing interfaces—frontend changes must rely on these types for request/response payloads.
+- Generated TypeScript types live in `apps/web/src/generated-types/openapi.d.ts`. If that file is missing (or clearly stale), run `npm run openapi-typescript` to regenerate it before touching frontend API code.
+- Import API shapes from the curated schema module (`import type { SessionEnvelope } from "@schema";`). Avoid importing from `@generated-types/*` directly—add re-exports in `src/schema/` when new stable types are needed.
 - Treat manual types as view-model helpers only; when adding params or schemas, update the OpenAPI spec and rerun the generator instead of editing the generated file.
 
 ```text
@@ -70,7 +70,14 @@ automatic-data-extractor/
 │  │     ├─ integration/                   # DB + API tests with test app
 │  │     └─ e2e/                           # Optional full pipeline/contract tests
 │  └─ web/                                 # React SPA (Vite)
-│     ├─ src/                              # Routes, components, features
+│     ├─ src/
+│     │  ├─ app/                           # Providers + navigation + shell
+│     │  ├─ screens/                       # Screen-first, co-located modules (Home, Login, Workspace, …)
+│     │  ├─ shared/                        # Cross-cutting utilities (auth, API, storage, …)
+│     │  ├─ ui/                            # Presentational primitives (Tabs, Button, Input, …)
+│     │  ├─ schema/                        # Curated, app-facing type exports
+│     │  ├─ generated-types/               # Raw OpenAPI-derived types (openapi.d.ts)
+│     │  └─ test/                          # Vitest setup + helpers
 │     ├─ public/                           # Static public assets
 │     ├─ package.json
 │     └─ vite.config.ts
@@ -102,6 +109,12 @@ automatic-data-extractor/
 ├─ .gitignore
 └─ .github/workflows/                       # CI (lint, test, build, publish)
 ```
+
+### Frontend screen-first (routerless) layout
+
+The React SPA at `apps/web/` uses a history-based navigation helper instead of React Router. Screen code lives under `src/screens/<ScreenName>/`, and everything a screen needs (components, hooks, sections) is co-located beneath that folder. The `src/ui/` directory holds presentational primitives such as `Tabs`, `Button`, and `Input`. Use the path aliases configured in `tsconfig.json`/`vite.config.ts` (`@app/*`, `@screens/*`, `@ui/*`, `@shared/*`, `@schema/*`, `@generated-types/*`, `@test/*`) for imports instead of deep relative paths.
+
+Navigation helpers live in `@app/nav` (`history.tsx`, `Link.tsx`, `urlState.ts`). Consume `useNavigate`/`useLocation` from there, and render links with `Link`/`NavLink` from the same module.
 
 Everything ADE produces (config_packages, venvs, jobs, logs, cache, etc..) is persisted under `./data/...` by default. Override `ADE_DOCUMENTS_DIR`, `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_JOBS_DIR`, or `ADE_PIP_CACHE_DIR` to relocate any storage area.
 
