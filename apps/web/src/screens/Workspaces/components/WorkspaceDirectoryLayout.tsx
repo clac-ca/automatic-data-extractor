@@ -43,7 +43,6 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions }: Works
             <ProfileDropdown displayName={displayName} email={email} />
           </div>
         }
-        maxWidthClassName="max-w-6xl"
       />
       <main className="flex flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-6xl px-4 py-8">
