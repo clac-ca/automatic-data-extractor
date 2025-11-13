@@ -6,14 +6,14 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
-import { useUpdateWorkspaceMutation } from "./useUpdateWorkspaceMutation";
+import { useUpdateWorkspaceMutation } from "./hooks/useUpdateWorkspaceMutation";
 import { Alert } from "@ui/Alert";
 import { Button } from "@ui/Button";
 import { FormField } from "@ui/FormField";
 import { Input } from "@ui/Input";
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
-import { WorkspaceMembersSection } from "./WorkspaceMembersSection";
-import { WorkspaceRolesSection } from "./WorkspaceRolesSection";
+import { WorkspaceMembersSection } from "./components/WorkspaceMembersSection";
+import { WorkspaceRolesSection } from "./components/WorkspaceRolesSection";
 
 export const handle = { workspaceSectionId: "settings" } as const;
 

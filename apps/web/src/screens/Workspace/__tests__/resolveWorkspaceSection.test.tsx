@@ -42,7 +42,7 @@ describe("resolveWorkspaceSection", () => {
     expect(detail).toMatchObject({ kind: "content", key: "config-builder:cfg-9" });
   });
 
-  it("returns the config editor with search+hash encoded in the key", () => {
+  it("returns the config editor without encoding search/hash in the key", () => {
     const editor = resolveWorkspaceSection(
       workspaceId,
       ["config-builder", "cfg-9", "editor"],
@@ -51,7 +51,7 @@ describe("resolveWorkspaceSection", () => {
     );
     expect(editor).toMatchObject({
       kind: "content",
-      key: "config-builder:cfg-9:editor?tab=editor#panel",
+      key: "config-builder:cfg-9:editor",
     });
   });
 

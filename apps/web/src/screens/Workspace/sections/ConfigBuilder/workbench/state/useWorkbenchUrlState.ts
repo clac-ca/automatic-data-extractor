@@ -2,12 +2,11 @@ import { useCallback, useMemo } from "react";
 
 import {
   DEFAULT_CONFIG_BUILDER_SEARCH,
-  ConfigBuilderConsole,
-  ConfigBuilderPane,
   mergeConfigBuilderSearch,
   readConfigBuilderSearch,
   useSearchParams,
 } from "@app/nav/urlState";
+import type { ConfigBuilderConsole, ConfigBuilderPane } from "@app/nav/urlState";
 
 interface WorkbenchUrlState {
   readonly fileId?: string;
