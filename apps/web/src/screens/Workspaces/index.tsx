@@ -11,6 +11,7 @@ import { PageState } from "@ui/PageState";
 import { defaultWorkspaceSection } from "@screens/Workspace/components/workspace-navigation";
 import { WorkspaceDirectoryLayout } from "@screens/Workspaces/components/WorkspaceDirectoryLayout";
 import { useShortcutHint } from "@shared/hooks/useShortcutHint";
+import type { GlobalSearchSuggestion } from "@app/shell/GlobalTopBar";
 
 export default function WorkspacesIndexRoute() {
   return (
@@ -84,12 +85,30 @@ function WorkspacesIndexContent() {
 
   const handleResetSearch = useCallback(() => setSearchQuery(""), []);
 
+  const suggestionSeed = (normalizedSearch ? visibleWorkspaces : workspaces).slice(0, 5);
+  const searchSuggestions = suggestionSeed.map((workspace) => ({
+    id: workspace.id,
+    label: workspace.name,
+    description: workspace.slug ? `Slug • ${workspace.slug}` : "Workspace",
+  }));
+
+  const handleWorkspaceSuggestionSelect = useCallback(
+    (suggestion: GlobalSearchSuggestion) => {
+      setSearchQuery("");
+      navigate(`/workspaces/${suggestion.id}/${defaultWorkspaceSection.path}`);
+    },
+    [navigate],
+  );
+
   const directorySearch = {
     value: searchQuery,
     onChange: setSearchQuery,
     onSubmit: handleWorkspaceSearchSubmit,
     placeholder: "Search workspaces or jump to one instantly",
     shortcutHint,
+    scopeLabel: "Workspace directory",
+    suggestions: searchSuggestions,
+    onSelectSuggestion: handleWorkspaceSuggestionSelect,
   };
 
   const mainContent =

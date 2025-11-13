@@ -1,4 +1,6 @@
 import type { ConfigBuilderPane } from "@app/nav/urlState";
+import clsx from "clsx";
+
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 
 import type { WorkbenchConsoleLine, WorkbenchValidationState } from "../types";
@@ -35,22 +37,33 @@ export function BottomPanel({
             </TabsTrigger>
           </TabsList>
         </div>
-        <TabsContent value="console" className="flex-1 overflow-auto px-3 py-2 text-sm">
-          {hasConsoleLines ? (
-            <ul className="space-y-1">
-              {consoleLines.map((line, index) => (
-                <li key={`${line.timestamp ?? index}-${line.message}`} className="flex items-baseline gap-3">
-                  <span className="w-16 text-xs text-slate-400">{line.timestamp ?? "—"}</span>
-                  <span className={consoleClassName(line.level)}>{line.message}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="max-w-prose text-xs leading-relaxed text-slate-500">
-              Trigger a build or ADE run to stream live output into this console. Logs and status updates will appear here as
-              soon as execution starts.
-            </p>
-          )}
+        <TabsContent value="console" className="flex h-full flex-col">
+          <div className="flex-1 overflow-auto bg-[#1e1e1e] font-mono text-[13px] leading-relaxed text-[#d4d4d4] shadow-inner">
+            {hasConsoleLines ? (
+              <ul className="space-y-1.5 px-4 py-3">
+                {consoleLines.map((line, index) => (
+                  <li
+                    key={`${line.timestamp ?? index}-${line.message}`}
+                    className="flex gap-3 rounded border border-transparent px-3 py-1.5 transition hover:border-[#333] hover:bg-[#252526]"
+                  >
+                    <span className="w-16 shrink-0 text-right text-[11px] text-[#808080]">{line.timestamp ?? " "}</span>
+                    <span className="flex-1 whitespace-pre-wrap break-words">
+                      <span className={clsx("mr-3 text-sm font-semibold", consolePromptClass(line.level))}>›</span>
+                      <span className={consoleLineClass(line.level)}>{line.message}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="px-5 py-6 text-[13px] text-[#999]">
+                <p className="whitespace-pre-line">
+                  No console output yet.
+                  {"\n"}
+                  Trigger a build or ADE run to stream live logs just like VS Code’s terminal.
+                </p>
+              </div>
+            )}
+          </div>
         </TabsContent>
         <TabsContent value="validation" className="flex-1 overflow-auto px-3 py-2 text-sm">
           <div className="flex flex-col gap-3">
@@ -61,7 +74,7 @@ export function BottomPanel({
             {validation.messages.length > 0 ? (
               <ul className="space-y-2">
                 {validation.messages.map((item, index) => (
-                  <li key={`${item.level}-${item.path ?? index}-${index}`} className={consoleClassName(item.level)}>
+                  <li key={`${item.level}-${item.path ?? index}-${index}`} className={validationMessageClass(item.level)}>
                     {item.path ? (
                       <span className="block text-xs font-medium uppercase tracking-wide text-slate-500">{item.path}</span>
                     ) : null}
@@ -79,7 +92,29 @@ export function BottomPanel({
   );
 }
 
-function consoleClassName(level: WorkbenchConsoleLine["level"] | WorkbenchValidationState["messages"][number]["level"]) {
+const CONSOLE_PROMPTS: Record<WorkbenchConsoleLine["level"], string> = {
+  info: "text-[#569cd6]",
+  warning: "text-[#dcdcaa]",
+  error: "text-[#f48771]",
+  success: "text-[#89d185]",
+};
+
+const CONSOLE_LINES: Record<WorkbenchConsoleLine["level"], string> = {
+  info: "text-[#d4d4d4]",
+  warning: "text-[#dcdcaa]",
+  error: "text-[#f48771]",
+  success: "text-[#b6f0b1]",
+};
+
+function consolePromptClass(level: WorkbenchConsoleLine["level"]) {
+  return CONSOLE_PROMPTS[level] ?? CONSOLE_PROMPTS.info;
+}
+
+function consoleLineClass(level: WorkbenchConsoleLine["level"]) {
+  return CONSOLE_LINES[level] ?? CONSOLE_LINES.info;
+}
+
+function validationMessageClass(level: WorkbenchValidationState["messages"][number]["level"]) {
   switch (level) {
     case "error":
       return "text-danger-600";

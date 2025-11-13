@@ -10,12 +10,14 @@ interface UseUnsavedChangesGuardOptions {
   readonly isDirty: boolean;
   readonly confirm?: ConfirmFn;
   readonly message?: string;
+  readonly shouldBypassNavigation?: () => boolean;
 }
 
 export function useUnsavedChangesGuard({
   isDirty,
   confirm = window.confirm,
   message = DEFAULT_PROMPT,
+  shouldBypassNavigation,
 }: UseUnsavedChangesGuardOptions) {
   const location = useLocation();
 
@@ -25,13 +27,17 @@ export function useUnsavedChangesGuard({
         return true;
       }
 
+      if (shouldBypassNavigation?.()) {
+        return true;
+      }
+
       if (intent.location.pathname === location.pathname) {
         return true;
       }
 
       return confirm(message);
     },
-    [confirm, isDirty, location.pathname, message],
+    [confirm, isDirty, location.pathname, message, shouldBypassNavigation],
   );
 
   useNavigationBlocker(blocker, isDirty);

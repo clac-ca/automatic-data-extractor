@@ -9,6 +9,12 @@ import type { WorkbenchDataSeed } from "@screens/Workspace/sections/ConfigBuilde
 import { getWorkbenchReturnPathStorageKey } from "@screens/Workspace/sections/ConfigBuilder/workbench/state/workbenchWindowState";
 
 import { createScopedStorage } from "@shared/storage";
+import {
+  SearchParamsOverrideProvider,
+  toURLSearchParams,
+  type SetSearchParamsInit,
+  type SetSearchParamsOptions,
+} from "@app/nav/urlState";
 
 type WorkbenchWindowMode = "maximized" | "minimized";
 
@@ -17,10 +23,12 @@ interface WorkbenchSessionPayload {
   readonly configId: string;
   readonly configName: string;
   readonly seed?: WorkbenchDataSeed;
+  readonly editorSearch?: string;
 }
 
 interface WorkbenchSessionState extends WorkbenchSessionPayload {
   readonly instanceId: string;
+  readonly editorSearch: string;
 }
 
 interface WorkbenchWindowContextValue {
@@ -54,6 +62,7 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
   const [mode, setMode] = useState<WorkbenchWindowMode>("maximized");
   const instanceCounter = useRef(0);
   const navigationIntent = useRef<"minimize" | "close" | null>(null);
+  const guardBypassRef = useRef(false);
 
   const returnPathStorage = useMemo(
     () => createScopedStorage(getWorkbenchReturnPathStorageKey(workspaceId)),
@@ -84,41 +93,97 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
       navigationIntent.current = null;
       return;
     }
+
+    const intent = navigationIntent.current;
+
     if (onEditorRoute && editorRouteConfigId === session.configId) {
-      setMode("maximized");
+      if (intent !== "minimize") {
+        setMode("maximized");
+      }
+      if (intent !== "minimize") {
+        navigationIntent.current = null;
+      }
+      return;
+    }
+
+    if (!onEditorRoute) {
+      if (intent === "minimize") {
+        navigationIntent.current = null;
+        return;
+      }
+      if (mode === "maximized" && intent === null) {
+        setSession(null);
+        return;
+      }
       navigationIntent.current = null;
-      return;
     }
-    if (!onEditorRoute && mode === "maximized" && navigationIntent.current === null) {
-      setSession(null);
-      return;
-    }
-    navigationIntent.current = null;
   }, [session, onEditorRoute, editorRouteConfigId, mode]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+    if (!onEditorRoute || editorRouteConfigId !== session.configId) {
+      return;
+    }
+    const normalizedSearch = normalizeSearchString(location.search);
+    if (normalizedSearch === session.editorSearch) {
+      return;
+    }
+    setSession((current) => {
+      if (!current || current.instanceId !== session.instanceId) {
+        return current;
+      }
+      return { ...current, editorSearch: normalizedSearch };
+    });
+  }, [session, onEditorRoute, editorRouteConfigId, location.search]);
 
   const ensureReturnPath = useCallback(() => {
     return returnPathStorage.get<string>() ?? defaultReturnPath;
   }, [returnPathStorage, defaultReturnPath]);
 
+  const setOverrideSearchParams = useCallback(
+    (init: SetSearchParamsInit, _options?: SetSearchParamsOptions) => {
+      setSession((current) => {
+        if (!current) {
+          return current;
+        }
+        const base = new URLSearchParams(current.editorSearch);
+        const nextInit = typeof init === "function" ? init(new URLSearchParams(base)) : init;
+        const nextParams = toURLSearchParams(nextInit);
+        const nextSearch = nextParams.toString();
+        if (nextSearch === current.editorSearch) {
+          return current;
+        }
+        return { ...current, editorSearch: nextSearch };
+      });
+    },
+    [],
+  );
+
   const openSession = useCallback(
     (payload: WorkbenchSessionPayload) => {
+      const normalizedSearch = normalizeSearchString(payload.editorSearch ?? location.search);
       setSession((current) => {
         if (current && current.workspaceId === payload.workspaceId && current.configId === payload.configId) {
           return {
             ...current,
             configName: payload.configName,
             seed: payload.seed ?? current.seed,
+            editorSearch:
+              payload.editorSearch !== undefined ? normalizedSearch : current.editorSearch,
           };
         }
         instanceCounter.current += 1;
         return {
           ...payload,
+          editorSearch: normalizedSearch,
           instanceId: `${payload.workspaceId}:${payload.configId}:${instanceCounter.current}`,
         };
       });
       setMode("maximized");
     },
-    [],
+    [location.search],
   );
 
   const closeSession = useCallback(() => {
@@ -135,6 +200,7 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
     if (!session) {
       return;
     }
+    guardBypassRef.current = true;
     setMode("minimized");
     navigationIntent.current = "minimize";
     navigate(ensureReturnPath());
@@ -145,11 +211,11 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
       return;
     }
     setMode("maximized");
-    const editorPath = buildEditorPath(session.workspaceId, session.configId);
-    if (location.pathname !== editorPath) {
-      navigate(editorPath);
+    const target = buildEditorTarget(session.workspaceId, session.configId, session.editorSearch);
+    if (`${location.pathname}${location.search}` !== target) {
+      navigate(target);
     }
-  }, [session, navigate, location.pathname]);
+  }, [session, navigate, location.pathname, location.search]);
 
   const contextValue = useMemo<WorkbenchWindowContextValue>(
     () => ({
@@ -163,15 +229,37 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
     [session, mode, openSession, closeSession, minimizeSession, restoreSession],
   );
 
+  const shouldOverrideSearch =
+    Boolean(session) && (!onEditorRoute || editorRouteConfigId !== session?.configId);
+  const searchParamsOverride = useMemo(
+    () =>
+      shouldOverrideSearch && session
+        ? {
+            params: new URLSearchParams(session.editorSearch),
+            setSearchParams: setOverrideSearchParams,
+          }
+        : null,
+    [shouldOverrideSearch, session, setOverrideSearchParams],
+  );
+
+  const consumeGuardBypass = useCallback(() => {
+    const bypass = guardBypassRef.current;
+    guardBypassRef.current = false;
+    return bypass;
+  }, []);
+
   return (
     <WorkbenchWindowContext.Provider value={contextValue}>
       {children}
-      <WorkbenchWindowLayer
-        session={session}
-        mode={mode}
-        onClose={closeSession}
-        onMinimize={minimizeSession}
-      />
+      <SearchParamsOverrideProvider value={searchParamsOverride}>
+        <WorkbenchWindowLayer
+          session={session}
+          mode={mode}
+          onClose={closeSession}
+          onMinimize={minimizeSession}
+          shouldBypassUnsavedGuard={consumeGuardBypass}
+        />
+      </SearchParamsOverrideProvider>
       {session && mode === "minimized" ? (
         <WorkbenchDock
           configName={session.configName}
@@ -188,11 +276,13 @@ function WorkbenchWindowLayer({
   mode,
   onClose,
   onMinimize,
+  shouldBypassUnsavedGuard,
 }: {
   readonly session: WorkbenchSessionState | null;
   readonly mode: WorkbenchWindowMode;
   readonly onClose: () => void;
   readonly onMinimize: () => void;
+  readonly shouldBypassUnsavedGuard: () => boolean;
 }) {
   if (!session) {
     return null;
@@ -214,6 +304,7 @@ function WorkbenchWindowLayer({
         seed={session.seed}
         onCloseWorkbench={onClose}
         onMinimizeWorkbench={onMinimize}
+        shouldBypassUnsavedGuard={shouldBypassUnsavedGuard}
       />
     </div>
   );
@@ -334,6 +425,14 @@ function extractEditorRouteConfigId(pathname: string, workspaceId: string) {
   return null;
 }
 
-function buildEditorPath(workspaceId: string, configId: string) {
-  return `/workspaces/${workspaceId}/config-builder/${encodeURIComponent(configId)}/editor`;
+function buildEditorTarget(workspaceId: string, configId: string, search: string) {
+  const base = `/workspaces/${workspaceId}/config-builder/${encodeURIComponent(configId)}/editor`;
+  return search.length > 0 ? `${base}?${search}` : base;
+}
+
+function normalizeSearchString(search: string | null | undefined) {
+  if (!search) {
+    return "";
+  }
+  return search.startsWith("?") ? search.slice(1) : search;
 }
