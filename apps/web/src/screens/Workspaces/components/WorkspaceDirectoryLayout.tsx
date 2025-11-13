@@ -2,7 +2,7 @@ import { type ReactNode } from "react";
 import { useNavigate } from "@app/nav/history";
 
 import { useSession } from "@shared/auth/context/SessionContext";
-import { GlobalTopBar } from "@app/shell/GlobalTopBar";
+import { GlobalTopBar, type GlobalTopBarSearchProps } from "@app/shell/GlobalTopBar";
 import { ProfileDropdown } from "@app/shell/ProfileDropdown";
 import { DirectoryIcon } from "@screens/Workspace/components/workspace-navigation";
 
@@ -10,9 +10,10 @@ interface WorkspaceDirectoryLayoutProps {
   readonly children: ReactNode;
   readonly sidePanel?: ReactNode;
   readonly actions?: ReactNode;
+  readonly search?: GlobalTopBarSearchProps;
 }
 
-export function WorkspaceDirectoryLayout({ children, sidePanel, actions }: WorkspaceDirectoryLayoutProps) {
+export function WorkspaceDirectoryLayout({ children, sidePanel, actions, search }: WorkspaceDirectoryLayoutProps) {
   const session = useSession();
   const navigate = useNavigate();
   const displayName = session.user.display_name || session.user.email || "Signed in";
@@ -21,7 +22,7 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions }: Works
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
       <GlobalTopBar
-        leading={
+        brand={
           <button
             type="button"
             onClick={() => navigate("/workspaces")}
@@ -36,10 +37,10 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions }: Works
             </span>
           </button>
         }
-        center={<DirectorySearchField />}
+        search={search}
+        actions={actions ? <div className="flex items-center gap-2">{actions}</div> : undefined}
         trailing={
           <div className="flex items-center gap-2">
-            {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
             <ProfileDropdown displayName={displayName} email={email} />
           </div>
         }
@@ -53,39 +54,5 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions }: Works
         </div>
       </main>
     </div>
-  );
-}
-
-function DirectorySearchField() {
-  return (
-    <form
-      role="search"
-      className="hidden w-full max-w-md items-center rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition focus-within:border-brand-200 focus-within:ring-2 focus-within:ring-brand-100 md:flex"
-      onSubmit={(event) => {
-        event.preventDefault();
-      }}
-    >
-      <label htmlFor="workspace-directory-search" className="sr-only">
-        Search workspaces
-      </label>
-      <SearchIcon />
-      <input
-        id="workspace-directory-search"
-        name="search"
-        type="search"
-        placeholder="Search workspaces"
-        className="ml-3 w-full border-0 bg-transparent text-sm text-slate-600 placeholder:text-slate-400 focus:outline-none"
-      />
-      <span className="text-xs text-slate-400">⌘K</span>
-    </form>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg className="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
-      <circle cx="9" cy="9" r="5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="m13.5 13.5 3 3" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

@@ -1,3 +1,5 @@
+import { useCallback, useMemo, useState } from "react";
+
 import { Link } from "@app/nav/Link";
 import { useNavigate } from "@app/nav/history";
 
@@ -8,6 +10,7 @@ import { Button } from "@ui/Button";
 import { PageState } from "@ui/PageState";
 import { defaultWorkspaceSection } from "@screens/Workspace/components/workspace-navigation";
 import { WorkspaceDirectoryLayout } from "@screens/Workspaces/components/WorkspaceDirectoryLayout";
+import { useShortcutHint } from "@shared/hooks/useShortcutHint";
 
 export default function WorkspacesIndexRoute() {
   return (
@@ -23,6 +26,8 @@ function WorkspacesIndexContent() {
   const workspacesQuery = useWorkspacesQuery();
   const userPermissions = session.user.permissions ?? [];
   const canCreateWorkspace = userPermissions.includes("Workspaces.Create");
+  const [searchQuery, setSearchQuery] = useState("");
+  const shortcutHint = useShortcutHint();
 
   if (workspacesQuery.isLoading) {
     return (
@@ -51,10 +56,41 @@ function WorkspacesIndexContent() {
 
   const workspacesPage = workspacesQuery.data;
   const workspaces: WorkspaceProfile[] = workspacesPage?.items ?? [];
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const visibleWorkspaces = useMemo(() => {
+    if (!normalizedSearch) {
+      return workspaces;
+    }
+    return workspaces.filter((workspace) => {
+      const name = workspace.name.toLowerCase();
+      const slug = workspace.slug?.toLowerCase() ?? "";
+      return name.includes(normalizedSearch) || slug.includes(normalizedSearch);
+    });
+  }, [workspaces, normalizedSearch]);
 
   const actions = canCreateWorkspace ? (
     <Button variant="primary" onClick={() => navigate("/workspaces/new")}>Create workspace</Button>
   ) : undefined;
+
+  const handleWorkspaceSearchSubmit = useCallback(() => {
+    if (!normalizedSearch) {
+      return;
+    }
+    const firstMatch = visibleWorkspaces[0];
+    if (firstMatch) {
+      navigate(`/workspaces/${firstMatch.id}/${defaultWorkspaceSection.path}`);
+    }
+  }, [visibleWorkspaces, normalizedSearch, navigate]);
+
+  const handleResetSearch = useCallback(() => setSearchQuery(""), []);
+
+  const directorySearch = {
+    value: searchQuery,
+    onChange: setSearchQuery,
+    onSubmit: handleWorkspaceSearchSubmit,
+    placeholder: "Search workspaces or jump to one instantly",
+    shortcutHint,
+  };
 
   const mainContent =
     workspaces.length === 0 ? (
@@ -72,6 +108,18 @@ function WorkspacesIndexContent() {
           />
         </div>
       )
+    ) : visibleWorkspaces.length === 0 ? (
+      <div className="space-y-4">
+        <PageState
+          title={`No workspaces matching "${searchQuery}"`}
+          description="Try searching by another workspace name or slug."
+          action={
+            <Button variant="secondary" onClick={handleResetSearch}>
+              Clear search
+            </Button>
+          }
+        />
+      </div>
     ) : (
       <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
         <header>
@@ -81,7 +129,7 @@ function WorkspacesIndexContent() {
           <p className="mt-1 text-sm text-slate-500">Select a workspace to jump straight into documents.</p>
         </header>
         <section className="grid gap-5 lg:grid-cols-2">
-          {workspaces.map((workspace) => (
+          {visibleWorkspaces.map((workspace) => (
             <Link
               key={workspace.id}
               to={`/workspaces/${workspace.id}/${defaultWorkspaceSection.path}`}
@@ -107,6 +155,7 @@ function WorkspacesIndexContent() {
   return (
     <WorkspaceDirectoryLayout
       actions={actions}
+      search={directorySearch}
       sidePanel={<DirectorySidebar canCreate={canCreateWorkspace} onCreate={() => navigate("/workspaces/new")} />}
     >
       {mainContent}
