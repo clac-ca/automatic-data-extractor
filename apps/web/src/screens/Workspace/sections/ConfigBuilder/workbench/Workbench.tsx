@@ -138,8 +138,8 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
     initialConsolePrefsRef.current = consolePersistence.get<ConsolePanelPreferences>() ?? null;
   }
   const editorTheme = useEditorThemePreference(buildEditorThemeStorageKey(workspaceId, configId));
-  const menuAppearance = editorTheme.resolvedTheme === "vs-dark" ? "dark" : "light";
-  const validationLabel = validationState.lastRunAt ? `Last run ${formatRelative(validationState.lastRunAt)}` : undefined;
+const menuAppearance = editorTheme.resolvedTheme === "vs-dark" ? "dark" : "light";
+const validationLabel = validationState.lastRunAt ? `Last run ${formatRelative(validationState.lastRunAt)}` : undefined;
 
   const [explorer, setExplorer] = useState({ collapsed: false, width: 280 });
   const [inspector, setInspector] = useState({ collapsed: true, width: 300 });
@@ -153,8 +153,9 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
   const [consoleNotice, setConsoleNotice] = useState<string | null>(null);
   const [activityView, setActivityView] = useState<ActivityBarView>("explorer");
   const [settingsMenu, setSettingsMenu] = useState<{ x: number; y: number } | null>(null);
+  const [windowMaximized, setWindowMaximized] = useState(false);
 
-  const showExplorerPane = !explorer.collapsed;
+const showExplorerPane = !explorer.collapsed;
 
   const loadFile = useCallback(
     async (path: string) => {
@@ -452,6 +453,21 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
     handleToggleOutput,
   ]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    const previous = document.documentElement.style.overflow;
+    if (windowMaximized) {
+      document.documentElement.style.overflow = "hidden";
+    } else {
+      document.documentElement.style.overflow = previous || "";
+    }
+    return () => {
+      document.documentElement.style.overflow = previous || "";
+    };
+  }, [windowMaximized]);
+
   if (!seed && filesQuery.isLoading) {
     return (
       <PageState
@@ -483,78 +499,96 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
   }
 
   const workspaceLabel = formatWorkspaceLabel(workspaceId);
-  const rootSurfaceClass =
-    menuAppearance === "dark" ? "bg-[#0f111a] text-white" : "bg-slate-50 text-slate-900";
+  const rootSurfaceClass = windowMaximized
+    ? menuAppearance === "dark"
+      ? "bg-[#0f111a] text-white"
+      : "bg-slate-50 text-slate-900"
+    : "bg-transparent text-slate-900";
   const editorSurface = menuAppearance === "dark" ? "#1b1f27" : "#ffffff";
   const editorText = menuAppearance === "dark" ? "#f5f6fb" : "#0f172a";
+  const windowFrameClass = windowMaximized
+    ? clsx(
+        "fixed inset-0 z-[90] flex flex-col",
+        menuAppearance === "dark" ? "bg-[#0f111a] text-white" : "bg-white text-slate-900",
+      )
+    : clsx(
+        "flex min-h-0 flex-1 flex-col overflow-hidden border shadow-[0_25px_60px_rgba(15,23,42,0.12)]",
+        menuAppearance === "dark"
+          ? "border-white/15 bg-[#0f111a] text-white shadow-[0_40px_80px_rgba(0,0,0,0.65)]"
+          : "border-slate-200 bg-white text-slate-900",
+      );
 
   return (
-    <div className={clsx("flex h-full min-h-0 flex-col", rootSurfaceClass)}>
-      <WorkbenchChrome
-        configName={configName}
-        workspaceLabel={workspaceLabel}
-        validationLabel={validationLabel}
-        canRunValidation={canRunValidation}
-        isRunningValidation={isRunningValidation}
-        onRunValidation={handleRunValidation}
-        explorerVisible={showExplorerPane}
-        onToggleExplorer={handleToggleExplorer}
-        consoleOpen={!outputCollapsed}
-        onToggleConsole={handleToggleOutput}
-        inspectorCollapsed={inspector.collapsed}
-        onToggleInspector={handleToggleInspectorVisibility}
-        appearance={menuAppearance}
-      />
-      {consoleNotice ? (
-        <div className="border-b border-brand-400/40 bg-brand-500/10 px-4 py-2 text-sm text-brand-100">
-          {consoleNotice}
-        </div>
-      ) : null}
-      <div className="flex min-h-0 flex-1">
-        <ActivityBar
-          activeView={activityView}
-          onSelectView={handleSelectActivityView}
-          onOpenSettings={handleOpenSettingsMenu}
+    <div className={clsx("flex h-full min-h-0 w-full flex-1 flex-col", rootSurfaceClass)}>
+      {windowMaximized ? <div className="fixed inset-0 z-40 bg-slate-900/60" /> : null}
+      <div className={windowFrameClass}>
+        <WorkbenchChrome
+          configName={configName}
+          workspaceLabel={workspaceLabel}
+          validationLabel={validationLabel}
+          canRunValidation={canRunValidation}
+          isRunningValidation={isRunningValidation}
+          onRunValidation={handleRunValidation}
+          explorerVisible={showExplorerPane}
+          onToggleExplorer={handleToggleExplorer}
+          consoleOpen={!outputCollapsed}
+          onToggleConsole={handleToggleOutput}
+          inspectorCollapsed={inspector.collapsed}
+          onToggleInspector={handleToggleInspectorVisibility}
           appearance={menuAppearance}
+          windowMaximized={windowMaximized}
+          onToggleWindow={() => setWindowMaximized((prev) => !prev)}
         />
-        {showExplorerPane ? (
-          <>
-            <div className="flex min-h-0" style={{ width: explorer.width }}>
-              {activityView === "explorer" && files.tree ? (
-                <Explorer
-                  width={explorer.width}
-                  tree={files.tree}
-                  activeFileId={files.activeTab?.id ?? ""}
-                  openFileIds={files.tabs.map((tab) => tab.id)}
-                  onSelectFile={(fileId) => {
-                    files.openFile(fileId);
-                    setFileId(fileId);
-                  }}
-                  theme={menuAppearance}
-                  onCloseFile={files.closeTab}
-                  onCloseOtherFiles={files.closeOtherTabs}
-                  onCloseTabsToRight={files.closeTabsToRight}
-                  onCloseAllFiles={files.closeAllTabs}
-                  onHide={handleHideExplorer}
-                />
-              ) : (
-                <SidePanelPlaceholder width={explorer.width} view={activityView} />
-              )}
-            </div>
-            <PanelResizeHandle
-              orientation="vertical"
-              onPointerDown={(event) => {
-                const startX = event.clientX;
-                const startWidth = explorer.width;
-                trackPointerDrag(event, (move) => {
-                  const delta = move.clientX - startX;
-                  const next = clamp(startWidth + delta, EXPLORER_LIMITS.min, EXPLORER_LIMITS.max);
-                  setExplorer((prev) => ({ ...prev, width: next }));
-                });
-              }}
-            />
-          </>
+        {consoleNotice ? (
+          <div className="border-b border-brand-400/40 bg-brand-500/10 px-4 py-2 text-sm text-brand-100">
+            {consoleNotice}
+          </div>
         ) : null}
+        <div className="flex min-h-0 flex-1">
+          <ActivityBar
+            activeView={activityView}
+            onSelectView={handleSelectActivityView}
+            onOpenSettings={handleOpenSettingsMenu}
+            appearance={menuAppearance}
+          />
+          {showExplorerPane ? (
+            <>
+              <div className="flex min-h-0" style={{ width: explorer.width }}>
+                {activityView === "explorer" && files.tree ? (
+                  <Explorer
+                    width={explorer.width}
+                    tree={files.tree}
+                    activeFileId={files.activeTab?.id ?? ""}
+                    openFileIds={files.tabs.map((tab) => tab.id)}
+                    onSelectFile={(fileId) => {
+                      files.openFile(fileId);
+                      setFileId(fileId);
+                    }}
+                    theme={menuAppearance}
+                    onCloseFile={files.closeTab}
+                    onCloseOtherFiles={files.closeOtherTabs}
+                    onCloseTabsToRight={files.closeTabsToRight}
+                    onCloseAllFiles={files.closeAllTabs}
+                    onHide={handleHideExplorer}
+                  />
+                ) : (
+                  <SidePanelPlaceholder width={explorer.width} view={activityView} />
+                )}
+              </div>
+              <PanelResizeHandle
+                orientation="vertical"
+                onPointerDown={(event) => {
+                  const startX = event.clientX;
+                  const startWidth = explorer.width;
+                  trackPointerDrag(event, (move) => {
+                    const delta = move.clientX - startX;
+                    const next = clamp(startWidth + delta, EXPLORER_LIMITS.min, EXPLORER_LIMITS.max);
+                    setExplorer((prev) => ({ ...prev, width: next }));
+                  });
+                }}
+              />
+            </>
+          ) : null}
 
         <div
           ref={setCenterPaneEl}
@@ -653,7 +687,7 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
           </>
         ) : null}
       </div>
-
+      </div>
       <ContextMenu
         open={Boolean(settingsMenu)}
         position={settingsMenu}
@@ -705,6 +739,8 @@ function WorkbenchChrome({
   inspectorCollapsed,
   onToggleInspector,
   appearance,
+  windowMaximized,
+  onToggleWindow,
 }: {
   readonly configName: string;
   readonly workspaceLabel: string;
@@ -719,6 +755,8 @@ function WorkbenchChrome({
   readonly inspectorCollapsed: boolean;
   readonly onToggleInspector: () => void;
   readonly appearance: "light" | "dark";
+  readonly windowMaximized: boolean;
+  readonly onToggleWindow: () => void;
 }) {
   const dark = appearance === "dark";
   const surfaceClass = dark
@@ -744,7 +782,22 @@ function WorkbenchChrome({
             Workspace · {workspaceLabel}
           </div>
         </div>
-        <div className="ml-4 flex items-center gap-1 text-xs">
+      </div>
+      <div className="flex items-center gap-2">
+        {validationLabel ? <span className={clsx("text-xs", metaTextClass)}>{validationLabel}</span> : null}
+        <button
+          type="button"
+          onClick={onRunValidation}
+          disabled={!canRunValidation}
+          className={clsx(
+            "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
+            runButtonClass,
+          )}
+        >
+          {isRunningValidation ? <SpinnerIcon /> : <RunIcon />}
+          {isRunningValidation ? "Running…" : "Run validation"}
+        </button>
+        <div className="flex items-center gap-1">
           <ChromeIconButton
             ariaLabel={explorerVisible ? "Hide explorer" : "Show explorer"}
             onClick={onToggleExplorer}
@@ -767,21 +820,13 @@ function WorkbenchChrome({
             icon={<ConsoleIcon />}
           />
         </div>
-      </div>
-      <div className="flex items-center gap-3">
-        {validationLabel ? <span className={clsx("text-xs", metaTextClass)}>{validationLabel}</span> : null}
-        <button
-          type="button"
-          onClick={onRunValidation}
-          disabled={!canRunValidation}
-          className={clsx(
-            "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
-            runButtonClass,
-          )}
-        >
-          {isRunningValidation ? <SpinnerIcon /> : <RunIcon />}
-          {isRunningValidation ? "Running…" : "Run validation"}
-        </button>
+        <ChromeIconButton
+          ariaLabel={windowMaximized ? "Restore window" : "Maximize window"}
+          onClick={onToggleWindow}
+          appearance={appearance}
+          active={windowMaximized}
+          icon={windowMaximized ? <WindowRestoreIcon /> : <WindowMaximizeIcon />}
+        />
       </div>
     </div>
   );
@@ -802,16 +847,16 @@ function ChromeIconButton({
 }) {
   const dark = appearance === "dark";
   const baseClass = dark
-    ? "border-white/10 text-white/70 hover:border-white/30 hover:text-white focus-visible:ring-white/40"
-    : "border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-900 focus-visible:ring-slate-400/60";
-  const activeClass = dark ? "bg-white/15 text-white" : "bg-slate-200 text-slate-900";
+    ? "text-white/70 hover:text-white hover:bg-white/5 hover:border-white/20 focus-visible:ring-white/40"
+    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100 hover:border-slate-300 focus-visible:ring-slate-400/40";
+  const activeClass = dark ? "text-white border-white/30 bg-white/10" : "text-slate-900 border-slate-300 bg-slate-200/70";
   return (
     <button
       type="button"
       aria-label={ariaLabel}
       onClick={onClick}
       className={clsx(
-        "flex h-8 w-8 items-center justify-center rounded-md border text-sm transition focus-visible:outline-none focus-visible:ring-2",
+        "flex h-7 w-7 items-center justify-center rounded-[4px] border border-transparent text-sm transition focus-visible:outline-none focus-visible:ring-2",
         baseClass,
         active && activeClass,
       )}
@@ -866,6 +911,23 @@ function InspectorIcon() {
     <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
       <rect x="3" y="3" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
       <path d="M10 3v10" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function WindowMaximizeIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="3" y="3" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function WindowRestoreIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M4.5 5.5h6v6h-6z" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M6 4h6v6" stroke="currentColor" strokeWidth="1.2" />
     </svg>
   );
 }
