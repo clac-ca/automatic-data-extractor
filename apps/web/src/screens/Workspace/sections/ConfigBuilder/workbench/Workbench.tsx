@@ -14,6 +14,7 @@ import { useWorkbenchUrlState } from "./state/useWorkbenchUrlState";
 import { useUnsavedChangesGuard } from "./state/useUnsavedChangesGuard";
 import { useEditorThemePreference } from "./state/useEditorThemePreference";
 import type { EditorThemePreference } from "./state/useEditorThemePreference";
+import { getMinimizedWorkbenchStorageKey, getWorkbenchReturnPathStorageKey, type MinimizedWorkbenchState } from "./state/workbenchWindowState";
 import type { WorkbenchDataSeed, WorkbenchValidationState } from "./types";
 import { clamp, trackPointerDrag } from "./utils/drag";
 import { createWorkbenchTreeFromListing } from "./utils/tree";
@@ -140,11 +141,11 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
     initialConsolePrefsRef.current = consolePersistence.get<ConsolePanelPreferences>() ?? null;
   }
   const editorTheme = useEditorThemePreference(buildEditorThemeStorageKey(workspaceId, configId));
-const menuAppearance = editorTheme.resolvedTheme === "vs-dark" ? "dark" : "light";
-const validationLabel = validationState.lastRunAt ? `Last run ${formatRelative(validationState.lastRunAt)}` : undefined;
+  const menuAppearance = editorTheme.resolvedTheme === "vs-light" ? "light" : "dark";
+  const validationLabel = validationState.lastRunAt ? `Last run ${formatRelative(validationState.lastRunAt)}` : undefined;
 
   const [explorer, setExplorer] = useState({ collapsed: false, width: 280 });
-  const [inspector, setInspector] = useState({ collapsed: true, width: 300 });
+  const [inspector, setInspector] = useState({ collapsed: false, width: 300 });
   const [outputHeight, setOutputHeight] = useState(
     () => initialConsolePrefsRef.current?.height ?? DEFAULT_CONSOLE_HEIGHT,
   );
@@ -156,11 +157,35 @@ const validationLabel = validationState.lastRunAt ? `Last run ${formatRelative(v
   const [activityView, setActivityView] = useState<ActivityBarView>("explorer");
   const [settingsMenu, setSettingsMenu] = useState<{ x: number; y: number } | null>(null);
   const [windowMaximized, setWindowMaximized] = useState(false);
+  const minimizedStorageKey = useMemo(() => getMinimizedWorkbenchStorageKey(workspaceId), [workspaceId]);
+  const minimizedStorage = useMemo(() => createScopedStorage(minimizedStorageKey), [minimizedStorageKey]);
+  const returnPathStorageKey = useMemo(() => getWorkbenchReturnPathStorageKey(workspaceId), [workspaceId]);
+  const returnPathStorage = useMemo(() => createScopedStorage(returnPathStorageKey), [returnPathStorageKey]);
+  const unmountDisposition = useRef<"idle" | "minimize" | "close">("idle");
+  useEffect(() => {
+    minimizedStorage.clear();
+  }, [minimizedStorage]);
+  useEffect(() => {
+    return () => {
+      if (unmountDisposition.current === "idle") {
+        minimizedStorage.set<MinimizedWorkbenchState>({ configId, configName });
+      }
+    };
+  }, [configId, configName, minimizedStorage]);
   const handleCloseWorkbench = useCallback(() => {
+    unmountDisposition.current = "close";
+    minimizedStorage.clear();
     navigate(`/workspaces/${workspaceId}/config-builder`);
-  }, [navigate, workspaceId]);
+  }, [minimizedStorage, navigate, workspaceId]);
+  const handleMinimizeWorkbench = useCallback(() => {
+    unmountDisposition.current = "minimize";
+    minimizedStorage.set<MinimizedWorkbenchState>({ configId, configName });
+    setWindowMaximized(false);
+    const target = returnPathStorage.get<string>() ?? `/workspaces/${workspaceId}/config-builder`;
+    navigate(target);
+  }, [configId, configName, minimizedStorage, navigate, returnPathStorage, workspaceId]);
 
-const showExplorerPane = !explorer.collapsed;
+  const showExplorerPane = !explorer.collapsed;
 
   const loadFile = useCallback(
     async (path: string) => {
@@ -189,6 +214,16 @@ const showExplorerPane = !explorer.collapsed;
   useUnsavedChangesGuard({ isDirty: files.isDirty });
 
   const outputCollapsed = consoleState !== "open";
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event("resize"));
+      window.dispatchEvent(new Event("ade:workbench-layout"));
+    });
+  }, [explorer.collapsed, explorer.width, inspector.collapsed, inspector.width, outputCollapsed, outputHeight, windowMaximized]);
 
   useEffect(() => {
     if (!centerPaneEl) {
@@ -544,13 +579,14 @@ const showExplorerPane = !explorer.collapsed;
           windowMaximized={windowMaximized}
           onToggleWindow={() => setWindowMaximized((prev) => !prev)}
           onCloseWindow={handleCloseWorkbench}
+          onMinimizeWindow={handleMinimizeWorkbench}
         />
         {consoleNotice ? (
           <div className="border-b border-brand-400/40 bg-brand-500/10 px-4 py-2 text-sm text-brand-100">
             {consoleNotice}
           </div>
         ) : null}
-        <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1">
           <ActivityBar
             activeView={activityView}
             onSelectView={handleSelectActivityView}
@@ -598,7 +634,7 @@ const showExplorerPane = !explorer.collapsed;
 
         <div
           ref={setCenterPaneEl}
-          className="flex min-h-0 flex-1 flex-col"
+          className="flex min-h-0 min-w-0 flex-1 flex-col"
           style={{ backgroundColor: editorSurface, color: editorText }}
         >
           {outputCollapsed ? (
@@ -748,6 +784,7 @@ function WorkbenchChrome({
   windowMaximized,
   onToggleWindow,
   onCloseWindow,
+  onMinimizeWindow,
 }: {
   readonly configName: string;
   readonly workspaceLabel: string;
@@ -765,6 +802,7 @@ function WorkbenchChrome({
   readonly windowMaximized: boolean;
   readonly onToggleWindow: () => void;
   readonly onCloseWindow: () => void;
+  readonly onMinimizeWindow: () => void;
 }) {
   const dark = appearance === "dark";
   const surfaceClass = dark
@@ -831,7 +869,7 @@ function WorkbenchChrome({
         <div className="flex items-center gap-1 border-l border-slate-200/70 pl-2">
           <ChromeIconButton
             ariaLabel="Minimize workbench"
-            onClick={() => {}}
+            onClick={onMinimizeWindow}
             appearance={appearance}
             icon={<MinimizeIcon />}
           />

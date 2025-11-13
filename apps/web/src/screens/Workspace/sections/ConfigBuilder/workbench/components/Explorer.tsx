@@ -71,6 +71,20 @@ const FOCUS_RING_CLASS: Record<ExplorerTheme, string> = {
   light: "focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:ring-offset-2 focus-visible:ring-offset-white",
 };
 
+function collectExpandedFolderIds(root: WorkbenchFileNode): Set<string> {
+  const expanded = new Set<string>();
+  const visit = (node: WorkbenchFileNode) => {
+    expanded.add(node.id);
+    node.children?.forEach((child) => {
+      if (child.kind === "folder") {
+        visit(child);
+      }
+    });
+  };
+  visit(root);
+  return expanded;
+}
+
 interface ExplorerProps {
   readonly width: number;
   readonly tree: WorkbenchFileNode;
@@ -98,15 +112,15 @@ export function Explorer({
   onCloseAllFiles,
   onHide,
 }: ExplorerProps) {
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([tree.id]));
+  const [expanded, setExpanded] = useState<Set<string>>(() => collectExpandedFolderIds(tree));
   const [contextMenu, setContextMenu] = useState<{
     readonly node: WorkbenchFileNode;
     readonly position: { readonly x: number; readonly y: number };
   } | null>(null);
 
   useEffect(() => {
-    setExpanded(new Set([tree.id]));
-  }, [tree.id]);
+    setExpanded(collectExpandedFolderIds(tree));
+  }, [tree]);
 
   const toggleFolder = useCallback((nodeId: string) => {
     setExpanded((prev) => {

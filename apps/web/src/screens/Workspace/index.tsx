@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import clsx from "clsx";
 
@@ -8,6 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
 import { useWorkspacesQuery, workspacesKeys, WORKSPACE_LIST_DEFAULT_PARAMS, type WorkspaceProfile } from "@screens/Workspace/api/workspaces-api";
+import { getMinimizedWorkbenchStorageKey, getWorkbenchReturnPathStorageKey, type MinimizedWorkbenchState } from "@screens/Workspace/sections/ConfigBuilder/workbench/state/workbenchWindowState";
 import { WorkspaceProvider } from "@screens/Workspace/context/WorkspaceContext";
 import { createScopedStorage } from "@shared/storage";
 import { writePreferredWorkspace } from "@screens/Workspace/state/workspace-preferences";
@@ -160,6 +161,54 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
     navStorage.set(isNavCollapsed);
   }, [isNavCollapsed, navStorage]);
 
+  const workbenchReturnPathStorage = useMemo(
+    () => createScopedStorage(getWorkbenchReturnPathStorageKey(workspace.id)),
+    [workspace.id],
+  );
+  useEffect(() => {
+    if (!workbenchReturnPathStorage.get<string>()) {
+      workbenchReturnPathStorage.set(`/workspaces/${workspace.id}/config-builder`);
+    }
+  }, [workbenchReturnPathStorage, workspace.id]);
+
+  const minimizedWorkbenchStorageKey = useMemo(
+    () => getMinimizedWorkbenchStorageKey(workspace.id),
+    [workspace.id],
+  );
+  const minimizedWorkbenchStorage = useMemo(
+    () => createScopedStorage(minimizedWorkbenchStorageKey),
+    [minimizedWorkbenchStorageKey],
+  );
+  const [minimizedWorkbench, setMinimizedWorkbench] = useState<MinimizedWorkbenchState | null>(() =>
+    minimizedWorkbenchStorage.get<MinimizedWorkbenchState>(),
+  );
+  useEffect(() => {
+    setMinimizedWorkbench(minimizedWorkbenchStorage.get<MinimizedWorkbenchState>());
+  }, [minimizedWorkbenchStorage, location.pathname, location.search]);
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === minimizedWorkbenchStorageKey) {
+        setMinimizedWorkbench(event.newValue ? (JSON.parse(event.newValue) as MinimizedWorkbenchState) : null);
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [minimizedWorkbenchStorageKey]);
+  const handleRestoreWorkbench = useCallback(() => {
+    if (!minimizedWorkbench) {
+      return;
+    }
+    minimizedWorkbenchStorage.clear();
+    setMinimizedWorkbench(null);
+    navigate(
+      `/workspaces/${workspace.id}/config-builder/${encodeURIComponent(minimizedWorkbench.configId)}/editor`,
+    );
+  }, [minimizedWorkbench, minimizedWorkbenchStorage, navigate, workspace.id]);
+  const handleDismissWorkbenchDock = useCallback(() => {
+    minimizedWorkbenchStorage.clear();
+    setMinimizedWorkbench(null);
+  }, [minimizedWorkbenchStorage]);
+
   const topBarLeading = (
     <button
       type="button"
@@ -195,6 +244,14 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
 
   const segments = extractSectionSegments(location.pathname, workspace.id);
   const section = resolveWorkspaceSection(workspace.id, segments, location.search, location.hash);
+  const isWorkbenchRoute =
+    segments.length >= 3 && segments[0] === "config-builder" && segments[2] === "editor";
+
+  useEffect(() => {
+    if (!isWorkbenchRoute) {
+      workbenchReturnPathStorage.set(`${location.pathname}${location.search}${location.hash}`);
+    }
+  }, [isWorkbenchRoute, location.pathname, location.search, location.hash, workbenchReturnPathStorage]);
 
   useEffect(() => {
     if (section?.kind === "redirect") {
@@ -244,6 +301,13 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
             </div>
           </div>
         </main>
+        {minimizedWorkbench ? (
+          <WorkbenchDock
+            configName={minimizedWorkbench.configName}
+            onRestore={handleRestoreWorkbench}
+            onDismiss={handleDismissWorkbenchDock}
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -364,4 +428,105 @@ function ConfigEditorWorkbenchRouteWithParams({ configId }: { readonly configId:
 
 export function getDefaultWorkspacePath(workspaceId: string) {
   return `/workspaces/${workspaceId}/${defaultWorkspaceSection.path}`;
+}
+
+interface WorkbenchDockProps {
+  readonly configName: string;
+  readonly onRestore: () => void;
+  readonly onDismiss: () => void;
+}
+
+function WorkbenchDock({ configName, onRestore, onDismiss }: WorkbenchDockProps) {
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40">
+      <div className="pointer-events-auto border-t border-slate-200 bg-white/95 shadow-[0_-12px_40px_rgba(15,23,42,0.15)] backdrop-blur">
+        <div className="relative mx-auto flex h-14 max-w-6xl items-center px-4 text-slate-900">
+          <button
+            type="button"
+            onClick={onRestore}
+            className="group flex min-w-0 flex-1 items-center gap-4 rounded-md px-3 py-1.5 text-left transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40"
+          >
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-brand-600 shadow-inner">
+              <DockWindowIcon />
+            </span>
+            <span className="flex min-w-0 flex-col leading-tight">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-400">
+                Config workbench
+              </span>
+              <span className="truncate text-sm font-semibold text-slate-900" title={configName}>
+                {configName}
+              </span>
+            </span>
+            <span className="ml-auto inline-flex items-center rounded border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 transition group-hover:border-slate-300 group-hover:bg-slate-50">
+              Restore
+            </span>
+          </button>
+          <div className="ml-3 flex h-10 overflow-hidden rounded-md border border-slate-200 bg-white text-slate-500">
+            <DockActionButton ariaLabel="Restore minimized workbench" onClick={onRestore} destructive={false}>
+              <DockRestoreIcon />
+            </DockActionButton>
+            <DockActionButton ariaLabel="Close minimized workbench" onClick={onDismiss} destructive>
+              <DockCloseIcon />
+            </DockActionButton>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DockActionButton({
+  ariaLabel,
+  onClick,
+  children,
+  destructive = false,
+}: {
+  readonly ariaLabel: string;
+  readonly onClick: () => void;
+  readonly children: JSX.Element;
+  readonly destructive?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      onClick={onClick}
+      className={clsx(
+        "flex h-full w-12 items-center justify-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40",
+        destructive
+          ? "text-rose-600 hover:bg-rose-50"
+          : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DockWindowIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="2" y="2" width="5" height="5" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="9" y="2" width="5" height="5" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="2" y="9" width="5" height="5" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="9" y="9" width="5" height="5" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function DockRestoreIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M4.5 5.5h6v6h-6z" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M6 4h6v6" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function DockCloseIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M5 5l6 6M11 5l-6 6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
 }

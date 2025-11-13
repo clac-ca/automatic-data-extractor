@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createScopedStorage } from "@shared/storage";
 
 export type EditorThemePreference = "system" | "light" | "dark";
-export type EditorThemeId = "vs-dark" | "vs-light";
+export type EditorThemeId = "ade-dark" | "vs-light";
 
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 
@@ -15,7 +15,7 @@ function coercePreference(value: unknown): EditorThemePreference {
 }
 
 function resolveTheme(preference: EditorThemePreference, systemPrefersDark: boolean): EditorThemeId {
-  return preference === "dark" || (preference === "system" && systemPrefersDark) ? "vs-dark" : "vs-light";
+  return preference === "dark" || (preference === "system" && systemPrefersDark) ? "ade-dark" : "vs-light";
 }
 
 export function useEditorThemePreference(storageKey: string) {
