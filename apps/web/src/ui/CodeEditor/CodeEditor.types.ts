@@ -10,4 +10,5 @@ export interface CodeEditorProps {
   readonly readOnly?: boolean;
   readonly onSaveShortcut?: () => void;
   readonly className?: string;
+  readonly theme?: string;
 }

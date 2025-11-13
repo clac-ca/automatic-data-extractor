@@ -5,7 +5,15 @@ import clsx from "clsx";
 import type { CodeEditorHandle, CodeEditorProps } from "./CodeEditor.types";
 
 const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function MonacoCodeEditor(
-  { value, onChange, language = "plaintext", readOnly = false, onSaveShortcut, className }: CodeEditorProps,
+  {
+    value,
+    onChange,
+    language = "plaintext",
+    readOnly = false,
+    onSaveShortcut,
+    className,
+    theme = "vs-dark",
+  }: CodeEditorProps,
   ref,
 ) {
   const saveShortcutRef = useRef(onSaveShortcut);
@@ -55,7 +63,7 @@ const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function 
         value={value}
         onChange={handleChange}
         language={language}
-        theme="vs-dark"
+        theme={theme}
         height="100%"
         width="100%"
         options={{

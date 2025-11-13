@@ -37,7 +37,7 @@ export function createWorkbenchTreeFromListing(listing: FileListing): WorkbenchF
     if (path.length === 0) {
       return rootNode;
     }
-    const normalized = path === rootId ? rootId : path;
+    const normalized = normalizeFolderId(path, rootId);
     const existing = nodes.get(normalized);
     if (existing) {
       return existing;
@@ -126,18 +126,38 @@ function inferLanguage(path: string): string | undefined {
 }
 
 function extractName(path: string): string {
-  const trimmed = path.replace(/\/+$/, "");
+  const trimmed = trimTrailingSlash(path);
   const index = trimmed.lastIndexOf("/");
   return index >= 0 ? trimmed.slice(index + 1) : trimmed;
 }
 
 function deriveParent(path: string): string | undefined {
-  const trimmed = path.replace(/\/+$/, "");
-  const index = trimmed.lastIndexOf("/");
-  if (index <= 0) {
+  const trimmed = trimTrailingSlash(path);
+  if (!trimmed) {
     return undefined;
   }
-  return trimmed.slice(0, index);
+  const index = trimmed.lastIndexOf("/");
+  if (index === -1) {
+    return "";
+  }
+  const base = trimmed.slice(0, index);
+  return base.length > 0 ? `${base}/` : "";
+}
+
+function normalizeFolderId(path: string, rootId: string): string {
+  if (path === rootId) {
+    return rootId;
+  }
+  const normalizedPath = trimTrailingSlash(path);
+  const normalizedRoot = trimTrailingSlash(rootId);
+  if (normalizedPath === normalizedRoot) {
+    return rootId;
+  }
+  return path;
+}
+
+function trimTrailingSlash(path: string): string {
+  return path.replace(/\/+$/, "");
 }
 
 export function findFileNode(root: WorkbenchFileNode, id: string): WorkbenchFileNode | null {

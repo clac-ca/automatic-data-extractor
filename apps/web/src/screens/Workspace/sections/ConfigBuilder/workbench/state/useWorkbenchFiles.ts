@@ -29,6 +29,10 @@ interface WorkbenchFilesApi {
   readonly openFile: (fileId: string) => void;
   readonly selectTab: (fileId: string) => void;
   readonly closeTab: (fileId: string) => void;
+  readonly closeOtherTabs: (fileId: string) => void;
+  readonly closeTabsToRight: (fileId: string) => void;
+  readonly closeAllTabs: () => void;
+  readonly moveTab: (fileId: string, targetIndex: number) => void;
   readonly updateContent: (fileId: string, content: string) => void;
   readonly isDirty: boolean;
 }
@@ -274,6 +278,60 @@ export function useWorkbenchFiles({
     });
   }, []);
 
+  const closeOtherTabs = useCallback((fileId: string) => {
+    setTabs((current) => {
+      if (!current.some((tab) => tab.id === fileId) || current.length <= 1) {
+        return current;
+      }
+      setActiveTabId(fileId);
+      return current.filter((tab) => tab.id === fileId);
+    });
+  }, []);
+
+  const closeTabsToRight = useCallback((fileId: string) => {
+    setTabs((current) => {
+      const targetIndex = current.findIndex((tab) => tab.id === fileId);
+      if (targetIndex === -1 || targetIndex === current.length - 1) {
+        return current;
+      }
+      const next = current.slice(0, targetIndex + 1);
+      setActiveTabId((prev) => {
+        if (next.some((tab) => tab.id === prev)) {
+          return prev;
+        }
+        return fileId;
+      });
+      return next;
+    });
+  }, []);
+
+  const closeAllTabs = useCallback(() => {
+    setTabs([]);
+    setActiveTabId("");
+  }, []);
+
+  const moveTab = useCallback((fileId: string, targetIndex: number) => {
+    setTabs((current) => {
+      const fromIndex = current.findIndex((tab) => tab.id === fileId);
+      if (fromIndex === -1) {
+        return current;
+      }
+      const boundedTarget = Math.max(0, Math.min(targetIndex, current.length));
+      if (fromIndex === boundedTarget || fromIndex + 1 === boundedTarget) {
+        return current;
+      }
+      const next = current.slice();
+      const [tab] = next.splice(fromIndex, 1);
+      let insertIndex = boundedTarget;
+      if (fromIndex < boundedTarget) {
+        insertIndex -= 1;
+      }
+      insertIndex = Math.max(0, Math.min(insertIndex, next.length));
+      next.splice(insertIndex, 0, tab);
+      return next;
+    });
+  }, []);
+
   const updateContent = useCallback((fileId: string, content: string) => {
     setTabs((current) =>
       current.map((tab) =>
@@ -335,6 +393,10 @@ export function useWorkbenchFiles({
     openFile,
     selectTab,
     closeTab,
+    closeOtherTabs,
+    closeTabsToRight,
+    closeAllTabs,
+    moveTab,
     updateContent,
     isDirty,
   };
