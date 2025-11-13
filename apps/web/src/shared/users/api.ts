@@ -1,6 +1,6 @@
 import { post } from "@shared/api";
 import { client } from "@shared/api/client";
-import type { components, paths } from "@openapi";
+import type { components, paths } from "@schema";
 
 export interface FetchUsersOptions {
   readonly page?: number;

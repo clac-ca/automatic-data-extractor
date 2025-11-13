@@ -1,5 +1,6 @@
-import type { Location } from "react-router";
 import { describe, expect, it } from "vitest";
+
+import type { LocationLike } from "@app/nav/history";
 
 import {
   DEFAULT_APP_HOME,
@@ -14,14 +15,12 @@ import {
   sanitizeNextPath,
 } from "../authNavigation";
 
-function mockLocation(input: Partial<Location> = {}): Location {
+function mockLocation(input: Partial<LocationLike> = {}): LocationLike {
   return {
     pathname: input.pathname ?? "/workspaces",
     search: input.search ?? "",
     hash: input.hash ?? "",
-    state: input.state,
-    key: input.key ?? "test",
-  } as Location;
+  };
 }
 
 describe("authNavigation utils", () => {

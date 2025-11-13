@@ -22,6 +22,7 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 ## Operational building blocks
 - Database connections are created via the async SQLAlchemy engine in [`apps/api/app/shared/db/engine.py`](../../apps/api/app/shared/db/engine.py) and scoped sessions from [`apps/api/app/shared/db/session.py`](../../apps/api/app/shared/db/session.py).
 - Structured logging and correlation IDs are configured through [`apps/api/app/shared/core/logging.py`](../../apps/api/app/shared/core/logging.py) and middleware in [`apps/api/app/shared/core/middleware.py`](../../apps/api/app/shared/core/middleware.py).
+- Run observability workflows (streaming, polling, DB inspection) are documented in [Observing ADE Runs](runs_observability.md) for on-call reference.
 
 Future sections will expand on security hardening, backup procedures, and frontend onboarding once those pieces land. The components listed above are already in place and unlikely to change dramatically.
 

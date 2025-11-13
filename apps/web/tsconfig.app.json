@@ -10,8 +10,10 @@
     "baseUrl": "./src",
     "paths": {
       "@app/*": ["app/*"],
+      "@screens/*": ["screens/*"],
       "@shared/*": ["shared/*"],
-      "@openapi": ["generated/openapi.d.ts"],
+      "@schema/*": ["schema/*"],
+      "@generated-types/*": ["generated-types/*"],
       "@ui/*": ["ui/*"],
       "@test/*": ["test/*"]
     },
@@ -19,10 +21,7 @@
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "rootDirs": ["./", "./.react-router/types"],
-    "moduleSuffixes": [".tsx", ".ts", ".jsx", ".js", ""],
     "verbatimModuleSyntax": true,
-    "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
 
@@ -34,5 +33,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src", ".react-router/types"]
+  "include": ["src"]
 }

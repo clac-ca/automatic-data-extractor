@@ -1,7 +1,7 @@
 import { ApiError } from "@shared/api";
 import { client } from "@shared/api/client";
 import { normalizeSessionEnvelope, type SessionEnvelope } from "@shared/auth/api";
-import type { components } from "@openapi";
+import type { components } from "@schema";
 
 export async function fetchSetupStatus(options: RequestOptions = {}): Promise<SetupStatus> {
   try {
