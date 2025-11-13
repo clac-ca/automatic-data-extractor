@@ -36,10 +36,6 @@ export function Link({ to, replace, className, children, onClick }: LinkProps) {
 
 type NavLinkRenderArgs = { isActive: boolean };
 type NavLinkClassName = string | ((args: NavLinkRenderArgs) => string);
-type NavLinkChildren =
-  | React.ReactNode
-  | ((args: NavLinkRenderArgs) => React.ReactNode);
-
 type NavLinkProps = React.PropsWithChildren<{
   to: string;
   end?: boolean;

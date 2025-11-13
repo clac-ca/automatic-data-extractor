@@ -155,6 +155,7 @@ export async function listConfigFiles(
         },
       },
       signal,
+      requestInitExt: { cache: "no-store" },
     },
   );
   if (!data) {
@@ -179,6 +180,7 @@ export async function readConfigFileJson(
         Accept: "application/json",
       },
       signal,
+      requestInitExt: { cache: "no-store" },
     },
   );
   if (!data) {

@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import JSON, Boolean, ForeignKey, String, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from apps.api.app.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
 

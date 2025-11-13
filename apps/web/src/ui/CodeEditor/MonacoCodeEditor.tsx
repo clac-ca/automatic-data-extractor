@@ -69,7 +69,6 @@ const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function 
       const modelLanguage = model?.getLanguageId() ?? language;
 
       if (import.meta.env?.DEV) {
-        // eslint-disable-next-line no-console
         console.debug("[ade] MonacoCodeEditor mounted", {
           language: modelLanguage,
           uri: model?.uri.toString(),

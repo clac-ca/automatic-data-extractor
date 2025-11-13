@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+
 from apps.api.app.shared.core.ids import generate_ulid
 from apps.api.app.shared.core.time import utc_now
 from sqlalchemy import DateTime, String

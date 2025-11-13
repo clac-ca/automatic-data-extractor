@@ -13,6 +13,7 @@ from .service import (
     get_workspace_permissions_for_principal,
 )
 
+
 async def authorize(
     *,
     session: AsyncSession,

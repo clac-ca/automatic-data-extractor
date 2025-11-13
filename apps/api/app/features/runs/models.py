@@ -5,12 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from apps.api.app.shared.core.time import utc_now
 from apps.api.app.shared.db import Base
 from apps.api.app.shared.db.enums import enum_values
-from apps.api.app.shared.core.time import utc_now
 
 __all__ = ["Run", "RunLog", "RunStatus"]
 
@@ -61,7 +62,7 @@ class Run(Base):
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    logs: Mapped[list["RunLog"]] = relationship(
+    logs: Mapped[list[RunLog]] = relationship(
         "RunLog",
         back_populates="run",
         cascade="all, delete-orphan",
@@ -92,4 +93,7 @@ class RunLog(Base):
 
     run: Mapped[Run] = relationship("Run", back_populates="logs")
 
-    __table_args__ = (Index("run_logs_run_id_idx", "run_id"), Index("run_logs_stream_idx", "stream"))
+    __table_args__ = (
+        Index("run_logs_run_id_idx", "run_id"),
+        Index("run_logs_stream_idx", "stream"),
+    )

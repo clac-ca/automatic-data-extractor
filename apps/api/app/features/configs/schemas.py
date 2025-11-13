@@ -10,6 +10,7 @@ from pydantic import Field, field_validator, model_validator
 from apps.api.app.shared.core.ids import ULIDStr
 from apps.api.app.shared.core.schema import BaseSchema
 from apps.api.app.shared.pagination import Page
+
 from .models import ConfigurationStatus
 
 
