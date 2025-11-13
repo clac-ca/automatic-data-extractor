@@ -15,7 +15,7 @@ import { useUnsavedChangesGuard } from "./state/useUnsavedChangesGuard";
 import { useEditorThemePreference } from "./state/useEditorThemePreference";
 import type { EditorThemePreference } from "./state/useEditorThemePreference";
 import { getMinimizedWorkbenchStorageKey, getWorkbenchReturnPathStorageKey, type MinimizedWorkbenchState } from "./state/workbenchWindowState";
-import type { WorkbenchDataSeed, WorkbenchValidationState } from "./types";
+import type { WorkbenchConsoleLine, WorkbenchDataSeed, WorkbenchValidationState } from "./types";
 import { clamp, trackPointerDrag } from "./utils/drag";
 import { createWorkbenchTreeFromListing } from "./utils/tree";
 
@@ -29,6 +29,10 @@ import type { FileReadJson } from "@shared/configs/types";
 import { useValidateConfigurationMutation } from "@shared/configs/hooks/useValidateConfiguration";
 import { createScopedStorage } from "@shared/storage";
 import type { ConfigBuilderConsole } from "@app/nav/urlState";
+import { ApiError } from "@shared/api";
+import { streamBuild } from "@shared/builds/api";
+import { streamRun } from "@shared/runs/api";
+import { describeBuildEvent, describeRunEvent, formatConsoleTimestamp } from "./utils/console";
 
 const EXPLORER_LIMITS = { min: 200, max: 420 } as const;
 const INSPECTOR_LIMITS = { min: 260, max: 420 } as const;
@@ -36,6 +40,7 @@ const OUTPUT_LIMITS = { min: 140, max: 420 } as const;
 const MIN_EDITOR_HEIGHT = 320;
 const MIN_CONSOLE_HEIGHT = 140;
 const DEFAULT_CONSOLE_HEIGHT = 220;
+const MAX_CONSOLE_LINES = 400;
 const OUTPUT_HANDLE_THICKNESS = 4; // matches h-1 Tailwind utility on PanelResizeHandle
 const CONSOLE_COLLAPSE_MESSAGE =
   "Console closed to keep the editor readable on this screen size. Resize the window or collapse other panes to reopen it.";
@@ -104,7 +109,16 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
     return createWorkbenchTreeFromListing(filesQuery.data);
   }, [seed, filesQuery.data]);
 
-  const consoleLines = useMemo(() => seed?.console ?? [], [seed]);
+  const [consoleLines, setConsoleLines] = useState<WorkbenchConsoleLine[]>(() =>
+    seed?.console ? seed.console.slice(-MAX_CONSOLE_LINES) : [],
+  );
+
+  useEffect(() => {
+    if (!seed?.console) {
+      return;
+    }
+    setConsoleLines(seed.console.slice(-MAX_CONSOLE_LINES));
+  }, [seed?.console]);
 
   const [validationState, setValidationState] = useState<WorkbenchValidationState>(() => ({
     status: seed?.validation?.length ? "success" : "idle",
@@ -113,6 +127,49 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
     error: null,
     digest: null,
   }));
+
+  const consoleStreamRef = useRef<AbortController | null>(null);
+  const isMountedRef = useRef(true);
+  const [activeStream, setActiveStream] = useState<null | {
+    readonly kind: "build" | "run";
+    readonly startedAt: string;
+  }>(null);
+
+  const resetConsole = useCallback(
+    (message: string) => {
+      if (!isMountedRef.current) {
+        return;
+      }
+      const timestamp = formatConsoleTimestamp(new Date());
+      setConsoleLines([{ level: "info", message, timestamp }]);
+    },
+    [setConsoleLines],
+  );
+
+  const appendConsoleLine = useCallback(
+    (line: WorkbenchConsoleLine) => {
+      if (!isMountedRef.current) {
+        return;
+      }
+      setConsoleLines((prev) => {
+        const next = [...prev, line];
+        return next.length > MAX_CONSOLE_LINES ? next.slice(next.length - MAX_CONSOLE_LINES) : next;
+      });
+    },
+    [setConsoleLines],
+  );
+
+  const pushConsoleError = useCallback(
+    (error: unknown) => {
+      if (!isMountedRef.current) {
+        return;
+      }
+      const message = describeError(error);
+      appendConsoleLine({ level: "error", message, timestamp: formatConsoleTimestamp(new Date()) });
+      setConsoleNotice(message);
+    },
+    [appendConsoleLine],
+  );
 
   useEffect(() => {
     if (seed?.validation) {
@@ -125,6 +182,13 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
       });
     }
   }, [seed?.validation]);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      consoleStreamRef.current?.abort();
+    };
+  }, []);
 
   const validateConfiguration = useValidateConfigurationMutation(workspaceId, configId);
 
@@ -362,22 +426,66 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
   const handleRunValidation = useCallback(() => {
     if (
       usingSeed ||
-      validateConfiguration.isPending ||
       !tree ||
       filesQuery.isLoading ||
-      filesQuery.isError
+      filesQuery.isError ||
+      activeStream !== null ||
+      validateConfiguration.isPending
     ) {
       return;
     }
-    const startedAt = new Date().toISOString();
-    openConsole();
-    setPane("validation");
+    if (!openConsole()) {
+      return;
+    }
+
+    const startedAt = new Date();
+    const startedIso = startedAt.toISOString();
+    setPane("console");
+    resetConsole("Starting ADE run (validate-only)…");
     setValidationState((prev) => ({
       ...prev,
       status: "running",
-      lastRunAt: startedAt,
+      lastRunAt: startedIso,
       error: null,
     }));
+
+    const controller = new AbortController();
+    consoleStreamRef.current?.abort();
+    consoleStreamRef.current = controller;
+    setActiveStream({ kind: "run", startedAt: startedIso });
+
+    void (async () => {
+      try {
+        for await (const event of streamRun(configId, { validate_only: true }, controller.signal)) {
+          appendConsoleLine(describeRunEvent(event));
+          if (!isMountedRef.current) {
+            return;
+          }
+          if (event.type === "run.completed") {
+            const notice =
+              event.status === "succeeded"
+                ? "ADE run completed successfully."
+                : event.status === "canceled"
+                  ? "ADE run canceled."
+                  : event.error_message?.trim() || "ADE run failed.";
+            setConsoleNotice(notice);
+          }
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        pushConsoleError(error);
+      } finally {
+        if (consoleStreamRef.current === controller) {
+          consoleStreamRef.current = null;
+        }
+        if (isMountedRef.current) {
+          setActiveStream(null);
+        }
+      }
+    })();
+
     validateConfiguration.mutate(undefined, {
       onSuccess(result) {
         const issues = result.issues ?? [];
@@ -389,7 +497,7 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
         setValidationState({
           status: "success",
           messages,
-          lastRunAt: startedAt,
+          lastRunAt: startedIso,
           error: null,
           digest: result.content_digest ?? null,
         });
@@ -399,7 +507,7 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
         setValidationState({
           status: "error",
           messages: [{ level: "error", message }],
-          lastRunAt: startedAt,
+          lastRunAt: startedIso,
           error: message,
           digest: null,
         });
@@ -407,17 +515,117 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
     });
   }, [
     usingSeed,
-    validateConfiguration,
     tree,
     filesQuery.isLoading,
     filesQuery.isError,
+    activeStream,
+    validateConfiguration,
     openConsole,
     setPane,
+    resetConsole,
+    consoleStreamRef,
+    setActiveStream,
+    streamRun,
+    configId,
+    appendConsoleLine,
+    pushConsoleError,
   ]);
 
-  const isRunningValidation = validationState.status === "running" || validateConfiguration.isPending;
+  const handleBuildEnvironment = useCallback(() => {
+    if (
+      usingSeed ||
+      !tree ||
+      filesQuery.isLoading ||
+      filesQuery.isError ||
+      activeStream !== null
+    ) {
+      return;
+    }
+    if (!openConsole()) {
+      return;
+    }
+
+    const startedIso = new Date().toISOString();
+    setPane("console");
+    resetConsole("Starting configuration build…");
+
+    const controller = new AbortController();
+    consoleStreamRef.current?.abort();
+    consoleStreamRef.current = controller;
+    setActiveStream({ kind: "build", startedAt: startedIso });
+
+    void (async () => {
+      try {
+        for await (const event of streamBuild(
+          workspaceId,
+          configId,
+          {},
+          controller.signal,
+        )) {
+          appendConsoleLine(describeBuildEvent(event));
+          if (!isMountedRef.current) {
+            return;
+          }
+          if (event.type === "build.completed") {
+            const notice =
+              event.status === "active"
+                ? event.summary?.trim() || "Build completed successfully."
+                : event.status === "canceled"
+                  ? "Build canceled."
+                  : event.error_message?.trim() || "Build failed.";
+            setConsoleNotice(notice);
+          }
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        pushConsoleError(error);
+      } finally {
+        if (consoleStreamRef.current === controller) {
+          consoleStreamRef.current = null;
+        }
+        if (isMountedRef.current) {
+          setActiveStream(null);
+        }
+      }
+    })();
+  }, [
+    usingSeed,
+    tree,
+    filesQuery.isLoading,
+    filesQuery.isError,
+    activeStream,
+    openConsole,
+    setPane,
+    resetConsole,
+    consoleStreamRef,
+    setActiveStream,
+    streamBuild,
+    workspaceId,
+    configId,
+    appendConsoleLine,
+    pushConsoleError,
+  ]);
+
+  const isStreamingRun = activeStream?.kind === "run";
+  const isStreamingBuild = activeStream?.kind === "build";
+  const isStreamingAny = activeStream !== null;
+
+  const isRunningValidation =
+    validationState.status === "running" || validateConfiguration.isPending || isStreamingRun;
   const canRunValidation =
-    !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !isRunningValidation;
+    !usingSeed &&
+    Boolean(tree) &&
+    !filesQuery.isLoading &&
+    !filesQuery.isError &&
+    !isStreamingAny &&
+    !validateConfiguration.isPending &&
+    validationState.status !== "running";
+
+  const isBuildingEnvironment = isStreamingBuild;
+  const canBuildEnvironment =
+    !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !isStreamingAny;
 
   const handleSelectActivityView = useCallback((view: ActivityBarView) => {
     setActivityView(view);
@@ -566,6 +774,9 @@ export function Workbench({ workspaceId, configId, configName, seed }: Workbench
           configName={configName}
           workspaceLabel={workspaceLabel}
           validationLabel={validationLabel}
+          canBuildEnvironment={canBuildEnvironment}
+          isBuildingEnvironment={isBuildingEnvironment}
+          onBuildEnvironment={handleBuildEnvironment}
           canRunValidation={canRunValidation}
           isRunningValidation={isRunningValidation}
           onRunValidation={handleRunValidation}
@@ -771,6 +982,9 @@ function WorkbenchChrome({
   configName,
   workspaceLabel,
   validationLabel,
+  canBuildEnvironment,
+  isBuildingEnvironment,
+  onBuildEnvironment,
   canRunValidation,
   isRunningValidation,
   onRunValidation,
@@ -789,6 +1003,9 @@ function WorkbenchChrome({
   readonly configName: string;
   readonly workspaceLabel: string;
   readonly validationLabel?: string;
+  readonly canBuildEnvironment: boolean;
+  readonly isBuildingEnvironment: boolean;
+  readonly onBuildEnvironment: () => void;
   readonly canRunValidation: boolean;
   readonly isRunningValidation: boolean;
   readonly onRunValidation: () => void;
@@ -809,6 +1026,9 @@ function WorkbenchChrome({
     ? "border-white/10 bg-[#151821] text-white"
     : "border-slate-200 bg-white text-slate-900";
   const metaTextClass = dark ? "text-white/60" : "text-slate-500";
+  const buildButtonClass = dark
+    ? "bg-white/10 text-white hover:bg-white/20 disabled:bg-white/10 disabled:text-white/40"
+    : "bg-slate-100 text-slate-900 hover:bg-slate-200 disabled:bg-slate-50 disabled:text-slate-400";
   const runButtonClass = dark
     ? "bg-brand-500 text-white hover:bg-brand-400 disabled:bg-white/20 disabled:text-white/40"
     : "bg-brand-600 text-white hover:bg-brand-500 disabled:bg-slate-200 disabled:text-slate-500";
@@ -831,6 +1051,18 @@ function WorkbenchChrome({
       </div>
       <div className="flex items-center gap-3">
         {validationLabel ? <span className={clsx("text-xs", metaTextClass)}>{validationLabel}</span> : null}
+        <button
+          type="button"
+          onClick={onBuildEnvironment}
+          disabled={!canBuildEnvironment}
+          className={clsx(
+            "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
+            buildButtonClass,
+          )}
+        >
+          {isBuildingEnvironment ? <SpinnerIcon /> : <BuildIcon />}
+          {isBuildingEnvironment ? "Building…" : "Build environment"}
+        </button>
         <button
           type="button"
           onClick={onRunValidation}
@@ -1018,12 +1250,37 @@ function SpinnerIcon() {
   );
 }
 
+function BuildIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M11 2.5a2.5 2.5 0 0 0-2.62 3.04L4 9.92 6.08 12l4.58-4.38A2.5 2.5 0 0 0 13.5 5 2.5 2.5 0 0 0 11 2.5Z"
+        fill="currentColor"
+      />
+      <path d="M4 10l2 2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function RunIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
       <path d="M4.5 3.5v9l7-4.5-7-4.5Z" fill="currentColor" />
     </svg>
   );
+}
+
+function describeError(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.message;
+  }
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return "Operation canceled.";
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }
 
 function formatRelative(timestamp?: string): string {

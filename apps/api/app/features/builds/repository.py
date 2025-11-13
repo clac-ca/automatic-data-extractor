@@ -1,4 +1,4 @@
-"""Persistence helpers for configuration build metadata."""
+"""Persistence helpers for configuration build metadata and logs."""
 
 from __future__ import annotations
 
@@ -8,13 +8,58 @@ from datetime import datetime
 from sqlalchemy import Select, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import BuildStatus, ConfigurationBuild
+from .models import (
+    Build,
+    BuildLog,
+    BuildStatus,
+    ConfigurationBuild,
+    ConfigurationBuildStatus,
+)
 
-__all__ = ["ConfigurationBuildsRepository"]
+__all__ = [
+    "BuildsRepository",
+    "ConfigurationBuildsRepository",
+]
+
+
+class BuildsRepository:
+    """Encapsulate read/write operations for build resources."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get(self, build_id: str) -> Build | None:
+        return await self._session.get(Build, build_id)
+
+    async def add(self, build: Build) -> None:
+        self._session.add(build)
+        await self._session.flush()
+
+    async def add_log(self, log: BuildLog) -> BuildLog:
+        self._session.add(log)
+        await self._session.flush()
+        return log
+
+    def logs_query(self) -> Select[tuple[BuildLog]]:
+        return select(BuildLog)
+
+    async def list_logs(
+        self,
+        *,
+        build_id: str,
+        after_id: int | None = None,
+        limit: int = 1000,
+    ) -> Sequence[BuildLog]:
+        stmt = self.logs_query().where(BuildLog.build_id == build_id)
+        if after_id is not None:
+            stmt = stmt.where(BuildLog.id > after_id)
+        stmt = stmt.order_by(BuildLog.id.asc()).limit(limit)
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
 
 
 class ConfigurationBuildsRepository:
-    """Read/write helpers encapsulating build-specific SQL operations."""
+    """Read/write helpers encapsulating legacy configuration build rows."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -64,7 +109,7 @@ class ConfigurationBuildsRepository:
             .where(
                 ConfigurationBuild.workspace_id == workspace_id,
                 ConfigurationBuild.config_id == config_id,
-                ConfigurationBuild.status == BuildStatus.ACTIVE,
+                ConfigurationBuild.status == ConfigurationBuildStatus.ACTIVE,
             )
             .limit(1)
         )
@@ -79,7 +124,7 @@ class ConfigurationBuildsRepository:
             .where(
                 ConfigurationBuild.workspace_id == workspace_id,
                 ConfigurationBuild.config_id == config_id,
-                ConfigurationBuild.status == BuildStatus.BUILDING,
+                ConfigurationBuild.status == ConfigurationBuildStatus.BUILDING,
             )
             .limit(1)
         )
@@ -95,7 +140,7 @@ class ConfigurationBuildsRepository:
                 ConfigurationBuild.workspace_id == workspace_id,
                 ConfigurationBuild.config_id == config_id,
                 ConfigurationBuild.status.in_(
-                    [BuildStatus.INACTIVE, BuildStatus.FAILED]
+                    [ConfigurationBuildStatus.INACTIVE, ConfigurationBuildStatus.FAILED]
                 ),
             )
             .order_by(ConfigurationBuild.created_at.asc())
@@ -112,9 +157,9 @@ class ConfigurationBuildsRepository:
                 ConfigurationBuild.workspace_id == workspace_id,
                 ConfigurationBuild.config_id == config_id,
                 ConfigurationBuild.build_id != exclude_build_id,
-                ConfigurationBuild.status == BuildStatus.ACTIVE,
+                ConfigurationBuild.status == ConfigurationBuildStatus.ACTIVE,
             )
-            .values(status=BuildStatus.INACTIVE)
+            .values(status=ConfigurationBuildStatus.INACTIVE)
         )
         await self._session.execute(stmt)
 
@@ -135,7 +180,7 @@ class ConfigurationBuildsRepository:
                 ConfigurationBuild.build_id == build_id,
             )
             .values(
-                status=BuildStatus.FAILED,
+                status=ConfigurationBuildStatus.FAILED,
                 built_at=finished_at,
                 error=error,
             )
@@ -161,7 +206,7 @@ class ConfigurationBuildsRepository:
                 ConfigurationBuild.build_id == build_id,
             )
             .values(
-                status=BuildStatus.ACTIVE,
+                status=ConfigurationBuildStatus.ACTIVE,
                 built_at=built_at,
                 last_used_at=built_at,
                 python_version=python_version,
@@ -207,3 +252,4 @@ class ConfigurationBuildsRepository:
             )
         )
         await self._session.execute(stmt)
+
