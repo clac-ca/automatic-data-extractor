@@ -1,13 +1,30 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import react from "@vitejs/plugin-react";
+
+const projectRoot = fileURLToPath(new URL(".", import.meta.url));
+const resolveSrc = (relativePath: string) => path.resolve(projectRoot, "src", relativePath);
 
 const frontendPort = Number.parseInt(process.env.DEV_FRONTEND_PORT ?? "8000", 10);
 const backendPort = process.env.DEV_BACKEND_PORT ?? "8000";
 
 export default defineConfig({
   plugins: [tailwindcss(), react(), tsconfigPaths()],
+  resolve: {
+    alias: {
+      "@app": resolveSrc("app"),
+      "@screens": resolveSrc("screens"),
+      "@ui": resolveSrc("ui"),
+      "@shared": resolveSrc("shared"),
+      "@schema": resolveSrc("schema"),
+      "@generated-types": resolveSrc("generated-types"),
+      "@test": resolveSrc("test"),
+    },
+  },
   server: {
     port: Number.isNaN(frontendPort) ? 8000 : frontendPort,
     host: process.env.DEV_FRONTEND_HOST ?? "0.0.0.0",

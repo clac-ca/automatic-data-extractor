@@ -6,17 +6,17 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { ApiError } from "@shared/api";
-import type { components } from "@openapi";
+import type { UserSummary } from "@shared/users/api";
 import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
 import { useCreateWorkspaceMutation } from "./hooks/useCreateWorkspaceMutation";
 import { useWorkspacesQuery, type WorkspaceProfile } from "@screens/Workspace/api/workspaces-api";
 import { useUsersQuery } from "@shared/users/hooks/useUsersQuery";
 import { WorkspaceDirectoryLayout } from "@screens/Workspaces/components/WorkspaceDirectoryLayout";
-import { Alert } from "@ui/alert";
-import { Button } from "@ui/button";
-import { FormField } from "@ui/form-field";
-import { Input } from "@ui/input";
+import { Alert } from "@ui/Alert";
+import { Button } from "@ui/Button";
+import { FormField } from "@ui/FormField";
+import { Input } from "@ui/Input";
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -242,7 +242,6 @@ function WorkspaceCreateContent() {
   );
 }
 
-type UserSummary = components["schemas"]["UserSummary"];
 
 function slugify(value: string) {
   return value

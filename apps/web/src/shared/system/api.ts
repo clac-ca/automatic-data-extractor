@@ -1,5 +1,5 @@
 import { client } from "@shared/api/client";
-import type { components } from "@openapi";
+import type { components } from "@schema";
 
 export interface SafeModeStatus {
   readonly enabled: boolean;

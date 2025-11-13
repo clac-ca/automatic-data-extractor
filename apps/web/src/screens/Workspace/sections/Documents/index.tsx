@@ -22,12 +22,12 @@ import { client } from "@shared/api/client";
 import { useFlattenedPages } from "@shared/api/pagination";
 import { createScopedStorage } from "@shared/storage";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
-import type { components, paths } from "@openapi";
+import type { components, paths } from "@schema";
 
-import { Alert } from "@ui/alert";
-import { Input } from "@ui/input";
-import { Select } from "@ui/select";
-import { Button } from "@ui/button";
+import { Alert } from "@ui/Alert";
+import { Input } from "@ui/Input";
+import { Select } from "@ui/Select";
+import { Button } from "@ui/Button";
 
 /* -------------------------------- Types & constants ------------------------------- */
 
@@ -797,7 +797,7 @@ function DocumentsToolbar({
               aria-label="Clear search"
             >
               ×
-            </button>
+            </>
           ) : null}
         </div>
 
@@ -842,7 +842,7 @@ function DocumentsToolbar({
             title="Reset filters"
           >
             Reset
-          </button>
+          </>
           <span
             className={clsx(
               "inline-flex items-center justify-end gap-1 text-xs text-slate-500",
@@ -1058,7 +1058,7 @@ function DocumentActionsMenu({
         disabled={disabled || downloading}
       >
         {downloading ? "Downloading…" : "Download"}
-      </button>
+      </>
 
       <button
         type="button"
@@ -1067,7 +1067,7 @@ function DocumentActionsMenu({
         disabled={disabled}
       >
         Delete
-      </button>
+      </>
     </div>
   );
 }
