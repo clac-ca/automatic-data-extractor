@@ -641,10 +641,7 @@ def _build_file_index(config_path: Path) -> dict:
 
     def _add_directory(rel_path: PurePosixPath) -> None:
         path_str = _format_directory_path(rel_path)
-        if path_str in dir_paths:
-            return
-        if path_str == "src/":
-            # do not expose the top-level src pseudo directory
+        if path_str in dir_paths or path_str == "":
             return
         full_path = config_path / rel_path.as_posix()
         stat = full_path.stat()
@@ -799,13 +796,12 @@ def _normalize_prefix_argument(prefix: str, dir_paths: set[str], file_paths: set
     candidate = candidate.lstrip("/")
     if not candidate:
         return "", False
-    if not candidate.endswith("/") and f"{candidate}/" in dir_paths:
-        candidate = f"{candidate}/"
-    if candidate in dir_paths:
-        return candidate, False
-    if candidate in file_paths:
-        return candidate, True
-    return candidate, candidate.endswith("/") and candidate in dir_paths
+    canonical = candidate.rstrip("/")
+    if canonical in dir_paths:
+        return canonical, False
+    if canonical in file_paths:
+        return canonical, True
+    return canonical, False
 
 
 def _coerce_depth(value: str) -> int | None:
@@ -840,38 +836,25 @@ def _relative_depth(entry_depth: int, prefix_depth: int) -> int:
 
 
 def _format_directory_path(rel_path: PurePosixPath) -> str:
-    path = rel_path.as_posix()
-    if not path:
-        return ""
-    if not path.endswith("/"):
-        path = f"{path}/"
-    return path
+    return rel_path.as_posix()
 
 
 def _entry_name(path: str) -> str:
-    trimmed = path[:-1] if path.endswith("/") else path
-    if not trimmed:
+    if not path:
         return ""
-    return trimmed.split("/")[-1]
+    return path.split("/")[-1]
 
 
 def _entry_parent(path: str) -> str:
-    trimmed = path[:-1] if path.endswith("/") else path
-    if not trimmed or "/" not in trimmed:
+    if not path or "/" not in path:
         return ""
-    parent = trimmed.rsplit("/", 1)[0]
-    if parent:
-        parent = f"{parent}/"
-    return parent
+    return path.rsplit("/", 1)[0]
 
 
 def _compute_depth_value(path: str) -> int:
     if not path:
         return -1
-    trimmed = path[:-1] if path.endswith("/") else path
-    if not trimmed:
-        return 0
-    return trimmed.count("/")
+    return path.count("/")
 
 
 def _resolve_entry_path(root: Path, rel_path: PurePosixPath) -> Path:
@@ -879,10 +862,7 @@ def _resolve_entry_path(root: Path, rel_path: PurePosixPath) -> Path:
 
 
 def _stringify_path(rel_path: PurePosixPath, is_dir: bool) -> str:
-    value = rel_path.as_posix()
-    if is_dir and value and not value.endswith("/"):
-        value = f"{value}/"
-    return value
+    return rel_path.as_posix()
 
 
 def _read_file_info(path: Path, rel_path: PurePosixPath, include_content: bool) -> dict:

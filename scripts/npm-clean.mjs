@@ -6,7 +6,6 @@ const targets = [
   ".venv",
   "apps/api/app/web/static",
   "apps/web/node_modules",
-  "apps/web/build",
   "apps/web/dist",
   "node_modules",
 ];

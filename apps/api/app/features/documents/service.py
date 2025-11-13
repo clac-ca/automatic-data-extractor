@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import unicodedata
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -11,6 +11,7 @@ from fastapi import UploadFile
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.api.app.features.jobs.repository import JobsRepository
 from apps.api.app.features.users.models import User
 from apps.api.app.settings import Settings
 from apps.api.app.shared.db import generate_ulid
@@ -25,7 +26,7 @@ from .exceptions import (
 from .filters import DocumentFilters, DocumentSource, DocumentStatus, apply_document_filters
 from .models import Document
 from .repository import DocumentsRepository
-from .schemas import DocumentOut, DocumentPage
+from .schemas import DocumentLastRun, DocumentOut, DocumentPage
 from .storage import DocumentStorage
 
 _FALLBACK_FILENAME = "upload"
@@ -44,6 +45,7 @@ class DocumentsService:
             raise RuntimeError("Document storage directory is not configured")
         self._storage = DocumentStorage(documents_dir)
         self._repository = DocumentsRepository(session)
+        self._jobs_repository = JobsRepository(session)
 
     async def create_document(
         self,
@@ -123,6 +125,7 @@ class DocumentsService:
             include_total=include_total,
         )
         items = [DocumentOut.model_validate(item) for item in page_result.items]
+        await self._attach_last_runs(workspace_id, items)
 
         return DocumentPage(
             items=items,
@@ -137,7 +140,9 @@ class DocumentsService:
         """Return document metadata for ``document_id``."""
 
         document = await self._get_document(workspace_id, document_id)
-        return DocumentOut.model_validate(document)
+        payload = DocumentOut.model_validate(document)
+        await self._attach_last_runs(workspace_id, [payload])
+        return payload
 
     async def stream_document(
         self, *, workspace_id: str, document_id: str
@@ -165,7 +170,9 @@ class DocumentsService:
                     stored_uri=document.stored_uri,
                 ) from exc
 
-        return DocumentOut.model_validate(document), _guarded()
+        payload = DocumentOut.model_validate(document)
+        await self._attach_last_runs(workspace_id, [payload])
+        return payload, _guarded()
 
     async def delete_document(
         self,
@@ -193,6 +200,33 @@ class DocumentsService:
         if document is None:
             raise DocumentNotFoundError(document_id)
         return document
+
+    async def _attach_last_runs(
+        self,
+        workspace_id: str,
+        documents: Sequence[DocumentOut],
+    ) -> None:
+        """Populate ``last_run`` on each document using recent job data."""
+
+        if not documents:
+            return
+
+        summaries = await self._jobs_repository.latest_runs_for_documents(
+            workspace_id=workspace_id,
+            document_ids=[document.id for document in documents],
+        )
+        for document in documents:
+            summary = summaries.get(document.id)
+            if summary is None:
+                document.last_run = None
+                continue
+
+            document.last_run = DocumentLastRun(
+                job_id=summary.job_id,
+                status=summary.status,
+                run_at=summary.run_at,
+                message=summary.message,
+            )
 
     def _resolve_expiration(self, override: str | None, now: datetime) -> datetime:
         if override is None:

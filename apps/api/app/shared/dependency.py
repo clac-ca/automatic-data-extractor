@@ -119,6 +119,17 @@ def get_builds_service(
     return BuildsService(session=session, settings=settings, storage=storage)
 
 
+def get_runs_service(
+    session: SessionDep,
+    settings: SettingsDep,
+) -> "RunsService":
+    """Return a runs service wired to the current request dependencies."""
+
+    from apps.api.app.features.runs.service import RunsService
+
+    return RunsService(session=session, settings=settings)
+
+
 _bearer_scheme = HTTPBearer(auto_error=False)
 _api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 _session_cookie_scheme = APIKeyCookie(
@@ -126,6 +137,9 @@ _session_cookie_scheme = APIKeyCookie(
     scheme_name="SessionCookie",
     auto_error=False,
 )
+
+def _is_dev_identity(identity: AuthenticatedIdentity) -> bool:
+    return identity.credentials == "development"
 
 
 def configure_auth_dependencies(*, settings: Settings) -> None:
@@ -147,6 +161,9 @@ async def get_current_identity(
     """Resolve the authenticated identity for the request."""
 
     service = AuthService(session=session, settings=settings)
+    if settings.auth_disabled:
+        return await service.ensure_dev_identity()
+
     if credentials is not None:
         try:
             payload = service.decode_token(
@@ -239,6 +256,8 @@ def require_global(
         identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
         session: SessionDep,
     ) -> User:
+        if _is_dev_identity(identity):
+            return identity.user
         decision = await authorize(
             session=session,
             principal_id=str(identity.principal.id),
@@ -269,6 +288,8 @@ def require_workspace(
         identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
         session: SessionDep,
     ) -> User:
+        if _is_dev_identity(identity):
+            return identity.user
         workspace_id = resolve_workspace_scope(
             request=request,
             security_scopes=security_scopes,
@@ -312,6 +333,8 @@ def require_permissions_catalog_access(
         session: SessionDep,
         workspace_id: str | None = None,
     ) -> User:
+        if _is_dev_identity(identity):
+            return identity.user
         if scope == ScopeType.GLOBAL:
             decision = await authorize(
                 session=session,
@@ -389,6 +412,7 @@ __all__ = [
     "get_configs_service",
     "get_documents_service",
     "get_health_service",
+    "get_runs_service",
     "get_system_settings_service",
     "get_users_service",
     "get_workspace_profile",

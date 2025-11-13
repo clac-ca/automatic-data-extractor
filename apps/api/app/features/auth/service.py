@@ -72,7 +72,7 @@ class AuthenticatedIdentity:
 
     user: User
     principal: Principal
-    credentials: Literal["session_cookie", "bearer_token", "api_key"]
+    credentials: Literal["session_cookie", "bearer_token", "api_key", "development"]
     api_key: APIKey | None = None
 
     @property
@@ -220,6 +220,46 @@ class AuthService:
     @property
     def settings(self) -> Settings:
         return self._settings
+
+    async def ensure_dev_identity(self) -> AuthenticatedIdentity:
+        """Ensure a development identity exists when auth is bypassed."""
+
+        email_source = self.settings.auth_disabled_user_email or "developer@example.test"
+        email = normalise_email(email_source)
+        display_name = (self.settings.auth_disabled_user_name or "Development User").strip() or None
+
+        user = await self._users.get_by_email(email)
+        if user is None:
+            user = await self._users.create(
+                email=email,
+                password_hash=None,
+                display_name=display_name,
+                is_active=True,
+                is_service_account=False,
+            )
+        else:
+            updated = False
+            if not user.is_active:
+                user.is_active = True
+                updated = True
+            if display_name and user.display_name != display_name:
+                user.display_name = display_name
+                updated = True
+            if updated:
+                await self._session.flush()
+
+        await sync_permission_registry(session=self._session)
+        await self._assign_global_role(
+            user=user,
+            slug=_GLOBAL_ADMIN_ROLE_SLUG,
+            session=self._session,
+        )
+        principal = await ensure_user_principal(session=self._session, user=user)
+        return AuthenticatedIdentity(
+            user=user,
+            principal=principal,
+            credentials="development",
+        )
 
     # ------------------------------------------------------------------
     # Password-based authentication

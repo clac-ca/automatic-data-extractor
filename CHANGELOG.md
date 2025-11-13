@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- Introduce ADE runs API endpoints with streaming NDJSON events, run/log models, and background execution wiring.
+- Refactor configuration build orchestration to stream NDJSON events, persist build/log tables, and expose `/api/v1/.../builds` endpoints with background execution.
+- Document the streaming builds API contract in `docs/ade_builds_api_spec.md` and synchronize the work package/plan guidance for downstream agents.
+- Wire the config builder console to the streaming build/run APIs with NDJSON helpers, formatter tests, and refreshed workbench controls.
 - Introduce `ADE_SAFE_MODE` to boot the API/UI without executing config packages, surfacing a health component and UI banner while job submissions return HTTP 400.
 - Deliver workspace chrome toggles and a redesigned documents page with filters, grid/list views, bulk actions, and an inspector drawer.
 - Introduce an Angular workspace directory service with loading and error states to power the app shell navigation.

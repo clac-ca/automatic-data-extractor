@@ -1,4 +1,4 @@
-import type { components } from "@openapi";
+import type { components } from "@schema";
 
 export type ConfigurationPage = components["schemas"]["ConfigurationPage"];
 export type ConfigRecord = components["schemas"]["ConfigurationRecord"];

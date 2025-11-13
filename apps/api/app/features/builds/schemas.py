@@ -1,71 +1,138 @@
-"""Pydantic schemas for configuration build API payloads."""
+"""Pydantic schemas describing build resources and streaming events."""
 
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Annotated, Literal, Optional, Union
 
 from pydantic import Field
 
-from apps.api.app.shared.core.ids import ULIDStr
 from apps.api.app.shared.core.schema import BaseSchema
 
-from .models import BuildStatus
+BuildObjectType = Literal["ade.build"]
+BuildEventObjectType = Literal["ade.build.event"]
+BuildLogsObjectType = Literal["ade.build.logs"]
+BuildStatusLiteral = Literal["queued", "building", "active", "failed", "canceled"]
 
 __all__ = [
-    "BuildEnsureRequest",
-    "BuildEnsureResponse",
-    "BuildRecord",
+    "BuildCreateOptions",
+    "BuildCreateRequest",
+    "BuildEvent",
+    "BuildLogsResponse",
+    "BuildLogEntry",
+    "BuildResource",
+    "BuildStatusLiteral",
+    "BuildStepEvent",
 ]
 
 
-class BuildRecord(BaseSchema):
-    """Serialized representation of a configuration build pointer."""
+def _timestamp(dt: datetime | None) -> int | None:
+    return int(dt.timestamp()) if dt else None
 
-    id: ULIDStr = Field(..., description="Primary identifier for the build record")
-    workspace_id: ULIDStr = Field(..., description="Workspace identifier")
-    config_id: ULIDStr = Field(..., description="Configuration identifier")
-    configuration_id: ULIDStr = Field(..., description="Configuration record identifier")
-    build_id: ULIDStr = Field(..., description="Build identifier (ULID)")
-    status: BuildStatus = Field(..., description="Current lifecycle status")
-    environment_ref: str = Field(
-        ...,
-        description="Opaque identifier referencing the build's execution environment.",
+
+class BuildResource(BaseSchema):
+    """API representation of a build row."""
+
+    id: str
+    object: BuildObjectType = "ade.build"
+
+    workspace_id: str
+    config_id: str
+    configuration_id: str
+    configuration_build_id: str | None = None
+    build_ref: str | None = Field(
+        None, description="Underlying configuration_builds.build_id value when present"
     )
 
-    config_version: int | None = Field(None, description="Configuration version when built")
-    content_digest: str | None = Field(None, description="Content fingerprint of the config")
-    engine_version: str | None = Field(None, description="Installed ADE engine version")
-    engine_spec: str | None = Field(None, description="Engine installation spec")
-    python_version: str | None = Field(None, description="Interpreter version used")
-    python_interpreter: str | None = Field(
-        None, description="Path to the interpreter used for venv creation"
-    )
+    status: BuildStatusLiteral
+    created: int = Field(..., description="Unix timestamp when the build request was created")
+    started: int | None = Field(None, description="Unix timestamp when execution started")
+    finished: int | None = Field(None, description="Unix timestamp when execution completed")
 
-    started_at: datetime | None = Field(None, description="When the build began")
-    built_at: datetime | None = Field(None, description="When the build completed")
-    expires_at: datetime | None = Field(None, description="When the build expires, if set")
-    last_used_at: datetime | None = Field(None, description="Last time the build was used")
-    error: str | None = Field(None, description="Error message, if build failed")
+    exit_code: int | None = None
+    summary: str | None = None
+    error_message: str | None = None
+
+    class Config:
+        json_encoders = {datetime: _timestamp}
 
 
-class BuildEnsureRequest(BaseSchema):
-    """Body accepted by PUT /build to trigger a rebuild."""
+class BuildCreateOptions(BaseSchema):
+    """Options controlling build orchestration."""
 
-    force: bool = Field(False, description="Force rebuild even if fingerprint matches")
-    wait: bool | None = Field(
-        None,
-        description=(
-            "When true, wait up to ADE_BUILD_ENSURE_WAIT_SECONDS for an in-progress "
-            "build to finish. When omitted, the default depends on the caller."
-        ),
-    )
+    force: bool = Field(False, description="Force rebuild even if fingerprints match")
+    wait: bool = Field(False, description="Wait for in-progress builds to complete before starting a new one")
 
 
-class BuildEnsureResponse(BaseSchema):
-    """Response returned by ensure_build endpoints."""
+class BuildCreateRequest(BaseSchema):
+    """Request body for POST /builds."""
 
-    status: BuildStatus = Field(..., description="Resulting build status")
-    build: BuildRecord | None = Field(
-        None,
-        description="Active build pointer when available",
-    )
+    stream: bool = False
+    options: BuildCreateOptions = Field(default_factory=BuildCreateOptions)
+
+
+class BuildEventBase(BaseSchema):
+    """Common fields shared by all build events."""
+
+    object: BuildEventObjectType = "ade.build.event"
+    build_id: str = Field(..., description="API build identifier")
+    created: int = Field(..., description="Unix timestamp seconds")
+    type: str = Field(..., description="Event discriminator")
+
+
+class BuildCreatedEvent(BuildEventBase):
+    type: Literal["build.created"] = "build.created"
+    status: BuildStatusLiteral
+    config_id: str
+
+
+class BuildStepEvent(BuildEventBase):
+    type: Literal["build.step"] = "build.step"
+    step: Literal[
+        "create_venv",
+        "upgrade_pip",
+        "install_engine",
+        "install_config",
+        "verify_imports",
+        "collect_metadata",
+    ]
+    message: str | None = None
+
+
+class BuildLogEvent(BuildEventBase):
+    type: Literal["build.log"] = "build.log"
+    stream: Literal["stdout", "stderr"] = "stdout"
+    message: str
+
+
+class BuildCompletedEvent(BuildEventBase):
+    type: Literal["build.completed"] = "build.completed"
+    status: BuildStatusLiteral
+    exit_code: int | None = None
+    error_message: str | None = None
+    summary: str | None = None
+
+
+BuildEvent = Annotated[
+    Union[BuildCreatedEvent, BuildStepEvent, BuildLogEvent, BuildCompletedEvent],
+    Field(discriminator="type"),
+]
+
+
+class BuildLogEntry(BaseSchema):
+    """Single build log row returned by polling endpoints."""
+
+    id: int
+    created: int
+    stream: str
+    message: str
+
+
+class BuildLogsResponse(BaseSchema):
+    """Envelope returned by GET /builds/{id}/logs."""
+
+    object: BuildLogsObjectType = "ade.build.logs"
+    build_id: str
+    entries: list[BuildLogEntry]
+    next_after_id: int | None = None
+

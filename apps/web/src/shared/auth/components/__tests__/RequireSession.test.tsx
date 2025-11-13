@@ -1,8 +1,7 @@
 import userEvent from "@testing-library/user-event";
-import { createMemoryRouter, RouterProvider } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { render, screen } from "@test/test-utils";
+import { render, screen, waitFor } from "@test/test-utils";
 import { useSession } from "../../context/SessionContext";
 import { RequireSession } from "../RequireSession";
 import type { SessionEnvelope } from "../../api";
@@ -17,6 +16,11 @@ vi.mock("../../hooks/useSessionQuery", () => ({
 vi.mock("../../hooks/useSetupStatusQuery", () => ({
   useSetupStatusQuery: (enabled?: boolean) => mockUseSetupStatusQuery(enabled),
 }));
+
+function renderWithHistory(ui: React.ReactElement, path = "/") {
+  window.history.replaceState(null, "", path);
+  return render(ui);
+}
 
 describe("RequireSession", () => {
   beforeEach(() => {
@@ -40,13 +44,7 @@ describe("RequireSession", () => {
       refetch: vi.fn(),
     });
 
-    render(
-      <RouterProvider
-        router={createMemoryRouter([
-          { path: "/", element: <RequireSession>Loading test</RequireSession> },
-        ])}
-      />,
-    );
+    renderWithHistory(<RequireSession>Loading test</RequireSession>);
 
     expect(screen.getByText("Loading your workspace…")).toBeInTheDocument();
   });
@@ -60,13 +58,7 @@ describe("RequireSession", () => {
       refetch,
     });
 
-    render(
-      <RouterProvider
-        router={createMemoryRouter([
-          { path: "/", element: <RequireSession>Error state</RequireSession> },
-        ])}
-      />,
-    );
+    renderWithHistory(<RequireSession>Error state</RequireSession>);
 
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 
@@ -81,31 +73,10 @@ describe("RequireSession", () => {
       refetch: vi.fn(),
     });
 
-    mockUseSetupStatusQuery.mockReturnValue({
-      data: { requires_setup: false },
-      isPending: false,
-      isSuccess: true,
-      isError: false,
-      refetch: vi.fn(),
-    });
+    renderWithHistory(<RequireSession>Protected</RequireSession>, "/workspaces");
 
-    const router = createMemoryRouter(
-      [
-        { path: "/login", element: <div>Login screen</div> },
-        {
-          path: "/workspaces",
-          element: <RequireSession>Protected</RequireSession>,
-        },
-      ],
-      { initialEntries: ["/workspaces"] },
-    );
-
-    render(<RouterProvider router={router} />);
-
-    await screen.findByText("Login screen");
-    expect(router.state.location.pathname).toBe("/login");
-    expect(router.state.location.search).toBe("");
-    expect(router.state.location.state).toBeNull();
+    await waitFor(() => expect(window.location.pathname).toBe("/login"));
+    expect(window.location.search).toBe("");
   });
 
   it("redirects to the setup screen when initial setup is required", async () => {
@@ -117,28 +88,16 @@ describe("RequireSession", () => {
     });
 
     mockUseSetupStatusQuery.mockReturnValue({
-      data: { requires_setup: true },
+      data: { requires_setup: true, force_sso: false },
       isPending: false,
       isSuccess: true,
       isError: false,
       refetch: vi.fn(),
     });
 
-    const router = createMemoryRouter(
-      [
-        { path: "/setup", element: <div>Setup screen</div> },
-        {
-          path: "/workspaces",
-          element: <RequireSession>Protected</RequireSession>,
-        },
-      ],
-      { initialEntries: ["/workspaces"] },
-    );
+    renderWithHistory(<RequireSession>Protected</RequireSession>, "/workspaces");
 
-    render(<RouterProvider router={router} />);
-
-    await screen.findByText("Setup screen");
-    expect(router.state.location.pathname).toBe("/setup");
+    await waitFor(() => expect(window.location.pathname).toBe("/setup"));
   });
 
   it("preserves the redirect path for non-default routes", async () => {
@@ -149,22 +108,10 @@ describe("RequireSession", () => {
       refetch: vi.fn(),
     });
 
-    const router = createMemoryRouter(
-      [
-        { path: "/login", element: <div>Login screen</div> },
-        {
-          path: "/workspaces/alpha",
-          element: <RequireSession>Protected</RequireSession>,
-        },
-      ],
-      { initialEntries: ["/workspaces/alpha"] },
-    );
+    renderWithHistory(<RequireSession>Protected</RequireSession>, "/workspaces/alpha");
 
-    render(<RouterProvider router={router} />);
-
-    await screen.findByText("Login screen");
-    expect(router.state.location.pathname).toBe("/login");
-    expect(router.state.location.search).toBe("?redirectTo=%2Fworkspaces%2Falpha");
+    await waitFor(() => expect(window.location.pathname).toBe("/login"));
+    expect(window.location.search).toBe("?redirectTo=%2Fworkspaces%2Falpha");
   });
 
   it("allows retrying when setup status fails to load", async () => {
@@ -184,13 +131,7 @@ describe("RequireSession", () => {
       refetch,
     });
 
-    render(
-      <RouterProvider
-        router={createMemoryRouter([
-          { path: "/", element: <RequireSession>Error state</RequireSession> },
-        ])}
-      />,
-    );
+    renderWithHistory(<RequireSession>Error state</RequireSession>);
 
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 
@@ -224,19 +165,10 @@ describe("RequireSession", () => {
       return <p>Signed in as {activeSession.user.display_name}</p>;
     }
 
-    render(
-      <RouterProvider
-        router={createMemoryRouter([
-          {
-            path: "/",
-            element: (
-              <RequireSession>
-                <SessionConsumer />
-              </RequireSession>
-            ),
-          },
-        ])}
-      />,
+    renderWithHistory(
+      <RequireSession>
+        <SessionConsumer />
+      </RequireSession>,
     );
 
     expect(await screen.findByText("Signed in as Test User")).toBeInTheDocument();

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 from fastapi.security import SecurityScopes
+from httpx import AsyncClient
 from starlette.requests import Request
 
 from apps.api.app.settings import get_settings
@@ -164,6 +165,41 @@ async def test_require_csrf_rejects_invalid_cookie(app, async_client, seed_ident
             await require_csrf(request, identity, session, settings)
 
     assert excinfo.value.status_code == 401
+
+
+async def test_auth_disabled_returns_session_without_credentials(
+    async_client: AsyncClient,
+    override_app_settings,
+) -> None:
+    """Requests should resolve a session automatically when auth is disabled."""
+
+    override_app_settings(
+        auth_disabled=True,
+        auth_disabled_user_email="dev@example.test",
+    )
+    response = await async_client.get("/api/v1/auth/session")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["user"]["email"] == "dev@example.test"
+    assert payload["expires_at"] is None
+    assert payload["refresh_expires_at"] is None
+
+
+async def test_auth_disabled_bypasses_workspace_permissions(
+    async_client: AsyncClient,
+    override_app_settings,
+    seed_identity,
+) -> None:
+    """Workspace endpoints should be accessible without login when auth is disabled."""
+
+    override_app_settings(
+        auth_disabled=True,
+        auth_disabled_user_email="dev@example.test",
+    )
+    response = await async_client.get(f"/api/v1/workspaces/{seed_identity['workspace_id']}")
+
+    assert response.status_code == 200
 
 
 async def _load_identity(session, user_id: str) -> AuthenticatedIdentity:

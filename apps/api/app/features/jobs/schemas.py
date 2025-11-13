@@ -1,12 +1,9 @@
-"""Jobs schema placeholders."""
+"""Shared Pydantic schemas for job representations."""
 
-from apps.api.app.shared.core.schema import BaseSchema
+from __future__ import annotations
 
+from typing import Literal
 
-class JobPlaceholder(BaseSchema):
-    """Placeholder schema for job responses."""
+JobStatusLiteral = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 
-    id: str
-
-
-__all__ = ["JobPlaceholder"]
+__all__ = ["JobStatusLiteral"]
