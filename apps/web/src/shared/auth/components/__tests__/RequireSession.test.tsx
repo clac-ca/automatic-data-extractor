@@ -1,7 +1,6 @@
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { NavProvider } from "@app/nav/history";
 import { render, screen, waitFor } from "@test/test-utils";
 import { useSession } from "../../context/SessionContext";
 import { RequireSession } from "../RequireSession";
@@ -18,9 +17,9 @@ vi.mock("../../hooks/useSetupStatusQuery", () => ({
   useSetupStatusQuery: (enabled?: boolean) => mockUseSetupStatusQuery(enabled),
 }));
 
-function renderWithNav(ui: React.ReactElement, path = "/") {
+function renderWithHistory(ui: React.ReactElement, path = "/") {
   window.history.replaceState(null, "", path);
-  return render(<NavProvider>{ui}</NavProvider>);
+  return render(ui);
 }
 
 describe("RequireSession", () => {
@@ -45,7 +44,7 @@ describe("RequireSession", () => {
       refetch: vi.fn(),
     });
 
-    renderWithNav(<RequireSession>Loading test</RequireSession>);
+    renderWithHistory(<RequireSession>Loading test</RequireSession>);
 
     expect(screen.getByText("Loading your workspace…")).toBeInTheDocument();
   });
@@ -59,7 +58,7 @@ describe("RequireSession", () => {
       refetch,
     });
 
-    renderWithNav(<RequireSession>Error state</RequireSession>);
+    renderWithHistory(<RequireSession>Error state</RequireSession>);
 
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 
@@ -74,7 +73,7 @@ describe("RequireSession", () => {
       refetch: vi.fn(),
     });
 
-    renderWithNav(<RequireSession>Protected</RequireSession>, "/workspaces");
+    renderWithHistory(<RequireSession>Protected</RequireSession>, "/workspaces");
 
     await waitFor(() => expect(window.location.pathname).toBe("/login"));
     expect(window.location.search).toBe("");
@@ -96,7 +95,7 @@ describe("RequireSession", () => {
       refetch: vi.fn(),
     });
 
-    renderWithNav(<RequireSession>Protected</RequireSession>, "/workspaces");
+    renderWithHistory(<RequireSession>Protected</RequireSession>, "/workspaces");
 
     await waitFor(() => expect(window.location.pathname).toBe("/setup"));
   });
@@ -109,7 +108,7 @@ describe("RequireSession", () => {
       refetch: vi.fn(),
     });
 
-    renderWithNav(<RequireSession>Protected</RequireSession>, "/workspaces/alpha");
+    renderWithHistory(<RequireSession>Protected</RequireSession>, "/workspaces/alpha");
 
     await waitFor(() => expect(window.location.pathname).toBe("/login"));
     expect(window.location.search).toBe("?redirectTo=%2Fworkspaces%2Falpha");
@@ -132,7 +131,7 @@ describe("RequireSession", () => {
       refetch,
     });
 
-    renderWithNav(<RequireSession>Error state</RequireSession>);
+    renderWithHistory(<RequireSession>Error state</RequireSession>);
 
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 
@@ -166,7 +165,7 @@ describe("RequireSession", () => {
       return <p>Signed in as {activeSession.user.display_name}</p>;
     }
 
-    renderWithNav(
+    renderWithHistory(
       <RequireSession>
         <SessionConsumer />
       </RequireSession>,

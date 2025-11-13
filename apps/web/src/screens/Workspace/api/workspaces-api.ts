@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { client } from "@shared/api/client";
-import type { components, paths } from "@openapi";
+import type { components, paths } from "@schema";
 
 const DEFAULT_WORKSPACE_PAGE_SIZE = 100;
 const DEFAULT_MEMBER_PAGE_SIZE = 100;

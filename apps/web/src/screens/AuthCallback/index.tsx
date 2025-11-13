@@ -6,8 +6,8 @@ import { useLocation, useNavigate } from "@app/nav/history";
 import { normalizeSessionEnvelope, sessionKeys } from "@shared/auth/api";
 import { chooseDestination } from "@shared/auth/utils/authNavigation";
 import { ApiError, get } from "@shared/api";
-import type { components } from "@openapi";
-import { Button } from "@ui/button";
+import type { SessionEnvelope } from "@schema";
+import { Button } from "@ui/Button";
 import { PageState } from "@ui/PageState";
 
 export default function AuthCallbackRoute() {
@@ -86,4 +86,3 @@ export default function AuthCallbackRoute() {
   );
 }
 
-type SessionEnvelope = components["schemas"]["SessionEnvelope"];

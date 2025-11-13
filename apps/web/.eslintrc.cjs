@@ -40,7 +40,6 @@ module.exports = {
     "build/",
     "dist/",
     "node_modules/",
-    "react-router.config.ts",
     "vite.config.ts",
   ],
   rules: {
@@ -52,6 +51,17 @@ module.exports = {
         "argsIgnorePattern": "^_",
         "varsIgnorePattern": "^_",
         "caughtErrorsIgnorePattern": "^_"
+      },
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        paths: [
+          {
+            name: "@generated-types/openapi",
+            message: "Import app-facing types from @schema, not the raw generated file.",
+          },
+        ],
       },
     ],
   },

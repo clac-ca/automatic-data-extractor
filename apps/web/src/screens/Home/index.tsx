@@ -5,7 +5,7 @@ import { useSession } from "@shared/auth/context/SessionContext";
 import { useWorkspacesQuery } from "@screens/Workspace/api/workspaces-api";
 import { readPreferredWorkspaceId } from "@screens/Workspace/state/workspace-preferences";
 import { getDefaultWorkspacePath } from "@screens/Workspace";
-import { Button } from "@ui/button";
+import { Button } from "@ui/Button";
 import { PageState } from "@ui/PageState";
 import { useLocation, useNavigate } from "@app/nav/history";
 

@@ -12,9 +12,9 @@ import {
   useWorkspaceRolesQuery,
 } from "./useWorkspaceRoles";
 import type { RoleDefinition, PermissionDefinition, RoleCreatePayload, RoleUpdatePayload } from "@screens/Workspace/api/workspaces-api";
-import { Alert } from "@ui/alert";
-import { Button } from "@ui/button";
-import { Input } from "@ui/input";
+import { Alert } from "@ui/Alert";
+import { Button } from "@ui/Button";
+import { Input } from "@ui/Input";
 
 const roleFormSchema = z.object({
   name: z.string().min(1, "Role name is required.").max(150, "Keep the name under 150 characters."),

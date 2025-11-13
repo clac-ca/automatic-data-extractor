@@ -14,16 +14,16 @@ import { ProfileDropdown } from "@app/shell/ProfileDropdown";
 import { WorkspaceNav } from "@screens/Workspace/components/WorkspaceNav";
 import { defaultWorkspaceSection } from "@screens/Workspace/components/workspace-navigation";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
-import { Alert } from "@ui/alert";
+import { Alert } from "@ui/Alert";
 import { PageState } from "@ui/PageState";
 
 import WorkspaceOverviewRoute from "@screens/Workspace/sections/Overview";
 import WorkspaceDocumentsRoute from "@screens/Workspace/sections/Documents";
-import DocumentDetailRoute from "@screens/Workspace/sections/Documents/views/DocumentDetail";
+import DocumentDetailRoute from "@screens/Workspace/sections/Documents/components/DocumentDetail";
 import WorkspaceJobsRoute from "@screens/Workspace/sections/Jobs";
 import WorkspaceConfigsIndexRoute from "@screens/Workspace/sections/ConfigBuilder";
-import WorkspaceConfigRoute from "@screens/Workspace/sections/ConfigBuilder/views/ConfigDetail";
-import ConfigEditorWorkbenchRoute from "@screens/Workspace/sections/ConfigBuilder/editor";
+import WorkspaceConfigRoute from "@screens/Workspace/sections/ConfigBuilder/detail";
+import ConfigEditorWorkbenchRoute from "@screens/Workspace/sections/ConfigBuilder/workbench";
 import WorkspaceSettingsRoute from "@screens/Workspace/sections/Settings";
 
 type WorkspaceSectionRender =
@@ -192,7 +192,7 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
   );
 
   const segments = extractSectionSegments(location.pathname, workspace.id);
-  const section = resolveWorkspaceSection(workspace.id, segments, location.search);
+  const section = resolveWorkspaceSection(workspace.id, segments, location.search, location.hash);
 
   useEffect(() => {
     if (section?.kind === "redirect") {
@@ -262,15 +262,18 @@ function buildCanonicalPath(pathname: string, search: string, resolvedId: string
   return `/workspaces/${resolvedId}${normalized}${search}`;
 }
 
-function resolveWorkspaceSection(
+export function resolveWorkspaceSection(
   workspaceId: string,
   segments: string[],
   search: string,
+  hash: string,
 ): WorkspaceSectionRender | null {
+  const suffix = `${search}${hash}`;
+
   if (segments.length === 0) {
     return {
       kind: "redirect",
-      to: `/workspaces/${workspaceId}/${defaultWorkspaceSection.path}${search}`,
+      to: `/workspaces/${workspaceId}/${defaultWorkspaceSection.path}${suffix}`,
     };
   }
 
@@ -291,21 +294,28 @@ function resolveWorkspaceSection(
     }
     case "jobs":
       return { kind: "content", key: "jobs", element: <WorkspaceJobsRoute /> };
-    case "configs": {
+    case "config-builder": {
       if (!second) {
-        return { kind: "content", key: "configs", element: <WorkspaceConfigsIndexRoute /> };
+        return { kind: "content", key: "config-builder", element: <WorkspaceConfigsIndexRoute /> };
       }
       if (third === "editor") {
         return {
           kind: "content",
-          key: `configs:${second}:editor${search}`,
+          key: `config-builder:${second}:editor${suffix}`,
           element: <ConfigEditorWorkbenchRouteWithParams configId={decodeURIComponent(second)} />,
         };
       }
       return {
         kind: "content",
-        key: `configs:${second}`,
+        key: `config-builder:${second}`,
         element: <WorkspaceConfigRoute params={{ configId: decodeURIComponent(second) }} />,
+      };
+    }
+    case "configs": {
+      const legacyTarget = `/workspaces/${workspaceId}/config-builder${second ? `/${second}` : ""}${third ? `/${third}` : ""}`;
+      return {
+        kind: "redirect",
+        to: `${legacyTarget}${suffix}`,
       };
     }
     case "settings":

@@ -9,7 +9,8 @@ export default function NotFoundRoute() {
         </p>
         <h1 className="text-3xl font-semibold text-slate-900">Page not found</h1>
         <p className="text-sm text-slate-600">
-          The resource you&apos;re looking for doesn&apos;t exist yet. If this surface should be part of the rebuild, add a route in <code>app/routes</code> and connect the relevant feature.
+          The resource you&apos;re looking for doesn&apos;t exist yet. Add a screen under <code>src/screens/&lt;ScreenName&gt;/</code> and
+          register it inside <code>src/app/App.tsx</code> if this surface should exist in the routerless SPA.
         </p>
         <div className="flex justify-center gap-3 text-sm">
           <Link
