@@ -5,12 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.api.app.shared.db import Base
-from apps.api.app.shared.db.mixins import TimestampMixin, ULIDPrimaryKeyMixin, generate_ulid
 from apps.api.app.shared.db.enums import enum_values
+from apps.api.app.shared.db.mixins import TimestampMixin, ULIDPrimaryKeyMixin, generate_ulid
 
 
 class ConfigurationStatus(str, Enum):

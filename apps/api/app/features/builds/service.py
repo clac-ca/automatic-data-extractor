@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import AsyncIterator
 from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,11 +22,10 @@ from apps.api.app.shared.db.mixins import generate_ulid
 
 from .builder import (
     BuildArtifacts,
-    BuildStep,
     BuilderArtifactsEvent,
-    BuilderEvent,
     BuilderLogEvent,
     BuilderStepEvent,
+    BuildStep,
     VirtualEnvironmentBuilder,
 )
 from .exceptions import (
@@ -45,14 +44,18 @@ from .models import (
 from .repository import BuildsRepository, ConfigurationBuildsRepository
 from .schemas import (
     BuildCompletedEvent,
-    BuildCreateOptions,
     BuildCreatedEvent,
+    BuildCreateOptions,
     BuildEvent,
-    BuildLogEvent as BuildLogSchema,
     BuildLogEntry,
     BuildLogsResponse,
     BuildResource,
     BuildStatusLiteral,
+)
+from .schemas import (
+    BuildLogEvent as BuildLogSchema,
+)
+from .schemas import (
     BuildStepEvent as BuildStepSchema,
 )
 
@@ -105,7 +108,7 @@ class BuildExecutionContext:
         }
 
     @classmethod
-    def from_dict(cls, payload: dict[str, str | bool | None | float]) -> "BuildExecutionContext":
+    def from_dict(cls, payload: dict[str, str | bool | None | float]) -> BuildExecutionContext:
         return cls(
             build_id=str(payload["build_id"]),
             configuration_id=str(payload["configuration_id"]),
@@ -515,7 +518,7 @@ class BuildsService:
         engine_spec: str,
         engine_version_hint: str | None,
         python_interpreter: str | None,
-    ) -> "_BuildPlan":
+    ) -> _BuildPlan:
         workspace_id = configuration.workspace_id
         config_id = configuration.config_id
         build_ulid = generate_ulid()

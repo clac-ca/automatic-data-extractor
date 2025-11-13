@@ -11,7 +11,7 @@ import {
   useUpdateWorkspaceRoleMutation,
   useWorkspaceRolesQuery,
 } from "../hooks/useWorkspaceRoles";
-import type { RoleDefinition, PermissionDefinition, RoleCreatePayload, RoleUpdatePayload } from "@screens/Workspace/api/workspaces-api";
+import type { RoleDefinition, PermissionDefinition } from "@screens/Workspace/api/workspaces-api";
 import { Alert } from "@ui/Alert";
 import { Button } from "@ui/Button";
 import { Input } from "@ui/Input";

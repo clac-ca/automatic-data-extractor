@@ -16,10 +16,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from apps.api.app.shared.pagination import Page, paginate_sql
-
 from apps.api.app.features.users.models import User
 from apps.api.app.features.workspaces.models import Workspace
+from apps.api.app.shared.pagination import Page, paginate_sql
 
 from .models import (
     Permission,
@@ -840,7 +839,11 @@ async def assign_role(
     if scope_type == ScopeType.WORKSPACE and scope_id is None:
         msg = "Workspace assignments require a scope_id"
         raise RoleScopeMismatchError(msg)
-    if scope_type == ScopeType.WORKSPACE and role.scope_id is not None and role.scope_id != scope_id:
+    if (
+        scope_type == ScopeType.WORKSPACE
+        and role.scope_id is not None
+        and role.scope_id != scope_id
+    ):
         msg = "Role is bound to a different workspace"
         raise RoleScopeMismatchError(msg)
 

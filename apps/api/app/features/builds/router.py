@@ -3,27 +3,30 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Annotated, Any, AsyncIterator
+from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path as PathParam, Query, Security, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Security, status
+from fastapi import Path as PathParam
 from fastapi.responses import StreamingResponse
 
 from apps.api.app.features.configs.exceptions import ConfigurationNotFoundError
+from apps.api.app.shared.core.time import utc_now
+from apps.api.app.shared.db.session import get_sessionmaker
 from apps.api.app.shared.dependency import (
     get_builds_service,
     require_authenticated,
     require_csrf,
     require_workspace,
 )
-from apps.api.app.shared.core.time import utc_now
-from apps.api.app.shared.db.session import get_sessionmaker
 
 from .exceptions import BuildAlreadyInProgressError, BuildExecutionError, BuildNotFoundError
 from .schemas import BuildCreateOptions, BuildCreateRequest, BuildLogsResponse, BuildResource
 from .service import DEFAULT_STREAM_LIMIT, BuildExecutionContext, BuildsService
 
 router = APIRouter(tags=["builds"], dependencies=[Security(require_authenticated)])
+builds_service_dependency = Depends(get_builds_service)
 
 
 def _event_bytes(event: Any) -> bytes:
@@ -61,7 +64,10 @@ async def _execute_build_background(
             import logging
 
             logger = logging.getLogger(__name__)
-            logger.exception("Background build execution failed", extra={"build_id": context.build_id})
+            logger.exception(
+                "Background build execution failed",
+                extra={"build_id": context.build_id},
+            )
 
 
 @router.post(
@@ -83,7 +89,7 @@ async def create_build_endpoint(
             scopes=["{workspace_id}"],
         ),
     ],
-    service: BuildsService = Depends(get_builds_service),
+    service: BuildsService = builds_service_dependency,
 ) -> BuildResource | StreamingResponse:
     try:
         build, context = await service.prepare_build(
@@ -134,7 +140,7 @@ async def create_build_endpoint(
 @router.get("/builds/{build_id}", response_model=BuildResource)
 async def get_build_endpoint(
     build_id: Annotated[str, PathParam(min_length=1, description="Build identifier")],
-    service: BuildsService = Depends(get_builds_service),
+    service: BuildsService = builds_service_dependency,
 ) -> BuildResource:
     build = await service.get_build(build_id)
     if build is None:
@@ -147,10 +153,9 @@ async def get_build_logs_endpoint(
     build_id: Annotated[str, PathParam(min_length=1, description="Build identifier")],
     after_id: int | None = Query(default=None, ge=0),
     limit: int = Query(default=DEFAULT_STREAM_LIMIT, ge=1, le=DEFAULT_STREAM_LIMIT),
-    service: BuildsService = Depends(get_builds_service),
+    service: BuildsService = builds_service_dependency,
 ) -> BuildLogsResponse:
     build = await service.get_build(build_id)
     if build is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Build not found")
     return await service.get_logs(build_id=build_id, after_id=after_id, limit=limit)
-

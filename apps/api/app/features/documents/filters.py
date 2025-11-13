@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+
 from fastapi import HTTPException
 from pydantic import Field, field_validator
 from sqlalchemy import and_, func, or_
@@ -8,8 +9,8 @@ from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
 from apps.api.app.settings import MAX_SEARCH_LEN, MAX_SET_SIZE, MIN_SEARCH_LEN
-from apps.api.app.shared.filters import FilterBase
 from apps.api.app.shared.core.ids import ULIDStr
+from apps.api.app.shared.filters import FilterBase
 from apps.api.app.shared.validators import normalize_utc, parse_csv_or_repeated
 
 from ..users.models import User

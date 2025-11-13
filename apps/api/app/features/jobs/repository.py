@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Sequence
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,7 +46,12 @@ class JobsRepository:
         remaining = set(deduped_ids)
         summaries: dict[str, JobRunSummary] = {}
 
-        sort_expr = func.coalesce(Job.completed_at, Job.started_at, Job.updated_at, Job.queued_at).desc()
+        sort_expr = func.coalesce(
+            Job.completed_at,
+            Job.started_at,
+            Job.updated_at,
+            Job.queued_at,
+        ).desc()
         offset = 0
 
         while remaining:
@@ -77,8 +82,17 @@ class JobsRepository:
                     if doc_id in summaries:
                         continue
 
-                    run_timestamp = job.completed_at or job.started_at or job.updated_at or job.queued_at
-                    status_value = job.status.value if isinstance(job.status, JobStatus) else str(job.status)
+                    run_timestamp = (
+                        job.completed_at
+                        or job.started_at
+                        or job.updated_at
+                        or job.queued_at
+                    )
+                    status_value = (
+                        job.status.value
+                        if isinstance(job.status, JobStatus)
+                        else str(job.status)
+                    )
                     summaries[doc_id] = JobRunSummary(
                         job_id=job.id,
                         status=status_value,

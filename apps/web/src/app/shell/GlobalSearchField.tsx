@@ -83,8 +83,9 @@ export function GlobalSearchField({
   onSelectSuggestion,
   renderSuggestion,
 }: GlobalSearchFieldProps) {
-  const inputId = id ?? useId();
-  const suggestionsListId = useId();
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
+  const suggestionsListId = `${generatedId}-suggestions`;
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isControlled = value !== undefined;
   const [uncontrolledQuery, setUncontrolledQuery] = useState(defaultValue);
@@ -223,18 +224,18 @@ export function GlobalSearchField({
               type="search"
               value={query}
               onChange={(event) => handleSearchChange(event.target.value)}
-              onFocus={(event) => {
-                setIsFocused(true);
-                onFocus?.();
-                // keep highlight stable if no suggestions
-                if (!hasSuggestions) {
-                  setHighlightedSuggestion(0);
+            onFocus={() => {
+              setIsFocused(true);
+              onFocus?.();
+              // keep highlight stable if no suggestions
+              if (!hasSuggestions) {
+                setHighlightedSuggestion(0);
                 }
               }}
-              onBlur={(event) => {
-                setIsFocused(false);
-                onBlur?.();
-              }}
+            onBlur={() => {
+              setIsFocused(false);
+              onBlur?.();
+            }}
               onKeyDown={handleSearchKeyDown}
               placeholder={placeholder}
               className="w-full border-0 bg-transparent text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none"
