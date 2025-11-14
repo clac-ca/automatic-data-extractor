@@ -274,6 +274,19 @@ export default function WorkspaceDocumentsRoute() {
     setStatusFilters(new Set());
   }, []);
 
+  const handleDeleteSelected = useCallback(async () => {
+    const ids = selectedIdsArray;
+    if (!ids.length) return;
+    setBanner(null);
+    try {
+      await deleteDocuments.mutateAsync({ documentIds: ids });
+      setSelectedIds(new Set());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete documents.";
+      setBanner({ tone: "error", message });
+    }
+  }, [deleteDocuments, selectedIdsArray]);
+
   /* --------------------------- Keyboard shortcuts --------------------------- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -291,8 +304,7 @@ export default function WorkspaceDocumentsRoute() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCount]);
+  }, [handleDeleteSelected, selectedCount]);
 
   /* ------------------------------- Helpers ------------------------------- */
 
@@ -344,19 +356,6 @@ export default function WorkspaceDocumentsRoute() {
       return new Set(allIds);
     });
   };
-
-  const handleDeleteSelected = useCallback(async () => {
-    const ids = selectedIdsArray;
-    if (!ids.length) return;
-    setBanner(null);
-    try {
-      await deleteDocuments.mutateAsync({ documentIds: ids });
-      setSelectedIds(new Set());
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to delete documents.";
-      setBanner({ tone: "error", message });
-    }
-  }, [deleteDocuments, selectedIdsArray]);
 
   const handleDeleteSingle = useCallback(
     async (document: DocumentRecord) => {
@@ -476,6 +475,7 @@ export default function WorkspaceDocumentsRoute() {
           ) : (
             <>
               <div className="overflow-x-auto p-2 sm:p-3">
+                {/* TODO: Swap this manual table rendering for a virtualized grid once datasets routinely exceed a few hundred rows. */}
                 <DocumentsTable
                   documents={documents}
                   selectedIds={selectedIdsSet}
