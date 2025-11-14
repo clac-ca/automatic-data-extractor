@@ -11,10 +11,15 @@ readme = { text = "Placeholder runtime package; implementation forthcoming.", co
 license = { text = "Proprietary" }
 dependencies = [
     "openpyxl>=3.1",
+    "jsonschema>=4.21",
+    "pydantic>=2.6",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"ade_engine.schemas" = ["*.json"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
