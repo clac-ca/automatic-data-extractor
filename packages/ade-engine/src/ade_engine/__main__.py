@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import NoReturn
 
-from . import DEFAULT_METADATA, ManifestNotFoundError, load_config_manifest
+from . import DEFAULT_METADATA, ManifestNotFoundError, load_config_manifest, run_job
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -26,6 +26,21 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Optional path to an ade_config manifest (defaults to the installed package resource).",
     )
+    parser.add_argument(
+        "--job-id",
+        type=str,
+        help="Run the worker pipeline for the specified job.",
+    )
+    parser.add_argument(
+        "--jobs-dir",
+        type=Path,
+        help="Root directory containing per-job folders (defaults to ADE_JOBS_DIR/ADE_DATA_DIR).",
+    )
+    parser.add_argument(
+        "--safe-mode",
+        action="store_true",
+        help="Run without sandboxing (used by integration tests).",
+    )
     return parser
 
 
@@ -35,16 +50,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
 
-    if args.version:
+    if args.version and not args.job_id:
         print(f"{DEFAULT_METADATA.name} {DEFAULT_METADATA.version}")
         return 0
+
+    if args.job_id:
+        result = run_job(
+            args.job_id,
+            jobs_dir=args.jobs_dir,
+            manifest_path=args.manifest_path,
+            safe_mode=args.safe_mode,
+        )
+        payload = {
+            "engine_version": DEFAULT_METADATA.version,
+            "job": {
+                "job_id": result.job_id,
+                "status": result.status,
+                "outputs": [str(path) for path in result.output_paths],
+                "artifact": str(result.artifact_path),
+                "events": str(result.events_path),
+            },
+        }
+        if result.error:
+            payload["job"]["error"] = result.error
+        print(json.dumps(payload, indent=2))
+        return 0 if result.status == "succeeded" else 1
 
     try:
         manifest = load_config_manifest(manifest_path=args.manifest_path)
     except ManifestNotFoundError as exc:
         print(f"Manifest error: {exc}")
         return 1
-
     print(
         json.dumps(
             {
