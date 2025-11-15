@@ -5,8 +5,10 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
+import sys
 
 import pytest
 import pytest_asyncio
@@ -16,6 +18,9 @@ from alembic.config import Config
 from fastapi import FastAPI
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "packages" / "ade-schemas" / "src"))
 
 from apps.api.app.settings import Settings, get_settings, reload_settings
 from apps.api.app.shared.db.engine import ensure_database_ready, render_sync_url, reset_database_state

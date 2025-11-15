@@ -28,6 +28,7 @@ dependencies = [
   "email-validator==2.1.0.post1",
   "openpyxl==3.1.5",
   "greenlet @ git+https://github.com/python-greenlet/greenlet.git@master",
+  { path = "../packages/ade-schemas", develop = true },
 ]
 
 [project.optional-dependencies]

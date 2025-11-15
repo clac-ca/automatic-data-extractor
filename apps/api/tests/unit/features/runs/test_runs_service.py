@@ -3,18 +3,17 @@ from __future__ import annotations
 import asyncio
 import os
 from collections.abc import AsyncIterator
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
+from ade_schemas import TelemetryEnvelope, TelemetryEvent
+
 from apps.api.app.features.builds.models import ConfigurationBuild, ConfigurationBuildStatus
 from apps.api.app.features.configs.models import Configuration, ConfigurationStatus
 from apps.api.app.features.runs.models import RunStatus
-from apps.api.app.features.runs.schemas import (
-    RunCompletedEvent,
-    RunCreateOptions,
-    RunLogEvent,
-)
+from apps.api.app.features.runs.schemas import RunCompletedEvent, RunCreateOptions, RunLogEvent
 from apps.api.app.features.runs.service import RunExecutionContext, RunsService
 from apps.api.app.features.workspaces.models import Workspace
 from apps.api.app.settings import Settings
@@ -97,7 +96,7 @@ async def test_stream_run_happy_path_yields_engine_events(
         run,
         context: RunExecutionContext,
         options: RunCreateOptions,
-    ) -> AsyncIterator[RunLogEvent | RunCompletedEvent]:
+    ) -> AsyncIterator[RunLogEvent | RunCompletedEvent | TelemetryEnvelope]:
         log = await self._append_log(run.id, "engine output", stream="stdout")
         yield RunLogEvent(
             run_id=run.id,
@@ -105,6 +104,14 @@ async def test_stream_run_happy_path_yields_engine_events(
             stream="stdout",
             message="engine output",
         )
+        telemetry = TelemetryEnvelope(
+            job_id=context.job_id or run.id,
+            run_id=context.run_id,
+            emitted_at=datetime.now(timezone.utc),
+            event=TelemetryEvent(name="pipeline_transition", level="info"),
+        )
+        await self._append_log(run.id, telemetry.model_dump_json(), stream="stdout")
+        yield telemetry
         completion = await self._complete_run(
             run,
             status=RunStatus.SUCCEEDED,
@@ -124,18 +131,20 @@ async def test_stream_run_happy_path_yields_engine_events(
     async for event in service.stream_run(context=context, options=RunCreateOptions()):
         events.append(event)
 
-    assert [event.type for event in events] == [
-        "run.created",
-        "run.started",
-        "run.log",
-        "run.completed",
-    ]
+    assert events[0].type == "run.created"
+    assert events[1].type == "run.started"
+    assert isinstance(events[2], RunLogEvent)
+    assert isinstance(events[3], TelemetryEnvelope)
+    assert events[4].type == "run.completed"
 
     run = await service.get_run(context.run_id)
     assert run is not None
     assert run.status is RunStatus.SUCCEEDED
     logs = await service.get_logs(run_id=context.run_id)
-    assert [entry.message for entry in logs.entries] == ["engine output"]
+    messages = [entry.message for entry in logs.entries]
+    assert messages[0] == "engine output"
+    telemetry = TelemetryEnvelope.model_validate_json(messages[1])
+    assert telemetry.event.name == "pipeline_transition"
     assert logs.next_after_id is None
 
 
