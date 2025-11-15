@@ -155,3 +155,8 @@ breaks the implementation into incremental, testable milestones.
 - [x] Introduce a telemetry configuration object that standardizes correlation IDs, severity thresholds, and output sinks for both artifact and event writers.
 
 Completed this iteration by introducing the `JobService` facade, isolating table processing into pure helpers, and implementing a configurable telemetry layer that unifies correlation metadata and severity thresholds across artifact and event sinks.
+
+## Remaining Frontend & Backend Integration Work
+- [ ] Update the runs service to execute the new worker entry point by supplying `--job-id`/`--jobs-dir` arguments (or calling `run_job` directly) so platform runs drive actual jobs instead of invoking the legacy manifest-printing CLI. Align the subprocess environment with the job directory layout and safe-mode semantics exposed by the runtime.【F:apps/api/app/features/runs/service.py†L324-L374】【F:packages/ade-engine/src/ade_engine/__main__.py†L12-L80】
+- [ ] Replace the placeholder jobs router/service with an implementation that persists submissions, provisions job folders, and associates runs with job metadata/artifacts that the frontend can display.【F:apps/api/app/features/jobs/router.py†L1-L7】【F:apps/api/app/features/jobs/service.py†L1-L10】
+- [ ] Ensure the workspace UI flows continue end-to-end once the backend endpoints exist: the documents drawer currently posts to `/jobs` and expects a `JobRecord`, and validation mode streams run events over NDJSON, so both APIs must emit the shapes the SPA consumes.【F:apps/web/src/screens/Workspace/sections/Documents/index.tsx†L626-L704】【F:apps/web/src/shared/runs/api.ts†L1-L24】
