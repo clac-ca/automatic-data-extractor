@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { BuildCompletedEvent, BuildLogEvent, BuildStepEvent } from "@shared/builds/types";
 import type { RunCompletedEvent, RunLogEvent } from "@shared/runs/types";
+import type { TelemetryEnvelope } from "@schema/adeTelemetry";
 
 import { describeBuildEvent, describeRunEvent, formatConsoleTimestamp } from "../console";
 
@@ -91,5 +92,24 @@ describe("describeRunEvent", () => {
     expect(line.level).toBe("error");
     expect(line.message).toContain("Runtime error");
     expect(line.message).toContain("exit code 2");
+  });
+
+  it("formats telemetry envelopes", () => {
+    const event: TelemetryEnvelope = {
+      schema: "ade.telemetry/run-event.v1",
+      version: "1.0.0",
+      job_id: "job_1",
+      run_id: "run_123",
+      timestamp: new Date().toISOString(),
+      event: {
+        event: "pipeline_transition",
+        level: "warning",
+        phase: "mapping",
+      },
+    };
+    const line = describeRunEvent(event);
+    expect(line.level).toBe("warning");
+    expect(line.message).toContain("pipeline_transition");
+    expect(line.message).toContain("phase");
   });
 });

@@ -8,10 +8,11 @@ from typing import Any
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from apps.api.app.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
 from apps.api.app.shared.db.enums import enum_values
+from apps.api.app.features.users.models import User
 
 __all__ = ["Job", "JobStatus"]
 
@@ -38,7 +39,9 @@ class Job(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     config_id: Mapped[str] = mapped_column(String(26), nullable=False)
     config_version_id: Mapped[str] = mapped_column(String(26), nullable=False)
-    submitted_by_user_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
+    submitted_by_user_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     status: Mapped[JobStatus] = mapped_column(
         SAEnum(
@@ -73,6 +76,12 @@ class Job(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    submitted_by_user: Mapped[User | None] = relationship(
+        "User",
+        lazy="selectin",
+        foreign_keys=[submitted_by_user_id],
+    )
 
     __table_args__ = (
         Index("jobs_workspace_idx", "workspace_id", "created_at"),

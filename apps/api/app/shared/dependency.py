@@ -11,6 +11,7 @@ from apps.api.app.features.auth.service import AuthenticatedIdentity, AuthServic
 from apps.api.app.features.roles.authorization import authorize
 from apps.api.app.features.roles.models import ScopeType
 from apps.api.app.features.roles.service import ensure_user_principal
+from apps.api.app.features.runs.supervisor import RunSupervisor
 from apps.api.app.features.users.models import User
 from apps.api.app.features.workspaces.schemas import WorkspaceOut
 from apps.api.app.settings import Settings, get_settings
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
     from apps.api.app.features.configs.service import ConfigurationsService
     from apps.api.app.features.documents.service import DocumentsService
     from apps.api.app.features.health.service import HealthService
+    from apps.api.app.features.jobs.service import JobsService
     from apps.api.app.features.runs.service import RunsService
     from apps.api.app.features.system_settings.service import SystemSettingsService
     from apps.api.app.features.users.service import UsersService
@@ -41,6 +43,8 @@ if TYPE_CHECKING:
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+
+_RUN_SUPERVISOR = RunSupervisor()
 
 
 def get_users_service(session: SessionDep) -> UsersService:
@@ -128,7 +132,22 @@ def get_runs_service(
 
     from apps.api.app.features.runs.service import RunsService
 
-    return RunsService(session=session, settings=settings)
+    return RunsService(
+        session=session,
+        settings=settings,
+        supervisor=_RUN_SUPERVISOR,
+    )
+
+
+def get_jobs_service(
+    session: SessionDep,
+    settings: SettingsDep,
+) -> "JobsService":
+    """Return a jobs service configured for the current request."""
+
+    from apps.api.app.features.jobs.service import JobsService
+
+    return JobsService(session=session, settings=settings)
 
 
 _bearer_scheme = HTTPBearer(auto_error=False)

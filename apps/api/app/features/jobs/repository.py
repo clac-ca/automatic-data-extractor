@@ -8,6 +8,7 @@ from datetime import datetime
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from .models import Job, JobStatus
 
@@ -29,6 +30,50 @@ class JobsRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    def base_query(self) -> Select[tuple[Job]]:
+        return select(Job).options(selectinload(Job.submitted_by_user))
+
+    async def get_job(
+        self,
+        *,
+        workspace_id: str,
+        job_id: str,
+    ) -> Job | None:
+        stmt = (
+            self.base_query()
+            .where(Job.workspace_id == workspace_id, Job.id == job_id)
+            .limit(1)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def list_jobs(
+        self,
+        *,
+        workspace_id: str,
+        status: JobStatus | None = None,
+        input_document_id: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Job]:
+        stmt = self.base_query().where(Job.workspace_id == workspace_id)
+        if status is not None:
+            stmt = stmt.where(Job.status == status)
+        stmt = stmt.order_by(Job.created_at.desc()).limit(limit).offset(offset)
+        result = await self._session.execute(stmt)
+        jobs = list(result.scalars())
+        if input_document_id:
+            jobs = [
+                job
+                for job in jobs
+                if any(
+                    isinstance(doc, dict)
+                    and doc.get("document_id") == input_document_id
+                    for doc in (job.input_documents or [])
+                )
+            ]
+        return jobs
 
     async def latest_runs_for_documents(
         self,
