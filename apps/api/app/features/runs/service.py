@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+from ade_schemas import TelemetryEnvelope
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.features.builds.models import ConfigurationBuild, ConfigurationBuildStatus
@@ -23,6 +24,7 @@ from apps.api.app.shared.core.time import utc_now
 
 from .models import Run, RunLog, RunStatus
 from .repository import RunsRepository
+from .runner import ADEProcessRunner, RunnerFrame, StdoutFrame
 from .schemas import (
     RunCompletedEvent,
     RunCreatedEvent,
@@ -35,17 +37,22 @@ from .schemas import (
     RunStartedEvent,
     RunStatusLiteral,
 )
+from .supervisor import RunSupervisor
 
 __all__ = [
     "RunExecutionContext",
     "RunEnvironmentNotReadyError",
     "RunNotFoundError",
     "RunsService",
+    "RunStreamFrame",
 ]
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_STREAM_LIMIT = 1000
+
+
+RunStreamFrame = RunEvent | TelemetryEnvelope
 
 
 @dataclass(slots=True, frozen=True)
@@ -58,6 +65,8 @@ class RunExecutionContext:
     config_id: str
     venv_path: str
     build_id: str
+    job_id: str | None = None
+    jobs_dir: str | None = None
 
     def as_dict(self) -> dict[str, str]:
         return {
@@ -67,6 +76,8 @@ class RunExecutionContext:
             "config_id": self.config_id,
             "venv_path": self.venv_path,
             "build_id": self.build_id,
+            "job_id": self.job_id or "",
+            "jobs_dir": self.jobs_dir or "",
         }
 
     @classmethod
@@ -78,6 +89,8 @@ class RunExecutionContext:
             config_id=payload["config_id"],
             venv_path=payload["venv_path"],
             build_id=payload["build_id"],
+            job_id=payload.get("job_id") or None,
+            jobs_dir=payload.get("jobs_dir") or None,
         )
 
 
@@ -97,12 +110,14 @@ class RunsService:
         *,
         session: AsyncSession,
         settings: Settings,
+        supervisor: RunSupervisor | None = None,
     ) -> None:
         self._session = session
         self._settings = settings
         self._configs = ConfigurationsRepository(session)
         self._builds = ConfigurationBuildsRepository(session)
         self._runs = RunsRepository(session)
+        self._supervisor = supervisor or RunSupervisor()
 
     # ---------------------------------------------------------------------
     # Run lifecycle helpers
@@ -112,6 +127,8 @@ class RunsService:
         *,
         config_id: str,
         options: RunCreateOptions,
+        job_id: str | None = None,
+        jobs_dir: Path | None = None,
     ) -> tuple[Run, RunExecutionContext]:
         """Create the queued run row and return its execution context."""
 
@@ -144,6 +161,8 @@ class RunsService:
             config_id=configuration.config_id,
             venv_path=build.venv_path,
             build_id=build.build_id,
+            job_id=job_id,
+            jobs_dir=str(jobs_dir or self._settings.jobs_dir),
         )
         return run, context
 
@@ -163,7 +182,7 @@ class RunsService:
         *,
         context: RunExecutionContext,
         options: RunCreateOptions,
-    ) -> AsyncIterator[RunEvent]:
+    ) -> AsyncIterator[RunStreamFrame]:
         """Iterate through run events while executing the engine."""
 
         run = await self._require_run(context.run_id)
@@ -233,11 +252,18 @@ class RunsService:
             )
             return
 
-        try:
-            async for event in self._execute_engine(
+        async def generator() -> AsyncIterator[RunStreamFrame]:
+            async for frame in self._execute_engine(
                 run=run,
                 context=context,
                 options=options,
+            ):
+                yield frame
+
+        try:
+            async for event in self._supervisor.stream(
+                run.id,
+                generator=generator,
             ):
                 yield event
         except asyncio.CancelledError:
@@ -335,29 +361,43 @@ class RunsService:
         run: Run,
         context: RunExecutionContext,
         options: RunCreateOptions,
-    ) -> AsyncIterator[RunEvent]:
+    ) -> AsyncIterator[RunStreamFrame]:
         python = self._resolve_python(Path(context.venv_path))
-        env = self._build_env(Path(context.venv_path), options)
-        command = [str(python), "-m", "ade_engine"]
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            env=env,
-        )
-        assert process.stdout is not None
+        env = self._build_env(Path(context.venv_path), options, context)
+        job_id = context.job_id or run.id
+        jobs_root = Path(context.jobs_dir or self._settings.jobs_dir)
+        job_dir = jobs_root / job_id
+        job_dir.mkdir(parents=True, exist_ok=True)
+        command = [
+            str(python),
+            "-m",
+            "ade_engine",
+            "--job-id",
+            job_id,
+            "--jobs-dir",
+            str(jobs_root),
+        ]
+        if self._settings.safe_mode:
+            command.append("--safe-mode")
 
-        async for raw_line in process.stdout:
-            text = raw_line.decode("utf-8", errors="replace").rstrip("\n")
-            log = await self._append_log(run.id, text, stream="stdout")
-            yield RunLogEvent(
-                run_id=run.id,
-                created=self._epoch_seconds(log.created_at),
-                stream="stdout",
-                message=text,
-            )
+        runner = ADEProcessRunner(command=command, job_dir=job_dir, env=env)
 
-        return_code = await process.wait()
+        async for frame in runner.stream():
+            if isinstance(frame, StdoutFrame):
+                log = await self._append_log(run.id, frame.message, stream=frame.stream)
+                yield RunLogEvent(
+                    run_id=run.id,
+                    created=self._epoch_seconds(log.created_at),
+                    stream=frame.stream,
+                    message=frame.message,
+                )
+                continue
+
+            serialized = frame.model_dump_json()
+            await self._append_log(run.id, serialized, stream="stdout")
+            yield frame
+
+        return_code = runner.returncode if runner.returncode is not None else 1
         status = RunStatus.SUCCEEDED if return_code == 0 else RunStatus.FAILED
         error_message = (
             None if status is RunStatus.SUCCEEDED else f"Process exited with {return_code}"
@@ -455,7 +495,9 @@ class RunsService:
         return candidate
 
     @staticmethod
-    def _build_env(venv_path: Path, options: RunCreateOptions) -> dict[str, str]:
+    def _build_env(
+        venv_path: Path, options: RunCreateOptions, context: RunExecutionContext
+    ) -> dict[str, str]:
         env = os.environ.copy()
         bin_dir = "Scripts" if os.name == "nt" else "bin"
         bin_path = venv_path / bin_dir
@@ -463,6 +505,11 @@ class RunsService:
         env["PATH"] = os.pathsep.join([str(bin_path), env.get("PATH", "")])
         if options.dry_run:
             env["ADE_RUN_DRY_RUN"] = "1"
+        if options.validate_only:
+            env["ADE_RUN_VALIDATE_ONLY"] = "1"
+        if context.run_id:
+            env["ADE_TELEMETRY_CORRELATION_ID"] = context.run_id
+            env["ADE_RUN_ID"] = context.run_id
         return env
 
     @staticmethod

@@ -41,6 +41,8 @@ if (hasBackend) {
   const pythonExecutable = pythonCandidates.find((candidate) => existsSync(candidate)) || launcher;
 
   await run(pythonExecutable, ["-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"]);
+  await run(pythonExecutable, ["-m", "pip", "install", "-e", "packages/ade-schemas"]);
+  await run(pythonExecutable, ["-m", "pip", "install", "-e", "packages/ade-engine"]);
   await run(pythonExecutable, ["-m", "pip", "install", "-e", "apps/api[dev]"]);
 }
 

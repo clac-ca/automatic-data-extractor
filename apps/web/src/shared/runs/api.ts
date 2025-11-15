@@ -1,7 +1,7 @@
 import { post } from "@shared/api";
 import { parseNdjsonStream } from "@shared/api/ndjson";
 
-import type { RunEvent } from "./types";
+import type { RunStreamEvent } from "./types";
 
 export interface RunStreamOptions {
   readonly dry_run?: boolean;
@@ -12,7 +12,7 @@ export async function* streamRun(
   configId: string,
   options: RunStreamOptions = {},
   signal?: AbortSignal,
-): AsyncGenerator<RunEvent> {
+): AsyncGenerator<RunStreamEvent> {
   const path = `/configs/${encodeURIComponent(configId)}/runs`;
   const response = await post<Response>(
     path,
@@ -25,7 +25,7 @@ export async function* streamRun(
     },
   );
 
-  for await (const event of parseNdjsonStream<RunEvent>(response)) {
+  for await (const event of parseNdjsonStream<RunStreamEvent>(response)) {
     yield event;
   }
 }

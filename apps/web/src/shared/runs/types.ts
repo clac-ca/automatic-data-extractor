@@ -1,3 +1,6 @@
+import { ADE_TELEMETRY_EVENT_SCHEMA } from "@schema/adeTelemetry";
+import type { TelemetryEnvelope } from "@schema/adeTelemetry";
+
 export type RunStatus = "queued" | "running" | "succeeded" | "failed" | "canceled";
 
 export type RunEvent =
@@ -34,4 +37,10 @@ export interface RunCompletedEvent extends RunEventBase {
   readonly status: RunStatus;
   readonly exit_code?: number | null;
   readonly error_message?: string | null;
+}
+
+export type RunStreamEvent = RunEvent | TelemetryEnvelope;
+
+export function isTelemetryEnvelope(event: RunStreamEvent): event is TelemetryEnvelope {
+  return (event as TelemetryEnvelope).schema === ADE_TELEMETRY_EVENT_SCHEMA;
 }

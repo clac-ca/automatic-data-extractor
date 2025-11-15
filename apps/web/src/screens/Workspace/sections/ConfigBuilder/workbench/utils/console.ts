@@ -1,5 +1,7 @@
 import type { BuildEvent, BuildCompletedEvent, BuildLogEvent, BuildStepEvent } from "@shared/builds/types";
-import type { RunEvent, RunCompletedEvent, RunLogEvent } from "@shared/runs/types";
+import { isTelemetryEnvelope } from "@shared/runs/types";
+import type { RunCompletedEvent, RunLogEvent, RunStreamEvent } from "@shared/runs/types";
+import type { TelemetryEnvelope } from "@schema/adeTelemetry";
 
 import type { WorkbenchConsoleLine } from "../types";
 
@@ -40,7 +42,10 @@ export function describeBuildEvent(event: BuildEvent): WorkbenchConsoleLine {
   }
 }
 
-export function describeRunEvent(event: RunEvent): WorkbenchConsoleLine {
+export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
+  if (isTelemetryEnvelope(event)) {
+    return formatTelemetry(event);
+  }
   switch (event.type) {
     case "run.created":
       return {
@@ -64,6 +69,30 @@ export function describeRunEvent(event: RunEvent): WorkbenchConsoleLine {
         message: JSON.stringify(event),
         timestamp: formatConsoleTimestamp(event.created),
       };
+  }
+}
+
+function formatTelemetry(event: TelemetryEnvelope): WorkbenchConsoleLine {
+  const { event: payload, timestamp } = event;
+  const { event: name, level, ...rest } = payload;
+  const normalizedLevel = telemetryToConsoleLevel(level);
+  const extras = Object.keys(rest).length > 0 ? ` ${JSON.stringify(rest)}` : "";
+  return {
+    level: normalizedLevel,
+    message: extras ? `Telemetry: ${name}${extras}` : `Telemetry: ${name}`,
+    timestamp: formatConsoleTimestamp(new Date(timestamp)),
+  };
+}
+
+function telemetryToConsoleLevel(level: TelemetryEnvelope["event"]["level"]): WorkbenchConsoleLine["level"] {
+  switch (level) {
+    case "warning":
+      return "warning";
+    case "error":
+    case "critical":
+      return "error";
+    default:
+      return "info";
   }
 }
 

@@ -27,12 +27,15 @@ from apps.api.app.shared.dependency import (
     require_csrf,
 )
 
+from ade_schemas import TelemetryEnvelope
+
 from .schemas import RunCreateOptions, RunCreateRequest, RunEvent, RunLogsResponse, RunResource
 from .service import (
     DEFAULT_STREAM_LIMIT,
     RunEnvironmentNotReadyError,
     RunExecutionContext,
     RunNotFoundError,
+    RunStreamFrame,
     RunsService,
 )
 
@@ -44,7 +47,9 @@ runs_service_dependency = Depends(get_runs_service)
 logger = logging.getLogger(__name__)
 
 
-def _event_bytes(event: RunEvent) -> bytes:
+def _event_bytes(event: RunStreamFrame) -> bytes:
+    if isinstance(event, TelemetryEnvelope):
+        return event.model_dump_json().encode("utf-8") + b"\n"
     return event.json_bytes() + b"\n"
 
 
