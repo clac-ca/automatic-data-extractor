@@ -94,6 +94,7 @@ export function NavProvider({ children }: { children: React.ReactNode }) {
       if (!allowed) {
         return;
       }
+      // TODO: Thread history state + scroll restoration support through this helper when we add richer flows.
       if (opts?.replace) {
         window.history.replaceState(null, "", target);
       } else {
