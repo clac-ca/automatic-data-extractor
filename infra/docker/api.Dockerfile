@@ -5,7 +5,7 @@ WORKDIR /app
 COPY apps/ade-web/package*.json apps/ade-web/
 RUN npm ci --prefix apps/ade-web --no-audit --no-fund
 
-# Build the SPA (requires ade-schemas JSON during bundling)
+# Build the SPA (requires telemetry JSON during bundling)
 COPY apps/ade-web apps/ade-web
 COPY packages packages
 RUN npm run build --prefix apps/ade-web
@@ -23,7 +23,7 @@ COPY apps/ade-api/pyproject.toml apps/ade-api/
 COPY apps ./apps
 COPY packages ./packages
 RUN python -m pip install -U pip \
- && pip install --no-cache-dir --prefix=/install ./packages/ade-schemas ./apps/ade-engine ./apps/ade-api
+ && pip install --no-cache-dir --prefix=/install ./apps/ade-engine ./apps/ade-api
 
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \

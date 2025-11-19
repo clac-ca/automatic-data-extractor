@@ -7,7 +7,7 @@ import re
 from collections import defaultdict
 from typing import Any, Mapping, Sequence
 
-from ade_schemas.manifest import ColumnMeta
+from ade_engine.schemas.manifest import ColumnMeta
 
 from ..model import JobContext
 from .models import ColumnMapping, ColumnModule, ExtraColumn, ScoreContribution

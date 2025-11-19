@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from ade_schemas import TelemetryEnvelope, TelemetryEvent
+from ade_engine.schemas import TelemetryEnvelope, TelemetryEvent
 
 from ade_api.features.builds.models import ConfigurationBuild, ConfigurationBuildStatus
 from ade_api.features.configs.models import Configuration, ConfigurationStatus

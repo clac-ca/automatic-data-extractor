@@ -167,21 +167,21 @@ Completed this iteration by introducing the `JobService` facade, isolating table
 - Frontend validation mode currently reads raw event payloads and builds UI state on the fly. Providing a typed event schema (and version negotiation) would harden the client against backend/runtime changes and clarify the supported telemetry timeline.
 
 ### Follow-Up Opportunities
-- [x] Define a shared manifest + telemetry schema package that the backend, engine, and SPA can import to eliminate drift in job context structures. (Implemented via the shared `ade-schemas` package and imported JSON schemas across services.)
+- [x] Define a shared manifest + telemetry schema package that the backend, engine, and SPA can import to eliminate drift in job context structures. (Originally implemented via the shared `ade-schemas` package; schemas are now bundled with `ade_engine`.)
 - [x] Prototype an asynchronous job runner abstraction for the API that supervises engine subprocesses, streams NDJSON over Server-Sent Events, and reconciles run status updates. (Added the `ADEProcessRunner` supervisor with telemetry-aware streaming.)
 - [x] Extend the SPA's runs client to consume versioned telemetry envelopes, adding regression tests that guard the NDJSON parsing contract end-to-end. (Workspace console now renders telemetry frames with dedicated Vitest coverage.)
 
 ## Architecture Hindsight (Round 4)
 - The new async runner still leaves the API service responsible for low-level process management. Standing up a dedicated jobs orchestrator (e.g., a worker queue or supervisor service) would decouple HTTP lifecycle concerns from long-running ADE executions and simplify retries or cancellation.
-- Schema alignment between the backend and SPA improved with `ade-schemas`, but the engine still owns bespoke Pydantic models. Consolidating all schema generation into a single package (with codegen for Python and TypeScript) would ensure versioned compatibility across every layer.
+- Schema alignment between the backend and SPA improved once schemas were centralized, but the engine still owns bespoke Pydantic models. Consolidating all schema generation into a single package (with codegen for Python and TypeScript) would ensure versioned compatibility across every layer.
 - Telemetry envelopes are now versioned, yet our persistence strategy remains file-system–centric. Introducing a telemetry bus abstraction (writing to disk, SSE, or external collectors) could support richer analytics without rewriting the pipeline.
 
 ### Follow-Up Tasks Under Consideration
 - [x] Evaluate introducing a lightweight job supervisor (e.g., Dramatiq/Arq) so the API enqueues runs and receives callbacks instead of directly awaiting subprocess completion.
-- [x] Investigate generating engine-side models from the shared `ade-schemas` definitions to remove duplicate validation logic and guarantee parity with API/SPA consumers.
+- [x] Investigate generating engine-side models from the shared schema definitions to remove duplicate validation logic and guarantee parity with API/SPA consumers.
 - [x] Prototype a pluggable telemetry sink interface that can forward envelopes to alternate transports (websocket, message bus) while retaining the current filesystem sink as the default.
 
-Implemented a request-scoped run supervisor that streams ADE subprocess output through background tasks, refit the engine pipeline to consume typed `ade-schemas` manifest models while preserving dictionary-based `field_meta` for user code, and introduced pluggable telemetry sinks with factory loading and env-configurable dispatch so events can fan out beyond the default filesystem logs.
+Implemented a request-scoped run supervisor that streams ADE subprocess output through background tasks, refit the engine pipeline to consume typed manifest models while preserving dictionary-based `field_meta` for user code, and introduced pluggable telemetry sinks with factory loading and env-configurable dispatch so events can fan out beyond the default filesystem logs.
 
 ## Architecture Hindsight (Round 5)
 - Wiring the supervisor directly into the FastAPI service gives us observability, but it still forces long-lived Python workers to share lifecycle with the API process. A dedicated job orchestration tier (or async task queue) would let us scale ADE execution separately and provide clearer back-pressure controls.
@@ -190,5 +190,5 @@ Implemented a request-scoped run supervisor that streams ADE subprocess output t
 
 ### Follow-Up Tasks For Future Consideration
 - [ ] Prototype a standalone job orchestration service (or queue-backed worker) that the API enqueues into while the supervisor subscribes to progress events instead of spawning subprocesses inline.
-- [ ] Extend the `ade-schemas` package to emit TypeScript declarations (or JSON Schema) that the SPA can import directly, replacing bespoke telemetry/mapping view models.
+- [ ] Extend the bundled schema source to emit TypeScript declarations (or JSON Schema) that the SPA can import directly, replacing bespoke telemetry/mapping view models.
 - [ ] Experiment with a telemetry event bus that fans out envelopes to durable stores (database, object storage) and live consumers simultaneously, keeping filesystem sinks as a compatibility layer.

@@ -139,7 +139,7 @@ def uvicorn_path() -> str:
     return require_command(
         "uvicorn",
         friendly_name="uvicorn",
-        fix_hint="Install ADE into an active virtualenv (e.g., `pip install -e apps/ade-cli -e packages/ade-schemas -e apps/ade-engine -e apps/ade-api`).",
+        fix_hint="Install ADE into an active virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
     )
 
 

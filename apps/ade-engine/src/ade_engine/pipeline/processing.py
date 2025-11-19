@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-from ade_schemas.manifest import ColumnMeta
+from ade_engine.schemas.manifest import ColumnMeta
 
 from ..model import JobContext
 from .mapping import map_columns

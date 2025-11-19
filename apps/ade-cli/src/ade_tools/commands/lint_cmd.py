@@ -23,7 +23,7 @@ def run_lint(scope: str) -> None:
     if run_backend and common.BACKEND_SRC.exists():
         common.require_python_module(
             "ruff",
-            "Install backend dev dependencies (e.g., `pip install -e apps/ade-cli -e packages/ade-schemas -e apps/ade-engine -e apps/ade-api`).",
+            "Install backend dev dependencies (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
         )
         common.run([sys.executable, "-m", "ruff", "check", "src/ade_api"], cwd=common.BACKEND_DIR)
         mypy_bin = shutil.which("mypy")

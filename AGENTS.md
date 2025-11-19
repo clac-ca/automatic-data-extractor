@@ -53,9 +53,9 @@ automatic-data-extractor/
 │     └─ vite.config.ts
 │
 ├─ packages/                               # Reusable Python libraries
-│  └─ ade-schemas/                         # installable package: ade_schemas
+│  └─ ade-engine/                          # installable package: ade_engine
 │     ├─ pyproject.toml
-│     └─ src/ade_schemas/
+│     └─ src/ade_engine/
 │
 ├─ specs/                                   # JSON Schemas & formal definitions
 │  ├─ config-manifest.v1.json

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from ade_schemas.manifest import ColumnMeta
+from ade_engine.schemas.manifest import ColumnMeta
 
 from ade_engine.pipeline.registry import ColumnRegistry, ColumnRegistryError
 

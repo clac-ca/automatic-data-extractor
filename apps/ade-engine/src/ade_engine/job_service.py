@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ade_schemas import ManifestContext
+from ade_engine.schemas import ManifestContext
 
 from .hooks import HookRegistry
 from .logging import StructuredLogger
