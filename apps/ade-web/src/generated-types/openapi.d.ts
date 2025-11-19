@@ -638,6 +638,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/sheets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List worksheets for a document */
+        get: operations["list_document_sheets_endpoint_api_v1_workspaces__workspace_id__documents__document_id__sheets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/configurations": {
         parameters: {
             query?: never;
@@ -902,6 +919,74 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/artifact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Run Artifact Endpoint */
+        get: operations["download_run_artifact_endpoint_api_v1_runs__run_id__artifact_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/logfile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Run Logs File Endpoint */
+        get: operations["download_run_logs_file_endpoint_api_v1_runs__run_id__logfile_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/outputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Run Outputs Endpoint */
+        get: operations["list_run_outputs_endpoint_api_v1_runs__run_id__outputs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/outputs/{output_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Run Output Endpoint */
+        get: operations["download_run_output_endpoint_api_v1_runs__run_id__outputs__output_path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/jobs": {
         parameters: {
             query?: never;
@@ -930,6 +1015,98 @@ export type paths = {
         /** Read Job Endpoint */
         get: operations["read_job_endpoint_api_v1_workspaces__workspace_id__jobs__job_id__get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/artifact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Job Artifact */
+        get: operations["download_job_artifact_api_v1_workspaces__workspace_id__jobs__job_id__artifact_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Job Logs */
+        get: operations["download_job_logs_api_v1_workspaces__workspace_id__jobs__job_id__logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Job Outputs */
+        get: operations["list_job_outputs_api_v1_workspaces__workspace_id__jobs__job_id__outputs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs/{output_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Job Output */
+        get: operations["download_job_output_api_v1_workspaces__workspace_id__jobs__job_id__outputs__output_path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/safe-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read ADE safe mode status
+         * @description Return the current ADE safe mode status.
+         */
+        get: operations["read_safe_mode_api_v1_system_safe_mode_get"];
+        /**
+         * Toggle ADE safe mode
+         * @description Persist and broadcast an updated ADE safe mode state.
+         */
+        put: operations["update_safe_mode_api_v1_system_safe_mode_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1346,14 +1523,19 @@ export type components = {
         };
         /**
          * DocumentLastRun
-         * @description Minimal representation of the last job run for a document.
+         * @description Minimal representation of the last engine execution for a document.
          */
         DocumentLastRun: {
             /**
              * Job Id
-             * @description Latest job ULID.
+             * @description Latest job ULID when the run came from a job.
              */
-            job_id: string;
+            job_id?: string | null;
+            /**
+             * Run Id
+             * @description Latest run ULID when the execution was streamed directly.
+             */
+            run_id?: string | null;
             /**
              * Status
              * @enum {string}
@@ -1361,12 +1543,12 @@ export type components = {
             status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
             /**
              * Run At
-             * @description Timestamp for the latest job event (completion/start).
+             * @description Timestamp for the latest job or run event (completion/start).
              */
             run_at?: string | null;
             /**
              * Message
-             * @description Optional status or error message associated with the job.
+             * @description Optional status or error message associated with the execution.
              */
             message?: string | null;
         };
@@ -1448,6 +1630,27 @@ export type components = {
             has_previous: boolean;
             /** Total */
             total?: number | null;
+        };
+        /**
+         * DocumentSheet
+         * @description Descriptor for a worksheet or single-sheet document.
+         */
+        DocumentSheet: {
+            /** Name */
+            name: string;
+            /** Index */
+            index: number;
+            /**
+             * Kind
+             * @default worksheet
+             * @enum {string}
+             */
+            kind: "worksheet" | "file";
+            /**
+             * Is Active
+             * @default false
+             */
+            is_active: boolean;
         };
         /**
          * DocumentSource
@@ -1698,6 +1901,24 @@ export type components = {
             content_type?: string | null;
             /** Byte Size */
             byte_size?: number | null;
+        };
+        /**
+         * JobOutputFile
+         * @description Single file emitted by a job output directory.
+         */
+        JobOutputFile: {
+            /** Path */
+            path: string;
+            /** Byte Size */
+            byte_size: number;
+        };
+        /**
+         * JobOutputListing
+         * @description Collection of files produced by a job run.
+         */
+        JobOutputListing: {
+            /** Files */
+            files?: components["schemas"]["JobOutputFile"][];
         };
         /**
          * JobRecord
@@ -2038,6 +2259,18 @@ export type components = {
              * @default false
              */
             validate_only: boolean;
+            /** Input Document Id */
+            input_document_id?: string | null;
+            /**
+             * Input Sheet Name
+             * @description Preferred worksheet to ingest when processing XLSX files.
+             */
+            input_sheet_name?: string | null;
+            /**
+             * Input Sheet Names
+             * @description Explicit worksheets to ingest; defaults to all when omitted.
+             */
+            input_sheet_names?: string[] | null;
         };
         /**
          * RunCreateRequest
@@ -2087,6 +2320,24 @@ export type components = {
             next_after_id?: number | null;
         };
         /**
+         * RunOutputFile
+         * @description Single file emitted by a streaming run output directory.
+         */
+        RunOutputFile: {
+            /** Path */
+            path: string;
+            /** Byte Size */
+            byte_size: number;
+        };
+        /**
+         * RunOutputListing
+         * @description Collection of files produced by a streaming run.
+         */
+        RunOutputListing: {
+            /** Files */
+            files?: components["schemas"]["RunOutputFile"][];
+        };
+        /**
          * RunResource
          * @description API representation of a persisted ADE run.
          */
@@ -2101,6 +2352,21 @@ export type components = {
             object: "ade.run";
             /** Config Id */
             config_id: string;
+            /**
+             * Input Document Id
+             * @description Document ULID staged for this run when provided.
+             */
+            input_document_id?: string | null;
+            /**
+             * Input Sheet Name
+             * @description Worksheet name used when ingesting XLSX inputs.
+             */
+            input_sheet_name?: string | null;
+            /**
+             * Input Sheet Names
+             * @description Worksheets requested for ingestion when provided.
+             */
+            input_sheet_names?: string[] | null;
             /**
              * Status
              * @enum {string}
@@ -2118,6 +2384,38 @@ export type components = {
             summary?: string | null;
             /** Error Message */
             error_message?: string | null;
+        };
+        /**
+         * SafeModeStatus
+         * @description Represents the current safe mode state.
+         */
+        SafeModeStatus: {
+            /**
+             * Enabled
+             * @description Whether ADE is short-circuiting user runs
+             */
+            enabled: boolean;
+            /**
+             * Detail
+             * @description User-visible explanation of the safe mode status
+             */
+            detail: string;
+        };
+        /**
+         * SafeModeUpdateRequest
+         * @description Request payload for toggling safe mode.
+         */
+        SafeModeUpdateRequest: {
+            /**
+             * Enabled
+             * @description Updated safe mode state
+             */
+            enabled: boolean;
+            /**
+             * Detail
+             * @description Optional message describing the active state
+             */
+            detail?: string | null;
         };
         /**
          * ScopeType
@@ -4868,6 +5166,47 @@ export interface operations {
             };
         };
     };
+    list_document_sheets_endpoint_api_v1_workspaces__workspace_id__documents__document_id__sheets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Document identifier */
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSheet"][];
+                };
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_configurations_api_v1_workspaces__workspace_id__configurations_get: {
         parameters: {
             query?: {
@@ -5647,6 +5986,157 @@ export interface operations {
             };
         };
     };
+    download_run_artifact_endpoint_api_v1_runs__run_id__artifact_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Artifact unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_run_logs_file_endpoint_api_v1_runs__run_id__logfile_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Logs unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_run_outputs_endpoint_api_v1_runs__run_id__outputs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOutputListing"];
+                };
+            };
+            /** @description Outputs unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_run_output_endpoint_api_v1_runs__run_id__outputs__output_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+                output_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Output not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_jobs_endpoint_api_v1_workspaces__workspace_id__jobs_get: {
         parameters: {
             query?: {
@@ -5741,6 +6231,218 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_job_artifact_api_v1_workspaces__workspace_id__jobs__job_id__artifact_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Job identifier */
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Artifact unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_job_logs_api_v1_workspaces__workspace_id__jobs__job_id__logs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Job identifier */
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Logs unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_job_outputs_api_v1_workspaces__workspace_id__jobs__job_id__outputs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Job identifier */
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOutputListing"];
+                };
+            };
+            /** @description Outputs unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_job_output_api_v1_workspaces__workspace_id__jobs__job_id__outputs__output_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Job identifier */
+                job_id: string;
+                output_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Output not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_safe_mode_api_v1_system_safe_mode_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SafeModeStatus"];
+                };
+            };
+        };
+    };
+    update_safe_mode_api_v1_system_safe_mode_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SafeModeUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SafeModeStatus"];
                 };
             };
             /** @description Validation Error */

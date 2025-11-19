@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
 import clsx from "clsx";
 
 import { useSearchParams } from "@app/nav/urlState";
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
 import { useConfigsQuery } from "@shared/configs";
@@ -23,7 +23,8 @@ import { useFlattenedPages } from "@shared/api/pagination";
 import { createScopedStorage } from "@shared/storage";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import type { components, paths } from "@schema";
-import type { JobRecord, JobStatus } from "@shared/jobs";
+import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
+import { fetchJob, fetchJobOutputs, type JobOutputListing, type JobRecord, type JobStatus } from "@shared/jobs";
 
 import { Alert } from "@ui/Alert";
 import { Select } from "@ui/Select";
@@ -664,6 +665,7 @@ function useDocumentRunPreferences(workspaceId: string, documentId: string) {
         [documentId]: {
           configId: next.configId,
           configVersionId: next.configVersionId,
+          sheetNames: next.sheetNames && next.sheetNames.length > 0 ? [...next.sheetNames] : null,
         },
       });
     },
@@ -676,6 +678,7 @@ function useDocumentRunPreferences(workspaceId: string, documentId: string) {
 type DocumentRunPreferences = {
   readonly configId: string | null;
   readonly configVersionId: string | null;
+  readonly sheetNames: readonly string[] | null;
 };
 /* ------------------------ API helpers & small utilities ------------------------ */
 
@@ -759,13 +762,25 @@ function readRunPreferences(
   if (all && typeof all === "object" && documentId in all) {
     const entry = all[documentId];
     if (entry && typeof entry === "object") {
+      const legacySheetNames: string[] = [];
+      if ("sheetName" in entry && typeof (entry as { sheetName?: string | null }).sheetName === "string") {
+        legacySheetNames.push((entry as { sheetName?: string }).sheetName);
+      }
+      const providedSheetNames = Array.isArray((entry as { sheetNames?: unknown }).sheetNames)
+        ? ((entry as { sheetNames?: unknown }).sheetNames as unknown[]).filter(
+            (value): value is string => typeof value === "string" && value.length > 0,
+          )
+        : null;
+      const mergedSheetNames = providedSheetNames ?? (legacySheetNames.length > 0 ? legacySheetNames : null);
+
       return {
         configId: entry.configId ?? null,
         configVersionId: entry.configVersionId ?? null,
+        sheetNames: mergedSheetNames,
       };
     }
   }
-  return { configId: null, configVersionId: null };
+  return { configId: null, configVersionId: null, sheetNames: null };
 }
 /* ---------------------- Command header + filter rail ---------------------- */
 
@@ -1379,6 +1394,7 @@ function RunExtractionDrawerContent({
     workspaceId,
     documentRecord.id,
   );
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
   const allConfigs = useMemo(() => configsQuery.data?.items ?? [], [configsQuery.data]);
   const selectableConfigs = useMemo(
@@ -1419,6 +1435,73 @@ function RunExtractionDrawerContent({
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const safeModeDetail = safeModeMessage ?? DEFAULT_SAFE_MODE_MESSAGE;
+
+  const jobQuery = useQuery({
+    queryKey: ["job", workspaceId, activeJobId],
+    queryFn: ({ signal }) =>
+      activeJobId
+        ? fetchJob(workspaceId, activeJobId, signal)
+        : Promise.reject(new Error("No job selected")),
+    enabled: Boolean(activeJobId),
+    refetchInterval: (data) => {
+      if (!data) return false;
+      return data.status === "running" || data.status === "queued" ? 2000 : false;
+    },
+  });
+
+  const outputsQuery = useQuery({
+    queryKey: ["job-outputs", workspaceId, activeJobId],
+    queryFn: ({ signal }) =>
+      activeJobId
+        ? fetchJobOutputs(workspaceId, activeJobId, signal)
+        : Promise.reject(new Error("No job selected")),
+    enabled:
+      Boolean(activeJobId) &&
+      (jobQuery.data?.status === "succeeded" || jobQuery.data?.status === "failed"),
+    staleTime: 5_000,
+  });
+
+  const sheetQuery = useQuery<DocumentSheet[]>({
+    queryKey: ["document-sheets", workspaceId, documentRecord.id],
+    queryFn: ({ signal }) => fetchDocumentSheets(workspaceId, documentRecord.id, signal),
+    staleTime: 60_000,
+  });
+  const sheetOptions = sheetQuery.data ?? [];
+  const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!sheetOptions.length) {
+      setSelectedSheets([]);
+      return;
+    }
+    const preferred = (preferences.sheetNames ?? []).filter((sheetName) =>
+      sheetOptions.some((sheet) => sheet.name === sheetName),
+    );
+    const uniquePreferred = Array.from(new Set(preferred));
+    setSelectedSheets(uniquePreferred);
+  }, [sheetOptions, preferences.sheetNames]);
+
+  const normalizedSheetSelection = useMemo(
+    () =>
+      Array.from(
+        new Set(selectedSheets.filter((name) => sheetOptions.some((sheet) => sheet.name === name))),
+      ),
+    [selectedSheets, sheetOptions],
+  );
+
+  const toggleWorksheet = useCallback((name: string) => {
+    setSelectedSheets((current) =>
+      current.includes(name) ? current.filter((sheet) => sheet !== name) : [...current, name],
+    );
+  }, []);
+
+  const currentJob = jobQuery.data ?? null;
+  const jobStatus = currentJob?.status ?? null;
+  const jobRunning = jobStatus === "running" || jobStatus === "queued";
+  const downloadBase = activeJobId
+    ? `/api/v1/workspaces/${workspaceId}/jobs/${activeJobId}`
+    : null;
+  const outputFiles: JobOutputListing["files"] = outputsQuery.data?.files ?? [];
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -1464,7 +1547,12 @@ function RunExtractionDrawerContent({
 
   const hasConfigurations = selectableConfigs.length > 0;
   const runDisabled =
-    submitJob.isPending || safeModeLoading || safeModeEnabled || !hasConfigurations || !selectedVersionId;
+    submitJob.isPending ||
+    jobRunning ||
+    safeModeLoading ||
+    safeModeEnabled ||
+    !hasConfigurations ||
+    !selectedVersionId;
   const runButtonTitle = safeModeEnabled
     ? safeModeDetail
     : safeModeLoading
@@ -1480,16 +1568,23 @@ function RunExtractionDrawerContent({
       return;
     }
     setErrorMessage(null);
+    setActiveJobId(null);
+    const sheetList = normalizedSheetSelection;
     submitJob.mutate(
       {
         input_document_id: documentRecord.id,
         config_version_id: selectedVersionId,
+        options: sheetList.length ? { input_sheet_names: sheetList } : {},
       },
       {
         onSuccess: (job) => {
-          setPreferences({ configId: selectedConfig.config_id, configVersionId: selectedVersionId });
+          setPreferences({
+            configId: selectedConfig.config_id,
+            configVersionId: selectedVersionId,
+            sheetNames: sheetList.length ? sheetList : null,
+          });
           onRunSuccess?.(job);
-          onClose();
+          setActiveJobId(job.id);
         },
         onError: (error) => {
           const message = error instanceof Error ? error.message : "Unable to submit extraction job.";
@@ -1563,7 +1658,11 @@ function RunExtractionDrawerContent({
                   const versionId = target?.active_version?.config_version_id ?? "";
                   setSelectedVersionId(versionId);
                   if (target && versionId) {
-                    setPreferences({ configId: target.config_id, configVersionId: versionId });
+                    setPreferences({
+                      configId: target.config_id,
+                      configVersionId: versionId,
+                      sheetNames: normalizedSheetSelection.length ? normalizedSheetSelection : null,
+                    });
                   }
                 }}
                 disabled={submitJob.isPending}
@@ -1582,10 +1681,130 @@ function RunExtractionDrawerContent({
 
           <section className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Advanced options</p>
-            <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-              Sheet selection and advanced flags will appear here once the processor supports them.
-            </p>
+            {sheetQuery.isLoading ? (
+              <p className="text-xs text-slate-500">Loading worksheets…</p>
+            ) : sheetQuery.isError ? (
+              <Alert tone="danger">Unable to load worksheet metadata.</Alert>
+            ) : sheetOptions.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-slate-600">Worksheets</p>
+                    <p className="text-[11px] text-slate-500">
+                      {normalizedSheetSelection.length === 0
+                        ? "All worksheets will be processed by default. Select any subset to narrow the run."
+                        : `${normalizedSheetSelection.length.toLocaleString()} worksheet${
+                            normalizedSheetSelection.length === 1 ? "" : "s"
+                          } selected. Clear selections to process every sheet.`}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setSelectedSheets([])}
+                    disabled={submitJob.isPending}
+                  >
+                    Use all worksheets
+                  </Button>
+                </div>
+
+                <div className="max-h-48 space-y-2 overflow-auto rounded-md border border-slate-200 p-2">
+                  {sheetOptions.map((sheet) => {
+                    const checked = normalizedSheetSelection.includes(sheet.name);
+                    return (
+                      <label
+                        key={`${sheet.index}-${sheet.name}`}
+                        className="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-slate-100"
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          checked={checked}
+                          onChange={() => toggleWorksheet(sheet.name)}
+                        />
+                        <span className="flex-1 truncate">
+                          {sheet.name}
+                          {sheet.is_active ? " (active)" : ""}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                This document does not expose multiple worksheets, so ADE will ingest the uploaded file directly.
+              </p>
+            )}
           </section>
+
+          {activeJobId ? (
+            <section className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Latest run</p>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-slate-800" title={activeJobId}>
+                      Job {activeJobId}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Status: {jobStatus ?? "loading…"}
+                    </p>
+                  </div>
+                  {jobRunning ? <SpinnerIcon className="h-4 w-4 text-slate-500" /> : null}
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <a
+                    href={downloadBase ? `${downloadBase}/artifact` : undefined}
+                    className={clsx(
+                      "inline-flex items-center rounded border px-3 py-1 text-xs font-semibold transition",
+                      downloadBase && !jobRunning
+                        ? "border-slate-300 text-slate-700 hover:bg-slate-100"
+                        : "cursor-not-allowed border-slate-200 text-slate-400",
+                    )}
+                    aria-disabled={jobRunning || !downloadBase}
+                  >
+                    Download artifact
+                  </a>
+                  <a
+                    href={downloadBase ? `${downloadBase}/logs` : undefined}
+                    className={clsx(
+                      "inline-flex items-center rounded border px-3 py-1 text-xs font-semibold transition",
+                      downloadBase ? "border-slate-300 text-slate-700 hover:bg-slate-100" : "cursor-not-allowed border-slate-200 text-slate-400",
+                    )}
+                    aria-disabled={!downloadBase}
+                  >
+                    Download logs
+                  </a>
+                </div>
+
+                <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-xs font-semibold text-slate-700">Output files</p>
+                  {outputsQuery.isLoading ? (
+                    <p className="text-xs text-slate-500">Loading outputs…</p>
+                  ) : outputFiles.length > 0 ? (
+                    <ul className="mt-1 space-y-1 text-xs text-slate-700">
+                      {outputFiles.map((file) => (
+                        <li key={file.path} className="flex items-center justify-between gap-2 break-all rounded border border-slate-100 px-2 py-1">
+                          <a
+                            href={downloadBase ? `${downloadBase}/outputs/${file.path.split("/").map(encodeURIComponent).join("/")}` : undefined}
+                            className="text-emerald-700 hover:underline"
+                            aria-disabled={!downloadBase}
+                          >
+                            {file.path}
+                          </a>
+                          <span className="text-[11px] text-slate-500">{file.byte_size.toLocaleString()} bytes</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-slate-500">Outputs will appear here after the run completes.</p>
+                  )}
+                </div>
+              </div>
+            </section>
+          ) : null}
 
           {safeModeEnabled ? <Alert tone="warning">{safeModeDetail}</Alert> : null}
           {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}

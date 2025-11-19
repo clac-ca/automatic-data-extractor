@@ -1,9 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import clsx from "clsx";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { createPortal } from "react-dom";
 
 import { ActivityBar, type ActivityBarView } from "./components/ActivityBar";
-import { BottomPanel } from "./components/BottomPanel";
+import { BottomPanel, type WorkbenchRunSummary } from "./components/BottomPanel";
 import { EditorArea } from "./components/EditorArea";
 import { Explorer } from "./components/Explorer";
 import { Inspector } from "./components/Inspector";
@@ -30,9 +38,16 @@ import { createScopedStorage } from "@shared/storage";
 import type { ConfigBuilderConsole } from "@app/nav/urlState";
 import { ApiError } from "@shared/api";
 import { streamBuild } from "@shared/builds/api";
-import { streamRun } from "@shared/runs/api";
+import { fetchRunOutputs, streamRun, type RunOutputListing, type RunStreamOptions } from "@shared/runs/api";
+import type { RunStatus } from "@shared/runs/types";
+import type { components } from "@schema";
+import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
+import { client } from "@shared/api/client";
 import { describeBuildEvent, describeRunEvent, formatConsoleTimestamp } from "./utils/console";
 import { useNotifications, type NotificationIntent } from "@shared/notifications";
+import { Select } from "@ui/Select";
+import { Button } from "@ui/Button";
+import { Alert } from "@ui/Alert";
 
 const EXPLORER_LIMITS = { min: 200, max: 420 } as const;
 const INSPECTOR_LIMITS = { min: 260, max: 420 } as const;
@@ -76,6 +91,15 @@ type BuildTriggerOptions = {
 };
 
 type WorkbenchWindowState = "restored" | "maximized";
+
+type DocumentRecord = components["schemas"]["DocumentOut"];
+
+interface RunStreamMetadata {
+  readonly mode: "validation" | "extraction";
+  readonly documentId?: string;
+  readonly documentName?: string;
+  readonly sheetNames?: readonly string[];
+}
 
 interface WorkbenchProps {
   readonly workspaceId: string;
@@ -154,14 +178,24 @@ export function Workbench({
 
   const consoleStreamRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
-  const [activeStream, setActiveStream] = useState<null | {
-    readonly kind: "build" | "run";
-    readonly startedAt: string;
-    readonly metadata?: {
-      readonly force?: boolean;
-      readonly wait?: boolean;
-    };
-  }>(null);
+  type ActiveStream =
+    | {
+        readonly kind: "build";
+        readonly startedAt: string;
+        readonly metadata?: {
+          readonly force?: boolean;
+          readonly wait?: boolean;
+        };
+      }
+    | {
+        readonly kind: "run";
+        readonly startedAt: string;
+        readonly metadata?: RunStreamMetadata;
+      };
+  const [activeStream, setActiveStream] = useState<ActiveStream | null>(null);
+
+  const [latestRun, setLatestRun] = useState<WorkbenchRunSummary | null>(null);
+  const [runDialogOpen, setRunDialogOpen] = useState(false);
 
   const resetConsole = useCallback(
     (message: string) => {
@@ -616,75 +650,148 @@ export function Workbench({
     setFileId(activeId);
   }, [files.activeTabId, setFileId]);
 
-  const handleRunValidation = useCallback(() => {
-    if (
-      usingSeed ||
-      !tree ||
-      filesQuery.isLoading ||
-      filesQuery.isError ||
-      activeStream !== null ||
-      validateConfiguration.isPending
-    ) {
-      return;
-    }
-    if (!openConsole()) {
-      return;
-    }
+  const startRunStream = useCallback(
+    (options: RunStreamOptions, metadata: RunStreamMetadata) => {
+      if (
+        usingSeed ||
+        !tree ||
+        filesQuery.isLoading ||
+        filesQuery.isError ||
+        activeStream !== null
+      ) {
+        return null;
+      }
+      if (metadata.mode === "validation" && validateConfiguration.isPending) {
+        return null;
+      }
+      if (!openConsole()) {
+        return null;
+      }
 
-    const startedAt = new Date();
-    const startedIso = startedAt.toISOString();
-    setPane("console");
-    resetConsole("Starting ADE run (validate-only)…");
-    setValidationState((prev) => ({
-      ...prev,
-      status: "running",
-      lastRunAt: startedIso,
-      error: null,
-    }));
+      const startedAt = new Date();
+      const startedIso = startedAt.toISOString();
+      setPane("console");
+      resetConsole(
+        metadata.mode === "validation"
+          ? "Starting ADE run (validate-only)…"
+          : "Starting ADE extraction…",
+      );
+      if (metadata.mode === "validation") {
+        setValidationState((prev) => ({
+          ...prev,
+          status: "running",
+          lastRunAt: startedIso,
+          error: null,
+        }));
+      } else {
+        setLatestRun(null);
+      }
 
-    const controller = new AbortController();
-    consoleStreamRef.current?.abort();
-    consoleStreamRef.current = controller;
-    setActiveStream({ kind: "run", startedAt: startedIso });
+      const controller = new AbortController();
+      consoleStreamRef.current?.abort();
+      consoleStreamRef.current = controller;
+      setActiveStream({ kind: "run", startedAt: startedIso, metadata });
 
-    void (async () => {
-      try {
-        for await (const event of streamRun(configId, { validate_only: true }, controller.signal)) {
-          appendConsoleLine(describeRunEvent(event));
-          if (!isMountedRef.current) {
+      void (async () => {
+        let currentRunId: string | null = null;
+        try {
+          for await (const event of streamRun(configId, options, controller.signal)) {
+            appendConsoleLine(describeRunEvent(event));
+            if (!isMountedRef.current) {
+              return;
+            }
+            if (event.type === "run.created") {
+              currentRunId = event.run_id;
+            }
+            if (event.type === "run.completed") {
+              const notice =
+                event.status === "succeeded"
+                  ? "ADE run completed successfully."
+                  : event.status === "canceled"
+                    ? "ADE run canceled."
+                    : event.error_message?.trim() || "ADE run failed.";
+              const intent: NotificationIntent =
+                event.status === "succeeded"
+                  ? "success"
+                  : event.status === "canceled"
+                    ? "info"
+                    : "danger";
+              showConsoleBanner(notice, { intent });
+
+              if (metadata.mode === "extraction" && currentRunId) {
+                const downloadBase = `/api/v1/runs/${encodeURIComponent(currentRunId)}`;
+                setLatestRun({
+                  runId: currentRunId,
+                  status: event.status as RunStatus,
+                  downloadBase,
+                  documentName: metadata.documentName,
+                  sheetNames: metadata.sheetNames ?? [],
+                  outputs: [],
+                  outputsLoaded: false,
+                  error: null,
+                });
+                try {
+                  const listing = await fetchRunOutputs(currentRunId);
+                  setLatestRun((prev) =>
+                    prev && prev.runId === currentRunId
+                      ? { ...prev, outputs: listing.files, outputsLoaded: true }
+                      : prev,
+                  );
+                } catch (error) {
+                  const message =
+                    error instanceof Error ? error.message : "Unable to load run outputs.";
+                  setLatestRun((prev) =>
+                    prev && prev.runId === currentRunId
+                      ? { ...prev, outputsLoaded: true, error: message }
+                      : prev,
+                  );
+                }
+              }
+            }
+          }
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") {
             return;
           }
-          if (event.type === "run.completed") {
-            const notice =
-              event.status === "succeeded"
-                ? "ADE run completed successfully."
-                : event.status === "canceled"
-                  ? "ADE run canceled."
-                  : event.error_message?.trim() || "ADE run failed.";
-            const intent: NotificationIntent =
-              event.status === "succeeded"
-                ? "success"
-                : event.status === "canceled"
-                  ? "info"
-                  : "danger";
-            showConsoleBanner(notice, { intent });
+          pushConsoleError(error);
+        } finally {
+          if (consoleStreamRef.current === controller) {
+            consoleStreamRef.current = null;
+          }
+          if (isMountedRef.current) {
+            setActiveStream(null);
           }
         }
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          return;
-        }
-        pushConsoleError(error);
-      } finally {
-        if (consoleStreamRef.current === controller) {
-          consoleStreamRef.current = null;
-        }
-        if (isMountedRef.current) {
-          setActiveStream(null);
-        }
-      }
-    })();
+      })();
 
+      return startedIso;
+    },
+    [
+      usingSeed,
+      tree,
+      filesQuery.isLoading,
+      filesQuery.isError,
+      activeStream,
+      validateConfiguration.isPending,
+      openConsole,
+      setPane,
+      resetConsole,
+      setValidationState,
+      setLatestRun,
+      consoleStreamRef,
+      setActiveStream,
+      configId,
+      appendConsoleLine,
+      showConsoleBanner,
+      pushConsoleError,
+    ],
+  );
+
+  const handleRunValidation = useCallback(() => {
+    const startedIso = startRunStream({ validate_only: true }, { mode: "validation" });
+    if (!startedIso) {
+      return;
+    }
     validateConfiguration.mutate(undefined, {
       onSuccess(result) {
         const issues = result.issues ?? [];
@@ -712,23 +819,30 @@ export function Workbench({
         });
       },
     });
-  }, [
-    usingSeed,
-    tree,
-    filesQuery.isLoading,
-    filesQuery.isError,
-    activeStream,
-    validateConfiguration,
-    openConsole,
-    setPane,
-    resetConsole,
-    consoleStreamRef,
-    setActiveStream,
-    configId,
-    appendConsoleLine,
-    pushConsoleError,
-    showConsoleBanner,
-  ]);
+  }, [startRunStream, validateConfiguration, setValidationState]);
+
+  const handleRunExtraction = useCallback(
+    (selection: { documentId: string; documentName: string; sheetNames?: readonly string[] }) => {
+      const worksheetList = Array.from(new Set((selection.sheetNames ?? []).filter(Boolean)));
+      const started = startRunStream(
+        {
+          input_document_id: selection.documentId,
+          input_sheet_names: worksheetList.length ? worksheetList : undefined,
+          input_sheet_name: worksheetList.length === 1 ? worksheetList[0] : undefined,
+        },
+        {
+          mode: "extraction",
+          documentId: selection.documentId,
+          documentName: selection.documentName,
+          sheetNames: worksheetList,
+        },
+      );
+      if (started) {
+        setRunDialogOpen(false);
+      }
+    },
+    [startRunStream],
+  );
 
   const triggerBuild = useCallback(
     (options?: BuildTriggerOptions) => {
@@ -913,12 +1027,16 @@ export function Workbench({
     return () => window.removeEventListener("keydown", handler);
   }, [isMacPlatform, canSaveFiles, handleSaveActiveTab]);
 
+  const runStreamMetadata = activeStream?.kind === "run" ? activeStream.metadata : undefined;
   const isStreamingRun = activeStream?.kind === "run";
   const isStreamingBuild = activeStream?.kind === "build";
   const isStreamingAny = activeStream !== null;
 
+  const isStreamingExtraction = isStreamingRun && runStreamMetadata?.mode === "extraction";
+  const isStreamingValidationRun = isStreamingRun && runStreamMetadata?.mode !== "extraction";
+
   const isRunningValidation =
-    validationState.status === "running" || validateConfiguration.isPending || isStreamingRun;
+    validationState.status === "running" || validateConfiguration.isPending || isStreamingValidationRun;
   const canRunValidation =
     !usingSeed &&
     Boolean(tree) &&
@@ -927,6 +1045,10 @@ export function Workbench({
     !isStreamingAny &&
     !validateConfiguration.isPending &&
     validationState.status !== "running";
+
+  const isRunningExtraction = isStreamingExtraction;
+  const canRunExtraction =
+    !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !isStreamingAny;
 
   const isBuildingEnvironment = isStreamingBuild;
   const canBuildEnvironment =
@@ -1116,6 +1238,14 @@ export function Workbench({
         canRunValidation={canRunValidation}
         isRunningValidation={isRunningValidation}
         onRunValidation={handleRunValidation}
+        canRunExtraction={canRunExtraction}
+        isRunningExtraction={isRunningExtraction}
+        onRunExtraction={() => {
+          if (!canRunExtraction) {
+            return;
+          }
+          setRunDialogOpen(true);
+        }}
         explorerVisible={showExplorerPane}
         onToggleExplorer={handleToggleExplorer}
         consoleOpen={!outputCollapsed}
@@ -1256,6 +1386,7 @@ export function Workbench({
                 validation={validationState}
                 activePane={pane}
                 onPaneChange={setPane}
+                latestRun={latestRun}
               />
             </div>
           )}
@@ -1280,6 +1411,14 @@ export function Workbench({
         ) : null}
       </div>
       </div>
+      {runDialogOpen ? (
+        <RunExtractionDialog
+          open={runDialogOpen}
+          workspaceId={workspaceId}
+          onClose={() => setRunDialogOpen(false)}
+          onRun={handleRunExtraction}
+        />
+      ) : null}
       <ContextMenu
         open={Boolean(buildMenu)}
         position={buildMenu ?? undefined}
@@ -1343,6 +1482,9 @@ function WorkbenchChrome({
   canRunValidation,
   isRunningValidation,
   onRunValidation,
+  canRunExtraction,
+  isRunningExtraction,
+  onRunExtraction,
   explorerVisible,
   onToggleExplorer,
   consoleOpen,
@@ -1373,6 +1515,9 @@ function WorkbenchChrome({
   readonly canRunValidation: boolean;
   readonly isRunningValidation: boolean;
   readonly onRunValidation: () => void;
+  readonly canRunExtraction: boolean;
+  readonly isRunningExtraction: boolean;
+  readonly onRunExtraction: () => void;
   readonly explorerVisible: boolean;
   readonly onToggleExplorer: () => void;
   readonly consoleOpen: boolean;
@@ -1481,6 +1626,18 @@ function WorkbenchChrome({
           {isRunningValidation ? <SpinnerIcon /> : <RunIcon />}
           {isRunningValidation ? "Running…" : "Run validation"}
         </button>
+        <button
+          type="button"
+          onClick={onRunExtraction}
+          disabled={!canRunExtraction}
+          className={clsx(
+            "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
+            runButtonClass,
+          )}
+        >
+          {isRunningExtraction ? <SpinnerIcon /> : <RunIcon />}
+          {isRunningExtraction ? "Running…" : "Run extraction"}
+        </button>
         <div className="flex items-center gap-1">
           <ChromeIconButton
             ariaLabel={explorerVisible ? "Hide explorer" : "Show explorer"}
@@ -1533,6 +1690,233 @@ function WorkbenchChrome({
       </div>
     </div>
   );
+}
+
+interface RunExtractionDialogProps {
+  readonly open: boolean;
+  readonly workspaceId: string;
+  readonly onClose: () => void;
+  readonly onRun: (selection: {
+    documentId: string;
+    documentName: string;
+    sheetNames?: readonly string[];
+  }) => void;
+}
+
+function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractionDialogProps) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const documentsQuery = useQuery<DocumentRecord[]>({
+    queryKey: ["builder-documents", workspaceId],
+    queryFn: ({ signal }) => fetchRecentDocuments(workspaceId, signal),
+    staleTime: 60_000,
+  });
+  const documents = documentsQuery.data ?? [];
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
+  useEffect(() => {
+    if (!documents.length) {
+      setSelectedDocumentId("");
+      return;
+    }
+    setSelectedDocumentId((current) => {
+      if (current && documents.some((doc) => doc.id === current)) {
+        return current;
+      }
+      return documents[0]?.id ?? "";
+    });
+  }, [documents]);
+
+  const selectedDocument = documents.find((doc) => doc.id === selectedDocumentId) ?? null;
+  const sheetQuery = useQuery<DocumentSheet[]>({
+    queryKey: ["builder-document-sheets", workspaceId, selectedDocumentId],
+    queryFn: ({ signal }) => fetchDocumentSheets(workspaceId, selectedDocumentId, signal),
+    enabled: Boolean(selectedDocumentId),
+    staleTime: 60_000,
+  });
+  const sheetOptions = sheetQuery.data ?? [];
+  const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
+  useEffect(() => {
+    if (!sheetOptions.length) {
+      setSelectedSheets([]);
+      return;
+    }
+    setSelectedSheets((current) =>
+      current.filter((name) => sheetOptions.some((sheet) => sheet.name === name)),
+    );
+  }, [sheetOptions]);
+
+  const normalizedSheetSelection = useMemo(
+    () =>
+      Array.from(
+        new Set(selectedSheets.filter((name) => sheetOptions.some((sheet) => sheet.name === name))),
+      ),
+    [selectedSheets, sheetOptions],
+  );
+
+  const toggleWorksheet = useCallback((name: string) => {
+    setSelectedSheets((current) =>
+      current.includes(name) ? current.filter((sheet) => sheet !== name) : [...current, name],
+    );
+  }, []);
+
+  if (!open) {
+    return null;
+  }
+
+  const runDisabled = !selectedDocument || documentsQuery.isLoading || documentsQuery.isError;
+  const sheetsAvailable = sheetOptions.length > 0;
+
+  const content = (
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/60 px-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-2xl"
+      >
+        <header className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Select a document</h2>
+            <p className="text-sm text-slate-500">
+              Choose a workspace document and optional worksheet before running the extractor.
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </header>
+
+        {documentsQuery.isError ? (
+          <Alert tone="danger">Unable to load documents. Try again later.</Alert>
+        ) : documentsQuery.isLoading ? (
+          <p className="text-sm text-slate-500">Loading documents…</p>
+        ) : documents.length === 0 ? (
+          <p className="text-sm text-slate-500">Upload a document in the workspace to run the extractor.</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700" htmlFor="builder-run-document-select">
+                Document
+              </label>
+              <Select
+                id="builder-run-document-select"
+                value={selectedDocumentId}
+                onChange={(event) => setSelectedDocumentId(event.target.value)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              >
+                {documents.map((document) => (
+                  <option key={document.id} value={document.id}>
+                    {document.name}
+                  </option>
+                ))}
+              </Select>
+              {selectedDocument ? (
+                <p className="text-xs text-slate-500">
+                  Uploaded {formatDocumentTimestamp(selectedDocument.created_at)} ·
+                  {" "}
+                  {(selectedDocument.byte_size ?? 0).toLocaleString()} bytes
+                </p>
+              ) : null}
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-slate-700">Worksheet</p>
+              {sheetQuery.isError ? (
+                <Alert tone="danger">Unable to load worksheets.</Alert>
+              ) : sheetQuery.isLoading ? (
+                <p className="text-sm text-slate-500">Loading worksheets…</p>
+              ) : sheetsAvailable ? (
+                <div className="space-y-3 rounded-lg border border-slate-200 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-slate-700">Worksheets</p>
+                      <p className="text-xs text-slate-500">
+                        {normalizedSheetSelection.length === 0
+                          ? "All worksheets will be processed by default. Select specific sheets to narrow the run."
+                          : `${normalizedSheetSelection.length.toLocaleString()} worksheet${
+                              normalizedSheetSelection.length === 1 ? "" : "s"
+                            } selected.`}
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="xs" onClick={() => setSelectedSheets([])}>
+                      Use all worksheets
+                    </Button>
+                  </div>
+
+                  <div className="max-h-48 space-y-2 overflow-auto rounded-md border border-slate-200 p-2">
+                    {sheetOptions.map((sheet) => {
+                      const checked = normalizedSheetSelection.includes(sheet.name);
+                      return (
+                        <label
+                          key={`${sheet.index}-${sheet.name}`}
+                          className="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-slate-100"
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                            checked={checked}
+                            onChange={() => toggleWorksheet(sheet.name)}
+                          />
+                          <span className="flex-1 truncate">
+                            {sheet.name}
+                            {sheet.is_active ? " (active)" : ""}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">This file will be ingested directly.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        <footer className="mt-6 flex items-center justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+              onClick={() => {
+                if (!selectedDocument) {
+                  return;
+                }
+                onRun({
+                  documentId: selectedDocument.id,
+                  documentName: selectedDocument.name,
+                  sheetNames:
+                    normalizedSheetSelection.length > 0 ? normalizedSheetSelection : undefined,
+                });
+              }}
+              disabled={runDisabled}
+            >
+              Run extraction
+          </Button>
+        </footer>
+      </div>
+    </div>
+  );
+
+  return typeof document === "undefined" ? null : createPortal(content, document.body);
+}
+
+async function fetchRecentDocuments(workspaceId: string, signal?: AbortSignal): Promise<DocumentRecord[]> {
+  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents", {
+    params: { path: { workspace_id: workspaceId }, query: { sort: "-created_at", page_size: 50 } },
+    signal,
+  });
+  return ((data as components["schemas"]["DocumentPage"] | undefined)?.items ?? []) as DocumentRecord[];
+}
+
+function formatDocumentTimestamp(value: string | null | undefined): string {
+  if (!value) {
+    return "unknown";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString();
 }
 
 function ChromeIconButton({
