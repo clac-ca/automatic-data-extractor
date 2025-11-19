@@ -52,7 +52,10 @@ def run_start(
 
 
 def register(app: typer.Typer) -> None:
-    @app.command(name="start", help="Start the backend server without autoreload.")
+    @app.command(
+        name="start",
+        help="Serve backend in production mode at http://0.0.0.0:8000; auto-builds static assets if missing; use --force-build to rebuild.",
+    )
     def start(
         port: int = typer.Option(
             8000,

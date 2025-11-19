@@ -6,7 +6,10 @@ import typer
 
 from ade_tools.commands import register_all
 
-app = typer.Typer(add_completion=False, help="ADE orchestration CLI (backend + frontend).")
+app = typer.Typer(
+    add_completion=False,
+    help="ADE orchestration CLI for ADE backend/frontend dev, builds, and local Docker helpers.",
+)
 
 register_all(app)
 

@@ -16,7 +16,7 @@ def run_tests(
     frontend_only: bool = False,
 ) -> None:
     """
-    Run backend and/or frontend tests.
+    Run backend/frontend tests; flags: --backend-only, --frontend-only, --no-backend, --no-frontend.
 
     By default runs both backend (pytest) and frontend (npm test, if defined).
     Use --backend-only / --frontend-only to narrow the scope.
@@ -76,7 +76,10 @@ def run_tests(
 
 
 def register(app: typer.Typer) -> None:
-    @app.command(name="test", help="Run backend and/or frontend tests.")
+    @app.command(
+        name="test",
+        help="Run backend/frontend tests; flags: --backend-only, --frontend-only, --no-backend, --no-frontend.",
+    )
     def test(
         backend: bool = typer.Option(
             True,

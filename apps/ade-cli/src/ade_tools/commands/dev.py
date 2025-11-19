@@ -19,11 +19,11 @@ def run_dev(
     frontend_port: int | None = None,
 ) -> None:
     """
-    Run backend and/or frontend dev servers.
+    Run FastAPI and Vite dev servers with sensible defaults.
 
     By default runs both:
-      - Backend (FastAPI + uvicorn --reload)
-      - Frontend (Vite dev server)
+      - Backend (FastAPI + uvicorn --reload) → http://localhost:8001
+      - Frontend (Vite dev server)          → http://localhost:8000
 
     Port behavior:
       - If both backend and frontend run:
@@ -140,7 +140,9 @@ def run_dev(
 
 
 def register(app: typer.Typer) -> None:
-    @app.command(help="Run backend and/or frontend dev servers.")
+    @app.command(
+        help="Run dev servers: FastAPI http://localhost:8001 and Vite http://localhost:8000; flags: --backend-only, --frontend-only, --backend-port <p>, --frontend-port <p>.",
+    )
     def dev(
         backend: bool = typer.Option(
             True,

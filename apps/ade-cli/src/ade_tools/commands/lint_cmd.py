@@ -42,7 +42,7 @@ def run_lint(scope: str) -> None:
 
 
 def lint_command(scope: str = "all") -> None:
-    """Run linters."""
+    """Run backend ruff/mypy and frontend eslint; scope with --scope backend|frontend|all."""
 
     run_lint(scope)
 

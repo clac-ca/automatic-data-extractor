@@ -31,7 +31,7 @@ Once dependencies are installed, run `ade dev` to start backend + frontend dev s
 
 
 def run_setup() -> None:
-    """Print developer setup instructions (no automatic installs)."""
+    """Show manual venv + editable install instructions (no automatic installs)."""
 
     common.refresh_paths()
     typer.echo(SETUP_INSTRUCTIONS.strip())

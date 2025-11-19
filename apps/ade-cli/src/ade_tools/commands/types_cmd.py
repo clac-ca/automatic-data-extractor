@@ -11,7 +11,7 @@ from ade_tools.commands import common
 
 
 def run_types() -> None:
-    """Generate backend OpenAPI schema and frontend TypeScript types."""
+    """Generate OpenAPI JSON and TypeScript types into apps/ade-web/src/generated-types/openapi.d.ts."""
 
     common.refresh_paths()
     common.ensure_backend_dir()
