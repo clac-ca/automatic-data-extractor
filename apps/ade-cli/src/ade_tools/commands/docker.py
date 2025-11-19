@@ -28,7 +28,8 @@ def docker_up(
 ) -> None:
     """Start the ADE stack via docker compose."""
     common.refresh_paths()
-    cmd = ["docker", "compose", "up"]
+    common.ensure_compose_file()
+    cmd = ["docker", "compose", "-f", str(common.COMPOSE_FILE), "up"]
     if build:
         cmd.append("--build")
     if detach:
@@ -47,7 +48,8 @@ def docker_down(
 ) -> None:
     """Stop the ADE stack and optionally remove volumes."""
     common.refresh_paths()
-    cmd = ["docker", "compose", "down"]
+    common.ensure_compose_file()
+    cmd = ["docker", "compose", "-f", str(common.COMPOSE_FILE), "down"]
     if volumes:
         cmd.append("--volumes")
     common.run(cmd, cwd=common.REPO_ROOT)
@@ -73,7 +75,8 @@ def docker_logs(
 ) -> None:
     """Tail logs for the ADE stack, optionally for a single service."""
     common.refresh_paths()
-    cmd = ["docker", "compose", "logs", "--tail", str(tail)]
+    common.ensure_compose_file()
+    cmd = ["docker", "compose", "-f", str(common.COMPOSE_FILE), "logs", "--tail", str(tail)]
     if follow:
         cmd.append("-f")
     if service:
