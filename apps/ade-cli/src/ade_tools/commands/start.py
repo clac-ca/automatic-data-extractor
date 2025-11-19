@@ -22,7 +22,7 @@ def run_start(
     common.ensure_backend_dir()
     common.require_python_module(
         "ade_api",
-        "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e packages/ade-schemas -e apps/ade-engine -e apps/ade-api`).",
+        "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
     )
 
     static_dir = common.BACKEND_SRC / "web" / "static"

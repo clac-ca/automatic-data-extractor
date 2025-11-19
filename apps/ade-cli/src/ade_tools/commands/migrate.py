@@ -16,7 +16,7 @@ def run_migrate(revision: str = "head") -> None:
     common.ensure_backend_dir()
     common.require_python_module(
         "alembic",
-        "Install backend dependencies (e.g., `pip install -e apps/ade-cli -e packages/ade-schemas -e apps/ade-engine -e apps/ade-api`).",
+        "Install backend dependencies (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
     )
     alembic_ini = common.BACKEND_DIR / "alembic.ini"
     common.run(

@@ -42,8 +42,7 @@ automatic-data-extractor/
 │     ├─ package.json
 │     └─ src/…
 ├─ packages/
-│  ├─ ade-engine/         # Runtime: ade_engine
-│  └─ ade-schemas/        # Shared schemas: ade_schemas
+│  └─ ade-engine/         # Runtime: ade_engine (bundled manifest + telemetry schemas)
 ├─ tools/
 │  └─ ade-cli/            # Python orchestration CLI (console script: ade)
 ├─ examples/              # Sample inputs/outputs
@@ -124,7 +123,6 @@ pip install -U pip setuptools wheel
 
 # Install ADE backend components in editable mode
 pip install -e apps/ade-cli       # ADE CLI (console entrypoint: `ade`)
-pip install -e packages/ade-schemas
 pip install -e apps/ade-engine
 pip install -e apps/ade-api
 
@@ -157,7 +155,6 @@ python -m venv .venv
 
 pip install -U pip setuptools wheel
 pip install -e tools/ade-cli
-pip install -e packages/ade-schemas
 pip install -e packages/ade-engine
 pip install -e apps/ade-api
 

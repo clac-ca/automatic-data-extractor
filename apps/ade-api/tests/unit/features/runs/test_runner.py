@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from ade_schemas import ADE_TELEMETRY_EVENT_SCHEMA
+from ade_engine.schemas import ADE_TELEMETRY_EVENT_SCHEMA
 
 from ade_api.features.runs.runner import ADEProcessRunner, StdoutFrame
 

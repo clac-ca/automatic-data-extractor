@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from types import ModuleType
 from typing import Any, Callable, Mapping, Sequence
 
-from ade_schemas.manifest import ColumnMeta
+from ade_engine.schemas.manifest import ColumnMeta
 
 
 @dataclass(slots=True)

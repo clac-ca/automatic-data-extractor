@@ -10,7 +10,7 @@ from typing import Any, Mapping
 
 from jsonschema import Draft202012Validator, ValidationError
 
-from ade_schemas import ManifestContext, ManifestV1
+from ade_engine.schemas import ManifestContext, ManifestV1
 
 
 class ManifestNotFoundError(RuntimeError):
@@ -108,7 +108,7 @@ def resolve_jobs_root(
 
 
 def _load_manifest_schema() -> dict[str, Any]:
-    schema_resource = resources.files("ade_schemas") / "manifest.v1.schema.json"
+    schema_resource = resources.files("ade_engine.schemas") / "manifest.v1.schema.json"
     return json.loads(schema_resource.read_text(encoding="utf-8"))
 
 
