@@ -2,7 +2,7 @@
 """
 Build a proof-of-concept ADE runtime environment using the backend builder.
 
-This script is a thin CLI wrapper around ``apps.api.app.features.builds.builder``
+This script is a thin CLI wrapper around ``ade_api.features.builds.builder``
 so the local workflow matches backend behavior (metadata, layout, pip flags).
 Storage paths default to ``ADE_VENVS_DIR``/``ADE_PIP_CACHE_DIR`` (falling back to
 the repo's ./data layout) so you can share caches with the API service.
@@ -22,13 +22,16 @@ from pathlib import Path
 from uuid import uuid4
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "apps" / "ade-api" / "src"))
 sys.path.insert(0, str(REPO_ROOT))
 
-from apps.api.app.features.builds.builder import VirtualEnvironmentBuilder
-from apps.api.app.features.builds.exceptions import BuildExecutionError
-from apps.api.app.settings import DEFAULT_PIP_CACHE_DIR, DEFAULT_VENVS_DIR
+from ade_api.features.builds.builder import VirtualEnvironmentBuilder
+from ade_api.features.builds.exceptions import BuildExecutionError
+from ade_api.settings import DEFAULT_PIP_CACHE_DIR, DEFAULT_VENVS_DIR
 
-TEMPLATE_CONFIG = REPO_ROOT / "apps" / "api" / "app" / "templates" / "config_packages" / "default"
+TEMPLATE_CONFIG = (
+    REPO_ROOT / "apps" / "ade-api" / "src" / "ade_api" / "templates" / "config_packages" / "default"
+)
 LOCAL_ENGINE = REPO_ROOT / "packages" / "ade-engine"
 DEFAULT_TIMEOUT = 600.0
 ENV_VENVS_DIR = "ADE_VENVS_DIR"

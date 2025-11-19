@@ -20,61 +20,39 @@ The ADE monorepo brings together four cooperating layers:
 ```text
 automatic-data-extractor/
 ├─ apps/                                   # Deployable applications (things you run/ship)
-│  ├─ api/                                 # FastAPI service (serves /api + static SPA)
-│  │  ├─ app/
-│  │  │  ├─ features/                      # domain-first modules; each owns its router/service/repo/schemas
-│  │  │  │  ├─ auth/
-│  │  │  │  │  ├─ router.py                # routes for this feature (mounted by api/router.py)
-│  │  │  │  │  ├─ service.py               # business logic for auth
-│  │  │  │  │  ├─ repository.py            # DB persistence for auth
-│  │  │  │  │  ├─ schemas.py               # Pydantic request/response models
-│  │  │  │  ├─ etc..
-│  │  │  ├─ scripts/                       #
-│  │  │  ├─ shared/                        # cross-cutting infra used by all features
-│  │  │  │  ├─ dependency.py               # shared FastAPI dependencies (auth, RBAC, services)
-│  │  │  ├─ web/static/                    # ← SPA build copied here at image build time (DO NOT COMMIT)
-│  │  │  ├─ templates/                     # optional: server-rendered templates/emails
-│  │  │  │  └─ config_packages/            # bundled starter ADE config packages
-│  │  │  │     ├─ default/
-│  │  │  │     │  ├─ pyproject.toml
-│  │  │  │     │  └─ src/ade_config/
-│  │  │  │     │     ├─ manifest.json               # read via importlib.resources
-│  │  │  │     │     ├─ column_detectors/           # detect → transform (opt) → validate (opt)
-│  │  │  │     │     ├─ row_detectors/              # header/data row heuristics
-│  │  │  │     │     └─ hooks/                      # on_job_start.py/after_mapping.py/before_save.py/on_job_end.py
-│  │  │  │     └─ <other-template>/
-│  │  │  │        ├─ manifest.json
-│  │  │  │        └─ src/ade_config/...
-│  │  │  └─ main.py                        # mounts: /api routers; serves / from ./web/static
+│  ├─ ade-api/                             # FastAPI service (serves /api + static SPA)
+│  │  ├─ pyproject.toml
+│  │  ├─ src/ade_api/                      # settings, routers, features, shared modules, templates, web assets
 │  │  ├─ migrations/                       # Alembic migration scripts
-│  │  ├─ alembic.ini                       # Alembic config
-│  │  ├─ pyproject.toml                    # Python project for the API app
 │  │  └─ tests/                            # API service tests
-│  │     ├─ unit/                          # fast, isolated tests (services, schemas)
-│  │     ├─ integration/                   # DB, repositories, API routes with test app
-│  │     └─ e2e/                           # optional contract/smoke tests against a running instance
-│  └─ web/                                 # React SPA (Vite)
+│  └─ ade-web/                             # React SPA (Vite)
 │     ├─ src/                              # routes, components, features
 │     ├─ public/                           # static public assets
 │     ├─ package.json
 │     └─ vite.config.ts
 │
 ├─ packages/                               # Reusable libraries (imported by apps)
-│  └─ ade-engine/                          # installable Python package: ade_engine
+│  ├─ ade-engine/                          # installable Python package: ade_engine
+│  │  ├─ pyproject.toml
+│  │  ├─ src/ade_engine/                   # engine runtime, IO, pipeline, hooks integration
+│  │  └─ tests/                            # engine unit tests
+│  └─ ade-schemas/                         # installable package: ade_schemas
 │     ├─ pyproject.toml
-│     ├─ src/ade_engine/                   # engine runtime, IO, pipeline, hooks integration
-│     └─ tests/                            # engine unit tests
+│     └─ src/ade_schemas/
 │
+├─ tools/                                   # Python orchestration CLI (console script: ade)
+│  └─ ade-cli/
+│     ├─ pyproject.toml
+│     └─ src/ade_tools/
 ├─ examples/                                # sample inputs/outputs for docs/tests
 ├─ docs/                                    # Developer Guide, HOWTOs, operations runbooks
-├─ scripts/                                 # helper scripts (seed data, local tools, etc.)
+├─ scripts/                                 # helper scripts (legacy node helpers, etc.)
 │
 ├─ infra/                                   # deployment infra (container, compose, k8s, IaC)
 │  ├─ docker/
-│  │  └─ api.Dockerfile                     # multi-stage: build web → copy dist → apps/api/app/web/static
+│  │  └─ api.Dockerfile                     # multi-stage: build web → copy dist → apps/ade-api/src/ade_api/web/static
 │  └─ compose.yaml                          # optional: local prod-style run
 │
-├─ Makefile                                 # friendly entrypoints (setup/dev/build/run)
 ├─ .env.example                             # documented env vars for local/dev
 ├─ .editorconfig
 ├─ .pre-commit-config.yaml
@@ -82,7 +60,7 @@ automatic-data-extractor/
 └─ .github/workflows/                       # CI: lint, test, build, publish
 ```
 
-Bundled ADE config templates now live under `apps/api/app/templates/config_packages/` and ship with the backend package.
+Bundled ADE config templates now live under `apps/ade-api/src/ade_api/templates/config_packages/` and ship with the backend package.
 
 Everything ADE produces (config_packages, venvs, jobs, logs, cache, etc.) is persisted under `./data`. Individual subdirectories can be overridden via environment variables (`ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_JOBS_DIR`, etc.), but by default they are organized as subfolders under the data root. In production, this folder is typically mounted to an external file share so it persists across restarts.
 
@@ -304,7 +282,7 @@ You can exercise the complete path without the frontend. Copy the template to cr
 ```bash
 # 1) Create a per-config virtual environment and install engine + config (production installs)
 python -m venv data/.venv/<config_id>
-data/.venv/<config_id>/bin/pip install packages/ade-engine/
+data/.venv/<config_id>/bin/pip install apps/ade-engine/
 data/.venv/<config_id>/bin/pip install data/config_packages/<config_id>/
 data/.venv/<config_id>/bin/pip freeze > data/.venv/<config_id>/ade-runtime/packages.txt
 

@@ -49,7 +49,7 @@ jobs:
               r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
           )
 
-          TARGET_FILE = "apps/api/pyproject.toml"
+          TARGET_FILE = "apps/ade-api/pyproject.toml"
 
           def version_for_ref(ref: str) -> str:
               try:

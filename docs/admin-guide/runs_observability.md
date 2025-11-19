@@ -43,7 +43,7 @@ non-streaming endpoints:
 
 When the API is unavailable you can read the SQLite/PostgreSQL tables
 directly. The table layout matches the SQLAlchemy models in
-`apps/api/app/features/runs/models.py`.
+`apps/ade-api/src/ade_api/features/runs/models.py`.
 
 ```sql
 SELECT id, status, exit_code, started_at, finished_at
@@ -66,7 +66,7 @@ ORDER BY id ASC;
 ## 4. CLI and automation follow-ups
 
 The repository does not yet surface runs through the developer tooling
-(`npm run workpackage`, `scripts/npm-*.mjs`). Track ADE-CLI-11 to add
+(`ade workpackage`, `scripts/npm-*.mjs`). Track ADE-CLI-11 to add
 `scripts/npm-runs.mjs` with helpers for `runs:list`, `runs:logs`, and
 `runs:tail`. Update this guide once the commands land so on-call
 engineers can rely on them instead of raw HTTP calls.
@@ -86,7 +86,7 @@ environment preparation:
    `/api/v1/builds/{build_id}/logs` for buffered output (supports `after_id`).
 3. Database fallbacks mirror runs: inspect the `builds` and `build_logs`
    tables if the API is unavailable. See
-   `apps/api/app/features/builds/models.py` for column definitions.
+   `apps/ade-api/src/ade_api/features/builds/models.py` for column definitions.
 
 Refer to `docs/ade_builds_api_spec.md` for the full schema/event catalog and
 the decision log in `docs/workpackages/WP12_ade_runs.md` for current

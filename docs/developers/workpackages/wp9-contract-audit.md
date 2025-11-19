@@ -8,7 +8,7 @@ Generated on `2025-11-11` to capture the current contract state before the WP9 s
 
 Legend: **Base** indicates whether the DTO currently extends `BaseSchema` or raw `BaseModel`. **ID type** calls out whether ULIDs are strongly typed. **Aliases / wire names** lists any non-canonical field exposure. **Issues / notes** summarizes why the DTO is in scope. **Target** is the proposed rename (per work package).
 
-### Documents (`apps/api/app/features/documents/schemas.py`)
+### Documents (`apps/ade-api/src/ade_api/features/documents/schemas.py`)
 
 | DTO | Base | ID type | Aliases / wire names | Enum fields | Issues / notes | Target |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -16,7 +16,7 @@ Legend: **Base** indicates whether the DTO currently extends `BaseSchema` or raw
 | `DocumentRecord` | `BaseSchema` | `document_id: ULIDStr` alias ↔ `id`; `workspace_id: ULIDStr` | `name` alias ↔ `original_filename`; `metadata` alias ↔ `attributes`; `deleted_by` alias ↔ `deleted_by_user_id`; `tags` alias ↔ `tag_values`; `uploader` alias ↔ `uploaded_by_user` | `DocumentStatus`, `DocumentSource` | Multiple permanent aliases, `document_id` wire name not canonical, `name` vs `original_filename` mismatch. | `DocumentOut` |
 | `DocumentListResponse` | `Page[DocumentRecord]` (Page uses `BaseModel`) | IDs wrapped via nested DTO | N/A | N/A | Depends on `Page` envelope; must inherit the unified base. | `Page[DocumentOut]` |
 
-### Users (`apps/api/app/features/users/schemas.py`)
+### Users (`apps/ade-api/src/ade_api/features/users/schemas.py`)
 
 | DTO | Base | ID type | Aliases / wire names | Enum fields | Issues / notes | Target |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -24,7 +24,7 @@ Legend: **Base** indicates whether the DTO currently extends `BaseSchema` or raw
 | `UserSummary` | `BaseSchema` | inherits `UserProfile` | inherits | N/A | Could collapse into `UserOut` with additional timestamps. | `UserOut` |
 | `UserListResponse` | `Page[UserSummary]` (`BaseModel`) | inherits | N/A | Page envelope not on BaseSchema. | `Page[UserOut]` |
 
-### Workspaces (`apps/api/app/features/workspaces/schemas.py`)
+### Workspaces (`apps/ade-api/src/ade_api/features/workspaces/schemas.py`)
 
 | DTO | Base | ID type | Aliases / wire names | Issues / notes | Target |
 | --- | --- | --- | --- | --- | --- |
@@ -36,7 +36,7 @@ Legend: **Base** indicates whether the DTO currently extends `BaseSchema` or raw
 | `WorkspaceMember` | `BaseSchema` | `workspace_membership_id: str` alias ↔ `id`; nested `UserProfile` | Non-canonical alias; nested DTO to be renamed. | `WorkspaceMemberOut` |
 | `WorkspaceDefaultSelection` | `BaseSchema` | `workspace_id: str` | N/A | Should rename to `WorkspaceDefaultSelectionOut`, adopt ULID alias. | `WorkspaceDefaultSelectionOut` |
 
-### Roles & RBAC (`apps/api/app/features/roles/schemas.py`)
+### Roles & RBAC (`apps/ade-api/src/ade_api/features/roles/schemas.py`)
 
 | DTO | Base | ID type | Aliases / wire names | Enum fields | Issues / notes | Target |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -49,7 +49,7 @@ Legend: **Base** indicates whether the DTO currently extends `BaseSchema` or raw
 | `EffectivePermissionsResponse` | `BaseSchema` | workspace_id str | N/A | `workspace_id` optional but raw str. | keep but adopt enums/id aliasing. |
 | `PermissionCheckRequest/Response` | `BaseSchema` | `workspace_id` raw str | N/A | Keep but enforces ULID. | same names |
 
-### Auth & API keys (`apps/api/app/features/auth/schemas.py`)
+### Auth & API keys (`apps/ade-api/src/ade_api/features/auth/schemas.py`)
 
 | DTO | Base | ID type | Notes | Target rename |
 | --- | --- | --- | --- | --- |
@@ -60,7 +60,7 @@ Legend: **Base** indicates whether the DTO currently extends `BaseSchema` or raw
 | `APIKeyIssueResponse` | `BaseSchema` | `principal_id: str` | `principal_type` literal; should align with enum + rename to `APIKeyIssueOut`. | `APIKeyIssueOut` |
 | `APIKeySummary` | `BaseSchema` | `api_key_id: str` etc. | Response used for `/api-keys` list; rename to `APIKeyOut`, adopt pagination. | `APIKeyOut` |
 
-### Configurations & File Tree (`apps/api/app/features/configs/schemas.py`)
+### Configurations & File Tree (`apps/ade-api/src/ade_api/features/configs/schemas.py`)
 
 All DTOs currently extend raw `BaseModel` with bespoke `ConfigDict`s. None inherit `BaseSchema`, meaning inconsistent defaults and `extra="ignore"` behaviour.
 
@@ -75,7 +75,7 @@ Key inventory:
 | `ConfigurationActivateRequest` | `BaseModel` | bool flag; should land on base. | keep |
 | `File*` DTOs (`FileEntry`, `FileListing`, etc.) | `BaseModel` | Several nullable fields (`mtime`, `etag`, `content_type`, `has_children`), rename `FileEntry` fields per spec; `FileRenameResponse` exports `src`/`dest` aliasing `from`/`to`. | keep names but tighten requirements |
 
-### Builds (`apps/api/app/features/builds/schemas.py`)
+### Builds (`apps/ade-api/src/ade_api/features/builds/schemas.py`)
 
 | DTO | Base | Issues / notes |
 | --- | --- | --- |
@@ -83,20 +83,20 @@ Key inventory:
 | `BuildEnsureRequest` | `BaseModel` (`extra="forbid"`) | Should inherit `BaseSchema` so defaults consistent. |
 | `BuildEnsureResponse` | `BaseModel` | Implements custom `model_dump` to exclude `None`; unify via base + `exclude_none`. |
 
-### Jobs (`apps/api/app/features/jobs/schemas.py`)
+### Jobs (`apps/ade-api/src/ade_api/features/jobs/schemas.py`)
 
 Single `JobPlaceholder(BaseModel)` with `id: str`. Needs real DTO or removal.
 
-### Shared pagination (`apps/api/app/shared/pagination.py`)
+### Shared pagination (`apps/ade-api/src/ade_api/shared/pagination.py`)
 
 `PageParams` and `Page` inherit `BaseModel`. `Page` exposes `{items,page,page_size,has_next,has_previous,total}`; lacks `count`/`next_token`. Should move to unified base + align envelope spec.
 
 ### Other cross-cutting items
 
-- `BaseSchema` config ( `apps/api/app/shared/core/schema.py` ) currently sets `extra="ignore"` and `use_enum_values=True`. WP9 requires `extra="forbid"`, `from_attributes=True`, `populate_by_name=True`, and default `model_dump(exclude_none=True)` semantics without overriding `use_enum_values`.
+- `BaseSchema` config ( `apps/ade-api/src/ade_api/shared/core/schema.py` ) currently sets `extra="ignore"` and `use_enum_values=True`. WP9 requires `extra="forbid"`, `from_attributes=True`, `populate_by_name=True`, and default `model_dump(exclude_none=True)` semantics without overriding `use_enum_values`.
 - `ErrorMessage` schema is the shared error envelope; returns `{"detail": ...}` which conflicts with the desired `ProblemDetail`.
-- `ULIDStr` alias is defined only inside `apps/api/app/features/documents/filters.py` and not exported for other modules.
-- `Workspace.settings` (`apps/api/app/features/workspaces/models.py:15-23`) uses plain JSON without `MutableDict`, so in-place mutations are not tracked.
+- `ULIDStr` alias is defined only inside `apps/ade-api/src/ade_api/features/documents/filters.py` and not exported for other modules.
+- `Workspace.settings` (`apps/ade-api/src/ade_api/features/workspaces/models.py:15-23`) uses plain JSON without `MutableDict`, so in-place mutations are not tracked.
 
 ---
 
@@ -104,9 +104,9 @@ Single `JobPlaceholder(BaseModel)` with `id: str`. Needs real DTO or removal.
 
 | Concept | Current implementation | Current values / source | Target Enum & usage | Notes |
 | --- | --- | --- | --- | --- |
-| `Configuration.status` | Plain `String(20)` column + string comparisons in `service.py` (`draft`, `active`, `inactive`) | `apps/api/app/features/configs/models.py:25-36` | New `ConfigurationStatus(str, Enum)` (likely `draft`, `published`, `archived`) used in ORM column (`Enum(..., native_enum=False)`) and every schema field. | Need migration to reconcile `active` vs `published`. |
-| `Build.status` | Column stored as `String` w/ `CheckConstraint`; Python `BuildStatus` Enum already exists but not enforced in DB layer. | `apps/api/app/features/builds/models.py:20-78` | Reuse `BuildStatus` for SQLAlchemy `Enum` + Pydantic field; ensure `Page` etc. emit string enums. | Replace raw `Mapped[str]` with `Mapped[BuildStatus]`. |
-| `Document.status` | Stored as string with `CheckConstraint` but `DocumentStatus(str, Enum)` exists. | `apps/api/app/features/documents/models.py:20-78` | Switch columns to SQLAlchemy Enum using existing class; share same Enum via schemas/filters. | Already imported in schemas. DB type change needed. |
+| `Configuration.status` | Plain `String(20)` column + string comparisons in `service.py` (`draft`, `active`, `inactive`) | `apps/ade-api/src/ade_api/features/configs/models.py:25-36` | New `ConfigurationStatus(str, Enum)` (likely `draft`, `published`, `archived`) used in ORM column (`Enum(..., native_enum=False)`) and every schema field. | Need migration to reconcile `active` vs `published`. |
+| `Build.status` | Column stored as `String` w/ `CheckConstraint`; Python `BuildStatus` Enum already exists but not enforced in DB layer. | `apps/ade-api/src/ade_api/features/builds/models.py:20-78` | Reuse `BuildStatus` for SQLAlchemy `Enum` + Pydantic field; ensure `Page` etc. emit string enums. | Replace raw `Mapped[str]` with `Mapped[BuildStatus]`. |
+| `Document.status` | Stored as string with `CheckConstraint` but `DocumentStatus(str, Enum)` exists. | `apps/ade-api/src/ade_api/features/documents/models.py:20-78` | Switch columns to SQLAlchemy Enum using existing class; share same Enum via schemas/filters. | Already imported in schemas. DB type change needed. |
 | `Document.source` | Same as above with `DocumentSource`. | Single value `manual_upload`. | Same as above; future expansion easier. |
 | `RBAC scope_type` | SQLAlchemy `Enum` objects (`ScopeTypeEnum`, `PrincipalTypeEnum`) without Python Enum types surfaced at schema layer. | `global`, `workspace` for scope; `user` for principal. | Introduce `ScopeType(str, Enum)` / `PrincipalType(str, Enum)` used across ORM + schemas. | Align `PermissionRead`, `Role*`, `RoleAssignment*`. |
 | `Document/File depth` | `Literal["0","1","infinity"]` in `FileListing.depth`. | Hardcoded union. | Keep as `Literal` or convert to Enum if we need `Depth`. Must align request + response. |
@@ -118,18 +118,18 @@ Single `JobPlaceholder(BaseModel)` with `id: str`. Needs real DTO or removal.
 
 | Field (current DTO) | File | Current wire name(s) | Canonical target | Deprecation note |
 | --- | --- | --- | --- | --- |
-| `DocumentRecord.document_id` | `apps/api/app/features/documents/schemas.py` | exposes both `id` & `document_id` | keep `document_id` only (ULIDStr) | Remove alias; accept legacy `id` for one release via deprecated alias. |
+| `DocumentRecord.document_id` | `apps/ade-api/src/ade_api/features/documents/schemas.py` | exposes both `id` & `document_id` | keep `document_id` only (ULIDStr) | Remove alias; accept legacy `id` for one release via deprecated alias. |
 | `DocumentRecord.name` vs `original_filename` | same | alias/serialize mismatch | Keep `original_filename` on wire; drop `name` alias. | Add computed property for compatibility if needed. |
 | `DocumentRecord.metadata` | same | alias ↔ `attributes` | Keep `metadata` or `attributes`, not both. | Document alias removal plan. |
 | `DocumentRecord.deleted_by` | same | alias ↔ `deleted_by_user_id` | Use `deleted_by_user_id`. |  |
 | `DocumentRecord.tags` | same | alias ↔ `tag_values` | Keep `tags`. |  |
 | `UploaderSummary.id/name` | same | `id` + alias for `display_name` | Rename to `uploader_id`, keep `display_name`. |  |
-| `UserProfile.user_id` | `apps/api/app/features/users/schemas.py` | alias ↔ `id` | Only expose `user_id`; remove alias. |  |
-| `WorkspaceProfile.workspace_id` | `apps/api/app/features/workspaces/schemas.py` | alias ↔ `id` | Keep `workspace_id`. |  |
+| `UserProfile.user_id` | `apps/ade-api/src/ade_api/features/users/schemas.py` | alias ↔ `id` | Only expose `user_id`; remove alias. |  |
+| `WorkspaceProfile.workspace_id` | `apps/ade-api/src/ade_api/features/workspaces/schemas.py` | alias ↔ `id` | Keep `workspace_id`. |  |
 | `WorkspaceMember.workspace_membership_id` | same | alias ↔ `id` | Keep `workspace_membership_id`. |  |
-| `RoleRead.role_id` | `apps/api/app/features/roles/schemas.py` | alias ↔ `id` | Keep `role_id`. |  |
+| `RoleRead.role_id` | `apps/ade-api/src/ade_api/features/roles/schemas.py` | alias ↔ `id` | Keep `role_id`. |  |
 | `RoleAssignmentRead.assignment_id` | same | alias ↔ `id` | Keep `assignment_id`. |  |
-| `FileRenameResponse.src/dest` | `apps/api/app/features/configs/schemas.py` | `src`/`dest` fields alias `from`/`to` | Rename actual fields to `from_path` / `to_path` or keep `from`/`to` as canonical wire keys. | Should mark `src`/`dest` deprecated. |
+| `FileRenameResponse.src/dest` | `apps/ade-api/src/ade_api/features/configs/schemas.py` | `src`/`dest` fields alias `from`/`to` | Rename actual fields to `from_path` / `to_path` or keep `from`/`to` as canonical wire keys. | Should mark `src`/`dest` deprecated. |
 
 *(Add more rows as additional aliases are discovered during implementation.)*
 
@@ -141,7 +141,7 @@ All endpoints below currently declare `response_model=list[...]` and should adop
 
 | Endpoint | Module / file | Current model | Notes |
 | --- | --- | --- | --- |
-| `GET /roles` | `apps/api/app/features/roles/router.py:225` | `list[RoleRead]` | Should become `Page[RoleOut]` with sort/filter query params. |
+| `GET /roles` | `apps/ade-api/src/ade_api/features/roles/router.py:225` | `list[RoleRead]` | Should become `Page[RoleOut]` with sort/filter query params. |
 | `GET /role-assignments` | `roles/router.py:482` | `list[RoleAssignmentRead]` | Add pagination + filtering (principal_id/user_id). |
 | `GET /workspaces/{workspace_id}/role-assignments` | `roles/router.py:644` | `list[RoleAssignmentRead]` | Same as above, workspace-scoped. |
 | `GET /permissions` | `roles/router.py:830` | `list[PermissionRead]` | Could remain list if bounded, but spec calls for Page envelope. |
@@ -157,7 +157,7 @@ All endpoints below currently declare `response_model=list[...]` and should adop
 
 ## 5. Error Model Inventory
 
-- **Global default**: Routers import `ErrorMessage` from `apps/api/app/shared/core/schema.py`, yielding FastAPI’s `{"detail": "..."}`
+- **Global default**: Routers import `ErrorMessage` from `apps/ade-api/src/ade_api/shared/core/schema.py`, yielding FastAPI’s `{"detail": "..."}`
   - files: `auth/router.py`, `builds/router.py`, `documents/router.py`, `workspaces/router.py`, `configs/router.py` (in addition to custom problem helper).
 - **Configs module**: `_problem()` helper already emits RFC 7807-ish payloads with `type`, `title`, `status`, `detail`, `code`, `meta`.
 - **Missing pieces**: No shared `ProblemDetail` schema; no registry of stable `code` values; routers mix literal strings vs dicts in `HTTPException.detail`.
@@ -168,16 +168,16 @@ All endpoints below currently declare `response_model=list[...]` and should adop
 
 ## 6. ULID Type Alias Coverage
 
-- Only `apps/api/app/features/documents/filters.py` defines `ULIDStr = Annotated[str, Field(..., pattern=ULID_PATTERN)]`.
+- Only `apps/ade-api/src/ade_api/features/documents/filters.py` defines `ULIDStr = Annotated[str, Field(..., pattern=ULID_PATTERN)]`.
 - All other schemas (`users`, `workspaces`, `roles`, `auth`, `configs`, `builds`) use raw `str` for ULIDs. No shared module exports ULID validators.
 
-**Action**: move `ULID_PATTERN` and `ULIDStr` into a shared module (e.g., `apps/api/app/shared/core/ids.py` or `shared/core/types.py`) and import everywhere. Update ORM mixins to surface type hints when constructing DTOs.
+**Action**: move `ULID_PATTERN` and `ULIDStr` into a shared module (e.g., `apps/ade-api/src/ade_api/shared/core/ids.py` or `shared/core/types.py`) and import everywhere. Update ORM mixins to surface type hints when constructing DTOs.
 
 ---
 
 ## 7. Workspace Settings Mutability
 
-- `Workspace.settings` is declared as `JSON` without `MutableDict` (`apps/api/app/features/workspaces/models.py:14-24`). Updating nested keys in-place will not mark the row dirty, causing silent data loss.
+- `Workspace.settings` is declared as `JSON` without `MutableDict` (`apps/ade-api/src/ade_api/features/workspaces/models.py:14-24`). Updating nested keys in-place will not mark the row dirty, causing silent data loss.
 - `Document.attributes` and `SystemSetting.value` already use `MutableDict`.
 
 **Action**: migrate column to `MutableDict.as_mutable(JSON)` with Alembic backfill, update services/tests accordingly.
@@ -198,8 +198,8 @@ All endpoints below currently declare `response_model=list[...]` and should adop
 Pending refactor steps:
 
 1. Update schemas/enums/routers per sections above.
-2. Run `npm run openapi-typescript` to ensure the generated client surfaces string enums and discriminated unions without `any`.
-3. Capture before/after spec (e.g., `apps/api/app/openapi.json`) to aid reviewers.
+2. Run `ade openapi-types` to ensure the generated client surfaces string enums and discriminated unions without `any`.
+3. Capture before/after spec (e.g., `apps/ade-api/src/ade_api/openapi.json`) to aid reviewers.
 
 ---
 
@@ -224,7 +224,7 @@ This document should evolve alongside the implementation to track which gaps hav
 
 1. **Core primitives first**
    - Update `BaseSchema` defaults (extra forbid, populate by name, from_attributes, `exclude_none=True`) and migrate `Page`, `PageParams`, `FilterBase`, configs/builds/jobs schemas to inherit from it.
-   - Create `apps/api/app/shared/core/types.py` (or extend `shared/core/ids.py`) with shared `ULID_PATTERN` + `ULIDStr` and begin replacing raw `str` annotations across schemas, filters, services.
+   - Create `apps/ade-api/src/ade_api/shared/core/types.py` (or extend `shared/core/ids.py`) with shared `ULID_PATTERN` + `ULIDStr` and begin replacing raw `str` annotations across schemas, filters, services.
 2. **Enum + ORM alignment**
    - Define `ConfigurationStatus`, `ScopeType`, `PrincipalType`, and move SQLAlchemy columns to use `Enum(..., native_enum=False)` referencing the Python `Enum`.
    - Update migrations + repositories/services accordingly; adjust `BuildStatus` / `DocumentStatus` columns to store Enum values natively.
@@ -246,5 +246,5 @@ This document should evolve alongside the implementation to track which gaps hav
    - Implement shared `ProblemDetail` schema + helper for raising errors; update routers to reference it in `responses` metadata.
    - Convert configs `_problem()` to return the shared schema; drop `ErrorMessage`.
 8. **Contract verification**
-   - Refresh OpenAPI schema + run `npm run openapi-typescript`; add regression tests for DTO serialization (golden fixtures) and alias deprecation.
+   - Refresh OpenAPI schema + run `ade openapi-types`; add regression tests for DTO serialization (golden fixtures) and alias deprecation.
    - Ensure CI covers new pagination/list tests, back-compat alias acceptance, and sanitized build responses.

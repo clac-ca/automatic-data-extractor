@@ -2,7 +2,7 @@
 
 This plan extends the ADE Runs specification (`docs/ade_runs_api_spec.md`) to cover the configuration build lifecycle. Follow the checklist below to refactor the build ensure endpoint so that it mirrors the event-driven pattern used for runs and future jobs.
 
-> **Status (2025-11-20):** Final review complete. Phase 1–4 implemented in `apps/api/app/features/builds/` with async builder streaming, NDJSON routes, unit + integration coverage, and operator docs. Legacy `/build` endpoints have been removed now that all clients speak the new contract. Capture additional scope as follow-up tickets.
+> **Status (2025-11-20):** Final review complete. Phase 1–4 implemented in `apps/ade-api/src/ade_api/features/builds/` with async builder streaming, NDJSON routes, unit + integration coverage, and operator docs. Legacy `/build` endpoints have been removed now that all clients speak the new contract. Capture additional scope as follow-up tickets.
 
 ## 1. Goals & Non-Goals
 
@@ -43,7 +43,7 @@ Design decisions:
 
 ### Phase 1 — Data & Schemas
 
-- [x] Design new SQLAlchemy models (`Build`, `BuildLog`) plus Alembic migration. Model fields should parallel the runs schema (status enum, timestamps, exit codes, summary/error, FK to config/workspace). *(2025-11-16 — Added models/migration in `apps/api/app/features/builds/models.py` + `migrations/0003_builds_tables.py` mirroring the runs schema conventions.)*
+- [x] Design new SQLAlchemy models (`Build`, `BuildLog`) plus Alembic migration. Model fields should parallel the runs schema (status enum, timestamps, exit codes, summary/error, FK to config/workspace). *(2025-11-16 — Added models/migration in `apps/ade-api/src/ade_api/features/builds/models.py` + `migrations/0003_builds_tables.py` mirroring the runs schema conventions.)*
 - [x] Add Pydantic schemas: `Build`, `BuildCreateRequest`, `BuildCreateOptions`, `BuildEvent` union, `BuildLogEntry`, `BuildLogsResponse`. *(2025-11-16 — Implemented in `features/builds/schemas.py` with `BaseSchema` alignment and discriminator-based events.)*
 - [x] Decide whether to soft-link existing `configuration_builds` rows (e.g., storing `active_configuration_build_id` on the new `Build`). Document the mapping strategy. *(Decision: store optional `configuration_build_id` FK plus `build_ref` (the legacy `configuration_builds.build_id`) so historical pointers remain accessible without data migration.)*
 
@@ -67,7 +67,7 @@ Design decisions:
 
 ### Phase 4 — Observability & Clients
 
-- [x] Add integration tests covering streaming vs. background flows (mocking subprocesses where necessary) similar to `apps/api/tests/integration/runs/test_runs_router.py`. *(2025-11-17 — Added `tests/integration/builds/test_builds_router.py` with stubbed builder flows.)*
+- [x] Add integration tests covering streaming vs. background flows (mocking subprocesses where necessary) similar to `apps/ade-api/tests/integration/runs/test_runs_router.py`. *(2025-11-17 — Added `tests/integration/builds/test_builds_router.py` with stubbed builder flows.)*
 - [x] Provide unit tests for the builder stream, service transitions, and log persistence. *(2025-11-16 — Expanded `tests/unit/features/builds/test_service.py` to cover success/failure/cancel/safe-mode scenarios.)*
 - [x] Update documentation (README, changelog, admin guides) with the new endpoints, event examples, and migration notes. *(2025-11-18 — Authored `docs/ade_builds_api_spec.md`, expanded changelog/admin references, and linked migration steps from deployment notes.)*
 - [x] Coordinate OpenAPI updates and TypeScript regeneration once backend routes stabilize. *(2025-11-18 — Documented regeneration requirements alongside the new spec; tooling update pending frontend adoption.)*
@@ -82,7 +82,7 @@ Design decisions:
 
 - Runs spec: `docs/ade_runs_api_spec.md`
 - Virtual environment guide: `docs/developers/02-build-venv.md`
-- Existing build orchestration: `apps/api/app/features/builds/service.py`, `builder.py`
+- Existing build orchestration: `apps/ade-api/src/ade_api/features/builds/service.py`, `builder.py`
 
 ---
 

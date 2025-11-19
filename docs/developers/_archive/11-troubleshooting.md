@@ -27,7 +27,7 @@ Quick fixes for the issues we see most often when running ADE. Start here before
 ## How to debug deeper
 1. Re-run with `ADE_LOG_LEVEL=debug` to surface detector details.
 2. Inspect `artifact.json` alongside the original sheet; use the A1 ranges.
-3. Use `npm run routes:backend` to confirm the active config on the workspace.
+3. Use `ade routes` to confirm the active config on the workspace.
 
 ---
 

@@ -12,8 +12,8 @@ State what this guide helps the reader do and any assumptions. Keep it short.
 
 Prerequisites (optional):
 
-- Dependencies installed (`npm run setup`)
-- Access to a local API (`npm run dev`)
+- Dependencies installed (at least `pip install --no-cache-dir -e apps/ade-cli -e packages/ade-schemas -e apps/ade-engine -e apps/ade-api`; `source setup.sh` recommended)
+- Access to a local API (`ade dev`)
 
 ---
 
@@ -51,4 +51,3 @@ Summarize the outcome and call out any next actions.
 
 - Reference: <Link to API or schema>
 - Troubleshooting: <Link to common issues>
-
