@@ -10,83 +10,52 @@ ADE is a lightweight, configurable engine for normalizing Excel/CSV files at sca
 
 ## ⚡ Available Tools
 
-> You can use either ade <script> or npm run <script> — both are synced.
+> The Python `ade` CLI (from `apps/ade-cli`) is the canonical entrypoint.
 
 ```bash
-npm run setup              # Install deps (.venv + web node_modules)
-npm run dev                # FastAPI + React dev servers
-npm run test               # Run all tests
-npm run build              # Build SPA → apps/api/app/web/static
-npm run start              # Serve API + SPA
-npm run openapi-typescript # Generate TS types from OpenAPI
-npm run routes             # List FastAPI routes (no dedicated frontend router CLI)
-npm run routes:backend     # List FastAPI routes
-npm run workpackage        # Manage work packages (CLI JSON interface)
-npm run clean:force        # Force delete build/.venv
-npm run reset:force        # Clean + setup fresh
-npm run ci                 # Full CI pipeline (lint, test, build)
-
+ade dev                   # FastAPI + React dev servers (--backend/--frontend to scope)
+ade test                  # Run all tests
+ade build                 # Build SPA → apps/ade-api/src/ade_api/web/static
+ade start                 # Serve API + SPA
+ade openapi-types         # Generate TS types from OpenAPI
+ade routes                # List FastAPI routes
+ade workpackage           # Manage work packages (legacy Node helper)
+ade clean --yes           # Delete build/.venv/node_modules
+ade reset --yes           # Clean + storage reset + setup
+ade ci                    # Full pipeline (lint, test, build)
 ```
 
 ### Frontend API types
 
-- Generated TypeScript types live in `apps/web/src/generated-types/openapi.d.ts`. If that file is missing (or clearly stale), run `npm run openapi-typescript` to regenerate it before touching frontend API code.
+- Generated TypeScript types live in `apps/ade-web/src/generated-types/openapi.d.ts`. If that file is missing (or clearly stale), run `ade openapi-types` to regenerate it before touching frontend API code.
 - Import API shapes from the curated schema module (`import type { SessionEnvelope } from "@schema";`). Avoid importing from `@generated-types/*` directly—add re-exports in `src/schema/` when new stable types are needed.
 - Treat manual types as view-model helpers only; when adding params or schemas, update the OpenAPI spec and rerun the generator instead of editing the generated file.
 
 ```text
 automatic-data-extractor/
-├─ apps/                                   # Deployable applications
-│  ├─ api/                                 # FastAPI service (serves /api + static SPA)
-│  │  ├─ app/
-│  │  │  ├─ api/                           # Exception handlers + API helpers
-│  │  │  ├─ features/                      # Domain-first modules (auth, configs, jobs, etc.)
-│  │  │  │  ├─ auth/                       # Example feature module
-│  │  │  │  │  ├─ router.py                # HTTP routes for this feature
-│  │  │  │  │  ├─ service.py               # Business logic
-│  │  │  │  │  ├─ repository.py            # DB persistence
-│  │  │  │  │  └─ schemas.py               # Pydantic I/O models
-│  │  │  ├─ scripts/                       # App-scoped CLIs (seed, migrate, etc.)
-│  │  │  ├─ shared/                        # Cross-cutting infra (settings, db, logging)
-│  │  │  │  ├─ dependency.py               # Global FastAPI dependencies (auth, RBAC, services)
-│  │  │  ├─ web/static/                    # ← Built SPA copied here at image build time (DO NOT COMMIT)
-│  │  │  ├─ templates/                     # Optional: Jinja2 emails/server-rendered templates
-│  │  │  │  └─ config_packages/            # Bundled ADE config package templates
-│  │  │  │     ├─ default/
-│  │  │  │     │  ├─ template.manifest.json
-│  │  │  │     │  └─ src/ade_config/                # Detectors/hooks + runtime manifest/env
-│  │  │  │     │     ├─ manifest.json
-│  │  │  │     │     ├─ config.env
-│  │  │  │     │     ├─ column_detectors/
-│  │  │  │     │     ├─ row_detectors/
-│  │  │  │     │     └─ hooks/
-│  │  │  │     └─ <other-template>/...
-│  │  │  └─ main.py                        # Mounts /api routers; serves SPA from ./web/static
+├─ apps/                                   # Deployable applications + tooling
+│  ├─ ade-api/                             # FastAPI service (serves /api + static SPA)
+│  │  ├─ pyproject.toml
+│  │  ├─ src/ade_api/                      # Settings, routers, features, shared modules, templates, web assets
 │  │  ├─ migrations/                       # Alembic migrations
-│  │  ├─ alembic.ini                       # Alembic config
-│  │  ├─ pyproject.toml                    # Python project metadata
-│  │  └─ tests/
-│  │     ├─ unit/                          # Fast, isolated logic tests
-│  │     ├─ integration/                   # DB + API tests with test app
-│  │     └─ e2e/                           # Optional full pipeline/contract tests
-│  └─ web/                                 # React SPA (Vite)
-│     ├─ src/
-│     │  ├─ app/                           # Providers + navigation + shell
-│     │  ├─ screens/                       # Screen-first, co-located modules (Home, Login, Workspace, …)
-│     │  ├─ shared/                        # Cross-cutting utilities (auth, API, storage, …)
-│     │  ├─ ui/                            # Presentational primitives (Tabs, Button, Input, …)
-│     │  ├─ schema/                        # Curated, app-facing type exports
-│     │  ├─ generated-types/               # Raw OpenAPI-derived types (openapi.d.ts)
-│     │  └─ test/                          # Vitest setup + helpers
+│  │  └─ tests/                            # Unit + integration tests
+│  ├─ ade-cli/                             # Python orchestration CLI (console script: ade)
+│  │  ├─ pyproject.toml
+│  │  └─ src/ade_tools/
+│  ├─ ade-engine/                          # installable package: ade_engine
+│  │  ├─ pyproject.toml
+│  │  ├─ src/ade_engine/                   # Engine runtime (I/O, pipeline, hooks)
+│  │  └─ tests/                            # Engine unit tests
+│  └─ ade-web/                             # React SPA (Vite)
+│     ├─ src/                              # app/, screens/, shared/, ui/, schema/, generated-types/, test/
 │     ├─ public/                           # Static public assets
 │     ├─ package.json
 │     └─ vite.config.ts
 │
 ├─ packages/                               # Reusable Python libraries
-│  └─ ade-engine/                          # installable package: ade_engine
+│  └─ ade-schemas/                         # installable package: ade_schemas
 │     ├─ pyproject.toml
-│     ├─ src/ade_engine/                   # Engine runtime (I/O, pipeline, hooks)
-│     └─ tests/                            # Engine unit tests
+│     └─ src/ade_schemas/
 │
 ├─ specs/                                   # JSON Schemas & formal definitions
 │  ├─ config-manifest.v1.json
@@ -94,15 +63,14 @@ automatic-data-extractor/
 │
 ├─ examples/                                # Sample inputs/outputs
 ├─ docs/                                    # Developer guides, HOWTOs, runbooks
-├─ scripts/                                 # Repo-level helper scripts
+├─ scripts/                                 # Repo-level helper scripts (legacy node helpers live here)
 │
 ├─ infra/                                   # Deployment infrastructure
 │  ├─ docker/
-│  │  └─ api.Dockerfile                     # Multi-stage build: web → api/app/web/static
+│  │  └─ api.Dockerfile                     # Multi-stage build: web → api/src/ade_api/web/static
 │  ├─ compose.yaml                          # Local prod-style stack
 │  └─ k8s/                                  # Optional: Helm/manifests
 │
-├─ Makefile                                 # Developer entrypoints
 ├─ .env.example                             # Example env vars
 ├─ .editorconfig
 ├─ .pre-commit-config.yaml
@@ -112,7 +80,7 @@ automatic-data-extractor/
 
 ### Frontend screen-first (routerless) layout
 
-The React SPA at `apps/web/` uses a history-based navigation helper instead of React Router. Screen code lives under `src/screens/<ScreenName>/`, and everything a screen needs (components, hooks, sections) is co-located beneath that folder. The `src/ui/` directory holds presentational primitives such as `Tabs`, `Button`, and `Input`. Use the path aliases configured in `tsconfig.json`/`vite.config.ts` (`@app/*`, `@screens/*`, `@ui/*`, `@shared/*`, `@schema/*`, `@generated-types/*`, `@test/*`) for imports instead of deep relative paths.
+The React SPA at `apps/ade-web/` uses a history-based navigation helper instead of React Router. Screen code lives under `src/screens/<ScreenName>/`, and everything a screen needs (components, hooks, sections) is co-located beneath that folder. The `src/ui/` directory holds presentational primitives such as `Tabs`, `Button`, and `Input`. Use the path aliases configured in `tsconfig.json`/`vite.config.ts` (`@app/*`, `@screens/*`, `@ui/*`, `@shared/*`, `@schema/*`, `@generated-types/*`, `@test/*`) for imports instead of deep relative paths.
 
 Navigation helpers live in `@app/nav` (`history.tsx`, `Link.tsx`, `urlState.ts`). Consume `useNavigate`/`useLocation` from there, and render links with `Link`/`NavLink` from the same module.
 
@@ -160,7 +128,7 @@ Everything ADE produces (config_packages, venvs, jobs, logs, cache, etc..) is pe
 
 ### Debug a Failing Build
 
-1. Run `npm run ci`.
+1. Run `ade ci`.
 2. Read JSON output (stdout).
 3. Fix first error.
 4. Re-run until `"ok": true`.
@@ -175,7 +143,7 @@ Everything ADE produces (config_packages, venvs, jobs, logs, cache, etc..) is pe
 
 ## 🤖 Agent Rules
 
-1. Always run `npm run test` before committing and `npm run ci` before pushing or opening a PR.
+1. Always run `ade test` before committing and `ade ci` before pushing or opening a PR.
 
 ---
 

@@ -81,7 +81,7 @@ Below is a clean, “boringly standard” **work plan** you can hand to an AI ag
 ## 4) Repository Layout
 
 ```
-apps/api/app/
+apps/ade-api/src/ade_api/
   settings.py
   shared/
     types.py
@@ -105,7 +105,7 @@ apps/api/app/
 ### 5.1 Settings
 
 ```python
-# apps/api/app/settings.py
+# apps/ade-api/src/ade_api/settings.py
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 100
 MAX_SORT_FIELDS = 3
@@ -118,7 +118,7 @@ COUNT_STATEMENT_TIMEOUT_MS = None  # optional (Postgres), e.g., 500
 ### 5.2 Types
 
 ```python
-# apps/api/app/shared/types.py
+# apps/ade-api/src/ade_api/shared/types.py
 from typing import Any, Mapping, Tuple
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -129,14 +129,14 @@ SortAllowedMap = Mapping[str, Tuple[ColumnElement[Any], ColumnElement[Any]]]
 ### 5.3 Filter Base & Validators
 
 ```python
-# apps/api/app/shared/filters.py
+# apps/ade-api/src/ade_api/shared/filters.py
 from pydantic import BaseModel
 class FilterBase(BaseModel):
     model_config = {"extra": "forbid"}  # reject unknown query keys
 ```
 
 ```python
-# apps/api/app/shared/validators.py
+# apps/ade-api/src/ade_api/shared/validators.py
 from typing import Iterable, Optional, Set
 from datetime import datetime, timezone
 
@@ -164,11 +164,11 @@ def normalize_utc(dt: datetime | None) -> datetime | None:
 ### 5.4 Sorting
 
 ```python
-# apps/api/app/shared/sorting.py
+# apps/ade-api/src/ade_api/shared/sorting.py
 from typing import Iterable, Sequence, Any
 from fastapi import Query, HTTPException
-from apps.api.app.settings import MAX_SORT_FIELDS
-from apps.api.app.shared.types import OrderBy, SortAllowedMap
+from ade_api.settings import MAX_SORT_FIELDS
+from ade_api.shared.types import OrderBy, SortAllowedMap
 
 def _dedupe_preserve_order(tokens: list[str]) -> list[str]:
     seen, out = set(), []
@@ -225,7 +225,7 @@ def make_sort_dependency(*, allowed: SortAllowedMap, default: Sequence[str], id_
 ### 5.5 SQL Utilities
 
 ```python
-# apps/api/app/shared/sql.py
+# apps/ade-api/src/ade_api/shared/sql.py
 from sqlalchemy import select
 def reselect_distinct_by_pk(stmt, *, entity, pk_col):
     ids = stmt.with_only_columns(pk_col).distinct().order_by(None).subquery()
@@ -239,7 +239,7 @@ def nulls_last(ordering):  # Postgres adds .nulls_last(); others ignore
 ### 5.6 Pagination (Async)
 
 ```python
-# apps/api/app/shared/pagination.py
+# apps/ade-api/src/ade_api/shared/pagination.py
 from typing import Generic, Sequence, TypeVar, Optional, Any, Sequence as Seq
 from pydantic import BaseModel, Field, conint
 from sqlalchemy import func, select, text
@@ -247,7 +247,7 @@ from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 from itertools import islice
-from apps.api.app.settings import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, COUNT_STATEMENT_TIMEOUT_MS
+from ade_api.settings import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, COUNT_STATEMENT_TIMEOUT_MS
 
 T = TypeVar("T")
 
@@ -321,8 +321,8 @@ For **each resource**, create:
 ### 6.1 Sorting (example skeleton)
 
 ```python
-# apps/api/app/features/<resource>/sorting.py
-from apps.api.app.shared.sql import nulls_last
+# apps/ade-api/src/ade_api/features/<resource>/sorting.py
+from ade_api.shared.sql import nulls_last
 from .models import ResourceModel as M
 
 SORT_FIELDS = {
@@ -338,14 +338,14 @@ ID_FIELD = (M.pk.asc(), M.pk.desc())
 ### 6.2 Filters (example skeleton)
 
 ```python
-# apps/api/app/features/<resource>/filters.py
+# apps/ade-api/src/ade_api/features/<resource>/filters.py
 from typing import Optional, Set
 from datetime import datetime
 from pydantic import Field, field_validator
 from sqlalchemy import and_
-from apps.api.app.shared.filters import FilterBase
-from apps.api.app.shared.validators import parse_csv_or_repeated, normalize_utc
-from apps.api.app.settings import MIN_SEARCH_LEN, MAX_SEARCH_LEN, MAX_SET_SIZE
+from ade_api.shared.filters import FilterBase
+from ade_api.shared.validators import parse_csv_or_repeated, normalize_utc
+from ade_api.settings import MIN_SEARCH_LEN, MAX_SEARCH_LEN, MAX_SET_SIZE
 from .models import ResourceModel as M
 
 class ResourceFilter(FilterBase):
@@ -383,15 +383,15 @@ def apply_resource_filters(stmt, f: "ResourceFilter"):
 ### 6.3 Route (async)
 
 ```python
-# apps/api/app/features/<resource>/routes.py
+# apps/ade-api/src/ade_api/features/<resource>/routes.py
 from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.app.shared.db import get_session
-from apps.api.app.shared.pagination import Page, PageParams, paginate_sql
-from apps.api.app.shared.sorting import make_sort_dependency
+from ade_api.shared.db import get_session
+from ade_api.shared.pagination import Page, PageParams, paginate_sql
+from ade_api.shared.sorting import make_sort_dependency
 from .sorting import SORT_FIELDS, DEFAULT_SORT, ID_FIELD
 from .filters import ResourceFilter, apply_resource_filters
 from .models import ResourceModel as M

@@ -13,7 +13,7 @@ before starting.
 * **Build** – Persistent record for one execution of the configuration build pipeline
   (mirrors `Run`). Exposed as object type `"ade.build"`.
 * **Build status** – `queued | building | active | failed | canceled` (`BuildStatus`
-  enum in `apps/api/app/features/builds/models.py`).
+  enum in `apps/ade-api/src/ade_api/features/builds/models.py`).
 * **Build logs** – Text chunks captured from subprocess output and stored in
   `build_logs`. Exposed via `GET /api/v1/builds/{build_id}/logs` and NDJSON
   `build.log` events.
@@ -33,8 +33,8 @@ before starting.
 
 ## 2. Database models & migrations
 
-Alembic migration `apps/api/migrations/versions/0003_builds_tables.py` installs the
-following tables (see `apps/api/app/features/builds/models.py`):
+Alembic migration `apps/ade-api/migrations/versions/0003_builds_tables.py` installs the
+following tables (see `apps/ade-api/src/ade_api/features/builds/models.py`):
 
 ### 2.1 `builds`
 
@@ -68,7 +68,7 @@ single-column FKs so legacy ensure flows remain compatible with the new API.
 
 ## 3. Pydantic schemas
 
-Defined in `apps/api/app/features/builds/schemas.py` using the shared
+Defined in `apps/ade-api/src/ade_api/features/builds/schemas.py` using the shared
 `BaseSchema` utilities.
 
 ### 3.1 `BuildResource`
@@ -132,7 +132,7 @@ for the next page when the configured limit (1000 rows) is reached.
 
 ## 4. Service layer orchestration
 
-`apps/api/app/features/builds/service.py` coordinates build execution:
+`apps/ade-api/src/ade_api/features/builds/service.py` coordinates build execution:
 
 1. `BuildsService.create_build(...)` inserts a new `Build` row with status
    `queued` and returns the ORM instance.
@@ -152,7 +152,7 @@ for the next page when the configured limit (1000 rows) is reached.
    immediately records a `failed` build with a descriptive error message rather than
    invoking subprocesses.
 
-The builder implementation lives in `apps/api/app/features/builds/builder.py`.
+The builder implementation lives in `apps/ade-api/src/ade_api/features/builds/builder.py`.
 `VirtualEnvironmentBuilder.build_stream(...)` emits structured steps/log lines for
 Python/`pip` commands using `asyncio.create_subprocess_exec`, ensuring stdout is
 consumed incrementally.
@@ -161,7 +161,7 @@ consumed incrementally.
 
 ## 5. API endpoints
 
-All routes live in `apps/api/app/features/builds/router.py` and are mounted under
+All routes live in `apps/ade-api/src/ade_api/features/builds/router.py` and are mounted under
 `/api/v1`.
 
 ### 5.1 Create / ensure build
@@ -230,6 +230,6 @@ paging until fewer than the configured limit (1000) entries are returned.
 * Evaluate storing structured command metadata (duration, exit code, environment) in
   a dedicated table for richer observability.
 * Once the React app adopts the new endpoints, regenerate TypeScript clients via
-  `npm run openapi-typescript` and update curated schema exports under
-  `apps/web/src/schema/`.
+  `ade openapi-types` and update curated schema exports under
+  `apps/ade-web/src/schema/`.
 

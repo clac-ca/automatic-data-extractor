@@ -4,7 +4,7 @@ This folder is the source of truth for structures referenced throughout the deve
 
 - `artifact.v1.1.schema.json` — job artifact schema (`tables[].mapping`, `pass_history`, summaries).
 - `manifest.v0.6.schema.json` — config package manifest used by the CLI and backend.
-- `config-package.index.v1.schema.json` — index produced by `npm run openapi-typescript` for discovery APIs.
+- `config-package.index.v1.schema.json` — index produced by `ade openapi-types` for discovery APIs.
 
 ## Validate quickly
 Use any JSON Schema validator. Two options:

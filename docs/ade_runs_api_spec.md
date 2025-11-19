@@ -33,7 +33,7 @@ Assume SQLAlchemy `Base` is already available within the FastAPI application.
 ### 2.1 Run Status Enum
 
 ```python
-# apps/api/app/features/runs/models.py
+# apps/ade-api/src/ade_api/features/runs/models.py
 import enum
 
 
@@ -48,12 +48,12 @@ class RunStatus(str, enum.Enum):
 ### 2.2 Run Model
 
 ```python
-# apps/api/app/features/runs/models.py
+# apps/ade-api/src/ade_api/features/runs/models.py
 from datetime import datetime
 from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
-from apps.api.app.db.base_class import Base  # adjust import to local Base
+from ade_api.db.base_class import Base  # adjust import to local Base
 from .enums import RunStatus  # as defined above
 
 
@@ -79,12 +79,12 @@ class Run(Base):
 ### 2.3 RunLog Model
 
 ```python
-# apps/api/app/features/runs/models.py
+# apps/ade-api/src/ade_api/features/runs/models.py
 from datetime import datetime
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
-from apps.api.app.db.base_class import Base
+from ade_api.db.base_class import Base
 
 
 class RunLog(Base):
@@ -109,7 +109,7 @@ Define response and request payloads to match OpenAI-style semantics while refle
 ### 3.1 Shared Types
 
 ```python
-# apps/api/app/features/runs/schemas.py
+# apps/ade-api/src/ade_api/features/runs/schemas.py
 from datetime import datetime
 from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
@@ -206,7 +206,7 @@ Provide helpers to create runs, update status, append logs, and execute the ADE 
 ### 4.1 Service Utilities
 
 ```python
-# apps/api/app/features/runs/service.py
+# apps/ade-api/src/ade_api/features/runs/service.py
 import asyncio
 import json
 import os
@@ -385,7 +385,7 @@ FastAPI endpoints mimic OpenAI’s dual response strategy: synchronous JSON for 
 ### 5.1 `POST /api/v1/configs/{config_id}/runs`
 
 ```python
-# apps/api/app/features/runs/router.py
+# apps/ade-api/src/ade_api/features/runs/router.py
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -395,7 +395,7 @@ import json
 from .models import Run, RunLog
 from .schemas import RunCreateRequest, Run as RunSchema
 from .service import create_run, run_to_schema, run_ade_engine_stream
-from apps.api.app.core.db import get_session
+from ade_api.core.db import get_session
 
 router = APIRouter(prefix="/api/v1", tags=["runs"])
 
@@ -518,7 +518,7 @@ This document serves as the implementation contract for ADE run execution APIs a
 - **Safe mode (`ADE_SAFE_MODE`)** — when set to `true`, the API short-circuits run execution after emitting a `run.log` message and marks the run as succeeded with a "Safe mode skip" summary. Keep this enabled during incident response or while rolling out migrations.
 - **Virtual environment layout** — the runner expects a Python executable at `<venv_path>/bin/python` (or `Scripts/python.exe` on Windows). `ConfigurationBuild.venv_path` should therefore point to the virtualenv root created by the build service.
 - **Operations runbook** — consult `docs/admin-guide/runs_observability.md` for streaming/polling instructions and `docs/reference/runs_deployment.md` before promoting changes to staging or production.
-- **Engine entry point** — the orchestration service invokes `python -m ade_engine`. The CLI lives in `packages/ade-engine/src/ade_engine/__main__.py` and prints engine metadata/manifest details, matching the expected entry point in this spec.
+- **Engine entry point** — the orchestration service invokes `python -m ade_engine`. The CLI lives in `apps/ade-engine/src/ade_engine/__main__.py` and prints engine metadata/manifest details, matching the expected entry point in this spec.
 
 ## 8. Manual QA Checklist
 

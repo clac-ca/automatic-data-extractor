@@ -27,7 +27,7 @@ Constraints:
 Environment variables to honor (with defaults from the build guide):
 * `ADE_VENVS_DIR` (default `./data/.venv`)
 * `ADE_PIP_CACHE_DIR` (`./data/cache/pip`)
-* `ADE_ENGINE_SPEC` (`packages/ade-engine/`)
+* `ADE_ENGINE_SPEC` (`apps/ade-engine/`)
 * `ADE_PYTHON_BIN` (optional override)
 * `ADE_BUILD_TIMEOUT_SECONDS` (default `600`)
 * `ADE_BUILD_ENSURE_WAIT_SECONDS` (default `30`)

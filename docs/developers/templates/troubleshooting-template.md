@@ -37,7 +37,7 @@ Fix:
 - Start services:
 
 ```bash
-npm run dev
+ade dev
 ```
 
 - Apply migrations:

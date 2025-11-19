@@ -8,14 +8,14 @@
 > - *2025-11-20 — Final audit complete.* All items below are now closed; capture any future scope as separate work packages or follow-up tickets rather than reopening this checklist.
 
 ## A. Foundations & Scaffolding
-- [x] Confirm FastAPI feature module scaffolding under `apps/api/app/features/runs/` (create `__init__.py`, `models.py`, `schemas.py`, `service.py`, `repository.py`, `router.py`, and `__tests__/` as needed). Reference existing modules such as `features/jobs` for layout parity.
-- [x] Review `apps/api/app/shared/dependency.py` and related DI helpers to determine how run services will be injected. Add provider wiring for the runs service if required.
-- [x] Update `apps/api/app/main.py` (or appropriate router registration site) to include the new runs router while keeping tag ordering consistent.
+- [x] Confirm FastAPI feature module scaffolding under `apps/ade-api/src/ade_api/features/runs/` (create `__init__.py`, `models.py`, `schemas.py`, `service.py`, `repository.py`, `router.py`, and `__tests__/` as needed). Reference existing modules such as `features/jobs` for layout parity.
+- [x] Review `apps/ade-api/src/ade_api/shared/dependency.py` and related DI helpers to determine how run services will be injected. Add provider wiring for the runs service if required.
+- [x] Update `apps/ade-api/src/ade_api/main.py` (or appropriate router registration site) to include the new runs router while keeping tag ordering consistent.
 - [x] Document any repo-wide settings/env vars required by run execution (e.g., ADE venv root paths) in `README.md` or a new doc section once they are finalized. *(2025-11-13 — Documented ADE_SAFE_MODE requirements in README and the runs spec operational notes.)*
 
 ## B. Database Layer
 - [x] Design Alembic migrations that create `runs` and `run_logs` tables per the spec. Ensure FK constraints reference configs and cascade deletions correctly.
-- [x] Implement SQLAlchemy `Run` and `RunLog` models with relationships, default timestamps, and `RunStatus` enum (`apps/api/app/features/runs/models.py`).
+- [x] Implement SQLAlchemy `Run` and `RunLog` models with relationships, default timestamps, and `RunStatus` enum (`apps/ade-api/src/ade_api/features/runs/models.py`).
 - [x] Align model metadata (indices, nullable rules, cascade behavior) with the spec and existing conventions (compare with `features/jobs/models.py`).
 - [x] Extend repository helpers to fetch runs/logs efficiently (filtering, pagination). Capture read patterns anticipated by the API (`after_id`, `limit`).
 - [x] Add model coverage tests (e.g., via async DB fixtures) verifying enum transitions, timestamp updates, and log persistence. *(2025-11-13 — Added unit test `test_models.py` exercising defaults and cascade behaviour.)*
@@ -28,7 +28,7 @@
 ## D. Service Layer & Execution Flow
 - [x] Implement run creation, status updates, log appenders, and schema mapping helpers in `service.py` consistent with the spec and existing async session patterns.
 - [x] Design the ADE execution runner (`run_ade_engine_stream`) that spawns the config-specific virtualenv process, streams output, persists logs, and yields structured events.
-- [x] Factor out environment/command builders if reusable pieces already exist (search `packages/ade-engine` and current job orchestrators).
+- [x] Factor out environment/command builders if reusable pieces already exist (search `apps/ade-engine` and current job orchestrators).
 - [x] Provide background execution strategy for non-streaming runs (e.g., FastAPI `BackgroundTasks`, Celery, or existing job queue). Document interim behavior if async execution is deferred.
 - [x] Add service-level tests (mocking subprocess) to cover success, failure, and cancellation paths, ensuring DB state matches spec expectations. *(2025-11-13 — Added `test_service.py` covering success, failure, cancellation, validate-only, and safe-mode flows.)*
 
@@ -39,7 +39,7 @@
 - [x] Update API error handling to surface run lookup failures and execution errors consistently (HTTP 404/409/500 as appropriate).
 
 ## F. Engine & Config Package Integration
-- [x] Verify `packages/ade-engine` exposes the entry point invoked by the runner (`python -m ade_engine.run` or equivalent). Add CLI flags/options mapping from `RunCreateOptions` if needed. *(2025-11-13 — Confirmed `python -m ade_engine` CLI and documented it in the spec.)*
+- [x] Verify `apps/ade-engine` exposes the entry point invoked by the runner (`python -m ade_engine.run` or equivalent). Add CLI flags/options mapping from `RunCreateOptions` if needed. *(2025-11-13 — Confirmed `python -m ade_engine` CLI and documented it in the spec.)*
 - [x] Ensure config package discovery resolves correct venv paths using the build pointer (`${ADE_VENVS_DIR}/<workspace_id>/<config_id>/<build_id>` per repo conventions). Document fallback behavior when venvs are missing and cite the build documentation where relevant.
 - [x] Plan for artifact/log storage beyond DB (e.g., writing NDJSON to disk) if required later; note follow-up tasks if this is out of scope for the initial release. *(2025-11-13 — Logged follow-up work in the spec to persist NDJSON events to disk.)*
 
@@ -48,18 +48,18 @@
 - [x] Evaluate whether `npm run workpackage` or other CLI tooling should expose runs (e.g., list active runs). Add CLI tasks or document TODOs accordingly. *(2025-11-15 — Logged follow-up ADE-CLI-11 for `scripts/npm-runs.mjs` commands and referenced it in the observability doc.)*
 
 ## H. Frontend & Client Consumers
-- [x] Audit `apps/web` for areas that will consume the runs API (e.g., workspace run consoles). Document integration points and create follow-up work packages if frontend work is substantial. *(2025-11-15 — Captured integration notes in `docs/reference/runs_frontend_integration.md` and requested WP13 for UI work.)*
-- [x] Ensure TypeScript clients regenerate OpenAPI types (`npm run openapi-typescript`) once the backend routes land and update curated schema exports if new shapes are exposed. *(2025-11-15 — Documented OpenAPI regeneration requirements in the frontend integration notes.)*
+- [x] Audit `apps/ade-web` for areas that will consume the runs API (e.g., workspace run consoles). Document integration points and create follow-up work packages if frontend work is substantial. *(2025-11-15 — Captured integration notes in `docs/reference/runs_frontend_integration.md` and requested WP13 for UI work.)*
+- [x] Ensure TypeScript clients regenerate OpenAPI types (`ade openapi-types`) once the backend routes land and update curated schema exports if new shapes are exposed. *(2025-11-15 — Documented OpenAPI regeneration requirements in the frontend integration notes.)*
 
 ## I. QA, Ops, & Documentation
-- [x] Maintain automated coverage: extend unit/integration test suites and update CI expectations (`npm run test`, `npm run ci`).
+- [x] Maintain automated coverage: extend unit/integration test suites and update CI expectations (`npm run test`, `ade ci`).
 - [x] Provide manual QA checklist mirroring streaming vs. non-streaming flows (e.g., using HTTPie/curl) and document in `docs/ade_runs_api_spec.md` or a companion doc. *(2025-11-13 — Added Manual QA Checklist section to the runs spec.)*
 - [x] Update changelog/release notes summarizing the new runs capability and migration requirements.
 - [x] Coordinate deployment steps (migrations, env vars) with ops; document rollback strategy if run processing fails. *(2025-11-15 — Authored `docs/reference/runs_deployment.md` covering migration order, config flags, and rollback steps.)*
 
 ## J. Build Endpoint Streaming Refactor
 - [x] Read `docs/ade_builds_streaming_plan.md` and reconcile it with the existing runs spec before implementing any code. *(2025-11-16 — Reviewed plan while aligning service/routers with the runs event contract.)*
-- [x] Draft migrations + SQLAlchemy models for the new `Build`/`BuildLog` tables, keeping compatibility with `configuration_builds` pointers. *(2025-11-16 — Added `apps/api/migrations/0003_builds_tables.py` plus ORM models with FK links back to configuration builds.)*
+- [x] Draft migrations + SQLAlchemy models for the new `Build`/`BuildLog` tables, keeping compatibility with `configuration_builds` pointers. *(2025-11-16 — Added `apps/ade-api/migrations/0003_builds_tables.py` plus ORM models with FK links back to configuration builds.)*
 - [x] Extend Pydantic schemas and API contracts to expose build objects, create requests, event streams, and log listings. *(2025-11-16 — Replaced legacy ensure schemas with `BuildResource`, `BuildEvent` union, and `BuildLogsResponse`.)*
 - [x] Refactor `BuildsService` and `VirtualEnvironmentBuilder` per the plan to emit streaming events and persist incremental logs. *(2025-11-16 — Introduced async builder streaming with structured step/log events and rewrote the service orchestration around `BuildExecutionContext`.)*
 - [x] Rework the builds router to serve `POST .../builds` with `stream` support alongside status/log endpoints and compatibility shims. *(2025-11-16 — Added new NDJSON endpoint plus legacy shims returning deprecation notices.)*

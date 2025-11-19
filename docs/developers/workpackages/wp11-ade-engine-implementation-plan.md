@@ -35,7 +35,7 @@ breaks the implementation into incremental, testable milestones.
 - Runs API specification noting the CLI entry point and streaming requirements.【F:docs/ade_runs_api_spec.md†L298-L537】
 
 ## Current State Snapshot
-- Package exposes `EngineMetadata`, `load_config_manifest`, and a CLI that prints engine metadata + config manifest.【F:packages/ade-engine/src/ade_engine/__init__.py†L1-L20】【F:packages/ade-engine/src/ade_engine/__main__.py†L1-L60】
+- Package exposes `EngineMetadata`, `load_config_manifest`, and a CLI that prints engine metadata + config manifest.【F:apps/ade-engine/src/ade_engine/__init__.py†L1-L20】【F:apps/ade-engine/src/ade_engine/__main__.py†L1-L60】
 - No runtime abstractions exist for file ingestion, job orchestration, detector execution, or artifact logging.
 - Tests only cover placeholder behaviors; no integration coverage for actual spreadsheet processing.
 
@@ -157,9 +157,9 @@ breaks the implementation into incremental, testable milestones.
 Completed this iteration by introducing the `JobService` facade, isolating table processing into pure helpers, and implementing a configurable telemetry layer that unifies correlation metadata and severity thresholds across artifact and event sinks.
 
 ## Remaining Frontend & Backend Integration Work
-- [x] Update the runs service to execute the new worker entry point by supplying `--job-id`/`--jobs-dir` arguments (or calling `run_job` directly) so platform runs drive actual jobs instead of invoking the legacy manifest-printing CLI. Align the subprocess environment with the job directory layout and safe-mode semantics exposed by the runtime.【F:apps/api/app/features/runs/service.py†L332-L427】【F:packages/ade-engine/src/ade_engine/__main__.py†L12-L88】
-- [x] Replace the placeholder jobs router/service with an implementation that persists submissions, provisions job folders, and associates runs with job metadata/artifacts that the frontend can display.【F:apps/api/app/features/jobs/router.py†L1-L120】【F:apps/api/app/features/jobs/service.py†L1-L272】
-- [x] Ensure the workspace UI flows continue end-to-end once the backend endpoints exist: the documents drawer currently posts to `/jobs` and expects a `JobRecord`, and validation mode streams run events over NDJSON, so both APIs must emit the shapes the SPA consumes.【F:apps/web/src/screens/Workspace/sections/Documents/index.tsx†L626-L704】【F:apps/web/src/shared/runs/api.ts†L1-L24】
+- [x] Update the runs service to execute the new worker entry point by supplying `--job-id`/`--jobs-dir` arguments (or calling `run_job` directly) so platform runs drive actual jobs instead of invoking the legacy manifest-printing CLI. Align the subprocess environment with the job directory layout and safe-mode semantics exposed by the runtime.【F:apps/ade-api/src/ade_api/features/runs/service.py†L332-L427】【F:apps/ade-engine/src/ade_engine/__main__.py†L12-L88】
+- [x] Replace the placeholder jobs router/service with an implementation that persists submissions, provisions job folders, and associates runs with job metadata/artifacts that the frontend can display.【F:apps/ade-api/src/ade_api/features/jobs/router.py†L1-L120】【F:apps/ade-api/src/ade_api/features/jobs/service.py†L1-L272】
+- [x] Ensure the workspace UI flows continue end-to-end once the backend endpoints exist: the documents drawer currently posts to `/jobs` and expects a `JobRecord`, and validation mode streams run events over NDJSON, so both APIs must emit the shapes the SPA consumes.【F:apps/ade-web/src/screens/Workspace/sections/Documents/index.tsx†L626-L704】【F:apps/ade-web/src/shared/runs/api.ts†L1-L24】
 
 ## Architecture Hindsight (Round 3)
 - In hindsight, the jobs service and engine runtime each grew their own abstractions for manifests, telemetry, and filesystem layout. Establishing a shared domain package (or OpenAPI/JSON schema source) that both layers consume would reduce duplication and ensure the backend and engine evolve together instead of drifting.

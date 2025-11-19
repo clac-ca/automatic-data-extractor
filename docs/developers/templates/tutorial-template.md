@@ -26,11 +26,9 @@ Explain the step’s purpose and provide clear, numbered sub‑steps:
 1. Action — Describe the action to take. For example, install deps and start dev services:
 
    ```bash
-   npm run setup
-   npm run dev
+   source setup.sh   # create/activate venv, install packages
+   ade dev           # starts backend + frontend in watch mode
    ```
-
-   This installs dependencies and starts the backend and frontend in watch mode.
 
 2. Next action — For example, run backend migrations and tests:
 
