@@ -1,9 +1,21 @@
 import type { ConfigBuilderPane } from "@app/nav/urlState";
+import type { RunStatus } from "@shared/runs/types";
 import clsx from "clsx";
 
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 
 import type { WorkbenchConsoleLine, WorkbenchValidationState } from "../types";
+
+export interface WorkbenchRunSummary {
+  readonly runId: string;
+  readonly status: RunStatus;
+  readonly downloadBase: string;
+  readonly outputs: ReadonlyArray<{ path: string; byte_size: number }>;
+  readonly outputsLoaded: boolean;
+  readonly documentName?: string;
+  readonly sheetNames?: readonly string[];
+  readonly error?: string | null;
+}
 
 interface BottomPanelProps {
   readonly height: number;
@@ -11,6 +23,7 @@ interface BottomPanelProps {
   readonly validation: WorkbenchValidationState;
   readonly activePane: ConfigBuilderPane;
   readonly onPaneChange: (pane: ConfigBuilderPane) => void;
+  readonly latestRun?: WorkbenchRunSummary | null;
 }
 
 export function BottomPanel({
@@ -19,6 +32,7 @@ export function BottomPanel({
   validation,
   activePane,
   onPaneChange,
+  latestRun,
 }: BottomPanelProps) {
   const hasConsoleLines = consoleLines.length > 0;
   const statusLabel = describeValidationStatus(validation);
@@ -44,6 +58,7 @@ export function BottomPanel({
               <span className="text-[10px] tracking-[0.45em] text-emerald-400">live</span>
             </div>
             <div className="flex-1 overflow-auto">
+              {latestRun ? <RunSummaryCard summary={latestRun} /> : null}
               {hasConsoleLines ? (
                 <ul className="divide-y divide-white/5">
                   {consoleLines.map((line, index) => (
@@ -100,6 +115,71 @@ export function BottomPanel({
           </div>
         </TabsContent>
       </TabsRoot>
+    </section>
+  );
+}
+
+function RunSummaryCard({ summary }: { summary: WorkbenchRunSummary }) {
+  const statusLabel = summary.status.charAt(0).toUpperCase() + summary.status.slice(1);
+  return (
+    <section className="border-b border-white/5 bg-slate-900/60 px-4 py-3 text-[13px] text-slate-100">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-semibold text-slate-50" title={summary.runId}>
+            Run {summary.runId}
+          </p>
+          <p className="text-xs text-slate-400">Status: {statusLabel}</p>
+          {summary.documentName ? (
+            <p className="text-xs text-slate-400">Document: {summary.documentName}</p>
+          ) : null}
+          {summary.sheetNames ? (
+            <p className="text-xs text-slate-400">
+              Worksheets:
+              {summary.sheetNames.length === 0
+                ? " All worksheets"
+                : ` ${summary.sheetNames.join(", ")}`}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={`${summary.downloadBase}/artifact`}
+            className="inline-flex items-center rounded border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-100 hover:bg-slate-800"
+          >
+            Download artifact
+          </a>
+          <a
+            href={`${summary.downloadBase}/logfile`}
+            className="inline-flex items-center rounded border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-100 hover:bg-slate-800"
+          >
+            Download logs
+          </a>
+        </div>
+      </div>
+      <div className="mt-3 rounded-md border border-white/10 bg-slate-950/70 px-3 py-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Output files</p>
+        {summary.error ? (
+          <p className="text-xs text-rose-300">{summary.error}</p>
+        ) : !summary.outputsLoaded ? (
+          <p className="text-xs text-slate-400">Loading outputs…</p>
+        ) : summary.outputs.length > 0 ? (
+          <ul className="mt-2 space-y-1 text-xs text-slate-100">
+            {summary.outputs.map((file) => (
+              <li key={file.path} className="flex items-center justify-between gap-2 break-all rounded border border-white/10 px-2 py-1">
+                <a
+                  href={`${summary.downloadBase}/outputs/${file.path.split("/").map(encodeURIComponent).join("/")}`}
+                  className="text-emerald-400 hover:underline"
+                >
+                  {file.path}
+                </a>
+                <span className="text-[11px] text-slate-400">{file.byte_size.toLocaleString()} bytes</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-slate-400">No output files were generated.</p>
+        )}
+      </div>
     </section>
   );
 }

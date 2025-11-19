@@ -14,6 +14,7 @@ import { Input } from "@ui/Input";
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 import { WorkspaceMembersSection } from "./components/WorkspaceMembersSection";
 import { WorkspaceRolesSection } from "./components/WorkspaceRolesSection";
+import { SafeModeControls } from "./components/SafeModeControls";
 
 export const handle = { workspaceSectionId: "settings" } as const;
 
@@ -140,66 +141,70 @@ function WorkspaceGeneralSettings() {
   });
 
   return (
-    <form
-      className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft"
-      onSubmit={onSubmit}
-      noValidate
-    >
-      <header className="space-y-1">
-        <h2 className="text-xl font-semibold text-slate-900">Workspace identity</h2>
-        <p className="text-sm text-slate-500">
-          Update the name and slug. Changes apply immediately across navigation and shared links.
-        </p>
-      </header>
+    <div className="space-y-6">
+      <form
+        className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft"
+        onSubmit={onSubmit}
+        noValidate
+      >
+        <header className="space-y-1">
+          <h2 className="text-xl font-semibold text-slate-900">Workspace identity</h2>
+          <p className="text-sm text-slate-500">
+            Update the name and slug. Changes apply immediately across navigation and shared links.
+          </p>
+        </header>
 
-      {successMessage ? <Alert tone="success">{successMessage}</Alert> : null}
+        {successMessage ? <Alert tone="success">{successMessage}</Alert> : null}
 
-      {updateWorkspace.isError ? (
-        <Alert tone="danger">
-          {updateWorkspace.error instanceof Error ? updateWorkspace.error.message : "Unable to save workspace details."}
-        </Alert>
-      ) : null}
+        {updateWorkspace.isError ? (
+          <Alert tone="danger">
+            {updateWorkspace.error instanceof Error ? updateWorkspace.error.message : "Unable to save workspace details."}
+          </Alert>
+        ) : null}
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <FormField label="Workspace name" required error={errors.name?.message}>
-          <Input
-            {...register("name")}
-            placeholder="Finance Operations"
-            invalid={Boolean(errors.name)}
-            disabled={updateWorkspace.isPending}
-          />
-        </FormField>
-        <FormField
-          label="Workspace slug"
-          hint="Lowercase, URL-friendly identifier."
-          required
-          error={errors.slug?.message}
-        >
-          <Input
-            {...register("slug")}
-            placeholder="finance-ops"
-            invalid={Boolean(errors.slug)}
-            disabled={updateWorkspace.isPending}
-          />
-        </FormField>
-      </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          <FormField label="Workspace name" required error={errors.name?.message}>
+            <Input
+              {...register("name")}
+              placeholder="Finance Operations"
+              invalid={Boolean(errors.name)}
+              disabled={updateWorkspace.isPending}
+            />
+          </FormField>
+          <FormField
+            label="Workspace slug"
+            hint="Lowercase, URL-friendly identifier."
+            required
+            error={errors.slug?.message}
+          >
+            <Input
+              {...register("slug")}
+              placeholder="finance-ops"
+              invalid={Boolean(errors.slug)}
+              disabled={updateWorkspace.isPending}
+            />
+          </FormField>
+        </div>
 
-      <div className="flex items-center justify-end gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => {
-            reset();
-            setSuccessMessage(null);
-          }}
-          disabled={updateWorkspace.isPending || !isDirty}
-        >
-          Reset
-        </Button>
-        <Button type="submit" isLoading={updateWorkspace.isPending} disabled={!isDirty}>
-          Save changes
-        </Button>
-      </div>
-    </form>
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              reset();
+              setSuccessMessage(null);
+            }}
+            disabled={updateWorkspace.isPending || !isDirty}
+          >
+            Reset
+          </Button>
+          <Button type="submit" isLoading={updateWorkspace.isPending} disabled={!isDirty}>
+            Save changes
+          </Button>
+        </div>
+      </form>
+
+      <SafeModeControls />
+    </div>
   );
 }

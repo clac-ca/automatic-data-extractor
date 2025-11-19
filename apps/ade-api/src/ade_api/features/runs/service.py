@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
+import shutil
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
+from typing import TYPE_CHECKING
 
 from ade_engine.schemas import TelemetryEnvelope
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +22,13 @@ from ade_api.features.builds.repository import ConfigurationBuildsRepository
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.features.configs.repository import ConfigurationsRepository
+from ade_api.features.documents.repository import DocumentsRepository
+from ade_api.features.documents.storage import DocumentStorage
+from ade_api.features.system_settings.service import (
+    SAFE_MODE_DEFAULT_DETAIL,
+    SafeModeService,
+)
+from ade_api.features.system_settings.schemas import SafeModeStatus
 from ade_api.settings import Settings
 from ade_api.shared.core.time import utc_now
 
@@ -40,9 +50,13 @@ from .schemas import (
 from .supervisor import RunSupervisor
 
 __all__ = [
+    "RunArtifactMissingError",
     "RunExecutionContext",
+    "RunDocumentMissingError",
     "RunEnvironmentNotReadyError",
+    "RunLogsFileMissingError",
     "RunNotFoundError",
+    "RunOutputMissingError",
     "RunsService",
     "RunStreamFrame",
 ]
@@ -53,6 +67,9 @@ DEFAULT_STREAM_LIMIT = 1000
 
 
 RunStreamFrame = RunEvent | TelemetryEnvelope
+
+if TYPE_CHECKING:  # pragma: no cover - import guard for circular dependencies
+    from ade_api.features.documents.models import Document
 
 
 @dataclass(slots=True, frozen=True)
@@ -102,6 +119,22 @@ class RunNotFoundError(RuntimeError):
     """Raised when a requested run row cannot be located."""
 
 
+class RunDocumentMissingError(RuntimeError):
+    """Raised when a requested input document cannot be located."""
+
+
+class RunArtifactMissingError(RuntimeError):
+    """Raised when a requested run artifact is unavailable."""
+
+
+class RunLogsFileMissingError(RuntimeError):
+    """Raised when a requested run log file cannot be read."""
+
+
+class RunOutputMissingError(RuntimeError):
+    """Raised when requested run outputs cannot be resolved."""
+
+
 class RunsService:
     """Coordinate run persistence, execution, and serialization for the API."""
 
@@ -111,6 +144,7 @@ class RunsService:
         session: AsyncSession,
         settings: Settings,
         supervisor: RunSupervisor | None = None,
+        safe_mode_service: SafeModeService | None = None,
     ) -> None:
         self._session = session
         self._settings = settings
@@ -118,6 +152,17 @@ class RunsService:
         self._builds = ConfigurationBuildsRepository(session)
         self._runs = RunsRepository(session)
         self._supervisor = supervisor or RunSupervisor()
+        self._documents = DocumentsRepository(session)
+        self._safe_mode_service = safe_mode_service
+
+        if settings.documents_dir is None:
+            raise RuntimeError("ADE_DOCUMENTS_DIR is not configured")
+        if settings.jobs_dir is None:
+            raise RuntimeError("ADE_JOBS_DIR is not configured")
+
+        self._documents_dir = settings.documents_dir
+        self._jobs_dir = Path(settings.jobs_dir)
+        self._storage = DocumentStorage(self._documents_dir)
 
     # ---------------------------------------------------------------------
     # Run lifecycle helpers
@@ -135,12 +180,23 @@ class RunsService:
         configuration = await self._resolve_configuration(config_id)
         build = await self._resolve_active_build(configuration)
 
+        selected_sheet_name = options.input_sheet_name
+        if not selected_sheet_name and options.input_sheet_names:
+            if len(options.input_sheet_names) == 1:
+                selected_sheet_name = options.input_sheet_names[0]
+
         run = Run(
             id=self._generate_run_id(),
             configuration_id=configuration.id,
             workspace_id=configuration.workspace_id,
             config_id=configuration.config_id,
             status=RunStatus.QUEUED,
+            input_document_id=options.input_document_id,
+            input_sheet_name=selected_sheet_name,
+            input_sheet_names=(
+                options.input_sheet_names
+                or ([selected_sheet_name] if selected_sheet_name else None)
+            ),
         )
         self._session.add(run)
         await self._session.flush()
@@ -225,10 +281,11 @@ class RunsService:
             )
             return
 
-        if self._settings.safe_mode:
+        safe_mode = await self._safe_mode_status()
+        if safe_mode.enabled:
             log = await self._append_log(
                 run.id,
-                "ADE safe mode enabled; skipping engine execution.",
+                safe_mode.detail,
                 stream="stdout",
             )
             completion = await self._complete_run(
@@ -257,6 +314,7 @@ class RunsService:
                 run=run,
                 context=context,
                 options=options,
+                safe_mode_enabled=safe_mode.enabled,
             ):
                 yield frame
 
@@ -321,6 +379,9 @@ class RunsService:
         return RunResource(
             id=run.id,
             config_id=run.config_id,
+            input_document_id=run.input_document_id,
+            input_sheet_name=run.input_sheet_name,
+            input_sheet_names=run.input_sheet_names,
             status=self._status_literal(run.status),
             created=self._epoch_seconds(run.created_at),
             started=self._epoch_seconds(run.started_at),
@@ -352,6 +413,68 @@ class RunsService:
             next_after_id=next_after,
         )
 
+    async def get_artifact_path(self, *, run_id: str) -> Path:
+        """Return the artifact path for ``run_id`` when available."""
+
+        await self._require_run(run_id)
+        logs_dir = self._job_dir_for_run(run_id) / "logs"
+        artifact_path = logs_dir / "artifact.json"
+        if not artifact_path.is_file():
+            raise RunArtifactMissingError("Run artifact is unavailable")
+        return artifact_path
+
+    async def get_logs_file_path(self, *, run_id: str) -> Path:
+        """Return the raw log stream path for ``run_id`` when available."""
+
+        await self._require_run(run_id)
+        logs_dir = self._job_dir_for_run(run_id) / "logs"
+        logs_path = logs_dir / "events.ndjson"
+        if not logs_path.is_file():
+            raise RunLogsFileMissingError("Run log stream is unavailable")
+        return logs_path
+
+    async def list_output_files(self, *, run_id: str) -> list[tuple[str, int]]:
+        """Return output file tuples for ``run_id``."""
+
+        await self._require_run(run_id)
+        output_dir = self._job_dir_for_run(run_id) / "output"
+        if not output_dir.exists() or not output_dir.is_dir():
+            raise RunOutputMissingError("Run output is unavailable")
+
+        files: list[tuple[str, int]] = []
+        for path in output_dir.rglob("*"):
+            if not path.is_file():
+                continue
+            try:
+                relative = path.relative_to(output_dir)
+            except ValueError:
+                continue
+            files.append((str(relative), path.stat().st_size))
+        return files
+
+    async def resolve_output_file(
+        self,
+        *,
+        run_id: str,
+        relative_path: str,
+    ) -> Path:
+        """Return the absolute path for ``relative_path`` in ``run_id`` outputs."""
+
+        await self._require_run(run_id)
+        output_dir = self._job_dir_for_run(run_id) / "output"
+        if not output_dir.exists() or not output_dir.is_dir():
+            raise RunOutputMissingError("Run output is unavailable")
+
+        candidate = (output_dir / relative_path).resolve()
+        try:
+            candidate.relative_to(output_dir)
+        except ValueError:
+            raise RunOutputMissingError("Requested output is outside the run directory")
+
+        if not candidate.is_file():
+            raise RunOutputMissingError("Requested output file not found")
+        return candidate
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -361,6 +484,7 @@ class RunsService:
         run: Run,
         context: RunExecutionContext,
         options: RunCreateOptions,
+        safe_mode_enabled: bool = False,
     ) -> AsyncIterator[RunStreamFrame]:
         python = self._resolve_python(Path(context.venv_path))
         env = self._build_env(Path(context.venv_path), options, context)
@@ -368,6 +492,13 @@ class RunsService:
         jobs_root = Path(context.jobs_dir or self._settings.jobs_dir)
         job_dir = jobs_root / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
+
+        if options.input_document_id:
+            await self._stage_input_document(
+                workspace_id=context.workspace_id,
+                document_id=options.input_document_id,
+                job_dir=job_dir,
+            )
         command = [
             str(python),
             "-m",
@@ -377,7 +508,7 @@ class RunsService:
             "--jobs-dir",
             str(jobs_root),
         ]
-        if self._settings.safe_mode:
+        if safe_mode_enabled:
             command.append("--safe-mode")
 
         runner = ADEProcessRunner(command=command, job_dir=job_dir, env=env)
@@ -421,6 +552,37 @@ class RunsService:
         if run is None:
             raise RunNotFoundError(run_id)
         return run
+
+    async def _require_document(self, *, workspace_id: str, document_id: str) -> Document:
+        document = await self._documents.get_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+        if document is None:
+            raise RunDocumentMissingError(f"Document {document_id} not found")
+        return document
+
+    async def _stage_input_document(
+        self,
+        *,
+        workspace_id: str,
+        document_id: str,
+        job_dir: Path,
+    ) -> None:
+        document = await self._require_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+
+        input_dir = job_dir / "input"
+        input_dir.mkdir(parents=True, exist_ok=True)
+
+        source = self._storage.path_for(document.stored_uri)
+        destination = input_dir / document.original_filename
+
+        await asyncio.to_thread(shutil.copy2, source, destination)
+        document.last_run_at = utc_now()
+        await self._session.flush()
 
     async def _resolve_configuration(self, config_id: str) -> Configuration:
         configuration = await self._configs.get_by_config_id(config_id)
@@ -507,10 +669,25 @@ class RunsService:
             env["ADE_RUN_DRY_RUN"] = "1"
         if options.validate_only:
             env["ADE_RUN_VALIDATE_ONLY"] = "1"
+        if options.input_sheet_name:
+            env["ADE_RUN_INPUT_SHEET"] = options.input_sheet_name
+        if options.input_sheet_names:
+            env["ADE_RUN_INPUT_SHEETS"] = json.dumps(options.input_sheet_names)
+            if len(options.input_sheet_names) == 1 and not options.input_sheet_name:
+                env["ADE_RUN_INPUT_SHEET"] = options.input_sheet_names[0]
         if context.run_id:
             env["ADE_TELEMETRY_CORRELATION_ID"] = context.run_id
             env["ADE_RUN_ID"] = context.run_id
         return env
+
+    def _job_dir_for_run(self, run_id: str) -> Path:
+        root = self._jobs_dir.resolve()
+        candidate = (self._jobs_dir / run_id).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:  # pragma: no cover - defensive guard
+            raise RunOutputMissingError("Requested path escapes jobs directory")
+        return candidate
 
     @staticmethod
     def _generate_run_id() -> str:
@@ -536,6 +713,14 @@ class RunsService:
         if not modes:
             return None
         return "Run options: " + ", ".join(modes)
+
+    async def _safe_mode_status(self) -> SafeModeStatus:
+        if self._safe_mode_service is not None:
+            return await self._safe_mode_service.get_status()
+        return SafeModeStatus(
+            enabled=self._settings.safe_mode,
+            detail=SAFE_MODE_DEFAULT_DETAIL,
+        )
 
     @property
     def settings(self) -> Settings:

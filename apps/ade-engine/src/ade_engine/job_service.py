@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -61,6 +63,16 @@ class JobService:
         metadata: dict[str, Any] = {}
         if self._telemetry_config.correlation_id:
             metadata["run_id"] = self._telemetry_config.correlation_id
+        sheet_override = os.environ.get("ADE_RUN_INPUT_SHEET")
+        if sheet_override:
+            metadata["input_sheet_name"] = sheet_override
+        sheet_list_raw = os.environ.get("ADE_RUN_INPUT_SHEETS")
+        if sheet_list_raw:
+            parsed = json.loads(sheet_list_raw)
+            if isinstance(parsed, list):
+                cleaned = [str(value).strip() for value in parsed if str(value).strip()]
+                if cleaned:
+                    metadata["input_sheet_names"] = cleaned
         job = JobContext(
             job_id=job_id,
             manifest=manifest_ctx.raw,

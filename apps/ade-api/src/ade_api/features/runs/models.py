@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -39,6 +39,11 @@ class Run(Base):
         String(26), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
     config_id: Mapped[str] = mapped_column(String(26), nullable=False)
+    input_document_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
+    )
+    input_sheet_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    input_sheet_names: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
     status: Mapped[RunStatus] = mapped_column(
         SAEnum(
@@ -73,6 +78,7 @@ class Run(Base):
         Index("runs_config_idx", "config_id"),
         Index("runs_workspace_idx", "workspace_id"),
         Index("runs_status_idx", "status"),
+        Index("runs_input_document_idx", "input_document_id"),
     )
 
 

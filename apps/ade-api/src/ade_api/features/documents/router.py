@@ -37,7 +37,7 @@ from .exceptions import (
     InvalidDocumentExpirationError,
 )
 from .filters import DocumentFilters
-from .schemas import DocumentOut, DocumentPage
+from .schemas import DocumentOut, DocumentPage, DocumentSheet
 from .service import DocumentsService
 from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
@@ -331,6 +331,41 @@ async def download_document(
     response = StreamingResponse(stream, media_type=media_type)
     response.headers["Content-Disposition"] = _build_download_disposition(record.original_filename)
     return response
+
+
+@router.get(
+    "/documents/{document_id}/sheets",
+    response_model=list[DocumentSheet],
+    summary="List worksheets for a document",
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document not found within the workspace.",
+        }
+    },
+)
+async def list_document_sheets_endpoint(
+    workspace_id: Annotated[
+        str, Path(min_length=1, description="Workspace identifier")
+    ],
+    document_id: Annotated[
+        str, Path(min_length=1, description="Document identifier")
+    ],
+    service: Annotated[DocumentsService, Depends(get_documents_service)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Documents.Read"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
+) -> list[DocumentSheet]:
+    try:
+        return await service.list_document_sheets(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+    except (DocumentNotFoundError, DocumentFileMissingError) as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.delete(

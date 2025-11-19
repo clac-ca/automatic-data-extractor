@@ -644,10 +644,14 @@ export function useWorkbenchFiles({
     if (!persistence || !hasHydratedPersistence) {
       return;
     }
+    const orderedRecentTabs = [activeTabId, ...recentOrder]
+      .filter((id): id is string => Boolean(id))
+      .filter((id, index, array) => array.indexOf(id) === index)
+      .filter((id) => tabs.some((tab) => tab.id === id));
     persistence.set<PersistedWorkbenchTabs>({
       openTabs: tabs.map((tab) => ({ id: tab.id, pinned: Boolean(tab.pinned) })),
       activeTabId: activeTabId || null,
-      mru: recentOrder,
+      mru: orderedRecentTabs,
     });
   }, [persistence, tabs, activeTabId, recentOrder, hasHydratedPersistence]);
 

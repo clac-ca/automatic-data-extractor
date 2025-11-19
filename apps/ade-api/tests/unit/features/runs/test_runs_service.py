@@ -16,6 +16,7 @@ from ade_api.features.runs.models import RunStatus
 from ade_api.features.runs.schemas import RunCompletedEvent, RunCreateOptions, RunLogEvent
 from ade_api.features.runs.service import RunExecutionContext, RunsService
 from ade_api.features.workspaces.models import Workspace
+from ade_api.features.system_settings.service import SafeModeService
 from ade_api.settings import Settings
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.db.mixins import generate_ulid
@@ -74,7 +75,12 @@ async def _prepare_service(
     session.add(build)
     await session.commit()
 
-    service = RunsService(session=session, settings=settings)
+    safe_mode_service = SafeModeService(session=session, settings=settings)
+    service = RunsService(
+        session=session,
+        settings=settings,
+        safe_mode_service=safe_mode_service,
+    )
     run, context = await service.prepare_run(
         config_id=configuration.config_id,
         options=RunCreateOptions(),
@@ -258,4 +264,4 @@ async def test_stream_run_respects_safe_mode(session, tmp_path: Path) -> None:
     assert run is not None
     assert run.summary == "Safe mode skip"
     logs = await service.get_logs(run_id=context.run_id)
-    assert logs.entries[-1].message.startswith("ADE safe mode enabled")
+    assert "safe mode" in logs.entries[-1].message.lower()
