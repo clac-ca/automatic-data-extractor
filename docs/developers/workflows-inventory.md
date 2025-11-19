@@ -4,7 +4,7 @@ This captures the npm-based orchestration that previously lived at the repo root
 
 ## Commands and behavior
 
-- `setup` — create `.venv` (if missing), pip upgrade, editable installs for `packages/ade-schemas`, `apps/ade-engine`, `apps/ade-api[dev]`; run `npm ci` in `apps/ade-web/`. Env: uses OS python launcher; cwd: repo root.
+- `setup` — create `.venv` (if missing), pip upgrade, editable installs for `apps/ade-engine`, `apps/ade-api[dev]`; run `npm ci` in `apps/ade-web/`. Env: uses OS python launcher; cwd: repo root.
 - `dev` — run backend (uvicorn) and frontend (npm dev) via `npx concurrently`. Env: `DEV_BACKEND_PORT`/`DEV_FRONTEND_PORT` (defaults 8000/8001 when both). Cwd for backend: repo root; frontend: `apps/ade-web/`.
 - `dev:backend` / `dev:frontend` — same as above, scoped to one side. Backend checks `.venv/bin/uvicorn` fallback to system uvicorn; frontend `npm --prefix apps/web run dev -- --host 0.0.0.0 --port <DEV_FRONTEND_PORT>`.
 - `start` — `uvicorn apps.api.app.main:create_app --factory --host 0.0.0.0 --port 8000` (prefers `.venv` uvicorn). Cwd: repo root.

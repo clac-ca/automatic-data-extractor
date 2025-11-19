@@ -6,7 +6,7 @@ import inspect
 from importlib import import_module
 from typing import Any, Iterable, Mapping
 
-from ade_schemas.manifest import ColumnMeta
+from ade_engine.schemas.manifest import ColumnMeta
 
 from .models import ColumnModule
 

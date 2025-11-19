@@ -8,7 +8,6 @@ source .venv/bin/activate
 # Install backend packages
 pip install -U pip setuptools wheel
 pip install -e apps/ade-cli
-pip install -e packages/ade-schemas
 pip install -e apps/ade-engine
 pip install -e apps/ade-api
 

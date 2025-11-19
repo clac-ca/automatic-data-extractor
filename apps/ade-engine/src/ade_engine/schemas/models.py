@@ -1,6 +1,6 @@
-"""Backward-compatible re-export of manifest schemas from :mod:`ade_schemas`."""
+"""Compatibility re-exports for manifest schemas bundled with :mod:`ade_engine`."""
 
-from ade_schemas.manifest import (  # noqa: F401
+from .manifest import (
     ColumnMeta,
     ColumnSection,
     EngineDefaults,

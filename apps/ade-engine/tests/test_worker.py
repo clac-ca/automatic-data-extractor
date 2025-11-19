@@ -8,7 +8,7 @@ from pathlib import Path
 import openpyxl
 import pytest
 
-from ade_schemas import ADE_TELEMETRY_EVENT_SCHEMA, TelemetryEnvelope
+from ade_engine.schemas import ADE_TELEMETRY_EVENT_SCHEMA, TelemetryEnvelope
 
 from ade_engine.worker import run_job
 

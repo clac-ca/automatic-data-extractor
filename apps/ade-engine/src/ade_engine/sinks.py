@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Protocol, runtime_checkable
 
-from ade_schemas import TelemetryEnvelope, TelemetryEvent
+from ade_engine.schemas import TelemetryEnvelope, TelemetryEvent
 
 from .model import JobContext, JobPaths
 

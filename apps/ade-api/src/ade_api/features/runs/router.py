@@ -6,7 +6,7 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
-from ade_schemas import TelemetryEnvelope
+from ade_engine.schemas import TelemetryEnvelope
 from fastapi import (
     APIRouter,
     BackgroundTasks,

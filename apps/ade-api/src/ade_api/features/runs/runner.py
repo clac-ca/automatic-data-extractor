@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from ade_schemas import TelemetryEnvelope
+from ade_engine.schemas import TelemetryEnvelope
 from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
