@@ -1,4 +1,4 @@
-import telemetrySchema from "../../../../packages/ade-schemas/src/ade_schemas/telemetry.event.v1.schema.json";
+import telemetrySchema from "../../../ade-engine/src/ade_engine/schemas/telemetry.event.v1.schema.json";
 
 export const ADE_TELEMETRY_EVENT_SCHEMA =
   telemetrySchema.properties?.schema?.const ?? "ade.telemetry/run-event.v1";

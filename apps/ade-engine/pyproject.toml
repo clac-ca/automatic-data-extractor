@@ -19,7 +19,7 @@ dependencies = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-"ade_engine.schemas" = []
+"ade_engine.schemas" = ["*.json"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

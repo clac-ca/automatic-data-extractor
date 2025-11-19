@@ -44,7 +44,7 @@ def run_tests(
             typer.echo("🧪 Running backend tests (pytest)…")
             common.require_python_module(
                 "pytest",
-                "Install backend/test dependencies (e.g., `pip install -e apps/ade-cli -e packages/ade-schemas -e apps/ade-engine -e apps/ade-api`).",
+                "Install backend/test dependencies (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
             )
             common.run(
                 [sys.executable, "-m", "pytest", "-q"],

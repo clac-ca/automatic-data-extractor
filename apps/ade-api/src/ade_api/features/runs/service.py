@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from ade_schemas import TelemetryEnvelope
+from ade_engine.schemas import TelemetryEnvelope
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.features.builds.models import ConfigurationBuild, ConfigurationBuildStatus

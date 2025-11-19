@@ -12,7 +12,7 @@ State what this guide helps the reader do and any assumptions. Keep it short.
 
 Prerequisites (optional):
 
-- Dependencies installed (at least `pip install --no-cache-dir -e apps/ade-cli -e packages/ade-schemas -e apps/ade-engine -e apps/ade-api`; `source setup.sh` recommended)
+- Dependencies installed (at least `pip install --no-cache-dir -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`; `source setup.sh` recommended)
 - Access to a local API (`ade dev`)
 
 ---

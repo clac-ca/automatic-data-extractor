@@ -64,7 +64,7 @@ export environment variables in your shell.
    source .venv/bin/activate  # Windows PowerShell: .\.venv\Scripts\Activate.ps1
 
    python -m pip install --upgrade pip
-   pip install --no-cache-dir -e apps/ade-cli -e packages/ade-schemas -e apps/ade-engine -e apps/ade-api
+   pip install --no-cache-dir -e apps/ade-cli -e apps/ade-engine -e apps/ade-api
 
    cd apps/ade-web
    npm install
@@ -106,7 +106,7 @@ ade dev --backend --no-frontend
 ade dev --frontend --no-backend
 ```
 
-Tip: If you frequently switch branches, re-run the editable installs (`pip install -e apps/ade-cli -e packages/ade-schemas -e apps/ade-engine -e apps/ade-api`) in your virtualenv (and `npm install` in `apps/ade-web`) after pulling changes so your environment stays in sync with the code.
+Tip: If you frequently switch branches, re-run the editable installs (`pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`) in your virtualenv (and `npm install` in `apps/ade-web`) after pulling changes so your environment stays in sync with the code.
 
 ## 5. Option B – Run ADE with Docker
 Docker is useful when you want ADE isolated from the host Python install or to
@@ -175,7 +175,7 @@ With these basics you can run ADE on a laptop, VM, or container host and manage
 administrators through the API while the frontend experience is completed.
 
 ## 8. Troubleshooting
-- **`uvicorn` exits immediately:** ensure the Python dependencies are installed (`pip install -e apps/ade-cli -e packages/ade-schemas -e apps/ade-engine -e apps/ade-api`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn ade_api.main:create_app --factory`).
+- **`uvicorn` exits immediately:** ensure the Python dependencies are installed (`pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn ade_api.main:create_app --factory`).
 - **Port conflicts on 8000:** choose another port with `uvicorn ... --port 9000` or stop the conflicting process.
 - **Frontend shows a blank page:** rebuild assets with `ade build` (or `npm run build` in `apps/ade-web/`) and copy `apps/ade-web/dist/` into `apps/ade-api/src/ade_api/web/static/`).
 - **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api` prefix.

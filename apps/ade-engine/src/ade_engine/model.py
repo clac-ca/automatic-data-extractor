@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ade_schemas import ManifestV1
+from ade_engine.schemas import ManifestV1
 
 
 @dataclass(frozen=True, slots=True)

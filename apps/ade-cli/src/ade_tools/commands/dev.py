@@ -98,7 +98,7 @@ def run_dev(
     if backend:
         common.require_python_module(
             "ade_api",
-            "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e packages/ade-schemas -e apps/ade-engine -e apps/ade-api`).",
+            "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
         )
         uvicorn_bin = common.uvicorn_path()
         typer.echo(f"🔧 Backend dev server:    http://localhost:{env['DEV_BACKEND_PORT']}")

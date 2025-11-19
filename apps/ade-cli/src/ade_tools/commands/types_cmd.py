@@ -17,7 +17,7 @@ def run_types() -> None:
     common.ensure_backend_dir()
     common.require_python_module(
         "ade_api",
-        "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e packages/ade-schemas -e apps/ade-engine -e apps/ade-api`).",
+        "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
     )
     openapi_path = common.BACKEND_SRC / "openapi.json"
     output_path = common.FRONTEND_DIR / "src" / "generated-types" / "openapi.d.ts"

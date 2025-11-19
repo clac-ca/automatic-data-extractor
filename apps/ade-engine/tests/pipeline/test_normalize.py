@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from ade_schemas.manifest import ColumnMeta
+from ade_engine.schemas.manifest import ColumnMeta
 
 from ade_engine.pipeline.models import ColumnMapping, ColumnModule
 from ade_engine.pipeline.normalize import normalize_rows

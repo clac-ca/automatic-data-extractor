@@ -32,13 +32,10 @@ automatic-data-extractor/
 │     └─ vite.config.ts
 │
 ├─ packages/                               # Reusable libraries (imported by apps)
-│  ├─ ade-engine/                          # installable Python package: ade_engine
-│  │  ├─ pyproject.toml
-│  │  ├─ src/ade_engine/                   # engine runtime, IO, pipeline, hooks integration
-│  │  └─ tests/                            # engine unit tests
-│  └─ ade-schemas/                         # installable package: ade_schemas
+│  └─ ade-engine/                          # installable Python package: ade_engine
 │     ├─ pyproject.toml
-│     └─ src/ade_schemas/
+│     ├─ src/ade_engine/                   # engine runtime, IO, pipeline, hooks integration, bundled schemas
+│     └─ tests/                            # engine unit tests
 │
 ├─ tools/                                   # Python orchestration CLI (console script: ade)
 │  └─ ade-cli/
