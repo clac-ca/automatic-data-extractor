@@ -6,21 +6,22 @@ from datetime import UTC, datetime
 
 from pydantic import ValidationError
 
+from ade_api.features.system_settings.schemas import SafeModeStatus
+from ade_api.features.system_settings.service import SAFE_MODE_DEFAULT_DETAIL, SafeModeService
 from ade_api.settings import Settings
 
 from .exceptions import HealthCheckError
 from .schemas import HealthCheckResponse, HealthComponentStatus
 
-SAFE_MODE_DISABLED_MESSAGE = (
-    "User-submitted configuration execution is currently disabled because ADE_SAFE_MODE is enabled."
-)
-
 
 class HealthService:
     """Compute health responses for readiness/liveness checks."""
 
-    def __init__(self, *, settings: Settings) -> None:
+    def __init__(
+        self, *, settings: Settings, safe_mode_service: SafeModeService | None = None
+    ) -> None:
         self._settings = settings
+        self._safe_mode_service = safe_mode_service
 
     async def status(self) -> HealthCheckResponse:
         """Return the overall system health."""
@@ -32,12 +33,13 @@ class HealthService:
                     detail=f"v{self._settings.app_version}",
                 ),
             ]
-            if self._settings.safe_mode:
+            safe_mode = await self._safe_mode_status()
+            if safe_mode.enabled:
                 components.append(
                     HealthComponentStatus(
                         name="safe-mode",
                         status="degraded",
-                        detail=SAFE_MODE_DISABLED_MESSAGE,
+                        detail=safe_mode.detail,
                     )
                 )
             return HealthCheckResponse(
@@ -47,3 +49,8 @@ class HealthService:
             )
         except ValidationError as exc:  # pragma: no cover - defensive guardrail
             raise HealthCheckError("Failed to compute health status") from exc
+
+    async def _safe_mode_status(self) -> SafeModeStatus:
+        if self._safe_mode_service is not None:
+            return await self._safe_mode_service.get_status()
+        return SafeModeStatus(enabled=self._settings.safe_mode, detail=SAFE_MODE_DEFAULT_DETAIL)

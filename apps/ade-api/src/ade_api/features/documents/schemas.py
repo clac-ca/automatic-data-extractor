@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -84,17 +84,23 @@ class DocumentOut(BaseSchema):
 
 
 class DocumentLastRun(BaseSchema):
-    """Minimal representation of the last job run for a document."""
+    """Minimal representation of the last engine execution for a document."""
 
-    job_id: ULIDStr = Field(description="Latest job ULID.")
+    job_id: ULIDStr | None = Field(
+        default=None, description="Latest job ULID when the run came from a job."
+    )
+    run_id: ULIDStr | None = Field(
+        default=None,
+        description="Latest run ULID when the execution was streamed directly.",
+    )
     status: JobStatusLiteral
     run_at: datetime | None = Field(
         default=None,
-        description="Timestamp for the latest job event (completion/start).",
+        description="Timestamp for the latest job or run event (completion/start).",
     )
     message: str | None = Field(
         default=None,
-        description="Optional status or error message associated with the job.",
+        description="Optional status or error message associated with the execution.",
     )
 
 
@@ -102,4 +108,19 @@ class DocumentPage(Page[DocumentOut]):
     """Paginated envelope of document records."""
 
 
-__all__ = ["DocumentLastRun", "DocumentOut", "DocumentPage", "UploaderOut"]
+class DocumentSheet(BaseSchema):
+    """Descriptor for a worksheet or single-sheet document."""
+
+    name: str
+    index: int = Field(ge=0)
+    kind: Literal["worksheet", "file"] = "worksheet"
+    is_active: bool = False
+
+
+__all__ = [
+    "DocumentLastRun",
+    "DocumentOut",
+    "DocumentPage",
+    "DocumentSheet",
+    "UploaderOut",
+]

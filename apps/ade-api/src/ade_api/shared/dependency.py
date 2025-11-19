@@ -75,12 +75,26 @@ def get_documents_service(
     return DocumentsService(session=session, settings=settings)
 
 
-def get_health_service(settings: SettingsDep) -> HealthService:
+def get_health_service(
+    session: SessionDep, settings: SettingsDep
+) -> HealthService:
     """Return a health service configured for the current request."""
 
     from ade_api.features.health.service import HealthService
+    from ade_api.features.system_settings.service import SafeModeService
 
-    return HealthService(settings=settings)
+    safe_mode = SafeModeService(session=session, settings=settings)
+    return HealthService(settings=settings, safe_mode_service=safe_mode)
+
+
+def get_safe_mode_service(
+    session: SessionDep, settings: SettingsDep
+) -> "SafeModeService":
+    """Return a safe mode service for toggling ADE runtime state."""
+
+    from ade_api.features.system_settings.service import SafeModeService
+
+    return SafeModeService(session=session, settings=settings)
 
 
 def get_configs_service(
@@ -137,6 +151,7 @@ def get_runs_service(
         session=session,
         settings=settings,
         supervisor=_RUN_SUPERVISOR,
+        safe_mode_service=get_safe_mode_service(session=session, settings=settings),
     )
 
 
@@ -434,6 +449,7 @@ __all__ = [
     "get_documents_service",
     "get_health_service",
     "get_runs_service",
+    "get_safe_mode_service",
     "get_system_settings_service",
     "get_users_service",
     "get_workspace_profile",

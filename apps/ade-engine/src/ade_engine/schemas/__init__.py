@@ -2,28 +2,30 @@
 
 from .manifest import (
     ColumnMeta,
+    ColumnSection,
     EngineDefaults,
+    EngineSection,
+    EngineWriter,
     HookCollection,
     ManifestContext,
     ManifestInfo,
     ManifestV1,
     ScriptRef,
-    Section,
-    Writer,
 )
 from .telemetry import ADE_TELEMETRY_EVENT_SCHEMA, TelemetryEnvelope, TelemetryEvent
 
 __all__ = [
     "ADE_TELEMETRY_EVENT_SCHEMA",
     "ColumnMeta",
+    "ColumnSection",
     "EngineDefaults",
+    "EngineSection",
+    "EngineWriter",
     "HookCollection",
     "ManifestContext",
     "ManifestInfo",
     "ManifestV1",
     "ScriptRef",
-    "Section",
-    "Writer",
     "TelemetryEnvelope",
     "TelemetryEvent",
 ]

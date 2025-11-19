@@ -38,9 +38,9 @@ class JobContext:
 
     job_id: str
     manifest: dict[str, Any]
-    manifest_model: ManifestV1 | None = None
     paths: JobPaths
     started_at: datetime
+    manifest_model: ManifestV1 | None = None
     safe_mode: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
 

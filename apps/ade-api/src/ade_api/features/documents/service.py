@@ -5,13 +5,17 @@ from __future__ import annotations
 import unicodedata
 from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, cast
 
+import openpyxl
 from fastapi import UploadFile
 from fastapi.concurrency import run_in_threadpool
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.features.jobs.repository import JobsRepository
+from ade_api.features.runs.models import Run, RunStatus
 from ade_api.features.users.models import User
 from ade_api.settings import Settings
 from ade_api.shared.db import generate_ulid
@@ -26,7 +30,7 @@ from .exceptions import (
 from .filters import DocumentFilters, DocumentSource, DocumentStatus, apply_document_filters
 from .models import Document
 from .repository import DocumentsRepository
-from .schemas import DocumentLastRun, DocumentOut, DocumentPage
+from .schemas import DocumentLastRun, DocumentOut, DocumentPage, DocumentSheet
 from .storage import DocumentStorage
 
 _FALLBACK_FILENAME = "upload"
@@ -144,6 +148,30 @@ class DocumentsService:
         await self._attach_last_runs(workspace_id, [payload])
         return payload
 
+    async def list_document_sheets(
+        self,
+        *,
+        workspace_id: str,
+        document_id: str,
+    ) -> list[DocumentSheet]:
+        """Return worksheet descriptors for ``document_id``."""
+
+        document = await self._get_document(workspace_id, document_id)
+        path = self._storage.path_for(document.stored_uri)
+        exists = await run_in_threadpool(path.exists)
+        if not exists:
+            raise DocumentFileMissingError(
+                document_id=document_id,
+                stored_uri=document.stored_uri,
+            )
+
+        suffix = Path(document.original_filename).suffix.lower()
+        if suffix == ".xlsx":
+            return await run_in_threadpool(self._inspect_workbook, path)
+
+        name = self._default_sheet_name(document.original_filename)
+        return [DocumentSheet(name=name, index=0, kind="file", is_active=True)]
+
     async def stream_document(
         self, *, workspace_id: str, document_id: str
     ) -> tuple[DocumentOut, AsyncIterator[bytes]]:
@@ -206,7 +234,7 @@ class DocumentsService:
         workspace_id: str,
         documents: Sequence[DocumentOut],
     ) -> None:
-        """Populate ``last_run`` on each document using recent job data."""
+        """Populate ``last_run`` on each document using recent job + run data."""
 
         if not documents:
             return
@@ -215,18 +243,67 @@ class DocumentsService:
             workspace_id=workspace_id,
             document_ids=[document.id for document in documents],
         )
+        run_summaries = await self._latest_stream_runs(
+            workspace_id=workspace_id, documents=documents
+        )
         for document in documents:
-            summary = summaries.get(document.id)
-            if summary is None:
+            job_summary = summaries.get(document.id)
+            run_summary = run_summaries.get(document.id)
+
+            winner = None
+            if job_summary and run_summary:
+                job_ts = job_summary.run_at or datetime.min.replace(tzinfo=UTC)
+                run_ts = run_summary.run_at or datetime.min.replace(tzinfo=UTC)
+                winner = run_summary if run_ts >= job_ts else job_summary
+            else:
+                winner = run_summary or job_summary
+
+            if winner is None:
                 document.last_run = None
                 continue
 
             document.last_run = DocumentLastRun(
-                job_id=summary.job_id,
-                status=summary.status,
-                run_at=summary.run_at,
-                message=summary.message,
+                job_id=getattr(winner, "job_id", None),
+                run_id=getattr(winner, "run_id", None),
+                status=winner.status,
+                run_at=winner.run_at,
+                message=winner.message,
             )
+
+    async def _latest_stream_runs(
+        self, *, workspace_id: str, documents: Sequence[DocumentOut]
+    ) -> dict[str, DocumentLastRun]:
+        ids = [document.id for document in documents if document.id]
+        if not ids:
+            return {}
+
+        stmt = (
+            select(Run)
+            .where(
+                Run.workspace_id == workspace_id,
+                Run.input_document_id.in_(ids),
+            )
+            .order_by(Run.finished_at.desc().nullslast(), Run.started_at.desc().nullslast())
+        )
+        result = await self._session.execute(stmt)
+        rows = result.scalars().all()
+        latest: dict[str, DocumentLastRun] = {}
+        for run in rows:
+            doc_id = run.input_document_id
+            if doc_id is None or doc_id in latest:
+                continue
+            timestamp = run.finished_at or run.started_at or run.created_at
+            status_value = (
+                "cancelled" if run.status == RunStatus.CANCELED else run.status.value
+            )
+            latest[doc_id] = DocumentLastRun(
+                job_id=None,
+                run_id=run.id,
+                status=status_value,
+                run_at=timestamp,
+                message=run.summary or run.error_message,
+            )
+        return latest
 
     def _resolve_expiration(self, override: str | None, now: datetime) -> datetime:
         if override is None:
@@ -286,6 +363,29 @@ class DocumentsService:
             return None
         candidate = content_type.strip()
         return candidate or None
+
+    @staticmethod
+    def _inspect_workbook(path: Path) -> list[DocumentSheet]:
+        workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        try:
+            sheetnames = workbook.sheetnames
+            active = workbook.active.title if sheetnames else None
+            return [
+                DocumentSheet(
+                    name=title,
+                    index=index,
+                    kind="worksheet",
+                    is_active=title == active,
+                )
+                for index, title in enumerate(sheetnames)
+            ]
+        finally:
+            workbook.close()
+
+    @staticmethod
+    def _default_sheet_name(name: str | None) -> str:
+        stem = Path(name or "Sheet").stem.strip() or "Sheet"
+        return stem[:64]
 
 
 __all__ = ["DocumentsService"]

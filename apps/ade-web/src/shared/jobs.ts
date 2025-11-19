@@ -3,6 +3,7 @@ import type { components, paths } from "@schema";
 
 export type JobRecord = components["schemas"]["JobRecord"];
 export type JobStatus = JobRecord["status"];
+export type JobOutputListing = components["schemas"]["JobOutputListing"];
 
 type ListJobsParameters = paths["/api/v1/workspaces/{workspace_id}/jobs"]["get"]["parameters"];
 type ListJobsQuery = ListJobsParameters extends { query?: infer Q }
@@ -31,6 +32,34 @@ export async function fetchWorkspaceJobs(
   });
 
   return (data ?? []) as JobRecord[];
+}
+
+export async function fetchJob(
+  workspaceId: string,
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<JobRecord> {
+  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/jobs/{job_id}", {
+    params: { path: { workspace_id: workspaceId, job_id: jobId } },
+    signal,
+  });
+
+  if (!data) throw new Error("Job not found");
+  return data as JobRecord;
+}
+
+export async function fetchJobOutputs(
+  workspaceId: string,
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<JobOutputListing> {
+  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs", {
+    params: { path: { workspace_id: workspaceId, job_id: jobId } },
+    signal,
+  });
+
+  if (!data) throw new Error("Job outputs unavailable");
+  return data as JobOutputListing;
 }
 
 export const workspaceJobsKeys = {
