@@ -7,7 +7,7 @@ import typer
 from ade_tools.commands import common
 
 docker_app = typer.Typer(
-    help="Docker helpers for the ADE stack (docker compose).",
+    help="Docker Compose helpers (API + SPA) with default app at http://localhost:8000; subcommands: up, down, logs.",
     no_args_is_help=True,
 )
 

@@ -10,7 +10,7 @@ from ade_tools.commands import common
 
 
 def run_migrate(revision: str = "head") -> None:
-    """Run Alembic migrations for the backend."""
+    """Run Alembic migrations (default upgrade to head) using apps/ade-api/alembic.ini."""
 
     common.refresh_paths()
     common.ensure_backend_dir()

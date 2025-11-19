@@ -10,7 +10,7 @@ from ade_tools.commands import common
 
 
 def run_build() -> None:
-    """Build the frontend and copy static assets into the backend."""
+    """Build frontend and copy static assets into the backend for production serving."""
 
     common.refresh_paths()
     common.ensure_frontend_dir()

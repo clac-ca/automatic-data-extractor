@@ -11,7 +11,7 @@ from ade_tools.commands import common
 
 
 def run_clean(yes: bool = False) -> None:
-    """Remove build artifacts and caches, keeping the virtualenv."""
+    """Remove build artifacts and caches (virtualenv kept); skip prompts with --yes."""
 
     common.refresh_paths()
     targets = [
@@ -36,7 +36,7 @@ def run_clean(yes: bool = False) -> None:
 
 
 def run_reset(yes: bool = False) -> None:
-    """Reset ADE storage and remove build artifacts (does not reinstall dependencies)."""
+    """Reset ADE storage under ./data and remove build artifacts (dependencies unchanged)."""
 
     common.refresh_paths()
     common.ensure_backend_dir()
