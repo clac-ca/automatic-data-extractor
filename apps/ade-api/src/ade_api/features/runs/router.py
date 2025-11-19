@@ -17,7 +17,7 @@ from fastapi import (
     Security,
     status,
 )
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.settings import Settings
@@ -28,12 +28,23 @@ from ade_api.shared.dependency import (
     require_csrf,
 )
 
-from .schemas import RunCreateOptions, RunCreateRequest, RunLogsResponse, RunResource
+from .schemas import (
+    RunCreateOptions,
+    RunCreateRequest,
+    RunLogsResponse,
+    RunOutputFile,
+    RunOutputListing,
+    RunResource,
+)
 from .service import (
     DEFAULT_STREAM_LIMIT,
+    RunArtifactMissingError,
+    RunDocumentMissingError,
     RunEnvironmentNotReadyError,
+    RunLogsFileMissingError,
     RunExecutionContext,
     RunNotFoundError,
+    RunOutputMissingError,
     RunsService,
     RunStreamFrame,
 )
@@ -89,6 +100,8 @@ async def create_run_endpoint(
         run, context = await service.prepare_run(config_id=config_id, options=payload.options)
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunDocumentMissingError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunEnvironmentNotReadyError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
@@ -137,3 +150,74 @@ async def get_run_logs_endpoint(
     if run is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
     return await service.get_logs(run_id=run_id, after_id=after_id, limit=limit)
+
+
+@router.get(
+    "/runs/{run_id}/artifact",
+    response_class=FileResponse,
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Artifact unavailable"}},
+)
+async def download_run_artifact_endpoint(
+    run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
+    service: RunsService = runs_service_dependency,
+):
+    try:
+        path = await service.get_artifact_path(run_id=run_id)
+    except (RunNotFoundError, RunArtifactMissingError) as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return FileResponse(path=path, media_type="application/json", filename=path.name)
+
+
+@router.get(
+    "/runs/{run_id}/logfile",
+    response_class=FileResponse,
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Logs unavailable"}},
+)
+async def download_run_logs_file_endpoint(
+    run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
+    service: RunsService = runs_service_dependency,
+):
+    try:
+        path = await service.get_logs_file_path(run_id=run_id)
+    except (RunNotFoundError, RunLogsFileMissingError) as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return FileResponse(
+        path=path,
+        media_type="application/x-ndjson",
+        filename=path.name,
+    )
+
+
+@router.get(
+    "/runs/{run_id}/outputs",
+    response_model=RunOutputListing,
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Outputs unavailable"}},
+)
+async def list_run_outputs_endpoint(
+    run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
+    service: RunsService = runs_service_dependency,
+) -> RunOutputListing:
+    try:
+        files = await service.list_output_files(run_id=run_id)
+    except (RunNotFoundError, RunOutputMissingError) as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    entries = [RunOutputFile(path=path, byte_size=size) for path, size in files]
+    return RunOutputListing(files=entries)
+
+
+@router.get(
+    "/runs/{run_id}/outputs/{output_path:path}",
+    response_class=FileResponse,
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Output not found"}},
+)
+async def download_run_output_endpoint(
+    run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
+    output_path: str,
+    service: RunsService = runs_service_dependency,
+):
+    try:
+        path = await service.resolve_output_file(run_id=run_id, relative_path=output_path)
+    except (RunNotFoundError, RunOutputMissingError) as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return FileResponse(path=path, filename=path.name)

@@ -13,6 +13,7 @@ from .features.health.router import router as health_router
 from .features.jobs.router import router as jobs_router
 from .features.roles.router import router as roles_router
 from .features.runs.router import router as runs_router
+from .features.system_settings.router import router as system_router
 from .features.users.router import router as users_router
 from .features.workspaces.router import router as workspaces_router
 
@@ -28,5 +29,6 @@ api_router.include_router(configs_router)
 api_router.include_router(builds_router)
 api_router.include_router(runs_router)
 api_router.include_router(jobs_router)
+api_router.include_router(system_router)
 
 __all__ = ["api_router"]

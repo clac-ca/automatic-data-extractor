@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import Field
 
+from ade_api.shared.core.ids import ULIDStr
 from ade_api.shared.core.schema import BaseSchema
 
 RunObjectType = Literal["ade.run"]
@@ -29,6 +30,8 @@ __all__ = [
     "RunLogEntry",
     "RunLogEvent",
     "RunLogsResponse",
+    "RunOutputFile",
+    "RunOutputListing",
     "RunResource",
     "RunStatusLiteral",
 ]
@@ -39,6 +42,16 @@ class RunCreateOptions(BaseSchema):
 
     dry_run: bool = False
     validate_only: bool = False
+    input_document_id: ULIDStr | None = None
+    input_sheet_name: str | None = Field(
+        default=None,
+        description="Preferred worksheet to ingest when processing XLSX files.",
+        max_length=64,
+    )
+    input_sheet_names: list[str] | None = Field(
+        default=None,
+        description="Explicit worksheets to ingest; defaults to all when omitted.",
+    )
 
 
 class RunCreateRequest(BaseSchema):
@@ -54,6 +67,19 @@ class RunResource(BaseSchema):
     id: str
     object: RunObjectType = Field(default="ade.run", alias="object")
     config_id: str
+    input_document_id: str | None = Field(
+        default=None,
+        description="Document ULID staged for this run when provided.",
+    )
+    input_sheet_name: str | None = Field(
+        default=None,
+        description="Worksheet name used when ingesting XLSX inputs.",
+        max_length=64,
+    )
+    input_sheet_names: list[str] | None = Field(
+        default=None,
+        description="Worksheets requested for ingestion when provided.",
+    )
     status: RunStatusLiteral
 
     created: int
@@ -124,3 +150,16 @@ class RunLogsResponse(BaseSchema):
     object: RunLogsObjectType = Field(default="ade.run.logs", alias="object")
     entries: list[RunLogEntry]
     next_after_id: int | None = None
+
+
+class RunOutputFile(BaseSchema):
+    """Single file emitted by a streaming run output directory."""
+
+    path: str
+    byte_size: int
+
+
+class RunOutputListing(BaseSchema):
+    """Collection of files produced by a streaming run."""
+
+    files: list[RunOutputFile] = Field(default_factory=list)

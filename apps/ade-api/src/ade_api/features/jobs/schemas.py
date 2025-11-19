@@ -74,6 +74,19 @@ class JobRecord(BaseSchema):
     output_uri: str | None = None
 
 
+class JobOutputFile(BaseSchema):
+    """Single file emitted by a job output directory."""
+
+    path: str
+    byte_size: int
+
+
+class JobOutputListing(BaseSchema):
+    """Collection of files produced by a job run."""
+
+    files: list[JobOutputFile] = Field(default_factory=list)
+
+
 __all__ = [
     "JobConfigVersion",
     "JobInputDocument",
@@ -81,4 +94,6 @@ __all__ = [
     "JobStatusLiteral",
     "JobSubmissionRequest",
     "JobSubmittedBy",
+    "JobOutputFile",
+    "JobOutputListing",
 ]

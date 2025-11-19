@@ -1,9 +1,13 @@
 import { client } from "@shared/api/client";
-import type { components } from "@schema";
 
 export interface SafeModeStatus {
   readonly enabled: boolean;
   readonly detail: string;
+}
+
+export interface SafeModeUpdateRequest {
+  readonly enabled: boolean;
+  readonly detail?: string | null;
 }
 
 interface RequestOptions {
@@ -11,24 +15,38 @@ interface RequestOptions {
 }
 
 export async function fetchSafeModeStatus(options: RequestOptions = {}): Promise<SafeModeStatus> {
-  const { data } = await client.GET("/api/v1/health", {
+  const { data } = await client.GET("/api/v1/system/safe-mode", {
     signal: options.signal,
   });
 
-  const payload = (data ?? {}) as Partial<HealthCheckResponse>;
-  const components = Array.isArray(payload.components) ? payload.components : [];
-  const safeModeComponent = components.find((component) => component?.name === "safe-mode");
-
-  const enabled = safeModeComponent?.status === "degraded";
+  const payload = (data ?? {}) as Partial<SafeModeStatus>;
+  const enabled = Boolean(payload.enabled);
   const detail =
-    (typeof safeModeComponent?.detail === "string" && safeModeComponent.detail.trim().length > 0
-      ? safeModeComponent.detail.trim()
-      : DEFAULT_SAFE_MODE_MESSAGE);
+    typeof payload.detail === "string" && payload.detail.trim().length > 0
+      ? payload.detail.trim()
+      : DEFAULT_SAFE_MODE_MESSAGE;
 
   return { enabled, detail };
 }
 
-export const DEFAULT_SAFE_MODE_MESSAGE =
-  "ADE_SAFE_MODE is enabled. Job execution is temporarily disabled so you can revert config changes and restart without safe mode.";
+export async function updateSafeModeStatus(
+  payload: SafeModeUpdateRequest,
+  options: RequestOptions = {},
+): Promise<SafeModeStatus> {
+  const { data } = await client.PUT("/api/v1/system/safe-mode", {
+    body: payload,
+    signal: options.signal,
+  });
 
-type HealthCheckResponse = components["schemas"]["HealthCheckResponse"];
+  const normalized = (data ?? {}) as Partial<SafeModeStatus>;
+  return {
+    enabled: Boolean(normalized.enabled),
+    detail:
+      typeof normalized.detail === "string" && normalized.detail.trim().length > 0
+        ? normalized.detail.trim()
+        : DEFAULT_SAFE_MODE_MESSAGE,
+  };
+}
+
+export const DEFAULT_SAFE_MODE_MESSAGE =
+  "ADE safe mode enabled; skipping engine execution until ADE_SAFE_MODE is disabled.";

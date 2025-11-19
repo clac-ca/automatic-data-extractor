@@ -3594,6 +3594,90 @@
         }
       }
     },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/sheets": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "List worksheets for a document",
+        "operationId": "list_document_sheets_endpoint_api_v1_workspaces__workspace_id__documents__document_id__sheets_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Document identifier",
+              "title": "Document Id"
+            },
+            "description": "Document identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentSheet"
+                  },
+                  "title": "Response List Document Sheets Endpoint Api V1 Workspaces  Workspace Id  Documents  Document Id  Sheets Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found within the workspace."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/configurations": {
       "get": {
         "tags": [
@@ -5449,6 +5533,230 @@
         }
       }
     },
+    "/api/v1/runs/{run_id}/artifact": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Download Run Artifact Endpoint",
+        "operationId": "download_run_artifact_endpoint_api_v1_runs__run_id__artifact_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Artifact unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/logfile": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Download Run Logs File Endpoint",
+        "operationId": "download_run_logs_file_endpoint_api_v1_runs__run_id__logfile_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Logs unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/outputs": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Run Outputs Endpoint",
+        "operationId": "list_run_outputs_endpoint_api_v1_runs__run_id__outputs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOutputListing"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Outputs unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/outputs/{output_path}": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Download Run Output Endpoint",
+        "operationId": "download_run_output_endpoint_api_v1_runs__run_id__outputs__output_path__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          },
+          {
+            "name": "output_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Output Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Output not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/jobs": {
       "post": {
         "tags": [
@@ -5721,6 +6029,398 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/artifact": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Download Job Artifact",
+        "operationId": "download_job_artifact_api_v1_workspaces__workspace_id__jobs__job_id__artifact_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Job identifier",
+              "title": "Job Id"
+            },
+            "description": "Job identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Artifact unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/logs": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Download Job Logs",
+        "operationId": "download_job_logs_api_v1_workspaces__workspace_id__jobs__job_id__logs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Job identifier",
+              "title": "Job Id"
+            },
+            "description": "Job identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Logs unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "List Job Outputs",
+        "operationId": "list_job_outputs_api_v1_workspaces__workspace_id__jobs__job_id__outputs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Job identifier",
+              "title": "Job Id"
+            },
+            "description": "Job identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOutputListing"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Outputs unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs/{output_path}": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Download Job Output",
+        "operationId": "download_job_output_api_v1_workspaces__workspace_id__jobs__job_id__outputs__output_path__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Job identifier",
+              "title": "Job Id"
+            },
+            "description": "Job identifier"
+          },
+          {
+            "name": "output_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Output Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Output not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/safe-mode": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Read ADE safe mode status",
+        "description": "Return the current ADE safe mode status.",
+        "operationId": "read_safe_mode_api_v1_system_safe_mode_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SafeModeStatus"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Toggle ADE safe mode",
+        "description": "Persist and broadcast an updated ADE safe mode state.",
+        "operationId": "update_safe_mode_api_v1_system_safe_mode_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SafeModeUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SafeModeStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ]
       }
     }
   },
@@ -6686,12 +7386,36 @@
       "DocumentLastRun": {
         "properties": {
           "job_id": {
-            "type": "string",
-            "maxLength": 26,
-            "minLength": 26,
-            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Job Id",
-            "description": "Latest job ULID."
+            "description": "Latest job ULID when the run came from a job."
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id",
+            "description": "Latest run ULID when the execution was streamed directly."
           },
           "status": {
             "type": "string",
@@ -6715,7 +7439,7 @@
               }
             ],
             "title": "Run At",
-            "description": "Timestamp for the latest job event (completion/start)."
+            "description": "Timestamp for the latest job or run event (completion/start)."
           },
           "message": {
             "anyOf": [
@@ -6727,17 +7451,16 @@
               }
             ],
             "title": "Message",
-            "description": "Optional status or error message associated with the job."
+            "description": "Optional status or error message associated with the execution."
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "job_id",
           "status"
         ],
         "title": "DocumentLastRun",
-        "description": "Minimal representation of the last job run for a document."
+        "description": "Minimal representation of the last engine execution for a document."
       },
       "DocumentOut": {
         "properties": {
@@ -6937,6 +7660,41 @@
         ],
         "title": "DocumentPage",
         "description": "Paginated envelope of document records."
+      },
+      "DocumentSheet": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Index"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "worksheet",
+              "file"
+            ],
+            "title": "Kind",
+            "default": "worksheet"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "index"
+        ],
+        "title": "DocumentSheet",
+        "description": "Descriptor for a worksheet or single-sheet document."
       },
       "DocumentSource": {
         "type": "string",
@@ -7533,6 +8291,41 @@
         ],
         "title": "JobInputDocument",
         "description": "Minimal representation of a document attached to a job."
+      },
+      "JobOutputFile": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "byte_size": {
+            "type": "integer",
+            "title": "Byte Size"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "path",
+          "byte_size"
+        ],
+        "title": "JobOutputFile",
+        "description": "Single file emitted by a job output directory."
+      },
+      "JobOutputListing": {
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/JobOutputFile"
+            },
+            "type": "array",
+            "title": "Files"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "JobOutputListing",
+        "description": "Collection of files produced by a job run."
       },
       "JobRecord": {
         "properties": {
@@ -8433,6 +9226,49 @@
             "type": "boolean",
             "title": "Validate Only",
             "default": false
+          },
+          "input_document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 26,
+                "minLength": 26,
+                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                "description": "ULID (26-character string)."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Document Id"
+          },
+          "input_sheet_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Sheet Name",
+            "description": "Preferred worksheet to ingest when processing XLSX files."
+          },
+          "input_sheet_names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Sheet Names",
+            "description": "Explicit worksheets to ingest; defaults to all when omitted."
           }
         },
         "additionalProperties": false,
@@ -8530,6 +9366,41 @@
         "title": "RunLogsResponse",
         "description": "Envelope for run log fetch responses."
       },
+      "RunOutputFile": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "byte_size": {
+            "type": "integer",
+            "title": "Byte Size"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "path",
+          "byte_size"
+        ],
+        "title": "RunOutputFile",
+        "description": "Single file emitted by a streaming run output directory."
+      },
+      "RunOutputListing": {
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/RunOutputFile"
+            },
+            "type": "array",
+            "title": "Files"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RunOutputListing",
+        "description": "Collection of files produced by a streaming run."
+      },
       "RunResource": {
         "properties": {
           "id": {
@@ -8545,6 +9416,46 @@
           "config_id": {
             "type": "string",
             "title": "Config Id"
+          },
+          "input_document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Document Id",
+            "description": "Document ULID staged for this run when provided."
+          },
+          "input_sheet_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Sheet Name",
+            "description": "Worksheet name used when ingesting XLSX inputs."
+          },
+          "input_sheet_names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Sheet Names",
+            "description": "Worksheets requested for ingestion when provided."
           },
           "status": {
             "type": "string",
@@ -8627,6 +9538,54 @@
         ],
         "title": "RunResource",
         "description": "API representation of a persisted ADE run."
+      },
+      "SafeModeStatus": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Whether ADE is short-circuiting user runs"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "User-visible explanation of the safe mode status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "detail"
+        ],
+        "title": "SafeModeStatus",
+        "description": "Represents the current safe mode state."
+      },
+      "SafeModeUpdateRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Updated safe mode state"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail",
+            "description": "Optional message describing the active state"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "SafeModeUpdateRequest",
+        "description": "Request payload for toggling safe mode."
       },
       "ScopeType": {
         "type": "string",
