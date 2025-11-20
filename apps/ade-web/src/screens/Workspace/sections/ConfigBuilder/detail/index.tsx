@@ -87,7 +87,11 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Active version</dt>
-            <dd className="text-sm text-slate-700">{config.active_version ?? "—"}</dd>
+            <dd className="text-sm text-slate-700">
+              {("active_version" in config ? (config as { active_version?: number | null }).active_version : null) ??
+                config.config_version ??
+                "—"}
+            </dd>
           </div>
         </dl>
       </section>

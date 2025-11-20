@@ -8,6 +8,7 @@ from openpyxl import Workbook
 
 from ..model import JobContext
 from ..schemas.models import ManifestContext
+from .extract import _unique_sheet_name
 from .models import FileExtraction
 
 
@@ -19,10 +20,12 @@ def write_outputs(
     """Persist normalized rows into an Excel workbook."""
 
     workbook = Workbook(write_only=True)
+    used_sheet_names: set[str] = set()
 
     try:
         for extraction in extractions:
-            sheet = workbook.create_sheet(title=extraction.sheet_name)
+            sheet_title = _unique_sheet_name(extraction.sheet_name, used_sheet_names)
+            sheet = workbook.create_sheet(title=sheet_title)
             header_cells = output_headers(manifest, extraction)
             sheet.append(header_cells)
             for row in extraction.rows:

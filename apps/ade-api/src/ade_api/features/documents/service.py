@@ -408,7 +408,8 @@ class DocumentsService:
     def _cached_worksheets(self, document: Document) -> list[DocumentSheet] | None:
         """Return cached worksheet metadata stored on the document, if any."""
 
-        cached = document.attributes.get("worksheets")
+        attrs = document.attributes if isinstance(document.attributes, Mapping) else {}
+        cached = attrs.get("worksheets") if isinstance(attrs, Mapping) else None
         if not isinstance(cached, Sequence) or isinstance(cached, (str, bytes, bytearray)):
             return None
 

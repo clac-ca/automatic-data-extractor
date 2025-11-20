@@ -12,6 +12,16 @@ docker_app = typer.Typer(
 )
 
 
+def _docker_bin() -> str:
+    """Return docker binary path with a friendly error if missing."""
+
+    return common.require_command(
+        "docker",
+        friendly_name="docker",
+        fix_hint="Install Docker Desktop/Engine and ensure the `docker` CLI is on your PATH.",
+    )
+
+
 @docker_app.command("up", help="Build and run the local Docker stack.")
 def docker_up(
     detach: bool = typer.Option(
@@ -28,8 +38,9 @@ def docker_up(
 ) -> None:
     """Start the ADE stack via docker compose."""
     common.refresh_paths()
+    docker_bin = _docker_bin()
     common.ensure_compose_file()
-    cmd = ["docker", "compose", "-f", str(common.COMPOSE_FILE), "up"]
+    cmd = [docker_bin, "compose", "-f", str(common.COMPOSE_FILE), "up"]
     if build:
         cmd.append("--build")
     if detach:
@@ -48,8 +59,9 @@ def docker_down(
 ) -> None:
     """Stop the ADE stack and optionally remove volumes."""
     common.refresh_paths()
+    docker_bin = _docker_bin()
     common.ensure_compose_file()
-    cmd = ["docker", "compose", "-f", str(common.COMPOSE_FILE), "down"]
+    cmd = [docker_bin, "compose", "-f", str(common.COMPOSE_FILE), "down"]
     if volumes:
         cmd.append("--volumes")
     common.run(cmd, cwd=common.REPO_ROOT)
@@ -75,8 +87,9 @@ def docker_logs(
 ) -> None:
     """Tail logs for the ADE stack, optionally for a single service."""
     common.refresh_paths()
+    docker_bin = _docker_bin()
     common.ensure_compose_file()
-    cmd = ["docker", "compose", "-f", str(common.COMPOSE_FILE), "logs", "--tail", str(tail)]
+    cmd = [docker_bin, "compose", "-f", str(common.COMPOSE_FILE), "logs", "--tail", str(tail)]
     if follow:
         cmd.append("-f")
     if service:

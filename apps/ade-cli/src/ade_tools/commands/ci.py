@@ -20,7 +20,12 @@ def run_ci(skip_types: bool = False, skip_tests: bool = False) -> None:
         typer.echo("ℹ️  Skipping OpenAPI type generation (--skip-types).")
     else:
         typer.echo("🧬 Generating OpenAPI types…")
-        run_types()
+        try:
+            run_types()
+        except typer.Exit as exc:
+            if exc.exit_code not in (0, None):
+                raise
+            typer.echo("ℹ️  OpenAPI types step exited early; continuing with CI pipeline.")
 
     typer.echo("🔍 Running linters…")
     run_lint(scope="all")

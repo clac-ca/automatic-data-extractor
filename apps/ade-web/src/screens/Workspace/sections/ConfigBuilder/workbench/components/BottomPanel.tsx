@@ -234,8 +234,6 @@ function validationMessageClass(level: WorkbenchValidationState["messages"][numb
       return "text-danger-600";
     case "warning":
       return "text-amber-600";
-    case "success":
-      return "text-emerald-600";
     default:
       return "text-slate-600";
   }

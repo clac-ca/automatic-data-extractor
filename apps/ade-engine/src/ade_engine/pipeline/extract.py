@@ -36,6 +36,7 @@ def extract_inputs(
 
     runtime_logger = logger.runtime_logger
     results: list[FileExtraction] = []
+    used_sheet_names: set[str] = set()
     raw_sheet_names = job.metadata.get("input_sheet_names") if job.metadata else None
     sheet_list: list[str] | None = None
     if isinstance(raw_sheet_names, list):
@@ -82,6 +83,7 @@ def extract_inputs(
                 if source_sheet
                 else sheet_name(file_path.stem)
             )
+            normalized_sheet = _unique_sheet_name(normalized_sheet, used_sheet_names)
             extraction = FileExtraction(
                 source_name=file_path.name,
                 sheet_name=normalized_sheet,
@@ -149,6 +151,26 @@ def extract_inputs(
             results.append(extraction)
 
     return results
+
+
+def _unique_sheet_name(name: str, used: set[str]) -> str:
+    """Return an Excel-safe sheet name unique across the workbook."""
+
+    if name not in used:
+        used.add(name)
+        return name
+
+    counter = 2
+    max_length = 31
+    while True:
+        suffix = f"-{counter}"
+        base_limit = max_length - len(suffix)
+        base = name[:base_limit] if base_limit > 0 else name[:max_length]
+        candidate = f"{base}{suffix}"
+        if candidate not in used:
+            used.add(candidate)
+            return candidate
+        counter += 1
 
 
 __all__ = ["extract_inputs"]

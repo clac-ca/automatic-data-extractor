@@ -22,7 +22,7 @@ def _setup_config_package(
 ) -> Path:
     pkg_root = tmp_path / ("config_pkg_hooks" if include_hooks else "config_pkg")
     config_pkg = pkg_root / "ade_config"
-    detectors_dir = config_pkg / "column_detectors"
+    detectors_dir = config_pkg / "columns"
     detectors_dir.mkdir(parents=True)
     (config_pkg / "__init__.py").write_text("", encoding="utf-8")
     (detectors_dir / "__init__.py").write_text("", encoding="utf-8")
@@ -78,16 +78,22 @@ def _setup_config_package(
     (detectors_dir / "email.py").write_text(email_module, encoding="utf-8")
 
     manifest: dict[str, object] = {
-        "schema_version": "ade.manifest@1",
-        "script_api": 1,
+        "config_script_api_version": "1",
+        "info": {
+            "schema": "ade.manifest/v1.0",
+            "title": "Test Config",
+            "version": "1.0.0",
+        },
         "engine": {
             "defaults": {
                 "mapping_score_threshold": 0.25,
                 "detector_sample_size": 8,
             },
             "writer": {
+                "mode": "row_streaming",
                 "append_unmapped_columns": True,
                 "unmapped_prefix": "raw_",
+                "output_sheet": "Normalized",
             },
         },
         "hooks": {},
@@ -97,15 +103,16 @@ def _setup_config_package(
                 "member_id": {
                     "label": "Member ID",
                     "synonyms": ["ID"],
-                    "script": "column_detectors/member_id.py",
+                    "script": "columns/member_id.py",
                 },
                 "email": {
                     "label": "Email",
                     "required": True,
-                    "script": "column_detectors/email.py",
+                    "script": "columns/email.py",
                 },
             },
         },
+        "env": {},
     }
 
     if include_hooks:
@@ -164,7 +171,7 @@ def test_run_job_normalizes_csv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     workbook = openpyxl.load_workbook(result.output_paths[0], read_only=True)
     sheet = workbook[workbook.sheetnames[0]]
     rows = list(sheet.iter_rows(values_only=True))
-    assert rows[0] == ("Member ID", "Email", "raw_Name")
+    assert rows[0] == ("Member ID", "Email", "raw_name")
     assert rows[1][:2] == ("123", "user@example.com")
     assert rows[2][1] == "invalid"
     workbook.close()

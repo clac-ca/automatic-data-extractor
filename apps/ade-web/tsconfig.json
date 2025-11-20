@@ -13,7 +13,9 @@
       "@screens/*": ["screens/*"],
       "@ui/*": ["ui/*"],
       "@shared/*": ["shared/*"],
+      "@schema": ["schema"],
       "@schema/*": ["schema/*"],
+      "@generated-types": ["generated-types"],
       "@generated-types/*": ["generated-types/*"],
       "@test/*": ["test/*"]
     },

@@ -386,9 +386,9 @@ function ExplorerNode({
   onContextMenu,
 }: ExplorerNodeProps) {
   const paddingLeft = 8 + depth * 16;
-  const baseStyle: CSSProperties = {
+  const baseStyle: CSSProperties & { ["--tree-hover-bg"]?: string } = {
     paddingLeft,
-    ["--tree-hover-bg" as const]: tokens.rowHover,
+    ["--tree-hover-bg"]: tokens.rowHover,
   };
 
   if (node.kind === "folder") {

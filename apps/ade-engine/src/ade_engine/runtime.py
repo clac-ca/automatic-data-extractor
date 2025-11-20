@@ -53,11 +53,11 @@ def load_config_manifest(
                 f"Config package '{package}' cannot be imported."
             ) from exc
 
-        if not resource_path.is_file():
-            raise ManifestNotFoundError(
-                f"Resource '{resource}' not found in '{package}'."
-            )
-        manifest = _read_manifest(Path(resource_path))
+            if not resource_path.is_file():
+                raise ManifestNotFoundError(
+                    f"Resource '{resource}' not found in '{package}'."
+                )
+            manifest = _read_manifest(Path(resource_path))
 
     if validate:
         _validate_manifest(manifest)
@@ -117,14 +117,14 @@ _MANIFEST_VALIDATOR = Draft202012Validator(_load_manifest_schema())
 
 def _validate_manifest(manifest: Mapping[str, Any]) -> None:
     schema_tag = _manifest_version(manifest)
-    if schema_tag and schema_tag.startswith("ade.manifest/v1"):
-        try:
-            _MANIFEST_VALIDATOR.validate(manifest)
-        except ValidationError as exc:  # pragma: no cover - jsonschema formats message
-            raise ManifestNotFoundError(f"Manifest failed validation: {exc.message}") from exc
-        return
-
-    _validate_legacy_manifest(manifest)
+    if not schema_tag:
+        raise ManifestNotFoundError("Manifest missing required info.schema version tag")
+    if not schema_tag.startswith("ade.manifest/v1"):
+        raise ManifestNotFoundError(f"Unsupported manifest schema: {schema_tag}")
+    try:
+        _MANIFEST_VALIDATOR.validate(manifest)
+    except ValidationError as exc:  # pragma: no cover - jsonschema formats message
+        raise ManifestNotFoundError(f"Manifest failed validation: {exc.message}") from exc
 
 
 def _manifest_version(manifest: Mapping[str, Any]) -> str | None:
@@ -132,23 +132,7 @@ def _manifest_version(manifest: Mapping[str, Any]) -> str | None:
         schema_value = manifest["info"].get("schema")
         if isinstance(schema_value, str):
             return schema_value
-    schema_version = manifest.get("schema_version")
-    if isinstance(schema_version, str):
-        return schema_version.replace("@", "/")
     return None
-
-
-def _validate_legacy_manifest(manifest: Mapping[str, Any]) -> None:
-    required_top_level = {"schema_version", "script_api", "engine", "columns"}
-    missing = sorted(value for value in required_top_level if value not in manifest)
-    if missing:
-        raise ManifestNotFoundError(
-            "Manifest missing required keys: " + ", ".join(missing)
-        )
-
-    columns = manifest.get("columns", {})
-    if "order" not in columns or "meta" not in columns:
-        raise ManifestNotFoundError("Manifest columns section must define 'order' and 'meta'")
 
 
 __all__ = [

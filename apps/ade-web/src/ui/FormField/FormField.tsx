@@ -16,7 +16,7 @@ export interface FormFieldProps {
   readonly hint?: ReactNode;
   readonly error?: ReactNode;
   readonly required?: boolean;
-  readonly children: ControlElement;
+  readonly children: ControlElement | ReactNode;
   readonly className?: string;
 }
 
@@ -29,8 +29,8 @@ export function FormField({
   className,
 }: FormFieldProps) {
   const generatedId = useId();
-  const childProps = children.props ?? {};
-  const controlId = childProps.id ?? generatedId;
+  const childProps = (children as ControlElement)?.props ?? {};
+  const controlId = childProps?.id ?? generatedId;
   const hintId = hint ? `${controlId}-hint` : undefined;
   const errorId = error ? `${controlId}-error` : undefined;
   const describedBy = [hintId, errorId, childProps["aria-describedby"]]

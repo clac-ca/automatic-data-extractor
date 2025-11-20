@@ -1,3 +1,4 @@
+import React from "react";
 import clsx from "clsx";
 
 export type ActivityBarView = "explorer" | "search" | "scm" | "extensions";
@@ -9,7 +10,7 @@ interface ActivityBarProps {
   readonly appearance: "light" | "dark";
 }
 
-const ITEMS: Array<{ id: ActivityBarView; label: string; icon: JSX.Element }> = [
+const ITEMS: Array<{ id: ActivityBarView; label: string; icon: React.ReactNode }> = [
   { id: "explorer", label: "Explorer", icon: <ExplorerIcon /> },
   { id: "search", label: "Search", icon: <SearchIcon /> },
   { id: "scm", label: "Source Control", icon: <SourceControlIcon /> },

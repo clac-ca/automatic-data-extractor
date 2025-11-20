@@ -74,15 +74,15 @@ class SafeModeService:
         """Persist the safe mode state and return the normalized value."""
 
         normalized_detail = (detail or "").strip() or SAFE_MODE_DEFAULT_DETAIL
-        async with self._session.begin():
-            record = await self._system_settings._fetch_by_key(SAFE_MODE_SETTING_KEY)
-            payload = {"enabled": enabled, "detail": normalized_detail}
-            if record is None:
-                record = SystemSetting(key=SAFE_MODE_SETTING_KEY, value=payload)
-                self._session.add(record)
-            else:
-                record.value = payload
-            await self._session.flush()
+        record = await self._system_settings._fetch_by_key(SAFE_MODE_SETTING_KEY)
+        payload = {"enabled": enabled, "detail": normalized_detail}
+        if record is None:
+            record = SystemSetting(key=SAFE_MODE_SETTING_KEY, value=payload)
+            self._session.add(record)
+        else:
+            record.value = payload
+        await self._session.flush()
+        await self._session.commit()
 
         return SafeModeStatus(enabled=enabled, detail=normalized_detail)
 

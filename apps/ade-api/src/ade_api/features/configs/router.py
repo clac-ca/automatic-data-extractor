@@ -205,7 +205,7 @@ async def read_configuration(
     "/configurations/{config_id}/versions",
     response_model=list[ConfigVersionRecord],
     summary="List configuration versions (drafts and published)",
-    response_model_exclude_none=True,
+    response_model_exclude_none=False,
 )
 async def list_config_versions_endpoint(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],

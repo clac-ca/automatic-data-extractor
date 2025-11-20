@@ -157,6 +157,7 @@ def run_parallel(tasks: list[tuple[str, list[str], Path | None, dict[str, str]]]
     """Run multiple long-lived commands in parallel until one exits."""
 
     processes: list[tuple[str, subprocess.Popen[bytes]]] = []
+    interrupted = False
     try:
         for name, cmd, cwd, env in tasks:
             typer.echo(f"▶️  starting {name}: {' '.join(cmd)}")
@@ -180,6 +181,7 @@ def run_parallel(tasks: list[tuple[str, list[str], Path | None, dict[str, str]]]
                 processes.remove((name, proc))
     except KeyboardInterrupt:
         typer.echo("\n🛑 received interrupt; stopping child processes...")
+        interrupted = True
     finally:
         for name, proc in processes:
             if proc.poll() is None:
@@ -188,6 +190,8 @@ def run_parallel(tasks: list[tuple[str, list[str], Path | None, dict[str, str]]]
         for _, proc in processes:
             if proc.poll() is None:
                 proc.wait(timeout=5)
+        if interrupted:
+            raise typer.Exit(code=130)
 
 
 def load_frontend_package_json() -> dict:

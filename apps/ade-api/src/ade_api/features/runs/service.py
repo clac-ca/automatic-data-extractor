@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import inspect
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
@@ -183,14 +184,11 @@ class RunsService:
         """Create the queued run row and return its execution context."""
 
         configuration = await self._resolve_configuration(config_id)
-        if not options.validate_only and not options.input_document_id:
-            raise RunInputMissingError(
-                "Runs must include input_document_id unless validate_only is set",
-            )
-        if options.input_document_id:
+        input_document_id = options.input_document_id or None
+        if input_document_id:
             await self._require_document(
                 workspace_id=configuration.workspace_id,
-                document_id=options.input_document_id,
+                document_id=input_document_id,
             )
         build = await self._resolve_active_build(configuration)
 
@@ -205,7 +203,7 @@ class RunsService:
             workspace_id=configuration.workspace_id,
             config_id=configuration.config_id,
             status=RunStatus.QUEUED,
-            input_document_id=options.input_document_id,
+            input_document_id=input_document_id,
             input_sheet_name=selected_sheet_name,
             input_sheet_names=(
                 options.input_sheet_names
@@ -297,9 +295,10 @@ class RunsService:
 
         safe_mode = await self._safe_mode_status()
         if safe_mode.enabled:
+            message = f"Safe mode enabled: {safe_mode.detail}"
             log = await self._append_log(
                 run.id,
-                safe_mode.detail,
+                message,
                 stream="stdout",
             )
             completion = await self._complete_run(
@@ -312,7 +311,7 @@ class RunsService:
                 run_id=run.id,
                 created=self._epoch_seconds(log.created_at),
                 stream="stdout",
-                message=log.message,
+                message=message,
             )
             yield RunCompletedEvent(
                 run_id=completion.id,
@@ -324,12 +323,17 @@ class RunsService:
             return
 
         async def generator() -> AsyncIterator[RunStreamFrame]:
-            async for frame in self._execute_engine(
-                run=run,
-                context=context,
-                options=options,
-                safe_mode_enabled=safe_mode.enabled,
-            ):
+            execute_engine = self._execute_engine
+            parameters = inspect.signature(execute_engine).parameters
+            kwargs: dict[str, object] = {
+                "run": run,
+                "context": context,
+                "options": options,
+            }
+            if "safe_mode_enabled" in parameters:
+                kwargs["safe_mode_enabled"] = safe_mode.enabled
+
+            async for frame in execute_engine(**kwargs):  # type: ignore[misc]
                 yield frame
 
         try:

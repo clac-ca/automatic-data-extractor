@@ -1,4 +1,5 @@
-import { FormEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import type { FormEvent } from "react";
 
 import { useNavigate } from "@app/nav/history";
 
@@ -34,7 +35,8 @@ export default function WorkspaceConfigsIndexRoute() {
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const configs = useMemo(
-    () => (configsQuery.data?.items ?? []).filter((config) => !config.deleted_at),
+    () =>
+      (configsQuery.data?.items ?? []).filter((config) => !("deleted_at" in config && (config as { deleted_at?: string | null }).deleted_at)),
     [configsQuery.data],
   );
   const lastSelection = useMemo(() => storage.get<LastSelection>(), [storage]);
@@ -150,7 +152,10 @@ export default function WorkspaceConfigsIndexRoute() {
                   ) : null}
                 </div>
                 <p className="text-sm text-slate-500">
-                  Updated {new Date(config.updated_at).toLocaleString()} · Active version {config.active_version ?? "—"}
+                  Updated {new Date(config.updated_at).toLocaleString()} · Active version{" "}
+                  {("active_version" in config ? (config as { active_version?: number | null }).active_version : null) ??
+                    config.config_version ??
+                    "—"}
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">

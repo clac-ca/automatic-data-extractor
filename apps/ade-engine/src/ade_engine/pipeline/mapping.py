@@ -164,7 +164,10 @@ def column_sample(values: Sequence[Any], size: int) -> list[Any]:
 def build_unmapped_header(prefix: str, header: str, index: int) -> str:
     """Generate a sanitized header for unmapped columns."""
 
-    cleaned = re.sub(r"[^A-Za-z0-9]+", "_", header).strip("_") or f"column_{index + 1}"
+    cleaned = (
+        re.sub(r"[^A-Za-z0-9]+", "_", header).strip("_").lower()
+        or f"column_{index + 1}"
+    )
     return f"{prefix}{cleaned}"[:31]
 
 

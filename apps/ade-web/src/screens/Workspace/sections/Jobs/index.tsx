@@ -4,7 +4,6 @@ import clsx from "clsx";
 import { useInfiniteQuery } from "@tanstack/react-query";
 
 import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
-import { useFlattenedPages } from "@shared/api/pagination";
 import { fetchWorkspaceJobs, workspaceJobsKeys, type JobRecord, type JobStatus } from "@shared/jobs";
 
 import { Button } from "@ui/Button";
@@ -72,7 +71,10 @@ export default function WorkspaceJobsRoute() {
     staleTime: 30_000,
   });
 
-  const jobs = useFlattenedPages(jobsQuery.data?.pages, (job) => job.id);
+  const jobs = useMemo(() => {
+    const pages = jobsQuery.data?.pages ?? [];
+    return pages.flat();
+  }, [jobsQuery.data?.pages]);
 
   const filteredJobs = useMemo(() => {
     const now = Date.now();

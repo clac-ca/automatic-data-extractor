@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
 } from "react";
 import clsx from "clsx";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -39,7 +40,7 @@ import type { ConfigBuilderConsole } from "@app/nav/urlState";
 import { ApiError } from "@shared/api";
 import { streamBuild } from "@shared/builds/api";
 import { fetchRunOutputs, streamRun, type RunStreamOptions } from "@shared/runs/api";
-import type { RunStatus } from "@shared/runs/types";
+import { isTelemetryEnvelope, type RunStatus } from "@shared/runs/types";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
 import { client } from "@shared/api/client";
@@ -620,8 +621,10 @@ export function Workbench({
       setHasHydratedConsoleState(true);
       return;
     }
-    if (storedState !== consoleState) {
-      setConsole(storedState);
+    if (storedState === "open" || storedState === "closed") {
+      if (storedState !== consoleState) {
+        setConsole(storedState);
+      }
     }
     setHasHydratedConsoleState(true);
   }, [consoleExplicit, consoleState, setConsole, hasHydratedConsoleState]);
@@ -799,6 +802,9 @@ export function Workbench({
             if (!isMountedRef.current) {
               return;
             }
+            if (isTelemetryEnvelope(event)) {
+              continue;
+            }
             if (event.type === "run.created") {
               currentRunId = event.run_id;
             }
@@ -831,9 +837,10 @@ export function Workbench({
                 });
                 try {
                   const listing = await fetchRunOutputs(currentRunId);
+                  const files = Array.isArray(listing.files) ? listing.files : [];
                   setLatestRun((prev) =>
                     prev && prev.runId === currentRunId
-                      ? { ...prev, outputs: listing.files, outputsLoaded: true }
+                      ? { ...prev, outputs: files, outputsLoaded: true }
                       : prev,
                   );
                 } catch (error) {
@@ -1612,6 +1619,7 @@ function WorkbenchChrome({
   inspectorCollapsed,
   onToggleInspector,
   appearance,
+  onToggleForceNextBuild,
   windowState,
   onMinimizeWindow,
   onToggleMaximize,
@@ -1645,6 +1653,7 @@ function WorkbenchChrome({
   readonly inspectorCollapsed: boolean;
   readonly onToggleInspector: () => void;
   readonly appearance: "light" | "dark";
+  readonly onToggleForceNextBuild: () => void;
   readonly windowState: WorkbenchWindowState;
   readonly onMinimizeWindow: () => void;
   readonly onToggleMaximize: () => void;
@@ -1758,6 +1767,13 @@ function WorkbenchChrome({
           {isRunningExtraction ? <SpinnerIcon /> : <RunIcon />}
           {isRunningExtraction ? "Running…" : "Run extraction"}
         </button>
+        <ChromeIconButton
+          ariaLabel={forceNextBuild ? "Force rebuild enabled for next run" : "Force next rebuild"}
+          onClick={onToggleForceNextBuild}
+          appearance={appearance}
+          active={forceNextBuild}
+          icon={<BuildIcon />}
+        />
         <div className="flex items-center gap-1">
           <ChromeIconButton
             ariaLabel={explorerVisible ? "Hide explorer" : "Show explorer"}
@@ -1956,14 +1972,14 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
                     </p>
                     <div className="flex items-center gap-2">
                       <Button
-                        variant="outline"
-                        size="xs"
+                        variant="secondary"
+                        size="sm"
                         onClick={() => sheetQuery.refetch()}
                         disabled={sheetQuery.isFetching}
                       >
                         Retry loading
                       </Button>
-                      <Button variant="ghost" size="xs" onClick={() => setSelectedSheets([])}>
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedSheets([])}>
                         Use all worksheets
                       </Button>
                     </div>
@@ -1982,7 +1998,7 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
                             } selected.`}
                       </p>
                     </div>
-                    <Button variant="ghost" size="xs" onClick={() => setSelectedSheets([])}>
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedSheets([])}>
                       Use all worksheets
                     </Button>
                   </div>
@@ -2073,7 +2089,7 @@ function ChromeIconButton({
 }: {
   readonly ariaLabel: string;
   readonly onClick: () => void;
-  readonly icon: JSX.Element;
+  readonly icon: ReactNode;
   readonly appearance: "light" | "dark";
   readonly active?: boolean;
 }) {

@@ -293,11 +293,11 @@ export async function listPermissions(options: ListPermissionsOptions = {}) {
   return data;
 }
 
-const defaultWorkspaceListParams = {
+const defaultWorkspaceListParams: WorkspaceListParams = {
   page: 1,
   pageSize: DEFAULT_WORKSPACE_PAGE_SIZE,
   includeTotal: false,
-} as const;
+};
 
 const defaultMemberListParams = {
   page: 1,
@@ -318,9 +318,15 @@ const defaultPermissionListParams = {
   includeTotal: false,
 } as const;
 
+type WorkspaceListParams = {
+  readonly page: number;
+  readonly pageSize: number;
+  readonly includeTotal: boolean;
+};
+
 export const workspacesKeys = {
   all: () => ["workspaces"] as const,
-  list: (params = defaultWorkspaceListParams) =>
+  list: (params: WorkspaceListParams = defaultWorkspaceListParams) =>
     [...workspacesKeys.all(), "list", { ...params }] as const,
   detail: (workspaceId: string) => [...workspacesKeys.all(), "detail", workspaceId] as const,
   members: (workspaceId: string, params = defaultMemberListParams) =>

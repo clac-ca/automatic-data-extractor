@@ -12,7 +12,7 @@ import clsx from "clsx";
 
 import type { BannerOptions, NotificationAction, NotificationIntent, ToastOptions } from "./types";
 
-interface ToastEntry extends Required<Omit<ToastOptions, "duration" | "actions" | "scope" | "dismissible" | "title">> {
+interface ToastEntry {
   readonly kind: "toast";
   readonly id: string;
   readonly title: string;
@@ -23,10 +23,11 @@ interface ToastEntry extends Required<Omit<ToastOptions, "duration" | "actions" 
   readonly dismissible: boolean;
   readonly scope?: string;
   readonly persistKey?: string;
+  readonly icon?: BannerOptions["icon"];
   readonly createdAt: number;
 }
 
-interface BannerEntry extends Required<Omit<BannerOptions, "duration" | "actions" | "scope" | "dismissible" | "title" | "sticky">> {
+interface BannerEntry {
   readonly kind: "banner";
   readonly id: string;
   readonly title: string;
@@ -37,6 +38,7 @@ interface BannerEntry extends Required<Omit<BannerOptions, "duration" | "actions
   readonly dismissible: boolean;
   readonly scope?: string;
   readonly persistKey?: string;
+  readonly icon?: BannerOptions["icon"];
   readonly sticky: boolean;
   readonly createdAt: number;
 }

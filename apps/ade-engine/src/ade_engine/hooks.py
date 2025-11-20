@@ -21,13 +21,12 @@ class HookExecutionError(RuntimeError):
 class HookRegistry:
     """Resolve and execute hooks declared in the manifest."""
 
-    _ALIASES = {
-        "after_mapping": "on_after_extract",
-        "before_save": "on_before_save",
-        "on_after_extract": "on_after_extract",
-        "on_before_save": "on_before_save",
-        "on_job_end": "on_job_end",
-        "on_job_start": "on_job_start",
+    _VALID_STAGES = {
+        "on_activate",
+        "on_job_start",
+        "on_after_extract",
+        "on_before_save",
+        "on_job_end",
     }
 
     def __init__(self, manifest: Mapping[str, Any], *, package: str) -> None:
@@ -35,9 +34,12 @@ class HookRegistry:
         resolved: dict[str, list[Callable[..., Any]]] = defaultdict(list)
 
         for stage, entries in hooks_section.items():
-            canonical = self._ALIASES.get(stage)
-            if canonical is None:
+            if stage not in self._VALID_STAGES:
                 continue
+            if not isinstance(entries, list):
+                raise HookLoadError(
+                    f"Hook stage '{stage}' must be a list of hook entries"
+                )
             for entry in entries:
                 if not entry.get("enabled", True):
                     continue
@@ -57,7 +59,7 @@ class HookRegistry:
                     raise HookLoadError(
                         f"Hook module '{module_name}' must expose a 'run' or 'main' callable"
                     )
-                resolved[canonical].append(func)
+                resolved[stage].append(func)
 
         self._hooks = {stage: tuple(funcs) for stage, funcs in resolved.items()}
 
@@ -78,6 +80,5 @@ def _script_to_module(script: str, *, package: str) -> str:
     module = script[:-3] if script.endswith(".py") else script
     module = module.replace("/", ".").replace("-", "_")
     return f"{package}.{module}" if not module.startswith(package) else module
-
 
 __all__ = ["HookExecutionError", "HookLoadError", "HookRegistry"]
