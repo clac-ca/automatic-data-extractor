@@ -264,6 +264,7 @@ export function Workbench({
   const [outputHeight, setOutputHeight] = useState(
     () => initialConsolePrefsRef.current?.height ?? DEFAULT_CONSOLE_HEIGHT,
   );
+  const outputHeightRef = useRef(outputHeight);
   const [hasHydratedConsoleState, setHasHydratedConsoleState] = useState(false);
   const [centerPaneEl, setCenterPaneEl] = useState<HTMLDivElement | null>(null);
   const [centerHeight, setCenterHeight] = useState(0);
@@ -273,6 +274,7 @@ export function Workbench({
   const [buildMenu, setBuildMenu] = useState<{ x: number; y: number } | null>(null);
   const [forceNextBuild, setForceNextBuild] = useState(false);
   const [forceModifierActive, setForceModifierActive] = useState(false);
+  const [isResizingConsole, setIsResizingConsole] = useState(false);
   const { notifyBanner, dismissScope } = useNotifications();
   const consoleBannerScope = useMemo(
     () => `workbench-console:${workspaceId}:${configId}`,
@@ -534,8 +536,8 @@ export function Workbench({
     };
   }, [centerPaneEl]);
 
-  const consoleBounds = useMemo(() => {
-    if (!hasMeasuredCenter) {
+  const computeConsoleBounds = useCallback((height: number | null) => {
+    if (height === null) {
       return {
         min: MIN_CONSOLE_HEIGHT,
         max: OUTPUT_LIMITS.max,
@@ -543,7 +545,7 @@ export function Workbench({
         hasMeasurement: false,
       };
     }
-    const available = Math.max(0, centerHeight - MIN_EDITOR_HEIGHT - OUTPUT_HANDLE_THICKNESS);
+    const available = Math.max(0, height - MIN_EDITOR_HEIGHT - OUTPUT_HANDLE_THICKNESS);
     const max = Math.min(OUTPUT_LIMITS.max, available);
     return {
       min: Math.min(MIN_CONSOLE_HEIGHT, max),
@@ -551,23 +553,29 @@ export function Workbench({
       canFitMin: available >= MIN_CONSOLE_HEIGHT,
       hasMeasurement: true,
     };
-  }, [centerHeight, hasMeasuredCenter]);
+  }, []);
 
-  const clampOutputHeight = useCallback(
-    (value: number) => {
-      const { max } = consoleBounds;
-      if (max <= 0) {
-        return 0;
-      }
-      const lower = Math.min(Math.max(MIN_CONSOLE_HEIGHT, 0), max);
-      return clamp(value, lower, max);
-    },
-    [consoleBounds],
+  const consoleBounds = useMemo(
+    () => computeConsoleBounds(hasMeasuredCenter ? centerHeight : null),
+    [centerHeight, hasMeasuredCenter, computeConsoleBounds],
   );
+
+  const clampOutputHeight = useCallback((value: number, bounds = consoleBounds) => {
+    const { max, min } = bounds;
+    if (max <= 0) {
+      return 0;
+    }
+    const lower = Math.min(Math.max(min, 0), max);
+    return clamp(value, lower, max);
+  }, [consoleBounds]);
 
   useEffect(() => {
     setOutputHeight((current) => clampOutputHeight(current));
   }, [clampOutputHeight]);
+
+  useEffect(() => {
+    outputHeightRef.current = outputHeight;
+  }, [outputHeight]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -620,14 +628,14 @@ export function Workbench({
   }, [consoleExplicit, consoleState, setConsole, hasHydratedConsoleState]);
 
   useEffect(() => {
-    if (!consolePersistence) {
+    if (!consolePersistence || isResizingConsole) {
       return;
     }
     consolePersistence.set<ConsolePanelPreferences>({
       height: outputHeight,
       state: consoleState,
     });
-  }, [consolePersistence, outputHeight, consoleState]);
+  }, [consolePersistence, outputHeight, consoleState, isResizingConsole]);
 
   useEffect(() => {
     if (consoleState !== "open" || !consoleBounds.hasMeasurement) {
@@ -1296,10 +1304,13 @@ export function Workbench({
                 onPointerDown={(event) => {
                   const startX = event.clientX;
                   const startWidth = explorer.width;
-                  trackPointerDrag(event, (move) => {
-                    const delta = move.clientX - startX;
-                    const next = clamp(startWidth + delta, EXPLORER_LIMITS.min, EXPLORER_LIMITS.max);
-                    setExplorer((prev) => ({ ...prev, width: next }));
+                  trackPointerDrag(event, {
+                    cursor: "col-resize",
+                    onMove: (move) => {
+                      const delta = move.clientX - startX;
+                      const next = clamp(startWidth + delta, EXPLORER_LIMITS.min, EXPLORER_LIMITS.max);
+                      setExplorer((prev) => (prev.width === next ? prev : { ...prev, width: next }));
+                    },
                   });
                 }}
               />
@@ -1354,29 +1365,39 @@ export function Workbench({
                 }}
                 onCloseTab={files.closeTab}
                 onCloseOtherTabs={files.closeOtherTabs}
-              onCloseTabsToRight={files.closeTabsToRight}
-              onCloseAllTabs={files.closeAllTabs}
-              onContentChange={files.updateContent}
-              onSaveTab={handleSaveTabShortcut}
-              onSaveAllTabs={handleSaveAllTabs}
-              onMoveTab={files.moveTab}
-              onPinTab={files.pinTab}
-              onUnpinTab={files.unpinTab}
-              onSelectRecentTab={files.selectRecentTab}
-              editorTheme={editorTheme.resolvedTheme}
-              menuAppearance={menuAppearance}
-              canSaveFiles={canSaveFiles}
-              minHeight={MIN_EDITOR_HEIGHT}
-            />
+                onCloseTabsToRight={files.closeTabsToRight}
+                onCloseAllTabs={files.closeAllTabs}
+                onContentChange={files.updateContent}
+                onSaveTab={handleSaveTabShortcut}
+                onSaveAllTabs={handleSaveAllTabs}
+                onMoveTab={files.moveTab}
+                onPinTab={files.pinTab}
+                onUnpinTab={files.unpinTab}
+                onSelectRecentTab={files.selectRecentTab}
+                editorTheme={editorTheme.resolvedTheme}
+                menuAppearance={menuAppearance}
+                canSaveFiles={canSaveFiles}
+                minHeight={MIN_EDITOR_HEIGHT}
+              />
               <PanelResizeHandle
                 orientation="horizontal"
                 onPointerDown={(event) => {
+                  setIsResizingConsole(true);
                   const startY = event.clientY;
-                  const startHeight = outputHeight;
-                  trackPointerDrag(event, (move) => {
-                    const delta = startY - move.clientY;
-                    const next = clampOutputHeight(startHeight + delta);
-                    setOutputHeight(next);
+                  const startHeight = outputHeightRef.current;
+                  const dragBounds = computeConsoleBounds(
+                    centerPaneEl ? centerPaneEl.getBoundingClientRect().height : null,
+                  );
+                  trackPointerDrag(event, {
+                    cursor: "row-resize",
+                    onMove: (move) => {
+                      const delta = move.clientY - startY;
+                      const next = clampOutputHeight(startHeight - delta, dragBounds);
+                      setOutputHeight((current) => (current === next ? current : next));
+                    },
+                    onEnd: () => {
+                      setIsResizingConsole(false);
+                    },
                   });
                 }}
               />
@@ -1399,10 +1420,13 @@ export function Workbench({
               onPointerDown={(event) => {
                 const startX = event.clientX;
                 const startWidth = inspector.width;
-                trackPointerDrag(event, (move) => {
-                  const delta = startX - move.clientX;
-                  const next = clamp(startWidth + delta, INSPECTOR_LIMITS.min, INSPECTOR_LIMITS.max);
-                  setInspector((prev) => ({ ...prev, width: next }));
+                trackPointerDrag(event, {
+                  cursor: "col-resize",
+                  onMove: (move) => {
+                    const delta = startX - move.clientX;
+                    const next = clamp(startWidth + delta, INSPECTOR_LIMITS.min, INSPECTOR_LIMITS.max);
+                    setInspector((prev) => (prev.width === next ? prev : { ...prev, width: next }));
+                  },
                 });
               }}
             />

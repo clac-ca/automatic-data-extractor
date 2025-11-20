@@ -16,6 +16,7 @@ export function PanelResizeHandle({ orientation, onPointerDown }: PanelResizeHan
           ? "w-1 cursor-col-resize select-none bg-transparent"
           : "h-1 cursor-row-resize select-none bg-transparent"
       }
+      style={{ touchAction: "none" }}
       onPointerDown={onPointerDown}
     >
       <span className="sr-only">Resize panel</span>
