@@ -17,6 +17,7 @@ import { useSearchParams } from "@app/nav/urlState";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
+import { useSession } from "@shared/auth/context/SessionContext";
 import {
   findActiveVersion,
   findLatestInactiveVersion,
@@ -52,7 +53,6 @@ type ListDocumentsQuery = {
   include_total?: boolean;
 };
 
-type StatusFilterInput = DocumentStatus | readonly DocumentStatus[] | null | undefined;
 type DocumentsView = "mine" | "team" | "attention" | "recent";
 
 const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
@@ -145,11 +145,9 @@ const documentsKeys = {
   workspace: (workspaceId: string) => [...documentsKeys.all(), workspaceId] as const,
   list: (
     workspaceId: string,
-    status: DocumentStatus[] | null,
-    search: string | null,
     sort: string | null,
     uploader: string | null,
-  ) => [...documentsKeys.workspace(workspaceId), "list", { status, search, sort, uploader }] as const,
+  ) => [...documentsKeys.workspace(workspaceId), "list", { sort, uploader }] as const,
 };
 
 const DOCUMENTS_PAGE_SIZE = 50;
@@ -157,6 +155,7 @@ const DOCUMENTS_PAGE_SIZE = 50;
 
 export default function WorkspaceDocumentsRoute() {
   const { workspace } = useWorkspaceContext();
+  const session = useSession();
 
   // URL-synced state
   const [searchParams, setSearchParams] = useSearchParams();
@@ -215,10 +214,37 @@ export default function WorkspaceDocumentsRoute() {
   });
   const { refetch: refetchDocuments } = documentsQuery;
   const getDocumentKey = useCallback((document: DocumentRecord) => document.id, []);
-  const documents = useFlattenedPages(documentsQuery.data?.pages, getDocumentKey);
+  const documentsRaw = useFlattenedPages(documentsQuery.data?.pages, getDocumentKey);
+  const documents = useMemo(() => {
+    const normalizedSearch = debouncedSearch.toLowerCase();
+    const uploaderId = uploaderFilter === "me" ? session.user.id : null;
+    const uploaderEmail = uploaderFilter === "me" ? session.user.email ?? null : null;
+    return documentsRaw.filter((doc) => {
+      if (statusFiltersArray.length > 0 && !statusFiltersArray.includes(doc.status)) {
+        return false;
+      }
+      if (uploaderFilter === "me") {
+        const docUploaderId = (doc as { uploader_id?: string | null }).uploader_id ?? doc.uploader?.id ?? null;
+        const docUploaderEmail = doc.uploader?.email ?? null;
+        if (uploaderId && docUploaderId && docUploaderId !== uploaderId) {
+          return false;
+        }
+        if (!docUploaderId && uploaderEmail && docUploaderEmail && docUploaderEmail !== uploaderEmail) {
+          return false;
+        }
+      }
+      if (normalizedSearch) {
+        const haystack = `${doc.name ?? ""} ${(doc as { source?: string | null }).source ?? ""}`.toLowerCase();
+        if (!haystack.includes(normalizedSearch)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [debouncedSearch, documentsRaw, session.user.email, session.user.id, statusFiltersArray, uploaderFilter]);
   const fetchingNextPage = documentsQuery.isFetchingNextPage;
   const backgroundFetch = documentsQuery.isFetching && !fetchingNextPage;
-  const totalDocuments = documentsQuery.data?.pages?.[0]?.total ?? null;
+  const totalDocuments = documents.length;
 
   /* ----------------------------- URL sync ----------------------------- */
   useEffect(() => {
@@ -563,23 +589,16 @@ interface WorkspaceDocumentsOptions {
 }
 
 function useWorkspaceDocuments(workspaceId: string, options: WorkspaceDocumentsOptions) {
-  const normalizedStatusRaw = normaliseStatusFilter(options.statuses ?? null);
-  const normalizedStatus: DocumentStatus[] | null = normalizedStatusRaw ? [...normalizedStatusRaw] : null;
-  const search = options.search.trim() || null;
   const sort = options.sort.trim() || null;
-  const uploader = options.uploader?.trim() || null;
 
   return useInfiniteQuery<DocumentListPage>({
-    queryKey: documentsKeys.list(workspaceId, normalizedStatus, search, sort, uploader),
+    queryKey: documentsKeys.list(workspaceId, sort, options.uploader ?? null),
     initialPageParam: 1,
     queryFn: ({ pageParam, signal }) =>
       fetchWorkspaceDocuments(
         workspaceId,
         {
-          statuses: normalizedStatus,
-          search,
           sort,
-          uploader,
           page: typeof pageParam === "number" ? pageParam : 1,
           pageSize: DOCUMENTS_PAGE_SIZE,
         },
@@ -696,26 +715,18 @@ type DocumentRunPreferences = {
 async function fetchWorkspaceDocuments(
   workspaceId: string,
   options: {
-    statuses: DocumentStatus[] | null;
-    search: string | null;
     sort: string | null;
-    uploader: string | null;
     page: number;
     pageSize: number;
   },
   signal?: AbortSignal,
 ): Promise<DocumentListPage> {
-  const query: ListDocumentsQuery = {};
-  if (options.statuses && options.statuses.length > 0) query.status = Array.from(options.statuses);
-  if (options.search) query.q = options.search;
-  if (options.sort) query.sort = options.sort;
-  if (options.uploader) query.uploader = options.uploader;
-  if (options.page && options.page > 0) {
-    query.page = options.page;
-  }
-  if (options.pageSize && options.pageSize > 0) {
-    query.page_size = options.pageSize;
-  }
+  const query: ListDocumentsQuery = {
+    sort: options.sort ?? undefined,
+    page: options.page > 0 ? options.page : 1,
+    page_size: options.pageSize > 0 ? options.pageSize : DOCUMENTS_PAGE_SIZE,
+    include_total: false,
+  };
 
   const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents", {
     params: { path: { workspace_id: workspaceId }, query },
@@ -754,15 +765,6 @@ function extractFilename(header: string | null) {
   }
   const filenameMatch = header.match(/filename="?([^";]+)"?/i);
   return filenameMatch?.[1] ?? null;
-}
-
-function normaliseStatusFilter(status: StatusFilterInput) {
-  if (status == null) return undefined;
-  if (Array.isArray(status)) {
-    const filtered = status.filter((value): value is DocumentStatus => Boolean(value));
-    return filtered.length > 0 ? filtered : undefined;
-  }
-  return [status];
 }
 
 function readRunPreferences(

@@ -63,12 +63,14 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
       return formatRunLog(event);
     case "run.completed":
       return formatRunCompletion(event);
-    default:
+    default: {
+      const neverEvent: never = event;
       return {
         level: "info",
-        message: JSON.stringify(event),
-        timestamp: formatConsoleTimestamp(event.created),
+        message: JSON.stringify(neverEvent),
+        timestamp: "",
       };
+    }
   }
 }
 
