@@ -71,6 +71,21 @@ class ConfigurationRecord(BaseSchema):
     activated_at: datetime | None = None
 
 
+class ConfigVersionRecord(BaseSchema):
+    """Serialized configuration version metadata."""
+
+    config_version_id: ULIDStr
+    config_id: ULIDStr
+    workspace_id: ULIDStr
+    status: ConfigurationStatus
+    semver: str | None = None
+    content_digest: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    activated_at: datetime | None = None
+    deleted_at: datetime | None = None
+
+
 class ConfigValidationIssue(BaseSchema):
     """Description of a validation issue found on disk."""
 
@@ -195,6 +210,7 @@ __all__ = [
     "ConfigSource",
     "ConfigSourceClone",
     "ConfigSourceTemplate",
+    "ConfigVersionRecord",
     "ConfigValidationIssue",
     "ConfigurationPage",
     "ConfigurationCreate",

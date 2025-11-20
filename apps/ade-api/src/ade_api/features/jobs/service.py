@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import shutil
 from collections.abc import Iterable
 from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -17,6 +16,7 @@ from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.documents.models import Document
 from ade_api.features.documents.repository import DocumentsRepository
 from ade_api.features.documents.storage import DocumentStorage
+from ade_api.features.documents.staging import stage_document_input
 from ade_api.features.jobs.models import Job, JobStatus
 from ade_api.features.jobs.repository import JobsRepository
 from ade_api.features.jobs.schemas import (
@@ -27,7 +27,12 @@ from ade_api.features.jobs.schemas import (
     JobSubmittedBy,
 )
 from ade_api.features.runs.models import RunStatus
-from ade_api.features.runs.schemas import RunCreateOptions
+from ade_api.features.runs.schemas import (
+    RunCompletedEvent,
+    RunCreateOptions,
+    RunEvent,
+    RunStartedEvent,
+)
 from ade_api.features.runs.service import RunExecutionContext, RunsService
 from ade_api.features.users.models import User
 from ade_api.settings import Settings
@@ -121,13 +126,15 @@ class JobsService:
             job_id=job_id,
             jobs_dir=self._jobs_dir,
         )
-        context = self._ensure_job_context(context, job_id, workspace_id)
+        context = self._ensure_job_context(context, run.id, workspace_id)
 
-        job_dir = self._jobs_dir / job_id
-        input_dir = job_dir / "input"
-        input_dir.mkdir(parents=True, exist_ok=True)
-
-        await self._copy_document(document, input_dir)
+        job_dir = self._runs.job_directory(context.job_id or context.run_id)
+        await stage_document_input(
+            document=document,
+            storage=self._storage,
+            session=self._session,
+            job_dir=job_dir,
+        )
 
         now = utc_now()
         job = Job(
@@ -243,11 +250,6 @@ class JobsService:
             "byte_size": document.byte_size,
         }
 
-    async def _copy_document(self, document: Document, input_dir: Path) -> None:
-        source = self._storage.path_for(document.stored_uri)
-        destination = input_dir / document.original_filename
-        await asyncio.to_thread(shutil.copy2, source, destination)
-
     async def _finalize_job(
         self,
         job: Job,
@@ -255,10 +257,17 @@ class JobsService:
         job_dir: Path,
     ) -> None:
         run = await self._runs.get_run(job.trace_id or "")
-        if run is not None:
+        if run is None:
+            job.status = JobStatus.FAILED
+            job.error_message = (
+                job.error_message
+                or "Run record not found; job status could not be reconciled."
+            )
+            job.completed_at = job.completed_at or utc_now()
+        else:
             job.error_message = run.error_message
-            job.completed_at = run.finished_at or utc_now()
-            job.started_at = job.started_at or run.started_at
+            job.started_at = run.started_at or job.started_at or utc_now()
+            job.completed_at = run.finished_at or job.completed_at or utc_now()
             status_map = {
                 RunStatus.SUCCEEDED: JobStatus.SUCCEEDED,
                 RunStatus.FAILED: JobStatus.FAILED,
@@ -266,20 +275,46 @@ class JobsService:
                 RunStatus.RUNNING: JobStatus.RUNNING,
                 RunStatus.QUEUED: JobStatus.QUEUED,
             }
-            job.status = status_map.get(run.status, JobStatus.SUCCEEDED)
-        else:
-            job.status = JobStatus.SUCCEEDED
-            job.completed_at = job.completed_at or utc_now()
+            job.status = status_map.get(run.status, JobStatus.FAILED)
 
-        job.artifact_uri = self._relative_path(job_dir / "logs" / "artifact.json")
-        job.logs_uri = self._relative_path(job_dir / "logs" / "events.ndjson")
-        job.output_uri = self._relative_path(job_dir / "output")
+        job.artifact_uri = self._runs.job_relative_path(job_dir / "logs" / "artifact.json")
+        job.logs_uri = self._runs.job_relative_path(job_dir / "logs" / "events.ndjson")
+        job.output_uri = self._runs.job_relative_path(job_dir / "output")
 
     async def _mark_job_failure(self, job: Job, message: str) -> None:
         job.status = JobStatus.FAILED
         job.error_message = message
         job.completed_at = utc_now()
         await self._session.flush()
+
+    async def _apply_run_frame(self, job: Job, frame: object) -> None:
+        if not isinstance(frame, RunEvent):
+            return
+
+        if isinstance(frame, RunStartedEvent):
+            job.status = JobStatus.RUNNING
+            job.started_at = job.started_at or self._epoch_to_datetime(frame.created)
+            await self._session.flush()
+            return
+
+        if isinstance(frame, RunCompletedEvent):
+            run_status = RunStatus(frame.status)
+            status_map = {
+                RunStatus.SUCCEEDED: JobStatus.SUCCEEDED,
+                RunStatus.FAILED: JobStatus.FAILED,
+                RunStatus.CANCELED: JobStatus.CANCELLED,
+                RunStatus.RUNNING: JobStatus.RUNNING,
+                RunStatus.QUEUED: JobStatus.QUEUED,
+            }
+            job.status = status_map.get(run_status, JobStatus.FAILED)
+            job.error_message = frame.error_message
+            job.started_at = job.started_at or self._epoch_to_datetime(frame.created)
+            job.completed_at = job.completed_at or self._epoch_to_datetime(frame.created)
+            await self._session.flush()
+
+    @staticmethod
+    def _epoch_to_datetime(epoch_seconds: int) -> datetime:
+        return datetime.fromtimestamp(epoch_seconds, tz=timezone.utc)
 
     async def _require_job(self, *, workspace_id: str, job_id: str) -> Job:
         job = await self._jobs.get_job(workspace_id=workspace_id, job_id=job_id)
@@ -308,15 +343,12 @@ class JobsService:
             config_id=context.config_id,
         )
 
-        job_dir = self._jobs_dir / job_id
+        job_dir = self._runs.job_directory(context.job_id or context.run_id)
         job_dir.mkdir(parents=True, exist_ok=True)
 
-        job.status = JobStatus.RUNNING
-        job.started_at = job.started_at or utc_now()
-        await self._session.flush()
-
         try:
-            await self._runs.run_to_completion(context=context, options=options)
+            async for frame in self._runs.stream_run(context=context, options=options):
+                await self._apply_run_frame(job, frame)
         except Exception as exc:  # pragma: no cover - defensive
             await self._mark_job_failure(job, str(exc))
             await self._session.commit()
@@ -393,12 +425,6 @@ class JobsService:
             raise JobOutputMissingError("Requested output file not found")
 
         return candidate
-
-    def _relative_path(self, path: Path) -> str:
-        try:
-            return str(path.relative_to(self._jobs_dir))
-        except ValueError:  # pragma: no cover - defensive
-            return str(path)
 
     def _job_path(self, uri: str) -> Path:
         root = self._jobs_dir.resolve()

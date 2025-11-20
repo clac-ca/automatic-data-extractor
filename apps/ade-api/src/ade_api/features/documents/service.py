@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import unicodedata
 from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import UTC, datetime
@@ -26,12 +27,15 @@ from .exceptions import (
     DocumentFileMissingError,
     DocumentNotFoundError,
     InvalidDocumentExpirationError,
+    DocumentWorksheetParseError,
 )
 from .filters import DocumentFilters, DocumentSource, DocumentStatus, apply_document_filters
 from .models import Document
 from .repository import DocumentsRepository
 from .schemas import DocumentLastRun, DocumentOut, DocumentPage, DocumentSheet
 from .storage import DocumentStorage
+
+logger = logging.getLogger(__name__)
 
 _FALLBACK_FILENAME = "upload"
 _MAX_FILENAME_LENGTH = 255
@@ -93,6 +97,7 @@ class DocumentsService:
             expires_at=expiration,
             last_run_at=None,
         )
+        await self._capture_worksheet_metadata(document, self._storage.path_for(stored_uri))
         self._session.add(document)
         await self._session.flush()
         stmt = self._repository.base_query(workspace_id).where(Document.id == document_id)
@@ -157,9 +162,22 @@ class DocumentsService:
         """Return worksheet descriptors for ``document_id``."""
 
         document = await self._get_document(workspace_id, document_id)
+        cached_sheets = self._cached_worksheets(document)
         path = self._storage.path_for(document.stored_uri)
+
         exists = await run_in_threadpool(path.exists)
         if not exists:
+            if cached_sheets:
+                logger.warning(
+                    "Serving cached worksheet metadata because the stored file is missing",
+                    extra={
+                        "document_id": document_id,
+                        "workspace_id": workspace_id,
+                        "stored_uri": document.stored_uri,
+                    },
+                )
+                return cached_sheets
+
             raise DocumentFileMissingError(
                 document_id=document_id,
                 stored_uri=document.stored_uri,
@@ -167,7 +185,30 @@ class DocumentsService:
 
         suffix = Path(document.original_filename).suffix.lower()
         if suffix == ".xlsx":
-            return await run_in_threadpool(self._inspect_workbook, path)
+            try:
+                return await run_in_threadpool(self._inspect_workbook, path)
+            except Exception as exc:  # pragma: no cover - defensive fallback
+                if cached_sheets:
+                    logger.warning(
+                        "Serving cached worksheet metadata after workbook inspection failed",
+                        extra={
+                            "document_id": document_id,
+                            "workspace_id": workspace_id,
+                            "stored_uri": document.stored_uri,
+                            "reason": type(exc).__name__,
+                        },
+                        exc_info=True,
+                    )
+                    return cached_sheets
+
+                raise DocumentWorksheetParseError(
+                    document_id=document_id,
+                    stored_uri=document.stored_uri,
+                    reason=type(exc).__name__,
+                ) from exc
+
+        if cached_sheets:
+            return cached_sheets
 
         name = self._default_sheet_name(document.original_filename)
         return [DocumentSheet(name=name, index=0, kind="file", is_active=True)]
@@ -363,6 +404,47 @@ class DocumentsService:
             return None
         candidate = content_type.strip()
         return candidate or None
+
+    def _cached_worksheets(self, document: Document) -> list[DocumentSheet] | None:
+        """Return cached worksheet metadata stored on the document, if any."""
+
+        cached = document.attributes.get("worksheets")
+        if not isinstance(cached, Sequence) or isinstance(cached, (str, bytes, bytearray)):
+            return None
+
+        valid: list[DocumentSheet] = []
+        for entry in cached:
+            try:
+                valid.append(DocumentSheet.model_validate(entry))
+            except Exception:  # pragma: no cover - defensive
+                continue
+
+        return valid or None
+
+    async def _capture_worksheet_metadata(self, document: Document, path: Path) -> None:
+        """Persist worksheet descriptors on the document for later reuse."""
+
+        suffix = Path(document.original_filename).suffix.lower()
+        try:
+            if suffix == ".xlsx":
+                sheets = await run_in_threadpool(self._inspect_workbook, path)
+            else:
+                sheet_name = self._default_sheet_name(document.original_filename)
+                sheets = [DocumentSheet(name=sheet_name, index=0, kind="file", is_active=True)]
+        except Exception as exc:  # pragma: no cover - defensive fallback
+            logger.warning(
+                "Unable to cache worksheet metadata",
+                extra={
+                    "document_id": document.id,
+                    "workspace_id": document.workspace_id,
+                    "stored_uri": document.stored_uri,
+                    "reason": type(exc).__name__,
+                },
+                exc_info=True,
+            )
+            return
+
+        document.attributes["worksheets"] = [sheet.model_dump() for sheet in sheets]
 
     @staticmethod
     def _inspect_workbook(path: Path) -> list[DocumentSheet]:

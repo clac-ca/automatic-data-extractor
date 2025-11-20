@@ -43,9 +43,29 @@ class InvalidDocumentExpirationError(Exception):
         super().__init__(message)
 
 
+class DocumentWorksheetParseError(Exception):
+    """Raised when worksheet metadata cannot be read from a workbook."""
+
+    def __init__(self, *, document_id: str, stored_uri: str, reason: str | None = None) -> None:
+        details = " Unable to read worksheet metadata."
+        if reason:
+            details = f" Parse failed ({reason})."
+
+        message = (
+            f"Worksheet inspection failed for document {document_id!r} at {stored_uri!r}."
+            f"{details}"
+        )
+
+        super().__init__(message)
+        self.document_id = document_id
+        self.stored_uri = stored_uri
+        self.reason = reason
+
+
 __all__ = [
     "DocumentNotFoundError",
     "DocumentFileMissingError",
     "DocumentTooLargeError",
     "InvalidDocumentExpirationError",
+    "DocumentWorksheetParseError",
 ]

@@ -18,6 +18,7 @@ class ConfigurationStatus(str, Enum):
     """Lifecycle states for workspace configuration packages."""
 
     DRAFT = "draft"
+    PUBLISHED = "published"
     ACTIVE = "active"
     INACTIVE = "inactive"
 
