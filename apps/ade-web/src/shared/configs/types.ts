@@ -2,7 +2,18 @@ import type { components } from "@schema";
 
 export type ConfigurationPage = components["schemas"]["ConfigurationPage"];
 export type ConfigRecord = components["schemas"]["ConfigurationRecord"];
-export type ConfigVersionRecord = components["schemas"]["ConfigVersionRecord"];
+export interface ConfigVersionRecord {
+  readonly config_version_id: string;
+  readonly config_id: string;
+  readonly workspace_id: string;
+  readonly status: "draft" | "published" | "active" | "inactive";
+  readonly semver?: string | null;
+  readonly content_digest?: string | null;
+  readonly created_at: string;
+  readonly updated_at: string;
+  readonly activated_at?: string | null;
+  readonly deleted_at?: string | null;
+}
 export type ConfigScriptSummary = components["schemas"]["ConfigScriptSummary"];
 export type ConfigScriptContent = components["schemas"]["ConfigScriptContent"];
 export type ConfigVersionValidateResponse = components["schemas"]["ConfigVersionValidateResponse"];

@@ -1811,8 +1811,7 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
               </Select>
               {selectedDocument ? (
                 <p className="text-xs text-slate-500">
-                  Uploaded {formatDocumentTimestamp(selectedDocument.created_at)} ·
-                  {" "}
+                  Uploaded {formatDocumentTimestamp(selectedDocument.created_at)} ·{" "}
                   {(selectedDocument.byte_size ?? 0).toLocaleString()} bytes
                 </p>
               ) : null}
@@ -1820,10 +1819,30 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
 
             <div className="space-y-2">
               <p className="text-sm font-medium text-slate-700">Worksheet</p>
-              {sheetQuery.isError ? (
-                <Alert tone="danger">Unable to load worksheets.</Alert>
-              ) : sheetQuery.isLoading ? (
+              {sheetQuery.isLoading ? (
                 <p className="text-sm text-slate-500">Loading worksheets…</p>
+              ) : sheetQuery.isError ? (
+                <Alert tone="warning">
+                  <div className="space-y-2">
+                    <p className="text-sm text-slate-700">
+                      Worksheet metadata is temporarily unavailable. The run will process the entire file unless you retry and
+                      pick specific sheets.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={() => sheetQuery.refetch()}
+                        disabled={sheetQuery.isFetching}
+                      >
+                        Retry loading
+                      </Button>
+                      <Button variant="ghost" size="xs" onClick={() => setSelectedSheets([])}>
+                        Use all worksheets
+                      </Button>
+                    </div>
+                  </div>
+                </Alert>
               ) : sheetsAvailable ? (
                 <div className="space-y-3 rounded-lg border border-slate-200 p-3">
                   <div className="flex items-start justify-between gap-3">

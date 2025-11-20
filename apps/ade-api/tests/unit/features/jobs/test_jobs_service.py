@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ from ade_api.features.jobs.models import JobStatus
 from ade_api.features.jobs.schemas import JobSubmissionRequest
 from ade_api.features.jobs.service import JobsService
 from ade_api.features.runs.models import RunStatus
+from ade_api.features.runs.schemas import RunCompletedEvent, RunStartedEvent
 from ade_api.features.runs.service import RunExecutionContext
 from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import Settings
@@ -27,6 +29,7 @@ class StubRunsService:
     def __init__(self, jobs_dir: Path) -> None:
         self.jobs_dir = jobs_dir
         self.run_id = f"run_{generate_ulid()}"
+        self.started_at = utc_now()
 
     async def prepare_run(self, *, config_id: str, options, job_id: str, jobs_dir: Path):
         context = RunExecutionContext(
@@ -42,8 +45,22 @@ class StubRunsService:
         run = type("Run", (), {"id": self.run_id})()
         return run, context
 
-    async def run_to_completion(self, *, context, options):  # noqa: D401 - signature match
-        return None
+    def job_directory(self, run_id: str) -> Path:  # noqa: D401 - signature match
+        return (self.jobs_dir / run_id).resolve()
+
+    def job_relative_path(self, path: Path) -> str:  # noqa: D401 - signature match
+        return str(path.resolve().relative_to(self.jobs_dir.resolve()))
+
+    async def stream_run(self, *, context, options):  # noqa: D401 - signature match
+        created = int(time.time())
+        yield RunStartedEvent(run_id=self.run_id, created=created)
+        yield RunCompletedEvent(
+            run_id=self.run_id,
+            created=created,
+            status=RunStatus.SUCCEEDED.value,
+            exit_code=0,
+            error_message=None,
+        )
 
     async def get_run(self, run_id: str):  # noqa: D401 - signature match
         return type(
@@ -52,7 +69,7 @@ class StubRunsService:
             {
                 "id": run_id,
                 "status": RunStatus.SUCCEEDED,
-                "started_at": utc_now(),
+                "started_at": self.started_at,
                 "finished_at": utc_now(),
                 "exit_code": 0,
                 "error_message": None,
@@ -145,7 +162,9 @@ async def test_submit_job_copies_document_and_records_completion(jobs_service, s
     assert record.config_id == configuration.config_id
     assert record.input_documents[0].document_id == document.id
 
-    job_input = jobs_dir / record.id / "input" / document.original_filename
+    assert record.output_uri
+    job_root = (jobs_dir / record.output_uri).parent
+    job_input = job_root / "input" / document.original_filename
     assert job_input.exists()
 
     refreshed_doc = await session.get(Document, document.id)
