@@ -4,6 +4,7 @@ import {
   createWorkspace,
   workspacesKeys,
   type WorkspaceCreatePayload,
+  type WorkspaceListPage,
   type WorkspaceProfile,
 } from "@screens/Workspace/api/workspaces-api";
 
@@ -12,7 +13,28 @@ export function useCreateWorkspaceMutation() {
 
   return useMutation<WorkspaceProfile, Error, WorkspaceCreatePayload>({
     mutationFn: createWorkspace,
-    onSuccess() {
+    onSuccess(workspace) {
+      queryClient.setQueryData(workspacesKeys.detail(workspace.id), workspace);
+
+      queryClient
+        .getQueriesData<WorkspaceListPage>({ queryKey: workspacesKeys.all() })
+        .forEach(([key, page]) => {
+          if (!Array.isArray(key) || key[0] !== "workspaces" || key[1] !== "list" || !page) {
+            return;
+          }
+
+          const existingIndex = page.items.findIndex((item) => item.id === workspace.id);
+          const mergedItems =
+            existingIndex >= 0
+              ? page.items.map((item) => (item.id === workspace.id ? workspace : item))
+              : [...page.items, workspace];
+
+          const sortedItems = [...mergedItems].sort((a, b) => a.name.localeCompare(b.name));
+          const total = typeof page.total === "number" && existingIndex === -1 ? page.total + 1 : page.total;
+
+          queryClient.setQueryData(key, { ...page, items: sortedItems, total });
+        });
+
       queryClient.invalidateQueries({ queryKey: workspacesKeys.all() });
     },
   });

@@ -52,12 +52,12 @@ def load_config_manifest(
             raise ManifestNotFoundError(
                 f"Config package '{package}' cannot be imported."
             ) from exc
-
-        if not resource_path.is_file():
-            raise ManifestNotFoundError(
-                f"Resource '{resource}' not found in '{package}'."
-            )
-        manifest = _read_manifest(Path(resource_path))
+        else:
+            if not resource_path.is_file():
+                raise ManifestNotFoundError(
+                    f"Resource '{resource}' not found in '{package}'."
+                )
+            manifest = _read_manifest(Path(resource_path))
 
     if validate:
         _validate_manifest(manifest)
