@@ -38,7 +38,8 @@
             "timeout_ms": { "type": "integer", "minimum": 1000 },
             "memory_mb": { "type": "integer", "minimum": 64 },
             "runtime_network_access": { "type": "boolean", "default": false },
-            "mapping_score_threshold": { "type": "number", "minimum": 0.0 }
+            "mapping_score_threshold": { "type": "number", "minimum": 0.0 },
+            "detector_sample_size": { "type": "integer", "minimum": 1 }
           }
         },
         "writer": {
@@ -61,6 +62,7 @@
         "on_activate": { "$ref": "#/$defs/HookList" },
         "on_job_start": { "$ref": "#/$defs/HookList" },
         "on_after_extract": { "$ref": "#/$defs/HookList" },
+        "on_before_save": { "$ref": "#/$defs/HookList" },
         "on_job_end": { "$ref": "#/$defs/HookList" }
       }
     },

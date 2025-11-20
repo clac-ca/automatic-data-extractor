@@ -139,9 +139,11 @@ def test_telemetry_config_loads_env_sinks(tmp_path: Path, monkeypatch) -> None:
     artifact = MemoryArtifact()
     events = MemoryEvents()
 
+    tests_dir = Path(__file__).parent
+    monkeypatch.syspath_prepend(str(tests_dir))
     monkeypatch.setenv(
         "ADE_TELEMETRY_SINKS",
-        "ade_engine.tests.test_telemetry:telemetry_test_sink",
+        "test_telemetry:telemetry_test_sink",
     )
 
     config = TelemetryConfig()

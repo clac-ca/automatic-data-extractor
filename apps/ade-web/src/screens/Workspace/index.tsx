@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 
 import clsx from "clsx";
 
@@ -34,7 +34,7 @@ import WorkspaceSettingsRoute from "@screens/Workspace/sections/Settings";
 
 type WorkspaceSectionRender =
   | { readonly kind: "redirect"; readonly to: string }
-  | { readonly kind: "content"; readonly key: string; readonly element: JSX.Element; readonly fullHeight?: boolean };
+  | { readonly kind: "content"; readonly key: string; readonly element: ReactElement; readonly fullHeight?: boolean };
 
 export default function WorkspaceScreen() {
   return (

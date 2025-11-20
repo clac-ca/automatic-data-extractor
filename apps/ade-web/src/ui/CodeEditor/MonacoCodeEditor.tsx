@@ -19,7 +19,7 @@ const ADE_DARK_THEME_ID = "ade-dark";
 const ADE_DARK_THEME = {
   base: "vs-dark",
   inherit: true,
-  rules: [],
+  rules: [] as Array<Record<string, string>>,
   colors: {
     "editor.background": "#1f2430",
     "editor.foreground": "#f3f6ff",
@@ -30,7 +30,7 @@ const ADE_DARK_THEME = {
     "editor.inactiveSelectionBackground": "#2d3446",
     "editorGutter.background": "#1c212b",
   },
-} as const;
+};
 
 const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function MonacoCodeEditor(
   {

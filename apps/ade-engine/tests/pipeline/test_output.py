@@ -70,3 +70,37 @@ def test_write_outputs_creates_workbook(tmp_path: Path) -> None:
     first_row = next(sheet.iter_rows(values_only=True))
     assert first_row == ("Member",)
     workbook.close()
+
+
+def test_write_outputs_dedupes_sheet_names(tmp_path: Path) -> None:
+    job = _job(tmp_path)
+    manifest = ManifestContext(
+        raw={"columns": {"order": ["member_id"], "meta": {"member_id": {"label": "Member"}}}},
+        version=None,
+        model=None,
+    )
+    base_extraction = FileExtraction(
+        source_name="file.csv",
+        sheet_name="Employees",
+        mapped_columns=[
+            ColumnMapping(field="member_id", header="ID", index=0, score=1.0, contributions=tuple())
+        ],
+        extra_columns=[],
+        rows=[["123"]],
+        header_row=["ID"],
+        validation_issues=[],
+    )
+    second = FileExtraction(
+        source_name="file2.csv",
+        sheet_name="Employees",
+        mapped_columns=list(base_extraction.mapped_columns),
+        extra_columns=list(base_extraction.extra_columns),
+        rows=[["456"]],
+        header_row=["ID"],
+        validation_issues=[],
+    )
+
+    output_path = write_outputs(job, manifest, [base_extraction, second])
+    workbook = openpyxl.load_workbook(output_path, read_only=True)
+    assert workbook.sheetnames == ["Employees", "Employees-2"]
+    workbook.close()

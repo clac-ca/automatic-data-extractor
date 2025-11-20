@@ -401,7 +401,7 @@ function DockActionButton({
 }: {
   readonly ariaLabel: string;
   readonly onClick: () => void;
-  readonly children: JSX.Element;
+  readonly children: ReactNode;
   readonly destructive?: boolean;
 }) {
   return (

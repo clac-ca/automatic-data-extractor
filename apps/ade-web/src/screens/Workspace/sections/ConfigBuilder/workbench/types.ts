@@ -1,37 +1,37 @@
 export type WorkbenchFileKind = "file" | "folder";
 
 export interface WorkbenchFileMetadata {
-  readonly size?: number | null;
-  readonly modifiedAt?: string | null;
-  readonly contentType?: string | null;
-  readonly etag?: string | null;
+  size?: number | null;
+  modifiedAt?: string | null;
+  contentType?: string | null;
+  etag?: string | null;
 }
 
 export interface WorkbenchFileNode {
-  readonly id: string;
-  readonly name: string;
-  readonly kind: WorkbenchFileKind;
-  readonly language?: string;
-  readonly children?: readonly WorkbenchFileNode[];
-  readonly metadata?: WorkbenchFileMetadata;
+  id: string;
+  name: string;
+  kind: WorkbenchFileKind;
+  language?: string;
+  children?: WorkbenchFileNode[];
+  metadata?: WorkbenchFileMetadata | null;
 }
 
 export type WorkbenchFileTabStatus = "loading" | "ready" | "error";
 
 export interface WorkbenchFileTab {
-  readonly id: string;
-  readonly name: string;
-  readonly language?: string;
-  readonly initialContent: string;
-  readonly content: string;
-  readonly status: WorkbenchFileTabStatus;
-  readonly error?: string | null;
-  readonly etag?: string | null;
-  readonly metadata?: WorkbenchFileMetadata;
-  readonly pinned?: boolean;
-  readonly saving?: boolean;
-  readonly saveError?: string | null;
-  readonly lastSavedAt?: string | null;
+  id: string;
+  name: string;
+  language?: string;
+  initialContent: string;
+  content: string;
+  status: WorkbenchFileTabStatus;
+  error?: string | null;
+  etag?: string | null;
+  metadata?: WorkbenchFileMetadata | null;
+  pinned?: boolean;
+  saving?: boolean;
+  saveError?: string | null;
+  lastSavedAt?: string | null;
 }
 
 export type WorkbenchConsoleLevel = "info" | "success" | "warning" | "error";

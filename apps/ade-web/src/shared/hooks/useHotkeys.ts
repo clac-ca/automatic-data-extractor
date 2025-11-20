@@ -149,18 +149,19 @@ export function useHotkeys(configs: readonly HotkeyConfig[]) {
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      for (const { config, type } of parsed) {
+      for (const entry of parsed) {
+        const { config } = entry;
         if (config.options?.enabled === false) {
           continue;
         }
         if (!config.options?.allowInInputs && isEditableTarget(event.target as HTMLElement | null)) {
           continue;
         }
-        if (type === "chord") {
+        if (entry.type === "chord") {
           if (event.repeat) {
             continue;
           }
-          const { segment } = type;
+          const { segment } = entry;
           const key = normalizeKey(event.key);
           if (key !== segment.key) {
             continue;
@@ -253,4 +254,3 @@ export function useHotkeys(configs: readonly HotkeyConfig[]) {
     };
   }, [configs]);
 }
-

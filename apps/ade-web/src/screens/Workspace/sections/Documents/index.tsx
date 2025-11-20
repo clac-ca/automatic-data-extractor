@@ -27,7 +27,7 @@ import { client } from "@shared/api/client";
 import { useFlattenedPages } from "@shared/api/pagination";
 import { createScopedStorage } from "@shared/storage";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
-import type { components, paths } from "@schema";
+import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
 import { fetchJob, fetchJobOutputs, type JobOutputListing, type JobRecord, type JobStatus } from "@shared/jobs";
 
@@ -42,12 +42,17 @@ type DocumentRecord = components["schemas"]["DocumentOut"];
 type JobSubmissionPayload = components["schemas"]["JobSubmissionRequest"];
 type DocumentListPage = components["schemas"]["DocumentPage"];
 
-type ListDocumentsParameters = paths["/api/v1/workspaces/{workspace_id}/documents"]["get"]["parameters"];
-type ListDocumentsQuery = ListDocumentsParameters extends { query?: infer Q }
-  ? (Q extends undefined ? Record<string, never> : Q)
-  : Record<string, never>;
+type ListDocumentsQuery = {
+  status?: DocumentStatus[];
+  q?: string;
+  sort?: string;
+  uploader?: string;
+  page?: number;
+  page_size?: number;
+  include_total?: boolean;
+};
 
-type StatusFilterInput = DocumentStatus | DocumentStatus[] | null | undefined;
+type StatusFilterInput = DocumentStatus | readonly DocumentStatus[] | null | undefined;
 type DocumentsView = "mine" | "team" | "attention" | "recent";
 
 const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
@@ -558,7 +563,8 @@ interface WorkspaceDocumentsOptions {
 }
 
 function useWorkspaceDocuments(workspaceId: string, options: WorkspaceDocumentsOptions) {
-  const normalizedStatus = normaliseStatusFilter(options.statuses ?? null) ?? null;
+  const normalizedStatusRaw = normaliseStatusFilter(options.statuses ?? null);
+  const normalizedStatus: DocumentStatus[] | null = normalizedStatusRaw ? [...normalizedStatusRaw] : null;
   const search = options.search.trim() || null;
   const sort = options.sort.trim() || null;
   const uploader = options.uploader?.trim() || null;
@@ -768,8 +774,11 @@ function readRunPreferences(
     const entry = all[documentId];
     if (entry && typeof entry === "object") {
       const legacySheetNames: string[] = [];
-      if ("sheetName" in entry && typeof (entry as { sheetName?: string | null }).sheetName === "string") {
-        legacySheetNames.push((entry as { sheetName?: string }).sheetName);
+      if ("sheetName" in entry) {
+        const sheetNameValue = (entry as { sheetName?: string | null }).sheetName;
+        if (typeof sheetNameValue === "string") {
+          legacySheetNames.push(sheetNameValue);
+        }
       }
       const providedSheetNames = Array.isArray((entry as { sheetNames?: unknown }).sheetNames)
         ? ((entry as { sheetNames?: unknown }).sheetNames as unknown[]).filter(
@@ -1305,6 +1314,33 @@ function ChevronDownIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+function SpinnerIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={clsx("animate-spin text-slate-500", className)}
+      role="presentation"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="3"
+      />
+      <path
+        className="opacity-75"
+        d="M22 12c0-5.523-4.477-10-10-10"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 /* --------------------------------- Run Drawer --------------------------------- */
 
 interface RunExtractionDrawerProps {
@@ -1405,7 +1441,10 @@ function RunExtractionDrawerContent({
 
   const allConfigs = useMemo(() => configsQuery.data?.items ?? [], [configsQuery.data]);
   const selectableConfigs = useMemo(
-    () => allConfigs.filter((config) => !config.deleted_at),
+    () =>
+      allConfigs.filter(
+        (config) => !("deleted_at" in config && (config as { deleted_at?: string | null }).deleted_at),
+      ),
     [allConfigs],
   );
 
@@ -1472,16 +1511,9 @@ function RunExtractionDrawerContent({
   }, [preferredVersionId]);
 
   const formatConfigLabel = useCallback((config: (typeof selectableConfigs)[number]) => {
-    const status =
-      config.status === "active"
-        ? "Active"
-        : config.status === "published"
-          ? "Published"
-          : config.status === "inactive"
-            ? "Inactive"
-            : "Draft";
-    const title = config.title ?? config.display_name ?? "Untitled configuration";
-    return `${title} (${status})`;
+    const statusLabel = typeof config.status === "string" ? config.status : "draft";
+    const title = (config as { title?: string | null }).title ?? config.display_name ?? "Untitled configuration";
+    return `${title} (${statusLabel.charAt(0).toUpperCase()}${statusLabel.slice(1)})`;
   }, []);
 
   const formatVersionLabel = useCallback((version: (typeof versionOptions)[number]) => {
@@ -1648,11 +1680,15 @@ function RunExtractionDrawerContent({
     setErrorMessage(null);
     setActiveJobId(null);
     const sheetList = normalizedSheetSelection;
+    const runOptions =
+      sheetList.length > 0
+        ? { dry_run: false, validate_only: false, input_sheet_names: sheetList }
+        : { dry_run: false, validate_only: false };
     submitJob.mutate(
       {
         input_document_id: documentRecord.id,
         config_version_id: selectedVersionId,
-        options: sheetList.length ? { input_sheet_names: sheetList } : {},
+        options: runOptions,
       },
       {
         onSuccess: (job) => {
@@ -1791,8 +1827,8 @@ function RunExtractionDrawerContent({
                   </p>
                   <div className="flex items-center gap-2">
                     <Button
-                      variant="outline"
-                      size="xs"
+                      variant="secondary"
+                      size="sm"
                       onClick={() => sheetQuery.refetch()}
                       disabled={sheetQuery.isFetching}
                     >
@@ -1800,7 +1836,7 @@ function RunExtractionDrawerContent({
                     </Button>
                     <Button
                       variant="ghost"
-                      size="xs"
+                      size="sm"
                       onClick={() => setSelectedSheets([])}
                       disabled={submitJob.isPending}
                     >
@@ -1820,15 +1856,15 @@ function RunExtractionDrawerContent({
                         : `${normalizedSheetSelection.length.toLocaleString()} worksheet${
                             normalizedSheetSelection.length === 1 ? "" : "s"
                           } selected. Clear selections to process every sheet.`}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => setSelectedSheets([])}
-                    disabled={submitJob.isPending}
-                  >
-                    Use all worksheets
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedSheets([])}
+                disabled={submitJob.isPending}
+              >
+                Use all worksheets
                   </Button>
                 </div>
 

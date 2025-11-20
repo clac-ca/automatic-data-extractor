@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, Mapping
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from ade_api.features.jobs.schemas import JobStatusLiteral
 from ade_api.shared.core.ids import ULIDStr
@@ -75,6 +75,18 @@ class DocumentOut(BaseSchema):
         default=None,
         description="Latest job execution associated with the document when available.",
     )
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def _strip_internal_metadata(cls, value: Any) -> dict[str, Any]:
+        """Remove internal attributes such as cached worksheets from API payloads."""
+
+        if isinstance(value, Mapping):
+            data = dict(value)
+        else:
+            data = {}
+        data.pop("worksheets", None)
+        return data
 
     @property
     def original_filename(self) -> str:

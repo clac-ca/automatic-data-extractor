@@ -1,3 +1,4 @@
+import sys
 import textwrap
 import textwrap
 from pathlib import Path
@@ -15,9 +16,16 @@ def _write_module(root: Path, path: str, content: str) -> None:
     file_path.write_text(textwrap.dedent(content), encoding="utf-8")
 
 
+def _reset_modules(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in list(sys.modules):
+        if name == "ade_config" or name.startswith("ade_config."):
+            monkeypatch.delitem(sys.modules, name, raising=False)
+
+
 def test_column_registry_loads_modules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pkg_root = tmp_path / "cfg"
     module_root = pkg_root / "ade_config"
+    module_root.mkdir(parents=True)
     (module_root / "__init__.py").write_text("", encoding="utf-8")
     _write_module(
         module_root,
@@ -38,6 +46,7 @@ def test_column_registry_loads_modules(tmp_path: Path, monkeypatch: pytest.Monke
     )
 
     monkeypatch.syspath_prepend(str(pkg_root))
+    _reset_modules(monkeypatch)
     registry = ColumnRegistry(
         {"member": ColumnMeta(label="Member", script="column_detectors/member.py")},
         package="ade_config",
@@ -53,6 +62,7 @@ def test_column_registry_loads_modules(tmp_path: Path, monkeypatch: pytest.Monke
 def test_column_registry_validates_signatures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pkg_root = tmp_path / "cfg"
     module_root = pkg_root / "ade_config"
+    module_root.mkdir(parents=True)
     (module_root / "__init__.py").write_text("", encoding="utf-8")
     _write_module(
         module_root,
@@ -67,6 +77,7 @@ def test_column_registry_validates_signatures(tmp_path: Path, monkeypatch: pytes
     )
 
     monkeypatch.syspath_prepend(str(pkg_root))
+    _reset_modules(monkeypatch)
 
     with pytest.raises(ColumnRegistryError) as excinfo:
         ColumnRegistry(
@@ -74,4 +85,4 @@ def test_column_registry_validates_signatures(tmp_path: Path, monkeypatch: pytes
             package="ade_config",
         )
 
-    assert 'Transformer for field' in str(excinfo.value)
+    assert "must accept parameters" in str(excinfo.value)

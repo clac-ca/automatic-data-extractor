@@ -14,6 +14,7 @@ def run_build() -> None:
 
     common.refresh_paths()
     common.ensure_frontend_dir()
+    common.ensure_backend_dir()
     dist_dir = common.FRONTEND_DIR / "dist"
     target = common.BACKEND_SRC / "web" / "static"
 
@@ -21,11 +22,14 @@ def run_build() -> None:
     common.ensure_node_modules()
     common.run([npm_bin, "run", "build"], cwd=common.FRONTEND_DIR)
 
-    if dist_dir.exists():
-        if target.exists():
-            shutil.rmtree(target)
-        shutil.copytree(dist_dir, target)
-        typer.echo(f"📦 copied {dist_dir.relative_to(common.REPO_ROOT)} → {target.relative_to(common.REPO_ROOT)}")
+    if not dist_dir.exists():
+        typer.echo(f"❌ build output missing: expected {dist_dir.relative_to(common.REPO_ROOT)}", err=True)
+        raise typer.Exit(code=1)
+
+    if target.exists():
+        shutil.rmtree(target)
+    shutil.copytree(dist_dir, target)
+    typer.echo(f"📦 copied {dist_dir.relative_to(common.REPO_ROOT)} → {target.relative_to(common.REPO_ROOT)}")
 
     typer.echo("✅ build complete")
 

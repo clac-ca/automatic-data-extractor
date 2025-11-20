@@ -190,19 +190,24 @@ class ConfigurationsService:
             workspace_id=workspace_id,
             config_id=config_id,
         )
-        if configuration.status not in {
-            ConfigurationStatus.PUBLISHED,
-            ConfigurationStatus.INACTIVE,
-        }:
-            raise ConfigStateError("Configuration is not activatable")
-
         config_path = await self._storage.ensure_config_path(workspace_id, config_id)
         issues, digest = await self._storage.validate_path(config_path)
         if issues:
             raise ConfigValidationFailedError(issues)
 
-        if configuration.content_digest and configuration.content_digest != digest:
-            raise ConfigStateError("Configuration contents differ from published digest")
+        if configuration.status is ConfigurationStatus.DRAFT:
+            configuration.config_version = max(configuration.config_version or 0, 0) + 1
+            configuration.content_digest = digest
+        elif configuration.status in {
+            ConfigurationStatus.PUBLISHED,
+            ConfigurationStatus.INACTIVE,
+        }:
+            if configuration.content_digest and configuration.content_digest != digest:
+                raise ConfigStateError("Configuration contents differ from published digest")
+            if configuration.content_digest is None:
+                configuration.content_digest = digest
+        else:
+            raise ConfigStateError("Configuration is not activatable")
 
         await self._demote_active(workspace_id=workspace_id, exclude=config_id)
 

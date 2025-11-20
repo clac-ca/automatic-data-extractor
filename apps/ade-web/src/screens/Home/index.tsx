@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
-import { useWorkspacesQuery } from "@screens/Workspace/api/workspaces-api";
+import { useWorkspacesQuery, type WorkspaceProfile } from "@screens/Workspace/api/workspaces-api";
 import { readPreferredWorkspaceId } from "@screens/Workspace/state/workspace-preferences";
 import { getDefaultWorkspacePath } from "@screens/Workspace";
 import { Button } from "@ui/Button";
@@ -23,7 +23,7 @@ function RootIndexContent() {
   const session = useSession();
   const workspacesQuery = useWorkspacesQuery();
 
-  const workspaces = workspacesQuery.data?.items ?? [];
+  const workspaces: WorkspaceProfile[] = workspacesQuery.data?.items ?? [];
 
   const preferredIds = [readPreferredWorkspaceId(), session.user.preferred_workspace_id]
     .filter((value): value is string => Boolean(value));
