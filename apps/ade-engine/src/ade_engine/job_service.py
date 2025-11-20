@@ -14,7 +14,7 @@ from .hooks import HookRegistry
 from .logging import StructuredLogger
 from .model import JobContext, JobPaths, JobResult
 from .pipeline.registry import ColumnRegistry
-from .pipeline.state import PipelineStateMachine, build_result
+from .pipeline.state import PipelinePhase, PipelineStateMachine, build_result
 from .runtime import load_manifest_context
 from .sinks import SinkProvider, _now
 from .telemetry import TelemetryBindings, TelemetryConfig
@@ -127,6 +127,9 @@ class JobService:
         """Mark job failure, flush sinks, and return an error result."""
 
         completed_at = _now()
+        if prepared.state_machine.phase is not PipelinePhase.FAILED:
+            prepared.state_machine.phase = PipelinePhase.FAILED
+            prepared.logger.transition(PipelinePhase.FAILED.value, error=str(error))
         prepared.telemetry.artifact.mark_failure(
             completed_at=completed_at,
             error=error,
@@ -160,4 +163,3 @@ def _build_job_paths(jobs_root: Path, job_id: str) -> JobPaths:
 
 
 __all__ = ["JobService", "PreparedJob"]
-

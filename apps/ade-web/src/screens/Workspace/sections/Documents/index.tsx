@@ -1428,7 +1428,10 @@ function RunExtractionDrawerContent({
     configId: selectedConfigId,
     enabled: Boolean(selectedConfigId),
   });
-  const versionOptions = versionsQuery.data ?? [];
+  const versionOptions = useMemo(
+    () => versionsQuery.data ?? [],
+    [versionsQuery.data],
+  );
   const selectedConfig = useMemo(
     () => selectableConfigs.find((config) => config.config_id === selectedConfigId) ?? null,
     [selectableConfigs, selectedConfigId],
@@ -1527,7 +1530,10 @@ function RunExtractionDrawerContent({
     queryFn: ({ signal }) => fetchDocumentSheets(workspaceId, documentRecord.id, signal),
     staleTime: 60_000,
   });
-  const sheetOptions = sheetQuery.data ?? [];
+  const sheetOptions = useMemo(
+    () => sheetQuery.data ?? [],
+    [sheetQuery.data],
+  );
   const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
 
   useEffect(() => {

@@ -9,7 +9,7 @@ import typer
 from ade_tools.commands import common
 
 
-def routes_command() -> None:
+def run_routes() -> None:
     """List backend routes."""
 
     common.refresh_paths()
@@ -22,4 +22,9 @@ def routes_command() -> None:
 
 
 def register(app: typer.Typer) -> None:
-    app.command()(routes_command)
+    @app.command(
+        name="routes",
+        help=run_routes.__doc__,
+    )
+    def routes() -> None:
+        run_routes()

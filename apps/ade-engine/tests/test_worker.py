@@ -18,6 +18,7 @@ def _setup_config_package(
     monkeypatch: pytest.MonkeyPatch,
     *,
     include_hooks: bool = False,
+    raising_hook: bool = False,
 ) -> Path:
     pkg_root = tmp_path / ("config_pkg_hooks" if include_hooks else "config_pkg")
     config_pkg = pkg_root / "ade_config"
@@ -111,10 +112,10 @@ def _setup_config_package(
         hooks_dir = config_pkg / "hooks"
         hooks_dir.mkdir(parents=True)
         (hooks_dir / "__init__.py").write_text("", encoding="utf-8")
-        (hooks_dir / "on_job_start.py").write_text(
-            "def run(*, artifact, **_):\n    artifact.note('start hook')\n",
-            encoding="utf-8",
-        )
+        start_hook = "def run(*, artifact, **_):\n    artifact.note('start hook')\n"
+        if raising_hook:
+            start_hook += "    raise RuntimeError('boom')\n"
+        (hooks_dir / "on_job_start.py").write_text(start_hook, encoding="utf-8")
         (hooks_dir / "on_job_end.py").write_text(
             "def run(*, artifact, result, **_):\n    artifact.note('end hook', status=result.status)\n",
             encoding="utf-8",
@@ -211,3 +212,28 @@ def test_hooks_are_executed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
         entry["message"] == "end hook" and entry.get("details", {}).get("status") == "succeeded"
         for entry in artifact["notes"]
     )
+
+
+def test_run_job_reports_failure_when_hook_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manifest_path = _setup_config_package(tmp_path, monkeypatch, include_hooks=True, raising_hook=True)
+
+    jobs_dir = tmp_path / "jobs"
+    job_dir = jobs_dir / "job-3"
+    input_dir = job_dir / "input"
+    logs_dir = job_dir / "logs"
+    input_dir.mkdir(parents=True)
+    logs_dir.mkdir(parents=True)
+    (input_dir / "data.csv").write_text("ID\n42\n", encoding="utf-8")
+
+    result = run_job(
+        "job-3",
+        jobs_dir=jobs_dir,
+        manifest_path=manifest_path,
+        config_package="ade_config",
+    )
+
+    assert result.status == "failed"
+    assert result.output_paths == ()
+    assert result.error
+    artifact = json.loads(result.artifact_path.read_text(encoding="utf-8"))
+    assert artifact["job"]["status"] == "failed"
