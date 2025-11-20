@@ -2,10 +2,13 @@ import type { WorkbenchFileTab } from "../types";
 
 interface InspectorProps {
   readonly width: number;
-  readonly file: WorkbenchFileTab;
+  readonly file: WorkbenchFileTab | null;
 }
 
 export function Inspector({ width, file }: InspectorProps) {
+  if (!file) {
+    return null;
+  }
   const isDirty = file.status === "ready" && file.content !== file.initialContent;
   const metadata = file.metadata;
 

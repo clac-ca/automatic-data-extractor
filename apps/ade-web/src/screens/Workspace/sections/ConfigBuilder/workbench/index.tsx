@@ -83,7 +83,7 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
     return (
       <div className="flex h-full min-h-0 flex-1 items-center justify-center px-6 py-8">
         <PageState
-          variant="info"
+          variant="empty"
           title="Immersive focus active"
           description="Exit immersive mode from the workbench focus menu to return here."
         />
@@ -95,7 +95,7 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
     return (
       <div className="flex h-full min-h-0 flex-1 items-center justify-center px-6 py-8">
         <PageState
-          variant="info"
+          variant="empty"
           title="Workbench docked"
           description="Use the dock at the bottom of the screen to resume editing."
         />

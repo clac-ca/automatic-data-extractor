@@ -10,16 +10,17 @@ import {
   useState,
 } from "react";
 import Editor, { type BeforeMount, type OnMount } from "@monaco-editor/react";
+import type { editor as MonacoEditor } from "monaco-editor";
 import clsx from "clsx";
 
 import type { CodeEditorHandle, CodeEditorProps } from "./CodeEditor.types";
 import { disposeAdeScriptHelpers, registerAdeScriptHelpers } from "./registerAdeScriptHelpers";
 
 const ADE_DARK_THEME_ID = "ade-dark";
-const ADE_DARK_THEME = {
+const ADE_DARK_THEME: MonacoEditor.IStandaloneThemeData = {
   base: "vs-dark",
   inherit: true,
-  rules: [] as Array<Record<string, string>>,
+  rules: [],
   colors: {
     "editor.background": "#1f2430",
     "editor.foreground": "#f3f6ff",

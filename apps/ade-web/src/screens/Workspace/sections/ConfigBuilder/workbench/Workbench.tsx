@@ -1533,7 +1533,7 @@ export function Workbench({
                 });
               }}
             />
-            <Inspector width={inspectorWidth} file={files.activeTab} />
+                    <Inspector width={inspectorWidth} file={files.activeTab ?? null} />
           </>
         ) : null}
       </div>
@@ -1548,7 +1548,7 @@ export function Workbench({
       ) : null}
       <ContextMenu
         open={Boolean(buildMenu)}
-        position={buildMenu ?? undefined}
+        position={buildMenu}
         onClose={closeBuildMenu}
         items={buildMenuItems}
         appearance={menuAppearance}

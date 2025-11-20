@@ -29,8 +29,8 @@ export function FormField({
   className,
 }: FormFieldProps) {
   const generatedId = useId();
-  const childProps = (children as ControlElement)?.props ?? {};
-  const controlId = childProps?.id ?? generatedId;
+  const childProps = isValidElement(children) ? children.props ?? {} : {};
+  const controlId = (childProps as ControlProps).id ?? generatedId;
   const hintId = hint ? `${controlId}-hint` : undefined;
   const errorId = error ? `${controlId}-error` : undefined;
   const describedBy = [hintId, errorId, childProps["aria-describedby"]]
@@ -54,11 +54,11 @@ export function FormField({
         </label>
       ) : null}
       {isValidElement(children)
-        ? cloneElement(children, {
+        ? cloneElement(children as ControlElement, {
             id: controlId,
-            required: required || childProps.required,
+            required: required || (childProps as ControlProps).required,
             "aria-describedby": describedBy,
-            "aria-invalid": error ? true : childProps["aria-invalid"],
+            "aria-invalid": error ? true : (childProps as ControlProps)["aria-invalid"],
           })
         : children}
       {hint ? (
