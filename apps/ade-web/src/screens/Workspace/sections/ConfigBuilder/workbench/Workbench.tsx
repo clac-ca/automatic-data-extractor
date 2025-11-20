@@ -57,6 +57,7 @@ const MIN_CONSOLE_HEIGHT = 140;
 const DEFAULT_CONSOLE_HEIGHT = 220;
 const MAX_CONSOLE_LINES = 400;
 const OUTPUT_HANDLE_THICKNESS = 4; // matches h-1 Tailwind utility on PanelResizeHandle
+const ACTIVITY_BAR_WIDTH = 56; // w-14
 const CONSOLE_COLLAPSE_MESSAGE =
   "Console closed to keep the editor readable on this screen size. Resize the window or collapse other panes to reopen it.";
 const buildTabStorageKey = (workspaceId: string, configId: string) =>
@@ -80,9 +81,17 @@ const ACTIVITY_LABELS: Record<ActivityBarView, string> = {
 };
 
 interface ConsolePanelPreferences {
-  readonly height: number;
+  readonly version: 2;
+  readonly fraction: number;
   readonly state: ConfigBuilderConsole;
 }
+
+type SideBounds = {
+  readonly minPx: number;
+  readonly maxPx: number;
+  readonly minFrac: number;
+  readonly maxFrac: number;
+};
 
 type BuildTriggerOptions = {
   readonly force?: boolean;
@@ -251,24 +260,21 @@ export function Workbench({
     () => (seed ? null : createScopedStorage(buildConsoleStorageKey(workspaceId, configId))),
     [workspaceId, configId, seed],
   );
-  const initialConsolePrefsRef = useRef<ConsolePanelPreferences | null>(null);
+  const initialConsolePrefsRef = useRef<ConsolePanelPreferences | Record<string, unknown> | null>(null);
   if (!initialConsolePrefsRef.current && consolePersistence) {
-    initialConsolePrefsRef.current = consolePersistence.get<ConsolePanelPreferences>() ?? null;
+    initialConsolePrefsRef.current =
+      (consolePersistence.get<unknown>() as ConsolePanelPreferences | Record<string, unknown> | null) ?? null;
   }
   const editorTheme = useEditorThemePreference(buildEditorThemeStorageKey(workspaceId, configId));
   const menuAppearance = editorTheme.resolvedTheme === "vs-light" ? "light" : "dark";
   const validationLabel = validationState.lastRunAt ? `Last run ${formatRelative(validationState.lastRunAt)}` : undefined;
 
-  const [explorer, setExplorer] = useState({ collapsed: false, width: 280 });
-  const [inspector, setInspector] = useState({ collapsed: false, width: 300 });
-  const [outputHeight, setOutputHeight] = useState(
-    () => initialConsolePrefsRef.current?.height ?? DEFAULT_CONSOLE_HEIGHT,
-  );
-  const outputHeightRef = useRef(outputHeight);
+  const [explorer, setExplorer] = useState({ collapsed: false, fraction: 280 / 1200 });
+  const [inspector, setInspector] = useState({ collapsed: false, fraction: 300 / 1200 });
+  const [consoleFraction, setConsoleFraction] = useState<number | null>(null);
   const [hasHydratedConsoleState, setHasHydratedConsoleState] = useState(false);
-  const [centerPaneEl, setCenterPaneEl] = useState<HTMLDivElement | null>(null);
-  const [centerHeight, setCenterHeight] = useState(0);
-  const [hasMeasuredCenter, setHasMeasuredCenter] = useState(false);
+  const [layoutSize, setLayoutSize] = useState({ width: 0, height: 0 });
+  const [paneAreaEl, setPaneAreaEl] = useState<HTMLDivElement | null>(null);
   const [activityView, setActivityView] = useState<ActivityBarView>("explorer");
   const [settingsMenu, setSettingsMenu] = useState<{ x: number; y: number } | null>(null);
   const [buildMenu, setBuildMenu] = useState<{ x: number; y: number } | null>(null);
@@ -405,10 +411,9 @@ export function Workbench({
       return;
     }
     requestAnimationFrame(() => {
-      window.dispatchEvent(new Event("resize"));
       window.dispatchEvent(new Event("ade:workbench-layout"));
     });
-  }, [explorer.collapsed, explorer.width, inspector.collapsed, inspector.width, outputCollapsed, outputHeight, isMaximized]);
+  }, [explorer.collapsed, explorer.fraction, inspector.collapsed, inspector.fraction, outputCollapsed, consoleFraction, isMaximized]);
 
   const saveTab = useCallback(
     async (tabId: string): Promise<boolean> => {
@@ -509,73 +514,62 @@ export function Workbench({
   }, [canSaveFiles, dirtyTabs, saveTabsSequentially, showConsoleBanner]);
 
   useEffect(() => {
-    if (!centerPaneEl) {
-      setCenterHeight(0);
-      setHasMeasuredCenter(false);
+    const node = paneAreaEl;
+    if (!node || typeof window === "undefined") {
       return;
     }
+
     const measure = () => {
-      setCenterHeight(centerPaneEl.getBoundingClientRect().height);
-      setHasMeasuredCenter(true);
+      const rect = node.getBoundingClientRect();
+      const width = rect.width;
+      const height = rect.height;
+      setLayoutSize({
+        width,
+        height,
+      });
+      window.dispatchEvent(new Event("ade:workbench-layout"));
     };
+
     measure();
 
-    if (typeof window === "undefined") {
-      return;
+    if (typeof window.ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
     }
 
-    if ("ResizeObserver" in window) {
-      const observer = new window.ResizeObserver(() => measure());
-      observer.observe(centerPaneEl);
-      return () => observer.disconnect();
-    }
+    const observer = new window.ResizeObserver(() => measure());
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [paneAreaEl]);
 
-    window.addEventListener("resize", measure);
-    return () => {
-      window.removeEventListener("resize", measure);
-    };
-  }, [centerPaneEl]);
+  const consoleLimits = useMemo(() => {
+    const container = Math.max(0, layoutSize.height);
+    const maxPx = Math.min(OUTPUT_LIMITS.max, Math.max(0, container - MIN_EDITOR_HEIGHT - OUTPUT_HANDLE_THICKNESS));
+    const minPx = Math.min(MIN_CONSOLE_HEIGHT, maxPx);
+    return { container, minPx, maxPx };
+  }, [layoutSize.height]);
 
-  const computeConsoleBounds = useCallback((height: number | null) => {
-    if (height === null) {
-      return {
-        min: MIN_CONSOLE_HEIGHT,
-        max: OUTPUT_LIMITS.max,
-        canFitMin: true,
-        hasMeasurement: false,
-      };
-    }
-    const available = Math.max(0, height - MIN_EDITOR_HEIGHT - OUTPUT_HANDLE_THICKNESS);
-    const max = Math.min(OUTPUT_LIMITS.max, available);
-    return {
-      min: Math.min(MIN_CONSOLE_HEIGHT, max),
-      max,
-      canFitMin: available >= MIN_CONSOLE_HEIGHT,
-      hasMeasurement: true,
-    };
-  }, []);
-
-  const consoleBounds = useMemo(
-    () => computeConsoleBounds(hasMeasuredCenter ? centerHeight : null),
-    [centerHeight, hasMeasuredCenter, computeConsoleBounds],
+  const clampConsoleHeight = useCallback(
+    (height: number, limits = consoleLimits) => clamp(height, limits.minPx, limits.maxPx),
+    [consoleLimits],
   );
 
-  const clampOutputHeight = useCallback((value: number, bounds = consoleBounds) => {
-    const { max, min } = bounds;
-    if (max <= 0) {
-      return 0;
+  const resolveInitialConsoleFraction = useCallback(() => {
+    const stored = initialConsolePrefsRef.current;
+    if (stored && "version" in stored && stored.version === 2 && typeof stored.fraction === "number") {
+      return clamp(stored.fraction, 0, 1);
     }
-    const lower = Math.min(Math.max(min, 0), max);
-    return clamp(value, lower, max);
-  }, [consoleBounds]);
+    if (stored && "height" in stored && typeof stored.height === "number" && consoleLimits.container > 0) {
+      return clamp(stored.height / consoleLimits.container, 0, 1);
+    }
+    return 0.25;
+  }, [consoleLimits.container]);
 
   useEffect(() => {
-    setOutputHeight((current) => clampOutputHeight(current));
-  }, [clampOutputHeight]);
-
-  useEffect(() => {
-    outputHeightRef.current = outputHeight;
-  }, [outputHeight]);
+    if (consoleFraction === null && consoleLimits.container > 0) {
+      setConsoleFraction(resolveInitialConsoleFraction());
+    }
+  }, [consoleFraction, consoleLimits.container, resolveInitialConsoleFraction]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -596,16 +590,21 @@ export function Workbench({
   }, []);
 
   const openConsole = useCallback(() => {
-    if (consoleBounds.hasMeasurement && !consoleBounds.canFitMin) {
+    if (consoleLimits.container > 0 && consoleLimits.maxPx < MIN_CONSOLE_HEIGHT) {
       setConsole("closed");
       showConsoleBanner(CONSOLE_COLLAPSE_MESSAGE, { intent: "warning", duration: 10000 });
       return false;
     }
     clearConsoleBanners();
     setConsole("open");
-    setOutputHeight((current) => clampOutputHeight(current > 0 ? current : DEFAULT_CONSOLE_HEIGHT));
+    setConsoleFraction((current) => {
+      if (current !== null) {
+        return clamp(current, 0, 1);
+      }
+      return resolveInitialConsoleFraction();
+    });
     return true;
-  }, [consoleBounds, clampOutputHeight, setConsole, showConsoleBanner, clearConsoleBanners]);
+  }, [consoleLimits, setConsole, showConsoleBanner, clearConsoleBanners, resolveInitialConsoleFraction]);
 
   const closeConsole = useCallback(() => {
     setConsole("closed");
@@ -628,26 +627,120 @@ export function Workbench({
   }, [consoleExplicit, consoleState, setConsole, hasHydratedConsoleState]);
 
   useEffect(() => {
-    if (!consolePersistence || isResizingConsole) {
+    if (!consolePersistence || isResizingConsole || consoleFraction === null) {
       return;
     }
     consolePersistence.set<ConsolePanelPreferences>({
-      height: outputHeight,
+      version: 2,
+      fraction: clamp(consoleFraction, 0, 1),
       state: consoleState,
     });
-  }, [consolePersistence, outputHeight, consoleState, isResizingConsole]);
+  }, [consolePersistence, consoleFraction, consoleState, isResizingConsole]);
 
   useEffect(() => {
-    if (consoleState !== "open" || !consoleBounds.hasMeasurement) {
+    if (consoleState !== "open" || !consoleLimits.container) {
       return;
     }
-    if (!consoleBounds.canFitMin) {
+    if (consoleLimits.maxPx < MIN_CONSOLE_HEIGHT) {
       setConsole("closed");
       showConsoleBanner(CONSOLE_COLLAPSE_MESSAGE, { intent: "warning", duration: 10000 });
       return;
     }
-    setOutputHeight((current) => clampOutputHeight(current));
-  }, [consoleState, consoleBounds, clampOutputHeight, setConsole, showConsoleBanner]);
+    setConsoleFraction((current) => {
+      if (current === null) {
+        return resolveInitialConsoleFraction();
+      }
+      return clamp(current, 0, 1);
+    });
+  }, [consoleState, consoleLimits, setConsole, showConsoleBanner, resolveInitialConsoleFraction]);
+
+  const deriveSideBounds = useCallback(
+    (availableWidth: number, limits: { min: number; max: number }): SideBounds => {
+      if (availableWidth <= 0) {
+        return { minPx: limits.min, maxPx: limits.max, minFrac: 0, maxFrac: 1 };
+      }
+      const minPx = Math.min(limits.min, availableWidth);
+      const maxPx = Math.min(limits.max, availableWidth);
+      return {
+        minPx,
+        maxPx,
+        minFrac: minPx / availableWidth,
+        maxFrac: maxPx / availableWidth,
+      };
+    },
+    [],
+  );
+
+  const contentWidth = Math.max(0, layoutSize.width - ACTIVITY_BAR_WIDTH);
+  const explorerBounds = useMemo(() => deriveSideBounds(contentWidth, EXPLORER_LIMITS), [contentWidth, deriveSideBounds]);
+  const inspectorBounds = useMemo(
+    () => deriveSideBounds(contentWidth, INSPECTOR_LIMITS),
+    [contentWidth, deriveSideBounds],
+  );
+
+  const clampSideFraction = useCallback((fraction: number, bounds: SideBounds) => clamp(fraction, bounds.minFrac, bounds.maxFrac), []);
+
+  useEffect(() => {
+    if (contentWidth <= 0) {
+      return;
+    }
+    setExplorer((prev) => {
+      if (prev.collapsed) {
+        return prev;
+      }
+      const next = clampSideFraction(prev.fraction, explorerBounds);
+      return next === prev.fraction ? prev : { ...prev, fraction: next };
+    });
+    setInspector((prev) => {
+      if (prev.collapsed) {
+        return prev;
+      }
+      const next = clampSideFraction(prev.fraction, inspectorBounds);
+      return next === prev.fraction ? prev : { ...prev, fraction: next };
+    });
+  }, [contentWidth, explorerBounds, inspectorBounds, clampSideFraction]);
+
+  const inspectorVisible = !inspector.collapsed && Boolean(files.activeTab);
+  const rawExplorerWidth = explorer.collapsed
+    ? 0
+    : clamp(explorer.fraction, explorerBounds.minFrac, explorerBounds.maxFrac) * contentWidth;
+  const rawInspectorWidth = inspectorVisible
+    ? clamp(inspector.fraction, inspectorBounds.minFrac, inspectorBounds.maxFrac) * contentWidth
+    : 0;
+  let explorerWidth = rawExplorerWidth;
+  let inspectorWidth = rawInspectorWidth;
+  if (contentWidth > 0) {
+    const handleBudget =
+      (showExplorerPane ? OUTPUT_HANDLE_THICKNESS : 0) + (inspectorVisible ? OUTPUT_HANDLE_THICKNESS : 0);
+    const occupied = rawExplorerWidth + rawInspectorWidth + handleBudget;
+    if (occupied > contentWidth) {
+      const overflow = occupied - contentWidth;
+      const inspectorShrink = Math.min(overflow, Math.max(0, rawInspectorWidth - inspectorBounds.minPx));
+      inspectorWidth = rawInspectorWidth - inspectorShrink;
+      const remaining = overflow - inspectorShrink;
+      if (remaining > 0) {
+        const explorerShrink = Math.min(remaining, Math.max(0, rawExplorerWidth - explorerBounds.minPx));
+        explorerWidth = rawExplorerWidth - explorerShrink;
+      }
+    }
+  }
+  const paneHeight = Math.max(0, consoleLimits.container);
+  const defaultFraction = 0.25;
+  const desiredFraction =
+    consoleFraction ??
+    (paneHeight > 0 ? clamp(DEFAULT_CONSOLE_HEIGHT / paneHeight, 0, 1) : defaultFraction);
+  const desiredHeight = outputCollapsed ? 0 : desiredFraction * paneHeight;
+  const consoleHeight = outputCollapsed
+    ? 0
+    : paneHeight > 0
+      ? clampConsoleHeight(desiredHeight)
+      : 0;
+  const editorHeight =
+    paneHeight > 0
+      ? Math.max(MIN_EDITOR_HEIGHT, paneHeight - OUTPUT_HANDLE_THICKNESS - consoleHeight)
+      : MIN_EDITOR_HEIGHT;
+  const effectiveConsoleFraction =
+    paneHeight > 0 && consoleHeight > 0 ? clamp(consoleHeight / paneHeight, 0, 1) : 0;
 
   useEffect(() => {
     const activeId = files.activeTabId;
@@ -1268,7 +1361,7 @@ export function Workbench({
         onToggleMaximize={handleToggleMaximize}
         onCloseWindow={handleCloseWorkbench}
       />
-        <div className="flex min-h-0 min-w-0 flex-1">
+        <div ref={setPaneAreaEl} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           <ActivityBar
             activeView={activityView}
             onSelectView={handleSelectActivityView}
@@ -1277,10 +1370,10 @@ export function Workbench({
           />
           {showExplorerPane ? (
             <>
-              <div className="flex min-h-0" style={{ width: explorer.width }}>
+              <div className="flex min-h-0" style={{ width: explorerWidth }}>
                 {activityView === "explorer" && files.tree ? (
                   <Explorer
-                    width={explorer.width}
+                    width={explorerWidth}
                     tree={files.tree}
                     activeFileId={files.activeTab?.id ?? ""}
                     openFileIds={files.tabs.map((tab) => tab.id)}
@@ -1296,20 +1389,24 @@ export function Workbench({
                     onHide={handleHideExplorer}
                   />
                 ) : (
-                  <SidePanelPlaceholder width={explorer.width} view={activityView} />
+                  <SidePanelPlaceholder width={explorerWidth} view={activityView} />
                 )}
               </div>
               <PanelResizeHandle
                 orientation="vertical"
                 onPointerDown={(event) => {
                   const startX = event.clientX;
-                  const startWidth = explorer.width;
+                  const startWidth = explorerWidth;
                   trackPointerDrag(event, {
                     cursor: "col-resize",
                     onMove: (move) => {
                       const delta = move.clientX - startX;
-                      const next = clamp(startWidth + delta, EXPLORER_LIMITS.min, EXPLORER_LIMITS.max);
-                      setExplorer((prev) => (prev.width === next ? prev : { ...prev, width: next }));
+                      const nextWidth = clamp(startWidth + delta, explorerBounds.minPx, explorerBounds.maxPx);
+                      setExplorer((prev) =>
+                        prev.collapsed || contentWidth <= 0
+                          ? prev
+                          : { ...prev, fraction: clampSideFraction(nextWidth / contentWidth, explorerBounds) },
+                      );
                     },
                   });
                 }}
@@ -1317,11 +1414,7 @@ export function Workbench({
             </>
           ) : null}
 
-        <div
-          ref={setCenterPaneEl}
-          className="flex min-h-0 min-w-0 flex-1 flex-col"
-          style={{ backgroundColor: editorSurface, color: editorText }}
-        >
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col" style={{ backgroundColor: editorSurface, color: editorText }}>
           {outputCollapsed ? (
             <EditorArea
               tabs={files.tabs}
@@ -1348,11 +1441,12 @@ export function Workbench({
             />
           ) : (
             <div
-              className="grid min-h-0 min-w-0 flex-1"
-              style={{
-                gridTemplateRows: `minmax(${MIN_EDITOR_HEIGHT}px, 1fr) ${OUTPUT_HANDLE_THICKNESS}px ${Math.max(
+                className="grid min-h-0 min-w-0 flex-1"
+                style={{
+                height: paneHeight > 0 ? `${paneHeight}px` : undefined,
+                gridTemplateRows: `${Math.max(MIN_EDITOR_HEIGHT, editorHeight)}px ${OUTPUT_HANDLE_THICKNESS}px ${Math.max(
                   0,
-                  outputHeight,
+                  consoleHeight,
                 )}px`,
               }}
             >
@@ -1384,16 +1478,16 @@ export function Workbench({
                 onPointerDown={(event) => {
                   setIsResizingConsole(true);
                   const startY = event.clientY;
-                  const startHeight = outputHeightRef.current;
-                  const dragBounds = computeConsoleBounds(
-                    centerPaneEl ? centerPaneEl.getBoundingClientRect().height : null,
-                  );
+                  const startHeight = consoleHeight;
                   trackPointerDrag(event, {
                     cursor: "row-resize",
                     onMove: (move) => {
-                      const delta = move.clientY - startY;
-                      const next = clampOutputHeight(startHeight - delta, dragBounds);
-                      setOutputHeight((current) => (current === next ? current : next));
+                      if (consoleLimits.maxPx <= 0 || paneHeight <= 0) {
+                        return;
+                      }
+                      const delta = startY - move.clientY;
+                      const nextHeight = clamp(startHeight + delta, consoleLimits.minPx, consoleLimits.maxPx);
+                      setConsoleFraction(clamp(nextHeight / paneHeight, 0, 1));
                     },
                     onEnd: () => {
                       setIsResizingConsole(false);
@@ -1402,7 +1496,7 @@ export function Workbench({
                 }}
               />
               <BottomPanel
-                height={Math.max(0, outputHeight)}
+                height={Math.max(0, consoleHeight)}
                 consoleLines={consoleLines}
                 validation={validationState}
                 activePane={pane}
@@ -1413,24 +1507,28 @@ export function Workbench({
           )}
         </div>
 
-        {!inspector.collapsed && files.activeTab ? (
+        {inspectorVisible ? (
           <>
             <PanelResizeHandle
               orientation="vertical"
               onPointerDown={(event) => {
                 const startX = event.clientX;
-                const startWidth = inspector.width;
+                const startWidth = inspectorWidth;
                 trackPointerDrag(event, {
                   cursor: "col-resize",
                   onMove: (move) => {
                     const delta = startX - move.clientX;
-                    const next = clamp(startWidth + delta, INSPECTOR_LIMITS.min, INSPECTOR_LIMITS.max);
-                    setInspector((prev) => (prev.width === next ? prev : { ...prev, width: next }));
+                    const nextWidth = clamp(startWidth + delta, inspectorBounds.minPx, inspectorBounds.maxPx);
+                    setInspector((prev) =>
+                      prev.collapsed || contentWidth <= 0
+                        ? prev
+                        : { ...prev, fraction: clampSideFraction(nextWidth / contentWidth, inspectorBounds) },
+                    );
                   },
                 });
               }}
             />
-            <Inspector width={inspector.width} file={files.activeTab} />
+            <Inspector width={inspectorWidth} file={files.activeTab} />
           </>
         ) : null}
       </div>

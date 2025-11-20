@@ -352,7 +352,12 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const fullHeightLayout = section.fullHeight ?? false;
 
   return (
-    <div className="flex min-h-screen min-w-0 bg-slate-50 text-slate-900">
+    <div
+      className={clsx(
+        "flex min-w-0 bg-slate-50 text-slate-900",
+        fullHeightLayout ? "h-screen overflow-hidden" : "min-h-screen",
+      )}
+    >
       {!immersiveWorkbenchActive ? (
         <WorkspaceNav
           workspace={workspace}
