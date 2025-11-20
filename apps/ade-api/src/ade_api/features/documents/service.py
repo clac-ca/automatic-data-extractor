@@ -449,21 +449,22 @@ class DocumentsService:
 
     @staticmethod
     def _inspect_workbook(path: Path) -> list[DocumentSheet]:
-        workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
-        try:
-            sheetnames = workbook.sheetnames
-            active = workbook.active.title if sheetnames else None
-            return [
-                DocumentSheet(
-                    name=title,
-                    index=index,
-                    kind="worksheet",
-                    is_active=title == active,
-                )
-                for index, title in enumerate(sheetnames)
-            ]
-        finally:
-            workbook.close()
+        with path.open("rb") as raw:
+            workbook = openpyxl.load_workbook(raw, read_only=True, data_only=True)
+            try:
+                sheetnames = workbook.sheetnames
+                active = workbook.active.title if sheetnames else None
+                return [
+                    DocumentSheet(
+                        name=title,
+                        index=index,
+                        kind="worksheet",
+                        is_active=title == active,
+                    )
+                    for index, title in enumerate(sheetnames)
+                ]
+            finally:
+                workbook.close()
 
     @staticmethod
     def _default_sheet_name(name: str | None) -> str:

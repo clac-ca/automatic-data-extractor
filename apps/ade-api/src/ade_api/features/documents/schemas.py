@@ -101,9 +101,9 @@ class DocumentLastRun(BaseSchema):
     job_id: ULIDStr | None = Field(
         default=None, description="Latest job ULID when the run came from a job."
     )
-    run_id: ULIDStr | None = Field(
+    run_id: str | None = Field(
         default=None,
-        description="Latest run ULID when the execution was streamed directly.",
+        description="Latest run identifier when the execution was streamed directly.",
     )
     status: JobStatusLiteral
     run_at: datetime | None = Field(

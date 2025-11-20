@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from ade_engine.runtime import load_config_manifest, load_manifest_context
 
@@ -42,6 +43,49 @@ def test_load_config_manifest_from_path(tmp_path: Path) -> None:
     )
 
     manifest = load_config_manifest(manifest_path=manifest_path)
+
+    assert manifest["info"]["schema"] == "ade.manifest/v1.0"
+
+
+def test_load_config_manifest_from_package(monkeypatch: Any, tmp_path: Path) -> None:
+    package_dir = tmp_path / "fake_pkg"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+
+    manifest_data = {
+        "config_script_api_version": "1",
+        "info": {
+            "schema": "ade.manifest/v1.0",
+            "title": "Test Config",
+            "version": "1.0.0",
+        },
+        "engine": {
+            "defaults": {"mapping_score_threshold": 0.0},
+            "writer": {
+                "mode": "row_streaming",
+                "append_unmapped_columns": True,
+                "unmapped_prefix": "raw_",
+                "output_sheet": "Normalized",
+            },
+        },
+        "hooks": {},
+        "columns": {
+            "order": ["member_id"],
+            "meta": {
+                "member_id": {
+                    "label": "Member ID",
+                    "script": "columns/member_id.py",
+                }
+            },
+        },
+    }
+
+    (package_dir / "manifest.json").write_text(
+        json.dumps(manifest_data), encoding="utf-8"
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    manifest = load_config_manifest(package="fake_pkg", resource="manifest.json")
 
     assert manifest["info"]["schema"] == "ade.manifest/v1.0"
 
