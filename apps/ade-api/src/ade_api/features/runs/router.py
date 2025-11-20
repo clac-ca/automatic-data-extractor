@@ -41,6 +41,7 @@ from .service import (
     RunArtifactMissingError,
     RunDocumentMissingError,
     RunEnvironmentNotReadyError,
+    RunInputMissingError,
     RunLogsFileMissingError,
     RunExecutionContext,
     RunNotFoundError,
@@ -102,6 +103,8 @@ async def create_run_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunDocumentMissingError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunInputMissingError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except RunEnvironmentNotReadyError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 

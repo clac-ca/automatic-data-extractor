@@ -34,6 +34,7 @@ from .exceptions import (
     DocumentFileMissingError,
     DocumentNotFoundError,
     DocumentTooLargeError,
+    DocumentWorksheetParseError,
     InvalidDocumentExpirationError,
 )
 from .filters import DocumentFilters
@@ -340,7 +341,10 @@ async def download_document(
     responses={
         status.HTTP_404_NOT_FOUND: {
             "description": "Document not found within the workspace.",
-        }
+        },
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+            "description": "The workbook exists but could not be parsed for worksheets.",
+        },
     },
 )
 async def list_document_sheets_endpoint(
@@ -366,6 +370,8 @@ async def list_document_sheets_endpoint(
         )
     except (DocumentNotFoundError, DocumentFileMissingError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentWorksheetParseError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
 
 @router.delete(

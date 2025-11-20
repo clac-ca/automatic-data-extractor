@@ -6,7 +6,6 @@ import asyncio
 import json
 import logging
 import os
-import shutil
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
@@ -24,6 +23,7 @@ from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.documents.repository import DocumentsRepository
 from ade_api.features.documents.storage import DocumentStorage
+from ade_api.features.documents.staging import stage_document_input
 from ade_api.features.system_settings.service import (
     SAFE_MODE_DEFAULT_DETAIL,
     SafeModeService,
@@ -52,6 +52,7 @@ from .supervisor import RunSupervisor
 __all__ = [
     "RunArtifactMissingError",
     "RunExecutionContext",
+    "RunInputMissingError",
     "RunDocumentMissingError",
     "RunEnvironmentNotReadyError",
     "RunLogsFileMissingError",
@@ -135,6 +136,10 @@ class RunOutputMissingError(RuntimeError):
     """Raised when requested run outputs cannot be resolved."""
 
 
+class RunInputMissingError(RuntimeError):
+    """Raised when a run is attempted without required staged inputs."""
+
+
 class RunsService:
     """Coordinate run persistence, execution, and serialization for the API."""
 
@@ -178,6 +183,15 @@ class RunsService:
         """Create the queued run row and return its execution context."""
 
         configuration = await self._resolve_configuration(config_id)
+        if not options.validate_only and not options.input_document_id:
+            raise RunInputMissingError(
+                "Runs must include input_document_id unless validate_only is set",
+            )
+        if options.input_document_id:
+            await self._require_document(
+                workspace_id=configuration.workspace_id,
+                document_id=options.input_document_id,
+            )
         build = await self._resolve_active_build(configuration)
 
         selected_sheet_name = options.input_sheet_name
@@ -475,6 +489,21 @@ class RunsService:
             raise RunOutputMissingError("Requested output file not found")
         return candidate
 
+    def job_directory(self, run_id: str) -> Path:
+        """Return the canonical job directory for a given ``run_id``."""
+
+        return self._job_dir_for_run(run_id)
+
+    def job_relative_path(self, path: Path) -> str:
+        """Return ``path`` relative to the jobs root, validating traversal."""
+
+        root = self._jobs_dir.resolve()
+        candidate = path.resolve()
+        try:
+            return str(candidate.relative_to(root))
+        except ValueError:  # pragma: no cover - defensive guard
+            raise RunOutputMissingError("Requested path escapes jobs directory")
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -574,15 +603,12 @@ class RunsService:
             document_id=document_id,
         )
 
-        input_dir = job_dir / "input"
-        input_dir.mkdir(parents=True, exist_ok=True)
-
-        source = self._storage.path_for(document.stored_uri)
-        destination = input_dir / document.original_filename
-
-        await asyncio.to_thread(shutil.copy2, source, destination)
-        document.last_run_at = utc_now()
-        await self._session.flush()
+        await stage_document_input(
+            document=document,
+            storage=self._storage,
+            session=self._session,
+            job_dir=job_dir,
+        )
 
     async def _resolve_configuration(self, config_id: str) -> Configuration:
         configuration = await self._configs.get_by_config_id(config_id)
