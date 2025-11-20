@@ -54,6 +54,10 @@ def run_types() -> None:
 
 
 def register(app: typer.Typer) -> None:
-    @app.command("types", help=run_types.__doc__)
-    def types() -> None:
-        run_types()
+    def _register(name: str, *, hidden: bool = False) -> None:
+        @app.command(name=name, help=run_types.__doc__, hidden=hidden)
+        def _types() -> None:
+            run_types()
+
+    _register("openapi-types")
+    _register("types", hidden=True)

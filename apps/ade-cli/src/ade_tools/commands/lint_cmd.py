@@ -11,6 +11,7 @@ from ade_tools.commands import common
 
 
 def run_lint(scope: str) -> None:
+    common.refresh_paths()
     scope_normalized = (scope or "all").lower()
     valid = {"backend", "frontend", "all"}
     if scope_normalized not in valid:

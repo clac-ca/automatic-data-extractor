@@ -38,7 +38,7 @@ import { createScopedStorage } from "@shared/storage";
 import type { ConfigBuilderConsole } from "@app/nav/urlState";
 import { ApiError } from "@shared/api";
 import { streamBuild } from "@shared/builds/api";
-import { fetchRunOutputs, streamRun, type RunOutputListing, type RunStreamOptions } from "@shared/runs/api";
+import { fetchRunOutputs, streamRun, type RunStreamOptions } from "@shared/runs/api";
 import type { RunStatus } from "@shared/runs/types";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
@@ -739,8 +739,6 @@ export function Workbench({
     paneHeight > 0
       ? Math.max(MIN_EDITOR_HEIGHT, paneHeight - OUTPUT_HANDLE_THICKNESS - consoleHeight)
       : MIN_EDITOR_HEIGHT;
-  const effectiveConsoleFraction =
-    paneHeight > 0 && consoleHeight > 0 ? clamp(consoleHeight / paneHeight, 0, 1) : 0;
 
   useEffect(() => {
     const activeId = files.activeTabId;
@@ -1832,7 +1830,10 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
     queryFn: ({ signal }) => fetchRecentDocuments(workspaceId, signal),
     staleTime: 60_000,
   });
-  const documents = documentsQuery.data ?? [];
+  const documents = useMemo(
+    () => documentsQuery.data ?? [],
+    [documentsQuery.data],
+  );
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
   useEffect(() => {
     if (!documents.length) {
@@ -1854,7 +1855,10 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
     enabled: Boolean(selectedDocumentId),
     staleTime: 60_000,
   });
-  const sheetOptions = sheetQuery.data ?? [];
+  const sheetOptions = useMemo(
+    () => sheetQuery.data ?? [],
+    [sheetQuery.data],
+  );
   const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
   useEffect(() => {
     if (!sheetOptions.length) {

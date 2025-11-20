@@ -96,7 +96,7 @@ class PipelineStateMachine:
 def build_result(state: PipelineStateMachine, error: str | None = None) -> JobResult:
     """Assemble a :class:`JobResult` from the state machine's state."""
 
-    status = "failed" if state.phase is PipelinePhase.FAILED else "succeeded"
+    status = "failed" if error or state.phase is PipelinePhase.FAILED else "succeeded"
     processed = tuple(getattr(table, "source_name", "") for table in state.tables)
     return JobResult(
         job_id=state.job.job_id,

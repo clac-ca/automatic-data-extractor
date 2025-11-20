@@ -116,3 +116,19 @@ def test_pipeline_state_machine_blocks_invalid_transition(tmp_path: Path) -> Non
         assert "Invalid pipeline transition" in str(exc)
     else:  # pragma: no cover - defensive
         raise AssertionError("transition should have failed")
+
+
+def test_build_result_sets_failure_when_error_present(tmp_path: Path) -> None:
+    job = _job(tmp_path)
+    telemetry = TelemetryConfig().bind(
+        job,
+        job.paths,
+        provider=StaticSinkProvider(DummyArtifact(), DummyEvents()),
+    )
+    logger = StructuredLogger(job, telemetry)
+    state = PipelineStateMachine(job, logger)
+
+    result = build_result(state, error="boom")
+
+    assert result.status == "failed"
+    assert result.error == "boom"
