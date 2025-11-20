@@ -17,7 +17,12 @@ import { useSearchParams } from "@app/nav/urlState";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
-import { useConfigsQuery } from "@shared/configs";
+import {
+  findActiveVersion,
+  findLatestInactiveVersion,
+  useConfigVersionsQuery,
+  useConfigsQuery,
+} from "@shared/configs";
 import { client } from "@shared/api/client";
 import { useFlattenedPages } from "@shared/api/pagination";
 import { createScopedStorage } from "@shared/storage";
@@ -1389,6 +1394,8 @@ function RunExtractionDrawerContent({
   const titleId = useId();
   const descriptionId = useId();
   const configsQuery = useConfigsQuery({ workspaceId });
+  const [selectedConfigId, setSelectedConfigId] = useState<string>("");
+  const [selectedVersionId, setSelectedVersionId] = useState<string>("");
   const submitJob = useSubmitJob(workspaceId);
   const { preferences, setPreferences } = useDocumentRunPreferences(
     workspaceId,
@@ -1398,40 +1405,94 @@ function RunExtractionDrawerContent({
 
   const allConfigs = useMemo(() => configsQuery.data?.items ?? [], [configsQuery.data]);
   const selectableConfigs = useMemo(
-    () => allConfigs.filter((config) => !config.deleted_at && config.active_version),
+    () => allConfigs.filter((config) => !config.deleted_at),
     [allConfigs],
   );
 
-  const preferredSelection = useMemo(() => {
+  const preferredConfigId = useMemo(() => {
     if (preferences.configId) {
       const match = selectableConfigs.find((config) => config.config_id === preferences.configId);
       if (match) {
-        return {
-          configId: match.config_id,
-          versionId: preferences.configVersionId ?? match.active_version?.config_version_id ?? null,
-        } as const;
+        return match.config_id;
       }
     }
-    const fallback = selectableConfigs[0];
-    return {
-      configId: fallback?.config_id ?? "",
-      versionId: fallback?.active_version?.config_version_id ?? null,
-    } as const;
-  }, [preferences.configId, preferences.configVersionId, selectableConfigs]);
-
-  const [selectedConfigId, setSelectedConfigId] = useState<string>(preferredSelection.configId);
-  const [selectedVersionId, setSelectedVersionId] = useState<string>(preferredSelection.versionId ?? "");
+    return selectableConfigs[0]?.config_id ?? "";
+  }, [preferences.configId, selectableConfigs]);
 
   useEffect(() => {
-    setSelectedConfigId(preferredSelection.configId);
-    setSelectedVersionId(preferredSelection.versionId ?? "");
-  }, [preferredSelection]);
+    setSelectedConfigId(preferredConfigId);
+  }, [preferredConfigId]);
 
+  const versionsQuery = useConfigVersionsQuery({
+    workspaceId,
+    configId: selectedConfigId,
+    enabled: Boolean(selectedConfigId),
+  });
+  const versionOptions = versionsQuery.data ?? [];
   const selectedConfig = useMemo(
     () => selectableConfigs.find((config) => config.config_id === selectedConfigId) ?? null,
     [selectableConfigs, selectedConfigId],
   );
-  const selectedActiveVersion = selectedConfig?.active_version ?? null;
+  const selectedVersion = useMemo(
+    () => versionOptions.find((version) => version.config_version_id === selectedVersionId) ?? null,
+    [versionOptions, selectedVersionId],
+  );
+  const activeVersion = useMemo(() => findActiveVersion(versionOptions), [versionOptions]);
+  const latestDraftVersion = useMemo(
+    () => findLatestInactiveVersion(versionOptions),
+    [versionOptions],
+  );
+  const preferredVersionId = useMemo(() => {
+    if (!selectedConfigId) return "";
+    if (preferences.configId === selectedConfigId && preferences.configVersionId) {
+      const preferred = versionOptions.find(
+        (version) => version.config_version_id === preferences.configVersionId,
+      );
+      if (preferred) {
+        return preferred.config_version_id;
+      }
+    }
+    if (activeVersion) return activeVersion.config_version_id;
+    if (latestDraftVersion) return latestDraftVersion.config_version_id;
+    return versionOptions[0]?.config_version_id ?? "";
+  }, [
+    activeVersion,
+    latestDraftVersion,
+    preferences.configId,
+    preferences.configVersionId,
+    selectedConfigId,
+    versionOptions,
+  ]);
+
+  useEffect(() => {
+    setSelectedVersionId(preferredVersionId);
+  }, [preferredVersionId]);
+
+  const formatConfigLabel = useCallback((config: (typeof selectableConfigs)[number]) => {
+    const status =
+      config.status === "active"
+        ? "Active"
+        : config.status === "published"
+          ? "Published"
+          : config.status === "inactive"
+            ? "Inactive"
+            : "Draft";
+    const title = config.title ?? config.display_name ?? "Untitled configuration";
+    return `${title} (${status})`;
+  }, []);
+
+  const formatVersionLabel = useCallback((version: (typeof versionOptions)[number]) => {
+    const status =
+      version.status === "active"
+        ? "Active"
+        : version.status === "published"
+          ? "Published"
+          : version.status === "inactive"
+            ? "Inactive"
+            : "Draft";
+    const semver = version.semver ?? "–";
+    return `v${semver} (${status})`;
+  }, []);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const safeModeDetail = safeModeMessage ?? DEFAULT_SAFE_MODE_MESSAGE;
@@ -1488,6 +1549,17 @@ function RunExtractionDrawerContent({
       ),
     [selectedSheets, sheetOptions],
   );
+
+  useEffect(() => {
+    if (!selectedConfig || !selectedVersionId) {
+      return;
+    }
+    setPreferences({
+      configId: selectedConfig.config_id,
+      configVersionId: selectedVersionId,
+      sheetNames: normalizedSheetSelection.length ? normalizedSheetSelection : null,
+    });
+  }, [normalizedSheetSelection, selectedConfig, selectedVersionId, setPreferences]);
 
   const toggleWorksheet = useCallback((name: string) => {
     setSelectedSheets((current) =>
@@ -1563,7 +1635,7 @@ function RunExtractionDrawerContent({
     if (safeModeEnabled || safeModeLoading) {
       return;
     }
-    if (!selectedConfig || !selectedActiveVersion || !selectedVersionId) {
+    if (!selectedConfig || !selectedVersion || !selectedVersionId) {
       setErrorMessage("Select a configuration before running the extractor.");
       return;
     }
@@ -1649,31 +1721,52 @@ function RunExtractionDrawerContent({
                 {configsQuery.error instanceof Error ? configsQuery.error.message : "Try again later."}
               </Alert>
             ) : hasConfigurations ? (
-              <Select
-                value={selectedConfigId}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setSelectedConfigId(value);
-                  const target = selectableConfigs.find((config) => config.config_id === value) ?? null;
-                  const versionId = target?.active_version?.config_version_id ?? "";
-                  setSelectedVersionId(versionId);
-                  if (target && versionId) {
-                    setPreferences({
-                      configId: target.config_id,
-                      configVersionId: versionId,
-                      sheetNames: normalizedSheetSelection.length ? normalizedSheetSelection : null,
-                    });
-                  }
-                }}
-                disabled={submitJob.isPending}
-              >
-                <option value="">Select configuration</option>
-                {selectableConfigs.map((config) => (
-                  <option key={config.config_id} value={config.config_id}>
-                    {config.title} (Active v{config.active_version?.semver ?? "–"})
-                  </option>
-                ))}
-              </Select>
+              <div className="space-y-2">
+                <Select
+                  value={selectedConfigId}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setSelectedConfigId(value);
+                    setSelectedVersionId("");
+                  }}
+                  disabled={submitJob.isPending}
+                >
+                  <option value="">Select configuration</option>
+                  {selectableConfigs.map((config) => (
+                    <option key={config.config_id} value={config.config_id}>
+                      {formatConfigLabel(config)}
+                    </option>
+                  ))}
+                </Select>
+
+                {selectedConfigId ? (
+                  versionsQuery.isLoading ? (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                      Loading versions…
+                    </div>
+                  ) : versionsQuery.isError ? (
+                    <Alert tone="danger">
+                      Unable to load configuration versions.{" "}
+                      {versionsQuery.error instanceof Error ? versionsQuery.error.message : "Try again later."}
+                    </Alert>
+                  ) : versionOptions.length > 0 ? (
+                    <Select
+                      value={selectedVersionId}
+                      onChange={(event) => setSelectedVersionId(event.target.value)}
+                      disabled={submitJob.isPending}
+                    >
+                      <option value="">Select version</option>
+                      {versionOptions.map((version) => (
+                        <option key={version.config_version_id} value={version.config_version_id}>
+                          {formatVersionLabel(version)}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Alert tone="info">No versions available for this configuration.</Alert>
+                  )
+                ) : null}
+              </div>
             ) : (
               <Alert tone="info">No configurations available. Create one before running extraction.</Alert>
             )}
@@ -1684,7 +1777,32 @@ function RunExtractionDrawerContent({
             {sheetQuery.isLoading ? (
               <p className="text-xs text-slate-500">Loading worksheets…</p>
             ) : sheetQuery.isError ? (
-              <Alert tone="danger">Unable to load worksheet metadata.</Alert>
+              <Alert tone="warning">
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-700">
+                    Worksheet metadata is temporarily unavailable. The run will process the entire
+                    file unless you retry and pick specific sheets.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={() => sheetQuery.refetch()}
+                      disabled={sheetQuery.isFetching}
+                    >
+                      Retry loading
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setSelectedSheets([])}
+                      disabled={submitJob.isPending}
+                    >
+                      Use all worksheets
+                    </Button>
+                  </div>
+                </div>
+              </Alert>
             ) : sheetOptions.length > 0 ? (
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-3">

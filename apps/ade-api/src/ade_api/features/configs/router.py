@@ -45,6 +45,7 @@ from .schemas import (
     ConfigurationCreate,
     ConfigurationPage,
     ConfigurationRecord,
+    ConfigVersionRecord,
     ConfigurationValidateResponse,
     FileListing,
     FileReadJson,
@@ -77,6 +78,10 @@ CONFIG_CREATE_BODY = Body(
 ACTIVATE_BODY = Body(
     ConfigurationActivateRequest(),
     description="Activation options.",
+)
+PUBLISH_BODY = Body(
+    None,
+    description="Publish the current draft into a frozen version without activating it.",
 )
 
 
@@ -194,6 +199,34 @@ async def read_configuration(
             status.HTTP_404_NOT_FOUND, detail="config_not_found"
         ) from exc
     return ConfigurationRecord.model_validate(record)
+
+
+@router.get(
+    "/configurations/{config_id}/versions",
+    response_model=list[ConfigVersionRecord],
+    summary="List configuration versions (drafts and published)",
+    response_model_exclude_none=True,
+)
+async def list_config_versions_endpoint(
+    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
+    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Configs.Read"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
+) -> list[ConfigVersionRecord]:
+    try:
+        versions = await service.list_config_versions(
+            workspace_id=workspace_id,
+            config_id=config_id,
+        )
+    except ConfigurationNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="config_not_found") from exc
+    return [ConfigVersionRecord.model_validate(version) for version in versions]
 
 
 @router.get(
@@ -532,6 +565,51 @@ async def activate_configuration_endpoint(
     del payload  # ensure_build hook handled by future WPs
     try:
         record = await service.activate_configuration(
+            workspace_id=workspace_id,
+            config_id=config_id,
+        )
+    except ConfigurationNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="config_not_found") from exc
+    except ConfigStorageNotFoundError as exc:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail="config_storage_missing",
+        ) from exc
+    except ConfigValidationFailedError as exc:
+        detail = {
+            "error": "validation_failed",
+            "issues": [issue.model_dump() for issue in exc.issues],
+        }
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail) from exc
+    except ConfigStateError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    return ConfigurationRecord.model_validate(record)
+
+
+@router.post(
+    "/configurations/{config_id}/publish",
+    dependencies=[Security(require_csrf)],
+    response_model=ConfigurationRecord,
+    summary="Publish a configuration draft",
+    response_model_exclude_none=True,
+)
+async def publish_configuration_endpoint(
+    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
+    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("Workspace.Configs.ReadWrite"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
+    payload: None = PUBLISH_BODY,
+) -> ConfigurationRecord:
+    del payload
+    try:
+        record = await service.publish_configuration(
             workspace_id=workspace_id,
             config_id=config_id,
         )

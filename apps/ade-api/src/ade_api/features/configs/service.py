@@ -37,6 +37,7 @@ from .schemas import (
     ConfigSource,
     ConfigSourceClone,
     ConfigSourceTemplate,
+    ConfigVersionRecord,
     ConfigValidationIssue,
 )
 from .storage import ConfigStorage
@@ -60,6 +61,21 @@ _MAX_FILE_SIZE = 512 * 1024  # 512 KiB
 _MAX_ASSET_FILE_SIZE = 5 * 1024 * 1024  # 5 MiB
 
 
+def _serialize_config_version(configuration: Configuration) -> ConfigVersionRecord:
+    return ConfigVersionRecord(
+        config_version_id=configuration.config_id,
+        config_id=configuration.config_id,
+        workspace_id=configuration.workspace_id,
+        status=configuration.status,
+        semver=str(configuration.config_version) if configuration.config_version else None,
+        content_digest=configuration.content_digest,
+        created_at=configuration.created_at,
+        updated_at=configuration.updated_at,
+        activated_at=configuration.activated_at,
+        deleted_at=None,
+    )
+
+
 @dataclass(slots=True)
 class ValidationResult:
     """Return value for validation requests."""
@@ -79,6 +95,18 @@ class ConfigurationsService:
 
     async def list_configurations(self, *, workspace_id: str) -> list[Configuration]:
         return list(await self._repo.list_for_workspace(workspace_id))
+
+    async def list_config_versions(
+        self,
+        *,
+        workspace_id: str,
+        config_id: str,
+    ) -> list[ConfigVersionRecord]:
+        configuration = await self._require_configuration(
+            workspace_id=workspace_id,
+            config_id=config_id,
+        )
+        return [_serialize_config_version(configuration)]
 
     async def get_configuration(
         self, *, workspace_id: str, config_id: str
@@ -163,7 +191,7 @@ class ConfigurationsService:
             config_id=config_id,
         )
         if configuration.status not in {
-            ConfigurationStatus.DRAFT,
+            ConfigurationStatus.PUBLISHED,
             ConfigurationStatus.INACTIVE,
         }:
             raise ConfigStateError("Configuration is not activatable")
@@ -173,12 +201,40 @@ class ConfigurationsService:
         if issues:
             raise ConfigValidationFailedError(issues)
 
+        if configuration.content_digest and configuration.content_digest != digest:
+            raise ConfigStateError("Configuration contents differ from published digest")
+
         await self._demote_active(workspace_id=workspace_id, exclude=config_id)
 
         configuration.status = ConfigurationStatus.ACTIVE
+        configuration.content_digest = configuration.content_digest or digest
+        configuration.activated_at = utc_now()
+        await self._session.flush()
+        await self._session.refresh(configuration)
+        return configuration
+
+    async def publish_configuration(
+        self,
+        *,
+        workspace_id: str,
+        config_id: str,
+    ) -> Configuration:
+        configuration = await self._require_configuration(
+            workspace_id=workspace_id,
+            config_id=config_id,
+        )
+
+        if configuration.status is not ConfigurationStatus.DRAFT:
+            raise ConfigStateError("Configuration must be a draft before publishing")
+
+        config_path = await self._storage.ensure_config_path(workspace_id, config_id)
+        issues, digest = await self._storage.validate_path(config_path)
+        if issues:
+            raise ConfigValidationFailedError(issues)
+
+        configuration.status = ConfigurationStatus.PUBLISHED
         configuration.config_version = max(configuration.config_version or 0, 0) + 1
         configuration.content_digest = digest
-        configuration.activated_at = utc_now()
         await self._session.flush()
         await self._session.refresh(configuration)
         return configuration

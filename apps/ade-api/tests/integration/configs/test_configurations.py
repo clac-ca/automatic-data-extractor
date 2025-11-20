@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 import io
+from pathlib import Path
 import zipfile
 
 import pytest
@@ -200,6 +201,47 @@ async def test_validate_missing_config_returns_not_found(
     assert response.json()["detail"] == "config_not_found"
 
 
+async def test_list_versions_reflects_status_transitions(
+    async_client: AsyncClient, seed_identity: dict[str, Any]
+) -> None:
+    workspace_id = seed_identity["workspace_id"]
+    owner = seed_identity["workspace_owner"]
+    headers = await _auth_headers(
+        async_client, email=owner["email"], password=owner["password"]
+    )
+
+    draft = await _create_from_template(
+        async_client,
+        workspace_id=workspace_id,
+        headers=headers,
+    )
+
+    draft_versions = await async_client.get(
+        f"/api/v1/workspaces/{workspace_id}/configurations/{draft['config_id']}/versions",
+        headers=headers,
+    )
+    assert draft_versions.status_code == 200, draft_versions.text
+    versions = draft_versions.json()
+    assert versions[0]["config_version_id"] == draft["config_id"]
+    assert versions[0]["status"] == "draft"
+    assert versions[0]["semver"] is None
+
+    publish = await async_client.post(
+        f"/api/v1/workspaces/{workspace_id}/configurations/{draft['config_id']}/publish",
+        headers=headers,
+    )
+    assert publish.status_code == 200, publish.text
+
+    published_versions = await async_client.get(
+        f"/api/v1/workspaces/{workspace_id}/configurations/{draft['config_id']}/versions",
+        headers=headers,
+    )
+    assert published_versions.status_code == 200, published_versions.text
+    published = published_versions.json()
+    assert published[0]["status"] == "published"
+    assert published[0]["semver"] == "1"
+
+
 async def test_file_editor_endpoints(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
@@ -343,6 +385,13 @@ async def test_activate_configuration_sets_active_and_digest(
         headers=headers,
     )
 
+    publish = await async_client.post(
+        f"/api/v1/workspaces/{workspace_id}/configurations/{record['config_id']}/publish",
+        headers=headers,
+        json=None,
+    )
+    assert publish.status_code == 200, publish.text
+
     response = await async_client.post(
         f"/api/v1/workspaces/{workspace_id}/configurations/{record['config_id']}/activate",
         headers=headers,
@@ -379,8 +428,18 @@ async def test_activate_demotes_previous_active(
     first = await _create_from_template(
         async_client, workspace_id=workspace_id, headers=headers, display_name="First"
     )
+    await async_client.post(
+        f"/api/v1/workspaces/{workspace_id}/configurations/{first['config_id']}/publish",
+        headers=headers,
+        json=None,
+    )
     second = await _create_from_template(
         async_client, workspace_id=workspace_id, headers=headers, display_name="Second"
+    )
+    await async_client.post(
+        f"/api/v1/workspaces/{workspace_id}/configurations/{second['config_id']}/publish",
+        headers=headers,
+        json=None,
     )
 
     await async_client.post(
@@ -427,9 +486,9 @@ async def test_activate_returns_422_when_validation_fails(
     manifest_path.unlink()
 
     response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['config_id']}/activate",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{record['config_id']}/publish",
         headers=headers,
-        json={},
+        json=None,
     )
     assert response.status_code == 422
     problem = response.json()
