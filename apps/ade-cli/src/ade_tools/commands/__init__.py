@@ -7,6 +7,7 @@ import typer
 from . import build
 from . import ci
 from . import clean_reset
+from . import copy_code
 from . import dev
 from . import docker
 from . import lint_cmd
@@ -25,6 +26,7 @@ COMMAND_MODULES = (
     build,
     tests,
     lint_cmd,
+    copy_code,
     types_cmd,
     migrate,
     routes,
