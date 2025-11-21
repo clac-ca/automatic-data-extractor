@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastNumber": 14,
+  "lastNumber": 15,
   "packages": [
     {
       "number": 1,
@@ -141,6 +141,16 @@
       "createdAt": "2025-11-03T19:59:46.296Z",
       "updatedAt": "2025-11-03T19:59:46.296Z",
       "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0014-docs-code-parity-job-runtime"
+    },
+    {
+      "number": 15,
+      "slug": "ade-engine-architecture-refresh",
+      "title": "ADE engine architecture refresh",
+      "status": "draft",
+      "summary": "Track the architecture cleanup for ade-engine (pipeline layering, manifest handling, hooks, telemetry) with an agent-updatable checklist.",
+      "createdAt": "2025-11-21T17:36:12Z",
+      "updatedAt": "2025-11-21T17:36:12Z",
+      "path": "/home/jkropp/automatic-data-extractor/.workpackage/packages/0015-ade-engine-architecture-refresh"
     }
   ]
 }

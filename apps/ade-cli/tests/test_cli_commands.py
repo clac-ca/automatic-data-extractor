@@ -16,7 +16,7 @@ runner = CliRunner()
 def test_help_includes_documented_commands() -> None:
     result = runner.invoke(cli.app, ["--help"])
     assert result.exit_code == 0
-    for command in ("routes", "openapi-types", "ci", "workpackage"):
+    for command in ("routes", "openapi-types", "ci", "workpackage", "copy-code"):
         assert command in result.stdout
 
 
