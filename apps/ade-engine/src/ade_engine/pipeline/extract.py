@@ -4,19 +4,21 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from ..logging import StructuredLogger
-from ..model import JobContext
-from ..schemas.models import ManifestContext
+from ade_engine.core.manifest import ManifestContext
+from ade_engine.core.models import JobContext
+from ade_engine.logging import StructuredLogger  # compatibility; prefer PipelineLogger
+from ade_engine.telemetry.logging import PipelineLogger
 from .io import iter_tables, list_input_files, sheet_name
 from .models import ColumnModule, FileExtraction
 from .processing import process_table
+from .util import unique_sheet_name
 
 
 def extract_inputs(
     job: JobContext,
     manifest: ManifestContext,
     modules: Mapping[str, ColumnModule],
-    logger: StructuredLogger,
+    logger: StructuredLogger | PipelineLogger,
     *,
     threshold: float,
     sample_size: int,
@@ -54,10 +56,10 @@ def extract_inputs(
         ):
             table_info = {
                 "headers": header_row,
-                "rows": data_rows,
                 "row_count": len(data_rows),
                 "column_count": len(header_row),
                 "source_name": file_path.name,
+                "sheet_name": source_sheet,
             }
             state.setdefault("tables", []).append(table_info)
 
@@ -83,7 +85,7 @@ def extract_inputs(
                 if source_sheet
                 else sheet_name(file_path.stem)
             )
-            normalized_sheet = _unique_sheet_name(normalized_sheet, used_sheet_names)
+            normalized_sheet = unique_sheet_name(normalized_sheet, used_sheet_names)
             extraction = FileExtraction(
                 source_name=file_path.name,
                 sheet_name=normalized_sheet,
@@ -151,26 +153,6 @@ def extract_inputs(
             results.append(extraction)
 
     return results
-
-
-def _unique_sheet_name(name: str, used: set[str]) -> str:
-    """Return an Excel-safe sheet name unique across the workbook."""
-
-    if name not in used:
-        used.add(name)
-        return name
-
-    counter = 2
-    max_length = 31
-    while True:
-        suffix = f"-{counter}"
-        base_limit = max_length - len(suffix)
-        base = name[:base_limit] if base_limit > 0 else name[:max_length]
-        candidate = f"{base}{suffix}"
-        if candidate not in used:
-            used.add(candidate)
-            return candidate
-        counter += 1
 
 
 __all__ = ["extract_inputs"]

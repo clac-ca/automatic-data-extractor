@@ -47,14 +47,13 @@ def iter_tables(
     suffix = path.suffix.lower()
     if suffix == ".csv":
         with path.open("r", encoding="utf-8-sig", newline="") as handle:
-            reader = list(csv.reader(handle))
-        if not reader:
-            return
-        header, *data = reader
-        yield None, [str(value) if value is not None else "" for value in header], [
-            [value for value in row]
-            for row in data
-        ]
+            reader = csv.reader(handle)
+            try:
+                header = next(reader)
+            except StopIteration:
+                return
+            data_rows = [list(row) for row in reader]
+        yield None, [str(value) if value is not None else "" for value in header], data_rows
         return
 
     workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
@@ -68,19 +67,16 @@ def iter_tables(
 
         for name in targets:
             sheet = workbook[name]
-            rows = [
-                [cell.value if cell.value is not None else "" for cell in row]
-                for row in sheet
-            ]
-            if not rows:
+            iterator = sheet.iter_rows(values_only=True)
+            try:
+                header = next(iterator)
+            except StopIteration:
                 raise RuntimeError(f"Input sheet '{name}' in '{path.name}' is empty")
-            header, *data = rows
-            yield name, [
-                str(value) if value is not None else "" for value in header
-            ], [
-                [value for value in row]
-                for row in data
+            header_row = [str(value) if value is not None else "" for value in header]
+            data_rows = [
+                [cell if cell is not None else "" for cell in row] for row in iterator
             ]
+            yield name, header_row, data_rows
     finally:
         workbook.close()
 

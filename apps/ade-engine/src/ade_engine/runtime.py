@@ -1,32 +1,20 @@
-"""Runtime helpers for :mod:`ade_engine`."""
+"""Runtime helpers for :mod:`ade_engine`.
+
+Kept as compatibility adapters; prefer :mod:`ade_engine.config.loader` helpers internally.
+"""
 
 from __future__ import annotations
 
-import json
-import os
-from importlib import resources
 from pathlib import Path
 from typing import Any, Mapping
 
-from jsonschema import Draft202012Validator, ValidationError
-
-from ade_engine.schemas import ManifestContext, ManifestV1
-
-
-class ManifestNotFoundError(RuntimeError):
-    """Raised when the ade_config manifest cannot be located."""
-
-
-def _read_manifest(path: Path) -> dict[str, Any]:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except FileNotFoundError as exc:  # pragma: no cover - defensive guard
-        raise ManifestNotFoundError(f"Manifest not found at {path}") from exc
-
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as exc:  # pragma: no cover - malformed manifest
-        raise ManifestNotFoundError(f"Manifest is not valid JSON: {path}") from exc
+from ade_engine.config.loader import (
+    ManifestNotFoundError,
+    load_manifest as _load_manifest,
+    resolve_input_sheets,
+    resolve_jobs_root,
+)
+from ade_engine.core.manifest import ManifestContext
 
 
 def load_config_manifest(
@@ -34,35 +22,12 @@ def load_config_manifest(
     package: str = "ade_config",
     resource: str = "manifest.json",
     manifest_path: Path | None = None,
-    validate: bool = True,
+    validate: bool = True,  # kept for compatibility; always validated
 ) -> dict[str, Any]:
-    """Return the ade_config manifest as a dict.
+    """Return the ade_config manifest as a dict (deprecated for internal use)."""
 
-    When ``manifest_path`` is supplied (mainly for tests/CLI overrides), the
-    manifest is read directly from that path. Otherwise, the function attempts to
-    load ``resource`` from the installed ``package`` via importlib.resources.
-    """
-
-    if manifest_path is not None:
-        manifest = _read_manifest(manifest_path)
-    else:
-        try:
-            resource_path = resources.files(package) / resource
-        except ModuleNotFoundError as exc:
-            raise ManifestNotFoundError(
-                f"Config package '{package}' cannot be imported."
-            ) from exc
-        else:
-            if not resource_path.is_file():
-                raise ManifestNotFoundError(
-                    f"Resource '{resource}' not found in '{package}'."
-                )
-            manifest = _read_manifest(Path(resource_path))
-
-    if validate:
-        _validate_manifest(manifest)
-
-    return manifest
+    ctx = _load_manifest(package=package, resource=resource, manifest_path=manifest_path)
+    return ctx.raw
 
 
 def load_manifest_context(
@@ -73,66 +38,11 @@ def load_manifest_context(
 ) -> ManifestContext:
     """Return a :class:`ManifestContext` with schema-derived helpers."""
 
-    manifest = load_config_manifest(
+    return _load_manifest(
         package=package,
         resource=resource,
         manifest_path=manifest_path,
-        validate=True,
     )
-    version = _manifest_version(manifest)
-    model = None
-    if version and version.startswith("ade.manifest/v1"):
-        model = ManifestV1.model_validate(manifest)
-    return ManifestContext(raw=manifest, version=version, model=model)
-
-
-def resolve_jobs_root(
-    jobs_dir: Path | None = None, *, env: Mapping[str, str] | None = None
-) -> Path:
-    """Return the base directory for job execution.
-
-    The resolution order matches the developer documentation: explicit arguments
-    win, followed by ``ADE_JOBS_DIR`` and finally ``ADE_DATA_DIR``.
-    """
-
-    env = os.environ if env is None else env
-
-    if jobs_dir is not None:
-        return Path(jobs_dir)
-
-    if env.get("ADE_JOBS_DIR"):
-        return Path(env["ADE_JOBS_DIR"])
-
-    data_dir = Path(env.get("ADE_DATA_DIR", "./data"))
-    return data_dir / "jobs"
-
-
-def _load_manifest_schema() -> dict[str, Any]:
-    schema_resource = resources.files("ade_engine.schemas") / "manifest.v1.schema.json"
-    return json.loads(schema_resource.read_text(encoding="utf-8"))
-
-
-_MANIFEST_VALIDATOR = Draft202012Validator(_load_manifest_schema())
-
-
-def _validate_manifest(manifest: Mapping[str, Any]) -> None:
-    schema_tag = _manifest_version(manifest)
-    if not schema_tag:
-        raise ManifestNotFoundError("Manifest missing required info.schema version tag")
-    if not schema_tag.startswith("ade.manifest/v1"):
-        raise ManifestNotFoundError(f"Unsupported manifest schema: {schema_tag}")
-    try:
-        _MANIFEST_VALIDATOR.validate(manifest)
-    except ValidationError as exc:  # pragma: no cover - jsonschema formats message
-        raise ManifestNotFoundError(f"Manifest failed validation: {exc.message}") from exc
-
-
-def _manifest_version(manifest: Mapping[str, Any]) -> str | None:
-    if isinstance(manifest.get("info"), Mapping):
-        schema_value = manifest["info"].get("schema")
-        if isinstance(schema_value, str):
-            return schema_value
-    return None
 
 
 __all__ = [
@@ -140,5 +50,6 @@ __all__ = [
     "ManifestNotFoundError",
     "load_config_manifest",
     "load_manifest_context",
+    "resolve_input_sheets",
     "resolve_jobs_root",
 ]

@@ -15,6 +15,7 @@ ADE is a lightweight, configurable engine for normalizing Excel/CSV files at sca
 ```bash
 ade dev                   # FastAPI + React dev servers (--backend/--frontend to scope)
 ade test                  # Run all tests
+ade bundle                # Bundle files/dirs into LLM-ready Markdown; copies to clipboard
 ade build                 # Build SPA → apps/ade-api/src/ade_api/web/static
 ade start                 # Serve API + SPA
 ade openapi-types         # Generate TS types from OpenAPI
@@ -24,6 +25,8 @@ ade clean --yes           # Delete build/.venv/node_modules
 ade reset --yes           # Clean + storage reset + setup
 ade ci                    # Full pipeline (lint, test, build)
 ```
+
+- `ade bundle` is the copy/paste helper for agents: like the old copy-code script, but richer. Point it at files/dirs, filter with `--ext/--include/--exclude`, and use `--out`/`--no-clip`/`--head`/`--tail` to control the bundle.
 
 ### Frontend API types
 

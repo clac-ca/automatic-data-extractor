@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from ade_engine.logging import StructuredLogger
-from ade_engine.model import JobContext, JobPaths
+from ade_engine.core.models import JobContext, JobPaths
 from ade_engine.telemetry import TelemetryConfig
 
 _PLUGIN_EVENTS: list[tuple[str, dict[str, Any]]] = []

@@ -5,9 +5,9 @@ from __future__ import annotations
 import typer
 
 from . import build
+from . import bundle
 from . import ci
 from . import clean_reset
-from . import copy_code
 from . import dev
 from . import docker
 from . import lint_cmd
@@ -26,7 +26,7 @@ COMMAND_MODULES = (
     build,
     tests,
     lint_cmd,
-    copy_code,
+    bundle,
     types_cmd,
     migrate,
     routes,

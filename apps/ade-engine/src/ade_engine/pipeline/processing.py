@@ -3,25 +3,19 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-from ade_engine.schemas.manifest import ColumnMeta
+from ade_engine.core.manifest import ColumnMeta
+from ade_engine.core.models import JobContext
+from ade_engine.core.pipeline_types import (
+    ColumnModule,
+    ColumnMapping,
+    ExtraColumn,
+    TableProcessingResult,
+)
 
-from ..model import JobContext
 from .mapping import map_columns
-from .models import ColumnModule, ColumnMapping, ExtraColumn
 from .normalize import normalize_rows
-
-
-@dataclass(slots=True)
-class TableProcessingResult:
-    """Normalized view of a single table after mapping and validation."""
-
-    mapping: list[ColumnMapping]
-    extras: list[ExtraColumn]
-    rows: list[list[Any]]
-    issues: list[dict[str, Any]]
 
 
 def process_table(
@@ -81,4 +75,3 @@ def process_table(
 
 
 __all__ = ["TableProcessingResult", "process_table"]
-

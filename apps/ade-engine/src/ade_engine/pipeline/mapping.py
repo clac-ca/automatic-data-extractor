@@ -7,10 +7,14 @@ import re
 from collections import defaultdict
 from typing import Any, Mapping, Sequence
 
-from ade_engine.schemas.manifest import ColumnMeta
-
-from ..model import JobContext
-from .models import ColumnMapping, ColumnModule, ExtraColumn, ScoreContribution
+from ade_engine.core.manifest import ColumnMeta
+from ade_engine.core.models import JobContext
+from ade_engine.core.pipeline_types import (
+    ColumnMapping,
+    ColumnModule,
+    ExtraColumn,
+    ScoreContribution,
+)
 
 
 def map_columns(

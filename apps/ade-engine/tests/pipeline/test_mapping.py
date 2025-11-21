@@ -10,7 +10,7 @@ from ade_engine.pipeline.mapping import (
     match_header,
 )
 from ade_engine.pipeline.models import ColumnModule
-from ade_engine.model import JobContext, JobPaths
+from ade_engine.core.models import JobContext, JobPaths
 
 
 class _DetectorModule(SimpleNamespace):

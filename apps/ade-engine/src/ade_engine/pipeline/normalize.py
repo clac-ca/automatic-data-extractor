@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Mapping, Sequence
 
-from ..model import JobContext
-from .models import ColumnMapping, ColumnModule, ExtraColumn
+from ade_engine.core.models import JobContext
+from ade_engine.core.pipeline_types import ColumnMapping, ColumnModule, ExtraColumn
 
 
 def normalize_rows(
