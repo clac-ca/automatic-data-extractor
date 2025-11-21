@@ -13,7 +13,10 @@ from .models import ColumnMapping, ColumnModule, ExtraColumn, FileExtraction, Sc
 from .normalize import normalize_rows
 from .processing import TableProcessingResult, process_table
 from .output import output_headers, write_outputs
+from .runner import PipelineRunner
 from .registry import ColumnRegistry, ColumnRegistryError
+from .stages import ExtractStage, WriteStage
+from .util import unique_sheet_name
 
 __all__ = [
     "ColumnMapping",
@@ -32,9 +35,13 @@ __all__ = [
     "match_header",
     "normalize_header",
     "normalize_rows",
+    "unique_sheet_name",
     "process_table",
+    "PipelineRunner",
     "output_headers",
     "read_table",
+    "ExtractStage",
+    "WriteStage",
     "sheet_name",
     "write_outputs",
 ]

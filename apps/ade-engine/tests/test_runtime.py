@@ -132,7 +132,7 @@ def test_load_manifest_context_returns_models(tmp_path: Path) -> None:
 
     assert context.model is not None
     assert context.column_order == ["member_id"]
-    assert context.writer["mode"] == "row_streaming"
+    assert context.writer.mode == "row_streaming"
 
 
 def test_manifest_with_before_save_hooks_validates(tmp_path: Path) -> None:

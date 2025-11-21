@@ -5,7 +5,7 @@ from ade_engine.schemas.manifest import ColumnMeta
 
 from ade_engine.pipeline.models import ColumnMapping, ColumnModule
 from ade_engine.pipeline.normalize import normalize_rows
-from ade_engine.model import JobContext, JobPaths
+from ade_engine.core.models import JobContext, JobPaths
 
 
 def _job() -> JobContext:

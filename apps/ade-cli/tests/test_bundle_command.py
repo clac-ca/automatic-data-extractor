@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 
 from ade_tools.commands import common
-from ade_tools.commands import copy_code
+from ade_tools.commands import bundle
 
 
 def test_format_files_for_clipboard_uses_relative_paths_and_languages(tmp_path, monkeypatch) -> None:
@@ -17,7 +17,7 @@ def test_format_files_for_clipboard_uses_relative_paths_and_languages(tmp_path, 
     alpha.write_text("print('hi')\n")
     notes.write_text("hello")
 
-    formatted = copy_code.format_files_for_clipboard([alpha, notes])
+    formatted = bundle.format_files_for_clipboard([alpha, notes])
 
     assert formatted == (
         "# Logical module layout (source -> sections below):\n"
@@ -36,7 +36,7 @@ def test_format_files_for_clipboard_uses_relative_paths_and_languages(tmp_path, 
     )
 
 
-def test_run_copy_code_uses_clipboard(monkeypatch, tmp_path) -> None:
+def test_run_bundle_uses_clipboard(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(common, "refresh_paths", lambda: None)
     monkeypatch.setattr(common, "REPO_ROOT", tmp_path)
 
@@ -55,7 +55,7 @@ def test_run_copy_code_uses_clipboard(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setitem(sys.modules, "pyperclip", DummyPyperclip)
 
-    formatted = copy_code.run_copy_code([file_path], print_output=False)
+    formatted = bundle.run_bundle([file_path], print_output=False)
 
     assert DummyPyperclip.data == formatted
     assert "Logical module layout" in formatted
@@ -68,7 +68,7 @@ def test_tree_can_be_disabled(monkeypatch, tmp_path) -> None:
     alpha = tmp_path / "alpha.py"
     alpha.write_text("print('hi')\n")
 
-    formatted = copy_code.format_files_for_clipboard([alpha], include_tree=False)
+    formatted = bundle.format_files_for_clipboard([alpha], include_tree=False)
 
     assert formatted.startswith("# alpha.py")
     assert "Logical module layout" not in formatted
@@ -82,7 +82,7 @@ def test_tree_uses_docstring(monkeypatch, tmp_path) -> None:
     beta = tmp_path / "beta.ts"
     beta.write_text("// Session-aware logging helpers.\nconst x = 1;\n")
 
-    formatted = copy_code.format_files_for_clipboard([alpha, beta])
+    formatted = bundle.format_files_for_clipboard([alpha, beta])
 
     assert "# - alpha.py" in formatted
     assert "Shared pipe settings and defaults." in formatted

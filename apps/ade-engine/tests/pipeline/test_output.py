@@ -3,7 +3,7 @@ from pathlib import Path
 
 import openpyxl
 
-from ade_engine.model import JobContext, JobPaths
+from ade_engine.core.models import JobContext, JobPaths
 from ade_engine.pipeline.models import ColumnMapping, ExtraColumn, FileExtraction
 from ade_engine.pipeline.output import output_headers, write_outputs
 from ade_engine.schemas.models import ManifestContext

@@ -1,13 +1,16 @@
-"""Data structures shared across :mod:`ade_engine` modules."""
+"""Core engine data models."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from ade_engine.schemas import ManifestV1
+from .phases import JobStatus
+
+if TYPE_CHECKING:
+    from .manifest import ManifestContext, ManifestV1
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,20 +40,20 @@ class JobContext:
     """Mutable context shared across the runtime."""
 
     job_id: str
-    manifest: dict[str, Any]
+    manifest: "ManifestContext | dict[str, Any]"
     paths: JobPaths
     started_at: datetime
-    manifest_model: ManifestV1 | None = None
+    manifest_model: "ManifestV1 | None" = None
     safe_mode: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
 class JobResult:
-    """Outcome returned by :func:`ade_engine.worker.run_job`."""
+    """Outcome returned by the engine interface."""
 
     job_id: str
-    status: str
+    status: JobStatus
     artifact_path: Path
     events_path: Path
     output_paths: tuple[Path, ...]
