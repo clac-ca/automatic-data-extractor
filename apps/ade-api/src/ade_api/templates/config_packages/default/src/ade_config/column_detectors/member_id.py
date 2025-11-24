@@ -7,33 +7,63 @@ from typing import Any
 _FIELD = "member_id"
 
 
-def detect(
+def detect_member_id(
     *,
     header: str | None,
     column_values_sample: list[Any],
     **_: Any,
 ) -> dict[str, dict[str, float]]:
-    """Return a confidence score for the member identifier column."""
+    """Return a confidence score for the member ID column."""
+    header_score = 0.0
+    if header:
+        lowered = header.strip().lower()
+        if "member" in lowered and "id" in lowered:
+            header_score = 0.9
+        elif lowered in {"id", "member #", "member no", "member number"}:
+            header_score = 0.7
+        elif "id" in lowered:
+            header_score = 0.5
 
-    header_score = 0.7 if header and "id" in header.lower() else 0.0
-    numeric_hits = sum(1 for value in column_values_sample if str(value).strip().isdigit())
-    sample_score = numeric_hits / max(1, len(column_values_sample)) * 0.3
+    numeric_hits = sum(
+        1 for value in column_values_sample
+        if value is not None and str(value).strip().isdigit()
+    )
+    sample_score = (numeric_hits / max(1, len(column_values_sample))) * 0.3
     score = round(min(1.0, header_score + sample_score), 2)
+
     return {"scores": {_FIELD: score}}
 
 
-def transform(value: Any, /) -> str | None:
-    """Normalise identifiers to trimmed uppercase strings."""
-
+def transform(
+    *,
+    value: Any,
+    **_: Any,
+) -> str | None:
+    """Normalize identifiers to trimmed uppercase strings."""
     if value in (None, ""):
         return None
     cleaned = str(value).strip()
     return cleaned.upper() if cleaned else None
 
 
-def validate(value: Any, /) -> list[str]:
+def validate(
+    *,
+    value: Any,
+    field_name: str = _FIELD,
+    field_meta: dict[str, Any] | None = None,
+    **_: Any,
+) -> list[dict[str, Any]]:
     """Return validation issues for missing identifiers."""
+    issues: list[dict[str, Any]] = []
+    required = bool(field_meta and field_meta.get("required"))
 
-    if value in (None, ""):
-        return ["member_id is required"]
-    return []
+    if value in (None, "") and required:
+        issues.append(
+            {
+                "code": "missing_required",
+                "severity": "error",
+                "message": f"{field_name.replace('_', ' ').title()} is required."
+            }
+        )
+
+    return issues

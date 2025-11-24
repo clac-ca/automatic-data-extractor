@@ -37,7 +37,7 @@ Column mapping is designed to:
    Hooks should work with dictionaries like `{"invoice_number": "...", "amount_due": ...}` instead of worrying about Excel coordinate math.
 
 3. **Allow multiple detection strategies**
-   Different column detectors can vote on where a logical column lives. The mapping step combines those signals into a single, deterministic choice.
+   Different column detectors can vote on where a field lives. The mapping step combines those signals into a single, deterministic choice.
 
 4. **Fail loudly when required columns are missing**
    If the configuration says a column is required, column mapping is the place where that gets enforced.
@@ -65,24 +65,24 @@ Examples:
 * Column `B` on sheet `"Detail"` in an XLSX file.
 * Column `0` in a CSV with no sheets.
 
-### Logical columns
+### Fields (canonical columns)
 
-A **logical column** is a *semantic* thing defined by the config package, for example:
+A **field** is a semantic, canonical data element defined by the config manifest, for example:
 
 * `invoice_number`
 * `bill_to_name`
 * `line_amount`
 * `posting_date`
 
-Logical columns:
+Fields:
 
 * Are described in the config manifest (name, type, whether required, etc.).
-* Do **not** know where they live in the sheet(s).
+* Do **not** know where they live in the sheet(s) until mapping assigns a physical column.
 * Are the keys hooks and outputs use.
 
 Column mapping’s role is to say:
 
-> “For this document and sheet, logical column `invoice_number` is implemented by physical column B.”
+> “For this document and sheet, field `invoice_number` is implemented by physical column B.”
 
 ### Detections
 
@@ -95,14 +95,14 @@ Each detection is conceptually:
 
 ```text
 DetectorFinding:
-  logical_column_id   # which logical column this relates to
+  field_id            # which field this relates to
   sheet_id            # which sheet / tab
   column_index        # which physical column
   score               # confidence or quality signal
   reasons             # optional free‑form explanation / features
 ```
 
-Different detectors can propose different columns for the same logical column; column mapping resolves these into a single choice.
+Different detectors can propose different columns for the same field; column mapping resolves these into a single choice.
 
 ### Column map
 
@@ -111,11 +111,11 @@ The **column map** is the main output:
 ```text
 ColumnMap:
   sheet_id -> {
-    logical_column_id -> MappedColumn
+    field_id -> MappedColumn
   }
 
 MappedColumn:
-  logical_column_id
+  field_id
   sheet_id
   column_index        # chosen physical column
   header_text         # final resolved header (if any)
@@ -161,7 +161,7 @@ Column mapping runs once the engine has:
 
    The manifest describes:
 
-   * the list of logical columns,
+   * the list of fields,
    * what they are called,
    * whether they’re required or optional,
    * sometimes hints like expected type/pattern (dates, numbers, strings).
@@ -178,7 +178,7 @@ When column mapping completes, the engine has:
 
    For each sheet being processed:
 
-   * Every logical column from the manifest will have a `MappedColumn` entry.
+   * Every field from the manifest will have a `MappedColumn` entry.
    * `MappedColumn.is_satisfied` indicates whether a physical column was found.
    * If multiple physical columns were plausible, the chosen winner is recorded along with tie‑breaking details.
 
@@ -221,10 +221,10 @@ For each sheet:
 1. The engine enumerates physical columns that are plausible data columns (e.g., non‑empty, not clearly metadata‑only).
 2. Each column detector runs and emits zero or more `DetectorFinding` objects.
 
-For a single logical column you might end up with:
+For a single field you might end up with:
 
 ```text
-logical_column_id = "invoice_number"
+field_id = "invoice_number"
 
 Candidates:
   B: score 0.92 (header match: "Invoice #")
@@ -243,13 +243,13 @@ Detectors can contribute different kinds of evidence:
 
 The engine then aggregates detector findings:
 
-* Group findings by `(sheet_id, logical_column_id, column_index)`.
+* Group findings by `(sheet_id, field_id, column_index)`.
 * Merge scores from multiple detectors into a **combined score**.
 
   * E.g., weighted sum, max, or any heuristic the engine uses.
 * Normalize scores so they’re comparable across columns.
 
-At this point, for each logical column and sheet, you have a ranked list:
+At this point, for each field and sheet, you have a ranked list:
 
 ```text
 invoice_number:
@@ -265,22 +265,22 @@ amount_due:
 
 ### 3. Winner selection
 
-For each `(sheet_id, logical_column_id)` pair, the engine chooses:
+For each `(sheet_id, field_id)` pair, the engine chooses:
 
 * The **best candidate** whose score clears a configurable threshold.
-* If no candidate meets the threshold, the logical column is **unmapped** on that sheet.
+* If no candidate meets the threshold, the field is **unmapped** on that sheet.
 
 Tie‑breaking typically prefers:
 
 1. Higher combined score.
-2. Columns whose headers are “cleaner” matches to the logical column name or its configured aliases.
+2. Columns whose headers are “cleaner” matches to the field name or its configured aliases.
 3. Columns nearer to other high‑confidence columns from the same "family" (e.g., `quantity`, `unit_price`, `amount_due`).
 
 ### 4. Building the `ColumnMap`
 
 Once winners are selected:
 
-* For each logical column, create a `MappedColumn`:
+* For each field, create a `MappedColumn`:
 
   * record `sheet_id`, `column_index`, `header_text`, etc.
   * include the underlying detector findings in case debugging is needed.
@@ -295,7 +295,7 @@ The resulting map:
 
 With a `ColumnMap` in hand, the engine validates against the config manifest:
 
-* For each required logical column:
+* For each required field:
 
   * If `is_satisfied` is `False`, add a validation error like:
 
@@ -313,11 +313,11 @@ Configuration or runtime settings control whether:
 
 Hooks should never need to look at physical row/column indices.
 
-Instead, hooks see **normalized rows** where keys are logical column IDs:
+Instead, hooks see **normalized rows** where keys are field IDs:
 
 ```python
 def process_row(row, context):
-    # `row` is keyed by logical columns from the config manifest
+    # `row` is keyed by fields from the config manifest
     invoice_no = row["invoice_number"]
     amount = row["amount_due"]
     posted_at = row.get("posting_date")  # may be None if optional/unmapped
@@ -329,16 +329,16 @@ This is made possible by column mapping:
 
 1. When the engine streams data rows, it uses the `ColumnMap` to:
 
-   * resolve which physical column(s) provide each logical column value,
+   * resolve which physical column(s) provide each field value,
    * pull the corresponding cell from the current physical row,
    * optionally coerce/normalize the value (dates, decimals, etc.).
-2. The hook receives a **logical view** of the row and never sees raw column indices.
+2. The hook receives a **field-identified view** of the row and never sees raw column indices.
 
 **Important invariants for hooks:**
 
-* The set of keys in `row` matches the logical columns defined in the manifest.
+* The set of keys in `row` matches the fields defined in the manifest.
 * Missing required columns will normally prevent hooks from running (unless configured otherwise).
-* Optional columns may be present but unmapped; in that case their value will typically be `None`.
+* Optional fields may be present but unmapped; in that case their value will typically be `None`.
 
 ---
 
@@ -364,7 +364,7 @@ Common patterns:
 
 The column mapping layer is responsible for:
 
-* Ensuring each `(sheet_id, logical_column_id)` is resolved independently.
+* Ensuring each `(sheet_id, field_id)` is resolved independently.
 * Exposing which sheets are “active” for a given run so hooks can iterate accordingly.
 
 ---
@@ -406,7 +406,7 @@ Column mapping quality is only as good as the signals it receives. When authorin
 When column mapping goes wrong, you typically see one of:
 
 * Required column reported as missing.
-* Hooks throwing `KeyError` for a logical column you expected to be mapped.
+* Hooks throwing `KeyError` for a field you expected to be mapped.
 * Output files with values shifted or clearly mismatched to their headers.
 
 To debug:
@@ -426,7 +426,7 @@ To debug:
 
 2. **Compare the manifest to the sheet**
 
-   * Is the logical column defined with the name/aliases you expect?
+   * Is the field defined with the name/aliases you expect?
    * Did the header wording in the file change (e.g., from “Invoice #” to “Invoice ID”)?
 
 3. **Check thresholds / configuration**
@@ -446,8 +446,8 @@ To debug:
 Column mapping is the bridge between raw spreadsheet shape and the logical schema your config package defines. It:
 
 * combines signals from `column_detectors`,
-* chooses a single physical column for each logical column,
+* chooses a single physical column for each field,
 * enforces required vs optional columns,
-* and presents hooks with simple, named `row["logical_column"]` access.
+* and presents hooks with simple, named `row["field_name"]` access.
 
 As long as you think in terms of *logical columns* and keep column detectors focused and expressive, the engine can adapt to messy, real‑world spreadsheets while keeping your hooks and outputs stable.
