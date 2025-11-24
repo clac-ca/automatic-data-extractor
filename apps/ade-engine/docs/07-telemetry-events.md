@@ -100,6 +100,7 @@ Modeled as e.g. `TelemetryEnvelope` in `ade_engine.schemas.telemetry`:
   * `job_id`
   * `config_id`
   * `workspace_id`
+  (These are caller-provided tags; `job_id` refers to a backend job, not an engine concept.)
 * `event: TelemetryEvent`
 
 Example envelope (one line in `events.ndjson`):
@@ -338,7 +339,8 @@ but should avoid redefining these.
   Payload:
 
   * `status: "failed"`
-  * `error_type`
+  * `error_code` (e.g., `config_error`, `input_error`, `hook_error`, `pipeline_error`, `unknown_error`)
+  * `error_stage` (e.g., `initialization`, `load_config`, `extracting`, `mapping`, `normalizing`, `writing_output`, `hooks`)
   * `error_message`
 
 ### 8.2 Pipeline transitions

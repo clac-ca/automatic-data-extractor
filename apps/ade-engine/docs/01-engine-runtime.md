@@ -217,7 +217,8 @@ These decisions are made once, up front, and never mutated mid‑run.
 
 * `state: dict[str, Any]`
   Per‑run mutable scratch space, shared across detectors, transforms,
-  validators, and hooks.
+  validators, and hooks. Not shared across runs or threads; each run executes
+  sequentially in a single thread/process.
 
 Properties:
 
@@ -230,9 +231,9 @@ Properties:
 
 `RunResult` is what `Engine.run` (and the top‑level `run()`) returns:
 
-* `status: Literal["succeeded", "failed"]`
-* `error: str | None`
-  Short, human‑readable summary for failures; `None` for success.
+* `status: RunStatus` (`"succeeded"` or `"failed"`)
+* `error: RunError | None`
+  Structured error with `code` (e.g., `config_error`, `input_error`, `hook_error`, `pipeline_error`, `unknown_error`), `stage` (e.g., `load_config`, `extracting`, `mapping`, `normalizing`, `writing_output`, `hooks`), and `message`.
 * `output_paths: tuple[Path, ...]`
   One or more normalized workbook paths (often a single workbook).
 * `artifact_path: Path`
@@ -265,7 +266,7 @@ Internally, the engine tracks a `PipelinePhase` enum, roughly:
 * `COMPLETED`
 * `FAILED`
 
-Phase transitions are recorded in telemetry and may be reflected in
+Enum `.value` strings are snake_case (`"initialized"`, `"extracting"`, `"mapping"`, `"normalizing"`, `"writing_output"`, `"completed"`, `"failed"`). Phase transitions are recorded in telemetry and may be reflected in
 `artifact.notes`. They are mostly relevant to observability and debugging.
 
 ---
@@ -351,10 +352,10 @@ If any of these steps fail, the error is handled as described in
 8. **Map**
 
    * Phase: `MAPPING`.
-   * For each `RawTable`:
+  * For each `RawTable`:
 
-     * Run column detectors and scoring.
-     * Produce `MappedTable` with `ColumnMapping[]` and `ExtraColumn[]`.
+    * Run column detectors and scoring.
+    * Produce `MappedTable` with `ColumnMapping[]` and `UnmappedColumn[]`.
    * After all tables are mapped:
 
      * Call `on_after_mapping` hooks (pass the mapped tables).
@@ -537,6 +538,11 @@ optional metadata for the run.
 
 The runtime is designed to be safe under typical worker pool patterns.
 
+* **No internal parallelism per run**
+
+  * A single `Engine.run` executes sequentially in one thread/process.
+  * Any concurrency comes from the ADE API running multiple workers (threads/processes/containers), each calling `Engine.run()` separately.
+
 * **Engine instances**
 
   * `Engine` holds configuration (e.g., `TelemetryConfig`), not run state.
@@ -550,7 +556,8 @@ The runtime is designed to be safe under typical worker pool patterns.
 
   * Every call to `Engine.run` creates a fresh `RunContext` with its own `state`
     dict.
-  * Nothing inside `RunContext` is shared across runs.
+  * Nothing inside `RunContext` is shared across runs or threads.
+  * `RunContext.state` is per-run scratch space; do not share it across threads.
 
 * **Global state**
 

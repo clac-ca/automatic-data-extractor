@@ -248,7 +248,7 @@ A typical end‑to‑end flow:
 
      * `ade_engine` installed.
      * the appropriate `ade_config` version installed.
-   * Create a job directory (with a per-run working area):
+   * Create a backend job directory (with a per-run working area):
 
      ```text
      /data/jobs/<job_id>/
@@ -261,7 +261,7 @@ A typical end‑to‑end flow:
 3. **Backend schedules worker** (thread/process/container) with:
 
    * venv location,
-   * job directory paths (input/output/logs for this run),
+   * backend job directory paths (input/output/logs for this run),
    * config identifier.
 
 4. **Worker activates venv** and invokes the engine, either:
