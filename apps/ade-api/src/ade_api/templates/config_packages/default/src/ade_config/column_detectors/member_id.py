@@ -12,7 +12,7 @@ def detect_member_id(
     header: str | None,
     column_values_sample: list[Any],
     **_: Any,
-) -> dict[str, dict[str, float]]:
+) -> float:
     """Return a confidence score for the member ID column."""
     header_score = 0.0
     if header:
@@ -31,19 +31,21 @@ def detect_member_id(
     sample_score = (numeric_hits / max(1, len(column_values_sample))) * 0.3
     score = round(min(1.0, header_score + sample_score), 2)
 
-    return {"scores": {_FIELD: score}}
+    return score
 
 
 def transform(
     *,
     value: Any,
+    field_name: str = _FIELD,
     **_: Any,
-) -> str | None:
+) -> dict[str, Any] | None:
     """Normalize identifiers to trimmed uppercase strings."""
     if value in (None, ""):
-        return None
+        return {field_name: None}
     cleaned = str(value).strip()
-    return cleaned.upper() if cleaned else None
+    normalized = cleaned.upper() if cleaned else None
+    return {field_name: normalized}
 
 
 def validate(

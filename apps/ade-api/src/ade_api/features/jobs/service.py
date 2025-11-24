@@ -255,7 +255,30 @@ class JobsService:
         job: Job,
         configuration: Configuration | None,
         job_dir: Path,
+        completion: RunCompletedEvent | None,
     ) -> None:
+        default_artifact = self._runs.job_relative_path(job_dir / "logs" / "artifact.json")
+        default_events = self._runs.job_relative_path(job_dir / "logs" / "events.ndjson")
+        default_output = self._runs.job_relative_path(job_dir / "output")
+
+        if completion is not None:
+            run_status = RunStatus(completion.status)
+            status_map = {
+                RunStatus.SUCCEEDED: JobStatus.SUCCEEDED,
+                RunStatus.FAILED: JobStatus.FAILED,
+                RunStatus.CANCELED: JobStatus.CANCELLED,
+                RunStatus.RUNNING: JobStatus.RUNNING,
+                RunStatus.QUEUED: JobStatus.QUEUED,
+            }
+            job.status = status_map.get(run_status, JobStatus.FAILED)
+            job.error_message = completion.error_message
+            job.started_at = job.started_at or self._epoch_to_datetime(completion.created)
+            job.completed_at = job.completed_at or self._epoch_to_datetime(completion.created)
+            job.artifact_uri = completion.artifact_path or job.artifact_uri or default_artifact
+            job.logs_uri = completion.events_path or job.logs_uri or default_events
+            job.output_uri = job.output_uri or default_output
+            return
+
         run = await self._runs.get_run(job.trace_id or "")
         if run is None:
             job.status = JobStatus.FAILED
@@ -277,9 +300,9 @@ class JobsService:
             }
             job.status = status_map.get(run.status, JobStatus.FAILED)
 
-        job.artifact_uri = self._runs.job_relative_path(job_dir / "logs" / "artifact.json")
-        job.logs_uri = self._runs.job_relative_path(job_dir / "logs" / "events.ndjson")
-        job.output_uri = self._runs.job_relative_path(job_dir / "output")
+        job.artifact_uri = job.artifact_uri or default_artifact
+        job.logs_uri = job.logs_uri or default_events
+        job.output_uri = job.output_uri or default_output
 
     async def _mark_job_failure(self, job: Job, message: str) -> None:
         job.status = JobStatus.FAILED
@@ -287,15 +310,20 @@ class JobsService:
         job.completed_at = utc_now()
         await self._session.flush()
 
-    async def _apply_run_frame(self, job: Job, frame: object) -> None:
+    async def _apply_run_frame(
+        self,
+        job: Job,
+        frame: object,
+        job_dir: Path,
+    ) -> RunCompletedEvent | None:
         if not isinstance(frame, RunEvent):
-            return
+            return None
 
         if isinstance(frame, RunStartedEvent):
             job.status = JobStatus.RUNNING
             job.started_at = job.started_at or self._epoch_to_datetime(frame.created)
             await self._session.flush()
-            return
+            return None
 
         if isinstance(frame, RunCompletedEvent):
             run_status = RunStatus(frame.status)
@@ -310,7 +338,16 @@ class JobsService:
             job.error_message = frame.error_message
             job.started_at = job.started_at or self._epoch_to_datetime(frame.created)
             job.completed_at = job.completed_at or self._epoch_to_datetime(frame.created)
+            default_artifact = self._runs.job_relative_path(job_dir / "logs" / "artifact.json")
+            default_events = self._runs.job_relative_path(job_dir / "logs" / "events.ndjson")
+            default_output = self._runs.job_relative_path(job_dir / "output")
+            job.artifact_uri = frame.artifact_path or job.artifact_uri or default_artifact
+            job.logs_uri = frame.events_path or job.logs_uri or default_events
+            job.output_uri = job.output_uri or default_output
             await self._session.flush()
+            return frame
+
+        return None
 
     @staticmethod
     def _epoch_to_datetime(epoch_seconds: int) -> datetime:
@@ -346,15 +383,16 @@ class JobsService:
         job_dir = self._runs.job_directory(context.job_id or context.run_id)
         job_dir.mkdir(parents=True, exist_ok=True)
 
+        completion: RunCompletedEvent | None = None
         try:
             async for frame in self._runs.stream_run(context=context, options=options):
-                await self._apply_run_frame(job, frame)
+                completion = await self._apply_run_frame(job, frame, job_dir)
         except Exception as exc:  # pragma: no cover - defensive
             await self._mark_job_failure(job, str(exc))
             await self._session.commit()
             raise
 
-        await self._finalize_job(job, configuration, job_dir)
+        await self._finalize_job(job, configuration, job_dir, completion)
         await self._session.commit()
 
     async def get_artifact_path(self, *, workspace_id: str, job_id: str) -> Path:

@@ -24,10 +24,10 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
         "payload = {\n"
         "    'schema': 'ade.telemetry/run-event.v1',\n"
         "    'version': '1.0.0',\n"
-        "    'job_id': 'job-1',\n"
         "    'run_id': 'run-1',\n"
         "    'timestamp': '2024-01-01T00:00:00Z',\n"
-        "    'event': {'event': 'pipeline_transition', 'level': 'info', 'phase': 'mapping'},\n"
+        "    'metadata': {'job_id': 'job-1'},\n"
+        "    'event': {'event': 'pipeline_transition', 'level': 'info', 'payload': {'phase': 'mapping'}},\n"
         "}\n"
         "time.sleep(0.05)\n"
         "events.write_text(json.dumps(payload) + '\\n', encoding='utf-8')\n",
@@ -45,5 +45,5 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
     assert stdout_frames, "expected stdout frames"
     telemetry = next(frame for frame in frames if not isinstance(frame, StdoutFrame))
     assert telemetry.schema == ADE_TELEMETRY_EVENT_SCHEMA
-    assert telemetry.event.name == "pipeline_transition"
+    assert telemetry.event.event == "pipeline_transition"
     assert telemetry.event.level == "info"

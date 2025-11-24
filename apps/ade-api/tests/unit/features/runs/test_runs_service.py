@@ -12,6 +12,8 @@ from ade_engine.schemas import TelemetryEnvelope, TelemetryEvent
 
 from ade_api.features.builds.models import ConfigurationBuild, ConfigurationBuildStatus
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
+from ade_api.features.documents.models import Document, DocumentSource, DocumentStatus
+from ade_api.features.documents.storage import DocumentStorage
 from ade_api.features.runs.models import RunStatus
 from ade_api.features.runs.schemas import RunCompletedEvent, RunCreateOptions, RunLogEvent
 from ade_api.features.runs.service import RunExecutionContext, RunsService
@@ -27,7 +29,7 @@ async def _prepare_service(
     tmp_path: Path,
     *,
     safe_mode: bool = False,
-) -> tuple[RunsService, RunExecutionContext]:
+) -> tuple[RunsService, RunExecutionContext, Document]:
     workspace = Workspace(name="Acme", slug=f"acme-{generate_ulid().lower()}")
     session.add(workspace)
     await session.flush()
@@ -44,6 +46,8 @@ async def _prepare_service(
     await session.flush()
 
     venv_root = tmp_path / "venvs"
+    documents_dir = tmp_path / "documents"
+    jobs_dir = tmp_path / "jobs"
     venv_dir = venv_root / configuration.config_id
     bin_dir = venv_dir / ("Scripts" if os.name == "nt" else "bin")
     bin_dir.mkdir(parents=True, exist_ok=True)
@@ -55,8 +59,31 @@ async def _prepare_service(
         update={
             "venvs_dir": str(venv_root),
             "safe_mode": safe_mode,
+            "documents_dir": documents_dir,
+            "jobs_dir": jobs_dir,
         }
     )
+
+    document_id = generate_ulid()
+    storage = DocumentStorage(settings.documents_dir)
+    stored_uri = storage.make_stored_uri(document_id)
+    source_path = storage.path_for(stored_uri)
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.write_text("name\nAlice", encoding="utf-8")
+
+    document = Document(
+        id=document_id,
+        workspace_id=workspace.id,
+        original_filename="input.csv",
+        content_type="text/csv",
+        byte_size=source_path.stat().st_size,
+        sha256="deadbeef",
+        stored_uri=stored_uri,
+        status=DocumentStatus.UPLOADED.value,
+        source=DocumentSource.MANUAL_UPLOAD.value,
+        expires_at=utc_now(),
+    )
+    session.add(document)
 
     build = ConfigurationBuild(
         workspace_id=workspace.id,
@@ -83,9 +110,9 @@ async def _prepare_service(
     )
     run, context = await service.prepare_run(
         config_id=configuration.config_id,
-        options=RunCreateOptions(),
+        options=RunCreateOptions(input_document_id=document.id),
     )
-    return service, context
+    return service, context, document
 
 
 @pytest.mark.asyncio()
@@ -94,7 +121,8 @@ async def test_stream_run_happy_path_yields_engine_events(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    service, context = await _prepare_service(session, tmp_path)
+    service, context, document = await _prepare_service(session, tmp_path)
+    run_options = RunCreateOptions(input_document_id=document.id)
 
     async def fake_execute_engine(
         self: RunsService,
@@ -111,10 +139,10 @@ async def test_stream_run_happy_path_yields_engine_events(
             message="engine output",
         )
         telemetry = TelemetryEnvelope(
-            job_id=context.job_id or run.id,
             run_id=context.run_id,
-            emitted_at=datetime.now(timezone.utc),
-            event=TelemetryEvent(name="pipeline_transition", level="info"),
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            metadata={"job_id": context.job_id or run.id},
+            event=TelemetryEvent(event="pipeline_transition", level="info"),
         )
         await self._append_log(run.id, telemetry.model_dump_json(), stream="stdout")
         yield telemetry
@@ -134,7 +162,7 @@ async def test_stream_run_happy_path_yields_engine_events(
     monkeypatch.setattr(RunsService, "_execute_engine", fake_execute_engine)
 
     events = []
-    async for event in service.stream_run(context=context, options=RunCreateOptions()):
+    async for event in service.stream_run(context=context, options=run_options):
         events.append(event)
 
     assert events[0].type == "run.created"
@@ -150,7 +178,7 @@ async def test_stream_run_happy_path_yields_engine_events(
     messages = [entry.message for entry in logs.entries]
     assert messages[0] == "engine output"
     telemetry = TelemetryEnvelope.model_validate_json(messages[1])
-    assert telemetry.event.name == "pipeline_transition"
+    assert telemetry.event.event == "pipeline_transition"
     assert logs.next_after_id is None
 
 
@@ -160,7 +188,8 @@ async def test_stream_run_handles_engine_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    service, context = await _prepare_service(session, tmp_path)
+    service, context, document = await _prepare_service(session, tmp_path)
+    run_options = RunCreateOptions(input_document_id=document.id)
 
     async def failing_engine(*args, **kwargs):  # type: ignore[no-untyped-def]
         if False:
@@ -170,7 +199,7 @@ async def test_stream_run_handles_engine_failure(
     monkeypatch.setattr(RunsService, "_execute_engine", failing_engine)
 
     events = []
-    async for event in service.stream_run(context=context, options=RunCreateOptions()):
+    async for event in service.stream_run(context=context, options=run_options):
         events.append(event)
 
     assert events[-1].type == "run.completed"
@@ -190,7 +219,8 @@ async def test_stream_run_handles_cancelled_execution(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    service, context = await _prepare_service(session, tmp_path)
+    service, context, document = await _prepare_service(session, tmp_path)
+    run_options = RunCreateOptions(input_document_id=document.id)
 
     async def cancelling_engine(*args, **kwargs):  # type: ignore[no-untyped-def]
         if False:
@@ -201,7 +231,7 @@ async def test_stream_run_handles_cancelled_execution(
 
     events = []
     with pytest.raises(asyncio.CancelledError):
-        async for event in service.stream_run(context=context, options=RunCreateOptions()):
+        async for event in service.stream_run(context=context, options=run_options):
             events.append(event)
 
     assert events[-1].type == "run.completed"
@@ -218,12 +248,13 @@ async def test_stream_run_validate_only_short_circuits(
     session,
     tmp_path: Path,
 ) -> None:
-    service, context = await _prepare_service(session, tmp_path)
+    service, context, document = await _prepare_service(session, tmp_path)
+    run_options = RunCreateOptions(input_document_id=document.id, validate_only=True)
 
     events = []
     async for event in service.stream_run(
         context=context,
-        options=RunCreateOptions(validate_only=True),
+        options=run_options,
     ):
         events.append(event)
 
@@ -245,10 +276,11 @@ async def test_stream_run_validate_only_short_circuits(
 
 @pytest.mark.asyncio()
 async def test_stream_run_respects_safe_mode(session, tmp_path: Path) -> None:
-    service, context = await _prepare_service(session, tmp_path, safe_mode=True)
+    service, context, document = await _prepare_service(session, tmp_path, safe_mode=True)
+    run_options = RunCreateOptions(input_document_id=document.id)
 
     events = []
-    async for event in service.stream_run(context=context, options=RunCreateOptions()):
+    async for event in service.stream_run(context=context, options=run_options):
         events.append(event)
 
     assert [event.type for event in events] == [

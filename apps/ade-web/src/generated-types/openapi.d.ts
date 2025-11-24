@@ -690,6 +690,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List configuration versions (drafts and published) */
+        get: operations["list_config_versions_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/files": {
         parameters: {
             query?: never;
@@ -756,6 +773,23 @@ export type paths = {
         put?: never;
         /** Activate a configuration */
         post: operations["activate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish a configuration draft */
+        post: operations["publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__publish_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1397,6 +1431,46 @@ export type components = {
             message: string;
         };
         /**
+         * ConfigVersionRecord
+         * @description Serialized configuration version metadata.
+         */
+        ConfigVersionRecord: {
+            /**
+             * Config Version Id
+             * @description ULID (26-character string).
+             */
+            config_version_id: string;
+            /**
+             * Config Id
+             * @description ULID (26-character string).
+             */
+            config_id: string;
+            /**
+             * Workspace Id
+             * @description ULID (26-character string).
+             */
+            workspace_id: string;
+            status: components["schemas"]["ConfigurationStatus"];
+            /** Semver */
+            semver?: string | null;
+            /** Content Digest */
+            content_digest?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Activated At */
+            activated_at?: string | null;
+            /** Deleted At */
+            deleted_at?: string | null;
+        };
+        /**
          * ConfigurationActivateRequest
          * @description Activation control flags.
          */
@@ -1480,7 +1554,7 @@ export type components = {
          * @description Lifecycle states for workspace configuration packages.
          * @enum {string}
          */
-        ConfigurationStatus: "draft" | "active" | "inactive";
+        ConfigurationStatus: "draft" | "published" | "active" | "inactive";
         /**
          * ConfigurationValidateResponse
          * @description Result of running validation.
@@ -1533,7 +1607,7 @@ export type components = {
             job_id?: string | null;
             /**
              * Run Id
-             * @description Latest run ULID when the execution was streamed directly.
+             * @description Latest run identifier when the execution was streamed directly.
              */
             run_id?: string | null;
             /**
@@ -2380,6 +2454,14 @@ export type components = {
             finished?: number | null;
             /** Exit Code */
             exit_code?: number | null;
+            /** Output Paths */
+            output_paths?: string[];
+            /** Processed Files */
+            processed_files?: string[];
+            /** Artifact Path */
+            artifact_path?: string | null;
+            /** Events Path */
+            events_path?: string | null;
             /** Summary */
             summary?: string | null;
             /** Error Message */
@@ -5196,14 +5278,12 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description The workbook exists but could not be parsed for worksheets. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -5300,6 +5380,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_config_versions_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                config_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigVersionRecord"][];
                 };
             };
             /** @description Validation Error */
@@ -5612,6 +5726,44 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": components["schemas"]["ConfigurationActivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__publish_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                config_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null;
             };
         };
         responses: {

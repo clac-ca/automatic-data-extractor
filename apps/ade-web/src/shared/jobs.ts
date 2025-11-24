@@ -1,5 +1,6 @@
 import { client } from "@shared/api/client";
-import type { components, paths } from "@schema";
+import type { ArtifactV1, components, paths } from "@schema";
+import type { TelemetryEnvelope } from "@schema/adeTelemetry";
 
 export type JobRecord = components["schemas"]["JobRecord"];
 export type JobStatus = JobRecord["status"];
@@ -60,6 +61,52 @@ export async function fetchJobOutputs(
 
   if (!data) throw new Error("Job outputs unavailable");
   return data as JobOutputListing;
+}
+
+export async function fetchJobArtifact(
+  workspaceId: string,
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<ArtifactV1> {
+  const response = await fetch(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/jobs/${encodeURIComponent(jobId)}/artifact`,
+    { headers: { Accept: "application/json" }, signal },
+  );
+
+  if (!response.ok) {
+    throw new Error("Job artifact unavailable");
+  }
+
+  return (await response.json()) as ArtifactV1;
+}
+
+export async function fetchJobTelemetry(
+  workspaceId: string,
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<TelemetryEnvelope[]> {
+  const response = await fetch(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/jobs/${encodeURIComponent(jobId)}/logs`,
+    { headers: { Accept: "application/x-ndjson" }, signal },
+  );
+
+  if (!response.ok) {
+    throw new Error("Job telemetry unavailable");
+  }
+
+  const text = await response.text();
+  return text
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line) as TelemetryEnvelope;
+      } catch (error) {
+        console.warn("Skipping invalid job telemetry line", { error, line });
+        return null;
+      }
+    })
+    .filter((value): value is TelemetryEnvelope => Boolean(value));
 }
 
 export const workspaceJobsKeys = {
