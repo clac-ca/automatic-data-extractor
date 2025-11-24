@@ -3,9 +3,9 @@
 Administrators install, configure, and operate the Automatic Data Extractor. This guide captures the durable pieces of that workflow while deeper runbooks are drafted.
 
 ## Deployment at a glance
-- ADE is a FastAPI application created in [`apps/api/app/main.py`](../../apps/api/app/main.py) with its settings defined in [`apps/api/app/settings.py`](../../apps/api/app/settings.py).
-- Development mirrors Uvicorn's factory semantics: run `uvicorn apps.api.app.main:create_app --factory` (or `npm run start`) to serve the compiled SPA and API in a single process. Add `--reload` while iterating and run `npm run dev` in `apps/web/` for Vite hot module reload.
-- Production deployments build the frontend once (`npm run build`) and serve the static bundle behind the same reverse proxy that forwards API traffic to a managed ASGI process (Uvicorn, Uvicorn+Gunicorn, systemd, or a container orchestrator).
+- ADE is a FastAPI application created in [`apps/ade-api/src/ade_api/main.py`](../../apps/ade-api/src/ade_api/main.py) with its settings defined in [`apps/ade-api/src/ade_api/settings.py`](../../apps/ade-api/src/ade_api/settings.py).
+- Development mirrors Uvicorn's factory semantics: run `uvicorn ade_api.main:create_app --factory` (or `ade start`) to serve the compiled SPA and API in a single process. Add `--reload` while iterating and run `ade dev --frontend --no-backend` for Vite hot module reload.
+- Production deployments build the frontend once (`ade build`) and serve the static bundle behind the same reverse proxy that forwards API traffic to a managed ASGI process (Uvicorn, Uvicorn+Gunicorn, systemd, or a container orchestrator).
 - Persistent state lives under the `data/` directory by default. SQLite databases and uploaded documents sit beneath `data/db/` and `data/documents/`; both paths can be overridden through environment variables.
 - The API entry point calls the shared database bootstrap helper before opening sessions. It creates the SQLite directory, runs Alembic migrations, and surfaces progress in the logs before mirroring the manual fallback documented in the [admin getting started guide](getting_started.md#manual-migrations-and-recovery).
 
@@ -20,8 +20,8 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
   five minutes after five consecutive failures.
 
 ## Operational building blocks
-- Database connections are created via the async SQLAlchemy engine in [`apps/api/app/shared/db/engine.py`](../../apps/api/app/shared/db/engine.py) and scoped sessions from [`apps/api/app/shared/db/session.py`](../../apps/api/app/shared/db/session.py).
-- Structured logging and correlation IDs are configured through [`apps/api/app/shared/core/logging.py`](../../apps/api/app/shared/core/logging.py) and middleware in [`apps/api/app/shared/core/middleware.py`](../../apps/api/app/shared/core/middleware.py).
+- Database connections are created via the async SQLAlchemy engine in [`apps/ade-api/src/ade_api/shared/db/engine.py`](../../apps/ade-api/src/ade_api/shared/db/engine.py) and scoped sessions from [`apps/ade-api/src/ade_api/shared/db/session.py`](../../apps/ade-api/src/ade_api/shared/db/session.py).
+- Structured logging and correlation IDs are configured through [`apps/ade-api/src/ade_api/shared/core/logging.py`](../../apps/ade-api/src/ade_api/shared/core/logging.py) and middleware in [`apps/ade-api/src/ade_api/shared/core/middleware.py`](../../apps/ade-api/src/ade_api/shared/core/middleware.py).
 - Run observability workflows (streaming, polling, DB inspection) are documented in [Observing ADE Runs](runs_observability.md) for on-call reference.
 
 Future sections will expand on security hardening, backup procedures, and frontend onboarding once those pieces land. The components listed above are already in place and unlikely to change dramatically.

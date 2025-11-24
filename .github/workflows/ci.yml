@@ -23,27 +23,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install root dependencies
-        run: npm ci
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: |
-            apps/api/pyproject.toml
-            packages/ade-engine/pyproject.toml
+            apps/ade-cli/pyproject.toml
+            apps/ade-api/pyproject.toml
+            apps/ade-engine/pyproject.toml
+            packages/ade-schemas/pyproject.toml
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/ade-web/package-lock.json
+
+      - name: Install ade CLI
+        run: |
+          python -m pip install -U pip
+          python -m pip install -e apps/ade-cli -e packages/ade-schemas -e apps/ade-engine -e apps/ade-api
 
       - name: Run repo CI (lint, test, build)
-        run: npm run ci
+        run: ade ci
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

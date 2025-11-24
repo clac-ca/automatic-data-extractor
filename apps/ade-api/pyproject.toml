@@ -1,0 +1,102 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ade-api"
+version = "0.1.0"
+description = "Internal ADE FastAPI service."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "CLAC IT Team" }]
+license = { text = "Proprietary" }
+urls = { "Repository" = "https://github.com/clac-ca/automatic-data-extractor" }
+
+# Runtime deps — pinned for reproducible builds
+dependencies = [
+  "fastapi==0.117.0",
+  "uvicorn[standard]==0.36.0",
+  "sqlalchemy==2.0.43",
+  "alembic==1.16.5",
+  "aiosqlite==0.20.0",
+  "pydantic==2.11.9",
+  "pydantic-settings==2.10.1",
+  "python-multipart==0.0.20",
+  "httpx==0.28.1",
+  "python-ulid[pydantic]==3.1.0",
+  "pyjwt[crypto]==2.10.1",
+  "email-validator==2.1.0.post1",
+  "openpyxl==3.1.5",
+  "greenlet==3.1.1",
+  "ade-engine",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.4.2",
+  "pytest-asyncio==1.2.0",
+  "pytest-cov==5.0.0",
+  "asgi-lifespan==2.1.0",
+  "mypy==1.18.2",
+  "ruff==0.13.1",
+  "openapi-spec-validator==0.7.2",
+]
+
+# ---- Packaging (src layout) ----
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ade_api*"]
+
+# Keep type marker; add other assets here only if needed at runtime
+[tool.setuptools.package-data]
+"ade_api" = [
+  "py.typed",
+  "openapi.json",
+  "web/**/*",
+  "templates/config_packages/**/*",
+]
+
+# ---- Tooling configs ----
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = [
+  "tests",
+]
+asyncio_mode = "auto"
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.format]
+preview = true
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+warn_unused_ignores = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+pretty = true
+
+[[tool.mypy.overrides]]
+module = "ade_api.tests.*"
+disallow_untyped_defs = false
+
+[tool.coverage.run]
+branch = true
+source = ["ade_api"]
+
+[tool.coverage.report]
+skip_empty = true
+show_missing = true

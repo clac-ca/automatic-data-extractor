@@ -7,8 +7,8 @@ flags, and rollback considerations.
 ## 1. Pre-deploy validation
 
 - Confirm the target environment includes the Alembic migration
-  `apps/api/migrations/versions/0002_runs_tables.py`.
-- Run `npm run ci` locally and ensure the backend image builds with the new
+  `apps/ade-api/migrations/versions/0002_runs_tables.py`.
+- Run `ade ci` locally and ensure the backend image builds with the new
   FastAPI routers mounted (`/api/v1/configs/{config_id}/runs`, `/api/v1/runs/...`).
 - Review `docs/ade_runs_api_spec.md#manual-qa-checklist` and run at least
   one streaming and one non-streaming scenario against staging.
@@ -29,7 +29,7 @@ flags, and rollback considerations.
 1. Apply database migrations.
 2. Deploy the updated API container.
 3. Verify health probes and log output for the new router registration
-   (`apps.api.app.features.runs.router`).
+   (`ade_api.features.runs.router`).
 4. Trigger a dry-run execution (`dry_run=true`) to verify streaming events
    and database persistence.
 5. Notify frontend teams that the API is live so they can schedule their
