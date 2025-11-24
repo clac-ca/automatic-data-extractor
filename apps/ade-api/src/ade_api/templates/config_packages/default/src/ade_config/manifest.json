@@ -1,26 +1,82 @@
 {
-  "schema_version": "ade.manifest@1",
-  "script_api": 1,
-  "config": {
-    "display_name": "ADE Config Package"
+  "script_api_version": "1",
+  "info": {
+    "schema": "ade.manifest/v1.0",
+    "title": "Default ADE Workspace Config",
+    "version": "0.1.0",
+    "description": "Starter config that detects a simple person/member schema."
+  },
+  "env": {
+    "LOCALE": "en-CA",
+    "DATE_FMT": "%Y-%m-%d"
   },
   "engine": {
     "defaults": {
-      "detector_sample_size": 64,
-      "mapping_score_threshold": 0.0
+      "timeout_ms": 180000,
+      "memory_mb": 384,
+      "runtime_network_access": false,
+      "mapping_score_threshold": 0.35,
+      "detector_sample_size": 64
     },
     "writer": {
+      "mode": "row_streaming",
       "append_unmapped_columns": true,
-      "unmapped_prefix": "raw_"
+      "unmapped_prefix": "raw_",
+      "output_sheet": "Normalized"
     }
+  },
+  "hooks": {
+    "on_run_start": [
+      { "script": "hooks/on_run_start.py" }
+    ],
+    "on_after_extract": [
+      { "script": "hooks/on_after_extract.py" }
+    ],
+    "on_after_mapping": [
+      { "script": "hooks/on_after_mapping.py" }
+    ],
+    "on_before_save": [
+      { "script": "hooks/on_before_save.py" }
+    ],
+    "on_run_end": [
+      { "script": "hooks/on_run_end.py" }
+    ]
   },
   "columns": {
     "order": ["member_id", "email", "first_name", "last_name"],
     "meta": {
-      "member_id":  { "label": "Member ID",  "hidden": false },
-      "email":      { "label": "Email",      "hidden": false },
-      "first_name": { "label": "First Name", "hidden": false },
-      "last_name":  { "label": "Last Name",  "hidden": false }
+      "member_id": {
+        "label": "Member ID",
+        "script": "column_detectors/member_id.py",
+        "required": true,
+        "enabled": true,
+        "synonyms": ["member id", "member#", "member no", "member number"],
+        "type_hint": "string"
+      },
+      "email": {
+        "label": "Email",
+        "script": "column_detectors/email.py",
+        "required": true,
+        "enabled": true,
+        "synonyms": ["email", "email address", "e-mail"],
+        "type_hint": "string"
+      },
+      "first_name": {
+        "label": "First Name",
+        "script": "column_detectors/first_name.py",
+        "required": false,
+        "enabled": true,
+        "synonyms": ["first name", "given name", "fname"],
+        "type_hint": "string"
+      },
+      "last_name": {
+        "label": "Last Name",
+        "script": "column_detectors/last_name.py",
+        "required": false,
+        "enabled": true,
+        "synonyms": ["last name", "surname", "family name", "lname"],
+        "type_hint": "string"
+      }
     }
   }
 }

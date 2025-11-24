@@ -17,7 +17,7 @@ This document describes the **architecture**, **folder structure**, **core types
 At runtime, inside a **pre‑built virtual environment**:
 
 1. The engine loads a versioned **config package** (`ade_config`) with:
-   - a JSON/YAML **manifest** (fields, writer settings, hooks, env)
+   - a JSON/YAML **manifest** (fields, writer settings, hooks)
    - **row detectors** (table finding)
    - **column detectors** (field recognition)
    - **transforms** & **validators**
@@ -69,7 +69,7 @@ The deployment model is:
     - reads `input.xlsx` (or multiple inputs, if provided),
     - imports `ade_config` and reads its `manifest.json`,
     - runs the pipeline once for that call,
-    - writes `normalized.xlsx`, `artifact.json`, `events.ndjson` to the given output/logs dirs.
+    - writes the normalized workbook (e.g., `normalized.xlsx`), `artifact.json`, `events.ndjson` to the given output/logs dirs.
 
 The **engine does not know or care about backend job IDs**. It only needs:
 

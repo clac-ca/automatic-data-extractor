@@ -1,43 +1,35 @@
 # ---------------------------------------------------------------------------
 # ADE Config Package — pyproject.toml
 # ---------------------------------------------------------------------------
-# This file defines how your ADE config package is built and installed.
-# The engine installs this package into an isolated environment before running
-# your detectors, transformations, and hooks — so any dependencies you list
-# here will automatically be available at runtime.
+# This defines how your ADE config package is built and installed.
+#
+# The ADE backend builds a venv per config, installs `ade_engine` and this
+# package, and then runs the engine inside that venv. Any dependencies listed
+# here will be available to your detectors / transforms / hooks.
 # ---------------------------------------------------------------------------
 
 [build-system]
-# These are needed to build the package into a wheel (.whl)
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-# Keep this name static — only one config package is installed per environment.
+# Keep the name stable; the import path for the config code is always
+# `ade_config`, regardless of the project name here.
 name = "ade-config"
 version = "0.1.0"
-
-# Python 3.11+ is required for compatibility with the ADE runtime.
+description = "Default ADE config package template"
 requires-python = ">=3.11"
 
-# Add any extra libraries your config needs here.
-# They’ll be installed automatically during the build process.
-# For example:
+# Add any extra libraries your config needs here. They will be installed
+# into the same venv as `ade_engine`.
+# Example:
 # dependencies = [
-#   "pandas>=2.2",
-#   "openpyxl>=3.1",
 #   "python-dateutil>=2.9",
 # ]
-#
-# During a job run:
-#   - ADE creates a temporary virtual environment
-#   - Installs ade_engine + your config package (via pip)
-#   - All listed dependencies become importable inside your detectors/hooks
 
 [tool.setuptools]
-# Tell setuptools that the code lives under src/
 package-dir = { "" = "src" }
-include-package-data = true                # Include manifest.json and other files
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -45,5 +37,5 @@ include = ["ade_config*"]
 namespaces = true
 
 [tool.setuptools.package-data]
-# Ensure the manifest is bundled into the wheel (ade_engine references the manifest)
+# Ensure the manifest ships in the wheel (ade_engine loads it at runtime)
 ade_config = ["manifest.json"]
