@@ -21,421 +21,758 @@
 ```markdown
 # ADE Web
 
-ADE Web is the browser-based front-end for the Automatic Data Extractor (ADE) platform.
+ADE Web is the browser-based front‑end for the Automatic Data Extractor (ADE) platform.
 
 It gives two main personas a single place to work:
 
-- **Workspace owners / engineers** – create and evolve config packages (Python packages) that define how documents are processed, manage safe mode, and administer membership and SSO.
-- **End users / analysts** – upload documents, kick off extractions, monitor progress, inspect logs, and download structured outputs.
+- **Workspace owners / engineers** – define and evolve config packages (Python packages) that describe how documents are processed, manage safe mode, and administer workspaces, users, and SSO.
+- **End users / analysts** – upload documents, run extractions, monitor progress, inspect logs and telemetry, and download structured outputs.
 
-This document focuses on **what** the ADE Web application does and the concepts it exposes, not on the current backend wiring. Treat it as the product-level description for how the UI should behave in an ideal implementation.
+This document describes **what** ADE Web does and how it should behave in an ideal implementation. It is intentionally backend‑agnostic and should be treated as the product‑level specification for the ADE Web UI and its contracts with the backend.
+
+---
+
+## High‑level UX & layout
+
+ADE Web has two major “layers”:
+
+1. **Workspace directory** – finding and creating workspaces.
+2. **Workspace shell** – working inside a specific workspace (Documents, Jobs, Config Builder, Settings).
+
+Both layers share a consistent structure:
+
+- A **global top bar** with:
+  - Brand/context (e.g. “Workspace directory” or current workspace name on mobile),
+  - A **search box** (scope depends on context),
+  - A user avatar and menu (profile, sign‑out, etc.).
+- A main content area that adapts between desktop and mobile.
+
+### Workspace directory layout
+
+The **Workspace directory** (`/workspaces`) is the entry point after sign‑in:
+
+- Top bar brand:
+  - “Workspace directory”
+  - Subtitle “Automatic Data Extractor”.
+- A **search box** for workspaces:
+  - Keyboard shortcut hint (e.g. `⌘K` / `Ctrl+K`),
+  - Suggestions (top matching workspaces),
+  - Pressing Enter jumps to the best match.
+- Optional **actions**:
+  - “Create workspace” for users with `Workspaces.Create` permission.
+- Main content:
+  - Either:
+    - An **empty state** inviting the user to create their first workspace, or
+    - A **card grid** of visible workspaces, each showing:
+      - Workspace name,
+      - Slug,
+      - A “Default” badge (for the user’s default workspace),
+      - The permissions the user has in that workspace (e.g. Owner, Runner, Viewer).
+
+A right‑hand side panel offers guidance:
+
+- **Workspace tips** (why multiple workspaces, how to structure them).
+- A **setup checklist** (invite admins, review configs before production, etc.).
+
+### Workspace shell layout
+
+Inside a workspace (`/workspaces/:workspaceId/...`), ADE Web presents a **workspace shell**:
+
+- **Left navigation (desktop)**:
+  - A workspace card showing initials, name, and “Switch workspace”.
+  - A collapsible primary nav, with items:
+    - Documents
+    - Jobs
+    - Config Builder
+    - Workspace Settings
+  - Collapse/expand state is persisted **per workspace**.
+
+- **Top bar**:
+  - On desktop:
+    - A search box whose **scope** depends on the current section:
+      - In **Documents**, the search box filters documents.
+      - Elsewhere, it searches within the workspace and lets you jump to sections.
+    - A user **Profile dropdown** (display name + email, sign‑out, etc.).
+  - On mobile:
+    - A **menu button** opens a slide‑in navigation panel for workspace sections.
+
+- **Main content**:
+  - The current section’s content (Documents, Jobs, Config Builder, Settings).
+  - A **safe mode banner** at the top of the content area when safe mode is active.
+  - A **notifications layer** (toasts) for feedback on actions.
+
+- **Immersive mode (Config Builder)**:
+  - Certain Config Builder routes use a full‑height, “workbench” layout.
+  - When the workbench is **maximised**, the workspace nav and top bar disappear to give a distraction‑free editing experience.
+  - An internal window state tracks when the workbench is maximised/minimised.
+
+On mobile, opening the workspace nav:
+
+- Shows a **slide‑in panel** with sections and workspace name.
+- Locks body scroll while the panel is open.
+- Lets you close with a close button, tapping outside, or navigating.
 
 ---
 
 ## Core concepts
 
-### Workspace
+### Workspaces
 
 A **workspace** is the primary unit of organisation in ADE:
 
 - Isolates **documents**, **runs**, **config packages**, and **access control**.
-- Has a **name** and stable **slug/ID** that appear in the UI and URLs.
-- Has exactly one **active config package version** at any point in time.
-- Is governed by **workspace-level safe mode** and **role-based access control (RBAC)**.
+- Has a human‑readable **name** and stable **slug/ID** that appear in the UI and URLs.
+- Has **one active config version** at any point for “normal” runs.
+- Is governed by **safe mode** and **role‑based access control (RBAC)**.
+- May have a **default** flag for each user, used as their preferred workspace.
 
-Users sign in, then select a workspace to begin working.
+Users sign in, land on the **Workspace directory**, and then select (or create) a workspace before they can work with documents or configs.
 
 ---
 
 ### Documents
 
-A **document** is any input you feed into ADE (for example, a spreadsheet, CSV export, or other supported file type) that you want to extract structured data from.
+A **document** is any input you feed into ADE:
+
+- Typically:
+  - Spreadsheets (e.g., XLSX),
+  - CSV/TSV files,
+  - Other supported tabular or semi‑structured formats.
 
 Per workspace:
 
-- Documents are **uploaded** and owned by that workspace.
+- Documents are **uploaded into** and **owned by** that workspace.
 - Each document has:
-  - A **name** (usually the filename),
-  - **Type** (e.g., Excel, CSV),
-  - Optional **tags** (e.g., client name, reporting period),
-  - A history of **runs** associated with it.
-- Documents are **immutable inputs**; runs refer back to the original upload. If you upload a new version, it becomes a new document.
+  - A **name** (often the filename),
+  - A **type** (e.g., XLSX, CSV),
+  - Optional **tags** (e.g., client, period),
+  - A history of **runs**.
+- Documents are **immutable inputs**:
+  - Uploading a revised file creates a **new document**.
+  - Runs always refer to the original upload.
 
 ---
 
 ### Runs (jobs)
 
-A **run** is a single execution of ADE against a document using a particular config package version.
+A **run** is a single execution of ADE against a specific input using a specific config version.
 
 Conceptually:
 
-- Runs are always **scoped to a document** and **belong to a workspace**.
-- Each run tracks:
-  - **Status** (queued → running → succeeded / failed / cancelled),
-  - **Timestamps** (created / started / completed),
-  - **Who** triggered it,
-  - The **config version** used,
-  - Links to **structured output artifacts** (CSV/JSON/other),
-  - **Telemetry and logs** (streamed as NDJSON events from the backend).
-- Runs are visible:
-  - Inline on the **Documents** screen (per-document focus),
-  - On the **Jobs** screen (workspace-wide view and auditing).
+- Runs are always **scoped to a workspace**, and generally to a **document**.
+- Each run includes:
+  - **Status**: `queued → running → succeeded / failed / canceled`,
+  - **Timestamps**: created / started / completed,
+  - **Triggering user**,
+  - **Config version** used,
+  - Links to **output artifacts** (CSV/JSON/other),
+  - **Logs and telemetry** (via NDJSON streams).
 
-In the ideal backend, ADE exposes runs via a **streaming API** (NDJSON), and the UI subscribes to updates so progress and logs appear in real time.
+Runs surface in:
+
+- **Documents** (per‑document history and details),
+- **Jobs** (workspace‑wide monitoring and auditing).
+
+The backend exposes **streaming APIs** (NDJSON):
+
+- ADE Web consumes these streams so that status, logs, and telemetry update **in real time** while a job is running.
+- Completed runs can replay the same event stream for consistent run history.
 
 ---
 
-### Config packages & config versions
+### Config packages & versions
 
-A **config package** is a Python package that defines how ADE should interpret, validate, and extract data from documents for a given workspace.
+A **config package** is a Python package that tells ADE how to interpret, validate, and extract data for a workspace.
 
-Conceptually:
+Key ideas:
 
-- Each workspace has one **config package** (a directory tree of Python modules and configuration files).
-- The package is versioned into **config versions**, each of which is immutable once activated.
-- A config version has a **status**:
-  - **Draft**
-    - The default state when a version is created or cloned.
-    - Fully editable in the Config Builder (files, metadata, etc.).
-    - Can be validated and used for **test runs**.
-    - Not used for standard end-user runs until activated.
-  - **Active**
-    - Exactly **one active config version per workspace**.
-    - Read-only in the UI (to ensure reproducibility).
-    - Used for all new regular document runs in that workspace.
-  - **Inactive**
-    - Previously active versions.
-    - Remain visible for **history, audits, and rollback**.
+- A workspace may hold **one or more config packages** (e.g. pipelines, client variants).
+- Each config package is versioned into **config versions**.
+- At any time, the workspace has **one active config version** that is used for standard runs.
+- Each config version comprises:
+  - Python package code,
+  - Configuration and schema files,
+  - A **manifest** describing output columns and table‑level behaviour,
+  - Optional scripts (transforms, validators, helpers).
 
-#### Version lifecycle (ideal behaviour)
+For simplicity, user‑facing docs emphasise three statuses:
 
-- Start with a **Draft**:
-  - Create a new draft version from scratch or by cloning an existing version.
-  - Edit code and configuration freely.
-  - Run **builds, validations, and test runs** against sample documents.
-- When ready, **Activate**:
-  - Marks the draft as the **single Active** version for its workspace.
-  - Automatically moves the previously active version (if any) to **Inactive**.
-  - New document runs use this active version.
-- To **evolve** behaviour:
-  - Clone the active (or an older inactive) version into a **new Draft**.
-  - Make changes, validate, and activate.
-- To **rollback**:
-  - Identify the previously working inactive version.
-  - Clone it into a new draft, optionally make adjustments.
-  - Activate the new draft; the current active version becomes inactive.
+- **Draft**
+  - Editable in the Config Builder.
+  - Supports:
+    - File/script editing,
+    - Manifest editing,
+    - Builds, validations, test runs.
+- **Active**
+  - Exactly **one active version per workspace** for “normal” runs.
+  - Treated as **read‑only** in the UI.
+- **Inactive**
+  - Older versions, kept for history and rollback.
+  - Not used for new runs unless cloned into a new draft.
 
-This lifecycle gives you a clear, audit-friendly history while enforcing a single source of truth per workspace.
+Internally, backends may support extra states (published, archived, deleted) but the primary UI contract is the `draft → active → inactive` lifecycle.
+
+---
+
+### Manifest & schema
+
+Each config version has a **manifest** that describes the expected outputs and table behaviour:
+
+- **Columns**:
+  - `key` – stable identifier,
+  - `label` – human‑friendly name,
+  - `path` – where the value comes from in extracted data,
+  - `ordinal` – ordering,
+  - `required` – whether the column must be present,
+  - `enabled` – whether the column is included in outputs,
+  - `depends_on` – optional dependencies on other columns.
+- **Table section**:
+  - Optional `transform` script path,
+  - Optional `validators` script path.
+
+ADE Web:
+
+- Parses the manifest into a structured representation,
+- Surfaces it in the Config Builder for:
+  - Column reordering,
+  - Toggling enabled/disabled,
+  - Toggling required flags,
+  - Inspecting or editing transform/validator hooks.
+- Sends **manifest patches** to the backend, preserving unknown fields so forward compatibility is maintained.
 
 ---
 
 ### Safe mode
 
-ADE includes a **safe mode** mechanism that acts as a kill switch for write/execution operations:
+ADE includes a **safe mode** mechanism as a kill switch for engine execution:
 
-- When **safe mode is enabled**, new runs and build/test executions are disabled, while read-only operations (viewing documents, logs, outputs) continue to work.
-- Safe mode is controlled by:
-  - **System-level** status (set by platform operators),
-  - Optional **workspace-level overrides** (for workspace owners), where allowed.
-- The UI surfaces safe mode in multiple places:
-  - A **banner** or status strip so it’s always visible when enabled,
-  - Disabled actions (Run, Build, Test Run) with explanatory tooltips,
-  - Controls in **Workspace Settings** (for authorised roles).
+- When **safe mode is enabled**:
+  - New runs, builds, and test runs are blocked.
+  - Read‑only operations still work:
+    - Viewing documents,
+    - Inspecting runs and logs,
+    - Downloading existing artifacts.
+- Safe mode is **system‑scoped**, with an optional extension to workspace scope (ideal behaviour):
+  - Backends expose a system‑wide `enabled` flag and human‑readable `detail` message.
+  - Workspace settings may surface additional per‑workspace controls.
+
+In the UI:
+
+- A **global banner** shows when safe mode is active, reusing the backend’s message or a sensible default.
+- Workspace‑level actions that execute the engine (Run, Build, Test, Activate) are disabled with tooltips explaining why.
+- Authorised users see safe mode controls under Settings.
 
 ---
 
 ### Roles & permissions
 
-ADE Web is designed around workspace-level RBAC:
+ADE Web is designed around **workspace‑scoped RBAC**:
 
-- Users are assigned roles in each workspace (for example: Owner, Maintainer, Member/Runner, Viewer).
-- Roles control what the UI enables:
-  - Who can toggle **safe mode**,
-  - Who can edit and activate **config versions**,
-  - Who can **invite** members and change roles,
-  - Who can run **builds/test runs** and **document runs**,
-  - Who has **read-only** access.
+- Users have roles per workspace (e.g. Owner, Maintainer, Runner, Viewer).
+- Roles govern capabilities such as:
+  - Creating/deleting **workspaces**,
+  - Managing **members** and roles,
+  - Toggling **safe mode**,
+  - Editing and activating **config versions**,
+  - Running **builds/test runs**,
+  - Triggering **document runs**,
+  - Viewing **logs and telemetry**.
 
-The UI assumes the backend enforces these permissions; the front-end mirrors them by disabling or hiding actions accordingly.
+Permissions are enforced by the backend; ADE Web only:
 
----
-
-### Authentication & SSO
-
-Authentication is handled centrally by ADE’s API:
-
-- Supports:
-  - Standard login (for local or simple deployments).
-  - **Single Sign-On (SSO)** via an identity provider (e.g., Azure AD, Okta) when configured.
-- ADE Web:
-  - Redirects unauthenticated users to the login/SSO entry point.
-  - Handles the **auth callback** and stores the session.
-  - Reads the current user’s profile and accessible workspaces.
-- For local development, ADE can be configured to **bypass authentication** (e.g., via environment flags) to speed up frontend and workflow development.
+- Reads the user’s roles/permissions,
+- Enables/disables or hides UI controls accordingly,
+- Uses feature flags like `Workspaces.Create` or `Users.Read.All` as hints for what to show.
 
 ---
 
-## Application overview
+### Authentication, SSO & first‑time setup
 
-At a high level, ADE Web is structured as:
+Authentication is handled centrally by ADE’s backend.
 
-1. **Sign-in & workspace selection**
-   - User signs in (directly or via SSO).
-   - They see a list of workspaces they belong to and choose one.
+#### First‑run setup
 
-2. **Workspace shell**
-   - Once inside a workspace, they see a full-screen layout with:
-     - **Top area**: workspace name, environment, optional system status banners and safe mode alerts.
-     - **Sidebar navigation**: links to the key sections:
-       - Overview (optional, high-level workspace summary),
-       - **Documents**,
-       - **Jobs**,
-       - **Config Builder**,
-       - **Settings**.
+On a fresh deployment:
 
-3. **Section content**
-   - The main content area changes based on the current section, but always uses a consistent design language (spacing, typography, and components) to keep the experience coherent.
+- A **Setup status** endpoint indicates that setup is required.
+- ADE Web routes users to `/setup` where they:
+  - Configure the first admin account,
+  - Optionally configure or select SSO providers,
+  - Complete the initial bootstrap.
+- After successful setup, ADE Web:
+  - Establishes a session,
+  - Redirects to `/workspaces` (or another safe default).
+
+If setup is not required, `/setup` behaves like a protected route and redirects to the app.
+
+#### Login & SSO
+
+Normal sign‑in uses `/login`:
+
+- ADE Web calls an **auth providers** API to list:
+  - Local login (if enabled),
+  - SSO providers (id + label + optional icon),
+  - Whether `force_sso` is true.
+- When `force_sso` is true:
+  - The UI either hides the local form or drives directly into SSO.
+- Unaudited or unsafe `redirectTo` parameters are sanitised:
+  - Only internal, single‑origin paths are honoured.
+  - Auth callbacks and setup flows also sanitise redirect destinations.
+
+Redirect behaviour:
+
+1. Use a `return_to` field from the session (if set),
+2. Else, use a validated `redirectTo` query parameter from the URL,
+3. Else, send the user to the default app home (`/workspaces`).
 
 ---
 
-## Documents section
+## Routes & navigation model
 
-The **Documents** section is where end users spend most of their time.
+ADE Web runs as a **single‑page app** with a lightweight custom navigation layer.
 
-### Document list
+### Top‑level routes
 
-- Shows a **paginated, filterable table** of all documents in the workspace.
-- Example columns:
-  - Name / filename,
-  - Type (e.g., XLSX, CSV),
-  - Tags or categories,
-  - Last run status and timestamp,
-  - Who last ran it.
-- Filtering and search:
-  - By **text** (name),
-  - By **type** or **tags**,
-  - By last run status or timeframe (ideal behaviour).
+- `/` – Entry point; decides where to send the user (login, setup, or app).
+- `/login` – Sign‑in and auth provider selection.
+- `/auth/callback` – Auth provider callback handler.
+- `/setup` – First‑time setup flow.
+- `/logout` – Logout screen.
+- `/workspaces` – Workspace directory.
+- `/workspaces/new` – Create workspace.
+- `/workspaces/:workspaceId` – Workspace shell (Documents, Jobs, Config Builder, Settings).
+- Any other path – Not found.
 
-### Uploading documents
+Within `/workspaces/:workspaceId`, the first path segment after the workspace ID selects the section:
 
-- The UI provides an **“Upload”** action (button and/or drag-and-drop area).
-- Users can:
-  - Upload one or more new files.
-  - See upload progress and any validation errors (unsupported file type, size limits, etc.).
-- Once an upload completes, the new document appears in the table and is ready to be run.
+- `/documents` – Documents list and document details.
+- `/jobs` – Jobs list.
+- `/config-builder` – Config overview and details:
+  - `/config-builder/:configId` – Config details (metadata, versions, etc.).
+  - `/config-builder/:configId/editor` – Full workbench editor for that config.
+- `/settings` – Workspace settings.
+- `/overview` – Optional overview/summary section.
+- Legacy `/configs/...` paths are redirected into `/config-builder/...`.
 
-### Document details panel
+### Navigation behaviour
 
-Selecting a document opens a **details panel** (often in a side pane):
+ADE Web uses a `NavProvider` based on the browser `history` API:
 
-- Shows document metadata:
-  - Name, type, size, uploaded by, uploaded at.
-- Shows **tags** and other editable metadata (where permitted).
-- Shows the **most recent run**:
+- `Link` intercepts clicks and performs SPA navigation unless the user explicitly opens links in a new tab/window (Ctrl/⌘/Shift/Alt clicks).
+- `NavLink` knows whether it is “active” (either exact match or prefix match) and can render:
+  - Different classes,
+  - Different children,
+  - Based on the `isActive` flag.
+
+A **navigation blocker** mechanism allows screens to intercept transitions:
+
+- For example, the Config Builder can register a blocker when there are unsaved edits.
+- Navigation attempts (including back/forward) are turned into “intents” that blockers can veto.
+- If vetoed, the app returns the user to the current URL.
+
+---
+
+### URL state & search parameters
+
+ADE Web encodes important state into the URL to make views shareable and recoverable on refresh.
+
+Generic helpers:
+
+- Convert JS objects or tuples into `URLSearchParams`.
+- Provide utilities to:
+  - Read a single parameter by key,
+  - Apply a patch (set/remove params) and build a new URL,
+  - Override search params in nested components.
+
+Important uses of URL state:
+
+- **Documents list** – for example:
+  - `q` – free‑text search across document names.
+  - Pagination and sorting parameters (ideal behaviour).
+- **Config Builder** – see below.
+- **Auth flows** – `redirectTo` for post‑login routing.
+
+#### Config Builder search state
+
+The Config Builder persists its layout and file selection in the URL:
+
+- `tab` – primary tab (currently `editor`).
+- `pane` – bottom panel (`console` or `validation`/`problems`).
+- `console` – whether the bottom panel is `open` or `closed`.
+- `view` – layout mode:
+  - `editor` – editor‑only,
+  - `split` – editor + console,
+  - `zen` – minimal, editor‑focused view.
+- `file` (or legacy `path`) – currently open file or script.
+
+Helpers:
+
+- **Read**: parse all relevant parameters into a `ConfigBuilderSearchState`, with flags indicating which were explicitly present.
+- **Merge**: apply a patch to the current state and serialise to the URL, only persisting non‑default values.
+
+This makes it possible to:
+
+- Bookmark a specific config version and file with the console open in validation mode.
+- Share a URL that opens the Builder in exactly the layout you see.
+- Refresh without losing your place.
+
+---
+
+## Workspace directory & creation
+
+### Workspace directory (`/workspaces`)
+
+The workspace directory presents:
+
+- A **search box** for workspaces:
+  - Filters workspaces by name and slug.
+  - Keyboard shortcut (platform‑aware) to focus the search.
+  - Suggestions for the most relevant workspaces; selecting a suggestion jumps to that workspace.
+- Optional **“Create workspace”** button:
+  - Shown only to users with the right permission (e.g. `Workspaces.Create`).
+
+Main content varies depending on data:
+
+- **No workspaces & can create**:
+  - An empty‑state card encouraging workspace creation.
+- **No workspaces & cannot create**:
+  - An informational empty state explaining that the user needs to be added to a workspace.
+- **Workspaces available**:
+  - A **card grid**, each card linking to:
+    - `/workspaces/:id/documents` (the default workspace section).
+  - Each card shows:
+    - Name,
+    - Slug,
+    - “Default” badge (if applicable),
+    - A comma‑separated list of permissions/roles.
+
+### Create workspace (`/workspaces/new`)
+
+The **Create workspace** form is available to authenticated users (and only fully unlocked for users with certain permissions).
+
+Form fields:
+
+- **Workspace name**:
+  - Required, length‑limited.
+- **Workspace slug**:
+  - Required, lowercase and URL‑safe.
+  - Automatically **slugified from the name** until the slug field is manually edited:
+    - Lowercases the name,
+    - Replaces non‑alphanumeric characters with `-`,
+    - Trims leading/trailing dashes,
+    - Enforces a max length.
+- **Workspace owner** (optional):
+  - Only shown when the user has permission to read the user directory (e.g. `Users.Read.All`).
+  - Defaults to the current user.
+  - Dropdown of users (paged with a “Load more users…” button).
+  - If the owner field is available and cleared, the form will require an owner to be selected.
+
+Validation:
+
+- Client‑side validation:
+  - Name and slug required,
+  - Slug pattern (lowercase letters, numbers, dashes).
+- Server‑side validation:
+  - Name and slug uniqueness errors are displayed inline,
+  - Any field‑specific API errors are mapped to their respective inputs,
+  - A generic root error covers non‑field issues.
+
+On successful creation:
+
+- The user is redirected to `/workspaces/:id` (which immediately normalises to the workspace’s default section).
+
+---
+
+## Workspace shell sections
+
+Within a workspace, the shell is driven by the URL and the workspace nav.
+
+### Documents
+
+The **Documents** section is where analysts and operators run extractions.
+
+#### Document list
+
+A **paginated, filterable table** of documents:
+
+- Columns:
+  - Name,
+  - Type,
+  - Tags,
+  - Last run status,
+  - Last run time,
+  - Last run triggered by.
+- Filters and search:
+  - Free‑text search (driven by `q` query param),
+  - Type/tag filters (ideal behaviour),
+  - Time‑window filter for “recently used” documents.
+
+The top‑bar search switches to a **document‑scoped search** when you’re on the Documents section.
+
+#### Uploading documents
+
+From the Documents section, users can:
+
+- Upload via an **Upload** button and/or drag‑and‑drop area.
+- See:
+  - Upload progress,
+  - Errors for unsupported types, size limits, or server errors.
+
+On success:
+
+- A new document is created in the workspace.
+- It appears in the table.
+- It becomes immediately eligible for runs.
+
+#### Document details & runs
+
+Selecting a document opens a **details view** (panel or dedicated screen) showing:
+
+- Metadata:
+  - Name, type, size,
+  - Uploaded by, uploaded at,
+  - Tags / other editable metadata.
+- Latest run status:
   - Status, duration,
-  - Which config version was used,
-  - Quick links to output artifacts.
-- Includes primary actions:
-  - **Run** – start a new extraction run,
-  - **View runs** – open the full run history drawer.
+  - Config version used,
+  - Output links.
 
-When safe mode is enabled, the **Run** button is disabled and explains why.
+Actions:
 
-### Running a document
+- **Run** – start an extraction run for this document.
+- **View runs** – open a per‑document run history view (Document Runs Drawer).
 
-When the user starts a run:
+Safe mode:
 
-- The UI asks for required parameters:
-  - Which **config version** to use (defaults to active),
-  - Any specific options (worksheet selection, scenario, etc., depending on backend capabilities).
-- The run transitions to **queued**, then **running**:
-  - Status updates are streamed from the backend.
-  - The document’s row and details panel reflect live progress.
+- When safe mode is active, the **Run** action is disabled.
+- Tooltips and inline messaging explain why.
 
-### Document Runs Drawer
+#### Document Runs Drawer
 
-The **Document Runs Drawer** is a per-document run history:
+The **Document Runs Drawer** shows recent runs for the selected document:
 
-- Opens from the document details (“View runs” or similar).
-- Shows a list of runs for that document, newest first.
-- For each run:
-  - Status, timestamps, user, config version.
-- The drawer:
-  - Defaults to the **latest run** so users immediately see the most relevant results.
-  - Shows:
-    - **Logs/console output**, streamed from the backend,
-    - **Telemetry** (e.g., row counts, warnings, errors),
-    - Links to **artifacts/output files** for download.
+- Each run shows:
+  - Status,
+  - Start/complete times,
+  - Triggering user,
+  - Config version used.
+- Selecting a run shows:
+  - Live or replayed logs (NDJSON),
+  - Telemetry (e.g. rows processed, warnings),
+  - Links to output files.
 
-This drawer turns ADE Web into an end-to-end console for that document: you can start a job, watch it finish, inspect issues, and download results without leaving the screen.
+This drawer is designed as a **single console** for that document: upload, run, watch, debug, and download, all in one place.
 
 ---
 
-## Jobs section
+### Jobs
 
-The **Jobs** section provides a workspace-wide view of all runs (jobs), regardless of which document they came from.
+The **Jobs** section is a workspace‑wide view of recent and running jobs.
 
-### Jobs list
+#### Jobs list
 
-- Presents a **chronological table** of runs:
-  - Run/job identifier,
+A **chronological table** of runs:
+
+- Columns:
+  - Run ID,
   - Document,
   - Status,
-  - Started / completed times,
+  - Start/completion timestamps,
   - Duration,
-  - Triggered by,
-  - Config version used.
-- Supports filtering by:
-  - Status (running, succeeded, failed),
-  - Date/time window,
-  - Document or config version,
+  - User,
+  - Config version.
+- Filters:
+  - Status (running/succeeded/failed/canceled),
+  - Time window,
+  - Document,
+  - Config version,
   - User.
 
-This view is designed for **operators and advanced users** who need to monitor the whole workspace, not just one document at a time.
+#### Job details & logs
 
-### Job details & logs
+Selecting a job opens a detailed view:
 
-Selecting a job:
+- **Streamed logs**:
+  - NDJSON events, interleaving log lines, run lifecycle events, and telemetry.
+- **Telemetry**:
+  - Structured counters (rows processed, warnings, etc.).
+- **Artifacts**:
+  - Listing and downloads for output files.
 
-- Opens a detailed view or drawer:
-  - The same **streamed logs** the engine produces (via NDJSON event stream),
-  - Structured telemetry (counters, timings, warnings),
-  - Output artifacts and result downloads.
-- Helps with:
-  - Debugging failures,
-  - Auditing who ran what and when,
-  - Generating evidence for incident reports.
+This view supports:
 
-The Jobs section may also offer **CSV export** or similar so operations teams can slice and analyse job histories outside ADE.
+- Incident response and debugging,
+- Auditing,
+- Export of job summaries (ideal behaviour).
 
 ---
 
-## Config Builder
+### Config Builder
 
-The **Config Builder** is a first-class part of ADE Web. It is designed to feel like a slim, browser-based **VS Code** experience focused on config packages.
+The **Config Builder** is a first‑class IDE‑style environment inside ADE Web.
 
-### Goals
+#### Goals
 
-- Make it obvious that a **config package is just a Python package**.
-- Let workspace owners modify config packages with minimal context switching from their usual IDE.
-- Provide an integrated environment to:
-  - Edit code and configuration,
-  - Run builds/validations,
-  - Kick off test runs,
-  - Watch logs and telemetry inline.
+- Make it obvious that a **config is a Python package**.
+- Provide a familiar IDE layout:
+  - Explorer, editor, inspector, console.
+- Support an integrated workflow:
+  - Edit → Build/Validate → Test → Inspect → Activate.
 
-### Layout: VS Code–inspired workbench
+#### Layout
 
-The Config Builder uses a multi-panel workbench:
+The Config Builder workbench has four main areas:
 
 1. **Explorer (left)**
-   - Shows the config package as a **filesystem-like tree**:
-     - Python modules (`__init__.py`, `models.py`, etc.),
-     - Configuration files (YAML/JSON),
-     - Supporting assets.
-   - Supports:
-     - Creating, renaming, and deleting files and folders (for drafts),
-     - Switching between config versions.
+   - Shows the config package file tree:
+     - Python modules,
+     - Config files,
+     - Scripts referenced from the manifest,
+     - Assets and helpers.
+   - For draft versions:
+     - Create, rename, and delete files and folders.
+   - Switch between config packages and config versions.
 
 2. **Editor (center)**
-   - A code editor that behaves like a modern IDE:
-     - Multiple open tabs,
-     - Keyboard shortcuts for navigation and save,
-     - Syntax highlighting and sensible defaults for Python and config formats.
-   - Editing is allowed only for **draft** versions.
-   - Tabs are persisted so that refreshing the page does not lose the current editing context.
+   - Multi‑tab code editor with:
+     - Syntax highlighting,
+     - Save shortcuts,
+     - Keyboard navigation.
+   - Only **draft** versions are editable.
+   - Uses optimistic concurrency with ETags (or equivalent) to avoid overwrites.
 
 3. **Inspector (right)**
-   - Shows metadata about the selected config version:
-     - Name, version identifier,
+   - Shows config and version metadata:
+     - Name, ID, semantic version,
      - Status (draft/active/inactive),
-     - Created / activated timestamps,
+     - Created/updated/activated at,
      - Who created/activated it.
-   - Includes actions:
-     - **Activate** (when viewing a draft),
-     - **Clone** (when viewing active or inactive versions),
-     - **Delete** (where allowed).
+   - Actions:
+     - Activate draft,
+     - Clone versions (from active/inactive),
+     - Archive/restore (ideal behaviour).
+   - Manifest view:
+     - Column list with key/label/required/enabled/order,
+     - Table transform/validator references.
 
-4. **Console / Terminal (bottom)**
-   - A terminal-like panel that receives **streamed events** from the backend:
-     - Build and validation logs,
-     - Test-run output,
-     - Errors and warnings.
-   - Feels like a VS Code integrated terminal:
-     -Separate tabs (e.g., “Build”, “Test run”, possibly a raw “Terminal”-style log).
-     - Messages appear incrementally as ADE streams NDJSON events.
+4. **Console (bottom)**
+   - Streams:
+     - Build steps and results,
+     - Validation errors,
+     - Test‑run logs and telemetry.
+   - Tabbed (e.g. “Build”, “Test run”, “Validation”).
+   - Open/closed state encoded in the URL.
 
-### Working with config versions
+#### View modes & URL state
+
+The workbench supports layout modes:
+
+- `editor` – standard view,
+- `split` – editor + console,
+- `zen` – editor‑focused.
+
+Combined with `pane` (`console`/`validation`) and `console` (`open`/`closed`), these settings are persisted in the URL via query parameters, along with the current `file`. This enables:
+
+- Deep linking into a specific file and console state,
+- Stable state across browser refreshes,
+- Shareable Builder URLs.
+
+#### Versions, builds & test runs
 
 From the Config Builder, workspace owners can:
 
-- **Create drafts**
-  - “New config version” (empty or from template),
-  - “Clone from current active” or from an older inactive version (for regression or rollback tweaks).
+- **Create drafts**:
+  - New blank versions from templates,
+  - Clones of the current active version (for iteration),
+  - Clones of inactive versions (for rollback).
+- **Edit drafts**:
+  - Modify files/scripts/manifest.
+- **Validate & build**:
+  - Trigger a build pipeline:
+    - Install dependencies,
+    - Import config modules,
+    - Gather metadata.
+  - Watch NDJSON events in the console.
+- **Run tests**:
+  - Run draft versions against sample documents:
+    - Optional sheet selection and options (`dry_run`, `validate_only`).
+  - Stream logs and telemetry into the console.
+- **Activate**:
+  - Promote a validated draft to **Active**.
+  - Demote the previous active version to **Inactive**.
 
-- **Edit drafts**
-  - Modify Python modules, config files, and metadata.
-  - Perform refactorings just as they would in a local IDE.
+#### Navigation guards & hotkeys
 
-- **Validate and test**
-  - Trigger **builds/validations**:
-    - The console shows streaming output (success, tracebacks, validation errors).
-  - Trigger **test runs** against sample documents:
-    - Use the same run plumbing as the main Documents tab.
-    - Provide a quick loop: edit → test → adjust → test again.
-
-- **Activate**
-  - When a draft is ready, owners activate it:
-    - The draft becomes the new **Active** version.
-    - The previous active becomes **Inactive**.
-  - The rest of ADE Web (Documents and Jobs) automatically routes new runs through this active version.
-
-This creates a tight, IDE-like workflow inside the browser, so workspace owners can stay within ADE Web for most of their config work.
+- **Navigation blockers**:
+  - When a draft has unsaved changes, Builder screens can register a blocker.
+  - Attempts to navigate away trigger a confirmation prompt (ideal behaviour).
+- **Keyboard shortcuts**:
+  - Platform‑aware key hints (e.g. `⌘S` vs `Ctrl+S`).
+  - Support for chords and sequences for:
+    - Saving,
+    - Toggling console,
+    - Navigating files,
+    - Opening command/search palettes (ideal behaviour).
 
 ---
 
-## Workspace Settings
+### Workspace Settings
 
-The **Settings** section is where workspace owners and admins configure and operate the workspace.
+The **Workspace Settings** section holds workspace‑specific configuration.
 
-Typical subsections:
+Subsections typically include:
 
-### General settings
+- **General**
+  - Name and slug,
+  - Environment label (Production, Staging, Test),
+  - Workspace ID and other read‑only identifiers for automation.
+- **Authentication & SSO (workspace‑facing)**
+  - Information about which IdP(s) apply,
+  - Whether SSO is required,
+  - Guidance for users.
+- **Safe mode**
+  - Safe mode state and message,
+  - Controls for authorised roles (where allowed).
+  - Changes propagate to the global banner and disable engine‑invoking actions.
+- **Members & roles**
+  - Lists members (name, email, role, last activity),
+  - Supports:
+    - Inviting users by email,
+    - Changing roles,
+    - Removing members.
+  - Uses the central user directory and invitation APIs under the hood.
 
-- Workspace name and slug.
-- Environment indicators (e.g., production vs test).
-- Read-only IDs useful for automation or API clients.
+---
 
-### Authentication & SSO (workspace-facing)
+## Notifications & keyboard shortcuts
 
-While the core SSO setup lives on the backend/admin side, the workspace settings may surface:
+### Notifications
 
-- Which identity provider is used (when relevant),
-- SSO connection status indicators,
-- Helpful links or information (e.g., “Use your corporate SSO to sign in”).
+ADE Web uses a shared notifications system:
 
-### Safe mode controls
+- **Toasts**:
+  - Short‑lived notifications (e.g. “Run started”, “Config activated”).
+  - Can include intent (info, success, warning, danger) and optional actions.
+- **Banners**:
+  - Persistent, cross‑cutting notifications:
+    - Safe mode active,
+    - Backend connectivity issues,
+    - Setup required.
 
-For authorised roles, workspace settings provide:
+Notifications can be scoped and de‑duplicated so users are not overwhelmed by repeated messages.
 
-- **Safe mode toggles**:
-  - View current system-wide safe mode state.
-  - Optionally override or confirm workspace-level safe mode.
-- Clear messaging about the impact:
-  - When enabled: new runs, builds, and test runs are blocked across the workspace.
-  - Existing jobs continue to be visible but not restartable.
+### Keyboard shortcuts
 
-### Members & roles
+ADE Web supports keyboard shortcuts for power users:
 
-An admin-focused subsection to manage workspace membership:
+- Platform‑aware hints:
+  - `⌘K` on macOS, `Ctrl+K` on Windows/Linux.
+- Chords and sequences:
+  - Common actions like save, search, and navigate.
+- Respect for text inputs:
+  - Shortcuts are suppressed while typing in fields where appropriate.
 
-- List of members:
-  - Name, email, role, last activity.
-- Actions:
-  - **Invite** user by email (sends an invite, which on acceptance grants access).
-  - **Change role** for existing members.
-  - **Remove** user from the workspace.
-- Visual cues to clarify what each role can do (e.g., who can toggle safe mode, who can edit configs, who can only view).
+A small “shortcut hint” component is used in search boxes and other affordances to gently teach available hotkeys.
 
 ---
 
@@ -443,57 +780,114 @@ An admin-focused subsection to manage workspace membership:
 
 ### 1. Analyst running an extraction
 
-1. Sign in (via SSO or standard login).
-2. Select the appropriate workspace.
+1. Sign in via SSO or standard login.
+2. Land on **Workspaces**, pick a workspace.
 3. Go to **Documents**.
-4. Upload a new spreadsheet or select an existing one.
-5. Click **Run**, confirm options (if any), and start the run.
-6. Watch progress in the **Document Runs Drawer**:
-   - Observe logs and telemetry.
-   - Wait for status to reach “Succeeded” or investigate on “Failed”.
-7. Download output artifacts (e.g., CSV/JSON) from the drawer.
+4. Upload a spreadsheet or select an existing document.
+5. Click **Run**, choose config/version/options as needed, and confirm.
+6. Watch the run in the **Document Runs Drawer**:
+   - Live logs,
+   - Telemetry,
+   - Status updates.
+7. On success, download outputs from the same drawer.
 
 ### 2. Workspace owner rolling out a config change
 
-1. Sign in and open the workspace.
-2. Go to **Config Builder**.
-3. Clone the current active config into a **new Draft** version.
-4. Edit Python modules and config files in the **editor**.
-5. Run **builds/validations** and **test runs** from the integrated console until everything passes.
-6. Activate the draft:
-   - It becomes the only **Active** config version.
-   - The previous active moves to **Inactive**.
-7. Optionally inform end users that they can now rerun documents, or watch new runs in **Jobs**.
+1. Sign in and choose the workspace.
+2. Open **Config Builder**.
+3. Clone the active config into a **new Draft**.
+4. Edit Python modules, config files, and manifest.
+5. Run **builds/validations** and **test runs** until the draft is stable.
+6. **Activate** the draft:
+   - It becomes the active version,
+   - The previous active version becomes inactive.
+7. Monitor early runs in **Jobs**, and adjust if needed.
 
-### 3. Responding to an incident / doing a rollback
+### 3. Responding to an incident / rollback
 
-1. Notice repeated failures or issues in the **Jobs** view.
-2. Use **Jobs** and **Document Runs** to inspect logs and confirm that the problem is caused by a recent config change.
-3. Go to **Config Builder**, identify a previous working **Inactive** version.
-4. Clone it into a **new Draft**, optionally apply a minimal fix.
-5. Validate and run tests.
-6. Activate this fixed draft to restore a working configuration.
-7. Optionally use **safe mode** to temporarily block new runs while the investigation is ongoing.
+1. Notice failures or anomalies in **Jobs**.
+2. Drill into problematic runs:
+   - Logs,
+   - Telemetry,
+   - Config versions used.
+3. In **Config Builder**, locate a previously good inactive version.
+4. Clone it into a new draft, optionally apply a small fix.
+5. Validate and test it against representative documents.
+6. Activate the fixed draft.
+7. Optionally enable **safe mode** during investigation; disable it once stable.
+
+### 4. Admin creating a new workspace
+
+1. Sign in as a user with `Workspaces.Create` permission.
+2. Go to **Workspaces** and click **Create workspace**.
+3. Fill in:
+   - Name (e.g. “Finance Operations”),
+   - Slug (auto‑generated from name, tweak if needed),
+   - Owner (yourself, or another user if allowed).
+4. Submit the form:
+   - Fix any client or server‑side validation errors.
+5. Land in the new workspace shell and proceed to:
+   - Configure SSO hints,
+   - Invite members,
+   - Set up config packages and safe mode policies.
 
 ---
 
-## Backend expectations (high-level)
+## Backend expectations (high‑level)
 
-While this README is intentionally backend-agnostic, ADE Web assumes that the backend provides:
+While ADE Web is backend‑agnostic, it suggests a set of contracts for any compatible backend:
 
-- HTTP APIs for:
-  - Authentication and user identity,
-  - Workspace listing and membership,
-  - Document upload, listing, and metadata,
-  - Run/job creation, querying, and artifact download,
-  - Config package/version management (draft/active/inactive),
-  - Safe mode status and toggles.
-- **Streaming endpoints** (e.g., NDJSON) for:
-  - Run/job logs and telemetry,
-  - Build/validation/test-run logs from Config Builder.
-- Strict enforcement of **roles and permissions** that the front-end can reflect in its UI.
+- **Auth & sessions**
+  - Endpoints for:
+    - Listing auth providers (`force_sso`, provider metadata),
+    - Reading the current session (user, roles, return_to),
+    - Creating/refreshing/destroying sessions,
+    - Exposing first‑run setup status and completing setup.
 
-When the backend is reimplemented, keeping these conceptual contracts intact will let ADE Web continue to behave as described here.
+- **Workspaces**
+  - List and create workspaces (with name, slug, owner, default flag, etc.),
+  - Retrieve workspace metadata and permissions,
+  - Manage membership and roles.
+
+- **Documents**
+  - Upload, list, and retrieve documents by workspace,
+  - Store type, tags, uploader, timestamps,
+  - Associate runs with documents.
+
+- **Runs / jobs**
+  - Create runs with options (e.g. `dry_run`, `validate_only`, input sheet selection),
+  - Query runs by workspace/document/user,
+  - Provide NDJSON streams for run events, logs, and telemetry,
+  - Provide artifact listings and download endpoints.
+
+- **Config packages & versions**
+  - List configs per workspace,
+  - Manage versions (create/clone/activate/archive),
+  - Provide file and script operations (list/read/write/rename/delete) with ETag support,
+  - Read and patch manifests safely,
+  - Trigger builds and validations,
+  - Trigger test runs against documents.
+
+- **Safe mode**
+  - System‑wide safe mode endpoint (status + detail),
+  - Optional workspace‑scoped safe mode for finer control.
+
+- **Users & invitations**
+  - Paginated user directory with search,
+  - Create invitations and track their state.
+
+- **Streaming & telemetry**
+  - NDJSON endpoints where each line is a standalone JSON event:
+    - Run/build lifecycle events,
+    - Structured telemetry envelopes,
+    - Log messages.
+
+- **Security**
+  - Enforce RBAC and permissions on all operations,
+  - CSRF protection for state‑changing requests (ADE Web can send CSRF tokens),
+  - Strict validation of redirect targets and user input.
+
+As long as these conceptual contracts are honoured, the ADE Web frontend can be re‑used and the backend can be reimplemented or swapped without changing the user experience.
 ```
 
 # apps/ade-web/src/app/App.tsx
