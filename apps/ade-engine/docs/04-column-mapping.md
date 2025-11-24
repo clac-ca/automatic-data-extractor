@@ -24,6 +24,23 @@ This document explains:
 * How hooks and other parts of the engine use the mapping.
 * What guarantees the engine tries to maintain.
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+This chapter uses “field” exclusively for manifest entries and “column” for
+cells in a sheet. Avoid other synonyms.
+
 ---
 
 ## Goals
@@ -106,25 +123,25 @@ Different detectors can propose different columns for the same field; column map
 
 ### Column map
 
-The **column map** is the main output:
+The **column map** is the main output and lives on `MappedTable.column_map`:
 
 ```text
 ColumnMap:
-  sheet_id -> {
-    field_id -> MappedColumn
-  }
+  mapped_columns: list[MappedColumn]      # one per field that mapped
+  unmapped_columns: list[UnmappedColumn]  # physical columns with no field match
 
 MappedColumn:
-  field_id
-  sheet_id
-  column_index        # chosen physical column
-  header_text         # final resolved header (if any)
-  detectors           # list of DetectorFinding used
-  is_required         # from manifest
-  is_satisfied        # True if actually mapped
+  field              # field ID from manifest.columns.order/fields
+  header             # header text from the source sheet (if any)
+  source_column_index# 0-based physical column index
+  score              # aggregate mapping score
+  contributions      # list[ScoreContribution] per detector
+  is_required        # from manifest
+  is_satisfied       # True if a physical column was chosen
 ```
 
-The exact Python types/fields are implementation details, but conceptually this is what the rest of the engine sees.
+The exact Python fields may vary, but the names above are used consistently in
+docs, artifact, and telemetry.
 
 ---
 
@@ -178,8 +195,8 @@ When column mapping completes, the engine has:
 
    For each sheet being processed:
 
-   * Every field from the manifest will have a `MappedColumn` entry.
-   * `MappedColumn.is_satisfied` indicates whether a physical column was found.
+   * `column_map.mapped_columns` contains the fields that were matched, each with `is_required`/`is_satisfied` flags.
+   * `column_map.unmapped_columns` lists physical columns that did not match any field (useful for appending `raw_` extras).
    * If multiple physical columns were plausible, the chosen winner is recorded along with tie‑breaking details.
 
 2. **Validation results**
@@ -280,11 +297,11 @@ Tie‑breaking typically prefers:
 
 Once winners are selected:
 
-* For each field, create a `MappedColumn`:
+* Build a `ColumnMap` instance with two lists:
 
-  * record `sheet_id`, `column_index`, `header_text`, etc.
-  * include the underlying detector findings in case debugging is needed.
-* Mark `is_satisfied = True` when a physical column was chosen; `False` otherwise.
+  * `mapped_columns`: one `MappedColumn` per field that cleared the score threshold (record `source_column_index`, `header`, `score`, `contributions`, `is_required`, `is_satisfied`).
+  * `unmapped_columns`: one `UnmappedColumn` per physical column that did not map to any field (used later for `raw_` extras if enabled).
+* Attach this `ColumnMap` to `MappedTable.column_map`.
 
 The resulting map:
 

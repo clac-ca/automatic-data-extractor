@@ -1,28 +1,37 @@
 # ADE Engine (Runtime)
 
 The **ADE engine** is a config‑driven runtime that turns messy spreadsheets into
-a **normalized Excel workbook plus a full audit artifact**.
+a **normalized Excel workbook plus a full audit artifact**. You can think of it
+as:
 
-You can think of it as:
+> “Run a pipeline over spreadsheets using an `ade_config` plugin that defines
+> how to detect, map, transform and validate data.”
 
-> “Run a pipeline over spreadsheets using an `ade_config` plugin that defines how to detect, map, transform and validate data.”
-
-This document describes the **architecture**, **folder structure**, **core types**, and
-**script APIs** you need to understand to implement or extend the engine.
+This document describes the **architecture**, **folder structure**, **core
+types**, and **script APIs** you need to understand to implement or extend the
+engine.
 
 ---
 
-## Glossary (canonical terms)
+## Terminology
 
-- **Run** — One execution of `Engine.run()` or the CLI. Artifact and telemetry are always per run.
-- **Config package** — The installed `ade_config` package (manifest + detectors/hooks).  
-  - **Config version** — `manifest.version`.  
-  - **Build** — The virtual environment built for a config version.
-- **Source file** — The original spreadsheet passed to the engine (`source_file`).  
-  **Source sheet** — Worksheet/tab within a source file (`source_sheet`).
-- **Output workbook** — Normalized workbook(s) written under `output_dir`.
-- **Table** — A contiguous header + data region detected in a sheet, represented as `RawTable → MappedTable → NormalizedTable`.
-- **Job / workspace / tenant** — Backend concepts only. They may appear as opaque metadata in telemetry; the engine has no first‑class job/workspace types or artifact fields for them.
+| Concept            | Term in code      | Notes                                                     |
+| ------------------ | ----------------- | --------------------------------------------------------- |
+| Run                | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package     | `config_package`  | Installed `ade_config` package for this run               |
+| Config version     | `manifest.version`| Version declared by the config package manifest           |
+| Build              | build             | Virtual environment built for a specific config version   |
+| User data file     | `source_file`     | Original spreadsheet on disk                              |
+| User sheet         | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical column   | `field`           | Defined in manifest; never call this a “column”           |
+| Physical column    | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook    | normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+Use these names everywhere in code comments, telemetry, docs, and filenames.
+Avoid synonyms like “input file” (use **source file**), “output file” (say
+**output workbook** or explicitly refer to artifact/events), or mixing “field”
+and “column”. Backend notions like job/workspace/tenant remain outside the
+engine and only show up as opaque metadata if the caller passes them.
 
 ---
 
@@ -122,7 +131,7 @@ ade_engine/
       write.py
       pipeline_runner.py     # Pipeline orchestrator (execute_pipeline)
 
-  config_runtime/            # Config loading and registries
+  config/                    # Config loading and registries (renamed from config_runtime)
     __init__.py
     loader.py                # load_config_runtime
     manifest_context.py
@@ -150,7 +159,7 @@ ade_engine/
 
 # Public API surface (top-level imports from ade_engine/__init__.py)
 from ade_engine.core.engine import Engine
-from ade_engine.core.types import RunRequest, RunResult, EngineMetadata, RunStatus
+from ade_engine.core.types import RunRequest, RunResult, EngineInfo, RunStatus
 from ade_engine import __version__
 
 def run(*args, **kwargs) -> RunResult:
@@ -163,7 +172,7 @@ __all__ = [
     "run",
     "RunRequest",
     "RunResult",
-    "EngineMetadata",
+    "EngineInfo",
     "RunStatus",
     "__version__",
 ]
@@ -171,18 +180,18 @@ __all__ = [
 
 Layering rules:
 
-- Runtime/core depends on config_runtime types and infra helpers.
-- `config_runtime/` can depend on schemas and infra where needed.
-- `infra/` holds IO + artifact/telemetry plumbing used by both core and config_runtime.
+- Runtime/core depends on config types and infra helpers.
+- `config/` (formerly `config_runtime/`) can depend on schemas and infra where needed.
+- `infra/` holds IO + artifact/telemetry plumbing used by both core and config.
 - `cli/` is a thin wrapper over the public API; keep business logic in `core/`.
-- Hooks remain part of the core extension model via `config_runtime/hook_registry.py`; hook invocation helpers can live in `core/` if desired.
+- Hooks remain part of the core extension model via `config/hook_registry.py` (legacy path: `config_runtime/hook_registry.py`); hook invocation helpers can live in `core/` if desired.
 
 If you know this layout, you know where everything lives:
 
-* **“How do I run the engine?”** → `core/engine.py`, `ade_engine/__init__.py`
-* **“How do we load config scripts?”** → `config_runtime/loader.py`
-* **“How does the pipeline work?”** → `core/pipeline/`
-* **“Where is artifact/telemetry written?”** → `infra/artifact.py`, `infra/telemetry.py`
+- **How do I run the engine?** → `core/engine.py`, `ade_engine/__init__.py`
+- **How do we load config scripts?** → `config/loader.py` (legacy path: `config_runtime/loader.py`)
+- **How does the pipeline work?** → `core/pipeline/`
+- **Where is artifact/telemetry written?** → `infra/artifact.py`, `infra/telemetry.py`
 
 ### 2.1 Public API (top-level `ade_engine`)
 
@@ -191,7 +200,7 @@ Keep the public surface obvious and small at the package root:
 ```python
 # ade_engine/__init__.py
 from ade_engine.core.engine import Engine
-from ade_engine.core.types import RunRequest, RunResult, EngineMetadata, RunStatus
+from ade_engine.core.types import RunRequest, RunResult, EngineInfo, RunStatus
 from ade_engine import __version__  # however versioning is managed
 
 
@@ -206,7 +215,7 @@ __all__ = [
     "run",
     "RunRequest",
     "RunResult",
-    "EngineMetadata",
+    "EngineInfo",
     "RunStatus",
     "__version__",
 ]
@@ -291,11 +300,11 @@ class RunPhase(str, Enum):
     FAILED = "failed"
 ```
 
-**EngineMetadata**
+**EngineInfo** (thin metadata for CLI/telemetry)
 
 ```python
 @dataclass(frozen=True)
-class EngineMetadata:
+class EngineInfo:
     name: str = "ade-engine"
     version: str = "0.0.0"
     description: str | None = None
@@ -403,19 +412,22 @@ Internal context shared across pipeline, hooks, and telemetry:
 class RunContext:
     run_id: str                 # generated UUID or similar per run
     metadata: dict[str, Any]    # optional caller-supplied metadata (used for telemetry correlation only)
-    manifest: ManifestContext   # see config_runtime/manifest_context.py
+    manifest: ManifestContext   # see config/manifest_context.py (legacy path: config_runtime/manifest_context.py)
     paths: RunPaths
     started_at: datetime
-    state: dict[str, Any] = field(default_factory=dict)  # per-run scratch space for scripts (not shared across runs/threads)
+    run_state: dict[str, Any] = field(default_factory=dict)  # per-run scratch space for scripts (not shared across runs/threads)
 ```
 
-`RunContext.state` is **per run**: each call to `Engine.run()` gets a fresh dict which
-detectors, transforms, validators, and hooks can share during that run. It is never
-shared across runs or threads. A single `Engine.run` executes sequentially in one
-thread/process; any concurrency is implemented by the ADE API running multiple
-workers, each with its own `RunContext`.
+`RunContext.run_state` (often exposed to scripts as `state` for backward
+compatibility) is **per run**: each call to `Engine.run()` gets a fresh dict
+that detectors, transforms, validators, and hooks can share during that run. It
+is never shared across runs or threads. A single `Engine.run` executes
+sequentially in one thread/process; any concurrency is implemented by the ADE
+API running multiple workers, each with its own `RunContext`.
 
 Exception classes are aligned with `RunErrorCode`:
+
+### 3.3 Errors (`errors.py`)
 
 ```python
 class AdeEngineError(Exception): ...
@@ -425,15 +437,24 @@ class HookError(AdeEngineError): ...        # → RunErrorCode.HOOK_ERROR
 class PipelineError(AdeEngineError): ...    # → RunErrorCode.PIPELINE_ERROR
 ```
 
-`Engine.run` should map exceptions to `RunError` in one place (e.g., `_error_to_run_error(exc, stage)`)
-so `RunResult`, artifact, and telemetry all share the same `code`/`message`/`stage`.
+Guidelines:
 
-The ADE backend may include a `job_id` inside `metadata`, but the engine just treats it as
-opaque metadata. The engine is always run-scoped; any job/run mapping is a backend concern.
+- Config loading raises `ConfigError` for manifest/schema/script issues.
+- IO/missing sheets/unsupported formats raise `InputError`.
+- Hook failures surface as `HookError`.
+- Unexpected pipeline bugs raise `PipelineError`.
 
-Because all per‑run state lives on `RunContext` and not on the `Engine` instance itself,
-the `Engine` class is **logically stateless** and can be safely reused across requests or
-threads (as long as each call uses a fresh `RunRequest`).
+`Engine.run` maps these to `RunError.code` in one place (e.g.,
+`_error_to_run_error(exc, stage)`) so `RunResult`, artifact, and telemetry all
+share the same `code`/`message`/`stage`.
+
+The ADE backend may include a `job_id` inside `metadata`, but the engine just
+treats it as opaque metadata. The engine is always run-scoped; any job/run
+mapping is a backend concern.
+
+Because all per‑run state lives on `RunContext` and not on the `Engine` instance
+itself, the `Engine` class is **logically stateless** and can be safely reused
+across requests or threads (as long as each call uses a fresh `RunRequest`).
 
 ### 3.2 Table and pipeline types
 
@@ -484,10 +505,14 @@ Mapped and normalized tables:
 
 ```python
 @dataclass
+class ColumnMap:
+    mapped_columns: list[MappedColumn]
+    unmapped_columns: list[UnmappedColumn]
+
+@dataclass
 class MappedTable:
     raw: RawTable
-    columns: list[MappedColumn]
-    extras: list[UnmappedColumn]
+    column_map: ColumnMap
 
 @dataclass
 class ValidationIssue:
@@ -501,8 +526,8 @@ class ValidationIssue:
 @dataclass
 class NormalizedTable:
     mapped: MappedTable
-    rows: list[list[Any]]            # rows in manifest.order + extras
-    issues: list[ValidationIssue]
+    rows: list[list[Any]]            # rows in manifest.order + unmapped columns (if appended)
+    validation_issues: list[ValidationIssue]
     output_sheet_name: str
 ```
 
@@ -597,7 +622,14 @@ Conceptually the manifest looks like:
 }
 ```
 
-`config_runtime/manifest_context.py` turns this into a typed `ManifestContext` with helpers:
+Key ideas:
+
+- **Top-level fields** describe the config and script API version.
+- Use the word **field** for manifest entries; use **column** only for physical spreadsheet columns. `columns.order` is the list of field IDs; `columns.fields` maps those IDs to `FieldConfig` objects.
+- Module paths are relative to `ade_config` and start with `column_detectors.<field_name>` or `hooks.<hook_name>`.
+- `script_api_version` is the only script contract version identifier; do not call it “API version” or “manifest API version”.
+
+`config/manifest_context.py` (legacy path: `config_runtime/manifest_context.py`) turns this into a typed `ManifestContext` with helpers:
 `columns.order`, `columns.fields`, and `writer` (engine-level defaults like timeouts or thresholds are fixed in code for manifest v1).
 
 ---
@@ -631,7 +663,7 @@ result = run(
 ```
 
 `Engine` is **logically stateless**: it does not keep any mutable per‑run data on the instance.
-Each call to `run()` constructs a fresh `RunContext` and `state` dict. You can safely reuse a
+Each call to `run()` constructs a fresh `RunContext` and `run_state` dict. You can safely reuse a
 single `Engine` across threads or requests as long as each call uses its own `RunRequest`.
 
 Under the hood, `Engine.run()`:
@@ -641,8 +673,8 @@ Under the hood, `Engine.run()`:
    * chooses `input_dir` (from source files or explicit folder),
    * chooses `output_dir` and `logs_dir` (from request or defaults based on source location),
    * generates a `run_id`,
-   * seeds `metadata` and a shared `state` dict.
-2. Calls `config_runtime.loader.load_config_runtime()` to load the manifest, column detectors, row detectors, and hooks.
+   * seeds `metadata` and a shared `run_state` dict.
+2. Calls `config.loader.load_config_runtime()` (legacy import path: `config_runtime.loader`) to load the manifest, column detectors, row detectors, and hooks.
 3. Binds telemetry sinks (`TelemetryConfig.bind`) and creates a `PipelineLogger`.
 4. Calls `ON_RUN_START` hooks.
 5. Calls `execute_pipeline()` in `pipeline/pipeline_runner.py`:
@@ -735,7 +767,7 @@ For each `RawTable`:
 
    * Call all `detect_*` functions in the field’s script with:
 
-     * `run`, `state`, `field_name`, `field_config`, `header`,
+     * `run`, `run_state`, `field_name`, `field_config`, `header`,
        `column_values_sample`, `column_values`, `table`, `column_index`,
        `manifest`, `logger`
 3. Aggregate scores per field and record `ScoreContribution`s.
@@ -759,7 +791,7 @@ passing the list of `MappedTable` objects. This is the ideal place for configs t
 
 * tweak or correct mappings,
 * reorder or drop fields,
-* adjust `extras`,
+* adjust unmapped columns (e.g., rename or drop),
 
 before normalization begins.
 
@@ -775,7 +807,7 @@ For each `MappedTable`:
 def transform(
     *,
     run: RunContext,
-    state: dict,
+    run_state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -794,7 +826,7 @@ def transform(
 def validate(
     *,
     run: RunContext,
-    state: dict,
+    run_state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -1012,6 +1044,17 @@ The envelope roughly looks like:
 }
 ```
 
+Canonical event names (used in telemetry payloads and docs):
+
+- `run_started`
+- `run_completed`
+- `run_failed`
+- `pipeline_transition`
+- `file_discovered`
+- `file_processed`
+- `table_detected`
+- `validation_issue`
+
 `PipelineLogger` is the only thing pipeline code touches:
 
 ```python
@@ -1030,17 +1073,18 @@ The ADE API can:
 
 ## 8. Script API overview (config side)
 
-For completeness, here’s the **contract** between the engine and `ade_config`.
+All script entrypoints are **keyword‑only**, should include `**_` for forward
+compatibility, and receive `RunContext` as `run` plus a **per-run `run_state`
+dict** (exposed as `state` for backward compatibility). Detector functions must
+be named `detect_*` so they are easy to discover.
 
-All script entrypoints are **keyword‑only** functions, should include `**_` to allow future parameters, and receive a `RunContext` as `run`.
-
-### 8.1 Row detectors (`ade_config.row_detectors.header` / `data`)
+### 8.1 Row detectors (`ade_config.row_detectors.*`)
 
 ```python
 def detect_*(
     *,
     run: RunContext,           # RunContext (read-only from config’s perspective)
-    state: dict,
+    run_state: dict,
     row_index: int,            # 1-based index in the sheet
     row_values: list,          # raw cell values for this row
     manifest: ManifestContext,
@@ -1050,13 +1094,16 @@ def detect_*(
     return {"scores": {"header": 0.7}}   # or {"scores": {"data": 0.4}}
 ```
 
+* Detectors return score dicts; the engine aggregates them.
+* `run_state` exists per run only; never persist data across runs here.
+
 ### 8.2 Column detectors (`ade_config.column_detectors.<field>`)
 
 ```python
 def detect_*(
     *,
     run: RunContext,
-    state: dict,
+    run_state: dict,
     field_name: str,
     field_config: dict,           # manifest.columns.fields[field_name]
     header: str | None,           # normalized header text
@@ -1071,13 +1118,18 @@ def detect_*(
     return {"scores": {field_name: 0.8}}
 ```
 
+* Module paths are relative to `ade_config` and start with
+  `column_detectors.<field_name>`.
+* “Column map” refers to the `MappedTable.column_map` object (mapped + unmapped
+  columns); avoid floating the name “ColumnMap” if no type exists in code.
+
 ### 8.3 Transforms
 
 ```python
 def transform(
     *,
     run: RunContext,
-    state: dict,
+    run_state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -1091,13 +1143,16 @@ def transform(
     ...
 ```
 
+Transforms see the latest canonical row state (after mapping). Use `run_state`
+for per-run caches or counters, not for cross-run persistence.
+
 ### 8.4 Validators
 
 ```python
 def validate(
     *,
     run: RunContext,
-    state: dict,
+    run_state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -1111,24 +1166,37 @@ def validate(
     ...
 ```
 
+Validators must return structured issue dicts; the engine wraps them as
+`ValidationIssue` objects.
+
 ### 8.5 Hooks (`ade_config.hooks.*`)
 
-Recommended context-first style:
+Hook stages are fixed and aligned to manifest keys:
+
+```python
+class HookStage(str, Enum):
+    ON_RUN_START = "on_run_start"
+    ON_AFTER_EXTRACT = "on_after_extract"
+    ON_AFTER_MAPPING = "on_after_mapping"
+    ON_BEFORE_SAVE = "on_before_save"
+    ON_RUN_END = "on_run_end"
+```
+
+Hook context fields are consistent across stages:
 
 ```python
 from ade_engine.core.types import RunResult, RunContext
-from ade_engine.config_runtime.hook_registry import HookContext, HookStage
+from ade_engine.config.hook_registry import HookContext, HookStage  # legacy path: ade_engine.config_runtime.hook_registry
 from ade_engine.core.pipeline import RawTable, MappedTable, NormalizedTable
 from ade_engine.infra.artifact import ArtifactSink
-from ade_engine.infra.telemetry import EventSink
-from ade_engine.infra.telemetry import PipelineLogger
+from ade_engine.infra.telemetry import EventSink, PipelineLogger
 from openpyxl import Workbook
 from typing import Any
 
 @dataclass
 class HookContext:
     run: RunContext
-    state: dict[str, Any]
+    run_state: dict[str, Any]
     manifest: ManifestContext
     artifact: ArtifactSink
     events: EventSink | None
@@ -1142,9 +1210,7 @@ def run(context: HookContext) -> None:
     context.logger.note("Run started", stage=context.stage.value)
 ```
 
-Hook stages (manifest keys → `HookStage` mapping):
-
-Hook stages (manifest keys → `HookStage` mapping):
+Stages:
 
 * `on_run_start` – before any IO or detection work
 * `on_after_extract` – after `RawTable[]` has been built
@@ -1228,7 +1294,7 @@ This architecture is intentionally:
 
   * `Engine.run`, `RunRequest`/`RunResult`
   * `execute_pipeline()`, `extract.py`, `mapping.py`, `normalize.py`, `write.py`
-  * `infra/io.py`, `config_runtime/loader.py`, `config_runtime/hook_registry.py`, `infra/artifact.py`, `infra/telemetry.py`
+  * `infra/io.py`, `config/loader.py`, `config/hook_registry.py` (legacy: `config_runtime/*`), `infra/artifact.py`, `infra/telemetry.py`
 * **Python‑first schemas** – Manifest and telemetry schemas are defined as Python models
   (Pydantic), with JSON Schemas generated as artifacts when needed.
 * **Auditable** – Every detector score, transform, and validation issue can be
@@ -1240,24 +1306,3 @@ This architecture is intentionally:
 
 With this README and the folder layout above, you should be able to reason about
 the engine from scratch and confidently implement or refactor any part of it.
-### 3.3 Errors (`errors.py`)
-
-Provide a small hierarchy for consistent exception handling:
-
-```python
-class AdeEngineError(Exception): ...
-
-class ConfigError(AdeEngineError): ...
-class InputError(AdeEngineError): ...
-class HookError(AdeEngineError): ...
-class PipelineError(AdeEngineError): ...
-```
-
-Guidelines:
-
-- `config_runtime` raises `ConfigError` for manifest/schema/script issues.
-- IO/missing sheets/unsupported formats raise `InputError`.
-- Hook failures surface as `HookError`.
-- Unexpected pipeline bugs raise `PipelineError`.
-
-`Engine.run` maps these to `RunError.code` values (`config_error`, `input_error`, `hook_error`, `pipeline_error`, etc.) in one place so callers and artifacts have structured error info.

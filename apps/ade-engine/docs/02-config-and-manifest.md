@@ -6,7 +6,7 @@ represented as Python models inside `ade_engine`.
 
 Read this if you are:
 
-- implementing `ade_engine.config_runtime` modules,
+- implementing `ade_engine.config` modules (legacy package name: `config_runtime`),
 - authoring or reviewing a config package,
 - or wiring config‑driven behavior into new parts of the engine.
 
@@ -53,6 +53,23 @@ ade_config/                     # business logic (per customer / per config)
 
 The **engine is generic**. Everything domain‑specific lives in this package and
 is defined by the manifest.
+
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+Stick to these names in manifest prose and type names to avoid synonyms like
+“input file” or “column” when you mean manifest **field**.
 
 ---
 
@@ -118,10 +135,12 @@ The manifest has a small number of top-level sections:
 
 Key ideas:
 
-* **Top-level fields** describe the config itself and the script API version.
-* **`columns`** declares what canonical fields exist and how to handle them.
-* **`hooks`** defines lifecycle customizations (as module lists).
-* **`writer`** controls writer behavior (unmapped handling, sheet name).
+- **Top-level fields** describe the config itself and the script API version.
+- **Fields vs columns**: use **field** for manifest entries; **column** refers to physical spreadsheet columns. `columns.order` lists field IDs; `columns.fields` maps those IDs to `FieldConfig` objects.
+- **Module paths** are relative to `ade_config` and start with `column_detectors.<field_name>` or `hooks.<hook_name>`.
+- **Script API version** lives at `script_api_version`; do not shorten it to “API version” in prose.
+- **`hooks`** defines lifecycle customizations (as module lists).
+- **`writer`** controls writer behavior (unmapped handling, sheet name).
 
 ---
 
@@ -139,7 +158,7 @@ class, e.g.:
   * `name: str | None`
   * `description: str | None`
   * `script_api_version: int`
-  * `columns: ColumnSection`
+  * `columns: ColumnsConfig`   # field-centric naming; avoid ColumnSection/ColumnField
   * `hooks: HookCollection`
   * `writer: WriterConfig`
 
@@ -147,6 +166,10 @@ Engine code **never** hard‑codes raw JSON keys; it works with these models.
 
 From the models, the engine can optionally emit JSON Schema
 (`ManifestV1.model_json_schema()`) for validation in other systems.
+
+Model naming stays **field-first**: prefer `FieldConfig` over `ColumnField` or
+`ColumnMeta`, and keep `ColumnsConfig.fields: dict[str, FieldConfig]` keyed by
+field ID.
 
 ### 3.2 `ManifestContext` helper
 
@@ -174,11 +197,11 @@ scripts via the `run` argument (see script API docs).
 
 ---
 
-## 4. Loading config at runtime (`config_runtime/`)
+## 4. Loading config at runtime (`config/`, legacy `config_runtime/`)
 
-### 4.1 Responsibilities of `config_runtime`
+### 4.1 Responsibilities of `config`
 
-The `config_runtime` package is the “glue” between:
+The `config` package is the “glue” between:
 
 * the `ade_config` package and its `manifest.json`, and
 * the rest of the engine.
@@ -196,7 +219,7 @@ It is responsible for:
 A typical public entrypoint looks like:
 
 ```python
-from ade_engine.config_runtime.loader import load_config_runtime
+from ade_engine.config.loader import load_config_runtime  # legacy path: ade_engine.config_runtime.loader
 
 cfg = load_config_runtime(
     package="ade_config",
@@ -273,7 +296,7 @@ The `ColumnField` Pydantic model captures this shape and enforces basic typing.
 
 ### 5.3 From `ColumnMeta` to `ColumnModule`
 
-At runtime, `config_runtime` builds a **column registry** from the manifest:
+At runtime, the config loader builds a **column registry** from the manifest:
 
 1. For each `field_name` in `columns.fields`:
 
@@ -308,7 +331,7 @@ modules directly.
 
 ### 5.4 Signature validation
 
-When building the registry, `config_runtime` validates that:
+When building the registry, the loader validates that:
 
 * Detectors, transformers, and validators are callable.
 * Functions support the expected keyword‑only API.
@@ -338,7 +361,7 @@ Each hook entry is a module string inside the config package (Python import path
 
 ### 6.2 Building the hook registry
 
-`config_runtime` turns the manifest `hooks` section into a `HookRegistry`:
+The loader turns the manifest `hooks` section into a `HookRegistry`:
 
 1. For each stage (e.g. `on_run_start`):
 
@@ -360,7 +383,7 @@ fails the run.
 
 ## 7. Config runtime aggregate: `ConfigRuntime`
 
-Putting everything together, `config_runtime` exposes a small aggregate object
+Putting everything together, the loader exposes a small aggregate object
 used by the pipeline:
 
 ```python

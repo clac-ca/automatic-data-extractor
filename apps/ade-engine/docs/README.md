@@ -4,10 +4,28 @@ This folder contains deeper “chapters” that expand on the high-level overvie
 in `ade_engine/README.md`. Read that first, then use this folder as a reference
 while building or extending the engine and configs.
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+These docs stick to that vocabulary to avoid synonyms like “input file” or
+mixing “field”/“column”. Backend notions (job/workspace/tenant) only appear as
+opaque metadata if the caller supplies them.
+
 ### Package layout (flattened, layered by convention)
 
 * Core runtime: `core/engine.py`, `core/types.py`, `core/pipeline/`
-* Config runtime: `config_runtime/loader.py`, `manifest_context.py`, registries
+* Config runtime: `config/` loader + registries (currently `config_runtime/loader.py`, `manifest_context.py`)
 * Infra/adapters: `infra/io.py`, `infra/artifact.py`, `infra/telemetry.py`
 * Public API & CLI: `ade_engine/__init__.py`, `cli/app.py`, `__main__.py`
 * Schemas: `schemas/`

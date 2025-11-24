@@ -13,6 +13,23 @@ It assumes you’ve read:
 - `01-engine-runtime.md`
 - `02-config-and-manifest.md`
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+This vocabulary is used consistently in IO and detection docs—avoid synonyms
+like “input file” unless referring to CLI flag names.
+
 Relevant modules:
 
 - `io.py` — low‑level file and sheet IO.
@@ -224,7 +241,7 @@ A typical row detector has this shape:
 def detect_header_or_data(
     *,
     run,                 # RunContext (config-facing view of the run)
-    state: dict,
+    run_state: dict,
     row_index: int,      # 1-based index within the sheet
     row_values: list,    # raw cell values for this row
     manifest,            # ManifestContext
@@ -241,7 +258,7 @@ def detect_header_or_data(
 Conventions:
 
 * `run` is read‑only from the config’s perspective (it is a `RunContext`).
-* `state` is a per‑run dict that detectors may use to coordinate across rows.
+* `run_state` is a per‑run dict that detectors may use to coordinate across rows.
 * `manifest` provides config‑level context (schema, defaults, writer, fields).
 * `logger` allows emitting notes and telemetry if needed.
 * Functions should accept `**_` to tolerate new parameters over time.
