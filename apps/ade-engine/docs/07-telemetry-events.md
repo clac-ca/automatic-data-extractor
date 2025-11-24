@@ -348,6 +348,8 @@ but should avoid redefining these.
 * `pipeline_transition`
   Emitted when the pipeline moves between phases:
 
+  * `"initialization"`
+  * `"load_config"`
   * `"extracting"`
   * `"mapping"`
   * `"normalizing"`

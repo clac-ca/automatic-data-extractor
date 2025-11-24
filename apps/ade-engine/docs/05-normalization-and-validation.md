@@ -75,7 +75,7 @@ Where:
   * Output of the mapping stage:
 
     * `raw: RawTable`
-    * `mapping: list[ColumnMapping]`
+    * `columns: list[MappedColumn]`
     * `extras: list[UnmappedColumn]`
 * `logger: PipelineLogger`
 
@@ -132,7 +132,7 @@ For each data row in `mapped.raw.data_rows`:
 1. Start with an empty `row: dict[str, Any]`.
 2. For each canonical field in `manifest.columns.order`:
 
-   * Find its `ColumnMapping` in `mapped.mapping` (if any).
+   * Find its `MappedColumn` in `mapped.columns` (if any).
    * If mapped:
 
      * Read the raw cell from `mapped.raw.data_rows[row_idx][mapping.index]`.

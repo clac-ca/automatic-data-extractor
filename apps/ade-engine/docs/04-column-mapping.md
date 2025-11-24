@@ -443,11 +443,11 @@ To debug:
 
 ## Summary
 
-Column mapping is the bridge between raw spreadsheet shape and the logical schema your config package defines. It:
+Column mapping is the bridge between raw spreadsheet shape and the field schema your config package defines. It:
 
 * combines signals from `column_detectors`,
 * chooses a single physical column for each field,
 * enforces required vs optional columns,
 * and presents hooks with simple, named `row["field_name"]` access.
 
-As long as you think in terms of *logical columns* and keep column detectors focused and expressive, the engine can adapt to messy, real‑world spreadsheets while keeping your hooks and outputs stable.
+As long as you think in terms of *fields* and keep column detectors focused and expressive, the engine can adapt to messy, real‑world spreadsheets while keeping your hooks and outputs stable.

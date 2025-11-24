@@ -33,7 +33,7 @@ This document describes the **architecture**, **folder structure**, **core types
 At runtime, inside a **pre‑built virtual environment**:
 
 1. The engine loads a versioned **config package** (`ade_config`) with:
-   - a JSON/YAML **manifest** (fields, writer settings, hooks, env)
+   - a JSON/YAML **manifest** (fields, writer settings, hooks)
    - **row detectors** (table finding)
    - **column detectors** (field recognition)
    - **transforms** & **validators**
@@ -85,7 +85,7 @@ The deployment model is:
     - reads `input.xlsx` (or multiple inputs, if provided),
     - imports `ade_config` and reads its `manifest.json`,
     - runs the pipeline once for that call,
-    - writes `normalized.xlsx`, `artifact.json`, `events.ndjson` to the given output/logs dirs.
+    - writes the normalized workbook (e.g., `normalized.xlsx`), `artifact.json`, `events.ndjson` to the given output/logs dirs.
 
 The **engine does not know or care about backend job IDs**. It only needs:
 
@@ -142,10 +142,28 @@ ade_engine/
     telemetry.py
     artifact.py
 
-  api/                       # Public API + CLI
-    __init__.py              # Engine, run, RunRequest, RunResult, __version__
-    cli.py                   # CLI entrypoint (arg parsing, JSON output)
-    __main__.py              # `python -m ade_engine` → cli.main()
+  cli.py               # CLI entrypoint (arg parsing, JSON output)
+  __main__.py          # `python -m ade_engine` → cli.main()
+
+# Public API surface (top-level imports from ade_engine/__init__.py)
+from ade_engine.core.engine import Engine
+from ade_engine.core.types import RunRequest, RunResult, EngineMetadata, RunStatus
+from ade_engine import __version__
+
+def run(*args, **kwargs) -> RunResult:
+    """Convenience helper: Engine().run(...)"""
+    engine = Engine()
+    return engine.run(*args, **kwargs)
+
+__all__ = [
+    "Engine",
+    "run",
+    "RunRequest",
+    "RunResult",
+    "EngineMetadata",
+    "RunStatus",
+    "__version__",
+]
 ```
 
 Layering rules:
@@ -163,15 +181,15 @@ If you know this layout, you know where everything lives:
 * **“How does the pipeline work?”** → `core/pipeline/`
 * **“Where is artifact/telemetry written?”** → `infra/artifact.py`, `infra/telemetry.py`
 
-### 2.1 Public API (`api/__init__.py`)
+### 2.1 Public API (top-level `ade_engine`)
 
-Keep the public surface obvious and small:
+Keep the public surface obvious and small at the package root:
 
 ```python
-# ade_engine/api/__init__.py
+# ade_engine/__init__.py
 from ade_engine.core.engine import Engine
 from ade_engine.core.types import RunRequest, RunResult, EngineMetadata, RunStatus
-from . import __version__  # however versioning is managed
+from ade_engine import __version__  # however versioning is managed
 
 
 def run(*args, **kwargs) -> RunResult:
@@ -207,9 +225,6 @@ result = run(
 ```
 
 You only need to dig into `pipeline`, `artifact`, or `telemetry` if you are working on the engine internals.
-
-`ade_engine/__init__.py` re-exports the same public symbols from `api/__init__.py`
-so consumers can simply `from ade_engine import Engine, run, RunRequest, RunResult`.
 * **“What does the manifest look like?”** → `schemas/manifest.py` (Python models)
   (JSON schemas can be generated from these models for external validation)
 
@@ -253,6 +268,22 @@ from typing import Any, Literal, Mapping, Sequence
 class RunStatus(str, Enum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+
+class RunErrorCode(str, Enum):
+    CONFIG_ERROR = "config_error"
+    INPUT_ERROR = "input_error"
+    HOOK_ERROR = "hook_error"
+    PIPELINE_ERROR = "pipeline_error"
+    UNKNOWN_ERROR = "unknown_error"
+
+class RunStage(str, Enum):
+    INITIALIZATION = "initialization"
+    LOAD_CONFIG = "load_config"
+    EXTRACTING = "extracting"
+    MAPPING = "mapping"
+    NORMALIZING = "normalizing"
+    WRITING_OUTPUT = "writing_output"
+    HOOKS = "hooks"
 ```
 
 **EngineMetadata**
@@ -324,8 +355,8 @@ Structured error info plus the overall outcome:
 ```python
 @dataclass(frozen=True)
 class RunError:
-    code: str                # "config_error" | "input_error" | "hook_error" | "pipeline_error" | "unknown_error"
-    stage: str | None        # "initialization" | "load_config" | "extracting" | "mapping" | "normalizing" | "writing_output" | "hooks" | None
+    code: RunErrorCode
+    stage: RunStage | None
     message: str
 
 @dataclass(frozen=True)
@@ -382,6 +413,19 @@ shared across runs or threads. A single `Engine.run` executes sequentially in on
 thread/process; any concurrency is implemented by the ADE API running multiple
 workers, each with its own `RunContext`.
 
+Exception classes are aligned with `RunErrorCode`:
+
+```python
+class AdeEngineError(Exception): ...
+class ConfigError(AdeEngineError): ...      # → RunErrorCode.CONFIG_ERROR
+class InputError(AdeEngineError): ...       # → RunErrorCode.INPUT_ERROR
+class HookError(AdeEngineError): ...        # → RunErrorCode.HOOK_ERROR
+class PipelineError(AdeEngineError): ...    # → RunErrorCode.PIPELINE_ERROR
+```
+
+`Engine.run` should map exceptions to `RunError` in one place (e.g., `_error_to_run_error(exc, stage)`)
+so `RunResult`, artifact, and telemetry all share the same `code`/`message`/`stage`.
+
 The ADE backend may include a `job_id` inside `metadata`, but the engine just treats it as
 opaque metadata. The engine is always run-scoped; any job/run mapping is a backend concern.
 
@@ -416,7 +460,7 @@ class ScoreContribution:
     delta: float
 
 @dataclass
-class ColumnMapping:
+class MappedColumn:
     field: str                # canonical field name
     header: str               # original header text
     source_column_index: int  # 0-based input column index (converted from 1-based script inputs)
@@ -440,7 +484,7 @@ Mapped and normalized tables:
 @dataclass
 class MappedTable:
     raw: RawTable
-    mapping: list[ColumnMapping]
+    columns: list[MappedColumn]
     extras: list[UnmappedColumn]
 
 @dataclass
@@ -460,7 +504,7 @@ class NormalizedTable:
     output_sheet_name: str
 ```
 
-`PipelinePhase` is an enum (`INITIALIZED`, `EXTRACTING`, `MAPPING`, `NORMALIZING`, `WRITING_OUTPUT`, `COMPLETED`, `FAILED`) used by telemetry. Enum `.value` strings are snake_case (`"initialized"`, `"extracting"`, `"mapping"`, `"normalizing"`, `"writing_output"`, `"completed"`, `"failed"`) and used in telemetry `pipeline_transition` events.
+`PipelinePhase` is an enum (`INITIALIZATION`, `LOAD_CONFIG`, `EXTRACTING`, `MAPPING`, `NORMALIZING`, `WRITING_OUTPUT`, `COMPLETED`, `FAILED`) used by telemetry. Enum `.value` strings are snake_case (`"initialization"`, `"load_config"`, `"extracting"`, `"mapping"`, `"normalizing"`, `"writing_output"`, `"completed"`, `"failed"`) and used in telemetry `pipeline_transition` events.
 
 ---
 
@@ -564,7 +608,7 @@ Conceptually the manifest looks like:
 ```
 
 `config_runtime/manifest_context.py` turns this into a typed `ManifestContext` with helpers:
-`column_order`, `column_meta`, `defaults`, `writer`.
+`columns.order`, `columns.meta`, `engine.defaults`, `engine.writer`.
 
 ---
 
@@ -1115,6 +1159,23 @@ Hook stages (manifest keys → `HookStage` mapping):
 
 ---
 
+### 9. CLI flag → RunRequest mapping
+
+Use consistent mappings between CLI flags and `RunRequest` fields:
+
+| CLI flag        | RunRequest field  |
+|-----------------|-------------------|
+| `--input`       | `input_files`     |
+| `--input-root`  | `input_root`      |
+| `--input-sheet` | `input_sheets`    |
+| `--output-dir`  | `output_root`     |
+| `--logs-dir`    | `logs_root`       |
+| `--config-package` | `config_package` |
+| `--manifest-path`  | `manifest_path`  |
+| `--safe-mode`      | `safe_mode`      |
+
+Docs and help text should phrase mappings explicitly, e.g., “`--output-dir` → `RunRequest.output_root`”.
+
 ## 9. CLI usage
 
 `cli.py` provides a small command‑line interface; `__main__.py` forwards to it.
@@ -1437,9 +1498,9 @@ Properties:
 
 * `status: RunStatus` (`"succeeded"` or `"failed"`)
 * `error: RunError | None`
-  Structured error with `code` (e.g., `config_error`, `input_error`, `hook_error`, `pipeline_error`, `unknown_error`), `stage` (e.g., `load_config`, `extracting`, `mapping`, `normalizing`, `writing_output`, `hooks`), and `message`.
+  Structured error with `code` (e.g., `config_error`, `input_error`, `hook_error`, `pipeline_error`, `unknown_error`), `stage` (e.g., `initialization`, `load_config`, `extracting`, `mapping`, `normalizing`, `writing_output`, `hooks`), and `message`.
 * `output_paths: tuple[Path, ...]`
-  One or more normalized workbook paths (often a single workbook).
+  One or more normalized workbook paths (often a single workbook). CLI JSON uses the same key for consistency.
 * `artifact_path: Path`
   Path to `artifact.json`.
 * `events_path: Path`
@@ -1460,9 +1521,10 @@ Guarantees:
 
 ### 3.5 Pipeline phases
 
-Internally, the engine tracks a `PipelinePhase` enum, roughly:
+Internally, the engine tracks a `PipelinePhase` enum:
 
-* `INITIALIZED`
+* `INITIALIZATION`
+* `LOAD_CONFIG`
 * `EXTRACTING`
 * `MAPPING`
 * `NORMALIZING`
@@ -1470,7 +1532,7 @@ Internally, the engine tracks a `PipelinePhase` enum, roughly:
 * `COMPLETED`
 * `FAILED`
 
-Enum `.value` strings are snake_case (`"initialized"`, `"extracting"`, `"mapping"`, `"normalizing"`, `"writing_output"`, `"completed"`, `"failed"`). Phase transitions are recorded in telemetry and may be reflected in
+Enum `.value` strings are snake_case (`"initialization"`, `"load_config"`, `"extracting"`, `"mapping"`, `"normalizing"`, `"writing_output"`, `"completed"`, `"failed"`). Phase transitions are recorded in telemetry and may be reflected in
 `artifact.notes`. They are mostly relevant to observability and debugging.
 
 ---
@@ -1559,7 +1621,7 @@ If any of these steps fail, the error is handled as described in
   * For each `RawTable`:
 
     * Run column detectors and scoring.
-    * Produce `MappedTable` with `ColumnMapping[]` and `UnmappedColumn[]`.
+    * Produce `MappedTable` with `MappedColumn[]` and `UnmappedColumn[]`.
    * After all tables are mapped:
 
      * Call `on_after_mapping` hooks (pass the mapped tables).
@@ -1633,26 +1695,29 @@ useful artifact and telemetry record.
 
 ### 5.1 Error categories
 
-Conceptually:
+Conceptually (and mapped to `RunErrorCode`):
 
-* **Config errors**
+* **Config errors** (`CONFIG_ERROR`)
 
   * Invalid manifest JSON.
   * Missing or misconfigured column scripts / hooks.
   * Signature mismatches in detectors/transforms/validators.
 
-* **Input errors**
+* **Input errors** (`INPUT_ERROR`)
 
   * Input file does not exist or cannot be read.
   * Required sheet missing.
   * No usable tables discovered.
 
-* **Engine errors**
+* **Hook errors** (`HOOK_ERROR`)
 
-  * Bugs or unexpected exceptions inside `ade_engine` itself.
+  * Exceptions thrown inside config hooks.
 
-The runtime generally does not distinguish these categories in types, but they
-inform how error messages are written.
+* **Pipeline errors** (`PIPELINE_ERROR`)
+
+  * Bugs or unexpected exceptions inside `ade_engine` pipeline stages.
+
+Exceptions are mapped to `RunError` via a single helper (e.g., `_error_to_run_error(exc, stage: RunStage | None)`), ensuring `RunResult.error`, artifact, and telemetry all share the same `code`/`message`/`stage`.
 
 ### 5.2 Behavior on failure
 
@@ -1663,13 +1728,13 @@ On any unhandled exception:
 
    * `run.status = "failed"`,
    * `completed_at = now`,
-   * `error` information recorded (type/message, optionally a code).
-3. A `run_failed` telemetry event is emitted with context.
+   * `error` recorded with `RunError.code`/`stage`/`message`.
+3. A `run_failed` telemetry event is emitted with `error_code`/`error_stage` and context.
 4. Sinks are flushed (artifact + telemetry).
 5. `RunResult` is returned with:
 
    * `status="failed"`,
-   * `error` set to a human‑readable summary,
+   * `error` set to a structured `RunError`,
    * `output_paths` possibly empty or partial,
    * `artifact_path` and `events_path` pointing to complete log files.
 
@@ -1954,27 +2019,23 @@ At runtime the manifest is wrapped in a lightweight helper:
 
 ```python
 class ManifestContext:
-    raw: dict                 # original JSON dict
+    raw_json: dict            # original JSON dict
     model: ManifestV1         # validated Pydantic model
 
     @property
-    def column_order(self) -> list[str]: ...
+    def columns(self) -> Columns: ...   # provides .order and .meta
     @property
-    def column_meta(self) -> dict[str, ColumnMeta]: ...
-    @property
-    def defaults(self) -> EngineDefaults: ...
-    @property
-    def writer(self) -> EngineWriter: ...
+    def engine(self) -> EngineSection: ...  # provides .defaults and .writer
     @property
     def env(self) -> dict[str, str]: ...
 ```
 
 This gives the pipeline and config runtime a clean, typed surface:
 
-* `ctx.manifest.column_order` to drive output ordering,
-* `ctx.manifest.column_meta["email"]` to look up script paths and flags,
-* `ctx.manifest.defaults.mapping_score_threshold` for mapping,
-* `ctx.manifest.writer.append_unmapped_columns` for output behavior,
+* `ctx.manifest.columns.order` to drive output ordering,
+* `ctx.manifest.columns.meta["email"]` to look up script paths and flags,
+* `ctx.manifest.engine.defaults.mapping_score_threshold` for mapping,
+* `ctx.manifest.engine.writer.append_unmapped_columns` for output behavior,
 * `ctx.manifest.env` for script configuration.
 
 The **same `ManifestContext` instance** is stored on `RunContext` and passed to
@@ -1993,7 +2054,7 @@ The `config_runtime` package is the “glue” between:
 
 It is responsible for:
 
-1. **Finding and parsing the manifest** into a `ManifestContext` (`manifest_context.py`).
+1. **Finding and parsing the manifest** into a `ManifestContext` (`manifest_context.py` with `raw_json`, `model`, `columns`, `engine`, `env`).
 2. **Resolving scripts** (row detectors, column_detectors field modules, hooks) via `loader.py`.
 3. **Building registries** that the pipeline can use:
 
@@ -2763,7 +2824,7 @@ Column mapping is designed to:
    Hooks should work with dictionaries like `{"invoice_number": "...", "amount_due": ...}` instead of worrying about Excel coordinate math.
 
 3. **Allow multiple detection strategies**
-   Different column detectors can vote on where a logical column lives. The mapping step combines those signals into a single, deterministic choice.
+   Different column detectors can vote on where a field lives. The mapping step combines those signals into a single, deterministic choice.
 
 4. **Fail loudly when required columns are missing**
    If the configuration says a column is required, column mapping is the place where that gets enforced.
@@ -2791,24 +2852,24 @@ Examples:
 * Column `B` on sheet `"Detail"` in an XLSX file.
 * Column `0` in a CSV with no sheets.
 
-### Logical columns
+### Fields (canonical columns)
 
-A **logical column** is a *semantic* thing defined by the config package, for example:
+A **field** is a semantic, canonical data element defined by the config manifest, for example:
 
 * `invoice_number`
 * `bill_to_name`
 * `line_amount`
 * `posting_date`
 
-Logical columns:
+Fields:
 
 * Are described in the config manifest (name, type, whether required, etc.).
-* Do **not** know where they live in the sheet(s).
+* Do **not** know where they live in the sheet(s) until mapping assigns a physical column.
 * Are the keys hooks and outputs use.
 
 Column mapping’s role is to say:
 
-> “For this document and sheet, logical column `invoice_number` is implemented by physical column B.”
+> “For this document and sheet, field `invoice_number` is implemented by physical column B.”
 
 ### Detections
 
@@ -2821,14 +2882,14 @@ Each detection is conceptually:
 
 ```text
 DetectorFinding:
-  logical_column_id   # which logical column this relates to
+  field_id            # which field this relates to
   sheet_id            # which sheet / tab
   column_index        # which physical column
   score               # confidence or quality signal
   reasons             # optional free‑form explanation / features
 ```
 
-Different detectors can propose different columns for the same logical column; column mapping resolves these into a single choice.
+Different detectors can propose different columns for the same field; column mapping resolves these into a single choice.
 
 ### Column map
 
@@ -2837,11 +2898,11 @@ The **column map** is the main output:
 ```text
 ColumnMap:
   sheet_id -> {
-    logical_column_id -> MappedColumn
+    field_id -> MappedColumn
   }
 
 MappedColumn:
-  logical_column_id
+  field_id
   sheet_id
   column_index        # chosen physical column
   header_text         # final resolved header (if any)
@@ -2887,7 +2948,7 @@ Column mapping runs once the engine has:
 
    The manifest describes:
 
-   * the list of logical columns,
+   * the list of fields,
    * what they are called,
    * whether they’re required or optional,
    * sometimes hints like expected type/pattern (dates, numbers, strings).
@@ -2904,7 +2965,7 @@ When column mapping completes, the engine has:
 
    For each sheet being processed:
 
-   * Every logical column from the manifest will have a `MappedColumn` entry.
+   * Every field from the manifest will have a `MappedColumn` entry.
    * `MappedColumn.is_satisfied` indicates whether a physical column was found.
    * If multiple physical columns were plausible, the chosen winner is recorded along with tie‑breaking details.
 
@@ -2947,10 +3008,10 @@ For each sheet:
 1. The engine enumerates physical columns that are plausible data columns (e.g., non‑empty, not clearly metadata‑only).
 2. Each column detector runs and emits zero or more `DetectorFinding` objects.
 
-For a single logical column you might end up with:
+For a single field you might end up with:
 
 ```text
-logical_column_id = "invoice_number"
+field_id = "invoice_number"
 
 Candidates:
   B: score 0.92 (header match: "Invoice #")
@@ -2969,13 +3030,13 @@ Detectors can contribute different kinds of evidence:
 
 The engine then aggregates detector findings:
 
-* Group findings by `(sheet_id, logical_column_id, column_index)`.
+* Group findings by `(sheet_id, field_id, column_index)`.
 * Merge scores from multiple detectors into a **combined score**.
 
   * E.g., weighted sum, max, or any heuristic the engine uses.
 * Normalize scores so they’re comparable across columns.
 
-At this point, for each logical column and sheet, you have a ranked list:
+At this point, for each field and sheet, you have a ranked list:
 
 ```text
 invoice_number:
@@ -2991,22 +3052,22 @@ amount_due:
 
 ### 3. Winner selection
 
-For each `(sheet_id, logical_column_id)` pair, the engine chooses:
+For each `(sheet_id, field_id)` pair, the engine chooses:
 
 * The **best candidate** whose score clears a configurable threshold.
-* If no candidate meets the threshold, the logical column is **unmapped** on that sheet.
+* If no candidate meets the threshold, the field is **unmapped** on that sheet.
 
 Tie‑breaking typically prefers:
 
 1. Higher combined score.
-2. Columns whose headers are “cleaner” matches to the logical column name or its configured aliases.
+2. Columns whose headers are “cleaner” matches to the field name or its configured aliases.
 3. Columns nearer to other high‑confidence columns from the same "family" (e.g., `quantity`, `unit_price`, `amount_due`).
 
 ### 4. Building the `ColumnMap`
 
 Once winners are selected:
 
-* For each logical column, create a `MappedColumn`:
+* For each field, create a `MappedColumn`:
 
   * record `sheet_id`, `column_index`, `header_text`, etc.
   * include the underlying detector findings in case debugging is needed.
@@ -3021,7 +3082,7 @@ The resulting map:
 
 With a `ColumnMap` in hand, the engine validates against the config manifest:
 
-* For each required logical column:
+* For each required field:
 
   * If `is_satisfied` is `False`, add a validation error like:
 
@@ -3039,11 +3100,11 @@ Configuration or runtime settings control whether:
 
 Hooks should never need to look at physical row/column indices.
 
-Instead, hooks see **normalized rows** where keys are logical column IDs:
+Instead, hooks see **normalized rows** where keys are field IDs:
 
 ```python
 def process_row(row, context):
-    # `row` is keyed by logical columns from the config manifest
+    # `row` is keyed by fields from the config manifest
     invoice_no = row["invoice_number"]
     amount = row["amount_due"]
     posted_at = row.get("posting_date")  # may be None if optional/unmapped
@@ -3055,16 +3116,16 @@ This is made possible by column mapping:
 
 1. When the engine streams data rows, it uses the `ColumnMap` to:
 
-   * resolve which physical column(s) provide each logical column value,
+   * resolve which physical column(s) provide each field value,
    * pull the corresponding cell from the current physical row,
    * optionally coerce/normalize the value (dates, decimals, etc.).
-2. The hook receives a **logical view** of the row and never sees raw column indices.
+2. The hook receives a **field-identified view** of the row and never sees raw column indices.
 
 **Important invariants for hooks:**
 
-* The set of keys in `row` matches the logical columns defined in the manifest.
+* The set of keys in `row` matches the fields defined in the manifest.
 * Missing required columns will normally prevent hooks from running (unless configured otherwise).
-* Optional columns may be present but unmapped; in that case their value will typically be `None`.
+* Optional fields may be present but unmapped; in that case their value will typically be `None`.
 
 ---
 
@@ -3090,7 +3151,7 @@ Common patterns:
 
 The column mapping layer is responsible for:
 
-* Ensuring each `(sheet_id, logical_column_id)` is resolved independently.
+* Ensuring each `(sheet_id, field_id)` is resolved independently.
 * Exposing which sheets are “active” for a given run so hooks can iterate accordingly.
 
 ---
@@ -3132,7 +3193,7 @@ Column mapping quality is only as good as the signals it receives. When authorin
 When column mapping goes wrong, you typically see one of:
 
 * Required column reported as missing.
-* Hooks throwing `KeyError` for a logical column you expected to be mapped.
+* Hooks throwing `KeyError` for a field you expected to be mapped.
 * Output files with values shifted or clearly mismatched to their headers.
 
 To debug:
@@ -3152,7 +3213,7 @@ To debug:
 
 2. **Compare the manifest to the sheet**
 
-   * Is the logical column defined with the name/aliases you expect?
+   * Is the field defined with the name/aliases you expect?
    * Did the header wording in the file change (e.g., from “Invoice #” to “Invoice ID”)?
 
 3. **Check thresholds / configuration**
@@ -3169,14 +3230,14 @@ To debug:
 
 ## Summary
 
-Column mapping is the bridge between raw spreadsheet shape and the logical schema your config package defines. It:
+Column mapping is the bridge between raw spreadsheet shape and the field schema your config package defines. It:
 
 * combines signals from `column_detectors`,
-* chooses a single physical column for each logical column,
+* chooses a single physical column for each field,
 * enforces required vs optional columns,
-* and presents hooks with simple, named `row["logical_column"]` access.
+* and presents hooks with simple, named `row["field_name"]` access.
 
-As long as you think in terms of *logical columns* and keep column detectors focused and expressive, the engine can adapt to messy, real‑world spreadsheets while keeping your hooks and outputs stable.
+As long as you think in terms of *fields* and keep column detectors focused and expressive, the engine can adapt to messy, real‑world spreadsheets while keeping your hooks and outputs stable.
 ```
 
 # apps/ade-engine/docs/05-normalization-and-validation.md
@@ -3258,7 +3319,7 @@ Where:
   * Output of the mapping stage:
 
     * `raw: RawTable`
-    * `mapping: list[ColumnMapping]`
+    * `columns: list[MappedColumn]`
     * `extras: list[UnmappedColumn]`
 * `logger: PipelineLogger`
 
@@ -3315,7 +3376,7 @@ For each data row in `mapped.raw.data_rows`:
 1. Start with an empty `row: dict[str, Any]`.
 2. For each canonical field in `manifest.columns.order`:
 
-   * Find its `ColumnMapping` in `mapped.mapping` (if any).
+   * Find its `MappedColumn` in `mapped.columns` (if any).
    * If mapped:
 
      * Read the raw cell from `mapped.raw.data_rows[row_idx][mapping.index]`.
@@ -4631,6 +4692,8 @@ but should avoid redefining these.
 * `pipeline_transition`
   Emitted when the pipeline moves between phases:
 
+  * `"initialization"`
+  * `"load_config"`
   * `"extracting"`
   * `"mapping"`
   * `"normalizing"`
@@ -5840,7 +5903,7 @@ Key tests:
 * Per‑column scoring:
 
   * Given controlled detector outputs, verify how scores are aggregated into
-    `ColumnMapping`.
+    `MappedColumn`.
 * Threshold behavior:
 
   * Columns below `mapping_score_threshold` are not mapped.

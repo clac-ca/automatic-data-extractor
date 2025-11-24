@@ -248,7 +248,7 @@ Key tests:
 * Per‑column scoring:
 
   * Given controlled detector outputs, verify how scores are aggregated into
-    `ColumnMapping`.
+    `MappedColumn`.
 * Threshold behavior:
 
   * Columns below `mapping_score_threshold` are not mapped.
