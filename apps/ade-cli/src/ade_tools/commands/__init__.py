@@ -17,7 +17,6 @@ from . import setup
 from . import start
 from . import tests
 from . import types_cmd
-from . import workpackage
 
 COMMAND_MODULES = (
     setup,
@@ -33,7 +32,6 @@ COMMAND_MODULES = (
     docker,
     clean_reset,
     ci,
-    workpackage,
 )
 
 

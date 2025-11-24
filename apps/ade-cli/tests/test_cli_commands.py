@@ -8,7 +8,6 @@ from ade_tools import cli
 from ade_tools.commands import build
 from ade_tools.commands import ci
 from ade_tools.commands import common
-from ade_tools.commands import workpackage
 
 runner = CliRunner()
 
@@ -16,27 +15,8 @@ runner = CliRunner()
 def test_help_includes_documented_commands() -> None:
     result = runner.invoke(cli.app, ["--help"])
     assert result.exit_code == 0
-    for command in ("routes", "openapi-types", "ci", "workpackage", "bundle"):
+    for command in ("routes", "openapi-types", "ci", "bundle"):
         assert command in result.stdout
-
-
-def test_workpackage_delegates_to_node_script(tmp_path, monkeypatch) -> None:
-    script = tmp_path / "scripts" / "npm-workpackage.mjs"
-    script.parent.mkdir(parents=True)
-    script.write_text("// test helper")
-
-    calls: dict[str, object] = {}
-
-    monkeypatch.setattr(common, "refresh_paths", lambda: calls.setdefault("refreshed", True))
-    monkeypatch.setattr(common, "REPO_ROOT", tmp_path)
-    monkeypatch.setattr(common, "require_command", lambda *_, **__: "node-bin")
-    monkeypatch.setattr(common, "run", lambda cmd, cwd=None, env=None: calls.update(cmd=cmd, cwd=cwd))
-
-    workpackage.run_workpackage(["status", "123"])
-
-    assert calls["refreshed"] is True
-    assert calls["cmd"] == ["node-bin", str(script), "status", "123"]
-    assert calls["cwd"] == tmp_path
 
 
 def test_ci_continues_when_types_exits_zero(monkeypatch) -> None:
