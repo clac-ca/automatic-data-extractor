@@ -32,7 +32,7 @@ The IO + extract layer has three core responsibilities:
 
 Design constraints:
 
-- **No job/backend knowledge** — everything is path‑based.
+- **Run-scoped, not backend-job aware** — everything is path‑based.
 - **Streaming‑friendly** — large workbooks should not require large amounts
   of memory.
 - **Config‑driven** — row detectors are provided by `ade_config`, not hard‑coded.
@@ -223,7 +223,7 @@ A typical row detector has this shape:
 ```python
 def detect_header_or_data(
     *,
-    job,                 # RunContext (named "job" for historical reasons)
+    run,                 # RunContext (config-facing view of the run)
     state: dict,
     row_index: int,      # 1-based index within the sheet
     row_values: list,    # raw cell values for this row
@@ -242,7 +242,7 @@ def detect_header_or_data(
 
 Conventions:
 
-* `job` is read‑only from the config’s perspective (it is a `RunContext`).
+* `run` is read‑only from the config’s perspective (it is a `RunContext`).
 * `state` is a per‑run dict that detectors may use to coordinate across rows.
 * `manifest` and `env` provide config‑level context (locale, date formats, etc.).
 * `logger` allows emitting notes and telemetry if needed.
@@ -278,28 +278,26 @@ RowScore = {
 Exact thresholds and label names are implementation details but should be
 documented in code comments and tests.
 
-### 5.4 Heuristics for deciding table boundaries
+### 5.4 Heuristics for deciding table boundaries (multiple per sheet)
 
-Using row scores, `pipeline/extract.py` decides where tables begin and end.
+Using row scores, `pipeline/extract.py` can find **multiple logical tables per sheet**. The
+baseline flow:
 
-Baseline behavior (for a single table per sheet):
+1. Scan rows top‑down, looking for a **header candidate** above a threshold.
+   * The first qualifying header starts **Table 0** on that sheet.
+2. From that header, accumulate contiguous **data rows** above a data threshold.
+   * Trailing low‑signal rows are trimmed.
+3. After a data block ends (or after trimming), continue scanning **below the last data row**
+   for the next header candidate. If found, start **Table 1**, and repeat.
+4. Stop when the end of the sheet is reached or no further header candidates pass the threshold.
+5. If no header/data block is found at all, the sheet produces no `RawTable` and the engine
+   logs an informative diagnostic.
 
-1. Scan rows top‑down until a row passes a **header threshold**:
+CSV inputs follow the same logic but have a single implicit sheet.
 
-   * First such row → header row.
-2. Starting from the row after the header:
-
-   * Rows that pass a **data threshold** are considered data rows.
-   * Trailing blocks of rows with very low data signal are ignored.
-3. If no header or data block is found:
-
-   * The sheet does not produce a `RawTable`.
-   * Engine logs an informative diagnostic.
-
-For CSV, the same logic is applied, but there is only a single “sheet.”
-
-Heuristics (thresholds, minimum row counts, gap handling) are tunable in code
-and may be influenced by manifest defaults (e.g., minimum data rows).
+Heuristics (thresholds, minimum row counts, required gaps between tables) are tunable in code
+and may be influenced by manifest defaults (e.g., minimum data rows). The ordering of tables per
+sheet is deterministic: top‑to‑bottom as discovered.
 
 ---
 
@@ -313,6 +311,7 @@ Once a table is identified, the engine materializes a `RawTable` dataclass
 class RawTable:
     source_file: Path
     source_sheet: str | None
+    table_index: int              # 0-based ordinal within the sheet
     header_row: list[str]          # normalized header cells
     data_rows: list[list[Any]]     # all data rows for the table
     header_index: int              # 1-based row index of header in the sheet
@@ -324,6 +323,7 @@ Details:
 
 * `source_file` — absolute path to the input file.
 * `source_sheet` — sheet name for XLSX; `None` for CSV.
+* `table_index` — 0-based order in which tables were detected within the sheet.
 * `header_row` — header cells normalized to strings (e.g. `None` → `""`).
 * `data_rows` — full set of rows between `first_data_index` and
   `last_data_index` that the algorithm considers part of the table.

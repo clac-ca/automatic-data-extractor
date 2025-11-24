@@ -35,11 +35,11 @@ The engine itself is **business‑logic free**: all domain rules live in `ade_co
 In production, the ADE API:
 
 - builds a **frozen venv** per config (`ade_engine` + a specific `ade_config` version),
-- then, for each **job**, launches a worker (process or thread) inside that venv,
+- then, for each **run request** (often tied to a backend job), launches a worker (process or thread) inside that venv,
 - and calls the engine with **file paths** (input / output / logs).
 
 From the engine’s perspective, it just runs synchronously inside an isolated environment
-with `ade_config` installed; **job IDs and workspace concepts are handled entirely by the backend**.
+with `ade_config` installed; **it is run-scoped only—job IDs and workspace concepts belong to the backend**.
 
 ---
 
@@ -53,11 +53,11 @@ The deployment model is:
   - Optionally pins dependencies and writes a `packages.txt` for reproducibility.
 
 - **Run time (inside the venv)**  
-  - Backend dispatches a job to a worker (thread/process/container).  
+  - Backend dispatches a run to a worker (thread/process/container).  
   - Worker activates that venv and invokes the engine with explicit paths:
 
     ```bash
-    # Typical worker invocation from the ADE API
+    # Typical worker invocation from the ADE API (one run, often inside a backend job)
     /path/to/.venv/<config_id>/<build_id>/bin/python \
       -m ade_engine \
       --input /data/jobs/<job_id>/input/input.xlsx \
@@ -71,65 +71,73 @@ The deployment model is:
     - runs the pipeline once for that call,
     - writes `normalized.xlsx`, `artifact.json`, `events.ndjson` to the given output/logs dirs.
 
-The **engine does not know or care about job IDs**. It only needs:
+The **engine does not know or care about backend job IDs**. It only needs:
 
 - the config to use (`config_package`, `manifest_path`),
 - one or more **input files**,
 - where to write outputs and logs.
 
-The ADE API is responsible for mapping those paths back to a job record in its own database.
+The ADE API is responsible for mapping those paths back to any job record in its own database.
 
 The engine has **no knowledge** of:
 
 - the ADE API,
 - workspaces, config package registry, or queues,
-- job IDs,
+- backend jobs or their IDs,
 - how many threads/processes are running.
 
-It is a pure “input files → normalized workbook + logs” component.
+It is a pure “input files → normalized workbook + logs” component. The backend may choose to associate one job with one or many runs; that mapping stays outside the engine.
 
 ---
 
-## 2. Package layout
+## 2. Package layout (layered)
 
-The `ade_engine` package is organized by responsibility, using standard Python conventions.
+The engine is organized into **three layers**. The code can remain flat, but
+naming and directories should make the separation obvious:
 
 ```text
 ade_engine/
-  __init__.py          # Public API: Engine, run(), RunRequest, RunResult, __version__
-  __main__.py          # `python -m ade_engine` → cli.main()
+  core/                      # pure runtime + domain types
+    engine.py                # Engine class + high-level run() orchestration
+    types.py                 # RunRequest, RunResult, RunContext, tables, enums
+    config_runtime.py        # Load manifest, detectors, transforms, validators, hooks from ade_config
+    pipeline/
+      __init__.py            # Re-exports execute_pipeline() and stage helpers
+      extract.py             # Use IO + row detectors to find tables → RawTable[]
+      mapping.py             # Column detectors → ColumnMapping/ExtraColumn per table
+      normalize.py           # Transforms + validators → NormalizedTable + ValidationIssue[]
+      write.py               # Compose normalized tables into Excel workbook(s)
+      runner.py              # PipelineRunner: orchestrates phases & transitions (formerly pipeline.py)
 
-  engine.py            # Engine class + high-level run() orchestration
-  types.py             # Shared dataclasses (RunRequest, RunResult, RunContext, tables, enums)
-  config_runtime.py    # Load manifest, detectors, transforms, validators, hooks from ade_config
-  io.py                # CSV/XLSX IO: list_input_files, iter_sheet_rows, etc.
-  hooks.py             # HookStage enum + HookRegistry + HookContext
-  artifact.py          # ArtifactSink + FileArtifactSink + ArtifactBuilder (artifact.json)
-  telemetry.py         # TelemetryConfig, TelemetryBindings, event sinks, PipelineLogger
-  cli.py               # CLI entrypoint (args parsing, JSON output / error codes)
+  infra/                     # IO + artifacts + telemetry plumbing
+    io.py                    # CSV/XLSX IO: list_input_files, iter_sheet_rows, etc.
+    hooks.py                 # HookStage enum + HookRegistry + HookContext
+    artifact.py              # ArtifactSink + FileArtifactSink + ArtifactBuilder (artifact.json)
+    telemetry.py             # TelemetryConfig, TelemetryBindings, event sinks, PipelineLogger
 
-  pipeline/
-    __init__.py        # Re-exports execute_pipeline() and stage helpers
-    extract.py         # Use IO + row detectors to find tables → RawTable[]
-    mapping.py         # Column detectors → ColumnMapping/ExtraColumn per table
-    normalize.py       # Transforms + validators → NormalizedTable + ValidationIssue[]
-    write.py           # Compose normalized tables into Excel workbook(s)
-    pipeline.py        # PipelineRunner: orchestrates phases & transitions
+  interface/                 # API + CLI entrypoints
+    __init__.py              # Public API: Engine, run(), RunRequest, RunResult, __version__
+    cli.py                   # CLI entrypoint (args parsing, JSON output / error codes)
+    __main__.py              # `python -m ade_engine` → cli.main()
 
   schemas/
     __init__.py
-    manifest.py        # Pydantic models for config manifest + JSON schema generator
-    telemetry.py       # Pydantic models for telemetry envelopes + JSON schema generator
+    manifest.py              # Pydantic models for config manifest + JSON schema generator
+    telemetry.py             # Pydantic models for telemetry envelopes + JSON schema generator
+```
 
-````
+Notes:
 
-If you know this tree, you know where everything lives:
+* The **layering is architectural**: core should avoid infra (except through well-defined seams), and interface depends on both. If the code stays in a flat package, mirror this naming so the separation stays legible.
+* Renaming `pipeline/pipeline.py` to `pipeline/runner.py` and grouping IO/artifact/telemetry under an `infra` banner makes the core vs infrastructure boundary obvious to new readers.
 
-* **“How do I run the engine?”** → `engine.py`, `__init__.py`
-* **“How do we load config scripts?”** → `config_runtime.py`
-* **“How do we read Excel/CSV?”** → `io.py`
-* **“How does the pipeline work?”** → `pipeline/`
-* **“Where is artifact/telemetry written?”** → `artifact.py`, `telemetry.py`
+If you know this layout, you know where everything lives:
+
+* **“How do I run the engine?”** → `core/engine.py`, `interface/__init__.py`
+* **“How do we load config scripts?”** → `core/config_runtime.py`
+* **“How do we read Excel/CSV?”** → `infra/io.py`
+* **“How does the pipeline work?”** → `core/pipeline/`
+* **“Where is artifact/telemetry written?”** → `infra/artifact.py`, `infra/telemetry.py`
 * **“What does the manifest look like?”** → `schemas/manifest.py` (Python models)
   (JSON schemas can be generated from these models for external validation)
 
@@ -214,7 +222,7 @@ it fails fast with a `ValueError` rather than guessing.
 
 In the simplest case, the ADE API:
 
-* resolves the job’s primary input file (e.g. `/data/jobs/<job_id>/input/input.xlsx`),
+* resolves the run’s primary input file (often inside a backend job folder, e.g. `/data/jobs/<job_id>/input/input.xlsx`),
 * chooses output/logs dirs (e.g. `/data/jobs/<job_id>/output` and `/data/jobs/<job_id>/logs`),
 * and calls:
 
@@ -292,7 +300,7 @@ detectors, transforms, validators, and hooks can share during that run. It is ne
 shared across runs.
 
 The ADE backend may include a `job_id` inside `metadata`, but the engine just treats it as
-opaque metadata.
+opaque metadata. The engine is always run-scoped; any job/run mapping is a backend concern.
 
 Because all per‑run state lives on `RunContext` and not on the `Engine` instance itself,
 the `Engine` class is **logically stateless** and can be safely reused across requests or
@@ -307,6 +315,7 @@ These types model tables and mapping/normalization results.
 class RawTable:
     source_file: Path
     source_sheet: str | None
+    table_index: int              # 0-based ordinal within the sheet (supports multiple tables per sheet)
     header_row: list[str]
     data_rows: list[list[Any]]
     header_index: int         # 1-based row index in original sheet
@@ -523,7 +532,7 @@ Under the hood, `Engine.run()`:
 2. Calls `load_config_runtime()` to load the manifest, column detectors, row detectors, and hooks.
 3. Binds telemetry sinks (`TelemetryConfig.bind`) and creates a `PipelineLogger`.
 4. Calls `ON_RUN_START` hooks.
-5. Calls `execute_pipeline()` in `pipeline/pipeline.py`:
+5. Calls `execute_pipeline()` in `pipeline/runner.py`:
 
    * `extract_tables` → `RawTable[]`
    * `map_table` per table → `MappedTable`
@@ -533,9 +542,9 @@ Under the hood, `Engine.run()`:
 7. Returns a `RunResult`.
 
 The engine is single‑run and synchronous: **one call → one pipeline run**. Concurrency
-across jobs is handled by the ADE API / worker framework, which:
+across runs is handled by the ADE API / worker framework, which:
 
-* looks up the job record,
+* looks up the backend record (job/task/request),
 * resolves input/output/log paths,
 * then calls `Engine.run()` (or the CLI) in the appropriate venv.
 
@@ -548,7 +557,7 @@ A typical integration in the ADE backend looks like:
 2. Backend:
 
    * ensures a venv exists for `<config_id>/<build_id>` with `ade_engine` + `ade_config` installed,
-   * resolves the document path and creates a job folder with `input/`, `output/`, `logs/`.
+   * resolves the document path and creates a per-run working folder (often nested inside a job) with `input/`, `output/`, `logs/`.
 
 3. Backend enqueues a worker task that:
 
@@ -568,9 +577,9 @@ A typical integration in the ADE backend looks like:
      ```
 
 4. Backend stores `RunResult` info and/or parses `artifact.json` and `events.ndjson`
-   to update job status, reports, etc.
+   to update backend job status, reports, etc.
 
-The engine has **no idea** that a “job” exists; it only sees file paths and metadata.
+The engine has **no idea** that a backend “job” exists; it only sees file paths and metadata.
 
 ---
 
@@ -586,8 +595,8 @@ Responsible for:
 
   * Iterate rows using `io.iter_sheet_rows`
   * Run row detectors (if configured) to score header/data rows
-  * Decide table boundaries (header row, first/last data row)
-  * Materialize `RawTable` objects
+  * Decide table boundaries (header row, first/last data row), continuing to scan for additional tables lower in the sheet
+  * Materialize `RawTable` objects (multiple per sheet supported via `table_index`)
 
 API:
 
@@ -613,7 +622,7 @@ For each `RawTable`:
 
    * Call all `detect_*` functions in the field’s script with:
 
-     * `job`, `state`, `field_name`, `field_meta`, `header`,
+     * `run`, `state`, `field_name`, `field_meta`, `header`,
        `column_values_sample`, `column_values`, `table`, `column_index`,
        `manifest`, `env`, `logger`
 3. Aggregate scores per field and record `ScoreContribution`s.
@@ -650,13 +659,13 @@ For each `MappedTable`:
 2. Run `transform` for each field module (if present):
 
    ```python
-   def transform(
-       *,
-       job,
-       state: dict,
-       row_index: int,
-       field_name: str,
-       value,
+def transform(
+    *,
+    run,
+    state: dict,
+    row_index: int,
+    field_name: str,
+    value,
        row: dict,                   # canonical row dict (field -> value)
        field_meta: dict | None,
        manifest: dict,
@@ -670,13 +679,13 @@ For each `MappedTable`:
 3. Run `validate` for each field module (if present):
 
    ```python
-   def validate(
-       *,
-       job,
-       state: dict,
-       row_index: int,
-       field_name: str,
-       value,
+def validate(
+    *,
+    run,
+    state: dict,
+    row_index: int,
+    field_name: str,
+    value,
        row: dict,
        field_meta: dict | None,
        manifest: dict,
@@ -734,7 +743,7 @@ def write_workbook(
     ...
 ```
 
-### 6.5 `pipeline.py` – orchestrate phases
+### 6.5 `runner.py` – orchestrate phases
 
 `PipelineRunner` coordinates the stages and phase transitions:
 
@@ -766,14 +775,19 @@ The artifact is a JSON document that records:
 
 * run metadata (ID, status, timestamps)
 * config info (schema, version)
-* tables (input metadata, mapping, validation issues)
+* tables (input metadata, table_index for multiple tables per sheet, mapping, validation issues)
 * notes (high‑level narrative and hook‑written notes)
+
+Boundaries:
+
+* Artifact stays compact and human-friendly: run-level metadata, compact mapping summaries (with per-column contributions), compact validation summaries, high-level notes.
+* Telemetry (`events.ndjson`) carries per-row or debug-level detail; avoid stuffing raw detector scores for every row/column into `artifact.json`.
 
 `FileArtifactSink` implements:
 
 ```python
 class FileArtifactSink(ArtifactSink):
-    def start(self, *, job: RunContext, manifest: dict): ...
+    def start(self, *, run: RunContext, manifest: dict): ...
     def note(self, message: str, *, level: str = "info", **extra): ...
     def record_table(self, table: dict): ...
     def mark_success(self, *, completed_at: datetime, outputs: Iterable[Path]): ...
@@ -808,6 +822,7 @@ The backing JSON shape is simple and self‑describing; structurally it might lo
     {
       "input_file": "input.xlsx",
       "input_sheet": "Sheet1",
+      "table_index": 0,
       "header": {
         "row_index": 5,
         "cells": ["ID","Email", "..."]
@@ -853,8 +868,8 @@ The backing JSON shape is simple and self‑describing; structurally it might lo
 ```
 
 Because every worker writes its own `artifact.json` for its run
-(often in a per‑job logs folder chosen by the backend),
-the ADE API can safely run many jobs in parallel without the engine
+(often in a per‑run logs folder living under a backend job directory),
+the ADE API can safely run many runs in parallel across backend jobs without the engine
 needing any shared global state.
 
 ### 7.2 Telemetry (`telemetry.py`)
@@ -903,17 +918,15 @@ The ADE API can:
 
 For completeness, here’s the **contract** between the engine and `ade_config`.
 
-All script entrypoints are **keyword‑only** functions and should accept `**_` to stay forward compatible.
-
-Although the parameter is named `job` for historical reasons, it is really a `RunContext`
-containing the manifest, paths, metadata, etc., and **does not require a job ID**.
+All script entrypoints are **keyword‑only** functions, should accept `**_` to stay forward compatible,
+and receive a `RunContext` as `run` (formerly called `job`).
 
 ### 8.1 Row detectors (`ade_config.row_detectors.header` / `data`)
 
 ```python
 def detect_*(
     *,
-    job,                 # RunContext (read-only from config’s perspective)
+    run,                 # RunContext (read-only from config’s perspective)
     state: dict,
     row_index: int,      # 1-based index in the sheet
     row_values: list,    # raw cell values for this row
@@ -930,7 +943,7 @@ def detect_*(
 ```python
 def detect_*(
     *,
-    job,
+    run,
     state: dict,
     field_name: str,
     field_meta: dict,            # manifest["columns"]["meta"][field_name]
@@ -952,7 +965,7 @@ def detect_*(
 ```python
 def transform(
     *,
-    job,
+    run,
     state: dict,
     row_index: int,
     field_name: str,
@@ -973,7 +986,7 @@ def transform(
 ```python
 def validate(
     *,
-    job,
+    run,
     state: dict,
     row_index: int,
     field_name: str,
@@ -991,23 +1004,41 @@ def validate(
 
 ### 8.5 Hooks (`ade_config.hooks.*`)
 
+Recommended context-first style:
+
 ```python
-def run(
-    *,
-    job,               # RunContext
-    state: dict,
-    manifest: dict,
-    env: dict | None,
-    artifact,          # ArtifactSink
-    events,            # EventSink | None
-    tables=None,       # depends on stage: RawTable[] / MappedTable[] / NormalizedTable[]
-    workbook=None,     # for on_before_save
-    result=None,       # for on_run_end
-    logger=None,
-    **_,
-) -> None:
+from ade_engine.types import RunResult, RunContext
+from ade_engine.hooks import HookContext, HookStage
+from ade_engine.pipeline import RawTable, MappedTable, NormalizedTable
+from openpyxl import Workbook
+from typing import Any
+
+@dataclass
+class HookContext:
+    run: RunContext
+    state: dict[str, Any]
+    manifest: Any               # ManifestContext | dict, depending on exposure
+    env: dict[str, str]
+    artifact: Any               # ArtifactSink
+    events: Any | None          # EventSink | None
+    tables: list[RawTable | MappedTable | NormalizedTable] | None
+    workbook: Workbook | None
+    result: RunResult | None
+    logger: Any                 # PipelineLogger
+    stage: HookStage
+
+def run(ctx: HookContext) -> None:
+    ctx.logger.note("Run started", stage=ctx.stage.value)
+```
+
+The engine also accepts the existing keyword-only style for transition:
+
+```python
+def run(*, run, state, manifest, env, artifact, events, tables=None, workbook=None, result=None, logger=None, **_):
     ...
 ```
+
+Hook stages (manifest keys → `HookStage` mapping):
 
 Hook stages (manifest keys → `HookStage` mapping):
 
@@ -1050,9 +1081,10 @@ The CLI prints a JSON summary including:
 * artifact/events paths
 * error (if any)
 
-The ADE backend uses this pattern to run jobs asynchronously: the API enqueues a job;
-a worker process/thread in the correct venv executes the CLI; the engine does its work
-and writes outputs/logs; the API reads `artifact.json`/`events.ndjson` to drive UIs and reports.
+The ADE backend uses this pattern to run asynchronously: the API enqueues a job or task,
+a worker process/thread in the correct venv executes the CLI for a single run,
+the engine does its work and writes outputs/logs, and the API reads
+`artifact.json`/`events.ndjson` to drive UIs and reports.
 
 ---
 
@@ -1062,8 +1094,8 @@ This architecture is intentionally:
 
 * **Config‑centric** – ADE engine is a generic spreadsheet pipeline,
   driven entirely by `ade_config` (manifest + scripts).
-* **Path‑based, not job‑based** – the engine deals in **files and folders** only.
-  Job IDs and higher‑level orchestration live in the ADE API.
+* **Path‑based, run‑scoped** – the engine deals in **files and folders** only.
+  Higher‑level orchestration (jobs, queues, retries) lives in the ADE API.
 * **Predictable** – All public entry points and file names follow standard patterns:
 
   * `Engine.run`, `RunRequest`/`RunResult`

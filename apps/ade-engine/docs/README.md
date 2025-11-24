@@ -4,6 +4,14 @@ This folder contains deeper “chapters” that expand on the high-level overvie
 in `ade_engine/README.md`. Read that first, then use this folder as a reference
 while building or extending the engine and configs.
 
+### Layered structure (at a glance)
+
+The runtime is organized conceptually into three layers (even if the code stays flat):
+
+* **core/** — engine orchestration and domain types (`engine.py`, `types.py`, `pipeline/`, `config_runtime.py`)
+* **infra/** — IO, hooks, artifacts, telemetry (`io.py`, `hooks.py`, `artifact.py`, `telemetry.py`)
+* **interface/** — public entrypoints (`__init__.py`, `cli.py`, `__main__.py`)
+
 Recommended reading order (mirrors the pipeline flow):
 
 1. [`01-engine-runtime.md`](./01-engine-runtime.md)  

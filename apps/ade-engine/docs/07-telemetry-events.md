@@ -139,7 +139,7 @@ class EventSink(Protocol):
         self,
         event: str,
         *,
-        job: RunContext,
+        run: RunContext,
         level: str = "info",
         **payload: Any,
     ) -> None:

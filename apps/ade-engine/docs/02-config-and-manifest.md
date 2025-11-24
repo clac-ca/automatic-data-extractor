@@ -194,7 +194,7 @@ This gives the pipeline and config runtime a clean, typed surface:
 * `ctx.manifest.env` for script configuration.
 
 The **same `ManifestContext` instance** is stored on `RunContext` and passed to
-scripts via the `job` argument (see script API docs).
+scripts via the `run` argument (see script API docs).
 
 ---
 

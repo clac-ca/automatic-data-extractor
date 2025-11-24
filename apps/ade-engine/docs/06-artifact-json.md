@@ -84,10 +84,16 @@ The artifact schema is intentionally:
   - Count validation issues by field/code/severity.
   - See how many tables were processed and from which sheets.
 
-- **Job‑agnostic**  
+- **Backend‑job‑agnostic**  
   No first‑class job concept. Backend can pass `job_id`, `config_id`, etc.
   via `RunRequest.metadata`; the engine stores them under `run.metadata`
   without understanding them.
+
+- **Deliberately minimal**  
+  Artifact is the stable, human‑readable audit log: run‑level metadata, compact
+  mapping summaries (with per-column contributions), compact validation summaries,
+  and high‑level notes. Per-row or debug chatter belongs in telemetry
+  (`events.ndjson`), not in `artifact.json`, to keep artifacts small even on large runs.
 
 ---
 
@@ -232,6 +238,7 @@ Each element in `tables` describes one logical table detected in the input:
   {
     "input_file": "input.xlsx",
     "input_sheet": "Sheet1",
+    "table_index": 0,
     "header": {
       "row_index": 5,
       "cells": ["ID", "Email", "..."]
@@ -287,12 +294,16 @@ Each element in `tables` describes one logical table detected in the input:
 * `input_sheet: str | null`
   Excel sheet name, or `null` for CSV.
 
+* `table_index: int`
+  0-based order of the table within the sheet (supports multiple tables per sheet).
+
 * `header: object`
 
   * `row_index: int` — 1‑based row index within the sheet.
   * `cells: string[]` — header row cells as strings.
 
-The **table identity** is implicitly `(input_file, input_sheet, header.row_index)`.
+The **table identity** is `(input_file, input_sheet, table_index)`; `header.row_index`
+is still recorded for traceability.
 
 ### 6.2 `mapping` entries
 
@@ -427,6 +438,13 @@ Notes may be produced by:
 
 Use `notes` for high‑level narrative. Use telemetry (`events.ndjson`) for
 more granular event streams.
+
+**Boundary:**
+
+Keep `artifact.json` compact: run metadata, compact mapping summaries (with
+per-column contributions), validation summaries, and durable notes. Put
+per-row debug or verbose detector outputs into telemetry events instead of
+artifact.
 
 ---
 

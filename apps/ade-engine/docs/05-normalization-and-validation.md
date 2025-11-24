@@ -174,7 +174,7 @@ Standard keyword-only signature:
 ```python
 def transform(
     *,
-    job,                    # RunContext (named "job" for historical reasons)
+    run,                    # RunContext (config-facing view of the run)
     state: dict,            # shared per-run scratch space
     row_index: int,         # original sheet row index (1-based)
     field_name: str,        # canonical field
@@ -191,7 +191,7 @@ def transform(
 
 Parameters to remember:
 
-* `job`: full run context (paths, metadata, env).
+* `run`: full run context (paths, metadata, env).
 * `state`: mutable dict shared across all rows and scripts within this run.
 * `row_index`: traceability back to original file.
 * `field_name`, `value`, `row`: the core of the normalization work.
@@ -275,7 +275,7 @@ Standard keyword-only signature:
 ```python
 def validate(
     *,
-    job,
+    run,
     state: dict,
     row_index: int,
     field_name: str,
@@ -425,7 +425,7 @@ For each row:
 * Append them to `NormalizedTable.issues`.
 
 Normalization does **not** decide whether issues are “fatal” or not; it only
-records them. Policy decisions (e.g., “fail the job if any `severity="error"`”)
+records them. Policy decisions (e.g., “fail the run if any `severity="error"`”)
 belong in the ADE backend or in hooks.
 
 ---

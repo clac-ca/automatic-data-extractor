@@ -20,7 +20,7 @@ the pipeline (`extract → mapping → normalize → write`).
 
 At a high level:
 
-- Each engine run has a single **`RunContext`** (`job` in script APIs).
+- Each engine run has a single **`RunContext`** (passed into script APIs as `run`).
 - The engine executes the pipeline in phases.
 - At certain phases, it calls **hook functions** defined in `ade_config.hooks`.
 - Hooks receive:
@@ -133,76 +133,8 @@ Responsibilities:
 * Discover the callable to execute (entrypoint).
 * Group hooks by stage (`on_run_start`, `on_after_extract`, etc.) in order.
 
-The pipeline orchestrator then does something conceptually like:
-
-```python
-# on_run_start
-hooks.call(
-    stage="on_run_start",
-    job=ctx,
-    state=ctx.state,
-    manifest=ctx.manifest.raw,
-    env=ctx.env,
-    artifact=artifact_sink,
-    events=event_sink,
-    logger=pipeline_logger,
-)
-
-# on_after_extract
-hooks.call(
-    stage="on_after_extract",
-    job=ctx,
-    state=ctx.state,
-    manifest=ctx.manifest.raw,
-    env=ctx.env,
-    artifact=artifact_sink,
-    events=event_sink,
-    tables=raw_tables,
-    logger=pipeline_logger,
-)
-
-# on_after_mapping
-hooks.call(
-    stage="on_after_mapping",
-    job=ctx,
-    state=ctx.state,
-    manifest=ctx.manifest.raw,
-    env=ctx.env,
-    artifact=artifact_sink,
-    events=event_sink,
-    tables=mapped_tables,
-    logger=pipeline_logger,
-)
-
-# on_before_save
-hooks.call(
-    stage="on_before_save",
-    job=ctx,
-    state=ctx.state,
-    manifest=ctx.manifest.raw,
-    env=ctx.env,
-    artifact=artifact_sink,
-    events=event_sink,
-    tables=normalized_tables,
-    workbook=workbook,
-    logger=pipeline_logger,
-)
-
-# on_run_end
-hooks.call(
-    stage="on_run_end",
-    job=ctx,
-    state=ctx.state,
-    manifest=ctx.manifest.raw,
-    env=ctx.env,
-    artifact=artifact_sink,
-    events=event_sink,
-    result=run_result,
-    logger=pipeline_logger,
-)
-```
-
-If a stage has no configured hooks, `HookRegistry` is a no‑op for that stage.
+The pipeline orchestrator builds a `HookContext` for each stage and dispatches
+it to hooks; if a stage has no configured hooks, `HookRegistry` is a no‑op.
 
 ---
 
@@ -210,51 +142,52 @@ If a stage has no configured hooks, `HookRegistry` is a no‑op for that stage.
 
 Hook modules are regular Python modules in `ade_config.hooks.*`.
 
-### 5.1 Recommended signature
+### 5.1 Recommended signature (context-first)
 
-The engine looks for a **`run` function** with a keyword‑only signature:
+Hooks should take a single `HookContext` argument for consistency:
 
 ```python
-def run(
-    *,
-    job,               # RunContext (called "job" for historical reasons)
-    state: dict,
-    manifest: dict,
-    env: dict | None,
-    artifact,          # ArtifactSink
-    events,            # EventSink | None
-    tables=None,       # stage-dependent: RawTable[] / MappedTable[] / NormalizedTable[]
-    workbook=None,     # openpyxl.Workbook for on_before_save
-    result=None,       # RunResult for on_run_end
-    logger=None,       # PipelineLogger
-    **_,
-) -> None:
-    ...
+from dataclasses import dataclass
+from typing import Any
+from ade_engine.hooks import HookContext, HookStage
+from ade_engine.types import RunResult, RunContext
+from ade_engine.pipeline import RawTable, MappedTable, NormalizedTable
+from openpyxl import Workbook
+
+@dataclass
+class HookContext:
+    run: RunContext
+    state: dict[str, Any]
+    manifest: Any               # ManifestContext | dict
+    env: dict[str, str]
+    artifact: Any               # ArtifactSink
+    events: Any | None          # EventSink | None
+    tables: list[RawTable | MappedTable | NormalizedTable] | None
+    workbook: Workbook | None
+    result: RunResult | None
+    logger: Any                 # PipelineLogger
+    stage: HookStage
+
+def run(ctx: HookContext) -> None:
+    ctx.logger.note("Run started", stage=ctx.stage.value)
 ```
 
 Guidelines:
 
-* Always accept `**_` to remain forward compatible with future parameters.
-* Treat `job` as read‑only engine context; use `state` for mutable per‑run data.
-* Use `logger` as the primary way to emit notes/events:
+* Use `ctx.state` for mutable per‑run data; treat `ctx.run` as read‑only engine context.
+* Use `ctx.logger` for notes/events; reach for `ctx.artifact`/`ctx.events` only when you need sink-level control.
+* `ctx.tables`, `ctx.workbook`, and `ctx.result` are stage-dependent and may be `None`.
 
-  * `logger.note("...", level="info", **details)`
-  * `logger.event("...", level="info", **payload)`
-* Use `artifact` and `events` only if you need direct sink control.
+### 5.2 Keyword style (supported for transition)
 
-### 5.2 Optional `HookContext` style
-
-The engine **may** also support a single‑argument style if you prefer:
+The engine still supports the previous keyword‑only signature for transitional configs:
 
 ```python
-def run(ctx) -> None:
-    # ctx.job, ctx.state, ctx.manifest, ctx.env, ctx.artifact, ctx.events,
-    # ctx.tables, ctx.workbook, ctx.result, ctx.logger
+def run(*, run, state, manifest, env, artifact, events, tables=None, workbook=None, result=None, logger=None, **_):
     ...
 ```
 
-This is purely a convenience; the recommended, explicit style is the
-keyword‑only function.
+Prefer the context-first style for new work; support for the keyword variant remains for compatibility.
 
 ---
 
@@ -345,14 +278,14 @@ Below are typical uses of each hook stage.
 
 ```python
 # ade_config/hooks/on_run_start.py
-def run(*, job, state, manifest, env, artifact, events, logger=None, **_):
-    state["start_timestamp"] = job.started_at.isoformat()
-    state["config_version"] = manifest["info"]["version"]
+def run(ctx):
+    ctx.state["start_timestamp"] = ctx.run.started_at.isoformat()
+    ctx.state["config_version"] = ctx.manifest["info"]["version"]
 
-    logger.note(
+    ctx.logger.note(
         "Run started",
-        config_title=manifest["info"].get("title"),
-        config_version=manifest["info"]["version"],
+        config_title=ctx.manifest["info"].get("title"),
+        config_version=ctx.manifest["info"]["version"],
     )
 ```
 
@@ -360,9 +293,9 @@ def run(*, job, state, manifest, env, artifact, events, logger=None, **_):
 
 ```python
 # ade_config/hooks/on_after_extract.py
-def run(*, tables, logger, **_):
-    for t in tables:
-        logger.note(
+def run(ctx):
+    for t in ctx.tables or []:
+        ctx.logger.note(
             "Extracted table",
             file=str(t.source_file),
             sheet=t.source_sheet,
@@ -371,7 +304,7 @@ def run(*, tables, logger, **_):
         )
 
         if len(t.data_rows) == 0:
-            logger.note(
+            ctx.logger.note(
                 "Empty table detected",
                 level="warning",
                 file=str(t.source_file),
@@ -383,14 +316,14 @@ def run(*, tables, logger, **_):
 
 ```python
 # ade_config/hooks/on_after_mapping.py
-def run(*, tables, logger, **_):
-    for table in tables:
+def run(ctx):
+    for table in ctx.tables or []:
         # Example: ensure at most one "email" mapping
         seen_email = False
         for m in table.mapping:
             if m.field == "email":
                 if seen_email:
-                    logger.note(
+                    ctx.logger.note(
                         "Dropping duplicate email mapping",
                         level="warning",
                         header=m.header,
@@ -405,46 +338,44 @@ def run(*, tables, logger, **_):
 
 ```python
 # ade_config/hooks/on_before_save.py
-def run(*, tables, workbook, manifest, logger=None, **_):
-    summary = workbook.create_sheet(title="ADE Summary")
+def run(ctx):
+    summary = ctx.workbook.create_sheet(title="ADE Summary")
 
     summary["A1"] = "Config"
-    summary["B1"] = manifest["info"]["title"]
+    summary["B1"] = ctx.manifest["info"]["title"]
     summary["A2"] = "Version"
-    summary["B2"] = manifest["info"]["version"]
+    summary["B2"] = ctx.manifest["info"]["version"]
 
     row = 4
     summary[f"A{row}"] = "Table"
     summary[f"B{row}"] = "Rows"
     row += 1
 
-    for t in tables:
+    for t in ctx.tables or []:
         summary[f"A{row}"] = f"{t.mapped.raw.source_file.name}:{t.output_sheet_name}"
         summary[f"B{row}"] = len(t.rows)
         row += 1
 
-    if logger:
-        logger.note("Added ADE Summary sheet")
+    ctx.logger.note("Added ADE Summary sheet")
 ```
 
 ### 7.5 `on_run_end`: aggregate metrics
 
 ```python
 # ade_config/hooks/on_run_end.py
-def run(*, job, state, result, artifact, logger=None, **_):
-    duration_ms = (job.completed_at - job.started_at).total_seconds() * 1000
-    status = result.status
+def run(ctx):
+    duration_ms = (ctx.run.completed_at - ctx.run.started_at).total_seconds() * 1000
+    status = ctx.result.status
 
-    if logger:
-        logger.event(
-            "run_summary",
-            level="info",
-            status=status,
-            duration_ms=duration_ms,
-            processed_files=list(result.processed_files),
-        )
+    ctx.logger.event(
+        "run_summary",
+        level="info",
+        status=status,
+        duration_ms=duration_ms,
+        processed_files=list(ctx.result.processed_files),
+    )
 
-    artifact.note(
+    ctx.artifact.note(
         f"Run {status} in {duration_ms:.0f}ms",
         level="info",
     )

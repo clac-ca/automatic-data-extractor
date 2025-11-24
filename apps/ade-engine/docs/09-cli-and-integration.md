@@ -4,7 +4,7 @@ This document describes the command‑line interface to the ADE engine and how
 the ADE backend invokes it inside a virtual environment.
 
 It assumes you’ve read `ade_engine/README.md` and understand that the engine
-is **path‑based and job‑agnostic**: it sees input/output/log paths and opaque
+is **path‑based and backend‑job‑agnostic**: it sees input/output/log paths and opaque
 metadata, not job IDs or queues.
 
 ---
@@ -116,7 +116,7 @@ Where to write normalized workbooks and logs:
 
 If omitted, the engine may infer sensible defaults from the input location
 (e.g. sibling `output/` and `logs/` directories), but backend workers should
-**explicitly pass both** to keep job layout predictable.
+**explicitly pass both** to keep backend layout predictable.
 
 ### 3.4 Config selection
 
@@ -242,13 +242,13 @@ A typical end‑to‑end flow:
 1. **API request** arrives:
    “Run config `<config_id>` on uploaded document `<document_id>`.”
 
-2. **Backend resolves job** to a venv and paths:
+2. **Backend resolves job/task** to a venv and per-run paths:
 
    * Ensure a venv exists for `<config_id>/<build_id>` with:
 
      * `ade_engine` installed.
      * the appropriate `ade_config` version installed.
-   * Create a job directory:
+   * Create a job directory (with a per-run working area):
 
      ```text
      /data/jobs/<job_id>/
@@ -261,7 +261,7 @@ A typical end‑to‑end flow:
 3. **Backend schedules worker** (thread/process/container) with:
 
    * venv location,
-   * job directory paths,
+   * job directory paths (input/output/logs for this run),
    * config identifier.
 
 4. **Worker activates venv** and invokes the engine, either:
