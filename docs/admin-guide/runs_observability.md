@@ -65,11 +65,11 @@ ORDER BY id ASC;
 
 ## 4. CLI and automation follow-ups
 
-The repository does not yet surface runs through the developer tooling
-(`ade workpackage`, `scripts/npm-*.mjs`). Track ADE-CLI-11 to add
-`scripts/npm-runs.mjs` with helpers for `runs:list`, `runs:logs`, and
-`runs:tail`. Update this guide once the commands land so on-call
-engineers can rely on them instead of raw HTTP calls.
+The repository does not yet surface runs through the developer tooling.
+Track ADE-CLI-11 to add `scripts/npm-runs.mjs` with helpers for
+`runs:list`, `runs:logs`, and `runs:tail`. Update this guide once the
+commands land so on-call engineers can rely on them instead of raw HTTP
+calls.
 
 ## 5. Monitoring configuration builds
 

@@ -20,7 +20,6 @@ ade build                 # Build SPA → apps/ade-api/src/ade_api/web/static
 ade start                 # Serve API + SPA
 ade openapi-types         # Generate TS types from OpenAPI
 ade routes                # List FastAPI routes
-ade workpackage           # Manage work packages (legacy Node helper)
 ade clean --yes           # Delete build/.venv/node_modules
 ade reset --yes           # Clean + storage reset + setup
 ade ci                    # Full pipeline (lint, test, build)
@@ -66,7 +65,7 @@ automatic-data-extractor/
 │
 ├─ examples/                                # Sample inputs/outputs
 ├─ docs/                                    # Developer guides, HOWTOs, runbooks
-├─ scripts/                                 # Repo-level helper scripts (legacy node helpers live here)
+├─ scripts/                                 # Repo-level helper scripts
 │
 ├─ infra/                                   # Deployment infrastructure
 │  ├─ docker/
