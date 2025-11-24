@@ -203,9 +203,6 @@ These decisions are made once, up front, and never mutated mid‑run.
 * `manifest: ManifestContext`
   Wrapper around the loaded manifest (Pydantic model + convenience helpers).
 
-* `env: dict[str, str]`
-  From `manifest.env`. This is the config‑level environment, not OS env vars.
-
 * `metadata: dict[str, Any]`
   Copy of `RunRequest.metadata`. The engine treats this as an opaque dict (e.g., a backend `job_id` if provided).
 
@@ -327,7 +324,6 @@ The lifecycle below describes what happens inside `Engine.run(request)`.
      * `run` (`RunContext`),
      * `state`,
      * `manifest`,
-     * `env`,
      * `artifact`,
      * `events`,
      * `logger`.
@@ -405,7 +401,7 @@ If any of these steps fail, the error is handled as described in
 
       * `run` (`RunContext`),
       * `state`,
-      * `manifest`, `env`,
+      * `manifest`,
       * `artifact`, `events`,
       * `result` (a provisional `RunResult`),
       * `logger`.

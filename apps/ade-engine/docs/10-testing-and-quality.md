@@ -208,7 +208,7 @@ Key tests:
   * Optional fields default correctly.
 * `ManifestContext` helpers:
 
-  * `column_order`, `column_meta`, `defaults`, `writer`, `env` behave as
+  * `column_order`, `column_meta`, `defaults`, `writer` behave as
     expected for typical manifests.
 * Script discovery:
 

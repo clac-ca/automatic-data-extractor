@@ -228,7 +228,6 @@ def detect_header_or_data(
     row_index: int,      # 1-based index within the sheet
     row_values: list,    # raw cell values for this row
     manifest,            # ManifestContext
-    env: dict | None,
     logger,
 ) -> dict:
     """
@@ -243,7 +242,7 @@ Conventions:
 
 * `run` is read‑only from the config’s perspective (it is a `RunContext`).
 * `state` is a per‑run dict that detectors may use to coordinate across rows.
-* `manifest` and `env` provide config‑level context (locale, date formats, etc.).
+* `manifest` provides config‑level context (schema, defaults, writer, fields).
 * `logger` allows emitting notes and telemetry if needed.
 * Functions should accept `**_` to tolerate new parameters over time.
 

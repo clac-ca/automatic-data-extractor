@@ -21,7 +21,7 @@ business‑specific behavior:
 - how to detect tables and fields,
 - how to normalize and validate values,
 - which hooks to run at various stages, and
-- writer / environment defaults.
+- writer defaults and other engine hints.
 
 By default this package is named **`ade_config`** and is installed into the same
 virtual environment as `ade_engine`.
@@ -84,10 +84,6 @@ The manifest has a small number of top‑level sections:
     "version": "1.2.3",
     "description": "Optional description"
   },
-  "env": {
-    "LOCALE": "en-CA",
-    "DATE_FMT": "%Y-%m-%d"
-  },
   "engine": {
     "defaults": {
       "timeout_ms": 180000,
@@ -136,7 +132,6 @@ The manifest has a small number of top‑level sections:
 Key ideas:
 
 * **`info`** describes the config itself and how to interpret the manifest.
-* **`env`** is a small string‑keyed map passed into all scripts.
 * **`engine`** controls engine‑side behavior (defaults, writer behavior).
 * **`hooks`** defines lifecycle customizations.
 * **`columns`** declares what canonical fields exist and how to handle them.
@@ -154,7 +149,6 @@ class, e.g.:
 
   * `config_script_api_version: str`
   * `info: ManifestInfo`
-  * `env: dict[str, str]`
   * `engine: EngineConfig` (with `defaults` and `writer`)
   * `hooks: HookCollection`
   * `columns: ColumnSection`
@@ -177,8 +171,6 @@ class ManifestContext:
     def columns(self) -> Columns: ...   # provides .order and .meta
     @property
     def engine(self) -> EngineSection: ...  # provides .defaults and .writer
-    @property
-    def env(self) -> dict[str, str]: ...
 ```
 
 This gives the pipeline and config runtime a clean, typed surface:
@@ -186,8 +178,7 @@ This gives the pipeline and config runtime a clean, typed surface:
 * `ctx.manifest.columns.order` to drive output ordering,
 * `ctx.manifest.columns.meta["email"]` to look up script paths and flags,
 * `ctx.manifest.engine.defaults.mapping_score_threshold` for mapping,
-* `ctx.manifest.engine.writer.append_unmapped_columns` for output behavior,
-* `ctx.manifest.env` for script configuration.
+* `ctx.manifest.engine.writer.append_unmapped_columns` for output behavior.
 
 The **same `ManifestContext` instance** is stored on `RunContext` and passed to
 scripts via the `run` argument (see script API docs).
@@ -205,13 +196,13 @@ The `config_runtime` package is the “glue” between:
 
 It is responsible for:
 
-1. **Finding and parsing the manifest** into a `ManifestContext` (`manifest_context.py` with `raw_json`, `model`, `columns`, `engine`, `env`).
+1. **Finding and parsing the manifest** into a `ManifestContext` (`manifest_context.py` with `raw_json`, `model`, `columns`, `engine`).
 2. **Resolving scripts** (row detectors, column_detectors field modules, hooks) via `loader.py`.
 3. **Building registries** that the pipeline can use:
 
    * `ConfigRuntime.columns` (column registry from `column_registry.py`),
    * `ConfigRuntime.hooks` (hook registry from `hook_registry.py`),
-   * plus convenient access to `env`, defaults, writer, etc.
+   * plus convenient access to defaults, writer, etc.
 
 A typical public entrypoint looks like:
 
@@ -406,51 +397,7 @@ fails the run.
 
 ---
 
-## 7. Config `env` and how scripts see it
-
-### 7.1 Manifest `env` section
-
-`env` is a simple key–value map:
-
-```jsonc
-"env": {
-  "LOCALE": "en-CA",
-  "DATE_FMT": "%Y-%m-%d",
-  "MAX_ROWS": "500000"
-}
-```
-
-Characteristics:
-
-* All keys and values are strings in the manifest.
-* It is meant for **config‑level settings**, *not* arbitrary environment
-  variables from the OS.
-
-### 7.2 Exposure in runtime and scripts
-
-`env` travels through the system as:
-
-* `RunContext.env` (dict of `str → str`).
-* A `env` parameter to:
-
-  * row detectors,
-  * column detectors,
-  * transforms,
-  * validators,
-  * hooks.
-
-Scripts can then do:
-
-```python
-date_fmt = env.get("DATE_FMT", "%Y-%m-%d")
-```
-
-Rather than reading `os.environ` directly. This keeps behavior deterministic for
-a given manifest and makes configs easier to reason about.
-
----
-
-## 8. Config runtime aggregate: `ConfigRuntime`
+## 7. Config runtime aggregate: `ConfigRuntime`
 
 Putting everything together, `config_runtime` exposes a small aggregate object
 used by the pipeline:
@@ -462,7 +409,7 @@ class ConfigRuntime:
     columns: ColumnRegistry
     hooks: HookRegistry
     # Optional additional views:
-    #   defaults, writer, env, etc., as convenience properties.
+    #   defaults, writer, etc., as convenience properties.
 ```
 
 The engine typically does:
@@ -479,12 +426,11 @@ From this point on, **all config behavior** is driven by:
 
 * the manifest model (`cfg.manifest`),
 * the column registry (`cfg.columns`),
-* the hook registry (`cfg.hooks`),
-* and the shared `env` exposed via `RunContext`.
+* the hook registry (`cfg.hooks`).
 
 ---
 
-## 9. Versioning
+## 8. Versioning
 
 Two fields in the manifest control how configs evolve over time:
 
@@ -499,7 +445,7 @@ Two fields in the manifest control how configs evolve over time:
 
 Guidelines:
 
-* Adding new optional manifest fields or `env` keys is safe.
+* Adding new optional manifest fields is safe.
 * Changing or removing manifest fields, or changing script signatures, should:
 
   * bump either `info.schema` or `config_script_api_version`, and
