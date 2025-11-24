@@ -2,6 +2,9 @@ import { post } from "@shared/api";
 import { client } from "@shared/api/client";
 import { parseNdjsonStream } from "@shared/api/ndjson";
 
+import type { ArtifactV1 } from "@schema";
+import type { TelemetryEnvelope } from "@schema/adeTelemetry";
+
 import type { components } from "@schema";
 
 import type { RunStreamEvent } from "./types";
@@ -49,4 +52,48 @@ export async function fetchRunOutputs(
 
   if (!data) throw new Error("Run outputs unavailable");
   return data as RunOutputListing;
+}
+
+export async function fetchRunArtifact(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<ArtifactV1> {
+  const response = await fetch(`/api/v1/runs/${encodeURIComponent(runId)}/artifact`, {
+    headers: { Accept: "application/json" },
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error("Run artifact unavailable");
+  }
+
+  return (await response.json()) as ArtifactV1;
+}
+
+export async function fetchRunTelemetry(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<TelemetryEnvelope[]> {
+  const response = await fetch(`/api/v1/runs/${encodeURIComponent(runId)}/logfile`, {
+    headers: { Accept: "application/x-ndjson" },
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error("Run telemetry unavailable");
+  }
+
+  const text = await response.text();
+  return text
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line) as TelemetryEnvelope;
+      } catch (error) {
+        console.warn("Skipping invalid telemetry line", { error, line });
+        return null;
+      }
+    })
+    .filter((value): value is TelemetryEnvelope => Boolean(value));
 }

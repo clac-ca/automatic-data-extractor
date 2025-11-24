@@ -30,7 +30,16 @@ import { createScopedStorage } from "@shared/storage";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
-import { fetchJob, fetchJobOutputs, type JobOutputListing, type JobRecord, type JobStatus } from "@shared/jobs";
+import {
+  fetchJob,
+  fetchJobOutputs,
+  fetchJobArtifact,
+  fetchJobTelemetry,
+  type JobOutputListing,
+  type JobRecord,
+  type JobStatus,
+} from "@shared/jobs";
+import { ArtifactSummary, TelemetrySummary } from "@shared/runs/RunInsights";
 
 import { Alert } from "@ui/Alert";
 import { Select } from "@ui/Select";
@@ -1439,7 +1448,13 @@ function RunExtractionDrawerContent({
     workspaceId,
     documentRecord.id,
   );
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(
+    documentRecord.last_run?.job_id ?? null,
+  );
+
+  useEffect(() => {
+    setActiveJobId(documentRecord.last_run?.job_id ?? null);
+  }, [documentRecord.id, documentRecord.last_run?.job_id]);
 
   const allConfigs = useMemo(() => configsQuery.data?.items ?? [], [configsQuery.data]);
   const selectableConfigs = useMemo(
@@ -1559,6 +1574,30 @@ function RunExtractionDrawerContent({
     staleTime: 5_000,
   });
 
+  const artifactQuery = useQuery({
+    queryKey: ["job-artifact", workspaceId, activeJobId],
+    queryFn: ({ signal }) =>
+      activeJobId
+        ? fetchJobArtifact(workspaceId, activeJobId, signal)
+        : Promise.reject(new Error("No job selected")),
+    enabled:
+      Boolean(activeJobId) &&
+      (jobQuery.data?.status === "succeeded" || jobQuery.data?.status === "failed"),
+    staleTime: 5_000,
+  });
+
+  const telemetryQuery = useQuery({
+    queryKey: ["job-telemetry", workspaceId, activeJobId],
+    queryFn: ({ signal }) =>
+      activeJobId
+        ? fetchJobTelemetry(workspaceId, activeJobId, signal)
+        : Promise.reject(new Error("No job selected")),
+    enabled:
+      Boolean(activeJobId) &&
+      (jobQuery.data?.status === "succeeded" || jobQuery.data?.status === "failed"),
+    staleTime: 5_000,
+  });
+
   const sheetQuery = useQuery<DocumentSheet[]>({
     queryKey: ["document-sheets", workspaceId, documentRecord.id],
     queryFn: ({ signal }) => fetchDocumentSheets(workspaceId, documentRecord.id, signal),
@@ -1611,9 +1650,11 @@ function RunExtractionDrawerContent({
   const jobStatus = currentJob?.status ?? null;
   const jobRunning = jobStatus === "running" || jobStatus === "queued";
   const downloadBase = activeJobId
-    ? `/api/v1/workspaces/${workspaceId}/jobs/${activeJobId}`
+    ? `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/jobs/${encodeURIComponent(activeJobId)}`
     : null;
   const outputFiles: JobOutputListing["files"] = outputsQuery.data?.files ?? [];
+  const artifact = artifactQuery.data ?? null;
+  const telemetryEvents = telemetryQuery.data ?? [];
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -1937,7 +1978,7 @@ function RunExtractionDrawerContent({
                     )}
                     aria-disabled={!downloadBase}
                   >
-                    Download logs
+                    Download telemetry
                   </a>
                 </div>
 
@@ -1962,6 +2003,30 @@ function RunExtractionDrawerContent({
                     </ul>
                   ) : (
                     <p className="text-xs text-slate-500">Outputs will appear here after the run completes.</p>
+                  )}
+                </div>
+                <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-xs font-semibold text-slate-700">Artifact summary</p>
+                  {artifactQuery.isLoading ? (
+                    <p className="text-xs text-slate-500">Loading artifact…</p>
+                  ) : artifactQuery.isError ? (
+                    <p className="text-xs text-rose-600">Unable to load artifact.</p>
+                  ) : artifact ? (
+                    <ArtifactSummary artifact={artifact} />
+                  ) : (
+                    <p className="text-xs text-slate-500">Artifact not available.</p>
+                  )}
+                </div>
+                <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-xs font-semibold text-slate-700">Telemetry summary</p>
+                  {telemetryQuery.isLoading ? (
+                    <p className="text-xs text-slate-500">Loading telemetry…</p>
+                  ) : telemetryQuery.isError ? (
+                    <p className="text-xs text-rose-600">Unable to load telemetry events.</p>
+                  ) : telemetryEvents.length > 0 ? (
+                    <TelemetrySummary events={telemetryEvents} />
+                  ) : (
+                    <p className="text-xs text-slate-500">No telemetry events captured.</p>
                   )}
                 </div>
               </div>

@@ -14,7 +14,7 @@ def detect_email(
     header: str | None,
     column_values_sample: list[Any],
     **_: Any,
-) -> dict[str, dict[str, float]]:
+) -> float:
     """
     Heuristic: header looks like email and/or most sample values look
     like email addresses.
@@ -35,18 +35,19 @@ def detect_email(
         if matches:
             score = max(score, matches / max(1, len(column_values_sample)))
 
-    return {"scores": {_FIELD: round(min(score, 1.0), 2)}}
+    return round(min(score, 1.0), 2)
 
 
 def transform(
     *,
     value: Any,
+    field_name: str = _FIELD,
     **_: Any,
-) -> str | None:
+) -> dict[str, Any] | None:
     """Normalize email addresses to lower-case strings, or None."""
     if value in (None, ""):
-        return None
-    return str(value).strip().lower()
+        return {field_name: None}
+    return {field_name: str(value).strip().lower()}
 
 
 def validate(
