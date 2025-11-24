@@ -106,13 +106,12 @@ This is what transforms and validators read and modify.
 Column order comes from the manifest:
 
 * `manifest.columns.order` — ordered list of canonical field names.
-* `manifest.columns.meta[field_name].enabled` — flag to include/exclude a field.
 
 Normalization respects that order:
 
 * **Canonical fields**:
 
-  * Iterate over `columns.order` and include only fields where `enabled=True`.
+  * Iterate over `columns.order` and include all defined fields.
 * **Extra columns**:
 
   * Appended later (based on `MappedTable.extras`), after all canonical fields.
@@ -174,15 +173,16 @@ Standard keyword-only signature:
 ```python
 def transform(
     *,
-    run,                    # RunContext (config-facing view of the run)
-    state: dict,            # shared per-run scratch space
-    row_index: int,         # original sheet row index (1-based)
-    field_name: str,        # canonical field
-    value,                  # current value for this field
-    row: dict,              # full canonical row (field -> value)
-    field_meta: dict | None,
-    manifest,               # ManifestContext
-    logger,
+    run: RunContext,              # config-facing view of the run
+    state: dict,                  # shared per-run scratch space
+    row_index: int,               # original sheet row index (1-based)
+    field_name: str,              # canonical field
+    value,                        # current value for this field
+    row: dict,                    # full canonical row (field -> value)
+    field_config: dict | None,    # from manifest.columns.fields.get(field_name)
+    manifest: ManifestContext,
+    logger: PipelineLogger,
+    **_,
 ) -> dict | None:
     ...
 ```
@@ -193,7 +193,7 @@ Parameters to remember:
 * `state`: mutable dict shared across all rows and scripts within this run.
 * `row_index`: traceability back to original file.
 * `field_name`, `value`, `row`: the core of the normalization work.
-* `field_meta`: the manifest’s metadata for this field (e.g., label, required).
+* `field_config`: the manifest’s field config for this field (e.g., label, required).
 * `logger`: use for notes/events (not `print`).
 * Include `**_` in signatures to allow future parameters without breaking configs.
 
@@ -273,15 +273,16 @@ Standard keyword-only signature:
 ```python
 def validate(
     *,
-    run,
+    run: RunContext,
     state: dict,
     row_index: int,
     field_name: str,
     value,
     row: dict,
-    field_meta: dict | None,
-    manifest,               # ManifestContext
-    logger,
+    field_config: dict | None,
+    manifest: ManifestContext,
+    logger: PipelineLogger,
+    **_,
 ) -> list[dict]:
     ...
 ```
@@ -381,7 +382,6 @@ For each data row:
      ```python
      canonical_values = [
          row[field] for field in manifest.columns.order
-         if column_meta[field].enabled
      ]
      ```
 
@@ -470,7 +470,7 @@ The exact event set is flexible, but the pattern is:
 * Prefer **pure, deterministic** transformations:
 
   * Same input row → same output row.
-* Use `field_meta` rather than hard-coded constants:
+* Use `field_config` rather than hard-coded constants:
 
   * Date formats, locales, thresholds, etc.
 * Keep transforms **local** when possible:

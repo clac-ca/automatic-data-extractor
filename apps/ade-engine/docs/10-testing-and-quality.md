@@ -172,11 +172,11 @@ Key tests:
 
 * `RunRequest` validation:
 
-  * Error if both `input_files` and `input_root` are provided.
+  * Error if both `input_files` and `input_dir` are provided.
   * Error if neither is provided.
 * `RunPaths` resolution:
 
-  * Correct derivation of `input_root`, `output_root`, and `logs_root` from
+  * Correct derivation of `input_dir`, `output_dir`, and `logs_dir` from
     `RunRequest`.
   * Directories are created if missing.
 * `Engine.run` happy path:
@@ -208,11 +208,11 @@ Key tests:
   * Optional fields default correctly.
 * `ManifestContext` helpers:
 
-  * `column_order`, `column_meta`, `defaults`, `writer` behave as
+  * `column_order`, `column_fields`, and `writer` behave as
     expected for typical manifests.
 * Script discovery:
 
-  * `ColumnModule` import and function discovery from `script` paths.
+  * `ColumnModule` import and function discovery from `module` paths.
   * Hook module import and `run`/`main` determination.
 * Failure modes:
 
@@ -251,7 +251,7 @@ Key tests:
     `MappedColumn`.
 * Threshold behavior:
 
-  * Columns below `mapping_score_threshold` are not mapped.
+  * Columns below the engine’s mapping threshold are not mapped (manifest v1 has no per-config override).
 * Tie‑breaking:
 
   * Ties resolved by `manifest.columns.order`.
@@ -292,7 +292,7 @@ Key tests:
   * `on_before_save` hooks can modify the workbook before save.
 * Output paths:
 
-  * Workbook saved to expected location under `output_root`.
+  * Workbook saved to expected location under `output_dir`.
 
 ### 4.7 Artifact and telemetry (`artifact.py`, `telemetry.py`)
 
@@ -305,7 +305,7 @@ Key tests:
 * Run section:
 
   * `run.status` matches the final `RunResult`.
-  * `outputs` and `metadata` are propagated correctly.
+  * `outputs` are propagated correctly.
 * Tables section:
 
   * `mapping`, `unmapped`, and `validation` entries reflect the given
@@ -340,8 +340,8 @@ Typical flow in `test_engine_runtime.py`:
    result = run(
        config_package="ade_config",
        input_files=[input_path],
-       output_root=tmp_path / "output",
-       logs_root=tmp_path / "logs",
+       output_dir=tmp_path / "output",
+       logs_dir=tmp_path / "logs",
        metadata={"test_case": "basic_e2e"},
    )
    ```
@@ -473,8 +473,8 @@ When tests fail, a few patterns help quickly identify where the problem lives.
 
 * Use `artifact.json` produced by failing tests:
 
-  * Inspect `tables[*].mapping` for unexpected field/header matches.
-  * Inspect `tables[*].validation` for unexpected issues.
+  * Inspect `tables[*].mapped_columns` for unexpected field/header matches.
+  * Inspect `tables[*].validation_issues` for unexpected issues.
 * Add temporary assertions or `PipelineLogger.note` calls in the failing area,
   then re‑run the specific test.
 
@@ -483,7 +483,7 @@ When tests fail, a few patterns help quickly identify where the problem lives.
 Typical sources:
 
 * Exceptions inside config detectors, transforms, validators, or hooks.
-* Misconfigured manifest `script` paths.
+* Misconfigured manifest hook/column module strings.
 
 Debugging steps:
 

@@ -23,15 +23,15 @@ A single engine run is:
 From inside the venv, the engine:
 
 - Accepts a **config package** to use (`config_package`, optional `manifest_path`).
-- Accepts **sources** (`input_files` or `input_root`, optional `input_sheets` for source sheets).
-- Accepts where to put **outputs** (`output_root`, `logs_root` for the output workbook and logs).
-- Accepts opaque **metadata** from the caller (e.g., backend job IDs if desired).
+- Accepts **sources** (`input_files` or `input_dir`, optional `input_sheets` for source sheets).
+- Accepts where to put **outputs** (`output_dir`, `logs_dir` for the output workbook and logs).
+- Accepts opaque **metadata** from the caller (e.g., backend job IDs) purely for telemetry correlation.
 
 It emits:
 
-- One or more **normalized output workbooks** in `output_root`.
-- An **artifact JSON** (`artifact.json`) in `logs_root`.
-- **Telemetry events** (`events.ndjson`) in `logs_root`.
+- One or more **normalized output workbooks** in `output_dir`.
+- An **artifact JSON** (`artifact.json`) in `logs_dir`.
+- **Telemetry events** (`events.ndjson`) in `logs_dir` (metadata appears here, not in the artifact).
 - A **`RunResult`** describing the outcome.
 
 The engine **does not**:
@@ -58,8 +58,8 @@ result = engine.run(
     RunRequest(
         config_package="ade_config",
         input_files=[Path("input.xlsx")],
-        output_root=Path("output"),
-        logs_root=Path("logs"),
+        output_dir=Path("output"),
+        logs_dir=Path("logs"),
         metadata={"job_id": "123"},  # opaque metadata; engine treats it as tags
     )
 )
@@ -67,8 +67,8 @@ result = engine.run(
 # Convenience helper (sugar over Engine.run)
 result = run(
     input_files=[Path("input.xlsx")],
-    output_root=Path("output"),
-    logs_root=Path("logs"),
+    output_dir=Path("output"),
+    logs_dir=Path("logs"),
 )
 ````
 
@@ -128,7 +128,7 @@ Most runtime complexity is expressed via a few core types in `types.py`.
 
   * `input_files: Sequence[Path] | None`
     Explicit list of source files (preferred; typical shape: `[Path("input.xlsx")]`).
-  * `input_root: Path | None`
+  * `input_dir: Path | None`
     Directory to discover source files in (e.g., `input/` folder).
 
 * **Sheet filter**
@@ -139,54 +139,53 @@ Most runtime complexity is expressed via a few core types in `types.py`.
 
 * **Outputs**
 
-  * `output_root: Path | None`
+  * `output_dir: Path | None`
     Directory for normalized output workbook(s).
-  * `logs_root: Path | None`
+  * `logs_dir: Path | None`
     Directory for `artifact.json` and `events.ndjson`.
 
-* **Options**
+* **Metadata**
 
-  * `safe_mode: bool`
-    Hint for more conservative execution (e.g., reduced integrations). Exact
-    semantics are handled by the engine and/or config.
   * `metadata: Mapping[str, Any] | None`
-    Opaque caller metadata (e.g., `{"job_id": "...", "config_id": "..."}`).
+    Opaque caller metadata for telemetry correlation (e.g., `{"job_id": "...", "config_id": "..."}`).
 
 Invariants:
 
-* Exactly one of `input_files` or `input_root` **must** be set.
+* Exactly one of `input_files` or `input_dir` **must** be set.
 * If both are set, the engine fails fast with a clear error.
 * All paths are normalized to absolute paths near the start of `Engine.run`.
+
+Safe-mode behavior (e.g., `ADE_SAFE_MODE=1`) is enforced by the outer app: in that mode the app can skip importing `ade_config` or invoking the engine entirely. There is no run-level `safe_mode` flag in `RunRequest` or `RunContext`.
 
 ### 3.2 `RunPaths` – resolved filesystem layout
 
 `RunPaths` represents a **normalized, concrete directory layout**:
 
-* `input_root: Path`
-* `output_root: Path`
-* `logs_root: Path`
-* `artifact_path: Path`   (within `logs_root`)
-* `events_path: Path`     (within `logs_root`)
+* `input_dir: Path`
+* `output_dir: Path`
+* `logs_dir: Path`
+* `artifact_path: Path`   (within `logs_dir`)
+* `events_path: Path`     (within `logs_dir`)
 
 Resolution rules (conceptual):
 
-1. **Input root**
+1. **Input directory**
 
-   * If `RunRequest.input_root` is provided, use it.
+   * If `RunRequest.input_dir` is provided, use it.
    * Else, use the parent of the first `RunRequest.input_files` entry.
 
-2. **Output / logs roots**
+2. **Output / logs directories**
 
    * If provided explicitly in `RunRequest`, use them as‑is.
-   * Otherwise, infer sensible defaults relative to `input_root`
+   * Otherwise, infer sensible defaults relative to `input_dir`
      (e.g., sibling `output/` and `logs/` directories).
 
 3. **File names**
 
-   * `artifact_path` is `logs_root / "artifact.json"`.
-   * `events_path` is `logs_root / "events.ndjson"`.
+   * `artifact_path` is `logs_dir / "artifact.json"`.
+   * `events_path` is `logs_dir / "events.ndjson"`.
    * Normalized workbook filename(s) are chosen by the writer (usually a
-     manifest‑driven name, often a single workbook under `output_root`).
+     manifest‑driven name, often a single workbook under `output_dir`).
 
 These decisions are made once, up front, and never mutated mid‑run.
 
@@ -204,10 +203,7 @@ These decisions are made once, up front, and never mutated mid‑run.
   Wrapper around the loaded manifest (Pydantic model + convenience helpers).
 
 * `metadata: dict[str, Any]`
-  Copy of `RunRequest.metadata`. The engine treats this as an opaque dict (e.g., a backend `job_id` if provided).
-
-* `safe_mode: bool`
-  Copied from `RunRequest.safe_mode`.
+  Copy of `RunRequest.metadata`. The engine treats this as an opaque dict for telemetry correlation (e.g., a backend `job_id` if provided).
 
 * `started_at: datetime` / `completed_at: datetime | None`
   Timestamps for run lifecycle.
@@ -231,6 +227,8 @@ Properties:
 * `status: RunStatus` (`"succeeded"` or `"failed"`)
 * `error: RunError | None`
   Structured error with `code` (e.g., `config_error`, `input_error`, `hook_error`, `pipeline_error`, `unknown_error`), `stage` (e.g., `initialization`, `load_config`, `extracting`, `mapping`, `normalizing`, `writing_output`, `hooks`), and `message`.
+* `run_id: str`
+  Identifier for this run (mirrors `RunContext.run_id` and CLI JSON `run.id`).
 * `output_paths: tuple[Path, ...]`
   One or more normalized workbook paths (often a single workbook). CLI JSON uses the same key for consistency.
 * `artifact_path: Path`
@@ -253,7 +251,7 @@ Guarantees:
 
 ### 3.5 Pipeline phases
 
-Internally, the engine tracks a `PipelinePhase` enum:
+Internally, the engine tracks a single `RunPhase` enum for pipeline transitions, telemetry, and `RunError.stage`:
 
 * `INITIALIZATION`
 * `LOAD_CONFIG`
@@ -277,7 +275,7 @@ The lifecycle below describes what happens inside `Engine.run(request)`.
 
 1. **Normalize `RunRequest`**
 
-   * Validate invariants (`input_files` vs `input_root`).
+   * Validate invariants (`input_files` vs `input_dir`).
    * Resolve paths and build `RunPaths`.
 
 2. **Create `RunContext`**
@@ -285,7 +283,7 @@ The lifecycle below describes what happens inside `Engine.run(request)`.
    * Generate `run_id`.
    * Initialize `started_at`.
    * Initialize empty `state` dict.
-   * Attach `RunPaths`, `metadata`, `safe_mode`.
+   * Attach `RunPaths` and `metadata`.
 
 3. **Load manifest and config runtime**
 
@@ -341,7 +339,7 @@ If any of these steps fail, the error is handled as described in
 7. **Extract**
 
    * Phase: `EXTRACTING`.
-   * Discover source files (if using `input_root`) and read CSV/XLSX source sheets.
+   * Discover source files (if using `input_dir`) and read CSV/XLSX source sheets.
    * Run row detectors to identify headers and data ranges.
    * Build `RawTable[]` and record them in the artifact as needed.
    * Call any `on_after_extract` hooks.
@@ -380,7 +378,7 @@ If any of these steps fail, the error is handled as described in
 
       * `NormalizedTable[]`,
       * a live workbook object (e.g., openpyxl `Workbook`).
-    * Save workbook(s) into `output_root`.
+    * Save workbook(s) into `output_dir`.
     * Return a list of `Path` objects (output workbooks).
 
 ### 4.4 Finalization
@@ -448,7 +446,7 @@ Conceptually (and mapped to `RunErrorCode`):
 
   * Bugs or unexpected exceptions inside `ade_engine` pipeline stages.
 
-Exceptions are mapped to `RunError` via a single helper (e.g., `_error_to_run_error(exc, stage: RunStage | None)`), ensuring `RunResult.error`, artifact, and telemetry all share the same `code`/`message`/`stage`.
+Exceptions are mapped to `RunError` via a single helper (e.g., `_error_to_run_error(exc, stage: RunPhase | None)`), ensuring `RunResult.error`, artifact, and telemetry all share the same `code`/`message`/`stage`.
 
 ### 5.2 Behavior on failure
 
@@ -507,8 +505,8 @@ integration looks like this:
    result = run(
        config_package="ade_config",
        input_files=[Path(f"/data/jobs/{job_id}/input/input.xlsx")],
-       output_root=Path(f"/data/jobs/{job_id}/output"),
-       logs_root=Path(f"/data/jobs/{job_id}/logs"),
+       output_dir=Path(f"/data/jobs/{job_id}/output"),
+       logs_dir=Path(f"/data/jobs/{job_id}/logs"),
        metadata={"job_id": job_id, "config_id": config_id},
    )
    ```

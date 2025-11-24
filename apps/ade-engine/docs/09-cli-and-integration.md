@@ -5,7 +5,7 @@ the ADE backend invokes it inside a virtual environment.
 
 It assumes you’ve read `ade_engine/README.md` and understand that the engine
 is **path‑based and backend‑job‑agnostic**: it sees source/output/log paths and opaque
-metadata, not job IDs or queues.
+metadata for telemetry correlation, not job IDs or queues in its own models.
 
 ---
 
@@ -50,7 +50,7 @@ ade-engine run \
   [SOURCE SELECTION] \
   [OUTPUT / LOGS] \
   [CONFIG OPTIONS] \
-  [EXECUTION OPTIONS]
+  [METADATA]
 ```
 
 ### 3.1 Source selection (mutually exclusive)
@@ -67,16 +67,16 @@ Exactly one of these must be provided:
 
   → `RunRequest.input_files = [Path(...), Path(...)]`
 
-* `--input-root DIR`
+* `--input-dir DIR`
   Directory to scan for source spreadsheets (`.csv`, `.xlsx`):
 
   ```bash
-  --input-root /data/jobs/123/input
+  --input-dir /data/jobs/123/input
   ```
 
-  → `RunRequest.input_root = Path(...)`
+  → `RunRequest.input_dir = Path(...)`
 
-If both `--input` and `--input-root` are provided, the CLI fails fast with a
+If both `--input` and `--input-dir` are provided, the CLI fails fast with a
 usage error (mirroring the `RunRequest` invariant).
 
 ### 3.2 Sheet filtering (XLSX only)
@@ -101,10 +101,10 @@ sheet filters (they’re treated as a single implicit sheet).
 Where to write normalized workbooks and logs:
 
 * `--output-dir DIR`
-  → `RunRequest.output_root = Path(DIR)`
+  → `RunRequest.output_dir = Path(DIR)`
 
 * `--logs-dir DIR`
-  → `RunRequest.logs_root = Path(DIR)`
+  → `RunRequest.logs_dir = Path(DIR)`
 
 If omitted, the engine may infer sensible defaults from the input location
 (e.g. sibling `output/` and `logs/` directories), but backend workers should
@@ -133,16 +133,7 @@ Config package and manifest:
 If `--manifest-path` is not provided, the engine resolves `manifest.json`
 from the `config_package` using `importlib.resources`.
 
-### 3.5 Execution options
-
-Execution‑time flags that don’t change the core pipeline semantics:
-
-* `--safe-mode`
-  → `RunRequest.safe_mode = True`
-
-  A hint that the caller wants a more conservative execution (e.g. disable
-  optional integrations or external sinks). OS‑level resource limits are still
-  enforced by the worker environment, not by the engine itself.
+### 3.5 Metadata (optional)
 
 * `--metadata KEY=VALUE` (repeatable, if supported)
   For injecting simple tags into `RunRequest.metadata`:
@@ -152,8 +143,8 @@ Execution‑time flags that don’t change the core pipeline semantics:
   --metadata config_id=config-01
   ```
 
-  The engine treats metadata as opaque; it simply mirrors it into
-  `RunContext.metadata`, `artifact.json`, and telemetry envelopes. How those
+  The engine treats metadata as opaque; it mirrors it into
+  `RunContext.metadata` and telemetry envelopes (not into `artifact.json`). How those
   keys relate back to “jobs” is entirely a backend concern.
 
 ---
@@ -166,7 +157,7 @@ The CLI also supports simple non‑run queries:
   Print engine version (and optionally config manifest version if discoverable)
   and exit with code `0`. No pipeline is executed.
 
-* `--manifest-path PATH` without any `--input`/`--input-root`
+* `--manifest-path PATH` without any `--input`/`--input-dir`
   Validate/inspect the manifest at `PATH` and exit. Implementation details
   (e.g., printing schema or summary) are intentionally light and can evolve,
   but **no files are processed**.
@@ -183,11 +174,11 @@ For a normal run, the CLI prints a single JSON object to stdout. Conceptually:
 {
   "engine_version": "0.0.0",
   "run": {
-    "run_id": "run-uuid",
+    "id": "run-uuid",
     "status": "succeeded",
-    "outputs": ["/data/jobs/123/output/normalized.xlsx"],
-    "artifact": "/data/jobs/123/logs/artifact.json",
-    "events": "/data/jobs/123/logs/events.ndjson",
+    "output_paths": ["/data/jobs/123/output/normalized.xlsx"],
+    "artifact_path": "/data/jobs/123/logs/artifact.json",
+    "events_path": "/data/jobs/123/logs/events.ndjson",
     "processed_files": ["input.xlsx"],
     "error": null
   }
@@ -197,9 +188,9 @@ For a normal run, the CLI prints a single JSON object to stdout. Conceptually:
 Fields mirror `RunResult`:
 
 * `status`: `"succeeded"` or `"failed"`.
-* `outputs`: list of output workbook paths (usually 1).
-* `artifact`: path to `artifact.json`.
-* `events`: path to `events.ndjson`.
+* `output_paths`: list of output workbook paths (usually 1).
+* `artifact_path`: path to `artifact.json`.
+* `events_path`: path to `events.ndjson`.
 * `processed_files`: basenames of source files the engine actually read.
 * `error`: `null` on success, or a human‑readable error summary on failure.
 
@@ -216,7 +207,7 @@ are for logs and operator visibility.
 
 * Non‑zero
 
-  * CLI usage error (e.g. both `--input` and `--input-root`), or
+  * CLI usage error (e.g. both `--input` and `--input-dir`), or
   * Run failed and `status == "failed"`.
 
 The exact non‑zero values are not intended as a stable API; backend code
@@ -279,8 +270,8 @@ A typical end‑to‑end flow:
      result = run(
          config_package="ade_config",
          input_files=[Path(f"/data/jobs/{job_id}/input/input.xlsx")],
-         output_root=Path(f"/data/jobs/{job_id}/output"),
-         logs_root=Path(f"/data/jobs/{job_id}/logs"),
+         output_dir=Path(f"/data/jobs/{job_id}/output"),
+         logs_dir=Path(f"/data/jobs/{job_id}/logs"),
          metadata={"job_id": job_id, "config_id": config_id},
      )
      ```
@@ -335,7 +326,7 @@ python -m ade_engine \
 Then inspect:
 
 * `examples/output/` — normalized workbook(s).
-* `examples/logs/artifact.json` — mapping, validation, and run metadata.
+* `examples/logs/artifact.json` — mapping, validation, and run details (no backend metadata).
 * `examples/logs/events.ndjson` — telemetry stream.
 
 ### 7.2 Python from a REPL or test
@@ -348,8 +339,8 @@ from ade_engine import run
 
 result = run(
     input_files=[Path("examples/input.xlsx")],
-    output_root=Path("examples/output"),
-    logs_root=Path("examples/logs"),
+    output_dir=Path("examples/output"),
+    logs_dir=Path("examples/logs"),
     metadata={"debug": True},
 )
 
