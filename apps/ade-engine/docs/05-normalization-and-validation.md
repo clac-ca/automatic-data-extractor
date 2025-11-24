@@ -76,7 +76,7 @@ Where:
 
     * `raw: RawTable`
     * `mapping: list[ColumnMapping]`
-    * `extras: list[ExtraColumn]`
+    * `extras: list[UnmappedColumn]`
 * `logger: PipelineLogger`
 
   * Unified logging/telemetry/artifact helper.
@@ -150,7 +150,7 @@ This seeded `row` is the input to the transform phase.
 
 `row_index` is always aligned to the **original sheet row index**:
 
-* `MappedTable.raw.header_index` is the header row’s 1-based index.
+* `MappedTable.raw.header_row_index` is the header row’s 1-based index.
 * Data row `i` is at original row index:
 
 ```python
@@ -181,7 +181,7 @@ def transform(
     value,                  # current value for this field
     row: dict,              # full canonical row (field -> value)
     field_meta: dict | None,
-    manifest: dict,
+    manifest,               # ManifestContext
     env: dict | None,
     logger,
 ) -> dict | None:
@@ -282,7 +282,7 @@ def validate(
     value,
     row: dict,
     field_meta: dict | None,
-    manifest: dict,
+    manifest,               # ManifestContext
     env: dict | None,
     logger,
 ) -> list[dict]:
@@ -393,7 +393,7 @@ For each data row:
    ```python
    extra_values = []
    for extra in mapped.extras:
-       col_idx = extra.index  # 0-based raw column index
+       col_idx = extra.source_column_index  # 0-based raw column index
        extra_values.append(
            mapped.raw.data_rows[row_offset][col_idx]
        )

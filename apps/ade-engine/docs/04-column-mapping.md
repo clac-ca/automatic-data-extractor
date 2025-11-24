@@ -56,7 +56,7 @@ A **physical column** is “whatever Excel/CSV calls a column”:
 * Identified by:
 
   * `sheet_name` (or index),
-  * `column_index` (0‑based) or column letter,
+  * `column_index` (0‑based internally; script APIs receive 1‑based and the engine converts) or column letter,
   * and the set of cell values in that column.
 * Completely layout‑driven: if the source file changes shape, the physical columns change.
 
@@ -80,7 +80,7 @@ Logical columns:
 * Do **not** know where they live in the sheet(s).
 * Are the keys hooks and outputs use.
 
-Column mapping’s job is to say:
+Column mapping’s role is to say:
 
 > “For this document and sheet, logical column `invoice_number` is implemented by physical column B.”
 

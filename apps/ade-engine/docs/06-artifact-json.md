@@ -181,23 +181,21 @@ Run‑level metadata and outcome:
   * any other backend correlation tags.
 
 * `error: object | null`
-  If `status == "failed"`, contains error summary.
+  If `status == "failed"`, contains error summary with structured code + stage + message.
   Recommended shape:
 
   ```jsonc
   {
-    "type": "EngineError | ConfigError | InputError | HookError | ...",
+    "code": "config_error | input_error | hook_error | pipeline_error | unknown_error",
+    "stage": "initialization | load_config | extracting | mapping | normalizing | writing_output | hooks",
     "message": "Human-readable summary",
     "details": {
       "exception_type": "ValueError",
       "exception_message": "...",
-      "stage": "extracting | mapping | normalizing | writing_output | hooks"
+      "stage_detail": "... optional free-form stage info ..."
     }
   }
   ```
-
-Backend **must not** rely on any specific error subtype values; treat them as
-best‑effort hints.
 
 ---
 

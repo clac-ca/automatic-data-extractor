@@ -134,7 +134,16 @@ Responsibilities:
 * Group hooks by stage (`on_run_start`, `on_after_extract`, etc.) in order.
 
 The pipeline orchestrator builds a `HookContext` for each stage and dispatches
-it to hooks; if a stage has no configured hooks, `HookRegistry` is a no‑op.
+it to hooks; if a stage has no configured hooks, `HookRegistry` is a no‑op. `HookStage` enum values are exactly:
+
+```python
+class HookStage(str, Enum):
+    ON_RUN_START = "on_run_start"
+    ON_AFTER_EXTRACT = "on_after_extract"
+    ON_AFTER_MAPPING = "on_after_mapping"
+    ON_BEFORE_SAVE = "on_before_save"
+    ON_RUN_END = "on_run_end"
+```
 
 ---
 
@@ -149,23 +158,23 @@ Hooks should take a single `HookContext` argument for consistency:
 ```python
 from dataclasses import dataclass
 from typing import Any
-from ade_engine.hooks import HookContext, HookStage
-from ade_engine.types import RunResult, RunContext
-from ade_engine.pipeline import RawTable, MappedTable, NormalizedTable
+from ade_engine.config_runtime.hook_registry import HookContext, HookStage
+from ade_engine.core.types import RunResult, RunContext
+from ade_engine.core.pipeline import RawTable, MappedTable, NormalizedTable
 from openpyxl import Workbook
 
 @dataclass
 class HookContext:
     run: RunContext
     state: dict[str, Any]
-    manifest: Any               # ManifestContext | dict
+    manifest: ManifestContext
     env: dict[str, str]
-    artifact: Any               # ArtifactSink
-    events: Any | None          # EventSink | None
+    artifact: ArtifactSink
+    events: EventSink | None
     tables: list[RawTable | MappedTable | NormalizedTable] | None
     workbook: Workbook | None
     result: RunResult | None
-    logger: Any                 # PipelineLogger
+    logger: PipelineLogger
     stage: HookStage
 
 def run(ctx: HookContext) -> None:
@@ -210,7 +219,7 @@ stage.
     * tweak header or data rows (e.g., trimming, fixing obvious anomalies).
   * Keep invariants intact:
 
-    * `header_row` and `data_rows` must remain aligned with `header_index`,
+* `header_row` and `data_rows` must remain aligned with `header_row_index`,
       `first_data_index`, `last_data_index`.
 
 * `on_after_mapping`:
@@ -219,7 +228,7 @@ stage.
   * You may:
 
     * override mappings for specific columns,
-    * adjust `extras` (`ExtraColumn` list),
+* adjust `extras` (`UnmappedColumn` list),
     * change field order if your writer mode supports it.
   * Be careful not to introduce holes or duplicates in mapping.
 
@@ -290,7 +299,7 @@ def run(ctx):
             file=str(t.source_file),
             sheet=t.source_sheet,
             row_count=len(t.data_rows),
-            header_row_index=t.header_index,
+            header_row_index=t.header_row_index,
         )
 
         if len(t.data_rows) == 0:
@@ -317,7 +326,7 @@ def run(ctx):
                         "Dropping duplicate email mapping",
                         level="warning",
                         header=m.header,
-                        column_index=m.index,
+                        column_index=m.source_column_index,
                     )
                     m.field = "raw_email_candidate"
                 else:

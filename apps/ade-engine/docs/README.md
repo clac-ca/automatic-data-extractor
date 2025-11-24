@@ -6,9 +6,10 @@ while building or extending the engine and configs.
 
 ### Package layout (flattened, layered by convention)
 
-* Root: main runtime and extension points (`engine.py`, `types.py`, `config_runtime.py`, `pipeline/`, `hooks.py`)
-* Infra/adapters: `io.py`, `artifact.py`, `telemetry.py`
-* Public API & CLI: `__init__.py`, `cli.py`, `__main__.py`
+* Core runtime: `core/engine.py`, `core/types.py`, `core/pipeline/`
+* Config runtime: `config_runtime/loader.py`, `manifest_context.py`, registries
+* Infra/adapters: `infra/io.py`, `infra/artifact.py`, `infra/telemetry.py`
+* Public API & CLI: `api/__init__.py`, `api/cli.py`, `api/__main__.py`
 * Schemas: `schemas/`
 
 Recommended reading order (mirrors the pipeline flow):

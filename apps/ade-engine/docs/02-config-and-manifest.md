@@ -6,7 +6,7 @@ represented as Python models inside `ade_engine`.
 
 Read this if you are:
 
-- implementing `config_runtime.py`,
+- implementing `ade_engine.config_runtime` modules,
 - authoring or reviewing a config package,
 - or wiring config‑driven behavior into new parts of the engine.
 
@@ -198,33 +198,34 @@ scripts via the `run` argument (see script API docs).
 
 ---
 
-## 4. Loading config at runtime (`config_runtime`)
+## 4. Loading config at runtime (`config_runtime/`)
 
 ### 4.1 Responsibilities of `config_runtime`
 
-The `config_runtime` module is the “glue” between:
+The `config_runtime` package is the “glue” between:
 
 * the `ade_config` package and its `manifest.json`, and
 * the rest of the engine.
 
 It is responsible for:
 
-1. **Finding and parsing the manifest** into a `ManifestContext`.
-2. **Resolving scripts** (row detectors, column modules, hooks).
+1. **Finding and parsing the manifest** into a `ManifestContext` (`manifest_context.py`).
+2. **Resolving scripts** (row detectors, column_detectors field modules, hooks) via `loader.py`.
 3. **Building registries** that the pipeline can use:
 
-   * `ConfigRuntime.columns` (column registry),
-   * `ConfigRuntime.hooks` (hook registry),
+   * `ConfigRuntime.columns` (column registry from `column_registry.py`),
+   * `ConfigRuntime.hooks` (hook registry from `hook_registry.py`),
    * plus convenient access to `env`, defaults, writer, etc.
 
 A typical public entrypoint looks like:
 
 ```python
-def load_config_runtime(
-    package: str = "ade_config",
-    manifest_path: Path | None = None,
-) -> ConfigRuntime:
-    ...
+from ade_engine.config_runtime.loader import load_config_runtime
+
+cfg = load_config_runtime(
+    package="ade_config",
+    manifest_path=None,
+)
 ```
 
 ### 4.2 Manifest resolution rules

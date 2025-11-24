@@ -227,7 +227,7 @@ def detect_header_or_data(
     state: dict,
     row_index: int,      # 1-based index within the sheet
     row_values: list,    # raw cell values for this row
-    manifest: dict,
+    manifest,            # ManifestContext
     env: dict | None,
     logger,
 ) -> dict:
@@ -313,9 +313,9 @@ class RawTable:
     table_index: int              # 0-based ordinal within the sheet
     header_row: list[str]          # normalized header cells
     data_rows: list[list[Any]]     # all data rows for the table
-    header_index: int              # 1-based row index of header in the sheet
-    first_data_index: int          # 1-based row index of first data row
-    last_data_index: int           # 1-based row index of last data row
+    header_row_index: int          # 1-based row index of header in the sheet
+    first_data_row_index: int      # 1-based row index of first data row
+    last_data_row_index: int       # 1-based row index of last data row
 ```
 
 Details:
@@ -324,8 +324,8 @@ Details:
 * `source_sheet` — sheet name for XLSX; `None` for CSV.
 * `table_index` — 0-based order in which tables were detected within the sheet.
 * `header_row` — header cells normalized to strings (e.g. `None` → `""`).
-* `data_rows` — full set of rows between `first_data_index` and
-  `last_data_index` that the algorithm considers part of the table.
+* `data_rows` — full set of rows between `first_data_row_index` and
+  `last_data_row_index` that the algorithm considers part of the table.
 * Indices are **1‑based** and correspond to original sheet row numbers; this
   is important for traceability and artifact reporting.
 

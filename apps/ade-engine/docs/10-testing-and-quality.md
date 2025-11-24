@@ -60,15 +60,15 @@ apps/ade-engine/
       test_io.py
       test_extract.py
       test_mapping.py
-      test_normalize.py
-      test_write.py
-    test_engine_runtime.py
-    test_config_runtime.py
-    test_artifact.py
-    test_telemetry.py
-    test_cli.py
-    fixtures/
-      __init__.py
+    test_normalize.py
+    test_write.py
+  test_engine_runtime.py
+  test_config_runtime_loader.py
+  test_artifact.py
+  test_telemetry.py
+  test_cli.py
+  fixtures/
+    __init__.py
       config_factories.py
       sample_inputs.py
 ````
@@ -86,7 +86,7 @@ Unit tests live close to the corresponding module:
 * `tests/pipeline/test_normalize.py` → `pipeline/normalize.py`
 * `tests/pipeline/test_write.py` → `pipeline/write.py`
 * `tests/test_engine_runtime.py` → `engine.py`, `types.py`
-* `tests/test_config_runtime.py` → `config_runtime.py`, `schemas/manifest.py`
+* `tests/test_config_runtime_loader.py` → `config_runtime/loader.py`, `schemas/manifest.py`
 * `tests/test_artifact.py` → `artifact.py`
 * `tests/test_telemetry.py` → `telemetry.py`
 * `tests/test_cli.py` → `cli.py`, `__main__.py`
@@ -194,7 +194,7 @@ Key tests:
 Tests here should not depend on real `ade_config` packages; use mocks or
 minimal in‑memory stubs.
 
-### 4.2 Config runtime (`config_runtime.py`, `schemas/manifest.py`)
+### 4.2 Config runtime (`config_runtime/`, `schemas/manifest.py`)
 
 Key tests:
 
@@ -257,7 +257,7 @@ Key tests:
   * Ties resolved by `manifest.columns.order`.
 * Extra columns:
 
-  * Unmapped columns become `ExtraColumn`s when writer config says so.
+  * Unmapped columns become `UnmappedColumn`s when writer config says so.
   * `output_header` is generated deterministically.
 
 ### 4.5 Normalization and validation (`pipeline/normalize.py`)
@@ -493,7 +493,7 @@ Debugging steps:
    * `RunResult.error`,
    * `artifact.run.error`,
    * `events.ndjson` (`run_failed` event payload).
-3. Add a minimal repro to `tests/test_config_runtime.py` or
+3. Add a minimal repro to `tests/test_config_runtime_loader.py` or
    `tests/test_engine_runtime.py` if the error indicates a gap in engine
    validation.
 
