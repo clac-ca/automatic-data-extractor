@@ -37,8 +37,8 @@ from .schemas import (
     ConfigSource,
     ConfigSourceClone,
     ConfigSourceTemplate,
-    ConfigVersionRecord,
     ConfigValidationIssue,
+    ConfigVersionRecord,
 )
 from .storage import ConfigStorage
 

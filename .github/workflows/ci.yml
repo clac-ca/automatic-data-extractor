@@ -40,10 +40,15 @@ jobs:
           cache: npm
           cache-dependency-path: apps/ade-web/package-lock.json
 
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: apps/ade-web
+
       - name: Install ade CLI
         run: |
           python -m pip install -U pip
           python -m pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api
+          python -m pip install ruff==0.13.1 pytest==8.4.2 pytest-asyncio==1.2.0 pytest-cov==5.0.0 asgi-lifespan==2.1.0 openapi-spec-validator==0.7.2
 
       - name: Run repo CI (lint, test, build)
         run: ade ci

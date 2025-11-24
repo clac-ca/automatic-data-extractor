@@ -11,8 +11,8 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from uuid import uuid4
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from ade_engine.schemas import TelemetryEnvelope
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,13 +23,13 @@ from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.documents.repository import DocumentsRepository
-from ade_api.features.documents.storage import DocumentStorage
 from ade_api.features.documents.staging import stage_document_input
+from ade_api.features.documents.storage import DocumentStorage
+from ade_api.features.system_settings.schemas import SafeModeStatus
 from ade_api.features.system_settings.service import (
     SAFE_MODE_DEFAULT_DETAIL,
     SafeModeService,
 )
-from ade_api.features.system_settings.schemas import SafeModeStatus
 from ade_api.settings import Settings
 from ade_api.shared.core.time import utc_now
 
@@ -506,7 +506,7 @@ class RunsService:
         try:
             candidate.relative_to(output_dir)
         except ValueError:
-            raise RunOutputMissingError("Requested output is outside the run directory")
+            raise RunOutputMissingError("Requested output is outside the run directory") from None
 
         if not candidate.is_file():
             raise RunOutputMissingError("Requested output file not found")
@@ -525,7 +525,7 @@ class RunsService:
         try:
             return str(candidate.relative_to(root))
         except ValueError:  # pragma: no cover - defensive guard
-            raise RunOutputMissingError("Requested path escapes jobs directory")
+            raise RunOutputMissingError("Requested path escapes jobs directory") from None
 
     def _relative_if_exists(self, path: str | Path | None) -> str | None:
         if path is None:
@@ -563,13 +563,19 @@ class RunsService:
         )
 
         logs_dir = job_dir / "logs"
-        artifact_candidates = [summary.get("artifact_path") if summary else None, logs_dir / "artifact.json"]
+        artifact_candidates = [
+            summary.get("artifact_path") if summary else None,
+            logs_dir / "artifact.json",
+        ]
         for candidate in artifact_candidates:
             snapshot.artifact_path = self._relative_if_exists(candidate)
             if snapshot.artifact_path:
                 break
 
-        event_candidates = [summary.get("events_path") if summary else None, logs_dir / "events.ndjson"]
+        event_candidates = [
+            summary.get("events_path") if summary else None,
+            logs_dir / "events.ndjson",
+        ]
         for candidate in event_candidates:
             snapshot.events_path = self._relative_if_exists(candidate)
             if snapshot.events_path:
@@ -577,7 +583,11 @@ class RunsService:
 
         output_candidates = summary.get("output_paths") if summary else None
         if isinstance(output_candidates, list):
-            snapshot.output_paths = [p for p in (self._relative_if_exists(path) for path in output_candidates) if p]
+            snapshot.output_paths = [
+                p
+                for p in (self._relative_if_exists(path) for path in output_candidates)
+                if p
+            ]
 
         if not snapshot.output_paths:
             snapshot.output_paths = self._relative_output_paths(job_dir / "output")
@@ -597,7 +607,9 @@ class RunsService:
         summary: dict[str, Any] | None, return_code: int
     ) -> tuple[RunStatus, str | None]:
         status = RunStatus.SUCCEEDED if return_code == 0 else RunStatus.FAILED
-        error_message: str | None = None if status is RunStatus.SUCCEEDED else f"Process exited with {return_code}"
+        error_message: str | None = (
+            None if status is RunStatus.SUCCEEDED else f"Process exited with {return_code}"
+        )
 
         if summary:
             summary_status = summary.get("status")
@@ -849,7 +861,7 @@ class RunsService:
         try:
             candidate.relative_to(root)
         except ValueError:  # pragma: no cover - defensive guard
-            raise RunOutputMissingError("Requested path escapes jobs directory")
+            raise RunOutputMissingError("Requested path escapes jobs directory") from None
         return candidate
 
     @staticmethod

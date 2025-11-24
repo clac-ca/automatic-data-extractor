@@ -3,24 +3,18 @@ from uuid import uuid4
 
 import pytest
 
-from sqlalchemy import text
-
+from ade_api.features.configs.models import Configuration, ConfigurationStatus
+from ade_api.features.documents.filters import DocumentFilters, DocumentSource, DocumentStatus
+from ade_api.features.documents.models import Document, DocumentTag
+from ade_api.features.documents.service import DocumentsService
+from ade_api.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
+from ade_api.features.jobs.models import Job, JobStatus
+from ade_api.features.users.models import User
+from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import get_settings
 from ade_api.shared.db import generate_ulid
 from ade_api.shared.db.session import get_sessionmaker
-from ade_api.features.documents.filters import (
-    DocumentFilters,
-    DocumentSource,
-    DocumentStatus,
-)
-from ade_api.features.documents.models import Document, DocumentTag
-from ade_api.features.jobs.models import Job, JobStatus
-from ade_api.features.documents.service import DocumentsService
-from ade_api.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
-from ade_api.features.users.models import User
-from ade_api.features.workspaces.models import Workspace
 from ade_api.shared.sorting import resolve_sort
-
 
 pytestmark = pytest.mark.asyncio
 
@@ -84,69 +78,19 @@ async def _build_documents_fixture(session):
     return workspace, uploader, colleague, processed, uploaded
 
 
-async def _ensure_config_version(session, workspace_id: str, author_id: str) -> tuple[str, str]:
-    """Create minimal config + version rows to satisfy job foreign keys."""
+async def _ensure_config_version(session, workspace_id: str) -> tuple[str, str]:
+    """Create minimal configuration row to satisfy job foreign keys."""
 
-    now = datetime.now(tz=UTC)
-    config_id = generate_ulid()
-    await session.execute(
-        text(
-            """
-            INSERT INTO configs (
-                id, workspace_id, slug, title, description,
-                created_by_user_id, updated_by_user_id, deleted_by_user_id,
-                created_at, updated_at, deleted_at
-            )
-            VALUES (
-                :id, :workspace_id, :slug, :title, NULL,
-                :author_id, :author_id, NULL, :created_at, :updated_at, NULL
-            )
-            """
-        ),
-        {
-            "id": config_id,
-            "workspace_id": workspace_id,
-            "slug": f"config-{config_id.lower()}",
-            "title": "Test Config",
-            "author_id": author_id,
-            "created_at": now,
-            "updated_at": now,
-        },
+    configuration = Configuration(
+        workspace_id=workspace_id,
+        display_name="Test Config",
+        status=ConfigurationStatus.ACTIVE,
+        config_version=1,
     )
+    session.add(configuration)
+    await session.flush()
 
-    version_id = generate_ulid()
-    await session.execute(
-        text(
-            """
-            INSERT INTO config_versions (
-                id, config_id, sequence, label, manifest, manifest_sha256,
-                package_sha256, package_path, config_script_api_version,
-                created_at, updated_at, deleted_at, created_by_user_id, deleted_by_user_id
-            )
-            VALUES (
-                :id, :config_id, :sequence, :label, :manifest, :manifest_sha256,
-                :package_sha256, :package_path, :api_version,
-                :created_at, :updated_at, NULL, :author_id, NULL
-            )
-            """
-        ),
-        {
-            "id": version_id,
-            "config_id": config_id,
-            "sequence": 1,
-            "label": "v1",
-            "manifest": "{}",
-            "manifest_sha256": "a" * 64,
-            "package_sha256": "b" * 64,
-            "package_path": "packages/test.tar.gz",
-            "api_version": "1",
-            "created_at": now,
-            "updated_at": now,
-            "author_id": author_id,
-        },
-    )
-
-    return config_id, version_id
+    return configuration.config_id, configuration.config_id
 
 
 async def test_list_documents_applies_filters_and_sorting() -> None:
@@ -154,7 +98,9 @@ async def test_list_documents_applies_filters_and_sorting() -> None:
     session_factory = get_sessionmaker()
 
     async with session_factory() as session:
-        workspace, uploader, colleague, processed, uploaded = await _build_documents_fixture(session)
+        workspace, uploader, colleague, processed, uploaded = await _build_documents_fixture(
+            session
+        )
 
         service = DocumentsService(session=session, settings=settings)
 
@@ -207,7 +153,9 @@ async def test_last_run_filters_include_nulls_in_upper_bound() -> None:
     session_factory = get_sessionmaker()
 
     async with session_factory() as session:
-        workspace, uploader, colleague, processed, uploaded = await _build_documents_fixture(session)
+        workspace, uploader, colleague, processed, uploaded = await _build_documents_fixture(
+            session
+        )
 
         service = DocumentsService(session=session, settings=settings)
 
@@ -238,7 +186,9 @@ async def test_sorting_last_run_places_nulls_last() -> None:
     session_factory = get_sessionmaker()
 
     async with session_factory() as session:
-        workspace, uploader, colleague, processed, uploaded = await _build_documents_fixture(session)
+        workspace, uploader, colleague, processed, uploaded = await _build_documents_fixture(
+            session
+        )
 
         service = DocumentsService(session=session, settings=settings)
 
@@ -266,10 +216,12 @@ async def test_list_documents_includes_last_run_summary() -> None:
     session_factory = get_sessionmaker()
 
     async with session_factory() as session:
-        workspace, uploader, colleague, processed, uploaded = await _build_documents_fixture(session)
+        workspace, uploader, colleague, processed, uploaded = await _build_documents_fixture(
+            session
+        )
 
         now = datetime.now(tz=UTC)
-        config_id, config_version_id = await _ensure_config_version(session, str(workspace.id), uploader.id)
+        config_id, config_version_id = await _ensure_config_version(session, str(workspace.id))
         job = Job(
             workspace_id=str(workspace.id),
             config_id=config_id,
