@@ -1556,9 +1556,9 @@ function RunExtractionDrawerContent({
         ? fetchJob(workspaceId, activeJobId, signal)
         : Promise.reject(new Error("No job selected")),
     enabled: Boolean(activeJobId),
-    refetchInterval: (data) => {
-      if (!data) return false;
-      return data.status === "running" || data.status === "queued" ? 2000 : false;
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "running" || status === "queued" ? 2000 : false;
     },
   });
 

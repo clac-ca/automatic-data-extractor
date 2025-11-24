@@ -37,8 +37,16 @@ class Job(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
     )
-    config_id: Mapped[str] = mapped_column(String(26), nullable=False)
-    config_version_id: Mapped[str] = mapped_column(String(26), nullable=False)
+    config_id: Mapped[str] = mapped_column(
+        String(26),
+        ForeignKey("configurations.config_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    config_version_id: Mapped[str] = mapped_column(
+        String(26),
+        ForeignKey("configurations.config_id", ondelete="CASCADE"),
+        nullable=False,
+    )
     submitted_by_user_id: Mapped[str | None] = mapped_column(
         String(26), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
