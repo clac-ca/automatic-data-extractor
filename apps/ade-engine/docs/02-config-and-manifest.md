@@ -170,27 +170,23 @@ At runtime the manifest is wrapped in a lightweight helper:
 
 ```python
 class ManifestContext:
-    raw: dict                 # original JSON dict
+    raw_json: dict            # original JSON dict
     model: ManifestV1         # validated Pydantic model
 
     @property
-    def column_order(self) -> list[str]: ...
+    def columns(self) -> Columns: ...   # provides .order and .meta
     @property
-    def column_meta(self) -> dict[str, ColumnMeta]: ...
-    @property
-    def defaults(self) -> EngineDefaults: ...
-    @property
-    def writer(self) -> EngineWriter: ...
+    def engine(self) -> EngineSection: ...  # provides .defaults and .writer
     @property
     def env(self) -> dict[str, str]: ...
 ```
 
 This gives the pipeline and config runtime a clean, typed surface:
 
-* `ctx.manifest.column_order` to drive output ordering,
-* `ctx.manifest.column_meta["email"]` to look up script paths and flags,
-* `ctx.manifest.defaults.mapping_score_threshold` for mapping,
-* `ctx.manifest.writer.append_unmapped_columns` for output behavior,
+* `ctx.manifest.columns.order` to drive output ordering,
+* `ctx.manifest.columns.meta["email"]` to look up script paths and flags,
+* `ctx.manifest.engine.defaults.mapping_score_threshold` for mapping,
+* `ctx.manifest.engine.writer.append_unmapped_columns` for output behavior,
 * `ctx.manifest.env` for script configuration.
 
 The **same `ManifestContext` instance** is stored on `RunContext` and passed to
@@ -209,7 +205,7 @@ The `config_runtime` package is the “glue” between:
 
 It is responsible for:
 
-1. **Finding and parsing the manifest** into a `ManifestContext` (`manifest_context.py`).
+1. **Finding and parsing the manifest** into a `ManifestContext` (`manifest_context.py` with `raw_json`, `model`, `columns`, `engine`, `env`).
 2. **Resolving scripts** (row detectors, column_detectors field modules, hooks) via `loader.py`.
 3. **Building registries** that the pipeline can use:
 

@@ -233,7 +233,7 @@ Properties:
 
 * `status: RunStatus` (`"succeeded"` or `"failed"`)
 * `error: RunError | None`
-  Structured error with `code` (e.g., `config_error`, `input_error`, `hook_error`, `pipeline_error`, `unknown_error`), `stage` (e.g., `load_config`, `extracting`, `mapping`, `normalizing`, `writing_output`, `hooks`), and `message`.
+  Structured error with `code` (e.g., `config_error`, `input_error`, `hook_error`, `pipeline_error`, `unknown_error`), `stage` (e.g., `initialization`, `load_config`, `extracting`, `mapping`, `normalizing`, `writing_output`, `hooks`), and `message`.
 * `output_paths: tuple[Path, ...]`
   One or more normalized workbook paths (often a single workbook). CLI JSON uses the same key for consistency.
 * `artifact_path: Path`
@@ -256,9 +256,10 @@ Guarantees:
 
 ### 3.5 Pipeline phases
 
-Internally, the engine tracks a `PipelinePhase` enum, roughly:
+Internally, the engine tracks a `PipelinePhase` enum:
 
-* `INITIALIZED`
+* `INITIALIZATION`
+* `LOAD_CONFIG`
 * `EXTRACTING`
 * `MAPPING`
 * `NORMALIZING`
@@ -266,7 +267,7 @@ Internally, the engine tracks a `PipelinePhase` enum, roughly:
 * `COMPLETED`
 * `FAILED`
 
-Enum `.value` strings are snake_case (`"initialized"`, `"extracting"`, `"mapping"`, `"normalizing"`, `"writing_output"`, `"completed"`, `"failed"`). Phase transitions are recorded in telemetry and may be reflected in
+Enum `.value` strings are snake_case (`"initialization"`, `"load_config"`, `"extracting"`, `"mapping"`, `"normalizing"`, `"writing_output"`, `"completed"`, `"failed"`). Phase transitions are recorded in telemetry and may be reflected in
 `artifact.notes`. They are mostly relevant to observability and debugging.
 
 ---
@@ -355,7 +356,7 @@ If any of these steps fail, the error is handled as described in
   * For each `RawTable`:
 
     * Run column detectors and scoring.
-    * Produce `MappedTable` with `ColumnMapping[]` and `UnmappedColumn[]`.
+    * Produce `MappedTable` with `MappedColumn[]` and `UnmappedColumn[]`.
    * After all tables are mapped:
 
      * Call `on_after_mapping` hooks (pass the mapped tables).
@@ -429,26 +430,29 @@ useful artifact and telemetry record.
 
 ### 5.1 Error categories
 
-Conceptually:
+Conceptually (and mapped to `RunErrorCode`):
 
-* **Config errors**
+* **Config errors** (`CONFIG_ERROR`)
 
   * Invalid manifest JSON.
   * Missing or misconfigured column scripts / hooks.
   * Signature mismatches in detectors/transforms/validators.
 
-* **Input errors**
+* **Input errors** (`INPUT_ERROR`)
 
   * Input file does not exist or cannot be read.
   * Required sheet missing.
   * No usable tables discovered.
 
-* **Engine errors**
+* **Hook errors** (`HOOK_ERROR`)
 
-  * Bugs or unexpected exceptions inside `ade_engine` itself.
+  * Exceptions thrown inside config hooks.
 
-The runtime generally does not distinguish these categories in types, but they
-inform how error messages are written.
+* **Pipeline errors** (`PIPELINE_ERROR`)
+
+  * Bugs or unexpected exceptions inside `ade_engine` pipeline stages.
+
+Exceptions are mapped to `RunError` via a single helper (e.g., `_error_to_run_error(exc, stage: RunStage | None)`), ensuring `RunResult.error`, artifact, and telemetry all share the same `code`/`message`/`stage`.
 
 ### 5.2 Behavior on failure
 
@@ -459,13 +463,13 @@ On any unhandled exception:
 
    * `run.status = "failed"`,
    * `completed_at = now`,
-   * `error` information recorded (type/message, optionally a code).
-3. A `run_failed` telemetry event is emitted with context.
+   * `error` recorded with `RunError.code`/`stage`/`message`.
+3. A `run_failed` telemetry event is emitted with `error_code`/`error_stage` and context.
 4. Sinks are flushed (artifact + telemetry).
 5. `RunResult` is returned with:
 
    * `status="failed"`,
-   * `error` set to a human‑readable summary,
+   * `error` set to a structured `RunError`,
    * `output_paths` possibly empty or partial,
    * `artifact_path` and `events_path` pointing to complete log files.
 

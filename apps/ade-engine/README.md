@@ -126,10 +126,28 @@ ade_engine/
     telemetry.py
     artifact.py
 
-  api/                       # Public API + CLI
-    __init__.py              # Engine, run, RunRequest, RunResult, __version__
-    cli.py                   # CLI entrypoint (arg parsing, JSON output)
-    __main__.py              # `python -m ade_engine` → cli.main()
+  cli.py               # CLI entrypoint (arg parsing, JSON output)
+  __main__.py          # `python -m ade_engine` → cli.main()
+
+# Public API surface (top-level imports from ade_engine/__init__.py)
+from ade_engine.core.engine import Engine
+from ade_engine.core.types import RunRequest, RunResult, EngineMetadata, RunStatus
+from ade_engine import __version__
+
+def run(*args, **kwargs) -> RunResult:
+    """Convenience helper: Engine().run(...)"""
+    engine = Engine()
+    return engine.run(*args, **kwargs)
+
+__all__ = [
+    "Engine",
+    "run",
+    "RunRequest",
+    "RunResult",
+    "EngineMetadata",
+    "RunStatus",
+    "__version__",
+]
 ```
 
 Layering rules:
@@ -147,15 +165,15 @@ If you know this layout, you know where everything lives:
 * **“How does the pipeline work?”** → `core/pipeline/`
 * **“Where is artifact/telemetry written?”** → `infra/artifact.py`, `infra/telemetry.py`
 
-### 2.1 Public API (`api/__init__.py`)
+### 2.1 Public API (top-level `ade_engine`)
 
-Keep the public surface obvious and small:
+Keep the public surface obvious and small at the package root:
 
 ```python
-# ade_engine/api/__init__.py
+# ade_engine/__init__.py
 from ade_engine.core.engine import Engine
 from ade_engine.core.types import RunRequest, RunResult, EngineMetadata, RunStatus
-from . import __version__  # however versioning is managed
+from ade_engine import __version__  # however versioning is managed
 
 
 def run(*args, **kwargs) -> RunResult:
@@ -191,9 +209,6 @@ result = run(
 ```
 
 You only need to dig into `pipeline`, `artifact`, or `telemetry` if you are working on the engine internals.
-
-`ade_engine/__init__.py` re-exports the same public symbols from `api/__init__.py`
-so consumers can simply `from ade_engine import Engine, run, RunRequest, RunResult`.
 * **“What does the manifest look like?”** → `schemas/manifest.py` (Python models)
   (JSON schemas can be generated from these models for external validation)
 
@@ -237,6 +252,22 @@ from typing import Any, Literal, Mapping, Sequence
 class RunStatus(str, Enum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+
+class RunErrorCode(str, Enum):
+    CONFIG_ERROR = "config_error"
+    INPUT_ERROR = "input_error"
+    HOOK_ERROR = "hook_error"
+    PIPELINE_ERROR = "pipeline_error"
+    UNKNOWN_ERROR = "unknown_error"
+
+class RunStage(str, Enum):
+    INITIALIZATION = "initialization"
+    LOAD_CONFIG = "load_config"
+    EXTRACTING = "extracting"
+    MAPPING = "mapping"
+    NORMALIZING = "normalizing"
+    WRITING_OUTPUT = "writing_output"
+    HOOKS = "hooks"
 ```
 
 **EngineMetadata**
@@ -308,8 +339,8 @@ Structured error info plus the overall outcome:
 ```python
 @dataclass(frozen=True)
 class RunError:
-    code: str                # "config_error" | "input_error" | "hook_error" | "pipeline_error" | "unknown_error"
-    stage: str | None        # "initialization" | "load_config" | "extracting" | "mapping" | "normalizing" | "writing_output" | "hooks" | None
+    code: RunErrorCode
+    stage: RunStage | None
     message: str
 
 @dataclass(frozen=True)
@@ -366,6 +397,19 @@ shared across runs or threads. A single `Engine.run` executes sequentially in on
 thread/process; any concurrency is implemented by the ADE API running multiple
 workers, each with its own `RunContext`.
 
+Exception classes are aligned with `RunErrorCode`:
+
+```python
+class AdeEngineError(Exception): ...
+class ConfigError(AdeEngineError): ...      # → RunErrorCode.CONFIG_ERROR
+class InputError(AdeEngineError): ...       # → RunErrorCode.INPUT_ERROR
+class HookError(AdeEngineError): ...        # → RunErrorCode.HOOK_ERROR
+class PipelineError(AdeEngineError): ...    # → RunErrorCode.PIPELINE_ERROR
+```
+
+`Engine.run` should map exceptions to `RunError` in one place (e.g., `_error_to_run_error(exc, stage)`)
+so `RunResult`, artifact, and telemetry all share the same `code`/`message`/`stage`.
+
 The ADE backend may include a `job_id` inside `metadata`, but the engine just treats it as
 opaque metadata. The engine is always run-scoped; any job/run mapping is a backend concern.
 
@@ -400,7 +444,7 @@ class ScoreContribution:
     delta: float
 
 @dataclass
-class ColumnMapping:
+class MappedColumn:
     field: str                # canonical field name
     header: str               # original header text
     source_column_index: int  # 0-based input column index (converted from 1-based script inputs)
@@ -424,7 +468,7 @@ Mapped and normalized tables:
 @dataclass
 class MappedTable:
     raw: RawTable
-    mapping: list[ColumnMapping]
+    columns: list[MappedColumn]
     extras: list[UnmappedColumn]
 
 @dataclass
@@ -444,7 +488,7 @@ class NormalizedTable:
     output_sheet_name: str
 ```
 
-`PipelinePhase` is an enum (`INITIALIZED`, `EXTRACTING`, `MAPPING`, `NORMALIZING`, `WRITING_OUTPUT`, `COMPLETED`, `FAILED`) used by telemetry. Enum `.value` strings are snake_case (`"initialized"`, `"extracting"`, `"mapping"`, `"normalizing"`, `"writing_output"`, `"completed"`, `"failed"`) and used in telemetry `pipeline_transition` events.
+`PipelinePhase` is an enum (`INITIALIZATION`, `LOAD_CONFIG`, `EXTRACTING`, `MAPPING`, `NORMALIZING`, `WRITING_OUTPUT`, `COMPLETED`, `FAILED`) used by telemetry. Enum `.value` strings are snake_case (`"initialization"`, `"load_config"`, `"extracting"`, `"mapping"`, `"normalizing"`, `"writing_output"`, `"completed"`, `"failed"`) and used in telemetry `pipeline_transition` events.
 
 ---
 
@@ -548,7 +592,7 @@ Conceptually the manifest looks like:
 ```
 
 `config_runtime/manifest_context.py` turns this into a typed `ManifestContext` with helpers:
-`column_order`, `column_meta`, `defaults`, `writer`.
+`columns.order`, `columns.meta`, `engine.defaults`, `engine.writer`.
 
 ---
 
