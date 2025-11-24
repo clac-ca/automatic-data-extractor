@@ -7,6 +7,7 @@ RUN npm ci --prefix apps/ade-web --no-audit --no-fund
 
 # Build the SPA (requires telemetry JSON during bundling)
 COPY apps/ade-web apps/ade-web
+COPY apps/ade-engine/src/ade_engine/schemas apps/ade-engine/src/ade_engine/schemas
 RUN npm run build --prefix apps/ade-web
 
 FROM python:3.12-slim AS backend-build
