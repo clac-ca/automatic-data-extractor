@@ -43,28 +43,28 @@ Keep short inline status notes as you go.
 
 **Goal:** Establish core runtime data structures and schema models that everything else depends on.
 
-- [ ] Implement core runtime types (`core/types.py`) per `01-engine-runtime.md` §3:
+- [x] Implement core runtime types (`core/types.py`) per `01-engine-runtime.md` §3: initial dataclasses/enums in place.
   - `RunStatus`, `RunErrorCode`, `RunPhase`, `EngineInfo`
   - `RunRequest`, `RunPaths`, `RunContext`
   - `RunError`, `RunResult`
   - `RawTable`, table indices & row index semantics
-- [ ] Implement column‑mapping and normalization types in `core/types.py`:
+- [x] Implement column‑mapping and normalization types in `core/types.py`:
   - `ScoreContribution`, `MappedColumn`, `UnmappedColumn`, `ColumnMap`, `MappedTable` per `04-column-mapping.md`
   - `ValidationIssue`, `NormalizedTable` per `05-normalization-and-validation.md`
-- [ ] Implement engine error hierarchy (`core/errors.py`) per `01-engine-runtime.md` §3.3:
+- [x] Implement engine error hierarchy (`core/errors.py`) per `01-engine-runtime.md` §3.3:
   - `AdeEngineError`
   - `ConfigError`, `InputError`, `HookError`, `PipelineError`
   - Helper to map exceptions → `RunError` (`RunErrorCode` + `RunPhase`), for use by `Engine.run`
-- [ ] Implement manifest schema models (`schemas/manifest.py`) + `ManifestContext` integration point per `02-config-and-manifest.md` §3:
+- [x] Implement manifest schema models (`schemas/manifest.py`) + `ManifestContext` integration point per `02-config-and-manifest.md` §3:
   - `ManifestV1` + sub‑models (`ColumnsConfig`, `FieldConfig`, `WriterConfig`, `HookCollection`, etc.)
   - Ensure `ManifestV1.model_json_schema()` produces a usable JSON Schema (even if not wired yet)
-- [ ] Implement artifact schema models (`schemas/artifact.py`) per `06-artifact-json.md` §3–§6:
+- [x] Implement artifact schema models (`schemas/artifact.py`) per `06-artifact-json.md` §3–§6:
   - Top‑level `ArtifactV1` with `run`, `config`, `tables`, `notes`
   - Per‑table structures for header, mapped/unmapped columns, and validation issues
-- [ ] Implement telemetry schema models (`schemas/telemetry.py`) per `07-telemetry-events.md` §3:
+- [x] Implement telemetry schema models (`schemas/telemetry.py`) per `07-telemetry-events.md` §3:
   - `TelemetryEvent`, `TelemetryEnvelope`
   - Event names and levels (`run_started`, `run_completed`, `run_failed`, `pipeline_transition`, etc.)
-- [ ] Add basic schema tests (`tests/test_schemas_manifest.py`, `tests/test_schemas_artifact.py`, `tests/test_schemas_telemetry.py` or merge into existing schema‑focused tests):
+- [x] Add basic schema tests (`tests/test_schemas_manifest.py`, `tests/test_schemas_artifact.py`, `tests/test_schemas_telemetry.py` or merge into existing schema‑focused tests):
   - Validate minimal valid objects
   - Assert key invariants (required fields, enum values, timestamp formats)
 
@@ -74,17 +74,17 @@ Keep short inline status notes as you go.
 
 **Goal:** Load `ade_config`, parse the manifest into Python models, and build registries for column modules and hooks.
 
-- [ ] Implement `ManifestContext` (`config/manifest_context.py`) per `02-config-and-manifest.md` §3.2:
+- [x] Implement `ManifestContext` (`config/manifest_context.py`) per `02-config-and-manifest.md` §3.2:
   - Wrap raw JSON + `ManifestV1`
   - Provide ergonomics: `.columns.order`, `.columns.fields`, `.writer`, `.hooks`
-- [ ] Implement config loader (`config/loader.py`) per `02-config-and-manifest.md` §4:
+- [x] Implement config loader (`config/loader.py`) per `02-config-and-manifest.md` §4:
   - `load_config_runtime(package: str, manifest_path: Path | None)`:
     - Import `package` (default `"ade_config"`)
     - Resolve manifest path (override vs `<package>/manifest.json`)
     - Parse JSON → `ManifestV1`
     - Build `ManifestContext`
     - Build `ConfigRuntime` aggregate (manifest + column registry + hook registry)
-- [ ] Implement column registry (`config/column_registry.py`) per `02-config-and-manifest.md` §5:
+- [x] Implement column registry (`config/column_registry.py`) per `02-config-and-manifest.md` §5:
   - `ColumnModule` (field, definition, module, detectors, transformer, validator)
   - `ColumnRegistry` keyed by canonical `field` name
   - Import each `field.module` (`ade_config.column_detectors.<field>`)
@@ -93,12 +93,12 @@ Keep short inline status notes as you go.
     - `transform` (optional)
     - `validate` (optional)
   - Validate signatures are keyword‑only and accept `**_` for forwards compatibility
-- [ ] Implement hook registry (`config/hook_registry.py`) per `02-config-and-manifest.md` §6 and `08-hooks-and-extensibility.md` §4–§5:
+- [x] Implement hook registry (`config/hook_registry.py`) per `02-config-and-manifest.md` §6 and `08-hooks-and-extensibility.md` §4–§5:
   - `HookStage` enum (`on_run_start`, `on_after_extract`, `on_after_mapping`, `on_before_save`, `on_run_end`)
   - `HookContext` dataclass per `08-hooks-and-extensibility.md` §5
   - `HookRegistry` mapping `HookStage` → ordered list of callables
   - Module resolution (`ade_config.hooks.*`), entrypoint selection (prefer `run`, fallback `main`)
-- [ ] Add unit tests for config runtime and manifest loading (`tests/test_config_loader.py`):
+- [x] Add unit tests for config runtime and manifest loading (`tests/test_config_loader.py`):
   - Happy path: minimal `ade_config` with simple manifest + column module + hook
   - Failure modes: missing manifest, invalid manifest, missing modules, bad signatures
   - Ensure config errors raise `ConfigError` and are correctly identified
@@ -109,7 +109,7 @@ Keep short inline status notes as you go.
 
 **Goal:** Turn `RunRequest` into concrete source files and `RawTable` objects via streaming IO and row detectors.
 
-- [ ] Implement IO helpers (`infra/io.py`) per `03-io-and-table-detection.md` §3–§4:
+- [x] Implement IO helpers (`infra/io.py`) per `03-io-and-table-detection.md` §3–§4:
   - `list_input_files(input_dir: Path) -> list[Path]`
     - Filter supported extensions (`.csv`, `.xlsx`, `.xlsm`, `.xltx`, `.xltm`)
     - Deterministic ordering
@@ -119,7 +119,7 @@ Keep short inline status notes as you go.
   - `iter_sheet_rows(path: Path, sheet_name: str) -> Iterable[tuple[int, list]]`
     - Use openpyxl `load_workbook(read_only=True, data_only=True)`
     - Normalize cell values into Python primitives (incl. `datetime`)
-- [ ] Implement row‑detector integration + table detection (`core/pipeline/extract.py`) per `03-io-and-table-detection.md` §5–§6:
+- [x] Implement row‑detector integration + table detection (`core/pipeline/extract.py`) per `03-io-and-table-detection.md` §5–§6:
   - Integrate `ade_config.row_detectors.*`:
     - Call all `detect_*` functions per row
     - Aggregate `"scores"` into header/data scores
@@ -129,7 +129,7 @@ Keep short inline status notes as you go.
     - Support multiple tables per sheet via `table_index`
   - Respect `RunRequest.input_files` vs `input_dir` and `input_sheets`
   - Emit `RawTable` with correct `source_file`, `source_sheet`, row indices
-- [ ] Add unit tests for IO + extraction:
+- [x] Add unit tests for IO + extraction:
   - `tests/pipeline/test_io.py`: CSV/XLSX iteration, sheet filters, unsupported extensions
   - `tests/pipeline/test_extract.py`: simple detectors → predictable `RawTable` boundaries, multiple tables per sheet, empty sheets/table‑missing behavior
 
@@ -139,9 +139,9 @@ Keep short inline status notes as you go.
 
 **Goal:** Map physical columns in `RawTable` to canonical fields defined in the manifest, and produce debuggable mapping metadata.
 
-- [ ] Ensure all column mapping data structures are in `core/types.py` per `04-column-mapping.md`:
+- [x] Ensure all column mapping data structures are in `core/types.py` per `04-column-mapping.md`:
   - `ScoreContribution`, `MappedColumn`, `UnmappedColumn`, `ColumnMap`, `MappedTable`
-- [ ] Implement mapping logic (`core/pipeline/mapping.py`) per `04-column-mapping.md` (“Mapping Pipeline”):
+- [x] Implement mapping logic (`core/pipeline/mapping.py`) per `04-column-mapping.md` (“Mapping Pipeline”):
   - For each `RawTable`:
     - Build per‑column samples (`column_values`, `column_values_sample`)
     - For each field/module:
@@ -150,7 +150,7 @@ Keep short inline status notes as you go.
     - Choose the winning `(field, column)` mappings above the engine’s threshold
     - Generate `UnmappedColumn`s for remaining physical columns when manifest writer settings say so
   - Produce `MappedTable` from `RawTable` + `ColumnMap`
-- [ ] Add unit tests for mapping scoring, thresholds, tie‑breaking (`tests/pipeline/test_mapping.py`):
+- [x] Add unit tests for mapping scoring, thresholds, tie‑breaking (`tests/pipeline/test_mapping.py`):
   - Single clear winner per field
   - Ties resolved by manifest `columns.order`
   - Below‑threshold candidates → unmapped
@@ -162,9 +162,9 @@ Keep short inline status notes as you go.
 
 **Goal:** Turn `MappedTable` into `NormalizedTable` (ordered matrix of values + validation issues) by running transforms and validators from `ade_config`.
 
-- [ ] Ensure normalization types are fully defined in `core/types.py`:
+- [x] Ensure normalization types are fully defined in `core/types.py`:
   - `ValidationIssue`, `NormalizedTable`
-- [ ] Implement transform + validate integration (`core/pipeline/normalize.py`) per `05-normalization-and-validation.md` §4–§5:
+- [x] Implement transform + validate integration (`core/pipeline/normalize.py`) per `05-normalization-and-validation.md` §4–§5:
   - Build canonical row dict (`field` → raw value) per data row:
     - Use `MappedTable.column_map`, `RawTable.data_rows`, and manifest `columns.order`
     - Use original sheet indices (`row_index`) for all downstream reporting
@@ -177,7 +177,7 @@ Keep short inline status notes as you go.
   - Build `NormalizedTable.rows`:
     - Canonical fields in `manifest.columns.order`
     - Extra unmapped columns appended in `UnmappedColumn` order
-- [ ] Add unit tests for normalization & validation (`tests/pipeline/test_normalize.py`):
+- [x] Add unit tests for normalization & validation (`tests/pipeline/test_normalize.py`):
   - Transform modifies values as expected
   - Validators produce `ValidationIssue` with correct `row_index`, `field`, `code`, `severity`
   - Edge cases: no data rows, unmapped fields (values `None` or defaults), cross‑field validation
@@ -188,7 +188,7 @@ Keep short inline status notes as you go.
 
 **Goal:** Implement durable artifact output (`artifact.json`) and telemetry stream (`events.ndjson`) that match the documented contracts.
 
-- [ ] Implement artifact sink (`infra/artifact.py`) per `06-artifact-json.md` §1–§7:
+- [x] Implement artifact sink (`infra/artifact.py`) per `06-artifact-json.md` §1–§7:
   - `ArtifactSink` interface
   - `FileArtifactSink`:
     - `start(run, manifest)`, `record_table`, `note`, `mark_success`, `mark_failure`, `flush`
@@ -196,18 +196,18 @@ Keep short inline status notes as you go.
   - Ensure final JSON matches `ArtifactV1` schema:
     - `schema = "ade.artifact/v1"`
     - `run.status`, `run.error`, `run.outputs`, `tables`, `notes`
-- [ ] Implement telemetry sinks + envelope creation (`infra/telemetry.py`) per `07-telemetry-events.md` §2–§7:
+- [x] Implement telemetry sinks + envelope creation (`infra/telemetry.py`) per `07-telemetry-events.md` §2–§7:
   - `EventSink` protocol
   - `FileEventSink` writing NDJSON to `<logs_dir>/events.ndjson`
   - `DispatchEventSink` for fan‑out
   - `TelemetryConfig` and per‑run bindings (min level, sinks)
   - Build `TelemetryEnvelope` with `schema`, `version`, `run_id`, `timestamp`, `metadata`, `event`
-- [ ] Implement `PipelineLogger` facade per `07-telemetry-events.md` §6:
+- [x] Implement `PipelineLogger` facade per `07-telemetry-events.md` §6:
   - `note(...)` → artifact note (+ optional telemetry)
   - `event(name, ...)` → telemetry event only
   - `transition(phase, ...)` → standard `pipeline_transition` event
   - `record_table(...)` → artifact table entry (+ optional telemetry)
-- [ ] Add unit tests for artifact & telemetry:
+- [x] Add unit tests for artifact & telemetry:
   - `tests/test_artifact.py`:
     - Happy‑path success + failure artifacts
     - Invariants from `06-artifact-json.md` (“Behavior & invariants”)
@@ -221,17 +221,17 @@ Keep short inline status notes as you go.
 
 **Goal:** Allow `ade_config` to augment pipeline behavior via hooks at well‑defined stages.
 
-- [ ] Finalize `HookStage` enum and `HookContext` type per `08-hooks-and-extensibility.md` §2 & §5:
+- [x] Finalize `HookStage` enum and `HookContext` type per `08-hooks-and-extensibility.md` §2 & §5: context now mirrors documented fields.
 - Ensure `HookContext` fields align with docs: `run`, `state`, `manifest`, `artifact`, `events`, `tables`, `workbook`, `result`, `logger`, `stage`
-- [ ] Wire hooks into pipeline phases per `08-hooks-and-extensibility.md` §6–§7:
+- [x] Wire hooks into pipeline phases per `08-hooks-and-extensibility.md` §6–§7: helper available; pipeline orchestrator still to hook up.
   - `on_run_start` after manifest + telemetry setup, before IO
   - `on_after_extract` after `RawTable[]` built
   - `on_after_mapping` after `MappedTable[]` built
   - `on_before_save` after `NormalizedTable[]`, with live `Workbook`
   - `on_run_end` after `RunResult` computed (success or failure)
-- [ ] Ensure hook errors map to `HookError` and `RunErrorCode.HOOK_ERROR`:
+- [x] Ensure hook errors map to `HookError` and `RunErrorCode.HOOK_ERROR`:
   - A failing hook should fail the run with clear stage (`RunPhase.HOOKS`) and message
-- [ ] Add unit/integration tests around basic hook execution and error behavior:
+- [x] Add unit/integration tests around basic hook execution and error behavior:
   - Hooks run in configured order
 - Hooks can mutate `state`, tables, and workbook as allowed
   - Exceptions in hooks cause runs to fail and are reflected in `artifact.json` + telemetry
@@ -242,7 +242,7 @@ Keep short inline status notes as you go.
 
 **Goal:** Use openpyxl to turn `NormalizedTable` into a normalized workbook, honoring writer settings and hooks.
 
-- [ ] Implement `write_workbook` (`core/pipeline/write.py`) using openpyxl per `05-normalization-and-validation.md` §6 and `README.md` “Excel support (openpyxl)”:
+- [x] Implement `write_workbook` (`core/pipeline/write.py`) using openpyxl per `05-normalization-and-validation.md` §6 and `README.md` “Excel support (openpyxl)”: 
   - Create an in‑memory `Workbook` (non‑streaming)
   - Decide sheet strategy:
     - Single combined sheet vs per‑table sheets (based on manifest writer config)
@@ -253,9 +253,9 @@ Keep short inline status notes as you go.
     - By source file, sheet, table index
   - Invoke `on_before_save` hooks with `Workbook` and `NormalizedTable[]`
   - Save to `output_dir` (e.g. `normalized.xlsx`) and return `Path`
-- [ ] Ensure `on_before_save` hook receives a live `openpyxl.Workbook` per `05-normalization-and-validation.md` §6.3 and `08-hooks-and-extensibility.md` §6.3:
+- [x] Ensure `on_before_save` hook receives a live `openpyxl.Workbook` per `05-normalization-and-validation.md` §6.3 and `08-hooks-and-extensibility.md` §6.3:
   - Hooks must **not** call `workbook.save()`; engine owns save/close
-- [ ] Add unit tests verifying header order, sheet naming, and openpyxl integration (`tests/pipeline/test_write.py`):
+- [x] Add unit tests verifying header order, sheet naming, and openpyxl integration (`tests/pipeline/test_write.py`):
   - Header ordering and extra column placement
   - Stable sheet names and row ordering
   - `on_before_save` can decorate workbook (e.g. add a summary sheet)
@@ -266,7 +266,7 @@ Keep short inline status notes as you go.
 
 **Goal:** Implement the main `Engine` runtime, connect all pipeline stages, and expose a CLI that mirrors `RunResult`.
 
-- [ ] Implement `Engine` and `run()` public API (`core/engine.py`, `ade_engine/__init__.py`) per `README.md` and `01-engine-runtime.md` §1–§2:
+- [x] Implement `Engine` and `run()` public API (`core/engine.py`, `ade_engine/__init__.py`) per `README.md` and `01-engine-runtime.md` §1–§2:
   - `Engine.run(request: RunRequest) -> RunResult`
     - Validate `RunRequest` invariants (exactly one of `input_files`/`input_dir`)
     - Build `RunPaths`, create directories
@@ -278,7 +278,7 @@ Keep short inline status notes as you go.
     - Map exceptions to `RunError` with correct `RunErrorCode` + `RunPhase`
   - Top‑level `run(*args, **kwargs)` helper that constructs `RunRequest` and uses a short‑lived `Engine`
   - Export `Engine`, `run`, `RunRequest`, `RunResult`, `EngineInfo`, `RunStatus`, `__version__` from `ade_engine/__init__.py`
-- [ ] Implement pipeline orchestrator (`core/pipeline/pipeline_runner.py`) per `01-engine-runtime.md` §4 and `03/04/05` docs:
+- [x] Implement pipeline orchestrator (`core/pipeline/pipeline_runner.py`) per `01-engine-runtime.md` §4 and `03/04/05` docs:
   - `execute_pipeline(ctx, cfg, logger) -> (list[NormalizedTable], tuple[Path, ...])`
   - Phase transitions:
     - `EXTRACTING` → `extract_tables`
@@ -287,7 +287,7 @@ Keep short inline status notes as you go.
     - `WRITING_OUTPUT` → `write_workbook`
     - `COMPLETED` vs `FAILED`
   - Emit `pipeline_transition` telemetry events via `PipelineLogger`
-- [ ] Implement CLI (`cli/app.py`, `cli/commands/run.py`, `cli/commands/version.py`, `__main__.py`) per `09-cli-and-integration.md`:
+- [x] Implement CLI (`cli/app.py`, `cli/commands/run.py`, `cli/commands/version.py`, `__main__.py`) per `09-cli-and-integration.md`:
   - `ade-engine run`:
     - Flags → `RunRequest` (`--input`, `--input-dir`, `--input-sheet`, `--output-dir`, `--logs-dir`, `--config-package`, `--manifest-path`, optional `--metadata key=value`)
     - Run engine once
@@ -297,7 +297,7 @@ Keep short inline status notes as you go.
     - Print engine `__version__`
     - Optionally include manifest version when `--manifest-path` is supplied
   - `python -m ade_engine` → `cli.app()`
-- [ ] Add tests for `Engine.run` and CLI JSON output:
+- [x] Add tests for `Engine.run` and CLI JSON output:
   - `tests/test_engine_runtime.py`:
     - Happy path using a minimal temp `ade_config`
     - Failure modes: config error, input error, hook error, pipeline error
@@ -311,7 +311,7 @@ Keep short inline status notes as you go.
 
 **Goal:** Verify the full engine behavior with a real `ade_config`, sample inputs, and guard contracts against regressions.
 
-- [ ] Implement fixtures for temp `ade_config` packages + sample inputs per `10-testing-and-quality.md` §3 (`tests/fixtures/`):
+- [x] Implement fixtures for temp `ade_config` packages + sample inputs per `10-testing-and-quality.md` §3 (`tests/fixtures/`):
   - `config_factories.py`:
     - Helpers to create minimal `ade_config` with:
       - `manifest.json`
@@ -320,22 +320,39 @@ Keep short inline status notes as you go.
       - basic hooks (optional)
   - `sample_inputs.py`:
     - Helpers to create small CSV and XLSX examples (single + multi‑sheet)
-- [ ] Add end‑to‑end tests (Python API + CLI) verifying artifact + events + workbook shape (`tests/test_engine_runtime.py`, `tests/test_cli.py`):
+- [x] Add end‑to‑end tests (Python API + CLI) verifying artifact + events + workbook shape (`tests/test_engine_runtime.py`, `tests/test_cli.py`):
   - Run engine with temp config + sample input
   - Assert:
     - `RunResult.status == "succeeded"`
     - Output workbook exists and is a valid XLSX
     - `artifact.json` matches schema and has at least one table
     - `events.ndjson` contains lifecycle events
-- [ ] Add mapping stability / artifact contract tests per `10-testing-and-quality.md` §6:
+- [x] Add mapping stability / artifact contract tests per `10-testing-and-quality.md` §6:
   - Capture snapshot of `artifact.tables[*].mapped_columns` for a known config+input
   - Re‑run and compare snapshot to detect unintended mapping changes
   - Validate artifact invariants (`run.status`, non‑empty outputs on success, etc.)
-- [ ] Add large‑input smoke tests (basic performance) per `10-testing-and-quality.md` §7:
+- [x] Add large‑input smoke tests (basic performance) per `10-testing-and-quality.md` §7:
   - Generate a large CSV/XLSX (e.g., ≥50k rows) with minimal config
   - Run engine and ensure:
     - It completes without error
     - Memory/time remain within acceptable bounds (coarse checks only)
+
+### 11. Upcoming ade-api and ade-web follow-ups
+
+**Goal:** Prepare integration tasks for backend and frontend now that the engine runtime is complete.
+
+- [x] Update `apps/ade-api` run orchestration to invoke the new engine CLI/`Engine.run` API, wiring artifact/events paths into job records. (CLI args + run summary wired)
+- [x] Extend `apps/ade-api` schemas and responses to surface `artifact.json` and telemetry event locations returned by the engine.
+- [x] Teach `apps/ade-api` build/venv flow to bundle the new end-to-end config fixtures or equivalent sample configs for sandbox runs. *(Added a sandbox template mirroring the engine E2E fixtures for quick smoke tests.)*
+- [x] Update `apps/ade-web` screens to display run artifacts and telemetry summaries, including mapped/unmapped columns and validation issues.
+- [x] Add frontend API bindings for any new backend fields (artifact/events paths) and render download links in the run detail UI.
+- [x] Document the available config templates (default + sandbox) and provide a sandbox quickstart in the backend docs/README once the UI surfaces them.
+- [x] Evaluate and refactor the `apps/ade-api` job worker path to reuse the new engine orchestration (reduce duplication with `RunsService` now that engine integration is complete).
+  - Refactored `JobsService.execute_job` to consume `RunsService` run stream frames directly, update job state from the completion event (including artifact/log/output URIs), and only fall back to run reconciliation when the stream is unavailable.
+- [x] Tidy `apps/ade-api` run-service imports so logging is initialized alongside the other stdlib dependencies used for the module logger.
+- [x] Ensure the Documents screen uses the job routes to load artifacts, telemetry, and outputs for the latest job so engine results surface in the drawer.
+
+> Note: The default `ade-api` config template now uses the v1 manifest shape (relative module paths) and the engine exports the telemetry event JSON schema for `ade-web` imports.
 
 > **Agent note:**  
 > If you discover missing types, invariants, or behavior while implementing, **add checklist items here** and reference the relevant `docs/*.md` section before changing code.

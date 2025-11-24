@@ -1,10 +1,13 @@
 import type { ConfigBuilderPane } from "@app/nav/urlState";
+import type { ArtifactV1 } from "@schema";
+import type { TelemetryEnvelope } from "@schema/adeTelemetry";
 import type { RunStatus } from "@shared/runs/types";
 import clsx from "clsx";
 
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 
 import type { WorkbenchConsoleLine, WorkbenchValidationState } from "../types";
+import { ArtifactSummary, TelemetrySummary } from "@shared/runs/RunInsights";
 
 export interface WorkbenchRunSummary {
   readonly runId: string;
@@ -12,6 +15,12 @@ export interface WorkbenchRunSummary {
   readonly downloadBase: string;
   readonly outputs: ReadonlyArray<{ path: string; byte_size: number }>;
   readonly outputsLoaded: boolean;
+  readonly artifact?: ArtifactV1 | null;
+  readonly artifactLoaded: boolean;
+  readonly artifactError?: string | null;
+  readonly telemetry?: readonly TelemetryEnvelope[] | null;
+  readonly telemetryLoaded: boolean;
+  readonly telemetryError?: string | null;
   readonly documentName?: string;
   readonly sheetNames?: readonly string[];
   readonly error?: string | null;
@@ -152,7 +161,7 @@ function RunSummaryCard({ summary }: { summary: WorkbenchRunSummary }) {
             href={`${summary.downloadBase}/logfile`}
             className="inline-flex items-center rounded border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-100 hover:bg-slate-800"
           >
-            Download logs
+            Download telemetry
           </a>
         </div>
       </div>
@@ -178,6 +187,30 @@ function RunSummaryCard({ summary }: { summary: WorkbenchRunSummary }) {
           </ul>
         ) : (
           <p className="text-xs text-slate-400">No output files were generated.</p>
+        )}
+      </div>
+      <div className="mt-3 rounded-md border border-white/10 bg-slate-950/70 px-3 py-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Artifact summary</p>
+        {summary.artifactError ? (
+          <p className="text-xs text-rose-300">{summary.artifactError}</p>
+        ) : !summary.artifactLoaded ? (
+          <p className="text-xs text-slate-400">Loading artifact…</p>
+        ) : summary.artifact ? (
+          <ArtifactSummary artifact={summary.artifact} />
+        ) : (
+          <p className="text-xs text-slate-400">Artifact not available.</p>
+        )}
+      </div>
+      <div className="mt-3 rounded-md border border-white/10 bg-slate-950/70 px-3 py-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Telemetry summary</p>
+        {summary.telemetryError ? (
+          <p className="text-xs text-rose-300">{summary.telemetryError}</p>
+        ) : !summary.telemetryLoaded ? (
+          <p className="text-xs text-slate-400">Loading telemetry…</p>
+        ) : summary.telemetry && summary.telemetry.length > 0 ? (
+          <TelemetrySummary events={[...summary.telemetry]} />
+        ) : (
+          <p className="text-xs text-slate-400">No telemetry events captured.</p>
         )}
       </div>
     </section>

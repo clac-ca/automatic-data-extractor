@@ -39,7 +39,13 @@ import { createScopedStorage } from "@shared/storage";
 import type { ConfigBuilderConsole } from "@app/nav/urlState";
 import { ApiError } from "@shared/api";
 import { streamBuild } from "@shared/builds/api";
-import { fetchRunOutputs, streamRun, type RunStreamOptions } from "@shared/runs/api";
+import {
+  fetchRunArtifact,
+  fetchRunOutputs,
+  fetchRunTelemetry,
+  streamRun,
+  type RunStreamOptions,
+} from "@shared/runs/api";
 import { isTelemetryEnvelope, type RunStatus } from "@shared/runs/types";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
@@ -833,6 +839,12 @@ export function Workbench({
                   sheetNames: metadata.sheetNames ?? [],
                   outputs: [],
                   outputsLoaded: false,
+                  artifact: null,
+                  artifactLoaded: false,
+                  artifactError: null,
+                  telemetry: null,
+                  telemetryLoaded: false,
+                  telemetryError: null,
                   error: null,
                 });
                 try {
@@ -849,6 +861,40 @@ export function Workbench({
                   setLatestRun((prev) =>
                     prev && prev.runId === currentRunId
                       ? { ...prev, outputsLoaded: true, error: message }
+                      : prev,
+                  );
+                }
+
+                try {
+                  const artifact = await fetchRunArtifact(currentRunId);
+                  setLatestRun((prev) =>
+                    prev && prev.runId === currentRunId
+                      ? { ...prev, artifact, artifactLoaded: true }
+                      : prev,
+                  );
+                } catch (error) {
+                  const message =
+                    error instanceof Error ? error.message : "Unable to load run artifact.";
+                  setLatestRun((prev) =>
+                    prev && prev.runId === currentRunId
+                      ? { ...prev, artifactLoaded: true, artifactError: message }
+                      : prev,
+                  );
+                }
+
+                try {
+                  const telemetry = await fetchRunTelemetry(currentRunId);
+                  setLatestRun((prev) =>
+                    prev && prev.runId === currentRunId
+                      ? { ...prev, telemetry, telemetryLoaded: true }
+                      : prev,
+                  );
+                } catch (error) {
+                  const message =
+                    error instanceof Error ? error.message : "Unable to load run telemetry.";
+                  setLatestRun((prev) =>
+                    prev && prev.runId === currentRunId
+                      ? { ...prev, telemetryLoaded: true, telemetryError: message }
                       : prev,
                   );
                 }

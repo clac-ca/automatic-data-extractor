@@ -25,6 +25,10 @@ def test_run_resource_serialization_uses_aliases() -> None:
 
     payload = resource.model_dump()
     assert payload["object"] == "ade.run"
+    assert payload["output_paths"] == []
+    assert payload["processed_files"] == []
+    assert "artifact_path" not in payload
+    assert "events_path" not in payload
     assert "summary" not in payload
     assert payload["status"] == "queued"
 
@@ -78,4 +82,6 @@ def test_run_completed_event_supports_optional_fields() -> None:
 
     payload = event.model_dump()
     assert payload["status"] == "succeeded"
+    assert payload["output_paths"] == []
+    assert "artifact_path" not in payload
     assert "error_message" not in payload

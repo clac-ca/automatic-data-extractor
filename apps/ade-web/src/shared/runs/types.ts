@@ -37,6 +37,10 @@ export interface RunCompletedEvent extends RunEventBase {
   readonly status: RunStatus;
   readonly exit_code?: number | null;
   readonly error_message?: string | null;
+  readonly artifact_path?: string | null;
+  readonly events_path?: string | null;
+  readonly output_paths?: string[];
+  readonly processed_files?: string[];
 }
 
 export type RunStreamEvent = RunEvent | TelemetryEnvelope;

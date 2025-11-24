@@ -87,6 +87,10 @@ class RunResource(BaseSchema):
     finished: int | None = None
 
     exit_code: int | None = None
+    output_paths: list[str] = Field(default_factory=list)
+    processed_files: list[str] = Field(default_factory=list)
+    artifact_path: str | None = None
+    events_path: str | None = None
     summary: str | None = None
     error_message: str | None = None
 
@@ -129,6 +133,10 @@ class RunCompletedEvent(RunEventBase):
     status: RunStatusLiteral
     exit_code: int | None = None
     error_message: str | None = None
+    artifact_path: str | None = None
+    events_path: str | None = None
+    output_paths: list[str] = Field(default_factory=list)
+    processed_files: list[str] = Field(default_factory=list)
 
 
 RunEvent = RunCreatedEvent | RunStartedEvent | RunLogEvent | RunCompletedEvent

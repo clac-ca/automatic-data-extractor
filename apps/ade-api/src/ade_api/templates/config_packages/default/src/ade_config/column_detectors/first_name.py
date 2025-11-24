@@ -12,7 +12,7 @@ def detect_first_name(
     header: str | None,
     column_values_sample: list[Any],
     **_: Any,
-) -> dict[str, dict[str, float]]:
+) -> float:
     """Heuristic: header mentions 'first name' or 'fname', or values look like short names."""
     score = 0.0
     if header:
@@ -31,15 +31,16 @@ def detect_first_name(
         if 2 <= avg_length <= 12:
             score = 0.4
 
-    return {"scores": {_FIELD: round(score, 2)}}
+    return round(score, 2)
 
 
 def transform(
     *,
     value: Any,
+    field_name: str = _FIELD,
     **_: Any,
-) -> str | None:
+) -> dict[str, Any] | None:
     """Strip whitespace and title-case first names."""
     if value in (None, ""):
-        return None
-    return str(value).strip().title()
+        return {field_name: None}
+    return {field_name: str(value).strip().title()}
