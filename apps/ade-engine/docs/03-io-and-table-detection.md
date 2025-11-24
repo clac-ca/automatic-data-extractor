@@ -46,29 +46,29 @@ each detected table, including header row, data rows, and location metadata.
 
 ## 2. From RunRequest to source files
 
-### 2.1 Sources: `input_files` vs `input_root`
+### 2.1 Sources: `input_files` vs `input_dir`
 
 `RunRequest` offers two ways to specify inputs:
 
 - `input_files: Sequence[Path]`  
   Explicit list of source files to process.
 
-- `input_root: Path`  
+- `input_dir: Path`  
   A directory to scan for source files.
 
 Invariants enforced upstream (in `Engine.run`):
 
-- Exactly **one** of `input_files` or `input_root` must be set.
+- Exactly **one** of `input_files` or `input_dir` must be set.
 - Paths are normalized to absolute paths before use.
 
 ### 2.2 File discovery
 
-When `input_root` is provided, `io.list_input_files` is used to discover files:
+When `input_dir` is provided, `io.list_input_files` is used to discover files:
 
 ```python
-def list_input_files(input_root: Path) -> list[Path]:
+def list_input_files(input_dir: Path) -> list[Path]:
     """
-    Return a sorted list of CSV/XLSX files under input_root.
+    Return a sorted list of CSV/XLSX files under input_dir.
 
     - Ignores hidden files and directories (implementation detail).
     - Filters by extension (.csv, .xlsx).

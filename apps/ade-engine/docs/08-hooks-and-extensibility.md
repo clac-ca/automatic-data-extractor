@@ -73,21 +73,11 @@ Example:
 ```jsonc
 {
   "hooks": {
-    "on_run_start": [
-      { "script": "hooks/on_run_start.py", "enabled": true }
-    ],
-    "on_after_extract": [
-      { "script": "hooks/on_after_extract.py" }
-    ],
-    "on_after_mapping": [
-      { "script": "hooks/on_after_mapping.py" }
-    ],
-    "on_before_save": [
-      { "script": "hooks/on_before_save.py" }
-    ],
-    "on_run_end": [
-      { "script": "hooks/on_run_end.py" }
-    ]
+    "on_run_start": ["hooks.on_run_start"],
+    "on_after_extract": ["hooks.on_after_extract"],
+    "on_after_mapping": ["hooks.on_after_mapping"],
+    "on_before_save": ["hooks.on_before_save"],
+    "on_run_end": ["hooks.on_run_end"]
   }
 }
 ````
@@ -97,22 +87,15 @@ Rules:
 * Stage keys (`on_run_start`, `on_after_extract`, etc.) are **optional**:
 
   * Omitted stage → no hooks for that stage.
-* Each entry:
-
-  ```jsonc
-  { "script": "hooks/on_run_start.py", "enabled": true }
-  ```
-
-  * `script` is a path **relative to the `ade_config` package root**.
-  * `enabled` is optional; default is `true`.
+* Each entry is a module string **relative to the `ade_config` package root**, e.g. `"hooks.on_run_start"`.
 * Hooks for a stage run in **the array order**.
 
-### 3.2 Script path → module
+### 3.2 Module resolution
 
 For each entry:
 
-* `script: "hooks/on_run_start.py"` → module: `ade_config.hooks.on_run_start`
-* `script: "hooks/reporting/end_of_run.py"` → module:
+* `"hooks.on_run_start"` → module: `ade_config.hooks.on_run_start`
+* `"hooks.reporting.end_of_run"` → module:
   `ade_config.hooks.reporting.end_of_run`
 
 If a hook module cannot be imported, the engine:
@@ -128,7 +111,7 @@ Internally, `config_runtime` builds a **`HookRegistry`** from the manifest.
 
 Responsibilities:
 
-* Resolve `script` paths into importable module names.
+* Resolve manifest hook module strings into importable module names.
 * Import modules once per run.
 * Discover the callable to execute (entrypoint).
 * Group hooks by stage (`on_run_start`, `on_after_extract`, etc.) in order.
@@ -161,6 +144,8 @@ from typing import Any
 from ade_engine.config_runtime.hook_registry import HookContext, HookStage
 from ade_engine.core.types import RunResult, RunContext
 from ade_engine.core.pipeline import RawTable, MappedTable, NormalizedTable
+from ade_engine.infra.artifact import ArtifactSink
+from ade_engine.infra.telemetry import EventSink, PipelineLogger
 from openpyxl import Workbook
 
 @dataclass
@@ -176,15 +161,15 @@ class HookContext:
     logger: PipelineLogger
     stage: HookStage
 
-def run(ctx: HookContext) -> None:
-    ctx.logger.note("Run started", stage=ctx.stage.value)
+def run(context: HookContext) -> None:
+    context.logger.note("Run started", stage=context.stage.value)
 ```
 
 Guidelines:
 
-* Use `ctx.state` for mutable per‑run data; treat `ctx.run` as read‑only engine context.
-* Use `ctx.logger` for notes/events; reach for `ctx.artifact`/`ctx.events` only when you need sink-level control.
-* `ctx.tables`, `ctx.workbook`, and `ctx.result` are stage-dependent and may be `None`.
+* Use `context.state` for mutable per‑run data; treat `context.run` as read‑only engine context.
+* Use `context.logger` for notes/events; reach for `context.artifact`/`context.events` only when you need sink-level control.
+* `context.tables`, `context.workbook`, and `context.result` are stage-dependent and may be `None`.
 * If you choose to expose a keyword‑only hook signature instead of the context object, include `**_` to absorb new parameters.
 
 ---
@@ -409,7 +394,7 @@ The engine **does not** swallow hook errors silently.
 
 Breaking changes to script APIs are coordinated via:
 
-* `config_script_api_version` in the manifest, and
+* `script_api_version` in the manifest, and
 * documentation that describes the new expectations.
 
 When in doubt, check:
@@ -429,7 +414,7 @@ When adding or modifying hooks in a config:
    * *Run metadata?* → `on_run_start` / `on_run_end`
    * *Inspect/reshape tables?* → `on_after_extract` / `on_after_mapping`
    * *Workbook styling/reporting?* → `on_before_save`
-2. **Add entries to `manifest.json`** under `hooks` with correct `script` paths.
+2. **Add entries to `manifest.json`** under `hooks` with correct module strings.
 3. **Create hook modules** in `ade_config/hooks/` with a `run(...)` function:
 
    * use keyword‑only signature,

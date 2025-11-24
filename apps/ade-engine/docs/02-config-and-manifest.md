@@ -73,68 +73,55 @@ Python models are authoritative.
 
 ### 2.2 High‑level structure
 
-The manifest has a small number of top‑level sections:
+The manifest has a small number of top-level sections:
 
 ```jsonc
 {
-  "config_script_api_version": "1",
-  "info": {
-    "schema": "ade.manifest/v1.0",
-    "title": "My Config",
-    "version": "1.2.3",
-    "description": "Optional description"
-  },
-  "engine": {
-    "defaults": {
-      "timeout_ms": 180000,
-      "memory_mb": 384,
-      "runtime_network_access": false,
-      "mapping_score_threshold": 0.35,
-      "detector_sample_size": 64
-    },
-    "writer": {
-      "mode": "row_streaming",
-      "append_unmapped_columns": true,
-      "unmapped_prefix": "raw_",
-      "output_sheet": "Normalized"
-    }
-  },
-  "hooks": {
-    "on_run_start":     [{ "script": "hooks/on_run_start.py" }],
-    "on_after_extract": [{ "script": "hooks/on_after_extract.py" }],
-    "on_after_mapping": [{ "script": "hooks/on_after_mapping.py" }],
-    "on_before_save":   [{ "script": "hooks/on_before_save.py" }],
-    "on_run_end":       [{ "script": "hooks/on_run_end.py" }]
-  },
+  "schema": "ade.manifest/v1",
+  "version": "1.2.3",
+  "name": "My Config",
+  "description": "Optional description",
+  "script_api_version": 1,
+
   "columns": {
     "order": ["member_id", "email", "..."],
-    "meta": {
+    "fields": {
       "member_id": {
         "label": "Member ID",
-        "script": "column_detectors/member_id.py",
+        "module": "column_detectors.member_id",
         "required": true,
-        "enabled": true,
         "synonyms": ["member id", "member#"],
-        "type_hint": "string"
+        "type": "string"
       },
       "email": {
         "label": "Email",
-        "script": "column_detectors/email.py",
+        "module": "column_detectors.email",
         "required": true,
-        "enabled": true,
-        "type_hint": "string"
+        "type": "string"
       }
     }
+  },
+  "hooks": {
+    "on_run_start": ["hooks.on_run_start"],
+    "on_after_extract": ["hooks.on_after_extract"],
+    "on_after_mapping": ["hooks.on_after_mapping"],
+    "on_before_save": ["hooks.on_before_save"],
+    "on_run_end": ["hooks.on_run_end"]
+  },
+  "writer": {
+    "append_unmapped_columns": true,
+    "unmapped_prefix": "raw_",
+    "output_sheet": "Normalized"
   }
 }
 ```
 
 Key ideas:
 
-* **`info`** describes the config itself and how to interpret the manifest.
-* **`engine`** controls engine‑side behavior (defaults, writer behavior).
-* **`hooks`** defines lifecycle customizations.
+* **Top-level fields** describe the config itself and the script API version.
 * **`columns`** declares what canonical fields exist and how to handle them.
+* **`hooks`** defines lifecycle customizations (as module lists).
+* **`writer`** controls writer behavior (unmapped handling, sheet name).
 
 ---
 
@@ -147,11 +134,14 @@ class, e.g.:
 
 * `ManifestV1`
 
-  * `config_script_api_version: str`
-  * `info: ManifestInfo`
-  * `engine: EngineConfig` (with `defaults` and `writer`)
-  * `hooks: HookCollection`
+  * `schema: str`
+  * `version: str`
+  * `name: str | None`
+  * `description: str | None`
+  * `script_api_version: int`
   * `columns: ColumnSection`
+  * `hooks: HookCollection`
+  * `writer: WriterConfig`
 
 Engine code **never** hard‑codes raw JSON keys; it works with these models.
 
@@ -168,17 +158,16 @@ class ManifestContext:
     model: ManifestV1         # validated Pydantic model
 
     @property
-    def columns(self) -> Columns: ...   # provides .order and .meta
+    def columns(self) -> Columns: ...   # provides .order and .fields
     @property
-    def engine(self) -> EngineSection: ...  # provides .defaults and .writer
+    def writer(self) -> WriterConfig: ...
 ```
 
 This gives the pipeline and config runtime a clean, typed surface:
 
 * `ctx.manifest.columns.order` to drive output ordering,
-* `ctx.manifest.columns.meta["email"]` to look up script paths and flags,
-* `ctx.manifest.engine.defaults.mapping_score_threshold` for mapping,
-* `ctx.manifest.engine.writer.append_unmapped_columns` for output behavior.
+* `ctx.manifest.columns.fields["email"]` to look up script modules and labels,
+* `ctx.manifest.writer.append_unmapped_columns` for output behavior.
 
 The **same `ManifestContext` instance** is stored on `RunContext` and passed to
 scripts via the `run` argument (see script API docs).
@@ -252,52 +241,44 @@ pipeline work starts.
 `columns.order` defines the **canonical field order** in the normalized
 workbook:
 
-* It is a list of canonical field IDs (keys of `columns.meta`).
+* It is a list of canonical field IDs (keys of `columns.fields`).
 * It controls:
 
   * the logical column order in the normalized sheet,
   * tie‑breaking in column mapping (earlier fields win on equal scores),
   * the order in which transforms/validators see fields (if applicable).
 
-If some fields in `columns.meta` are **not** included in `columns.order`, they
+If some fields in `columns.fields` are **not** included in `columns.order`, they
 are considered defined but not part of the main output ordering. The engine may
 still use them if scripts reference them explicitly.
 
-### 5.2 `columns.meta` and `ColumnMeta`
+### 5.2 `columns.fields` and `ColumnField`
 
-For each canonical field, `columns.meta[field_name]` describes how to handle it.
+For each canonical field, `columns.fields[field_name]` describes how to handle it.
 Typical keys:
 
 * `label: str`
   Human‑friendly column label for the normalized workbook.
-* `script: str`
-  Path to the column script inside the config package, e.g.
-  `"column_detectors/email.py"`.
+* `module: str`
+  Python module path inside the config package, e.g.
+  `"column_detectors.email"`.
 * `required: bool`
   Whether the field is semantically required (used by validators and reporting).
-* `enabled: bool`
-  If `false`, the field is ignored by mapping and normalization.
 * `synonyms: list[str]`
   Common alternate header names; often used by detectors.
-* `type_hint: str`
+* `type: str`
   Optional scalar type hint (e.g. `"string"`, `"date"`, `"integer"`).
 
-The `ColumnMeta` Pydantic model captures this shape and enforces basic typing.
+The `ColumnField` Pydantic model captures this shape and enforces basic typing.
 
 ### 5.3 From `ColumnMeta` to `ColumnModule`
 
 At runtime, `config_runtime` builds a **column registry** from the manifest:
 
-1. For each `field_name` in `columns.meta`:
+1. For each `field_name` in `columns.fields`:
 
-   * Resolve `script` to a module name:
-
-     ```text
-     "column_detectors/email.py"
-       → "ade_config.column_detectors.email"
-     ```
-
-   * Import the module.
+   * Use the `module` string directly (already a Python import path, e.g. `"column_detectors.email"`).
+   * Import the module as `ade_config.<module>`.
 
 2. For each module:
 
@@ -345,28 +326,15 @@ The `hooks` section describes which scripts to run at each lifecycle stage:
 
 ```jsonc
 "hooks": {
-  "on_run_start": [
-    { "script": "hooks/on_run_start.py", "enabled": true }
-  ],
-  "on_after_extract": [
-    { "script": "hooks/on_after_extract.py" }
-  ],
-  "on_after_mapping": [
-    { "script": "hooks/on_after_mapping.py" }
-  ],
-  "on_before_save": [
-    { "script": "hooks/on_before_save.py" }
-  ],
-  "on_run_end": [
-    { "script": "hooks/on_run_end.py" }
-  ]
+  "on_run_start": ["hooks.on_run_start"],
+  "on_after_extract": ["hooks.on_after_extract"],
+  "on_after_mapping": ["hooks.on_after_mapping"],
+  "on_before_save": ["hooks.on_before_save"],
+  "on_run_end": ["hooks.on_run_end"]
 }
 ```
 
-Each hook entry is a small object with:
-
-* `script: str` — path inside the config package, e.g. `"hooks/on_run_end.py"`.
-* Optional `enabled: bool` — defaults to `true` if omitted.
+Each hook entry is a module string inside the config package (Python import path).
 
 ### 6.2 Building the hook registry
 
@@ -374,16 +342,9 @@ Each hook entry is a small object with:
 
 1. For each stage (e.g. `on_run_start`):
 
-   * For each hook entry:
+   * For each hook module string:
 
-     * Resolve `script` path to a module name:
-
-       ```text
-       "hooks/on_run_start.py"
-         → "ade_config.hooks.on_run_start"
-       ```
-
-     * Import the module.
+     * Import the module as `ade_config.<module>`.
 
      * Select an entrypoint:
 
@@ -434,11 +395,11 @@ From this point on, **all config behavior** is driven by:
 
 Two fields in the manifest control how configs evolve over time:
 
-* `info.schema` (e.g. `"ade.manifest/v1.0"`):
+* `schema` (e.g. `"ade.manifest/v1"`):
 
   * Identifies the manifest schema version.
   * Used by the engine and tooling to decide which Pydantic model to use.
-* `config_script_api_version` (e.g. `"1"`):
+* `script_api_version` (e.g. `1`):
 
   * Indicates which **script API contract** the config expects
     (parameters of detectors, transforms, validators, hooks).
@@ -448,15 +409,15 @@ Guidelines:
 * Adding new optional manifest fields is safe.
 * Changing or removing manifest fields, or changing script signatures, should:
 
-  * bump either `info.schema` or `config_script_api_version`, and
+  * bump either `schema` or `script_api_version`, and
   * be treated as a breaking change for existing configs.
 
 The ADE backend is responsible for:
 
-* tying a particular **config version** (`info.version`) to a specific venv
+* tying a particular **config version** (`version`) to a specific venv
   build, and
 * ensuring that config and engine versions that share a venv agree on
-  `info.schema` and `config_script_api_version`.
+  `schema` and `script_api_version`.
 
 With these rules, you can evolve both the engine and config packages without
 mysterious runtime breakage.

@@ -22,7 +22,7 @@ This document describes the **architecture**, **folder structure**, **core types
   **Source sheet** — Worksheet/tab within a source file (`source_sheet`).
 - **Output workbook** — Normalized workbook(s) written under `output_dir`.
 - **Table** — A contiguous header + data region detected in a sheet, represented as `RawTable → MappedTable → NormalizedTable`.
-- **Job / workspace / tenant** — Backend concepts only. They appear at most as opaque metadata; the engine has no first‑class job/workspace types.
+- **Job / workspace / tenant** — Backend concepts only. They may appear as opaque metadata in telemetry; the engine has no first‑class job/workspace types or artifact fields for them.
 
 ---
 
@@ -115,7 +115,7 @@ ade_engine/
     engine.py                # Engine.run orchestration
     types.py                 # RunRequest, RunResult, RunContext, RawTable, enums (core runtime models)
     pipeline/
-      __init__.py            # Re-export execute_pipeline(), PipelinePhase, helpers
+      __init__.py            # Re-export execute_pipeline(), RunPhase helpers
       extract.py
       mapping.py
       normalize.py
@@ -221,8 +221,8 @@ from ade_engine import Engine, run, RunRequest
 result = run(
     RunRequest(
         input_files=[Path("input.xlsx")],
-        output_root=Path("output"),
-        logs_root=Path("logs"),
+        output_dir=Path("output"),
+        logs_dir=Path("logs"),
     )
 )
 ```
@@ -279,7 +279,7 @@ class RunErrorCode(str, Enum):
     PIPELINE_ERROR = "pipeline_error"
     UNKNOWN_ERROR = "unknown_error"
 
-class RunStage(str, Enum):
+class RunPhase(str, Enum):
     INITIALIZATION = "initialization"
     LOAD_CONFIG = "load_config"
     EXTRACTING = "extracting"
@@ -287,6 +287,8 @@ class RunStage(str, Enum):
     NORMALIZING = "normalizing"
     WRITING_OUTPUT = "writing_output"
     HOOKS = "hooks"
+    COMPLETED = "completed"
+    FAILED = "failed"
 ```
 
 **EngineMetadata**
@@ -312,22 +314,23 @@ class RunRequest:
 
     # Source selection (one of the two is required; providing both is an error)
     input_files: Sequence[Path] | None = None  # preferred: explicit source files, typically [Path("input.xlsx")]
-    input_root: Path | None = None             # optional: scan folder for CSV/XLSX
+    input_dir: Path | None = None              # optional: scan folder for CSV/XLSX
 
     # Optional sheet filtering (XLSX only; CSV has a single implicit sheet)
     input_sheets: Sequence[str] | None = None  # restrict to specific sheet names
 
     # Output / logs
-    output_root: Path | None = None           # folder for normalized output workbook(s)
-    logs_root: Path | None = None             # folder for artifact.json + events.ndjson
+    output_dir: Path | None = None            # folder for normalized output workbook(s)
+    logs_dir: Path | None = None              # folder for artifact.json + events.ndjson
 
-    # Execution options
-    safe_mode: bool = False
-    metadata: Mapping[str, Any] | None = None  # arbitrary tags (job_id, workspace_id, etc.)
+    # Metadata (telemetry-only correlation tags)
+    metadata: Mapping[str, Any] | None = None
 ```
 
-The engine requires **exactly one** of `input_files` or `input_root`. If both are provided,
+The engine requires **exactly one** of `input_files` or `input_dir`. If both are provided,
 it fails fast with a `ValueError` rather than guessing.
+
+Safe mode (e.g., `ADE_SAFE_MODE=1`) is handled by the outer app: it may choose not to import `ade_config` or invoke the engine. There is no run-level `safe_mode` flag in `RunRequest`.
 
 In the simplest case, the ADE API:
 
@@ -339,17 +342,13 @@ In the simplest case, the ADE API:
 RunRequest(
     config_package="ade_config",
     input_files=[Path("/data/jobs/<job_id>/input/input.xlsx")],
-    output_root=Path("/data/jobs/<job_id>/output"),
-    logs_root=Path("/data/jobs/<job_id>/logs"),
+    output_dir=Path("/data/jobs/<job_id>/output"),
+    logs_dir=Path("/data/jobs/<job_id>/logs"),
     metadata={"job_id": "<job_id>", "config_id": "<config_id>"},
 )
 ```
 
-The engine doesn’t know what `job_id` means; it just surfaces metadata into artifact/telemetry.
-
-`safe_mode` is a hint that the caller wants a more conservative execution (e.g. disable
-optional integrations or network‑using sinks). OS‑level resource limits (CPU, memory, network)
-are still enforced by the worker environment, not by the engine itself.
+The engine doesn’t know what `job_id` means; if provided, metadata is treated as opaque and only echoed in telemetry for correlation.
 
 **RunError** and **RunResult**
 
@@ -359,13 +358,14 @@ Structured error info plus the overall outcome:
 @dataclass(frozen=True)
 class RunError:
     code: RunErrorCode
-    stage: RunStage | None
+    stage: RunPhase | None
     message: str
 
 @dataclass(frozen=True)
 class RunResult:
     status: RunStatus
     error: RunError | None
+    run_id: str
     output_paths: tuple[Path, ...]      # normalized output workbooks (usually length 1)
     artifact_path: Path                 # audit JSON
     events_path: Path                   # telemetry NDJSON
@@ -379,20 +379,20 @@ Resolved filesystem layout for a run:
 ```python
 @dataclass(frozen=True)
 class RunPaths:
-    input_root: Path
-    output_root: Path
-    logs_root: Path
-    artifact_path: Path       # logs_root / "artifact.json"
-    events_path: Path         # logs_root / "events.ndjson"
+    input_dir: Path
+    output_dir: Path
+    logs_dir: Path
+    artifact_path: Path       # logs_dir / "artifact.json"
+    events_path: Path         # logs_dir / "events.ndjson"
 ```
 
-* If you pass `output_root`/`logs_root`, those are used directly.
+* If you pass `output_dir`/`logs_dir`, those are used directly.
 * If you only pass `input_files`, the engine infers defaults (e.g. sibling `output` / `logs`
   folders next to the first source file).
-* If you only pass `input_root`, the engine infers defaults relative to that directory
-  (e.g. `input_root.parent / "output"` and `input_root.parent / "logs"`).
-* It is an error to provide both `input_files` and `input_root`.
-* CLI flags map directly: `--output-dir` → `RunPaths.output_root`, `--logs-dir` → `RunPaths.logs_root`.
+* If you only pass `input_dir`, the engine infers defaults relative to that directory
+  (e.g. `input_dir.parent / "output"` and `input_dir.parent / "logs"`).
+* It is an error to provide both `input_files` and `input_dir`.
+* CLI flags map directly: `--output-dir` → `RunPaths.output_dir`, `--logs-dir` → `RunPaths.logs_dir`, `--input-dir` → `RunRequest.input_dir`.
 
 **RunContext**
 
@@ -402,11 +402,10 @@ Internal context shared across pipeline, hooks, and telemetry:
 @dataclass
 class RunContext:
     run_id: str                 # generated UUID or similar per run
-    metadata: dict[str, Any]    # includes caller-supplied metadata
+    metadata: dict[str, Any]    # optional caller-supplied metadata (used for telemetry correlation only)
     manifest: ManifestContext   # see config_runtime/manifest_context.py
     paths: RunPaths
     started_at: datetime
-    safe_mode: bool
     state: dict[str, Any] = field(default_factory=dict)  # per-run scratch space for scripts (not shared across runs/threads)
 ```
 
@@ -507,7 +506,7 @@ class NormalizedTable:
     output_sheet_name: str
 ```
 
-`PipelinePhase` is an enum (`INITIALIZATION`, `LOAD_CONFIG`, `EXTRACTING`, `MAPPING`, `NORMALIZING`, `WRITING_OUTPUT`, `COMPLETED`, `FAILED`) used by telemetry. Enum `.value` strings are snake_case (`"initialization"`, `"load_config"`, `"extracting"`, `"mapping"`, `"normalizing"`, `"writing_output"`, `"completed"`, `"failed"`) and used in telemetry `pipeline_transition` events.
+`RunPhase` is used consistently for pipeline transitions, telemetry, and `RunError.stage`. Enum `.value` strings are snake_case (`"initialization"`, `"load_config"`, `"extracting"`, `"mapping"`, `"normalizing"`, `"writing_output"`, `"hooks"`, `"completed"`, `"failed"`) and used in telemetry `pipeline_transition` events.
 
 ---
 
@@ -559,59 +558,47 @@ Conceptually the manifest looks like:
 
 ```jsonc
 {
-  "config_script_api_version": "1",
-  "info": {
-    "schema": "ade.manifest/v1.0",
-    "title": "My Config",
-    "version": "1.2.3",
-    "description": "Optional"
-  },
-  "engine": {
-    "defaults": {
-      "timeout_ms": 180000,
-      "memory_mb": 384,
-      "runtime_network_access": false,
-      "mapping_score_threshold": 0.35,
-      "detector_sample_size": 64
-    },
-    "writer": {
-      "mode": "row_streaming",
-      "append_unmapped_columns": true,
-      "unmapped_prefix": "raw_",
-      "output_sheet": "Normalized"
-    }
-  },
-  "hooks": {
-    "on_run_start":     [{ "script": "hooks/on_run_start.py" }],
-    "on_after_extract": [{ "script": "hooks/on_after_extract.py" }],
-    "on_after_mapping": [{ "script": "hooks/on_after_mapping.py" }],
-    "on_before_save":   [{ "script": "hooks/on_before_save.py" }],
-    "on_run_end":       [{ "script": "hooks/on_run_end.py" }]
-  },
+  "schema": "ade.manifest/v1",
+  "version": "1.2.3",
+  "name": "My Config",
+  "description": "Optional",
+  "script_api_version": 1,
+
   "columns": {
     "order": ["member_id","email","..."],
-    "meta": {
+    "fields": {
       "member_id": {
         "label": "Member ID",
-        "script": "column_detectors/member_id.py",
+        "module": "column_detectors.member_id",
         "required": true,
-        "enabled": true,
         "synonyms": ["member id", "member#"],
-        "type_hint": "string"
+        "type": "string"
       },
       "email": {
         "label": "Email",
-        "script": "column_detectors/email.py",
+        "module": "column_detectors.email",
         "required": true,
-        "type_hint": "string"
+        "type": "string"
       }
     }
+  },
+  "hooks": {
+    "on_run_start": ["hooks.on_run_start"],
+    "on_after_extract": ["hooks.on_after_extract"],
+    "on_after_mapping": ["hooks.on_after_mapping"],
+    "on_before_save": ["hooks.on_before_save"],
+    "on_run_end": ["hooks.on_run_end"]
+  },
+  "writer": {
+    "append_unmapped_columns": true,
+    "unmapped_prefix": "raw_",
+    "output_sheet": "Normalized"
   }
 }
 ```
 
 `config_runtime/manifest_context.py` turns this into a typed `ManifestContext` with helpers:
-`columns.order`, `columns.meta`, `engine.defaults`, `engine.writer`.
+`columns.order`, `columns.fields`, and `writer` (engine-level defaults like timeouts or thresholds are fixed in code for manifest v1).
 
 ---
 
@@ -630,16 +617,16 @@ engine = Engine()
 result = engine.run(
     RunRequest(
         input_files=[Path("input.xlsx")],
-        output_root=Path("output"),
-        logs_root=Path("logs"),
+        output_dir=Path("output"),
+        logs_dir=Path("logs"),
     )
 )
 
 # Convenience helper: sugar over Engine.run
 result = run(
     input_files=[Path("input.xlsx")],
-    output_root=Path("output"),
-    logs_root=Path("logs"),
+    output_dir=Path("output"),
+    logs_dir=Path("logs"),
 )
 ```
 
@@ -651,8 +638,8 @@ Under the hood, `Engine.run()`:
 
 1. Normalizes a `RunRequest` into `RunPaths` and `RunContext`:
 
-   * chooses `input_root` (from source files or explicit folder),
-   * chooses `output_root` and `logs_root` (from request or defaults based on source location),
+   * chooses `input_dir` (from source files or explicit folder),
+   * chooses `output_dir` and `logs_dir` (from request or defaults based on source location),
    * generates a `run_id`,
    * seeds `metadata` and a shared `state` dict.
 2. Calls `config_runtime.loader.load_config_runtime()` to load the manifest, column detectors, row detectors, and hooks.
@@ -696,8 +683,8 @@ A typical integration in the ADE backend looks like:
      result = run(
          config_package="ade_config",
          input_files=[Path(f"/data/jobs/{job_id}/input/input.xlsx")],
-         output_root=Path(f"/data/jobs/{job_id}/output"),
-         logs_root=Path(f"/data/jobs/{job_id}/logs"),
+         output_dir=Path(f"/data/jobs/{job_id}/output"),
+         logs_dir=Path(f"/data/jobs/{job_id}/logs"),
          metadata={"job_id": job_id, "config_id": config_id},
      )
      ```
@@ -715,7 +702,7 @@ The engine has **no idea** that a backend “job” exists; it only sees file pa
 
 Responsible for:
 
-* Listing source files (`io.list_input_files`) if `input_root` is used,
+* Listing source files (`io.list_input_files`) if `input_dir` is used,
 * Or using the explicit `input_files` provided.
 * For each CSV/XLSX:
 
@@ -748,11 +735,11 @@ For each `RawTable`:
 
    * Call all `detect_*` functions in the field’s script with:
 
-     * `run`, `state`, `field_name`, `field_meta`, `header`,
+     * `run`, `state`, `field_name`, `field_config`, `header`,
        `column_values_sample`, `column_values`, `table`, `column_index`,
        `manifest`, `logger`
 3. Aggregate scores per field and record `ScoreContribution`s.
-4. Pick the best field above the manifest’s `mapping_score_threshold`.
+4. Pick the best field above the engine’s mapping score threshold (fixed for manifest v1).
 5. If no match and `append_unmapped_columns` is true, create `UnmappedColumn`.
 
 API:
@@ -787,18 +774,18 @@ For each `MappedTable`:
    ```python
 def transform(
     *,
-    run,
+    run: RunContext,
     state: dict,
     row_index: int,
     field_name: str,
     value,
-       row: dict,                   # canonical row dict (field -> value)
-       field_meta: dict | None,     # manifest.column_meta.get(field_name)
-       manifest: ManifestContext,
-       logger,
-       **_,
-   ) -> dict | None:
-       ...
+    row: dict,                        # canonical row dict (field -> value)
+    field_config: dict | None,        # manifest.columns.fields.get(field_name)
+    manifest: ManifestContext,
+    logger: PipelineLogger,
+    **_,
+) -> dict | None:
+    ...
    ```
 
 3. Run `validate` for each field module (if present):
@@ -806,17 +793,17 @@ def transform(
    ```python
 def validate(
     *,
-    run,
+    run: RunContext,
     state: dict,
     row_index: int,
     field_name: str,
     value,
-       row: dict,
-       field_meta: dict | None,     # manifest.column_meta.get(field_name)
-       manifest: ManifestContext,
-       logger,
-       **_,
-   ) -> list[dict]:
+    row: dict,
+    field_config: dict | None,        # manifest.columns.fields.get(field_name)
+    manifest: ManifestContext,
+    logger: PipelineLogger,
+    **_,
+) -> list[dict]:
        # Return issue dicts: {"code": "invalid_format", "severity": "error", ...}
        ...
    ```
@@ -854,7 +841,7 @@ Given one or more `NormalizedTable`s:
 
 * Invoke `on_before_save` hook (if configured) with the openpyxl `Workbook`.
 
-* Save workbook to a temp path, then atomically move to `output_root/normalized.xlsx`.
+* Save workbook to a temp path, then atomically move to `output_dir/normalized.xlsx`.
 
 API:
 
@@ -897,14 +884,14 @@ Each phase change is recorded via `logger.transition(phase, **payload)`.
 
 The artifact is a JSON document that records:
 
-* run metadata (ID, status, timestamps)
+* run info (ID, status, timestamps, outputs)
 * config info (schema, version)
 * tables (input metadata, table_index for multiple tables per sheet, mapping, validation issues)
 * notes (high‑level narrative and hook‑written notes)
 
 Boundaries:
 
-* Artifact stays compact and human-friendly: run-level metadata, compact mapping summaries (with per-column contributions), compact validation summaries, high-level notes.
+* Artifact stays compact and human-friendly: run-level info, compact mapping summaries (with per-column contributions), compact validation summaries, high-level notes.
 * Telemetry (`events.ndjson`) carries per-row or debug-level detail; avoid stuffing raw detector scores for every row/column into `artifact.json`.
 
 `FileArtifactSink` implements:
@@ -924,34 +911,30 @@ The backing JSON shape is simple and self‑describing; structurally it might lo
 ```jsonc
 {
   "schema": "ade.artifact/v1",
-  "artifact_version": "1.0.0",
+  "version": "1.0.0",
   "run": {
-    "run_id": "run-uuid",
+    "id": "run-uuid",
     "status": "succeeded",
     "started_at": "2024-01-01T12:00:00Z",
     "completed_at": "2024-01-01T12:00:05Z",
     "outputs": [".../normalized.xlsx"],
-    "metadata": {
-      "job_id": "optional-job-id-from-backend",
-      "config_id": "config-abc",
-      "workspace_id": "ws-123"
-    }
+    "engine_version": "0.1.0"
   },
   "config": {
-    "schema": "ade.manifest/v1.0",
-    "manifest_version": "1.2.3",
-    "title": "My Config"
+    "schema": "ade.manifest/v1",
+    "version": "1.2.3",
+    "name": "My Config"
   },
   "tables": [
     {
-      "input_file": "input.xlsx",
-      "input_sheet": "Sheet1",
+      "source_file": "input.xlsx",
+      "source_sheet": "Sheet1",
       "table_index": 0,
       "header": {
         "row_index": 5,
         "cells": ["ID","Email", "..."]
       },
-      "mapping": [
+      "mapped_columns": [
         {
           "field": "member_id",
           "header": "ID",
@@ -963,14 +946,14 @@ The backing JSON shape is simple and self‑describing; structurally it might lo
           ]
         }
       ],
-      "unmapped": [
+      "unmapped_columns": [
         {
           "header": "Notes",
           "source_column_index": 5,
           "output_header": "raw_notes"
         }
       ],
-      "validation": [
+      "validation_issues": [
         {
           "row_index": 10,
           "field": "email",
@@ -996,6 +979,8 @@ Because every worker writes its own `artifact.json` for its run
 the ADE API can safely run many runs in parallel across backend jobs without the engine
 needing any shared global state.
 
+Opaque metadata passed via `RunRequest.metadata` is **only** echoed in telemetry envelopes for correlation; it is not stored in `artifact.json`.
+
 ### 7.2 Telemetry (`telemetry.py`)
 
 Telemetry events are written as **newline‑delimited JSON** to `events.ndjson`.
@@ -1012,12 +997,17 @@ The envelope roughly looks like:
   "version": "1.0.0",
   "run_id": "run-uuid-or-correlation-id",
   "timestamp": "2024-01-01T12:34:56Z",
+  "metadata": {
+    "job_id": "optional-job-id-from-backend",
+    "config_id": "config-abc",
+    "workspace_id": "ws-123"
+  },
   "event": {
     "event": "run_started",
     "level": "info",
-    "job_id": "optional-job-id-from-metadata",
-    "config_id": "config-abc",
-    "workspace_id": "ws-123"
+    "payload": {
+      "files": 1
+    }
   }
 }
 ```
@@ -1049,12 +1039,12 @@ All script entrypoints are **keyword‑only** functions, should include `**_` to
 ```python
 def detect_*(
     *,
-    run,                 # RunContext (read-only from config’s perspective)
+    run: RunContext,           # RunContext (read-only from config’s perspective)
     state: dict,
-    row_index: int,      # 1-based index in the sheet
-    row_values: list,    # raw cell values for this row
+    row_index: int,            # 1-based index in the sheet
+    row_values: list,          # raw cell values for this row
     manifest: ManifestContext,
-    logger,
+    logger: PipelineLogger,
     **_,
 ) -> dict:
     return {"scores": {"header": 0.7}}   # or {"scores": {"data": 0.4}}
@@ -1065,17 +1055,17 @@ def detect_*(
 ```python
 def detect_*(
     *,
-    run,
+    run: RunContext,
     state: dict,
     field_name: str,
-    field_meta: dict,            # manifest.column_meta[field_name]
-    header: str | None,          # normalized header text
+    field_config: dict,           # manifest.columns.fields[field_name]
+    header: str | None,           # normalized header text
     column_values_sample: list,
     column_values: tuple,
-    table: dict,                 # table summary (headers, row_count, etc.)
-    column_index: int,           # 1-based for scripts; engine converts to 0-based internally
+    table: RawTable,              # detected table
+    column_index: int,            # 1-based for scripts; engine converts to 0-based internally
     manifest: ManifestContext,
-    logger,
+    logger: PipelineLogger,
     **_,
 ) -> dict:
     return {"scores": {field_name: 0.8}}
@@ -1086,15 +1076,16 @@ def detect_*(
 ```python
 def transform(
     *,
-    run,
+    run: RunContext,
     state: dict,
     row_index: int,
     field_name: str,
     value,
-    row: dict,                   # canonical row dict (field -> value)
-    field_meta: dict | None,
+    row: dict,                        # canonical row dict (field -> value)
+    field_config: dict | None,        # manifest.columns.fields.get(field_name)
     manifest: ManifestContext,
-    logger,
+    logger: PipelineLogger,
+    **_,
 ) -> dict | None:
     # Update row and/or return additional field mappings
     ...
@@ -1105,15 +1096,16 @@ def transform(
 ```python
 def validate(
     *,
-    run,
+    run: RunContext,
     state: dict,
     row_index: int,
     field_name: str,
     value,
     row: dict,
-    field_meta: dict | None,
+    field_config: dict | None,        # manifest.columns.fields.get(field_name)
     manifest: ManifestContext,
-    logger,
+    logger: PipelineLogger,
+    **_,
 ) -> list[dict]:
     # Return issue dicts: {"code": "invalid_format", "severity": "error", ...}
     ...
@@ -1127,6 +1119,9 @@ Recommended context-first style:
 from ade_engine.core.types import RunResult, RunContext
 from ade_engine.config_runtime.hook_registry import HookContext, HookStage
 from ade_engine.core.pipeline import RawTable, MappedTable, NormalizedTable
+from ade_engine.infra.artifact import ArtifactSink
+from ade_engine.infra.telemetry import EventSink
+from ade_engine.infra.telemetry import PipelineLogger
 from openpyxl import Workbook
 from typing import Any
 
@@ -1135,16 +1130,16 @@ class HookContext:
     run: RunContext
     state: dict[str, Any]
     manifest: ManifestContext
-    artifact: Any               # ArtifactSink
-    events: Any | None          # EventSink | None
+    artifact: ArtifactSink
+    events: EventSink | None
     tables: list[RawTable | MappedTable | NormalizedTable] | None
     workbook: Workbook | None
     result: RunResult | None
-    logger: Any                 # PipelineLogger
+    logger: PipelineLogger
     stage: HookStage
 
-def run(ctx: HookContext) -> None:
-    ctx.logger.note("Run started", stage=ctx.stage.value)
+def run(context: HookContext) -> None:
+    context.logger.note("Run started", stage=context.stage.value)
 ```
 
 Hook stages (manifest keys → `HookStage` mapping):
@@ -1166,15 +1161,14 @@ Use consistent mappings between CLI flags and `RunRequest` fields:
 | CLI flag        | RunRequest field  |
 |-----------------|-------------------|
 | `--input`       | `input_files`     |
-| `--input-root`  | `input_root`      |
+| `--input-dir`   | `input_dir`       |
 | `--input-sheet` | `input_sheets`    |
-| `--output-dir`  | `output_root`     |
-| `--logs-dir`    | `logs_root`       |
+| `--output-dir`  | `output_dir`      |
+| `--logs-dir`    | `logs_dir`        |
 | `--config-package` | `config_package` |
 | `--manifest-path`  | `manifest_path`  |
-| `--safe-mode`      | `safe_mode`      |
 
-Docs and help text should phrase mappings explicitly, e.g., “`--output-dir` → `RunRequest.output_root`”.
+Docs and help text should phrase mappings explicitly, e.g., “`--output-dir` → `RunRequest.output_dir`”.
 
 ## 9. CLI usage
 
@@ -1198,14 +1192,22 @@ ade-engine run \
   --manifest-path ./data/config_packages/my-config/manifest.json
 ```
 
-The CLI prints a JSON summary including:
+The CLI prints a JSON summary mirroring `RunResult`:
 
-* engine version
-* run ID
-* status
-* output paths
-* artifact/events paths
-* error (if any)
+```jsonc
+{
+  "engine_version": "0.1.0",
+  "run": {
+    "id": "run-uuid",
+    "status": "succeeded",
+    "output_paths": ["/.../normalized.xlsx"],
+    "artifact_path": "/.../logs/artifact.json",
+    "events_path": "/.../logs/events.ndjson",
+    "processed_files": ["input.xlsx"],
+    "error": null
+  }
+}
+```
 
 The ADE backend uses this pattern to run asynchronously: the API enqueues a job or task,
 a worker process/thread in the correct venv executes the CLI for a single run,

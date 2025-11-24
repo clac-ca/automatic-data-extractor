@@ -95,7 +95,7 @@ Modeled as e.g. `TelemetryEnvelope` in `ade_engine.schemas.telemetry`:
 * `timestamp: str`
   ISO 8601 UTC timestamp of when the event was emitted.
 * `metadata: dict[str, Any]`
-  Optional subset of `RunContext.metadata`, e.g.:
+  Optional subset of `RunContext.metadata` for correlation (artifact does not store these), e.g.:
 
   * `job_id`
   * `config_id`
@@ -160,7 +160,7 @@ Default sink used by the engine.
 * Writes **one JSON envelope per line** to:
 
   ```text
-  <logs_root>/events.ndjson
+  <logs_dir>/events.ndjson
   ```
 
 * Behavior:
@@ -215,7 +215,7 @@ For each run, the engine creates `TelemetryBindings`:
 
 * Holds:
 
-  * `events: EventSink` — already wired to `<logs_root>/events.ndjson` and any
+  * `events: EventSink` — already wired to `<logs_dir>/events.ndjson` and any
     additional sinks.
   * `artifact` sink — for structured notes (see `artifact.json` doc).
 * Decorates events with:
@@ -284,10 +284,10 @@ class PipelineLogger:
 Telemetry is written to:
 
 ```text
-<logs_root>/events.ndjson
+<logs_dir>/events.ndjson
 ```
 
-where `logs_root` is determined from `RunRequest` / `RunPaths`.
+where `logs_dir` is determined from `RunRequest` / `RunPaths`.
 
 ### 7.2 Format guarantees
 
