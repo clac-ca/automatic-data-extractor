@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ade-cli"
+version = "0.1.1"
+description = "Python orchestration CLI for ADE."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "CLAC IT Team" }]
+license = { text = "Proprietary" }
+dependencies = [
+  "pyperclip>=1.8",
+  "typer>=0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+ade = "ade_tools.cli:app"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ade_tools*"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]

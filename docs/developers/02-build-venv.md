@@ -242,7 +242,7 @@ Returns a paginated list of log entries and the `next_after_id` cursor for subse
 | `ADE_VENVS_DIR`                 | `./data/.venv`         | Where virtual environments are created          |
 | `ADE_PIP_CACHE_DIR`             | `./data/cache/pip`     | Cache for pip downloads (safe to delete)        |
 | `ADE_BUILD_TTL_DAYS`            | —                      | Optional expiry for builds                      |
-| `ADE_ENGINE_SPEC`               | `packages/ade-engine/` | How to install the engine (path or pinned dist) |
+| `ADE_ENGINE_SPEC`               | `apps/ade-engine/` | How to install the engine (path or pinned dist) |
 | `ADE_PYTHON_BIN`                | system default         | Python executable to use for `venv` (optional)  |
 | `ADE_BUILD_TIMEOUT_SECONDS`     | `600`                  | Max duration for a single build before failing  |
 | `ADE_BUILD_ENSURE_WAIT_SECONDS` | `30`                   | How long server waits for an in‑progress build  |

@@ -10,7 +10,7 @@ Follow the packages in order unless a prerequisite is already complete:
 
 | WP | Title | Summary |
 | -- | ----- | ------- |
-| [WP0](./wp0-preflight-embed-templates.md) | Preflight: Embed Templates | Ensure backend ships config templates inside `apps/api/app/templates/config_packages/` and update packaging docs. |
+| [WP0](./wp0-preflight-embed-templates.md) | Preflight: Embed Templates | Ensure backend ships config templates inside `apps/ade-api/src/ade_api/templates/config_packages/` and update packaging docs. |
 | [WP1](./wp1-config-create-from-template.md) | Config Metadata & Draft Creation | Add DB metadata and APIs to create draft configs from templates or clones via copy/validate/promote. |
 | [WP2](./wp2-draft-file-editing.md) | Draft File Editing API | CRUD endpoints for draft files with ETags, safe paths, and size limits. |
 | [WP3](./wp3-lifecycle-actions.md) | Lifecycle Actions | Activate/archive/clone configs with one active per workspace and digest/version tracking. |

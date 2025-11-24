@@ -10,7 +10,7 @@ and WP12 when planning the UI work.
 The documents screen already references "runs" in copy and state but still
 relies on the legacy jobs endpoints. Key touchpoints:
 
-- `apps/web/src/screens/Workspace/sections/Documents/index.tsx`
+- `apps/ade-web/src/screens/Workspace/sections/Documents/index.tsx`
   - `DocumentRunsDrawer` keeps run drawer state in `document_runs` storage
     keys and displays the "Run" button per document. Update the request
     handlers to call `POST /api/v1/configs/{config_id}/runs` and stream
@@ -24,7 +24,7 @@ relies on the legacy jobs endpoints. Key touchpoints:
 
 ## Config Builder validation console
 
-- `apps/web/src/screens/Workspace/sections/ConfigBuilder/workbench/` –
+- `apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/` –
   validation actions dispatch `validateConfiguration` and display
   "Console streaming endpoints are not available yet." Replace this guard
   with a streaming client that consumes NDJSON events so the console shows
@@ -35,9 +35,9 @@ relies on the legacy jobs endpoints. Key touchpoints:
 
 ## Generated API types
 
-Once the backend endpoints are available, run `npm run openapi-typescript`
-to regenerate `apps/web/src/generated-types/openapi.d.ts` and add curated
-schema exports under `apps/web/src/schema/`. Update the React hooks to use
+Once the backend endpoints are available, run `ade openapi-types`
+to regenerate `apps/ade-web/src/generated-types/openapi.d.ts` and add curated
+schema exports under `apps/ade-web/src/schema/`. Update the React hooks to use
 those types instead of ad-hoc interfaces.
 
 ## Follow-up work items
