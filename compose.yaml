@@ -1,0 +1,18 @@
+services:
+  ade:
+    image: ghcr.io/clac-ca/automatic-data-extractor:local
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: ade
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+# Uncomment to use a named volume instead of a bind mount
+# volumes:
+#   ade-data:

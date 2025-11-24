@@ -72,7 +72,7 @@ cd automatic-data-extractor
 cp .env.example .env
 
 # Start the stack (API + built SPA)
-docker compose -f infra/compose.yaml up --build
+docker compose up --build
 ```
 
 Then:
