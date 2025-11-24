@@ -12,7 +12,6 @@ from ade_api.settings import Settings
 from .models import SystemSetting
 from .schemas import SafeModeStatus
 
-
 SAFE_MODE_SETTING_KEY = "safe-mode"
 SAFE_MODE_DEFAULT_DETAIL = (
     "ADE safe mode enabled; skipping engine execution until ADE_SAFE_MODE is disabled."

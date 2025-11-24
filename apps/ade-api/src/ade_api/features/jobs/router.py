@@ -24,8 +24,8 @@ from ade_api.features.jobs.schemas import (
     JobSubmissionRequest,
 )
 from ade_api.features.jobs.service import (
-    JobConfigurationMissingError,
     JobArtifactMissingError,
+    JobConfigurationMissingError,
     JobDocumentMissingError,
     JobLogsMissingError,
     JobNotFoundError,
