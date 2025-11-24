@@ -7,6 +7,8 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+.mypy_cache/
+.pytest_cache/
 
 # Node artifacts
 node_modules/
@@ -17,6 +19,7 @@ yarn-error.log*
 # Build outputs
 dist/
 build/
+apps/ade-web/dist/
 frontend/build/
 artifacts/
 data/
@@ -25,4 +28,6 @@ data/
 
 # Env files
 .env
+.env.*
 frontend/.env*
+apps/ade-web/.env*

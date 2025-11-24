@@ -6,7 +6,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Iterable, Optional
@@ -38,7 +37,7 @@ BACKEND_DIR = REPO_ROOT / "apps" / "ade-api"
 BACKEND_SRC = BACKEND_DIR / "src" / "ade_api"
 FRONTEND_DIR = REPO_ROOT / "apps" / "ade-web"
 VENV_DIR = REPO_ROOT / ".venv"
-COMPOSE_FILE = REPO_ROOT / "infra" / "compose.yaml"
+COMPOSE_FILE = REPO_ROOT / "compose.yaml"
 README_HINT = "See README: Developer Setup."
 
 
@@ -51,7 +50,7 @@ def refresh_paths() -> None:
     BACKEND_SRC = BACKEND_DIR / "src" / "ade_api"
     FRONTEND_DIR = REPO_ROOT / "apps" / "ade-web"
     VENV_DIR = REPO_ROOT / ".venv"
-    COMPOSE_FILE = REPO_ROOT / "infra" / "compose.yaml"
+    COMPOSE_FILE = REPO_ROOT / "compose.yaml"
 
 
 def run(command: Iterable[str], cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
