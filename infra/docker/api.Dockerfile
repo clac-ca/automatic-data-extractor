@@ -7,7 +7,6 @@ RUN npm ci --prefix apps/ade-web --no-audit --no-fund
 
 # Build the SPA (requires telemetry JSON during bundling)
 COPY apps/ade-web apps/ade-web
-COPY packages packages
 RUN npm run build --prefix apps/ade-web
 
 FROM python:3.12-slim AS backend-build
@@ -21,9 +20,8 @@ RUN apt-get update \
 COPY README.md ./
 COPY apps/ade-api/pyproject.toml apps/ade-api/
 COPY apps ./apps
-COPY packages ./packages
 RUN python -m pip install -U pip \
- && pip install --no-cache-dir --prefix=/install ./apps/ade-engine ./apps/ade-api
+ && pip install --no-cache-dir --prefix=/install ./apps/ade-cli ./apps/ade-engine ./apps/ade-api
 
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -32,7 +30,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY --from=backend-build /install /usr/local
 COPY apps ./apps
-COPY packages ./packages
 COPY --from=web-build /app/apps/ade-web/dist ./apps/ade-api/src/ade_api/web/static
 RUN mkdir -p /app/data/db /app/data/documents
 VOLUME ["/app/data"]
