@@ -206,7 +206,7 @@ When column mapping completes, the engine has:
 
 4. **Debug/observer data**
 
-   Mapping decisions are recorded into the run’s debug artifacts (e.g., job/run logs and artifact JSON) so that UIs and developers can understand what happened when a run misbehaves.
+   Mapping decisions are recorded into the run’s debug artifacts (run logs and artifact JSON) so that UIs and developers can understand what happened when a run misbehaves.
 
 ---
 

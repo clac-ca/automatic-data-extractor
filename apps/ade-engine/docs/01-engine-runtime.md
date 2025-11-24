@@ -18,14 +18,14 @@ It assumes:
 A single engine run is:
 
 > A pure, path‑based function that takes **config + input files** and produces
-> a **normalized workbook + artifact + telemetry**, with no knowledge of jobs.
+> a **normalized workbook + artifact + telemetry**, with no knowledge of backend jobs.
 
 From inside the venv, the engine:
 
 - Accepts a **config** to use (`config_package`, optional `manifest_path`).
 - Accepts **inputs** (`input_files` or `input_root`, optional `input_sheets`).
 - Accepts where to put **outputs** (`output_root`, `logs_root`).
-- Accepts opaque **metadata** from the caller (job IDs, etc., if desired).
+- Accepts opaque **metadata** from the caller (e.g., backend job IDs if desired).
 
 It emits:
 
@@ -36,9 +36,9 @@ It emits:
 
 The engine **does not**:
 
-- Know about job queues, tenants, workspaces, or job IDs.
+- Know about backend job queues, tenants, workspaces, or job IDs.
 - Own virtual environment creation, scaling, or scheduling.
-- Enforce OS‑level limits (CPU, memory, time). That’s the backend’s job.
+- Enforce OS‑level limits (CPU, memory, time). That’s handled by the backend.
 
 ---
 
@@ -192,7 +192,7 @@ These decisions are made once, up front, and never mutated mid‑run.
 
 ### 3.3 `RunContext` – per-run state
 
-`RunContext` is what config code “sees” as the `job` argument. It contains:
+`RunContext` is what config code receives as the `run` argument. It contains:
 
 * `run_id: str`
   Unique identifier per run (e.g. UUID).
@@ -207,7 +207,7 @@ These decisions are made once, up front, and never mutated mid‑run.
   From `manifest.env`. This is the config‑level environment, not OS env vars.
 
 * `metadata: dict[str, Any]`
-  Copy of `RunRequest.metadata`. The engine treats this as an opaque dict.
+  Copy of `RunRequest.metadata`. The engine treats this as an opaque dict (e.g., a backend `job_id` if provided).
 
 * `safe_mode: bool`
   Copied from `RunRequest.safe_mode`.
@@ -322,7 +322,7 @@ The lifecycle below describes what happens inside `Engine.run(request)`.
 
    * Call any hooks registered for `on_run_start` with:
 
-     * `job` (`RunContext`),
+     * `run` (`RunContext`),
      * `state`,
      * `manifest`,
      * `env`,
@@ -401,7 +401,7 @@ If any of these steps fail, the error is handled as described in
 
     * Hooks see:
 
-      * `job` (`RunContext`),
+      * `run` (`RunContext`),
       * `state`,
       * `manifest`, `env`,
       * `artifact`, `events`,
@@ -475,7 +475,7 @@ The **goal** is that a failed run is still debuggable by looking at
 
 ## 6. Interaction with virtual environments and ADE backend
 
-The runtime is intentionally simple and **job‑agnostic**. The typical backend
+The runtime is intentionally simple and **backend‑job‑agnostic**. The typical backend
 integration looks like this:
 
 1. ADE backend decides which config version to use.
@@ -485,7 +485,7 @@ integration looks like this:
    * `ade_engine`,
    * that specific `ade_config` version.
 
-3. Backend prepares a per‑job directory structure, e.g.:
+3. Backend prepares a per‑run working directory (often under a job folder), e.g.:
 
    ```text
    /data/jobs/<job_id>/
@@ -525,11 +525,11 @@ integration looks like this:
 5. Backend:
 
    * Stores references to `result.output_paths`, `artifact.json`, and
-     `events.ndjson` in its own job record.
+     `events.ndjson` in its own job/task record.
    * Uses `artifact.json` and `events.ndjson` for reporting and UI.
 
 The engine never needs to know what `job_id` means; it just sees file paths and
-optional metadata.
+optional metadata for the run.
 
 ---
 
