@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -15,8 +15,8 @@ from ade_api.features.configs.models import Configuration
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.documents.models import Document
 from ade_api.features.documents.repository import DocumentsRepository
-from ade_api.features.documents.storage import DocumentStorage
 from ade_api.features.documents.staging import stage_document_input
+from ade_api.features.documents.storage import DocumentStorage
 from ade_api.features.jobs.models import Job, JobStatus
 from ade_api.features.jobs.repository import JobsRepository
 from ade_api.features.jobs.schemas import (
@@ -354,7 +354,7 @@ class JobsService:
 
     @staticmethod
     def _epoch_to_datetime(epoch_seconds: int) -> datetime:
-        return datetime.fromtimestamp(epoch_seconds, tz=timezone.utc)
+        return datetime.fromtimestamp(epoch_seconds, tz=UTC)
 
     async def _require_job(self, *, workspace_id: str, job_id: str) -> Job:
         job = await self._jobs.get_job(workspace_id=workspace_id, job_id=job_id)
@@ -460,7 +460,7 @@ class JobsService:
         try:
             candidate.relative_to(output_dir)
         except ValueError:
-            raise JobOutputMissingError("Requested output is outside the job directory")
+            raise JobOutputMissingError("Requested output is outside the job directory") from None
 
         if not candidate.is_file():
             raise JobOutputMissingError("Requested output file not found")
@@ -473,7 +473,7 @@ class JobsService:
         try:
             candidate.relative_to(root)
         except ValueError:
-            raise JobOutputMissingError("Requested path escapes jobs directory")
+            raise JobOutputMissingError("Requested path escapes jobs directory") from None
         return candidate
 
     async def _configuration_map(

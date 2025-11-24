@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import sys
 
@@ -29,7 +30,21 @@ def run_lint(scope: str) -> None:
         common.run([sys.executable, "-m", "ruff", "check", "src/ade_api"], cwd=common.BACKEND_DIR)
         mypy_bin = shutil.which("mypy")
         if mypy_bin:
-            common.run([mypy_bin, "src/ade_api"], cwd=common.BACKEND_DIR)
+            # mypy rejects package paths that include characters outside [a-zA-Z0-9_],
+            # which is common for hyphenated repo directories. Skip gracefully to avoid
+            # false-negative failures when the checkout path is not a valid module name.
+            invalid_segments = [
+                part
+                for part in common.BACKEND_DIR.resolve().parts
+                if part not in {"/"} and not re.fullmatch(r"[A-Za-z0-9_]+", part)
+            ]
+            if invalid_segments:
+                typer.echo(
+                    f"ℹ️  Skipping mypy because path contains invalid package segments: {', '.join(invalid_segments)}",
+                    err=True,
+                )
+            else:
+                common.run([mypy_bin, "src/ade_api"], cwd=common.BACKEND_DIR)
         else:
             typer.echo("ℹ️  mypy not installed; skipping type check", err=True)
 
