@@ -226,7 +226,7 @@ These decisions are made once, up front, and never mutated mid‑run.
 * `started_at: datetime` / `completed_at: datetime | None`
   Timestamps for run lifecycle.
 
-* `run_state: dict[str, Any]` (available as `state` for backward compatibility)
+* `state: dict[str, Any]`
   Per‑run mutable scratch space, shared across detectors, transforms,
   validators, and hooks. Not shared across runs or threads; each run executes
   sequentially in a single thread/process.
@@ -235,7 +235,7 @@ Properties:
 
 * A new `RunContext` is created for every call to `Engine.run`.
 * No `RunContext` is shared across runs.
-* Config authors can use `run_state` for caches, counters, etc., within a single
+* Config authors can use `state` for caches, counters, etc., within a single
   run; never for cross‑run state.
 
 ### 3.4 `RunResult` – outcome summary
@@ -300,7 +300,7 @@ The lifecycle below describes what happens inside `Engine.run(request)`.
 
    * Generate `run_id`.
    * Initialize `started_at`.
-   * Initialize empty `run_state` dict.
+   * Initialize empty `state` dict.
    * Attach `RunPaths` and `metadata`.
 
 3. **Load manifest and config runtime**
@@ -338,7 +338,7 @@ The lifecycle below describes what happens inside `Engine.run(request)`.
    * Call any hooks registered for `on_run_start` with:
 
      * `run` (`RunContext`),
-     * `run_state`,
+     * `state`,
      * `manifest`,
      * `artifact`,
      * `events`,
@@ -416,7 +416,7 @@ If any of these steps fail, the error is handled as described in
     * Hooks see:
 
       * `run` (`RunContext`),
-      * `run_state`,
+      * `state`,
       * `manifest`,
       * `artifact`, `events`,
       * `result` (a provisional `RunResult`),
@@ -570,15 +570,15 @@ The runtime is designed to be safe under typical worker pool patterns.
 
 * **RunContext**
 
-  * Every call to `Engine.run` creates a fresh `RunContext` with its own `run_state`
-    dict (exposed as `state` in scripts).
+  * Every call to `Engine.run` creates a fresh `RunContext` with its own `state`
+    dict.
   * Nothing inside `RunContext` is shared across runs or threads.
-  * `RunContext.run_state` is per-run scratch space; do not share it across threads.
+  * `RunContext.state` is per-run scratch space; do not share it across threads.
 
 * **Global state**
 
   * The engine avoids mutable module‑level globals wherever possible.
-  * Config code should use `RunContext.run_state` or external systems (databases,
+  * Config code should use `RunContext.state` or external systems (databases,
     caches) rather than global variables.
 
 Backend concurrency (threads vs processes vs containers) is outside the scope of

@@ -17,13 +17,13 @@ def run(ctx: Any) -> None:
     the caller passed in.
     """
     logger = getattr(ctx, "logger", None)
-    run_ctx = getattr(ctx, "run", None)
+    run = getattr(ctx, "run", None)
 
-    if logger is None or run_ctx is None:
+    if logger is None or run is None:
         return
 
-    run_id = getattr(run_ctx, "run_id", None)
-    metadata = getattr(run_ctx, "metadata", {})
+    run_id = getattr(run, "run_id", None)
+    metadata = getattr(run, "metadata", {})
 
     logger.note(
         "Run started",

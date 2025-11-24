@@ -78,7 +78,7 @@ Where:
 
 * `ctx: RunContext`
 
-  * Per-run context (paths, manifest, metadata, shared `run_state` dict, timestamps).
+  * Per-run context (paths, manifest, metadata, shared `state` dict, timestamps).
 * `cfg: ConfigRuntime`
 
   * Config runtime object exposing:
@@ -189,7 +189,7 @@ Standard keyword-only signature:
 def transform(
     *,
     run: RunContext,              # config-facing view of the run
-    run_state: dict,              # shared per-run scratch space
+    state: dict,              # shared per-run scratch space
     row_index: int,               # original sheet row index (1-based)
     field_name: str,              # canonical field
     value,                        # current value for this field
@@ -205,7 +205,7 @@ def transform(
 Parameters to remember:
 
 * `run`: full run context (paths, metadata).
-* `run_state`: mutable dict shared across all rows and scripts within this run.
+* `state`: mutable dict shared across all rows and scripts within this run.
 * `row_index`: traceability back to original file.
 * `field_name`, `value`, `row`: the core of the normalization work.
 * `field_config`: the manifest’s field config for this field (e.g., label, required).
@@ -289,7 +289,7 @@ Standard keyword-only signature:
 def validate(
     *,
     run: RunContext,
-    run_state: dict,
+    state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -354,7 +354,7 @@ The engine wraps these into `ValidationIssue` objects, adding:
   * They can validate both `value` and cross-field relationships via `row`.
 * Cross-row constraints:
 
-  * May be implemented using `run_state` to collect information across rows
+  * May be implemented using `state` to collect information across rows
     (e.g., track duplicates) and report issues during or after normalization.
   * For “summary” behavior, `on_run_end` hooks can also be used.
 
@@ -500,11 +500,11 @@ The exact event set is flexible, but the pattern is:
   * Date formats, locales, thresholds, etc.
 * Keep transforms **local** when possible:
 
-  * Avoid cross-row dependencies unless you have a clear pattern using `run_state`.
+  * Avoid cross-row dependencies unless you have a clear pattern using `state`.
 * Avoid:
 
   * Network calls per row.
-  * Unbounded in-memory structures (e.g., storing all rows in `run_state`).
+  * Unbounded in-memory structures (e.g., storing all rows in `state`).
 
 ### 8.2 Writing good validators
 
@@ -523,7 +523,7 @@ The exact event set is flexible, but the pattern is:
   * Inspect the full `row` (e.g., “if `end_date` < `start_date`”).
 * For cross-row checks:
 
-  * Use `run_state` to accumulate and check after all rows are seen (or in a
+  * Use `state` to accumulate and check after all rows are seen (or in a
     dedicated pass/hook).
 
 ### 8.3 Debugging

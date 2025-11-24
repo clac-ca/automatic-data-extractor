@@ -259,8 +259,8 @@ A typical row detector has this shape:
 ```python
 def detect_header_or_data(
     *,
-    run,                 # RunContext (config-facing view of the run)
-    run_state: dict,
+    run: RunContext,             # RunContext (config-facing view of the run)
+    state: dict,
     row_index: int,      # 1-based index within the sheet
     row_values: list,    # raw cell values for this row
     manifest,            # ManifestContext
@@ -277,7 +277,7 @@ def detect_header_or_data(
 Conventions:
 
 * `run` is read‑only from the config’s perspective (it is a `RunContext`).
-* `run_state` is a per‑run dict that detectors may use to coordinate across rows.
+* `state` is a per‑run dict that detectors may use to coordinate across rows.
 * `manifest` provides config‑level context (schema, defaults, writer, fields).
 * `logger` allows emitting notes and telemetry if needed.
 * Functions should accept `**_` to tolerate new parameters over time.

@@ -41,7 +41,7 @@ At a high level:
 - At certain phases, it calls **hook functions** defined in `ade_config.hooks`.
 - Hooks receive:
   - the current `RunContext`,
-  - shared per‑run `run_state` dict,
+  - shared per‑run `state` dict,
   - the manifest,
   - artifact and telemetry sinks,
   - and phase‑specific objects (tables, workbook, result).
@@ -52,7 +52,7 @@ Hooks are **config‑owned**:
 - The config defines *what* those hooks do.
 
 There is no global/shared state between runs; hooks only see per‑run state
-through `RunContext` and `run_state` (exposed as `state` for backward
+through `RunContext` and `state` (exposed as `state` for backward
 compatibility).
 
 ---
@@ -64,7 +64,7 @@ invoked in this order:
 
 | Stage name        | When it runs                                       | What is available / allowed to change                                  |
 | ----------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
-| `on_run_start`    | After manifest + telemetry initialized, before IO | Read/initialize `run_state`, add notes, never touches tables or workbook|
+| `on_run_start`    | After manifest + telemetry initialized, before IO | Read/initialize `state`, add notes, never touches tables or workbook|
 | `on_after_extract`| After `RawTable[]` built, before column mapping   | Inspect/modify `RawTable` objects                                       |
 | `on_after_mapping`| After `MappedTable[]` built, before normalization | Inspect/modify `MappedTable` objects (`column_map.mapped_columns` / `unmapped_columns`) |
 | `on_before_save`  | After `NormalizedTable[]`, before writing files   | Inspect `NormalizedTable[]`, modify `Workbook` (formatting, summary)    |
@@ -168,7 +168,7 @@ from openpyxl import Workbook
 @dataclass
 class HookContext:
     run: RunContext
-    run_state: dict[str, Any]
+    state: dict[str, Any]
     manifest: ManifestContext
     artifact: ArtifactSink
     events: EventSink | None
@@ -184,7 +184,7 @@ def run(context: HookContext) -> None:
 
 Guidelines:
 
-* Use `context.run_state` for mutable per‑run data; treat `context.run` as read‑only engine context.
+* Use `context.state` for mutable per‑run data; treat `context.run` as read‑only engine context.
 * Use `context.logger` for notes/events; reach for `context.artifact`/`context.events` only when you need sink-level control.
 * `context.tables`, `context.workbook`, and `context.result` are stage-dependent and may be `None`.
 * If you choose to expose a keyword‑only hook signature instead of the context object, include `**_` to absorb new parameters.
@@ -196,9 +196,9 @@ Guidelines:
 Hooks have real power; this section defines what is safe to mutate at each
 stage.
 
-### 6.1 `run_state` (aka `state` in scripts)
+### 6.1 `state` (aka `state` in scripts)
 
-* `run_state` is the same dict exposed to detectors, transforms, validators, and
+* `state` is the same dict exposed to detectors, transforms, validators, and
   hooks.
 * It is **per run**; no sharing between runs.
 * You can freely add, update, or delete keys.
@@ -281,8 +281,8 @@ Below are typical uses of each hook stage.
 ```python
 # ade_config/hooks/on_run_start.py
 def run(ctx):
-    ctx.run_state["start_timestamp"] = ctx.run.started_at.isoformat()
-    ctx.run_state["config_version"] = ctx.manifest["info"]["version"]
+    ctx.state["start_timestamp"] = ctx.run.started_at.isoformat()
+    ctx.state["config_version"] = ctx.manifest["info"]["version"]
 
     ctx.logger.note(
         "Run started",
@@ -437,7 +437,7 @@ When adding or modifying hooks in a config:
 3. **Create hook modules** in `ade_config/hooks/` with a `run(...)` function:
 
    * use keyword‑only signature,
-4. **Use `logger` for notes/events**, `run_state` for shared run data.
+4. **Use `logger` for notes/events**, `state` for shared run data.
 5. **Mutate only what’s safe** for the stage (see section 6).
 6. **Test end‑to‑end**:
 
