@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 import os
-import inspect
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ade_engine.schemas import TelemetryEnvelope
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -69,6 +69,16 @@ DEFAULT_STREAM_LIMIT = 1000
 
 
 RunStreamFrame = RunEvent | TelemetryEnvelope
+
+
+@dataclass(slots=True)
+class RunPathsSnapshot:
+    """Container for job-relative output and log paths."""
+
+    artifact_path: str | None = None
+    events_path: str | None = None
+    output_paths: list[str] = None  # type: ignore[assignment]
+    processed_files: list[str] = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:  # pragma: no cover - import guard for circular dependencies
     from ade_api.features.documents.models import Document
@@ -393,6 +403,11 @@ class RunsService:
 
     def to_resource(self, run: Run) -> RunResource:
         """Convert ``run`` into its API representation."""
+        paths = self._finalize_paths(
+            summary=None,
+            job_dir=self._job_dir_for_run(run.id),
+            default_paths=RunPathsSnapshot(output_paths=[], processed_files=[]),
+        )
 
         return RunResource(
             id=run.id,
@@ -407,6 +422,10 @@ class RunsService:
             exit_code=run.exit_code,
             summary=run.summary,
             error_message=run.error_message,
+            artifact_path=paths.artifact_path,
+            events_path=paths.events_path,
+            output_paths=paths.output_paths or [],
+            processed_files=paths.processed_files or [],
         )
 
     async def get_logs(
@@ -508,6 +527,91 @@ class RunsService:
         except ValueError:  # pragma: no cover - defensive guard
             raise RunOutputMissingError("Requested path escapes jobs directory")
 
+    def _relative_if_exists(self, path: str | Path | None) -> str | None:
+        if path is None:
+            return None
+        candidate = Path(path)
+        if not candidate.exists():
+            return None
+        try:
+            return self.job_relative_path(candidate)
+        except RunOutputMissingError:
+            return None
+
+    def _relative_output_paths(self, output_dir: Path) -> list[str]:
+        if not output_dir.exists() or not output_dir.is_dir():
+            return []
+        paths: list[str] = []
+        for path in sorted(p for p in output_dir.rglob("*") if p.is_file()):
+            relative = self._relative_if_exists(path)
+            if relative is not None:
+                paths.append(relative)
+        return paths
+
+    def _finalize_paths(
+        self,
+        *,
+        summary: dict[str, Any] | None,
+        job_dir: Path,
+        default_paths: RunPathsSnapshot,
+    ) -> RunPathsSnapshot:
+        snapshot = RunPathsSnapshot(
+            artifact_path=default_paths.artifact_path,
+            events_path=default_paths.events_path,
+            output_paths=list(default_paths.output_paths or []),
+            processed_files=list(default_paths.processed_files or []),
+        )
+
+        logs_dir = job_dir / "logs"
+        artifact_candidates = [summary.get("artifact_path") if summary else None, logs_dir / "artifact.json"]
+        for candidate in artifact_candidates:
+            snapshot.artifact_path = self._relative_if_exists(candidate)
+            if snapshot.artifact_path:
+                break
+
+        event_candidates = [summary.get("events_path") if summary else None, logs_dir / "events.ndjson"]
+        for candidate in event_candidates:
+            snapshot.events_path = self._relative_if_exists(candidate)
+            if snapshot.events_path:
+                break
+
+        output_candidates = summary.get("output_paths") if summary else None
+        if isinstance(output_candidates, list):
+            snapshot.output_paths = [p for p in (self._relative_if_exists(path) for path in output_candidates) if p]
+
+        if not snapshot.output_paths:
+            snapshot.output_paths = self._relative_output_paths(job_dir / "output")
+
+        return snapshot
+
+    @staticmethod
+    def _parse_summary(line: str, default: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        try:
+            candidate = json.loads(line)
+        except json.JSONDecodeError:
+            return default
+        return candidate if isinstance(candidate, dict) else default
+
+    @staticmethod
+    def _resolve_completion(
+        summary: dict[str, Any] | None, return_code: int
+    ) -> tuple[RunStatus, str | None]:
+        status = RunStatus.SUCCEEDED if return_code == 0 else RunStatus.FAILED
+        error_message: str | None = None if status is RunStatus.SUCCEEDED else f"Process exited with {return_code}"
+
+        if summary:
+            summary_status = summary.get("status")
+            if summary_status == "failed":
+                status = RunStatus.FAILED
+                error = summary.get("error")
+                if isinstance(error, dict):
+                    error_message = error.get("message", error_message)
+            elif summary_status == "succeeded":
+                status = RunStatus.SUCCEEDED
+                error_message = None
+
+        return status, error_message
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -526,29 +630,48 @@ class RunsService:
         job_dir = jobs_root / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
 
-        if options.input_document_id:
-            await self._stage_input_document(
-                workspace_id=context.workspace_id,
-                document_id=options.input_document_id,
-                job_dir=job_dir,
-            )
-        command = [
-            str(python),
-            "-m",
-            "ade_engine",
-            "--job-id",
-            job_id,
-            "--jobs-dir",
-            str(jobs_root),
-        ]
+        if not options.input_document_id:
+            raise RunInputMissingError("Input document is required for run execution")
+
+        staged_input = await self._stage_input_document(
+            workspace_id=context.workspace_id,
+            document_id=options.input_document_id,
+            job_dir=job_dir,
+        )
+
+        command = [str(python), "-m", "ade_engine", "run"]
+        command.extend(["--input", str(staged_input)])
+        command.extend(["--output-dir", str(job_dir / "output")])
+        command.extend(["--logs-dir", str(job_dir / "logs")])
+
+        sheets = options.input_sheet_names or []
+        if options.input_sheet_name:
+            sheets.append(options.input_sheet_name)
+        for sheet in sheets:
+            command.extend(["--input-sheet", sheet])
+
+        metadata = {
+            "run_id": run.id,
+            "job_id": job_id,
+            "config_id": run.config_id,
+            "workspace_id": run.workspace_id,
+            "configuration_id": context.configuration_id,
+        }
+        for key, value in metadata.items():
+            command.extend(["--metadata", f"{key}={value}"])
+
         if safe_mode_enabled:
             command.append("--safe-mode")
 
         runner = ADEProcessRunner(command=command, job_dir=job_dir, env=env)
 
+        summary: dict[str, Any] | None = None
+        paths_snapshot = RunPathsSnapshot(output_paths=[], processed_files=[])
+
         async for frame in runner.stream():
             if isinstance(frame, StdoutFrame):
                 log = await self._append_log(run.id, frame.message, stream=frame.stream)
+                summary = self._parse_summary(frame.message, default=summary)
                 yield RunLogEvent(
                     run_id=run.id,
                     created=self._epoch_seconds(log.created_at),
@@ -562,10 +685,16 @@ class RunsService:
             yield frame
 
         return_code = runner.returncode if runner.returncode is not None else 1
-        status = RunStatus.SUCCEEDED if return_code == 0 else RunStatus.FAILED
-        error_message = (
-            None if status is RunStatus.SUCCEEDED else f"Process exited with {return_code}"
+        status, error_message = self._resolve_completion(summary, return_code)
+
+        paths_snapshot = self._finalize_paths(
+            summary=summary,
+            job_dir=job_dir,
+            default_paths=paths_snapshot,
         )
+        if summary and summary.get("processed_files"):
+            paths_snapshot.processed_files = list(summary.get("processed_files", []))
+
         completion = await self._complete_run(
             run,
             status=status,
@@ -578,6 +707,10 @@ class RunsService:
             status=self._status_literal(completion.status),
             exit_code=completion.exit_code,
             error_message=completion.error_message,
+            artifact_path=paths_snapshot.artifact_path,
+            events_path=paths_snapshot.events_path,
+            output_paths=paths_snapshot.output_paths,
+            processed_files=paths_snapshot.processed_files,
         )
 
     async def _require_run(self, run_id: str) -> Run:
@@ -601,13 +734,13 @@ class RunsService:
         workspace_id: str,
         document_id: str,
         job_dir: Path,
-    ) -> None:
+    ) -> Path:
         document = await self._require_document(
             workspace_id=workspace_id,
             document_id=document_id,
         )
 
-        await stage_document_input(
+        return await stage_document_input(
             document=document,
             storage=self._storage,
             session=self._session,

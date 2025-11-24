@@ -1,0 +1,66 @@
+{
+  "$defs": {
+    "TelemetryEvent": {
+      "additionalProperties": false,
+      "description": "Single telemetry event payload.",
+      "properties": {
+        "event": {
+          "title": "Event",
+          "type": "string"
+        },
+        "level": {
+          "title": "Level",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        }
+      },
+      "required": [
+        "event",
+        "level"
+      ],
+      "title": "TelemetryEvent",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Envelope wrapping telemetry events with run context.",
+  "properties": {
+    "schema": {
+      "default": "ade.telemetry/run-event.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "version": {
+      "default": "1.0.0",
+      "title": "Version",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "timestamp": {
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    },
+    "event": {
+      "$ref": "#/$defs/TelemetryEvent"
+    }
+  },
+  "required": [
+    "run_id",
+    "timestamp",
+    "event"
+  ],
+  "title": "TelemetryEnvelope",
+  "type": "object"
+}
