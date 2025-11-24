@@ -110,6 +110,9 @@ class JobsService:
     ) -> JobRecord:
         """Create a job, enqueue execution, and return the resulting record."""
 
+        options = payload.options.model_copy(
+            update={"input_document_id": payload.input_document_id}
+        )
         document = await self._require_document(
             workspace_id=workspace_id,
             document_id=payload.input_document_id,
@@ -122,7 +125,7 @@ class JobsService:
         job_id = generate_ulid()
         run, context = await self._runs.prepare_run(
             config_id=configuration.config_id,
-            options=payload.options,
+            options=options,
             job_id=job_id,
             jobs_dir=self._jobs_dir,
         )
@@ -159,13 +162,13 @@ class JobsService:
         await self._session.commit()
 
         context_dict = context.as_dict()
-        options_dict = payload.options.model_dump()
+        options_dict = options.model_dump()
 
         if background_tasks is None:
             await self.execute_job(
                 job_id=job.id,
                 context=context,
-                options=payload.options,
+                options=options,
             )
             await self._session.refresh(job)
             return self._to_record(job, configuration)

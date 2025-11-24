@@ -58,6 +58,7 @@ class Configuration(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
+        UniqueConstraint("config_id"),
         UniqueConstraint("workspace_id", "config_id"),
         Index("configurations_workspace_status_idx", "workspace_id", "status"),
     )
