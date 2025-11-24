@@ -365,7 +365,7 @@ but should avoid redefining these.
 ### 8.3 File and table events
 
 * `file_discovered`
-  Emitted when an input file is discovered (optional).
+  Emitted when a source file is discovered (optional).
 
 * `file_processed`
   Emitted after a file has been fully processed.

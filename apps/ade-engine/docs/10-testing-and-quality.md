@@ -14,7 +14,7 @@ predictable over time.
 Our testing strategy is built around a few simple ideas:
 
 - **Deterministic behavior**  
-  Given the same `ade_config`, manifest, and input files, the engine should
+  Given the same `ade_config`, manifest, and source files, the engine should
   produce the **same** normalized workbook, `artifact.json`, and
   `events.ndjson`.
 

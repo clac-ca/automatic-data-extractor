@@ -2,7 +2,7 @@
 
 This document describes how the ADE engine:
 
-1. Discovers **input files** (CSV/XLSX),
+1. Discovers **source files** (CSV/XLSX),
 2. Streams **rows** from those files in a memory‑friendly way, and
 3. Uses **row detectors** from `ade_config` to turn raw sheets into `RawTable`
    objects that feed the mapping stage.
@@ -25,7 +25,7 @@ Relevant modules:
 
 The IO + extract layer has three core responsibilities:
 
-1. **Turn a `RunRequest` into a deterministic sequence of input files.**
+1. **Turn a `RunRequest` into a deterministic sequence of source files.**
 2. **Stream rows** from CSV/XLSX without loading whole workbooks into memory.
 3. **Locate tables** in each sheet by running row detectors and emitting
    `RawTable` objects.
@@ -44,17 +44,17 @@ each detected table, including header row, data rows, and location metadata.
 
 ---
 
-## 2. From RunRequest to input files
+## 2. From RunRequest to source files
 
 ### 2.1 Sources: `input_files` vs `input_root`
 
 `RunRequest` offers two ways to specify inputs:
 
 - `input_files: Sequence[Path]`  
-  Explicit list of files to process.
+  Explicit list of source files to process.
 
 - `input_root: Path`  
-  A directory to scan for input files.
+  A directory to scan for source files.
 
 Invariants enforced upstream (in `Engine.run`):
 
@@ -319,7 +319,7 @@ class RawTable:
 
 Details:
 
-* `source_file` — absolute path to the input file.
+* `source_file` — absolute path to the source file.
 * `source_sheet` — sheet name for XLSX; `None` for CSV.
 * `table_index` — 0-based order in which tables were detected within the sheet.
 * `header_row` — header cells normalized to strings (e.g. `None` → `""`).
@@ -402,7 +402,7 @@ additional tables within the same sheet.
 
 The IO and table detection layer is responsible for:
 
-1. Turning a `RunRequest` into a **deterministic list of input files**.
+1. Turning a `RunRequest` into a **deterministic list of source files**.
 2. Streaming **rows** from CSV/XLSX in a memory‑conscious way.
 3. Using **config‑provided row detectors** to identify table boundaries and
    emit `RawTable` objects with precise sheet/row metadata.

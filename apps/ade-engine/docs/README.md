@@ -9,7 +9,7 @@ while building or extending the engine and configs.
 * Core runtime: `core/engine.py`, `core/types.py`, `core/pipeline/`
 * Config runtime: `config_runtime/loader.py`, `manifest_context.py`, registries
 * Infra/adapters: `infra/io.py`, `infra/artifact.py`, `infra/telemetry.py`
-* Public API & CLI: `api/__init__.py`, `api/cli.py`, `api/__main__.py`
+* Public API & CLI: `ade_engine/__init__.py`, `cli/app.py`, `__main__.py`
 * Schemas: `schemas/`
 
 Recommended reading order (mirrors the pipeline flow):
@@ -23,7 +23,7 @@ Recommended reading order (mirrors the pipeline flow):
    `manifest.json`, and the Python schema models in `ade_engine.schemas`.
 
 3. [`03-io-and-table-detection.md`](./03-io-and-table-detection.md)  
-   How input files are discovered and read, how sheets are selected, and how
+   How source files are discovered and read, how sheets are selected, and how
    row detectors find table boundaries (`RawTable`).
 
 4. [`04-column-mapping.md`](./04-column-mapping.md)  
