@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from ade_api.features.health.service import HealthService
     from ade_api.features.jobs.service import JobsService
     from ade_api.features.runs.service import RunsService
-    from ade_api.features.system_settings.service import SystemSettingsService
+    from ade_api.features.system_settings.service import SafeModeService, SystemSettingsService
     from ade_api.features.users.service import UsersService
 
 
@@ -89,7 +89,7 @@ def get_health_service(
 
 def get_safe_mode_service(
     session: SessionDep, settings: SettingsDep
-) -> "SafeModeService":
+) -> SafeModeService:
     """Return a safe mode service for toggling ADE runtime state."""
 
     from ade_api.features.system_settings.service import SafeModeService

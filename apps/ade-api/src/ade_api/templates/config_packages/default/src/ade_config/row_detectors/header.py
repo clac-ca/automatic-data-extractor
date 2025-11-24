@@ -7,7 +7,8 @@ engine calls all of them for each row and sums the scores.
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 # Lowercase words commonly found in column headers
 KNOWN_HEADER_WORDS: set[str] = {

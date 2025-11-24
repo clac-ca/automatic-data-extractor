@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
-from typing import Any, Literal, Mapping
+from typing import Any, Literal
 
 from pydantic import Field, field_validator
 
