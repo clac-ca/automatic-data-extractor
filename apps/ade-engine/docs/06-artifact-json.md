@@ -286,7 +286,7 @@ Each element in `tables` describes one logical table detected in the input:
 ### 6.1 Per‑table metadata
 
 * `input_file: str`
-  Basename of the input file where the table was found
+  Basename of the source file where the table was found
   (e.g., `"input.xlsx"` or `"members.csv"`).
 
 * `input_sheet: str | null`
@@ -311,7 +311,7 @@ Each item describes how one canonical field was mapped:
   Canonical field name (from manifest `columns.meta`).
 
 * `header: str`
-  Original header text from the input file that was mapped to this field
+  Original header text from the source file that was mapped to this field
   (post simple normalization).
 
 * `source_column_index: int`
@@ -507,7 +507,7 @@ Breaking changes include:
 
 Typical usage patterns:
 
-* **Job summary page**
+* **Run summary page (in backend UI)**
 
   * Use `run.status`, `run.error`, and `run.outputs`.
   * Show config `title` and `manifest_version`.

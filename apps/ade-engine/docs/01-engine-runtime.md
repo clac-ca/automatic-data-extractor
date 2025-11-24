@@ -17,19 +17,19 @@ It assumes:
 
 A single engine run is:
 
-> A pure, path‑based function that takes **config + input files** and produces
+> A pure, path‑based function that takes **config + source files** and produces
 > a **normalized workbook + artifact + telemetry**, with no knowledge of backend jobs.
 
 From inside the venv, the engine:
 
-- Accepts a **config** to use (`config_package`, optional `manifest_path`).
-- Accepts **inputs** (`input_files` or `input_root`, optional `input_sheets`).
-- Accepts where to put **outputs** (`output_root`, `logs_root`).
+- Accepts a **config package** to use (`config_package`, optional `manifest_path`).
+- Accepts **sources** (`input_files` or `input_root`, optional `input_sheets` for source sheets).
+- Accepts where to put **outputs** (`output_root`, `logs_root` for the output workbook and logs).
 - Accepts opaque **metadata** from the caller (e.g., backend job IDs if desired).
 
 It emits:
 
-- One or more **normalized Excel workbooks** in `output_root`.
+- One or more **normalized output workbooks** in `output_root`.
 - An **artifact JSON** (`artifact.json`) in `logs_root`.
 - **Telemetry events** (`events.ndjson`) in `logs_root`.
 - A **`RunResult`** describing the outcome.
@@ -60,7 +60,7 @@ result = engine.run(
         input_files=[Path("input.xlsx")],
         output_root=Path("output"),
         logs_root=Path("logs"),
-        metadata={"job_id": "123"},
+        metadata={"job_id": "123"},  # opaque metadata; engine treats it as tags
     )
 )
 
@@ -117,30 +117,30 @@ Most runtime complexity is expressed via a few core types in `types.py`.
 
 `RunRequest` describes the configuration of a single engine run:
 
-* **Config**
+* **Config package**
 
   * `config_package: str`
     Python package name to import. Defaults to `"ade_config"`.
   * `manifest_path: Path | None`
     Optional path overriding `ade_config/manifest.json`.
 
-* **Inputs** (mutually exclusive; one must be provided)
+* **Source selection** (mutually exclusive; one must be provided)
 
   * `input_files: Sequence[Path] | None`
-    Explicit list of files (preferred; typical shape: `[Path("input.xlsx")]`).
+    Explicit list of source files (preferred; typical shape: `[Path("input.xlsx")]`).
   * `input_root: Path | None`
-    Directory to discover files in (e.g., `input/` folder).
+    Directory to discover source files in (e.g., `input/` folder).
 
 * **Sheet filter**
 
   * `input_sheets: Sequence[str] | None`
-    Restrict XLSX processing to specific sheet names. CSV has a single implicit
-    sheet; this filter has no effect on CSV.
+    Restrict XLSX processing to specific source sheet names. CSV has a single
+    implicit sheet; this filter has no effect on CSV.
 
 * **Outputs**
 
   * `output_root: Path | None`
-    Directory for normalized workbook(s).
+    Directory for normalized output workbook(s).
   * `logs_root: Path | None`
     Directory for `artifact.json` and `events.ndjson`.
 
@@ -238,7 +238,7 @@ Properties:
 * `events_path: Path`
   Path to `events.ndjson`.
 * `processed_files: tuple[str, ...]`
-  Basenames of all input files that were actually processed.
+  Basenames of all source files that were actually processed.
 
 Guarantees:
 
@@ -341,7 +341,7 @@ If any of these steps fail, the error is handled as described in
 7. **Extract**
 
    * Phase: `EXTRACTING`.
-   * Discover input files (if using `input_root`) and read CSV/XLSX sheets.
+   * Discover source files (if using `input_root`) and read CSV/XLSX source sheets.
    * Run row detectors to identify headers and data ranges.
    * Build `RawTable[]` and record them in the artifact as needed.
    * Call any `on_after_extract` hooks.

@@ -4,7 +4,7 @@ This document describes the command‑line interface to the ADE engine and how
 the ADE backend invokes it inside a virtual environment.
 
 It assumes you’ve read `ade_engine/README.md` and understand that the engine
-is **path‑based and backend‑job‑agnostic**: it sees input/output/log paths and opaque
+is **path‑based and backend‑job‑agnostic**: it sees source/output/log paths and opaque
 metadata, not job IDs or queues.
 
 ---
@@ -29,21 +29,13 @@ It is primarily used by:
 
 ## 2. Entrypoints
 
-The CLI is exposed in two equivalent ways:
+The CLI is exposed as a console script:
 
-- Module entrypoint:
+```bash
+ade-engine ...
+```
 
-  ```bash
-  python -m ade_engine ...
-````
-
-* (Optional) console script, if configured in packaging:
-
-  ```bash
-  ade-engine ...
-  ```
-
-Both forms call `ade_engine.cli.main()`. The CLI **does not** create or manage
+`python -m ade_engine` delegates to the same Typer app (`ade_engine.cli.app`). The CLI **does not** create or manage
 virtual environments; it assumes the current interpreter is already running
 inside the correct venv (`ade_engine` + the desired `ade_config`).
 
@@ -54,19 +46,19 @@ inside the correct venv (`ade_engine` + the desired `ade_config`).
 The CLI maps directly to `RunRequest` fields. Conceptually:
 
 ```bash
-python -m ade_engine \
-  [INPUT SELECTION] \
+ade-engine run \
+  [SOURCE SELECTION] \
   [OUTPUT / LOGS] \
   [CONFIG OPTIONS] \
   [EXECUTION OPTIONS]
 ```
 
-### 3.1 Input selection (mutually exclusive)
+### 3.1 Source selection (mutually exclusive)
 
 Exactly one of these must be provided:
 
 * `--input PATH` (repeatable)
-  One or more explicit input files:
+  One or more explicit source files:
 
   ```bash
   --input /data/jobs/123/input/input.xlsx
@@ -76,7 +68,7 @@ Exactly one of these must be provided:
   → `RunRequest.input_files = [Path(...), Path(...)]`
 
 * `--input-root DIR`
-  Directory to scan for input spreadsheets (`.csv`, `.xlsx`):
+  Directory to scan for source spreadsheets (`.csv`, `.xlsx`):
 
   ```bash
   --input-root /data/jobs/123/input
@@ -208,7 +200,7 @@ Fields mirror `RunResult`:
 * `outputs`: list of output workbook paths (usually 1).
 * `artifact`: path to `artifact.json`.
 * `events`: path to `events.ndjson`.
-* `processed_files`: basenames of input files the engine actually read.
+* `processed_files`: basenames of source files the engine actually read.
 * `error`: `null` on success, or a human‑readable error summary on failure.
 
 The ADE backend should **not parse internal error messages** for control flow;

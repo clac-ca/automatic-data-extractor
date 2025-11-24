@@ -12,6 +12,20 @@ This document describes the **architecture**, **folder structure**, **core types
 
 ---
 
+## Glossary (canonical terms)
+
+- **Run** — One execution of `Engine.run()` or the CLI. Artifact and telemetry are always per run.
+- **Config package** — The installed `ade_config` package (manifest + detectors/hooks).  
+  - **Config version** — `manifest.version`.  
+  - **Build** — The virtual environment built for a config version.
+- **Source file** — The original spreadsheet passed to the engine (`source_file`).  
+  **Source sheet** — Worksheet/tab within a source file (`source_sheet`).
+- **Output workbook** — Normalized workbook(s) written under `output_dir`.
+- **Table** — A contiguous header + data region detected in a sheet, represented as `RawTable → MappedTable → NormalizedTable`.
+- **Job / workspace / tenant** — Backend concepts only. They appear at most as opaque metadata; the engine has no first‑class job/workspace types.
+
+---
+
 ## 1. Big picture
 
 At runtime, inside a **pre‑built virtual environment**:
@@ -22,7 +36,7 @@ At runtime, inside a **pre‑built virtual environment**:
    - **column detectors** (field recognition)
    - **transforms** & **validators**
    - **hooks** (lifecycle callbacks)
-2. It **reads spreadsheets** (CSV/XLSX) in streaming mode.
+2. It **reads source spreadsheets** (CSV/XLSX) in streaming mode.
 3. It **detects tables**, **maps columns** to canonical fields, and
    **normalizes** values row‑by‑row using the config code.
 4. It emits:
@@ -35,8 +49,8 @@ The engine itself is **business‑logic free**: all domain rules live in `ade_co
 In production, the ADE API:
 
 - builds a **frozen venv** per config (`ade_engine` + a specific `ade_config` version),
-- then, for each **run request** (often tied to a backend job), launches a worker (process or thread) inside that venv,
-- and calls the engine with **file paths** (input / output / logs).
+- then, for each **run request**, launches a worker (process or thread) inside that venv,
+- and calls the engine with **file paths** (source / output / logs).
 
 From the engine’s perspective, it just runs synchronously inside an isolated environment
 with `ade_config` installed; **it is run-scoped only—job IDs and workspace concepts belong to the backend**.
@@ -57,7 +71,7 @@ The deployment model is:
   - Worker activates that venv and invokes the engine with explicit paths:
 
     ```bash
-    # Typical worker invocation from the ADE API (one run, often inside a backend job)
+    # Typical worker invocation from the ADE API (one run, often dispatched from a backend job queue)
     /path/to/.venv/<config_id>/<build_id>/bin/python \
       -m ade_engine \
       --input /data/jobs/<job_id>/input/input.xlsx \
@@ -66,7 +80,7 @@ The deployment model is:
     ```
 
   - The engine:
-    - reads `input.xlsx` (or multiple inputs, if provided),
+    - reads the source file(s) (e.g., `input.xlsx`),
     - imports `ade_config` and reads its `manifest.json`,
     - runs the pipeline once for that call,
     - writes the normalized workbook (e.g., `normalized.xlsx`), `artifact.json`, `events.ndjson` to the given output/logs dirs.
@@ -74,8 +88,8 @@ The deployment model is:
 The **engine does not know or care about backend job IDs**. It only needs:
 
 - the config to use (`config_package`, `manifest_path`),
-- one or more **input files**,
-- where to write outputs and logs.
+- one or more **source files**,
+- where to write the output workbook(s) and logs.
 
 The ADE API is responsible for mapping those paths back to any job record in its own database.
 
@@ -86,7 +100,7 @@ The engine has **no knowledge** of:
 - backend jobs or their IDs,
 - how many threads/processes are running.
 
-It is a pure “input files → normalized workbook + logs” component. The backend may choose to associate one job with one or many runs; that mapping stays outside the engine.
+It is a pure “source files → normalized workbook + logs” component. The backend may choose to associate one backend job with one or many runs; that mapping stays outside the engine.
 
 ---
 
@@ -97,7 +111,7 @@ Make the layering explicit with clear subpackages:
 ```text
 ade_engine/
   core/                      # Runtime orchestrator + pipeline
-    __init__.py              # Re-export Engine, RunRequest, RunResult, etc. (optional if kept at api/)
+    __init__.py              # Re-export Engine, RunRequest, RunResult, etc.
     engine.py                # Engine.run orchestration
     types.py                 # RunRequest, RunResult, RunContext, RawTable, enums (core runtime models)
     pipeline/
@@ -126,8 +140,13 @@ ade_engine/
     telemetry.py
     artifact.py
 
-  cli.py               # CLI entrypoint (arg parsing, JSON output)
-  __main__.py          # `python -m ade_engine` → cli.main()
+  cli/                 # Typer-based CLI (`ade-engine`) with subcommands
+    __init__.py
+    app.py             # Typer app wiring
+    commands/          # One file per command for maintainability
+      run.py           # primary run command
+      version.py       # prints version
+  __main__.py          # `python -m ade_engine` → cli.app()
 
 # Public API surface (top-level imports from ade_engine/__init__.py)
 from ade_engine.core.engine import Engine
@@ -152,16 +171,16 @@ __all__ = [
 
 Layering rules:
 
-- Runtime/core depends on config_runtime types, but not on `api/`.
-- `config_runtime/` can depend on schemas and infra where needed, but not on `api/`.
-- `api/` depends on everything else.
+- Runtime/core depends on config_runtime types and infra helpers.
+- `config_runtime/` can depend on schemas and infra where needed.
+- `infra/` holds IO + artifact/telemetry plumbing used by both core and config_runtime.
+- `cli/` is a thin wrapper over the public API; keep business logic in `core/`.
 - Hooks remain part of the core extension model via `config_runtime/hook_registry.py`; hook invocation helpers can live in `core/` if desired.
 
 If you know this layout, you know where everything lives:
 
-* **“How do I run the engine?”** → `core/engine.py`, `api/__init__.py`
+* **“How do I run the engine?”** → `core/engine.py`, `ade_engine/__init__.py`
 * **“How do we load config scripts?”** → `config_runtime/loader.py`
-* **“How do we read Excel/CSV?”** → `infra/io.py`
 * **“How does the pipeline work?”** → `core/pipeline/`
 * **“Where is artifact/telemetry written?”** → `infra/artifact.py`, `infra/telemetry.py`
 
@@ -193,7 +212,7 @@ __all__ = [
 ]
 ```
 
-Usage stays simple:
+Usage stays simple (one source file, explicit destinations):
 
 ```python
 from pathlib import Path
@@ -291,15 +310,15 @@ class RunRequest:
     config_package: str = "ade_config"
     manifest_path: Path | None = None   # override manifest.json if provided
 
-    # Inputs (one of the two is required; providing both is an error)
-    input_files: Sequence[Path] | None = None  # preferred: explicit files, typically [Path("input.xlsx")]
+    # Source selection (one of the two is required; providing both is an error)
+    input_files: Sequence[Path] | None = None  # preferred: explicit source files, typically [Path("input.xlsx")]
     input_root: Path | None = None             # optional: scan folder for CSV/XLSX
 
     # Optional sheet filtering (XLSX only; CSV has a single implicit sheet)
     input_sheets: Sequence[str] | None = None  # restrict to specific sheet names
 
     # Output / logs
-    output_root: Path | None = None           # folder for normalized.xlsx
+    output_root: Path | None = None           # folder for normalized output workbook(s)
     logs_root: Path | None = None             # folder for artifact.json + events.ndjson
 
     # Execution options
@@ -312,7 +331,7 @@ it fails fast with a `ValueError` rather than guessing.
 
 In the simplest case, the ADE API:
 
-* resolves the run’s primary input file (often inside a backend job folder, e.g. `/data/jobs/<job_id>/input/input.xlsx`),
+* resolves the run’s primary **source file** (often inside a backend job folder, e.g. `/data/jobs/<job_id>/input/input.xlsx`),
 * chooses output/logs dirs (e.g. `/data/jobs/<job_id>/output` and `/data/jobs/<job_id>/logs`),
 * and calls:
 
@@ -347,10 +366,10 @@ class RunError:
 class RunResult:
     status: RunStatus
     error: RunError | None
-    output_paths: tuple[Path, ...]      # normalized workbooks (usually length 1)
+    output_paths: tuple[Path, ...]      # normalized output workbooks (usually length 1)
     artifact_path: Path                 # audit JSON
     events_path: Path                   # telemetry NDJSON
-    processed_files: tuple[str, ...]    # input file names as seen by the engine
+    processed_files: tuple[str, ...]    # source file names as seen by the engine
 ```
 
 **RunPaths**
@@ -369,7 +388,7 @@ class RunPaths:
 
 * If you pass `output_root`/`logs_root`, those are used directly.
 * If you only pass `input_files`, the engine infers defaults (e.g. sibling `output` / `logs`
-  folders next to the first input file).
+  folders next to the first source file).
 * If you only pass `input_root`, the engine infers defaults relative to that directory
   (e.g. `input_root.parent / "output"` and `input_root.parent / "logs"`).
 * It is an error to provide both `input_files` and `input_root`.
@@ -606,7 +625,7 @@ The main entry points:
 from pathlib import Path
 from ade_engine import Engine, run, RunRequest
 
-# Simple: one input file, explicit output/logs
+# Simple: one source file, explicit output/logs
 engine = Engine()
 result = engine.run(
     RunRequest(
@@ -632,8 +651,8 @@ Under the hood, `Engine.run()`:
 
 1. Normalizes a `RunRequest` into `RunPaths` and `RunContext`:
 
-   * chooses `input_root` (from files or explicit folder),
-   * chooses `output_root` and `logs_root` (from request or defaults based on input),
+   * chooses `input_root` (from source files or explicit folder),
+   * chooses `output_root` and `logs_root` (from request or defaults based on source location),
    * generates a `run_id`,
    * seeds `metadata` and a shared `state` dict.
 2. Calls `config_runtime.loader.load_config_runtime()` to load the manifest, column detectors, row detectors, and hooks.
@@ -651,8 +670,8 @@ Under the hood, `Engine.run()`:
 The engine is single‑run and synchronous: **one call → one pipeline run**. Concurrency
 across runs is handled by the ADE API / worker framework, which:
 
-* looks up the backend record (job/task/request),
-* resolves input/output/log paths,
+* looks up the backend record (job/task/request) associated with the run,
+* resolves source/output/log paths,
 * then calls `Engine.run()` (or the CLI) in the appropriate venv.
 
 ### 5.2 How the ADE backend typically uses the engine
@@ -664,7 +683,7 @@ A typical integration in the ADE backend looks like:
 2. Backend:
 
    * ensures a venv exists for `<config_id>/<build_id>` with `ade_engine` + `ade_config` installed,
-   * resolves the document path and creates a per-run working folder (often nested inside a job) with `input/`, `output/`, `logs/`.
+   * resolves the document path and creates a per-run working folder (often nested inside a backend job directory) with `input/`, `output/`, `logs/`.
 
 3. Backend enqueues a worker task that:
 
@@ -696,7 +715,7 @@ The engine has **no idea** that a backend “job” exists; it only sees file pa
 
 Responsible for:
 
-* Listing input files (`io.list_input_files`) if `input_root` is used,
+* Listing source files (`io.list_input_files`) if `input_root` is used,
 * Or using the explicit `input_files` provided.
 * For each CSV/XLSX:
 
@@ -826,7 +845,7 @@ Given one or more `NormalizedTable`s:
   * one sheet per normalized table (deduplicating sheet names).
 
   In combined mode, normalized rows are appended in a deterministic order:
-  by input file name, then by sheet order within that file, then by table
+  by source file name, then by sheet order within that file, then by table
   detection order.
 
 * Build header rows from `manifest.columns.order` and column labels.
@@ -1159,19 +1178,19 @@ Docs and help text should phrase mappings explicitly, e.g., “`--output-dir` �
 
 ## 9. CLI usage
 
-`cli.py` provides a small command‑line interface; `__main__.py` forwards to it.
+`ade_engine/cli` provides a Typer-based `ade-engine` command; `__main__.py` forwards to `cli.app()`.
 
 Examples (all run inside the appropriate venv):
 
 ```bash
 # Print engine version
-python -m ade_engine --version
+ade-engine version
 
 # Print engine version + manifest from a path (no run)
-python -m ade_engine --manifest-path ./config/manifest.json
+ade-engine run --manifest-path ./config/manifest.json --input ./input.xlsx --output-dir ./output --logs-dir ./logs --dry-run
 
 # Run the engine on a single file (typical worker call, paths chosen by backend)
-python -m ade_engine \
+ade-engine run \
   --input ./data/jobs/<job_id>/input/input.xlsx \
   --output-dir ./data/jobs/<job_id>/output \
   --logs-dir ./data/jobs/<job_id>/logs \
