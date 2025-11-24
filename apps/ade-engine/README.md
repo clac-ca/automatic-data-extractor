@@ -731,7 +731,7 @@ For each `RawTable`:
 
      * `run`, `state`, `field_name`, `field_meta`, `header`,
        `column_values_sample`, `column_values`, `table`, `column_index`,
-       `manifest`, `env`, `logger`
+       `manifest`, `logger`
 3. Aggregate scores per field and record `ScoreContribution`s.
 4. Pick the best field above the manifest’s `mapping_score_threshold`.
 5. If no match and `append_unmapped_columns` is true, create `UnmappedColumn`.
@@ -1075,7 +1075,6 @@ def transform(
     row: dict,                   # canonical row dict (field -> value)
     field_meta: dict | None,
     manifest: ManifestContext,
-    env: dict | None,
     logger,
 ) -> dict | None:
     # Update row and/or return additional field mappings
@@ -1095,7 +1094,6 @@ def validate(
     row: dict,
     field_meta: dict | None,
     manifest: ManifestContext,
-    env: dict | None,
     logger,
 ) -> list[dict]:
     # Return issue dicts: {"code": "invalid_format", "severity": "error", ...}
@@ -1118,7 +1116,6 @@ class HookContext:
     run: RunContext
     state: dict[str, Any]
     manifest: ManifestContext
-    env: dict[str, str]
     artifact: Any               # ArtifactSink
     events: Any | None          # EventSink | None
     tables: list[RawTable | MappedTable | NormalizedTable] | None

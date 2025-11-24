@@ -26,7 +26,7 @@ At a high level:
 - Hooks receive:
   - the current `RunContext`,
   - shared per‑run `state` dict,
-  - the manifest and `env`,
+  - the manifest,
   - artifact and telemetry sinks,
   - and phase‑specific objects (tables, workbook, result).
 
@@ -168,7 +168,6 @@ class HookContext:
     run: RunContext
     state: dict[str, Any]
     manifest: ManifestContext
-    env: dict[str, str]
     artifact: ArtifactSink
     events: EventSink | None
     tables: list[RawTable | MappedTable | NormalizedTable] | None

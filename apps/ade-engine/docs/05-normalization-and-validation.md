@@ -62,7 +62,7 @@ Where:
 
 * `ctx: RunContext`
 
-  * Per-run context (paths, manifest, env, metadata, shared `state` dict, timestamps).
+  * Per-run context (paths, manifest, metadata, shared `state` dict, timestamps).
 * `cfg: ConfigRuntime`
 
   * Config runtime object exposing:
@@ -182,7 +182,6 @@ def transform(
     row: dict,              # full canonical row (field -> value)
     field_meta: dict | None,
     manifest,               # ManifestContext
-    env: dict | None,
     logger,
 ) -> dict | None:
     ...
@@ -190,12 +189,11 @@ def transform(
 
 Parameters to remember:
 
-* `run`: full run context (paths, metadata, env).
+* `run`: full run context (paths, metadata).
 * `state`: mutable dict shared across all rows and scripts within this run.
 * `row_index`: traceability back to original file.
 * `field_name`, `value`, `row`: the core of the normalization work.
 * `field_meta`: the manifest’s metadata for this field (e.g., label, required).
-* `env`: config‑level environment values (locale, date formats, etc.).
 * `logger`: use for notes/events (not `print`).
 * Include `**_` in signatures to allow future parameters without breaking configs.
 
@@ -283,7 +281,6 @@ def validate(
     row: dict,
     field_meta: dict | None,
     manifest,               # ManifestContext
-    env: dict | None,
     logger,
 ) -> list[dict]:
     ...
@@ -473,7 +470,7 @@ The exact event set is flexible, but the pattern is:
 * Prefer **pure, deterministic** transformations:
 
   * Same input row → same output row.
-* Use `env` and `field_meta` rather than hard-coded constants:
+* Use `field_meta` rather than hard-coded constants:
 
   * Date formats, locales, thresholds, etc.
 * Keep transforms **local** when possible:
