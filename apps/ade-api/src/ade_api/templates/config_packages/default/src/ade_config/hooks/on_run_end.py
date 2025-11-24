@@ -16,13 +16,13 @@ def run(ctx: Any) -> None:
     both artifact notes and telemetry events.
     """
     logger = getattr(ctx, "logger", None)
-    run_ctx = getattr(ctx, "run", None)
+    run = getattr(ctx, "run", None)
     result = getattr(ctx, "result", None)
 
-    if logger is None or run_ctx is None or result is None:
+    if logger is None or run is None or result is None:
         return
 
-    run_id = getattr(run_ctx, "run_id", None)
+    run_id = getattr(run, "run_id", None)
     status = getattr(result, "status", None)
     output_paths = getattr(result, "output_paths", ()) or ()
     artifact_path = getattr(result, "artifact_path", None)

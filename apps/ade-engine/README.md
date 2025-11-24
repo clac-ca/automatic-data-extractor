@@ -427,13 +427,12 @@ class RunContext:
     manifest: ManifestContext   # see config/manifest_context.py (legacy path: config_runtime/manifest_context.py)
     paths: RunPaths
     started_at: datetime
-    run_state: dict[str, Any] = field(default_factory=dict)  # per-run scratch space for scripts (not shared across runs/threads)
+    state: dict[str, Any] = field(default_factory=dict)  # per-run scratch space for scripts (not shared across runs/threads)
 ```
 
-`RunContext.run_state` (often exposed to scripts as `state` for backward
-compatibility) is **per run**: each call to `Engine.run()` gets a fresh dict
-that detectors, transforms, validators, and hooks can share during that run. It
-is never shared across runs or threads. A single `Engine.run` executes
+`RunContext.state` is **per run**: each call to `Engine.run()` gets a fresh
+dict that detectors, transforms, validators, and hooks can share during that
+run. It is never shared across runs or threads. A single `Engine.run` executes
 sequentially in one thread/process; any concurrency is implemented by the ADE
 API running multiple workers, each with its own `RunContext`.
 
@@ -675,7 +674,7 @@ result = run(
 ```
 
 `Engine` is **logically stateless**: it does not keep any mutable per‑run data on the instance.
-Each call to `run()` constructs a fresh `RunContext` and `run_state` dict. You can safely reuse a
+Each call to `run()` constructs a fresh `RunContext` and `state` dict. You can safely reuse a
 single `Engine` across threads or requests as long as each call uses its own `RunRequest`.
 
 Under the hood, `Engine.run()`:
@@ -685,7 +684,7 @@ Under the hood, `Engine.run()`:
    * chooses `input_dir` (from source files or explicit folder),
    * chooses `output_dir` and `logs_dir` (from request or defaults based on source location),
    * generates a `run_id`,
-   * seeds `metadata` and a shared `run_state` dict.
+   * seeds `metadata` and a shared `state` dict.
 2. Calls `config.loader.load_config_runtime()` (legacy import path: `config_runtime.loader`) to load the manifest, column detectors, row detectors, and hooks.
 3. Binds telemetry sinks (`TelemetryConfig.bind`) and creates a `PipelineLogger`.
 4. Calls `ON_RUN_START` hooks.
@@ -779,7 +778,7 @@ For each `RawTable`:
 
    * Call all `detect_*` functions in the field’s script with:
 
-     * `run`, `run_state`, `field_name`, `field_config`, `header`,
+     * `run`, `state`, `field_name`, `field_config`, `header`,
        `column_values_sample`, `column_values`, `table`, `column_index`,
        `manifest`, `logger`
 3. Aggregate scores per field and record `ScoreContribution`s.
@@ -819,7 +818,7 @@ For each `MappedTable`:
 def transform(
     *,
     run: RunContext,
-    run_state: dict,
+    state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -838,7 +837,7 @@ def transform(
 def validate(
     *,
     run: RunContext,
-    run_state: dict,
+    state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -1086,9 +1085,8 @@ The ADE API can:
 ## 8. Script API overview (config side)
 
 All script entrypoints are **keyword‑only**, should include `**_` for forward
-compatibility, and receive `RunContext` as `run` plus a **per-run `run_state`
-dict** (exposed as `state` for backward compatibility). Detector functions must
-be named `detect_*` so they are easy to discover.
+compatibility, and receive `RunContext` as `run` plus a **per-run `state` dict**.
+Detector functions must be named `detect_*` so they are easy to discover.
 
 ### 8.1 Row detectors (`ade_config.row_detectors.*`)
 
@@ -1096,7 +1094,7 @@ be named `detect_*` so they are easy to discover.
 def detect_*(
     *,
     run: RunContext,           # RunContext (read-only from config’s perspective)
-    run_state: dict,
+    state: dict,
     row_index: int,            # 1-based index in the sheet
     row_values: list,          # raw cell values for this row
     manifest: ManifestContext,
@@ -1107,7 +1105,7 @@ def detect_*(
 ```
 
 * Detectors return score dicts; the engine aggregates them.
-* `run_state` exists per run only; never persist data across runs here.
+* `state` exists per run only; never persist data across runs here.
 
 ### 8.2 Column detectors (`ade_config.column_detectors.<field>`)
 
@@ -1115,7 +1113,7 @@ def detect_*(
 def detect_*(
     *,
     run: RunContext,
-    run_state: dict,
+    state: dict,
     field_name: str,
     field_config: dict,           # manifest.columns.fields[field_name]
     header: str | None,           # normalized header text
@@ -1141,7 +1139,7 @@ def detect_*(
 def transform(
     *,
     run: RunContext,
-    run_state: dict,
+    state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -1155,8 +1153,8 @@ def transform(
     ...
 ```
 
-Transforms see the latest canonical row state (after mapping). Use `run_state`
-for per-run caches or counters, not for cross-run persistence.
+Transforms see the latest canonical row state (after mapping). Use `state` for
+per-run caches or counters, not for cross-run persistence.
 
 ### 8.4 Validators
 
@@ -1164,7 +1162,7 @@ for per-run caches or counters, not for cross-run persistence.
 def validate(
     *,
     run: RunContext,
-    run_state: dict,
+    state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -1208,7 +1206,7 @@ from typing import Any
 @dataclass
 class HookContext:
     run: RunContext
-    run_state: dict[str, Any]
+    state: dict[str, Any]
     manifest: ManifestContext
     artifact: ArtifactSink
     events: EventSink | None

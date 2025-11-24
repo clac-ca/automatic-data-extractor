@@ -11,7 +11,8 @@
 # - apps/ade-engine/docs/09-cli-and-integration.md - CLI and Integration with ADE API
 # - apps/ade-engine/docs/10-testing-and-quality.md - Testing & Quality
 # - apps/ade-engine/docs/README.md - ADE Engine – Detailed Documentation Index
-# - apps/ade-engine/workpackages/workpackage-template.md
+# - apps/ade-engine/workpackages/wp-implement-ade-engine.md
+# - apps/ade-engine/workpackages/wp-template.md
 
 # apps/ade-engine/README.md
 ```markdown
@@ -444,10 +445,10 @@ class RunContext:
     manifest: ManifestContext   # see config/manifest_context.py (legacy path: config_runtime/manifest_context.py)
     paths: RunPaths
     started_at: datetime
-    run_state: dict[str, Any] = field(default_factory=dict)  # per-run scratch space for scripts (not shared across runs/threads)
+    state: dict[str, Any] = field(default_factory=dict)  # per-run scratch space for scripts (not shared across runs/threads)
 ```
 
-`RunContext.run_state` (often exposed to scripts as `state` for backward
+`RunContext.state` (often exposed to scripts as `state` for backward
 compatibility) is **per run**: each call to `Engine.run()` gets a fresh dict
 that detectors, transforms, validators, and hooks can share during that run. It
 is never shared across runs or threads. A single `Engine.run` executes
@@ -692,7 +693,7 @@ result = run(
 ```
 
 `Engine` is **logically stateless**: it does not keep any mutable per‑run data on the instance.
-Each call to `run()` constructs a fresh `RunContext` and `run_state` dict. You can safely reuse a
+Each call to `run()` constructs a fresh `RunContext` and `state` dict. You can safely reuse a
 single `Engine` across threads or requests as long as each call uses its own `RunRequest`.
 
 Under the hood, `Engine.run()`:
@@ -702,7 +703,7 @@ Under the hood, `Engine.run()`:
    * chooses `input_dir` (from source files or explicit folder),
    * chooses `output_dir` and `logs_dir` (from request or defaults based on source location),
    * generates a `run_id`,
-   * seeds `metadata` and a shared `run_state` dict.
+   * seeds `metadata` and a shared `state` dict.
 2. Calls `config.loader.load_config_runtime()` (legacy import path: `config_runtime.loader`) to load the manifest, column detectors, row detectors, and hooks.
 3. Binds telemetry sinks (`TelemetryConfig.bind`) and creates a `PipelineLogger`.
 4. Calls `ON_RUN_START` hooks.
@@ -796,7 +797,7 @@ For each `RawTable`:
 
    * Call all `detect_*` functions in the field’s script with:
 
-     * `run`, `run_state`, `field_name`, `field_config`, `header`,
+     * `run`, `state`, `field_name`, `field_config`, `header`,
        `column_values_sample`, `column_values`, `table`, `column_index`,
        `manifest`, `logger`
 3. Aggregate scores per field and record `ScoreContribution`s.
@@ -836,7 +837,7 @@ For each `MappedTable`:
 def transform(
     *,
     run: RunContext,
-    run_state: dict,
+    state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -855,7 +856,7 @@ def transform(
 def validate(
     *,
     run: RunContext,
-    run_state: dict,
+    state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -1103,7 +1104,7 @@ The ADE API can:
 ## 8. Script API overview (config side)
 
 All script entrypoints are **keyword‑only**, should include `**_` for forward
-compatibility, and receive `RunContext` as `run` plus a **per-run `run_state`
+compatibility, and receive `RunContext` as `run` plus a **per-run `state`
 dict** (exposed as `state` for backward compatibility). Detector functions must
 be named `detect_*` so they are easy to discover.
 
@@ -1113,7 +1114,7 @@ be named `detect_*` so they are easy to discover.
 def detect_*(
     *,
     run: RunContext,           # RunContext (read-only from config’s perspective)
-    run_state: dict,
+    state: dict,
     row_index: int,            # 1-based index in the sheet
     row_values: list,          # raw cell values for this row
     manifest: ManifestContext,
@@ -1124,7 +1125,7 @@ def detect_*(
 ```
 
 * Detectors return score dicts; the engine aggregates them.
-* `run_state` exists per run only; never persist data across runs here.
+* `state` exists per run only; never persist data across runs here.
 
 ### 8.2 Column detectors (`ade_config.column_detectors.<field>`)
 
@@ -1132,7 +1133,7 @@ def detect_*(
 def detect_*(
     *,
     run: RunContext,
-    run_state: dict,
+    state: dict,
     field_name: str,
     field_config: dict,           # manifest.columns.fields[field_name]
     header: str | None,           # normalized header text
@@ -1158,7 +1159,7 @@ def detect_*(
 def transform(
     *,
     run: RunContext,
-    run_state: dict,
+    state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -1172,7 +1173,7 @@ def transform(
     ...
 ```
 
-Transforms see the latest canonical row state (after mapping). Use `run_state`
+Transforms see the latest canonical row state (after mapping). Use `state`
 for per-run caches or counters, not for cross-run persistence.
 
 ### 8.4 Validators
@@ -1181,7 +1182,7 @@ for per-run caches or counters, not for cross-run persistence.
 def validate(
     *,
     run: RunContext,
-    run_state: dict,
+    state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -1225,7 +1226,7 @@ from typing import Any
 @dataclass
 class HookContext:
     run: RunContext
-    run_state: dict[str, Any]
+    state: dict[str, Any]
     manifest: ManifestContext
     artifact: ArtifactSink
     events: EventSink | None
@@ -1567,7 +1568,7 @@ These decisions are made once, up front, and never mutated mid‑run.
 * `started_at: datetime` / `completed_at: datetime | None`
   Timestamps for run lifecycle.
 
-* `run_state: dict[str, Any]` (available as `state` for backward compatibility)
+* `state: dict[str, Any]` (available as `state` for backward compatibility)
   Per‑run mutable scratch space, shared across detectors, transforms,
   validators, and hooks. Not shared across runs or threads; each run executes
   sequentially in a single thread/process.
@@ -1576,7 +1577,7 @@ Properties:
 
 * A new `RunContext` is created for every call to `Engine.run`.
 * No `RunContext` is shared across runs.
-* Config authors can use `run_state` for caches, counters, etc., within a single
+* Config authors can use `state` for caches, counters, etc., within a single
   run; never for cross‑run state.
 
 ### 3.4 `RunResult` – outcome summary
@@ -1641,7 +1642,7 @@ The lifecycle below describes what happens inside `Engine.run(request)`.
 
    * Generate `run_id`.
    * Initialize `started_at`.
-   * Initialize empty `run_state` dict.
+   * Initialize empty `state` dict.
    * Attach `RunPaths` and `metadata`.
 
 3. **Load manifest and config runtime**
@@ -1679,7 +1680,7 @@ The lifecycle below describes what happens inside `Engine.run(request)`.
    * Call any hooks registered for `on_run_start` with:
 
      * `run` (`RunContext`),
-     * `run_state`,
+     * `state`,
      * `manifest`,
      * `artifact`,
      * `events`,
@@ -1757,7 +1758,7 @@ If any of these steps fail, the error is handled as described in
     * Hooks see:
 
       * `run` (`RunContext`),
-      * `run_state`,
+      * `state`,
       * `manifest`,
       * `artifact`, `events`,
       * `result` (a provisional `RunResult`),
@@ -1911,15 +1912,15 @@ The runtime is designed to be safe under typical worker pool patterns.
 
 * **RunContext**
 
-  * Every call to `Engine.run` creates a fresh `RunContext` with its own `run_state`
+  * Every call to `Engine.run` creates a fresh `RunContext` with its own `state`
     dict (exposed as `state` in scripts).
   * Nothing inside `RunContext` is shared across runs or threads.
-  * `RunContext.run_state` is per-run scratch space; do not share it across threads.
+  * `RunContext.state` is per-run scratch space; do not share it across threads.
 
 * **Global state**
 
   * The engine avoids mutable module‑level globals wherever possible.
-  * Config code should use `RunContext.run_state` or external systems (databases,
+  * Config code should use `RunContext.state` or external systems (databases,
     caches) rather than global variables.
 
 Backend concurrency (threads vs processes vs containers) is outside the scope of
@@ -2647,7 +2648,7 @@ A typical row detector has this shape:
 def detect_header_or_data(
     *,
     run,                 # RunContext (config-facing view of the run)
-    run_state: dict,
+    state: dict,
     row_index: int,      # 1-based index within the sheet
     row_values: list,    # raw cell values for this row
     manifest,            # ManifestContext
@@ -2664,7 +2665,7 @@ def detect_header_or_data(
 Conventions:
 
 * `run` is read‑only from the config’s perspective (it is a `RunContext`).
-* `run_state` is a per‑run dict that detectors may use to coordinate across rows.
+* `state` is a per‑run dict that detectors may use to coordinate across rows.
 * `manifest` provides config‑level context (schema, defaults, writer, fields).
 * `logger` allows emitting notes and telemetry if needed.
 * Functions should accept `**_` to tolerate new parameters over time.
@@ -3392,7 +3393,7 @@ Where:
 
 * `ctx: RunContext`
 
-  * Per-run context (paths, manifest, metadata, shared `run_state` dict, timestamps).
+  * Per-run context (paths, manifest, metadata, shared `state` dict, timestamps).
 * `cfg: ConfigRuntime`
 
   * Config runtime object exposing:
@@ -3503,7 +3504,7 @@ Standard keyword-only signature:
 def transform(
     *,
     run: RunContext,              # config-facing view of the run
-    run_state: dict,              # shared per-run scratch space
+    state: dict,              # shared per-run scratch space
     row_index: int,               # original sheet row index (1-based)
     field_name: str,              # canonical field
     value,                        # current value for this field
@@ -3519,7 +3520,7 @@ def transform(
 Parameters to remember:
 
 * `run`: full run context (paths, metadata).
-* `run_state`: mutable dict shared across all rows and scripts within this run.
+* `state`: mutable dict shared across all rows and scripts within this run.
 * `row_index`: traceability back to original file.
 * `field_name`, `value`, `row`: the core of the normalization work.
 * `field_config`: the manifest’s field config for this field (e.g., label, required).
@@ -3603,7 +3604,7 @@ Standard keyword-only signature:
 def validate(
     *,
     run: RunContext,
-    run_state: dict,
+    state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -3668,7 +3669,7 @@ The engine wraps these into `ValidationIssue` objects, adding:
   * They can validate both `value` and cross-field relationships via `row`.
 * Cross-row constraints:
 
-  * May be implemented using `run_state` to collect information across rows
+  * May be implemented using `state` to collect information across rows
     (e.g., track duplicates) and report issues during or after normalization.
   * For “summary” behavior, `on_run_end` hooks can also be used.
 
@@ -3814,11 +3815,11 @@ The exact event set is flexible, but the pattern is:
   * Date formats, locales, thresholds, etc.
 * Keep transforms **local** when possible:
 
-  * Avoid cross-row dependencies unless you have a clear pattern using `run_state`.
+  * Avoid cross-row dependencies unless you have a clear pattern using `state`.
 * Avoid:
 
   * Network calls per row.
-  * Unbounded in-memory structures (e.g., storing all rows in `run_state`).
+  * Unbounded in-memory structures (e.g., storing all rows in `state`).
 
 ### 8.2 Writing good validators
 
@@ -3837,7 +3838,7 @@ The exact event set is flexible, but the pattern is:
   * Inspect the full `row` (e.g., “if `end_date` < `start_date`”).
 * For cross-row checks:
 
-  * Use `run_state` to accumulate and check after all rows are seen (or in a
+  * Use `state` to accumulate and check after all rows are seen (or in a
     dedicated pass/hook).
 
 ### 8.3 Debugging
@@ -4963,7 +4964,7 @@ At a high level:
 - At certain phases, it calls **hook functions** defined in `ade_config.hooks`.
 - Hooks receive:
   - the current `RunContext`,
-  - shared per‑run `run_state` dict,
+  - shared per‑run `state` dict,
   - the manifest,
   - artifact and telemetry sinks,
   - and phase‑specific objects (tables, workbook, result).
@@ -4974,7 +4975,7 @@ Hooks are **config‑owned**:
 - The config defines *what* those hooks do.
 
 There is no global/shared state between runs; hooks only see per‑run state
-through `RunContext` and `run_state` (exposed as `state` for backward
+through `RunContext` and `state` (exposed as `state` for backward
 compatibility).
 
 ---
@@ -4986,7 +4987,7 @@ invoked in this order:
 
 | Stage name        | When it runs                                       | What is available / allowed to change                                  |
 | ----------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
-| `on_run_start`    | After manifest + telemetry initialized, before IO | Read/initialize `run_state`, add notes, never touches tables or workbook|
+| `on_run_start`    | After manifest + telemetry initialized, before IO | Read/initialize `state`, add notes, never touches tables or workbook|
 | `on_after_extract`| After `RawTable[]` built, before column mapping   | Inspect/modify `RawTable` objects                                       |
 | `on_after_mapping`| After `MappedTable[]` built, before normalization | Inspect/modify `MappedTable` objects (`column_map.mapped_columns` / `unmapped_columns`) |
 | `on_before_save`  | After `NormalizedTable[]`, before writing files   | Inspect `NormalizedTable[]`, modify `Workbook` (formatting, summary)    |
@@ -5090,7 +5091,7 @@ from openpyxl import Workbook
 @dataclass
 class HookContext:
     run: RunContext
-    run_state: dict[str, Any]
+    state: dict[str, Any]
     manifest: ManifestContext
     artifact: ArtifactSink
     events: EventSink | None
@@ -5106,7 +5107,7 @@ def run(context: HookContext) -> None:
 
 Guidelines:
 
-* Use `context.run_state` for mutable per‑run data; treat `context.run` as read‑only engine context.
+* Use `context.state` for mutable per‑run data; treat `context.run` as read‑only engine context.
 * Use `context.logger` for notes/events; reach for `context.artifact`/`context.events` only when you need sink-level control.
 * `context.tables`, `context.workbook`, and `context.result` are stage-dependent and may be `None`.
 * If you choose to expose a keyword‑only hook signature instead of the context object, include `**_` to absorb new parameters.
@@ -5118,9 +5119,9 @@ Guidelines:
 Hooks have real power; this section defines what is safe to mutate at each
 stage.
 
-### 6.1 `run_state` (aka `state` in scripts)
+### 6.1 `state` (aka `state` in scripts)
 
-* `run_state` is the same dict exposed to detectors, transforms, validators, and
+* `state` is the same dict exposed to detectors, transforms, validators, and
   hooks.
 * It is **per run**; no sharing between runs.
 * You can freely add, update, or delete keys.
@@ -5203,8 +5204,8 @@ Below are typical uses of each hook stage.
 ```python
 # ade_config/hooks/on_run_start.py
 def run(ctx):
-    ctx.run_state["start_timestamp"] = ctx.run.started_at.isoformat()
-    ctx.run_state["config_version"] = ctx.manifest["info"]["version"]
+    ctx.state["start_timestamp"] = ctx.run.started_at.isoformat()
+    ctx.state["config_version"] = ctx.manifest["info"]["version"]
 
     ctx.logger.note(
         "Run started",
@@ -5359,7 +5360,7 @@ When adding or modifying hooks in a config:
 3. **Create hook modules** in `ade_config/hooks/` with a `run(...)` function:
 
    * use keyword‑only signature,
-4. **Use `logger` for notes/events**, `run_state` for shared run data.
+4. **Use `logger` for notes/events**, `state` for shared run data.
 5. **Mutate only what’s safe** for the stage (see section 6).
 6. **Test end‑to‑end**:
 
@@ -6401,7 +6402,249 @@ Each document assumes you are familiar with the concepts introduced in
 `ade_engine/README.md` and in the preceding chapters.
 ```
 
-# apps/ade-engine/workpackages/workpackage-template.md
+# apps/ade-engine/workpackages/wp-implement-ade-engine.md
+```markdown
+> **Agent instruction (read first):**
+>
+> * Treat this workpackage as the **single source of truth** for implementing `ade_engine`.
+> * Keep the checklist below up to date: change `[ ]` → `[x]` as you complete tasks, and add new items when you discover more work.
+> * Update any TODOs directly in this file as you learn more.
+> * Prefer small, incremental commits aligned to checklist items.
+> * If you must change the plan, **update this document first**, then the code.
+> * When in doubt about behavior or naming, defer to:
+>   * `apps/ade-engine/README.md`
+>   * `apps/ade-engine/docs/01-engine-runtime.md` – runtime
+>   * `apps/ade-engine/docs/02-config-and-manifest.md` – config
+>   * `apps/ade-engine/docs/03-io-and-table-detection.md` – IO/extract
+>   * `apps/ade-engine/docs/04-column-mapping.md` – mapping
+>   * `apps/ade-engine/docs/05-normalization-and-validation.md` – normalize
+>   * `apps/ade-engine/docs/06-artifact-json.md` – artifact
+>   * `apps/ade-engine/docs/07-telemetry-events.md` – telemetry
+>   * `apps/ade-engine/docs/08-hooks-and-extensibility.md` – hooks
+>   * `apps/ade-engine/docs/09-cli-and-integration.md` – CLI
+>   * `apps/ade-engine/docs/10-testing-and-quality.md` – tests
+
+---
+
+## Work Package Checklist
+
+Implementation order is intentionally **bottom‑up**, with tests at each layer.  
+Keep short inline status notes as you go.
+
+### 1. Core types & schemas
+
+- [ ] Implement core runtime types (`core/types.py`) per `01-engine-runtime.md` §3  
+- [ ] Implement manifest schema models (`schemas/manifest.py`) + `ManifestContext` per `02-config-and-manifest.md` §3  
+- [ ] Implement artifact schema models (`schemas/artifact.py`) per `06-artifact-json.md` §3–§6  
+- [ ] Implement telemetry schema models (`schemas/telemetry.py`) per `07-telemetry-events.md` §3  
+
+### 2. Config runtime
+
+- [ ] Implement config loader (`config/loader.py`) per `02-config-and-manifest.md` §4  
+- [ ] Implement `ManifestContext` (`config/manifest_context.py`) per `02-config-and-manifest.md` §3.2  
+- [ ] Implement column registry (`config/column_registry.py`) per `02-config-and-manifest.md` §5  
+- [ ] Implement hook registry (`config/hook_registry.py`) per `02-config-and-manifest.md` §6 and `08-hooks-and-extensibility.md` §4–§5  
+- [ ] Add unit tests for config runtime and manifest loading (`tests/test_config_loader.py`) per `10-testing-and-quality.md` §4.2  
+
+### 3. IO & table detection
+
+- [ ] Implement IO helpers (`infra/io.py`) for CSV/XLSX per `03-io-and-table-detection.md` §3–§4  
+- [ ] Implement row‑detector integration + table detection (`core/pipeline/extract.py`) per `03-io-and-table-detection.md` §5–§6  
+- [ ] Add unit tests for IO + extraction (`tests/pipeline/test_io.py`, `tests/pipeline/test_extract.py`)  
+
+### 4. Column mapping
+
+- [ ] Implement column mapping data structures (`MappedColumn`, `UnmappedColumn`, `ColumnMap`, `MappedTable`) in `core/types.py` per `04-column-mapping.md`  
+- [ ] Implement mapping logic (`core/pipeline/mapping.py`) per `04-column-mapping.md` “Mapping Pipeline”  
+- [ ] Add unit tests for mapping scoring, thresholds, tie‑breaking (`tests/pipeline/test_mapping.py`)  
+
+### 5. Normalization & validation
+
+- [ ] Implement `NormalizedTable` + `ValidationIssue` in `core/types.py` per `05-normalization-and-validation.md` §2 & §6  
+- [ ] Implement transform + validate integration (`core/pipeline/normalize.py`) per `05-normalization-and-validation.md` §4–§5  
+- [ ] Add unit tests for normalization & validation (`tests/pipeline/test_normalize.py`)  
+
+### 6. Artifact & telemetry
+
+- [ ] Implement artifact sink (`infra/artifact.py`) per `06-artifact-json.md` §1–§7  
+- [ ] Implement telemetry sinks + envelope creation (`infra/telemetry.py`) per `07-telemetry-events.md` §2–§7  
+- [ ] Implement `PipelineLogger` facade per `07-telemetry-events.md` §6  
+- [ ] Add unit tests for artifact & telemetry (`tests/test_artifact.py`, `tests/test_telemetry.py`)  
+
+### 7. Hooks & extensibility
+
+- [ ] Finalize `HookStage` enum and `HookContext` type per `08-hooks-and-extensibility.md` §2 & §5  
+- [ ] Wire hooks into pipeline phases (on_run_start, on_after_extract, on_after_mapping, on_before_save, on_run_end) per `08-hooks-and-extensibility.md` §6–§7  
+- [ ] Add unit/integration tests around basic hook execution and error behavior  
+
+### 8. Writer & workbook output
+
+- [ ] Implement `write_workbook` (`core/pipeline/write.py`) using openpyxl per `05-normalization-and-validation.md` §6 & `README.md` “Excel support (openpyxl)`  
+- [ ] Ensure `on_before_save` hook receives a live `openpyxl.Workbook` per `05-normalization-and-validation.md` §6.3 and `08-hooks-and-extensibility.md` §6.3  
+- [ ] Add unit tests verifying header order, sheet naming, and openpyxl integration (`tests/pipeline/test_write.py`)  
+
+### 9. Engine orchestration & CLI
+
+- [ ] Implement `Engine` and `run()` public API (`core/engine.py`, `ade_engine/__init__.py`) per `README.md` and `01-engine-runtime.md` §1–§2  
+- [ ] Implement pipeline orchestrator (`core/pipeline/pipeline_runner.py`) per `01-engine-runtime.md` §4 & `03/04/05` docs  
+- [ ] Implement CLI (`cli/app.py`, `__main__.py`) per `09-cli-and-integration.md`  
+- [ ] Add tests for `Engine.run` and CLI JSON output (`tests/test_engine_runtime.py`, `tests/test_cli.py`)  
+
+### 10. End‑to‑end & regression tests
+
+- [ ] Implement fixtures for temp `ade_config` packages + sample inputs per `10-testing-and-quality.md` §3  
+- [ ] Add end‑to‑end tests (Python API + CLI) verifying artifact + events + workbook shape (`tests/test_engine_runtime.py`)  
+- [ ] Add mapping stability / artifact contract tests per `10-testing-and-quality.md` §6  
+- [ ] Add large‑input smoke tests (basic performance) per `10-testing-and-quality.md` §7  
+
+> **Agent note:**  
+> If you discover missing types or behavior while implementing, add checklist items and reference the relevant `docs/*.md` file.
+
+---
+
+# Workpackage: Implement `ade_engine` Runtime
+
+## 1. Objective
+
+**Goal:**  
+Implement the `ade_engine` runtime (core engine, pipeline, config integration, artifact/telemetry, CLI) as specified by the documentation under `apps/ade-engine/docs/` and `apps/ade-engine/README.md`.
+
+You will:
+
+* Implement the **core runtime types and pipeline** (`RunRequest`, `RunContext`, `RunResult`, `RawTable`, `MappedTable`, `NormalizedTable`) per `01-engine-runtime.md`, `03-io-and-table-detection.md`, `04-column-mapping.md`, and `05-normalization-and-validation.md`.
+* Implement the **config runtime** (`config` loader, manifest schema, column + hook registries) per `02-config-and-manifest.md`.
+* Implement **IO, mapping, normalization, artifact, telemetry, hooks, and CLI** in a test‑driven, layered way per `03–10` docs.
+
+The result should:
+
+* Match the documented architecture and contracts for:
+  * runtime API (`Engine`, `run()`, `RunRequest`, `RunResult`),
+  * artifact (`artifact.json`) and telemetry (`events.ndjson`),
+  * script APIs in `ade_config`.
+* Be covered by unit + integration tests as described in `10-testing-and-quality.md`, with deterministic behavior for given configs and inputs.
+
+---
+
+## 2. Context (What you are starting from)
+
+We already have detailed design docs and naming conventions; this workpackage is about implementing code to match them.
+
+### Current state
+
+* Architecture, terminology, and desired module layout are defined in:
+  * `apps/ade-engine/README.md` – high‑level architecture, terminology, target package layout.
+  * `apps/ade-engine/docs/README.md` – chapter index and recommended reading order.
+* Conceptual behavior for each subsystem is documented:
+  * Runtime & core types — `01-engine-runtime.md`.
+  * Config & manifest — `02-config-and-manifest.md`.
+  * IO & table detection — `03-io-and-table-detection.md`.
+  * Column mapping — `04-column-mapping.md`.
+  * Normalization & validation — `05-normalization-and-validation.md`.
+  * Artifact JSON — `06-artifact-json.md`.
+  * Telemetry events — `07-telemetry-events.md`.
+  * Hooks & extensibility — `08-hooks-and-extensibility.md`.
+  * CLI & integration — `09-cli-and-integration.md`.
+  * Testing & quality — `10-testing-and-quality.md`.
+
+### Existing structure (desired, mostly not implemented yet)
+
+See `apps/ade-engine/README.md` “Package layout (layered and obvious)” and `docs/README.md`:
+
+* `ade_engine/core/` — runtime orchestrator + pipeline (`engine.py`, `types.py`, `pipeline/`).
+* `ade_engine/config/` — config loader + manifest/registry glue (legacy name: `config_runtime`).
+* `ade_engine/infra/` — IO, artifact, telemetry.
+* `ade_engine/schemas/` — Pydantic models for manifest, artifact, telemetry.
+* `ade_engine/cli/` — Typer‑based CLI wiring.
+* `ade_engine/__init__.py` — narrow public API: `Engine`, `run`, `RunRequest`, `RunResult`, `RunStatus`, `__version__`.
+
+### Current behavior / expectations
+
+* A single engine run is a **pure path‑based function** per `01-engine-runtime.md` §1:
+
+  > config + source files → normalized workbook(s) + artifact + telemetry.
+
+* Engine must be **backend‑job‑agnostic**: backend concepts (jobs, workspaces, tenants) only appear as opaque `metadata` in `RunRequest` and telemetry envelopes per `01-engine-runtime.md` §1 and `07-telemetry-events.md` §3.2.
+* The engine is **logically stateless**: `Engine` has no mutable per‑run state; `RunContext` holds all run‑specific state (`01-engine-runtime.md` §3.3).
+
+### Known constraints & contracts
+
+* Terminology and naming in code must align with the tables in each doc; e.g. `source_file`, `source_sheet`, `field`, `RunStatus`, `RunPhase` etc.
+* Config packages (`ade_config`) are the only place for business logic; engine must remain generic (`README.md` “Big picture” and `02-config-and-manifest.md` §1).
+* Artifact and telemetry formats are treated as **contracts** per `06-artifact-json.md` and `07-telemetry-events.md`.
+* Testing strategy and folder layout are prescribed in `10-testing-and-quality.md` and should be followed.
+
+---
+
+## 3. Target architecture / structure (ideal)
+
+See `apps/ade-engine/README.md` “Package layout (layered and obvious)”. This workpackage assumes the following structure:
+
+```text
+apps/ade-engine/
+  ade_engine/
+    __init__.py          # public API: Engine, run, RunRequest, RunResult, RunStatus, __version__
+    __main__.py          # `python -m ade_engine` → cli.app()
+
+    core/
+      __init__.py        # re-export Engine, RunRequest, RunResult, RunStatus, core types
+      engine.py          # Engine.run orchestration per 01-engine-runtime.md §4
+      types.py           # RunRequest, RunResult, RunContext, RunPaths, RawTable, MappedTable, NormalizedTable, enums
+      pipeline/
+        __init__.py      # re-export execute_pipeline, phase helpers
+        extract.py       # IO + RawTable detection per 03-io-and-table-detection.md
+        mapping.py       # column mapping per 04-column-mapping.md
+        normalize.py     # transforms + validators per 05-normalization-and-validation.md
+        write.py         # workbook writing per 05-normalization-and-validation.md §6
+        pipeline_runner.py # execute_pipeline() orchestration and RunPhase transitions
+
+    config/              # config runtime (formerly config_runtime/)
+      __init__.py
+      loader.py          # load_config_runtime per 02-config-and-manifest.md §4
+      manifest_context.py# ManifestContext wrapper per 02-config-and-manifest.md §3.2
+      column_registry.py # ColumnModule / ColumnRegistry per 02-config-and-manifest.md §5
+      hook_registry.py   # HookRegistry, HookContext, HookStage per 02-config-and-manifest.md §6 and 08-hooks-and-extensibility.md
+
+    infra/               # IO + artifact + telemetry plumbing
+      __init__.py
+      io.py              # list_input_files, iter_csv_rows, iter_sheet_rows per 03-io-and-table-detection.md
+      artifact.py        # ArtifactSink, FileArtifactSink per 06-artifact-json.md
+      telemetry.py       # EventSink, FileEventSink, PipelineLogger, TelemetryConfig per 07-telemetry-events.md
+
+    schemas/             # Pydantic models (Python-first schemas)
+      __init__.py
+      manifest.py        # ManifestV1 and friends per 02-config-and-manifest.md §3
+      artifact.py        # Artifact schema per 06-artifact-json.md §3–§7
+      telemetry.py       # TelemetryEnvelope, TelemetryEvent per 07-telemetry-events.md §3
+
+    cli/
+      __init__.py
+      app.py             # Typer app exposing `ade-engine` per 09-cli-and-integration.md
+      commands/
+        run.py           # main run command; builds RunRequest and prints JSON summary
+        version.py       # prints engine version (and maybe manifest version)
+
+  docs/                  # existing docs (do not modify structurally as part of this workpack)
+    ...
+
+  tests/
+    pipeline/
+      test_io.py
+      test_extract.py
+      test_mapping.py
+      test_normalize.py
+      test_write.py
+    test_engine_runtime.py
+    test_config_loader.py
+    test_artifact.py
+    test_telemetry.py
+    test_cli.py
+    fixtures/
+      __init__.py
+      config_factories.py  # helpers to create temp ade_config packages
+      sample_inputs.py     # helpers to generate CSV/XLSX fixtures
+```
+
+# apps/ade-engine/workpackages/wp-template.md
 ```markdown
 > **Agent instruction (read first):**
 >
