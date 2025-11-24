@@ -18,28 +18,37 @@
 # ADE Engine (Runtime)
 
 The **ADE engine** is a config‑driven runtime that turns messy spreadsheets into
-a **normalized Excel workbook plus a full audit artifact**.
+a **normalized Excel workbook plus a full audit artifact**. You can think of it
+as:
 
-You can think of it as:
+> “Run a pipeline over spreadsheets using an `ade_config` plugin that defines
+> how to detect, map, transform and validate data.”
 
-> “Run a pipeline over spreadsheets using an `ade_config` plugin that defines how to detect, map, transform and validate data.”
-
-This document describes the **architecture**, **folder structure**, **core types**, and
-**script APIs** you need to understand to implement or extend the engine.
+This document describes the **architecture**, **folder structure**, **core
+types**, and **script APIs** you need to understand to implement or extend the
+engine.
 
 ---
 
-## Glossary (canonical terms)
+## Terminology
 
-- **Run** — One execution of `Engine.run()` or the CLI. Artifact and telemetry are always per run.
-- **Config package** — The installed `ade_config` package (manifest + detectors/hooks).  
-  - **Config version** — `manifest.version`.  
-  - **Build** — The virtual environment built for a config version.
-- **Source file** — The original spreadsheet passed to the engine (`source_file`).  
-  **Source sheet** — Worksheet/tab within a source file (`source_sheet`).
-- **Output workbook** — Normalized workbook(s) written under `output_dir`.
-- **Table** — A contiguous header + data region detected in a sheet, represented as `RawTable → MappedTable → NormalizedTable`.
-- **Job / workspace / tenant** — Backend concepts only. They may appear as opaque metadata in telemetry; the engine has no first‑class job/workspace types or artifact fields for them.
+| Concept            | Term in code      | Notes                                                     |
+| ------------------ | ----------------- | --------------------------------------------------------- |
+| Run                | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package     | `config_package`  | Installed `ade_config` package for this run               |
+| Config version     | `manifest.version`| Version declared by the config package manifest           |
+| Build              | build             | Virtual environment built for a specific config version   |
+| User data file     | `source_file`     | Original spreadsheet on disk                              |
+| User sheet         | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical column   | `field`           | Defined in manifest; never call this a “column”           |
+| Physical column    | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook    | normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+Use these names everywhere in code comments, telemetry, docs, and filenames.
+Avoid synonyms like “input file” (use **source file**), “output file” (say
+**output workbook** or explicitly refer to artifact/events), or mixing “field”
+and “column”. Backend notions like job/workspace/tenant remain outside the
+engine and only show up as opaque metadata if the caller passes them.
 
 ---
 
@@ -71,6 +80,18 @@ In production, the ADE API:
 
 From the engine’s perspective, it just runs synchronously inside an isolated environment
 with `ade_config` installed; **it is run-scoped only—job IDs and workspace concepts belong to the backend**.
+
+---
+
+### Excel support (openpyxl)
+
+The engine uses **openpyxl** for Excel IO:
+
+- **Supported formats** — Excel Open XML only: `xlsx`, `xlsm`, `xltx`, `xltm`. Older `xls` is not supported and is rejected.
+- **Source files are read‑only** — workbooks are opened with `read_only=True` and never saved back; the engine always writes a new normalized workbook.
+- **Performance posture** — openpyxl in normal mode can use significant memory (docs note ~50× file size). The engine reads in streaming mode and keeps writes simple, but very large outputs still consume RAM proportionally.
+
+CSV uses Python’s CSV reader; only Excel IO goes through openpyxl.
 
 ---
 
@@ -139,7 +160,7 @@ ade_engine/
       write.py
       pipeline_runner.py     # Pipeline orchestrator (execute_pipeline)
 
-  config_runtime/            # Config loading and registries
+  config/                    # Config loading and registries (renamed from config_runtime)
     __init__.py
     loader.py                # load_config_runtime
     manifest_context.py
@@ -167,7 +188,7 @@ ade_engine/
 
 # Public API surface (top-level imports from ade_engine/__init__.py)
 from ade_engine.core.engine import Engine
-from ade_engine.core.types import RunRequest, RunResult, EngineMetadata, RunStatus
+from ade_engine.core.types import RunRequest, RunResult, EngineInfo, RunStatus
 from ade_engine import __version__
 
 def run(*args, **kwargs) -> RunResult:
@@ -180,7 +201,7 @@ __all__ = [
     "run",
     "RunRequest",
     "RunResult",
-    "EngineMetadata",
+    "EngineInfo",
     "RunStatus",
     "__version__",
 ]
@@ -188,18 +209,18 @@ __all__ = [
 
 Layering rules:
 
-- Runtime/core depends on config_runtime types and infra helpers.
-- `config_runtime/` can depend on schemas and infra where needed.
-- `infra/` holds IO + artifact/telemetry plumbing used by both core and config_runtime.
+- Runtime/core depends on config types and infra helpers.
+- `config/` (formerly `config_runtime/`) can depend on schemas and infra where needed.
+- `infra/` holds IO + artifact/telemetry plumbing used by both core and config.
 - `cli/` is a thin wrapper over the public API; keep business logic in `core/`.
-- Hooks remain part of the core extension model via `config_runtime/hook_registry.py`; hook invocation helpers can live in `core/` if desired.
+- Hooks remain part of the core extension model via `config/hook_registry.py` (legacy path: `config_runtime/hook_registry.py`); hook invocation helpers can live in `core/` if desired.
 
 If you know this layout, you know where everything lives:
 
-* **“How do I run the engine?”** → `core/engine.py`, `ade_engine/__init__.py`
-* **“How do we load config scripts?”** → `config_runtime/loader.py`
-* **“How does the pipeline work?”** → `core/pipeline/`
-* **“Where is artifact/telemetry written?”** → `infra/artifact.py`, `infra/telemetry.py`
+- **How do I run the engine?** → `core/engine.py`, `ade_engine/__init__.py`
+- **How do we load config scripts?** → `config/loader.py` (legacy path: `config_runtime/loader.py`)
+- **How does the pipeline work?** → `core/pipeline/`
+- **Where is artifact/telemetry written?** → `infra/artifact.py`, `infra/telemetry.py`
 
 ### 2.1 Public API (top-level `ade_engine`)
 
@@ -208,7 +229,7 @@ Keep the public surface obvious and small at the package root:
 ```python
 # ade_engine/__init__.py
 from ade_engine.core.engine import Engine
-from ade_engine.core.types import RunRequest, RunResult, EngineMetadata, RunStatus
+from ade_engine.core.types import RunRequest, RunResult, EngineInfo, RunStatus
 from ade_engine import __version__  # however versioning is managed
 
 
@@ -223,7 +244,7 @@ __all__ = [
     "run",
     "RunRequest",
     "RunResult",
-    "EngineMetadata",
+    "EngineInfo",
     "RunStatus",
     "__version__",
 ]
@@ -308,11 +329,11 @@ class RunPhase(str, Enum):
     FAILED = "failed"
 ```
 
-**EngineMetadata**
+**EngineInfo** (thin metadata for CLI/telemetry)
 
 ```python
 @dataclass(frozen=True)
-class EngineMetadata:
+class EngineInfo:
     name: str = "ade-engine"
     version: str = "0.0.0"
     description: str | None = None
@@ -420,19 +441,22 @@ Internal context shared across pipeline, hooks, and telemetry:
 class RunContext:
     run_id: str                 # generated UUID or similar per run
     metadata: dict[str, Any]    # optional caller-supplied metadata (used for telemetry correlation only)
-    manifest: ManifestContext   # see config_runtime/manifest_context.py
+    manifest: ManifestContext   # see config/manifest_context.py (legacy path: config_runtime/manifest_context.py)
     paths: RunPaths
     started_at: datetime
-    state: dict[str, Any] = field(default_factory=dict)  # per-run scratch space for scripts (not shared across runs/threads)
+    run_state: dict[str, Any] = field(default_factory=dict)  # per-run scratch space for scripts (not shared across runs/threads)
 ```
 
-`RunContext.state` is **per run**: each call to `Engine.run()` gets a fresh dict which
-detectors, transforms, validators, and hooks can share during that run. It is never
-shared across runs or threads. A single `Engine.run` executes sequentially in one
-thread/process; any concurrency is implemented by the ADE API running multiple
-workers, each with its own `RunContext`.
+`RunContext.run_state` (often exposed to scripts as `state` for backward
+compatibility) is **per run**: each call to `Engine.run()` gets a fresh dict
+that detectors, transforms, validators, and hooks can share during that run. It
+is never shared across runs or threads. A single `Engine.run` executes
+sequentially in one thread/process; any concurrency is implemented by the ADE
+API running multiple workers, each with its own `RunContext`.
 
 Exception classes are aligned with `RunErrorCode`:
+
+### 3.3 Errors (`errors.py`)
 
 ```python
 class AdeEngineError(Exception): ...
@@ -442,15 +466,24 @@ class HookError(AdeEngineError): ...        # → RunErrorCode.HOOK_ERROR
 class PipelineError(AdeEngineError): ...    # → RunErrorCode.PIPELINE_ERROR
 ```
 
-`Engine.run` should map exceptions to `RunError` in one place (e.g., `_error_to_run_error(exc, stage)`)
-so `RunResult`, artifact, and telemetry all share the same `code`/`message`/`stage`.
+Guidelines:
 
-The ADE backend may include a `job_id` inside `metadata`, but the engine just treats it as
-opaque metadata. The engine is always run-scoped; any job/run mapping is a backend concern.
+- Config loading raises `ConfigError` for manifest/schema/script issues.
+- IO/missing sheets/unsupported formats raise `InputError`.
+- Hook failures surface as `HookError`.
+- Unexpected pipeline bugs raise `PipelineError`.
 
-Because all per‑run state lives on `RunContext` and not on the `Engine` instance itself,
-the `Engine` class is **logically stateless** and can be safely reused across requests or
-threads (as long as each call uses a fresh `RunRequest`).
+`Engine.run` maps these to `RunError.code` in one place (e.g.,
+`_error_to_run_error(exc, stage)`) so `RunResult`, artifact, and telemetry all
+share the same `code`/`message`/`stage`.
+
+The ADE backend may include a `job_id` inside `metadata`, but the engine just
+treats it as opaque metadata. The engine is always run-scoped; any job/run
+mapping is a backend concern.
+
+Because all per‑run state lives on `RunContext` and not on the `Engine` instance
+itself, the `Engine` class is **logically stateless** and can be safely reused
+across requests or threads (as long as each call uses a fresh `RunRequest`).
 
 ### 3.2 Table and pipeline types
 
@@ -501,10 +534,14 @@ Mapped and normalized tables:
 
 ```python
 @dataclass
+class ColumnMap:
+    mapped_columns: list[MappedColumn]
+    unmapped_columns: list[UnmappedColumn]
+
+@dataclass
 class MappedTable:
     raw: RawTable
-    columns: list[MappedColumn]
-    extras: list[UnmappedColumn]
+    column_map: ColumnMap
 
 @dataclass
 class ValidationIssue:
@@ -518,8 +555,8 @@ class ValidationIssue:
 @dataclass
 class NormalizedTable:
     mapped: MappedTable
-    rows: list[list[Any]]            # rows in manifest.order + extras
-    issues: list[ValidationIssue]
+    rows: list[list[Any]]            # rows in manifest.order + unmapped columns (if appended)
+    validation_issues: list[ValidationIssue]
     output_sheet_name: str
 ```
 
@@ -614,7 +651,14 @@ Conceptually the manifest looks like:
 }
 ```
 
-`config_runtime/manifest_context.py` turns this into a typed `ManifestContext` with helpers:
+Key ideas:
+
+- **Top-level fields** describe the config and script API version.
+- Use the word **field** for manifest entries; use **column** only for physical spreadsheet columns. `columns.order` is the list of field IDs; `columns.fields` maps those IDs to `FieldConfig` objects.
+- Module paths are relative to `ade_config` and start with `column_detectors.<field_name>` or `hooks.<hook_name>`.
+- `script_api_version` is the only script contract version identifier; do not call it “API version” or “manifest API version”.
+
+`config/manifest_context.py` (legacy path: `config_runtime/manifest_context.py`) turns this into a typed `ManifestContext` with helpers:
 `columns.order`, `columns.fields`, and `writer` (engine-level defaults like timeouts or thresholds are fixed in code for manifest v1).
 
 ---
@@ -648,7 +692,7 @@ result = run(
 ```
 
 `Engine` is **logically stateless**: it does not keep any mutable per‑run data on the instance.
-Each call to `run()` constructs a fresh `RunContext` and `state` dict. You can safely reuse a
+Each call to `run()` constructs a fresh `RunContext` and `run_state` dict. You can safely reuse a
 single `Engine` across threads or requests as long as each call uses its own `RunRequest`.
 
 Under the hood, `Engine.run()`:
@@ -658,8 +702,8 @@ Under the hood, `Engine.run()`:
    * chooses `input_dir` (from source files or explicit folder),
    * chooses `output_dir` and `logs_dir` (from request or defaults based on source location),
    * generates a `run_id`,
-   * seeds `metadata` and a shared `state` dict.
-2. Calls `config_runtime.loader.load_config_runtime()` to load the manifest, column detectors, row detectors, and hooks.
+   * seeds `metadata` and a shared `run_state` dict.
+2. Calls `config.loader.load_config_runtime()` (legacy import path: `config_runtime.loader`) to load the manifest, column detectors, row detectors, and hooks.
 3. Binds telemetry sinks (`TelemetryConfig.bind`) and creates a `PipelineLogger`.
 4. Calls `ON_RUN_START` hooks.
 5. Calls `execute_pipeline()` in `pipeline/pipeline_runner.py`:
@@ -752,7 +796,7 @@ For each `RawTable`:
 
    * Call all `detect_*` functions in the field’s script with:
 
-     * `run`, `state`, `field_name`, `field_config`, `header`,
+     * `run`, `run_state`, `field_name`, `field_config`, `header`,
        `column_values_sample`, `column_values`, `table`, `column_index`,
        `manifest`, `logger`
 3. Aggregate scores per field and record `ScoreContribution`s.
@@ -776,7 +820,7 @@ passing the list of `MappedTable` objects. This is the ideal place for configs t
 
 * tweak or correct mappings,
 * reorder or drop fields,
-* adjust `extras`,
+* adjust unmapped columns (e.g., rename or drop),
 
 before normalization begins.
 
@@ -792,7 +836,7 @@ For each `MappedTable`:
 def transform(
     *,
     run: RunContext,
-    state: dict,
+    run_state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -811,7 +855,7 @@ def transform(
 def validate(
     *,
     run: RunContext,
-    state: dict,
+    run_state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -1029,6 +1073,17 @@ The envelope roughly looks like:
 }
 ```
 
+Canonical event names (used in telemetry payloads and docs):
+
+- `run_started`
+- `run_completed`
+- `run_failed`
+- `pipeline_transition`
+- `file_discovered`
+- `file_processed`
+- `table_detected`
+- `validation_issue`
+
 `PipelineLogger` is the only thing pipeline code touches:
 
 ```python
@@ -1047,17 +1102,18 @@ The ADE API can:
 
 ## 8. Script API overview (config side)
 
-For completeness, here’s the **contract** between the engine and `ade_config`.
+All script entrypoints are **keyword‑only**, should include `**_` for forward
+compatibility, and receive `RunContext` as `run` plus a **per-run `run_state`
+dict** (exposed as `state` for backward compatibility). Detector functions must
+be named `detect_*` so they are easy to discover.
 
-All script entrypoints are **keyword‑only** functions, should include `**_` to allow future parameters, and receive a `RunContext` as `run`.
-
-### 8.1 Row detectors (`ade_config.row_detectors.header` / `data`)
+### 8.1 Row detectors (`ade_config.row_detectors.*`)
 
 ```python
 def detect_*(
     *,
     run: RunContext,           # RunContext (read-only from config’s perspective)
-    state: dict,
+    run_state: dict,
     row_index: int,            # 1-based index in the sheet
     row_values: list,          # raw cell values for this row
     manifest: ManifestContext,
@@ -1067,13 +1123,16 @@ def detect_*(
     return {"scores": {"header": 0.7}}   # or {"scores": {"data": 0.4}}
 ```
 
+* Detectors return score dicts; the engine aggregates them.
+* `run_state` exists per run only; never persist data across runs here.
+
 ### 8.2 Column detectors (`ade_config.column_detectors.<field>`)
 
 ```python
 def detect_*(
     *,
     run: RunContext,
-    state: dict,
+    run_state: dict,
     field_name: str,
     field_config: dict,           # manifest.columns.fields[field_name]
     header: str | None,           # normalized header text
@@ -1088,13 +1147,18 @@ def detect_*(
     return {"scores": {field_name: 0.8}}
 ```
 
+* Module paths are relative to `ade_config` and start with
+  `column_detectors.<field_name>`.
+* “Column map” refers to the `MappedTable.column_map` object (mapped + unmapped
+  columns); avoid floating the name “ColumnMap” if no type exists in code.
+
 ### 8.3 Transforms
 
 ```python
 def transform(
     *,
     run: RunContext,
-    state: dict,
+    run_state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -1108,13 +1172,16 @@ def transform(
     ...
 ```
 
+Transforms see the latest canonical row state (after mapping). Use `run_state`
+for per-run caches or counters, not for cross-run persistence.
+
 ### 8.4 Validators
 
 ```python
 def validate(
     *,
     run: RunContext,
-    state: dict,
+    run_state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -1128,24 +1195,37 @@ def validate(
     ...
 ```
 
+Validators must return structured issue dicts; the engine wraps them as
+`ValidationIssue` objects.
+
 ### 8.5 Hooks (`ade_config.hooks.*`)
 
-Recommended context-first style:
+Hook stages are fixed and aligned to manifest keys:
+
+```python
+class HookStage(str, Enum):
+    ON_RUN_START = "on_run_start"
+    ON_AFTER_EXTRACT = "on_after_extract"
+    ON_AFTER_MAPPING = "on_after_mapping"
+    ON_BEFORE_SAVE = "on_before_save"
+    ON_RUN_END = "on_run_end"
+```
+
+Hook context fields are consistent across stages:
 
 ```python
 from ade_engine.core.types import RunResult, RunContext
-from ade_engine.config_runtime.hook_registry import HookContext, HookStage
+from ade_engine.config.hook_registry import HookContext, HookStage  # legacy path: ade_engine.config_runtime.hook_registry
 from ade_engine.core.pipeline import RawTable, MappedTable, NormalizedTable
 from ade_engine.infra.artifact import ArtifactSink
-from ade_engine.infra.telemetry import EventSink
-from ade_engine.infra.telemetry import PipelineLogger
+from ade_engine.infra.telemetry import EventSink, PipelineLogger
 from openpyxl import Workbook
 from typing import Any
 
 @dataclass
 class HookContext:
     run: RunContext
-    state: dict[str, Any]
+    run_state: dict[str, Any]
     manifest: ManifestContext
     artifact: ArtifactSink
     events: EventSink | None
@@ -1159,9 +1239,7 @@ def run(context: HookContext) -> None:
     context.logger.note("Run started", stage=context.stage.value)
 ```
 
-Hook stages (manifest keys → `HookStage` mapping):
-
-Hook stages (manifest keys → `HookStage` mapping):
+Stages:
 
 * `on_run_start` – before any IO or detection work
 * `on_after_extract` – after `RawTable[]` has been built
@@ -1245,7 +1323,7 @@ This architecture is intentionally:
 
   * `Engine.run`, `RunRequest`/`RunResult`
   * `execute_pipeline()`, `extract.py`, `mapping.py`, `normalize.py`, `write.py`
-  * `infra/io.py`, `config_runtime/loader.py`, `config_runtime/hook_registry.py`, `infra/artifact.py`, `infra/telemetry.py`
+  * `infra/io.py`, `config/loader.py`, `config/hook_registry.py` (legacy: `config_runtime/*`), `infra/artifact.py`, `infra/telemetry.py`
 * **Python‑first schemas** – Manifest and telemetry schemas are defined as Python models
   (Pydantic), with JSON Schemas generated as artifacts when needed.
 * **Auditable** – Every detector score, transform, and validation issue can be
@@ -1257,27 +1335,6 @@ This architecture is intentionally:
 
 With this README and the folder layout above, you should be able to reason about
 the engine from scratch and confidently implement or refactor any part of it.
-### 3.3 Errors (`errors.py`)
-
-Provide a small hierarchy for consistent exception handling:
-
-```python
-class AdeEngineError(Exception): ...
-
-class ConfigError(AdeEngineError): ...
-class InputError(AdeEngineError): ...
-class HookError(AdeEngineError): ...
-class PipelineError(AdeEngineError): ...
-```
-
-Guidelines:
-
-- `config_runtime` raises `ConfigError` for manifest/schema/script issues.
-- IO/missing sheets/unsupported formats raise `InputError`.
-- Hook failures surface as `HookError`.
-- Unexpected pipeline bugs raise `PipelineError`.
-
-`Engine.run` maps these to `RunError.code` values (`config_error`, `input_error`, `hook_error`, `pipeline_error`, etc.) in one place so callers and artifacts have structured error info.
 ```
 
 # apps/ade-engine/docs/01-engine-runtime.md
@@ -1294,6 +1351,24 @@ It assumes:
   - `ade_engine` installed.
   - Exactly one `ade_config` package installed (the config for this run).
 - You’ve read the top-level `README.md` for the high-level architecture.
+
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+These docs stick to that vocabulary to avoid synonyms like “input file” or
+mixing “field”/“column”. Backend notions (job/workspace/tenant) only appear as
+opaque metadata if the caller supplies them.
 
 ---
 
@@ -1492,7 +1567,7 @@ These decisions are made once, up front, and never mutated mid‑run.
 * `started_at: datetime` / `completed_at: datetime | None`
   Timestamps for run lifecycle.
 
-* `state: dict[str, Any]`
+* `run_state: dict[str, Any]` (available as `state` for backward compatibility)
   Per‑run mutable scratch space, shared across detectors, transforms,
   validators, and hooks. Not shared across runs or threads; each run executes
   sequentially in a single thread/process.
@@ -1501,7 +1576,7 @@ Properties:
 
 * A new `RunContext` is created for every call to `Engine.run`.
 * No `RunContext` is shared across runs.
-* Config authors can use `state` for caches, counters, etc., within a single
+* Config authors can use `run_state` for caches, counters, etc., within a single
   run; never for cross‑run state.
 
 ### 3.4 `RunResult` – outcome summary
@@ -1566,7 +1641,7 @@ The lifecycle below describes what happens inside `Engine.run(request)`.
 
    * Generate `run_id`.
    * Initialize `started_at`.
-   * Initialize empty `state` dict.
+   * Initialize empty `run_state` dict.
    * Attach `RunPaths` and `metadata`.
 
 3. **Load manifest and config runtime**
@@ -1604,7 +1679,7 @@ The lifecycle below describes what happens inside `Engine.run(request)`.
    * Call any hooks registered for `on_run_start` with:
 
      * `run` (`RunContext`),
-     * `state`,
+     * `run_state`,
      * `manifest`,
      * `artifact`,
      * `events`,
@@ -1656,7 +1731,7 @@ If any of these steps fail, the error is handled as described in
 
       * Decide whether to output a single combined workbook vs multiple sheets
         / workbooks.
-      * Build header rows (canonical fields + extras).
+      * Build header rows (canonical fields + unmapped columns when `append_unmapped_columns` is enabled).
       * Append normalized rows in a deterministic order.
     * Call `on_before_save` hooks with:
 
@@ -1682,7 +1757,7 @@ If any of these steps fail, the error is handled as described in
     * Hooks see:
 
       * `run` (`RunContext`),
-      * `state`,
+      * `run_state`,
       * `manifest`,
       * `artifact`, `events`,
       * `result` (a provisional `RunResult`),
@@ -1836,15 +1911,15 @@ The runtime is designed to be safe under typical worker pool patterns.
 
 * **RunContext**
 
-  * Every call to `Engine.run` creates a fresh `RunContext` with its own `state`
-    dict.
+  * Every call to `Engine.run` creates a fresh `RunContext` with its own `run_state`
+    dict (exposed as `state` in scripts).
   * Nothing inside `RunContext` is shared across runs or threads.
-  * `RunContext.state` is per-run scratch space; do not share it across threads.
+  * `RunContext.run_state` is per-run scratch space; do not share it across threads.
 
 * **Global state**
 
   * The engine avoids mutable module‑level globals wherever possible.
-  * Config code should use `RunContext.state` or external systems (databases,
+  * Config code should use `RunContext.run_state` or external systems (databases,
     caches) rather than global variables.
 
 Backend concurrency (threads vs processes vs containers) is outside the scope of
@@ -1868,7 +1943,7 @@ represented as Python models inside `ade_engine`.
 
 Read this if you are:
 
-- implementing `ade_engine.config_runtime` modules,
+- implementing `ade_engine.config` modules (legacy package name: `config_runtime`),
 - authoring or reviewing a config package,
 - or wiring config‑driven behavior into new parts of the engine.
 
@@ -1915,6 +1990,23 @@ ade_config/                     # business logic (per customer / per config)
 
 The **engine is generic**. Everything domain‑specific lives in this package and
 is defined by the manifest.
+
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+Stick to these names in manifest prose and type names to avoid synonyms like
+“input file” or “column” when you mean manifest **field**.
 
 ---
 
@@ -1980,10 +2072,12 @@ The manifest has a small number of top-level sections:
 
 Key ideas:
 
-* **Top-level fields** describe the config itself and the script API version.
-* **`columns`** declares what canonical fields exist and how to handle them.
-* **`hooks`** defines lifecycle customizations (as module lists).
-* **`writer`** controls writer behavior (unmapped handling, sheet name).
+- **Top-level fields** describe the config itself and the script API version.
+- **Fields vs columns**: use **field** for manifest entries; **column** refers to physical spreadsheet columns. `columns.order` lists field IDs; `columns.fields` maps those IDs to `FieldConfig` objects.
+- **Module paths** are relative to `ade_config` and start with `column_detectors.<field_name>` or `hooks.<hook_name>`.
+- **Script API version** lives at `script_api_version`; do not shorten it to “API version” in prose.
+- **`hooks`** defines lifecycle customizations (as module lists).
+- **`writer`** controls writer behavior (unmapped handling, sheet name).
 
 ---
 
@@ -2001,7 +2095,7 @@ class, e.g.:
   * `name: str | None`
   * `description: str | None`
   * `script_api_version: int`
-  * `columns: ColumnSection`
+  * `columns: ColumnsConfig`   # field-centric naming; avoid ColumnSection/ColumnField
   * `hooks: HookCollection`
   * `writer: WriterConfig`
 
@@ -2009,6 +2103,10 @@ Engine code **never** hard‑codes raw JSON keys; it works with these models.
 
 From the models, the engine can optionally emit JSON Schema
 (`ManifestV1.model_json_schema()`) for validation in other systems.
+
+Model naming stays **field-first**: prefer `FieldConfig` over `ColumnField` or
+`ColumnMeta`, and keep `ColumnsConfig.fields: dict[str, FieldConfig]` keyed by
+field ID.
 
 ### 3.2 `ManifestContext` helper
 
@@ -2036,11 +2134,11 @@ scripts via the `run` argument (see script API docs).
 
 ---
 
-## 4. Loading config at runtime (`config_runtime/`)
+## 4. Loading config at runtime (`config/`, legacy `config_runtime/`)
 
-### 4.1 Responsibilities of `config_runtime`
+### 4.1 Responsibilities of `config`
 
-The `config_runtime` package is the “glue” between:
+The `config` package is the “glue” between:
 
 * the `ade_config` package and its `manifest.json`, and
 * the rest of the engine.
@@ -2058,7 +2156,7 @@ It is responsible for:
 A typical public entrypoint looks like:
 
 ```python
-from ade_engine.config_runtime.loader import load_config_runtime
+from ade_engine.config.loader import load_config_runtime  # legacy path: ade_engine.config_runtime.loader
 
 cfg = load_config_runtime(
     package="ade_config",
@@ -2135,7 +2233,7 @@ The `ColumnField` Pydantic model captures this shape and enforces basic typing.
 
 ### 5.3 From `ColumnMeta` to `ColumnModule`
 
-At runtime, `config_runtime` builds a **column registry** from the manifest:
+At runtime, the config loader builds a **column registry** from the manifest:
 
 1. For each `field_name` in `columns.fields`:
 
@@ -2170,7 +2268,7 @@ modules directly.
 
 ### 5.4 Signature validation
 
-When building the registry, `config_runtime` validates that:
+When building the registry, the loader validates that:
 
 * Detectors, transformers, and validators are callable.
 * Functions support the expected keyword‑only API.
@@ -2200,7 +2298,7 @@ Each hook entry is a module string inside the config package (Python import path
 
 ### 6.2 Building the hook registry
 
-`config_runtime` turns the manifest `hooks` section into a `HookRegistry`:
+The loader turns the manifest `hooks` section into a `HookRegistry`:
 
 1. For each stage (e.g. `on_run_start`):
 
@@ -2222,7 +2320,7 @@ fails the run.
 
 ## 7. Config runtime aggregate: `ConfigRuntime`
 
-Putting everything together, `config_runtime` exposes a small aggregate object
+Putting everything together, the loader exposes a small aggregate object
 used by the pipeline:
 
 ```python
@@ -2302,6 +2400,23 @@ It assumes you’ve read:
 - `01-engine-runtime.md`
 - `02-config-and-manifest.md`
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+This vocabulary is used consistently in IO and detection docs—avoid synonyms
+like “input file” unless referring to CLI flag names.
+
 Relevant modules:
 
 - `io.py` — low‑level file and sheet IO.
@@ -2380,10 +2495,12 @@ the given list as‑is (after normalization).
 Each discovered input is classified by extension:
 
 * `.csv` → **CSV file**
-* `.xlsx` → **XLSX workbook**
+* `.xlsx`, `.xlsm`, `.xltx`, `.xltm` → **Excel Open XML** (handled by openpyxl)
 
-Unsupported extensions are rejected early with a clear, user‑facing error
-(e.g., “File `foo.xls` has unsupported extension `.xls`”).
+Unsupported extensions are rejected early as **input errors**
+(e.g., “File `foo.xls` has unsupported extension `.xls`”). ADE does not use
+any legacy Excel readers; only 2010+ Open XML formats are supported via
+openpyxl.
 
 ---
 
@@ -2447,6 +2564,9 @@ Design goals:
 * Never load entire workbook into memory when not necessary.
 * Always work in terms of standard Python primitives:
   strings, numbers, booleans, `None`.
+* **Read‑only consequences** — `read_only=True` yields a streaming worksheet;
+  some APIs like `iter_cols()` aren’t available. Use `iter_rows()`/`.rows`.
+  Charts/images and other rich objects are ignored by design.
 
 ### 4.2 Sheet selection
 
@@ -2474,7 +2594,7 @@ def iter_sheet_rows(path: Path, sheet_name: str) -> Iterable[tuple[int, list]]:
     Stream (row_index, row_values) from a sheet in an XLSX file.
 
     - row_index is 1-based.
-    - row_values is a list of simple Python values (str, float, bool, None, ...).
+    - row_values is a list of simple Python values (str, float, bool, datetime, None, ...).
     """
 ```
 
@@ -2484,11 +2604,25 @@ Typical logic:
 * Normalize values:
 
   * Excel blanks → `None`.
-  * Formulas → evaluated values via `data_only=True` (not formulas).
+  * Numbers → `int`/`float`.
+  * Dates/times → `datetime` objects per openpyxl’s formatting.
+  * Formulas → cached values via `data_only=True` (never the formula string).
 
 The exact normalization strategy (e.g., whether to keep `None` or coerce to
 `""`) should be stable and documented; any changes must be coordinated with
 detectors and config authors.
+
+Detectors and downstream scripts should expect native Python types (including
+`datetime`) from openpyxl, not pre-stringified cell values.
+
+### 4.4 Formula cells and `data_only=True`
+
+Workbooks are opened with `data_only=True`, so openpyxl returns **cached
+formula results**, not the formula strings. openpyxl does **not** evaluate
+formulas itself; if the workbook was not recalculated and saved by Excel (or
+another tool that populates cached values), formula cells surface as `None`.
+The engine treats these as missing values and does not attempt to recompute
+formulas.
 
 ---
 
@@ -2513,7 +2647,7 @@ A typical row detector has this shape:
 def detect_header_or_data(
     *,
     run,                 # RunContext (config-facing view of the run)
-    state: dict,
+    run_state: dict,
     row_index: int,      # 1-based index within the sheet
     row_values: list,    # raw cell values for this row
     manifest,            # ManifestContext
@@ -2530,7 +2664,7 @@ def detect_header_or_data(
 Conventions:
 
 * `run` is read‑only from the config’s perspective (it is a `RunContext`).
-* `state` is a per‑run dict that detectors may use to coordinate across rows.
+* `run_state` is a per‑run dict that detectors may use to coordinate across rows.
 * `manifest` provides config‑level context (schema, defaults, writer, fields).
 * `logger` allows emitting notes and telemetry if needed.
 * Functions should accept `**_` to tolerate new parameters over time.
@@ -2730,6 +2864,23 @@ This document explains:
 * How hooks and other parts of the engine use the mapping.
 * What guarantees the engine tries to maintain.
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+This chapter uses “field” exclusively for manifest entries and “column” for
+cells in a sheet. Avoid other synonyms.
+
 ---
 
 ## Goals
@@ -2812,25 +2963,25 @@ Different detectors can propose different columns for the same field; column map
 
 ### Column map
 
-The **column map** is the main output:
+The **column map** is the main output and lives on `MappedTable.column_map`:
 
 ```text
 ColumnMap:
-  sheet_id -> {
-    field_id -> MappedColumn
-  }
+  mapped_columns: list[MappedColumn]      # one per field that mapped
+  unmapped_columns: list[UnmappedColumn]  # physical columns with no field match
 
 MappedColumn:
-  field_id
-  sheet_id
-  column_index        # chosen physical column
-  header_text         # final resolved header (if any)
-  detectors           # list of DetectorFinding used
-  is_required         # from manifest
-  is_satisfied        # True if actually mapped
+  field              # field ID from manifest.columns.order/fields
+  header             # header text from the source sheet (if any)
+  source_column_index# 0-based physical column index
+  score              # aggregate mapping score
+  contributions      # list[ScoreContribution] per detector
+  is_required        # from manifest
+  is_satisfied       # True if a physical column was chosen
 ```
 
-The exact Python types/fields are implementation details, but conceptually this is what the rest of the engine sees.
+The exact Python fields may vary, but the names above are used consistently in
+docs, artifact, and telemetry.
 
 ---
 
@@ -2884,8 +3035,8 @@ When column mapping completes, the engine has:
 
    For each sheet being processed:
 
-   * Every field from the manifest will have a `MappedColumn` entry.
-   * `MappedColumn.is_satisfied` indicates whether a physical column was found.
+   * `column_map.mapped_columns` contains the fields that were matched, each with `is_required`/`is_satisfied` flags.
+   * `column_map.unmapped_columns` lists physical columns that did not match any field (useful for appending `raw_` extras).
    * If multiple physical columns were plausible, the chosen winner is recorded along with tie‑breaking details.
 
 2. **Validation results**
@@ -2986,11 +3137,11 @@ Tie‑breaking typically prefers:
 
 Once winners are selected:
 
-* For each field, create a `MappedColumn`:
+* Build a `ColumnMap` instance with two lists:
 
-  * record `sheet_id`, `column_index`, `header_text`, etc.
-  * include the underlying detector findings in case debugging is needed.
-* Mark `is_satisfied = True` when a physical column was chosen; `False` otherwise.
+  * `mapped_columns`: one `MappedColumn` per field that cleared the score threshold (record `source_column_index`, `header`, `score`, `contributions`, `is_required`, `is_satisfied`).
+  * `unmapped_columns`: one `UnmappedColumn` per physical column that did not map to any field (used later for `raw_` extras if enabled).
+* Attach this `ColumnMap` to `MappedTable.column_map`.
 
 The resulting map:
 
@@ -3181,6 +3332,22 @@ It assumes you’ve read:
 - `03-io-and-table-detection.md` (how we get `RawTable`), and  
 - `04-column-mapping.md` (how we get `MappedTable`).
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+This stage keeps field/column naming strict to avoid ambiguity.
+
 ---
 
 ## 1. Role in the pipeline
@@ -3225,7 +3392,7 @@ Where:
 
 * `ctx: RunContext`
 
-  * Per-run context (paths, manifest, metadata, shared `state` dict, timestamps).
+  * Per-run context (paths, manifest, metadata, shared `run_state` dict, timestamps).
 * `cfg: ConfigRuntime`
 
   * Config runtime object exposing:
@@ -3238,8 +3405,7 @@ Where:
   * Output of the mapping stage:
 
     * `raw: RawTable`
-    * `columns: list[MappedColumn]`
-    * `extras: list[UnmappedColumn]`
+    * `column_map: ColumnMap` (`mapped_columns` + `unmapped_columns`)
 * `logger: PipelineLogger`
 
   * Unified logging/telemetry/artifact helper.
@@ -3250,7 +3416,7 @@ Returns:
 
   * `mapped` — original `MappedTable`
   * `rows` — 2D list of normalized values
-  * `issues` — list of `ValidationIssue`
+  * `validation_issues` — list of `ValidationIssue`
 
 ---
 
@@ -3277,7 +3443,7 @@ Normalization respects that order:
   * Iterate over `columns.order` and include all defined fields.
 * **Extra columns**:
 
-  * Appended later (based on `MappedTable.extras`), after all canonical fields.
+  * Appended later (based on `MappedTable.column_map.unmapped_columns`), after all canonical fields.
 
 The final `NormalizedTable.rows` is ordered as:
 
@@ -3285,7 +3451,7 @@ The final `NormalizedTable.rows` is ordered as:
 [c1, c2, ..., cN, extra1, extra2, ...]
 ```
 
-where `c1..cN` follow `columns.order` and `extra*` follow `MappedTable.extras`.
+where `c1..cN` follow `columns.order` and `extra*` follow `MappedTable.column_map.unmapped_columns`.
 
 ### 3.2 Seeding the canonical row
 
@@ -3294,10 +3460,10 @@ For each data row in `mapped.raw.data_rows`:
 1. Start with an empty `row: dict[str, Any]`.
 2. For each canonical field in `manifest.columns.order`:
 
-   * Find its `MappedColumn` in `mapped.columns` (if any).
+   * Find its `MappedColumn` in `mapped.column_map.mapped_columns` (if any).
    * If mapped:
 
-     * Read the raw cell from `mapped.raw.data_rows[row_idx][mapping.index]`.
+     * Read the raw cell from `mapped.raw.data_rows[row_idx][mapped_col.source_column_index]`.
      * Set `row[field_name] = raw_value`.
    * If not mapped:
 
@@ -3316,7 +3482,7 @@ This seeded `row` is the input to the transform phase.
 * Data row `i` is at original row index:
 
 ```python
-row_index = mapped.raw.first_data_index + i
+row_index = mapped.raw.first_data_row_index + i
 ```
 
 This index is passed into transforms and validators and appears in
@@ -3337,7 +3503,7 @@ Standard keyword-only signature:
 def transform(
     *,
     run: RunContext,              # config-facing view of the run
-    state: dict,                  # shared per-run scratch space
+    run_state: dict,              # shared per-run scratch space
     row_index: int,               # original sheet row index (1-based)
     field_name: str,              # canonical field
     value,                        # current value for this field
@@ -3353,7 +3519,7 @@ def transform(
 Parameters to remember:
 
 * `run`: full run context (paths, metadata).
-* `state`: mutable dict shared across all rows and scripts within this run.
+* `run_state`: mutable dict shared across all rows and scripts within this run.
 * `row_index`: traceability back to original file.
 * `field_name`, `value`, `row`: the core of the normalization work.
 * `field_config`: the manifest’s field config for this field (e.g., label, required).
@@ -3437,7 +3603,7 @@ Standard keyword-only signature:
 def validate(
     *,
     run: RunContext,
-    state: dict,
+    run_state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -3502,7 +3668,7 @@ The engine wraps these into `ValidationIssue` objects, adding:
   * They can validate both `value` and cross-field relationships via `row`.
 * Cross-row constraints:
 
-  * May be implemented using `state` to collect information across rows
+  * May be implemented using `run_state` to collect information across rows
     (e.g., track duplicates) and report issues during or after normalization.
   * For “summary” behavior, `on_run_end` hooks can also be used.
 
@@ -3530,7 +3696,7 @@ If a validator raises an exception:
 class NormalizedTable:
     mapped: MappedTable
     rows: list[list[Any]]           # normalized matrix
-    issues: list[ValidationIssue]   # all row-level issues
+    validation_issues: list[ValidationIssue]   # all row-level issues
     output_sheet_name: str          # chosen by writer stage
 ```
 
@@ -3552,7 +3718,7 @@ For each data row:
 
    ```python
    extra_values = []
-   for extra in mapped.extras:
+   for extra in mapped.column_map.unmapped_columns:
        col_idx = extra.source_column_index  # 0-based raw column index
        extra_values.append(
            mapped.raw.data_rows[row_offset][col_idx]
@@ -3570,7 +3736,7 @@ Invariants:
 
 * All rows in a `NormalizedTable` have the **same length**.
 * Canonical columns always appear in manifest order.
-* Extra columns appear in `mapped.extras` order.
+* Extra columns appear in `mapped.column_map.unmapped_columns` order.
 
 ### 6.2 Aggregating issues
 
@@ -3581,11 +3747,21 @@ For each row:
 
   * `row_index`
   * `field`
-* Append them to `NormalizedTable.issues`.
+* Append them to `NormalizedTable.validation_issues`.
 
 Normalization does **not** decide whether issues are “fatal” or not; it only
 records them. Policy decisions (e.g., “fail the run if any `severity="error"`”)
 belong in the ADE backend or in hooks.
+
+### 6.3 Openpyxl writer behavior
+
+The writer builds a standard in‑memory `openpyxl.Workbook()` (not
+`write_only=True`) so `on_before_save` hooks get a full‑featured workbook
+supporting styles, charts, and formatting APIs. openpyxl keeps sheet grids in
+memory; its docs note memory use can reach ~50× the XLSX size in worst cases.
+Plan capacity accordingly for very large outputs. Hooks must not call
+`workbook.save()`; the engine owns the save/close lifecycle and writes the
+normalized workbook once at the end of `write_workbook`.
 
 ---
 
@@ -3599,7 +3775,7 @@ During or after normalization, the artifact recorder (`ArtifactSink`) receives:
 
 * For each table:
 
-  * Validation issues: written under `tables[*].validation`.
+  * Validation issues: written under `tables[*].validation_issues`.
 * For each issue:
 
   * `row_index`, `field`, `code`, `severity`, `message`, `details`.
@@ -3638,11 +3814,11 @@ The exact event set is flexible, but the pattern is:
   * Date formats, locales, thresholds, etc.
 * Keep transforms **local** when possible:
 
-  * Avoid cross-row dependencies unless you have a clear pattern using `state`.
+  * Avoid cross-row dependencies unless you have a clear pattern using `run_state`.
 * Avoid:
 
   * Network calls per row.
-  * Unbounded in-memory structures (e.g., storing all rows in `state`).
+  * Unbounded in-memory structures (e.g., storing all rows in `run_state`).
 
 ### 8.2 Writing good validators
 
@@ -3661,7 +3837,7 @@ The exact event set is flexible, but the pattern is:
   * Inspect the full `row` (e.g., “if `end_date` < `start_date`”).
 * For cross-row checks:
 
-  * Use `state` to accumulate and check after all rows are seen (or in a
+  * Use `run_state` to accumulate and check after all rows are seen (or in a
     dedicated pass/hook).
 
 ### 8.3 Debugging
@@ -3673,7 +3849,7 @@ The exact event set is flexible, but the pattern is:
 
   * Input workbook → mapped headers (`artifact.mapping`) →
     normalized rows (`NormalizedTable.rows`) →
-    validation issues (`artifact.validation`).
+    validation issues (`artifact.validation_issues`).
 
 ---
 
@@ -3687,10 +3863,10 @@ Some known edge cases and potential future enhancements:
   * Normalization should produce:
 
     * `rows = []`,
-    * `issues = []`.
+    * `validation_issues = []`.
 * **Completely unmapped tables**:
 
-  * All columns become extras; canonical row has only `None` values.
+  * All columns become `unmapped_columns`; canonical row has only `None` values.
   * Transform/validate may be skipped for fields with no mapping
     (depending on design choice).
 * **Batch-level validation**:
@@ -3732,6 +3908,23 @@ This document defines:
 - How tables, mappings, and validation are represented.
 - The invariants consumers can rely on.
 - How ADE API is expected to consume it.
+
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+Artifact docs stick to these names; telemetry uses the same values for
+consistency.
 
 ---
 
@@ -4252,6 +4445,22 @@ how events are modeled, written, filtered, and consumed via `events.ndjson`.
 It focuses on the **event stream**, not on `artifact.json`. For the artifact
 schema, see `06-artifact-json.md`.
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+Telemetry payloads mirror artifact/run models and reuse these names.
+
 ---
 
 ## 1. Goal and mental model
@@ -4727,6 +4936,22 @@ Hooks are how configs:
 It assumes you’ve read the top‑level `README.md` and have a basic picture of
 the pipeline (`extract → mapping → normalize → write`).
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+Hooks follow this vocabulary for consistency with runtime, artifact, and telemetry.
+
 ---
 
 ## 1. Mental model
@@ -4738,7 +4963,7 @@ At a high level:
 - At certain phases, it calls **hook functions** defined in `ade_config.hooks`.
 - Hooks receive:
   - the current `RunContext`,
-  - shared per‑run `state` dict,
+  - shared per‑run `run_state` dict,
   - the manifest,
   - artifact and telemetry sinks,
   - and phase‑specific objects (tables, workbook, result).
@@ -4749,7 +4974,8 @@ Hooks are **config‑owned**:
 - The config defines *what* those hooks do.
 
 There is no global/shared state between runs; hooks only see per‑run state
-through `RunContext` and `state`.
+through `RunContext` and `run_state` (exposed as `state` for backward
+compatibility).
 
 ---
 
@@ -4760,9 +4986,9 @@ invoked in this order:
 
 | Stage name        | When it runs                                       | What is available / allowed to change                                  |
 | ----------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
-| `on_run_start`    | After manifest + telemetry initialized, before IO | Read/initialize `state`, add notes, never touches tables or workbook    |
+| `on_run_start`    | After manifest + telemetry initialized, before IO | Read/initialize `run_state`, add notes, never touches tables or workbook|
 | `on_after_extract`| After `RawTable[]` built, before column mapping   | Inspect/modify `RawTable` objects                                       |
-| `on_after_mapping`| After `MappedTable[]` built, before normalization | Inspect/modify `MappedTable` objects (mappings and extras)              |
+| `on_after_mapping`| After `MappedTable[]` built, before normalization | Inspect/modify `MappedTable` objects (`column_map.mapped_columns` / `unmapped_columns`) |
 | `on_before_save`  | After `NormalizedTable[]`, before writing files   | Inspect `NormalizedTable[]`, modify `Workbook` (formatting, summary)    |
 | `on_run_end`      | After run success/failure determined              | Inspect `RunResult`, emit metrics/notes, **no further pipeline changes** |
 
@@ -4820,7 +5046,7 @@ If a hook module cannot be imported, the engine:
 
 ## 4. HookRegistry and invocation
 
-Internally, `config_runtime` builds a **`HookRegistry`** from the manifest.
+Internally, the config loader builds a **`HookRegistry`** from the manifest.
 
 Responsibilities:
 
@@ -4854,7 +5080,7 @@ Hooks should take a single `HookContext` argument for consistency:
 ```python
 from dataclasses import dataclass
 from typing import Any
-from ade_engine.config_runtime.hook_registry import HookContext, HookStage
+from ade_engine.config.hook_registry import HookContext, HookStage  # legacy path: ade_engine.config_runtime.hook_registry
 from ade_engine.core.types import RunResult, RunContext
 from ade_engine.core.pipeline import RawTable, MappedTable, NormalizedTable
 from ade_engine.infra.artifact import ArtifactSink
@@ -4864,7 +5090,7 @@ from openpyxl import Workbook
 @dataclass
 class HookContext:
     run: RunContext
-    state: dict[str, Any]
+    run_state: dict[str, Any]
     manifest: ManifestContext
     artifact: ArtifactSink
     events: EventSink | None
@@ -4880,7 +5106,7 @@ def run(context: HookContext) -> None:
 
 Guidelines:
 
-* Use `context.state` for mutable per‑run data; treat `context.run` as read‑only engine context.
+* Use `context.run_state` for mutable per‑run data; treat `context.run` as read‑only engine context.
 * Use `context.logger` for notes/events; reach for `context.artifact`/`context.events` only when you need sink-level control.
 * `context.tables`, `context.workbook`, and `context.result` are stage-dependent and may be `None`.
 * If you choose to expose a keyword‑only hook signature instead of the context object, include `**_` to absorb new parameters.
@@ -4892,9 +5118,9 @@ Guidelines:
 Hooks have real power; this section defines what is safe to mutate at each
 stage.
 
-### 6.1 `state`
+### 6.1 `run_state` (aka `state` in scripts)
 
-* `state` is the same dict exposed to detectors, transforms, validators, and
+* `run_state` is the same dict exposed to detectors, transforms, validators, and
   hooks.
 * It is **per run**; no sharing between runs.
 * You can freely add, update, or delete keys.
@@ -4916,16 +5142,16 @@ stage.
     * tweak header or data rows (e.g., trimming, fixing obvious anomalies).
   * Keep invariants intact:
 
-* `header_row` and `data_rows` must remain aligned with `header_row_index`,
-      `first_data_index`, `last_data_index`.
+    * `header_row` and `data_rows` must remain aligned with `header_row_index`,
+      `first_data_row_index`, `last_data_row_index`.
 
 * `on_after_mapping`:
 
   * Receives `MappedTable[]`.
   * You may:
 
-    * override mappings for specific columns,
-* adjust `extras` (`UnmappedColumn` list),
+    * override mappings for specific columns (`column_map.mapped_columns`),
+    * adjust `column_map.unmapped_columns` (drop/rename extras),
     * change field order if your writer mode supports it.
   * Be careful not to introduce holes or duplicates in mapping.
 
@@ -4936,14 +5162,16 @@ stage.
 
     * reorder tables for writing,
     * drop tables,
-    * (carefully) adjust `issues` collections.
+    * (carefully) adjust `validation_issues` collections.
   * Individual row values are usually better handled during normalization,
     not here, but small fixes are allowed if necessary.
 
 ### 6.3 `workbook` (on_before_save only)
 
-* `workbook` is an openpyxl `Workbook` that the engine will save after the
-  hook stage.
+* `workbook` is the live **openpyxl `Workbook`** the engine is about to save.
+  Use standard openpyxl APIs (styles, charts, row/column dimensions, images)
+  as documented in the openpyxl tutorial. Do **not** call `.save()`; the
+  engine owns the save/close lifecycle.
 * You may:
 
   * create new sheets (e.g., summary, readme, metrics),
@@ -4975,8 +5203,8 @@ Below are typical uses of each hook stage.
 ```python
 # ade_config/hooks/on_run_start.py
 def run(ctx):
-    ctx.state["start_timestamp"] = ctx.run.started_at.isoformat()
-    ctx.state["config_version"] = ctx.manifest["info"]["version"]
+    ctx.run_state["start_timestamp"] = ctx.run.started_at.isoformat()
+    ctx.run_state["config_version"] = ctx.manifest["info"]["version"]
 
     ctx.logger.note(
         "Run started",
@@ -5131,7 +5359,7 @@ When adding or modifying hooks in a config:
 3. **Create hook modules** in `ade_config/hooks/` with a `run(...)` function:
 
    * use keyword‑only signature,
-4. **Use `logger` for notes/events**, `state` for shared run data.
+4. **Use `logger` for notes/events**, `run_state` for shared run data.
 5. **Mutate only what’s safe** for the stage (see section 6).
 6. **Test end‑to‑end**:
 
@@ -5153,6 +5381,24 @@ the ADE backend invokes it inside a virtual environment.
 It assumes you’ve read `ade_engine/README.md` and understand that the engine
 is **path‑based and backend‑job‑agnostic**: it sees source/output/log paths and opaque
 metadata for telemetry correlation, not job IDs or queues in its own models.
+
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+CLI help text should stick to this vocabulary: “input files” refers only to
+CLI parameters (`--input/--input-dir`), while “source files” describe the user
+spreadsheets being processed.
 
 ---
 
@@ -5531,6 +5777,22 @@ It is written for engine maintainers and advanced config authors who need to
 understand how the runtime behaves and how to keep changes safe and
 predictable over time.
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+Tests and fixtures should use the same vocabulary as runtime and docs.
+
 ---
 
 ## 1. Goals and principles
@@ -5587,7 +5849,7 @@ apps/ade-engine/
     test_normalize.py
     test_write.py
   test_engine_runtime.py
-  test_config_runtime_loader.py
+  test_config_loader.py  # legacy name in repo: test_config_runtime_loader.py
   test_artifact.py
   test_telemetry.py
   test_cli.py
@@ -5610,7 +5872,7 @@ Unit tests live close to the corresponding module:
 * `tests/pipeline/test_normalize.py` → `pipeline/normalize.py`
 * `tests/pipeline/test_write.py` → `pipeline/write.py`
 * `tests/test_engine_runtime.py` → `engine.py`, `types.py`
-* `tests/test_config_runtime_loader.py` → `config_runtime/loader.py`, `schemas/manifest.py`
+* `tests/test_config_loader.py` (legacy: `test_config_runtime_loader.py`) → `config/loader.py`, `schemas/manifest.py`
 * `tests/test_artifact.py` → `artifact.py`
 * `tests/test_telemetry.py` → `telemetry.py`
 * `tests/test_cli.py` → `cli.py`, `__main__.py`
@@ -5718,7 +5980,7 @@ Key tests:
 Tests here should not depend on real `ade_config` packages; use mocks or
 minimal in‑memory stubs.
 
-### 4.2 Config runtime (`config_runtime/`, `schemas/manifest.py`)
+### 4.2 Config runtime (`config/`, legacy `config_runtime/`, `schemas/manifest.py`)
 
 Key tests:
 
@@ -5806,7 +6068,7 @@ Key tests:
 
 * Single combined sheet:
 
-  * Headers appear in `manifest.columns.order` followed by extras.
+  * Headers appear in `manifest.columns.order` followed by unmapped columns (if `append_unmapped_columns` is enabled).
   * Data rows written in stable, documented order.
 * Per‑table sheet mode (if supported by writer config):
 
@@ -6017,7 +6279,7 @@ Debugging steps:
    * `RunResult.error`,
    * `artifact.run.error`,
    * `events.ndjson` (`run_failed` event payload).
-3. Add a minimal repro to `tests/test_config_runtime_loader.py` or
+3. Add a minimal repro to `tests/test_config_loader.py` (legacy: `test_config_runtime_loader.py`) or
    `tests/test_engine_runtime.py` if the error indicates a gap in engine
    validation.
 
@@ -6068,10 +6330,28 @@ This folder contains deeper “chapters” that expand on the high-level overvie
 in `ade_engine/README.md`. Read that first, then use this folder as a reference
 while building or extending the engine and configs.
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+These docs stick to that vocabulary to avoid synonyms like “input file” or
+mixing “field”/“column”. Backend notions (job/workspace/tenant) only appear as
+opaque metadata if the caller supplies them.
+
 ### Package layout (flattened, layered by convention)
 
 * Core runtime: `core/engine.py`, `core/types.py`, `core/pipeline/`
-* Config runtime: `config_runtime/loader.py`, `manifest_context.py`, registries
+* Config runtime: `config/` loader + registries (currently `config_runtime/loader.py`, `manifest_context.py`)
 * Infra/adapters: `infra/io.py`, `infra/artifact.py`, `infra/telemetry.py`
 * Public API & CLI: `ade_engine/__init__.py`, `cli/app.py`, `__main__.py`
 * Schemas: `schemas/`

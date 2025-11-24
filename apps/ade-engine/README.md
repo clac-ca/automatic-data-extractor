@@ -66,6 +66,18 @@ with `ade_config` installed; **it is run-scoped only—job IDs and workspace con
 
 ---
 
+### Excel support (openpyxl)
+
+The engine uses **openpyxl** for Excel IO:
+
+- **Supported formats** — Excel Open XML only: `xlsx`, `xlsm`, `xltx`, `xltm`. Older `xls` is not supported and is rejected.
+- **Source files are read‑only** — workbooks are opened with `read_only=True` and never saved back; the engine always writes a new normalized workbook.
+- **Performance posture** — openpyxl in normal mode can use significant memory (docs note ~50× file size). The engine reads in streaming mode and keeps writes simple, but very large outputs still consume RAM proportionally.
+
+CSV uses Python’s CSV reader; only Excel IO goes through openpyxl.
+
+---
+
 ### 1.1 Runtime & virtual environments
 
 The deployment model is:

@@ -108,10 +108,12 @@ the given list as‑is (after normalization).
 Each discovered input is classified by extension:
 
 * `.csv` → **CSV file**
-* `.xlsx` → **XLSX workbook**
+* `.xlsx`, `.xlsm`, `.xltx`, `.xltm` → **Excel Open XML** (handled by openpyxl)
 
-Unsupported extensions are rejected early with a clear, user‑facing error
-(e.g., “File `foo.xls` has unsupported extension `.xls`”).
+Unsupported extensions are rejected early as **input errors**
+(e.g., “File `foo.xls` has unsupported extension `.xls`”). ADE does not use
+any legacy Excel readers; only 2010+ Open XML formats are supported via
+openpyxl.
 
 ---
 
@@ -175,6 +177,9 @@ Design goals:
 * Never load entire workbook into memory when not necessary.
 * Always work in terms of standard Python primitives:
   strings, numbers, booleans, `None`.
+* **Read‑only consequences** — `read_only=True` yields a streaming worksheet;
+  some APIs like `iter_cols()` aren’t available. Use `iter_rows()`/`.rows`.
+  Charts/images and other rich objects are ignored by design.
 
 ### 4.2 Sheet selection
 
@@ -202,7 +207,7 @@ def iter_sheet_rows(path: Path, sheet_name: str) -> Iterable[tuple[int, list]]:
     Stream (row_index, row_values) from a sheet in an XLSX file.
 
     - row_index is 1-based.
-    - row_values is a list of simple Python values (str, float, bool, None, ...).
+    - row_values is a list of simple Python values (str, float, bool, datetime, None, ...).
     """
 ```
 
@@ -212,11 +217,25 @@ Typical logic:
 * Normalize values:
 
   * Excel blanks → `None`.
-  * Formulas → evaluated values via `data_only=True` (not formulas).
+  * Numbers → `int`/`float`.
+  * Dates/times → `datetime` objects per openpyxl’s formatting.
+  * Formulas → cached values via `data_only=True` (never the formula string).
 
 The exact normalization strategy (e.g., whether to keep `None` or coerce to
 `""`) should be stable and documented; any changes must be coordinated with
 detectors and config authors.
+
+Detectors and downstream scripts should expect native Python types (including
+`datetime`) from openpyxl, not pre-stringified cell values.
+
+### 4.4 Formula cells and `data_only=True`
+
+Workbooks are opened with `data_only=True`, so openpyxl returns **cached
+formula results**, not the formula strings. openpyxl does **not** evaluate
+formulas itself; if the workbook was not recalculated and saved by Excel (or
+another tool that populates cached values), formula cells surface as `None`.
+The engine treats these as missing values and does not attempt to recompute
+formulas.
 
 ---
 

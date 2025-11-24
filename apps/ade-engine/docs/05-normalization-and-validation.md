@@ -439,6 +439,16 @@ Normalization does **not** decide whether issues are “fatal” or not; it only
 records them. Policy decisions (e.g., “fail the run if any `severity="error"`”)
 belong in the ADE backend or in hooks.
 
+### 6.3 Openpyxl writer behavior
+
+The writer builds a standard in‑memory `openpyxl.Workbook()` (not
+`write_only=True`) so `on_before_save` hooks get a full‑featured workbook
+supporting styles, charts, and formatting APIs. openpyxl keeps sheet grids in
+memory; its docs note memory use can reach ~50× the XLSX size in worst cases.
+Plan capacity accordingly for very large outputs. Hooks must not call
+`workbook.save()`; the engine owns the save/close lifecycle and writes the
+normalized workbook once at the end of `write_workbook`.
+
 ---
 
 ## 7. Artifact & telemetry integration
