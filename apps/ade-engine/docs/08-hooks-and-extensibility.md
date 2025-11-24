@@ -177,17 +177,7 @@ Guidelines:
 * Use `ctx.state` for mutable per‑run data; treat `ctx.run` as read‑only engine context.
 * Use `ctx.logger` for notes/events; reach for `ctx.artifact`/`ctx.events` only when you need sink-level control.
 * `ctx.tables`, `ctx.workbook`, and `ctx.result` are stage-dependent and may be `None`.
-
-### 5.2 Keyword style (supported for transition)
-
-The engine still supports the previous keyword‑only signature for transitional configs:
-
-```python
-def run(*, run, state, manifest, env, artifact, events, tables=None, workbook=None, result=None, logger=None, **_):
-    ...
-```
-
-Prefer the context-first style for new work; support for the keyword variant remains for compatibility.
+* If you choose to expose a keyword‑only hook signature instead of the context object, include `**_` to absorb new parameters.
 
 ---
 
@@ -407,16 +397,7 @@ The engine **does not** swallow hook errors silently.
 
 ---
 
-## 9. Compatibility & versioning
-
-To keep configs working across versions:
-
-* Hook functions should:
-
-  * use keyword‑only parameters, and
-  * always include `**_` to ignore new parameters.
-* The engine may add new keyword arguments over time (e.g., additional
-  metadata).
+## 9. Versioning
 
 Breaking changes to script APIs are coordinated via:
 
@@ -444,7 +425,6 @@ When adding or modifying hooks in a config:
 3. **Create hook modules** in `ade_config/hooks/` with a `run(...)` function:
 
    * use keyword‑only signature,
-   * include `**_` for forward compatibility.
 4. **Use `logger` for notes/events**, `state` for shared run data.
 5. **Mutate only what’s safe** for the stage (see section 6).
 6. **Test end‑to‑end**:

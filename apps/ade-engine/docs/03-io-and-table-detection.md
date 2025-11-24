@@ -230,7 +230,6 @@ def detect_header_or_data(
     manifest: dict,
     env: dict | None,
     logger,
-    **_,
 ) -> dict:
     """
     Return a dict with per-label scores.
@@ -246,7 +245,7 @@ Conventions:
 * `state` is a per‑run dict that detectors may use to coordinate across rows.
 * `manifest` and `env` provide config‑level context (locale, date formats, etc.).
 * `logger` allows emitting notes and telemetry if needed.
-* Functions must accept `**_` to remain forwards‑compatible.
+* Functions should accept `**_` to tolerate new parameters over time.
 
 Return contract:
 
@@ -392,17 +391,11 @@ Policies should be consistent and covered by tests.
 
   * The run fails similarly, with an explicit “could not read file” error.
 
-### 8.3 Multiple tables per sheet (future)
+### 8.3 Multiple tables per sheet
 
-The initial implementation can assume **one logical table per sheet**, but
-the architecture is compatible with a future where:
-
-* A sheet yields multiple `RawTable` objects, each with its own header/data
-  region.
-* Table detection logic becomes more sophisticated (e.g., gap‑based segmentation).
-
-When/if this is implemented, it should be documented here and in
-`pipeline/extract.py`.
+A sheet can yield multiple `RawTable` objects, each with its own header/data
+region. Table detection logic can segment by gaps and continue scanning for
+additional tables within the same sheet.
 
 ---
 

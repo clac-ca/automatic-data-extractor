@@ -342,8 +342,7 @@ modules directly.
 When building the registry, `config_runtime` validates that:
 
 * Detectors, transformers, and validators are callable.
-* Functions support the expected keyword‑only API (and `**_` for forward
-  compatibility).
+* Functions support the expected keyword‑only API.
 
 If a function is missing or has an incompatible signature, the engine treats
 this as a **config error** and fails loading before processing any input.
@@ -488,7 +487,7 @@ From this point on, **all config behavior** is driven by:
 
 ---
 
-## 9. Versioning and compatibility
+## 9. Versioning
 
 Two fields in the manifest control how configs evolve over time:
 
@@ -503,8 +502,7 @@ Two fields in the manifest control how configs evolve over time:
 
 Guidelines:
 
-* Adding new optional manifest fields or `env` keys is safe and should be
-  backwards compatible.
+* Adding new optional manifest fields or `env` keys is safe.
 * Changing or removing manifest fields, or changing script signatures, should:
 
   * bump either `info.schema` or `config_script_api_version`, and

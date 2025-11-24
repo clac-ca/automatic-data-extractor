@@ -479,7 +479,7 @@ Artifact is explicitly versioned via:
 * `schema` — identifies the “family” (e.g., `"ade.artifact/v1"`).
 * `artifact_version` — semantic version for this family.
 
-### 9.1 Backwards‑compatible changes
+### 9.1 Minor changes
 
 Allowed without bumping `schema` and with minor/patch bumps of
 `artifact_version`:

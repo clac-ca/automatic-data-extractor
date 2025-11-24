@@ -525,11 +525,6 @@ Before merging a non‑trivial change to `ade_engine`, check:
    * README and relevant docs under `apps/ade-engine/docs/` reflect the new
      behavior.
 
-5. **Config compatibility**
-
-   * Existing configs continue to work, or migration steps are clearly
-     documented (including changes to script APIs or manifest schema).
-
 If tests are failing for reasons that look like “expected breakage”, expand
 the tests to encode the new behavior, then update snapshots and docs in the
 same change.

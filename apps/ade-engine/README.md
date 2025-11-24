@@ -90,54 +90,99 @@ It is a pure “input files → normalized workbook + logs” component. The bac
 
 ---
 
-## 2. Package layout (layered)
+## 2. Package layout (flattened, layered by convention)
 
-The engine is organized into **three layers**. The code can remain flat, but
-naming and directories should make the separation obvious:
+Flattened package with conventional Python layout while keeping logical layers clear:
 
 ```text
 ade_engine/
-  core/                      # pure runtime + domain types
-    engine.py                # Engine class + high-level run() orchestration
-    types.py                 # RunRequest, RunResult, RunContext, tables, enums
-    config_runtime.py        # Load manifest, detectors, transforms, validators, hooks from ade_config
-    pipeline/
-      __init__.py            # Re-exports execute_pipeline() and stage helpers
-      extract.py             # Use IO + row detectors to find tables → RawTable[]
-      mapping.py             # Column detectors → ColumnMapping/ExtraColumn per table
-      normalize.py           # Transforms + validators → NormalizedTable + ValidationIssue[]
-      write.py               # Compose normalized tables into Excel workbook(s)
-      runner.py              # PipelineRunner: orchestrates phases & transitions (formerly pipeline.py)
+  __init__.py          # Public API: Engine, run(), RunRequest, RunResult, __version__
+  engine.py            # Engine class + high-level run() orchestration
 
-  infra/                     # IO + artifacts + telemetry plumbing
-    io.py                    # CSV/XLSX IO: list_input_files, iter_sheet_rows, etc.
-    hooks.py                 # HookStage enum + HookRegistry + HookContext
-    artifact.py              # ArtifactSink + FileArtifactSink + ArtifactBuilder (artifact.json)
-    telemetry.py             # TelemetryConfig, TelemetryBindings, event sinks, PipelineLogger
+  types.py             # RunRequest, RunResult, RunContext, table types, enums
+  config_runtime.py    # ManifestContext + config loading (ade_config)
 
-  interface/                 # API + CLI entrypoints
-    __init__.py              # Public API: Engine, run(), RunRequest, RunResult, __version__
-    cli.py                   # CLI entrypoint (args parsing, JSON output / error codes)
-    __main__.py              # `python -m ade_engine` → cli.main()
+  pipeline/            # Core pipeline logic (pure runtime)
+    __init__.py        # Re-export execute_pipeline(), PipelinePhase, helpers
+    extract.py
+    mapping.py
+    normalize.py
+    write.py
+    runner.py
 
-  schemas/
+  io.py                # CSV/XLSX IO and input file discovery (infra)
+  hooks.py             # HookStage enum + HookRegistry + HookContext (extension API)
+  artifact.py          # ArtifactSink + FileArtifactSink + ArtifactBuilder
+  telemetry.py         # TelemetryConfig, PipelineLogger, event sinks
+
+  schemas/             # Python-first schemas (Pydantic)
     __init__.py
-    manifest.py              # Pydantic models for config manifest + JSON schema generator
-    telemetry.py             # Pydantic models for telemetry envelopes + JSON schema generator
+    manifest.py
+    telemetry.py
+
+  cli.py               # CLI entrypoint (arg parsing, JSON output)
+  __main__.py          # `python -m ade_engine` → cli.main()
 ```
 
-Notes:
+Conceptual layers (documented, not enforced by folders):
 
-* The **layering is architectural**: core should avoid infra (except through well-defined seams), and interface depends on both. If the code stays in a flat package, mirror this naming so the separation stays legible.
-* Renaming `pipeline/pipeline.py` to `pipeline/runner.py` and grouping IO/artifact/telemetry under an `infra` banner makes the core vs infrastructure boundary obvious to new readers.
+- Runtime/core: `engine.py`, `types.py`, `config_runtime.py`, `pipeline/`, `hooks.py`
+- Infra/adapters: `io.py`, `artifact.py`, `telemetry.py`
+- Public API & CLI: `__init__.py`, `cli.py`, `__main__.py`
+- Schemas: `schemas/`
 
 If you know this layout, you know where everything lives:
 
-* **“How do I run the engine?”** → `core/engine.py`, `interface/__init__.py`
-* **“How do we load config scripts?”** → `core/config_runtime.py`
-* **“How do we read Excel/CSV?”** → `infra/io.py`
-* **“How does the pipeline work?”** → `core/pipeline/`
-* **“Where is artifact/telemetry written?”** → `infra/artifact.py`, `infra/telemetry.py`
+* **“How do I run the engine?”** → `engine.py`, `__init__.py`
+* **“How do we load config scripts?”** → `config_runtime.py`
+* **“How do we read Excel/CSV?”** → `io.py`
+* **“How does the pipeline work?”** → `pipeline/`
+* **“Where is artifact/telemetry written?”** → `artifact.py`, `telemetry.py`
+
+### 2.1 Public API (`__init__.py`)
+
+Keep the public surface obvious and small:
+
+```python
+# ade_engine/__init__.py
+from .engine import Engine
+from .types import RunRequest, RunResult, EngineMetadata, RunStatus
+from . import __version__  # however versioning is managed
+
+
+def run(*args, **kwargs) -> RunResult:
+    """Convenience helper: Engine().run(...)"""
+    engine = Engine()
+    return engine.run(*args, **kwargs)
+
+
+__all__ = [
+    "Engine",
+    "run",
+    "RunRequest",
+    "RunResult",
+    "EngineMetadata",
+    "RunStatus",
+    "__version__",
+]
+```
+
+Usage stays simple:
+
+```python
+from pathlib import Path
+from ade_engine import Engine, run, RunRequest
+
+result = run(
+    RunRequest(
+        input_files=[Path("input.xlsx")],
+        output_root=Path("output"),
+        logs_root=Path("logs"),
+    )
+)
+```
+
+You only need to dig into `pipeline`, `artifact`, or `telemetry` if you are working on the engine internals.
 * **“What does the manifest look like?”** → `schemas/manifest.py` (Python models)
   (JSON schemas can be generated from these models for external validation)
 
@@ -918,8 +963,7 @@ The ADE API can:
 
 For completeness, here’s the **contract** between the engine and `ade_config`.
 
-All script entrypoints are **keyword‑only** functions, should accept `**_` to stay forward compatible,
-and receive a `RunContext` as `run` (formerly called `job`).
+All script entrypoints are **keyword‑only** functions, should include `**_` to allow future parameters, and receive a `RunContext` as `run`.
 
 ### 8.1 Row detectors (`ade_config.row_detectors.header` / `data`)
 
@@ -975,7 +1019,6 @@ def transform(
     manifest: dict,
     env: dict | None,
     logger,
-    **_,
 ) -> dict | None:
     # Update row and/or return additional field mappings
     ...
@@ -996,7 +1039,6 @@ def validate(
     manifest: dict,
     env: dict | None,
     logger,
-    **_,
 ) -> list[dict]:
     # Return issue dicts: {"code": "invalid_format", "severity": "error", ...}
     ...
@@ -1029,13 +1071,6 @@ class HookContext:
 
 def run(ctx: HookContext) -> None:
     ctx.logger.note("Run started", stage=ctx.stage.value)
-```
-
-The engine also accepts the existing keyword-only style for transition:
-
-```python
-def run(*, run, state, manifest, env, artifact, events, tables=None, workbook=None, result=None, logger=None, **_):
-    ...
 ```
 
 Hook stages (manifest keys → `HookStage` mapping):
