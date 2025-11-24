@@ -11,6 +11,24 @@ It assumes:
   - Exactly one `ade_config` package installed (the config for this run).
 - You’ve read the top-level `README.md` for the high-level architecture.
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+These docs stick to that vocabulary to avoid synonyms like “input file” or
+mixing “field”/“column”. Backend notions (job/workspace/tenant) only appear as
+opaque metadata if the caller supplies them.
+
 ---
 
 ## 1. Purpose and boundaries
@@ -208,7 +226,7 @@ These decisions are made once, up front, and never mutated mid‑run.
 * `started_at: datetime` / `completed_at: datetime | None`
   Timestamps for run lifecycle.
 
-* `state: dict[str, Any]`
+* `run_state: dict[str, Any]` (available as `state` for backward compatibility)
   Per‑run mutable scratch space, shared across detectors, transforms,
   validators, and hooks. Not shared across runs or threads; each run executes
   sequentially in a single thread/process.
@@ -217,7 +235,7 @@ Properties:
 
 * A new `RunContext` is created for every call to `Engine.run`.
 * No `RunContext` is shared across runs.
-* Config authors can use `state` for caches, counters, etc., within a single
+* Config authors can use `run_state` for caches, counters, etc., within a single
   run; never for cross‑run state.
 
 ### 3.4 `RunResult` – outcome summary
@@ -282,7 +300,7 @@ The lifecycle below describes what happens inside `Engine.run(request)`.
 
    * Generate `run_id`.
    * Initialize `started_at`.
-   * Initialize empty `state` dict.
+   * Initialize empty `run_state` dict.
    * Attach `RunPaths` and `metadata`.
 
 3. **Load manifest and config runtime**
@@ -320,7 +338,7 @@ The lifecycle below describes what happens inside `Engine.run(request)`.
    * Call any hooks registered for `on_run_start` with:
 
      * `run` (`RunContext`),
-     * `state`,
+     * `run_state`,
      * `manifest`,
      * `artifact`,
      * `events`,
@@ -372,7 +390,7 @@ If any of these steps fail, the error is handled as described in
 
       * Decide whether to output a single combined workbook vs multiple sheets
         / workbooks.
-      * Build header rows (canonical fields + extras).
+      * Build header rows (canonical fields + unmapped columns when `append_unmapped_columns` is enabled).
       * Append normalized rows in a deterministic order.
     * Call `on_before_save` hooks with:
 
@@ -398,7 +416,7 @@ If any of these steps fail, the error is handled as described in
     * Hooks see:
 
       * `run` (`RunContext`),
-      * `state`,
+      * `run_state`,
       * `manifest`,
       * `artifact`, `events`,
       * `result` (a provisional `RunResult`),
@@ -552,15 +570,15 @@ The runtime is designed to be safe under typical worker pool patterns.
 
 * **RunContext**
 
-  * Every call to `Engine.run` creates a fresh `RunContext` with its own `state`
-    dict.
+  * Every call to `Engine.run` creates a fresh `RunContext` with its own `run_state`
+    dict (exposed as `state` in scripts).
   * Nothing inside `RunContext` is shared across runs or threads.
-  * `RunContext.state` is per-run scratch space; do not share it across threads.
+  * `RunContext.run_state` is per-run scratch space; do not share it across threads.
 
 * **Global state**
 
   * The engine avoids mutable module‑level globals wherever possible.
-  * Config code should use `RunContext.state` or external systems (databases,
+  * Config code should use `RunContext.run_state` or external systems (databases,
     caches) rather than global variables.
 
 Backend concurrency (threads vs processes vs containers) is outside the scope of

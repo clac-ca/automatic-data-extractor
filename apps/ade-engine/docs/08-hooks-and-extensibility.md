@@ -14,6 +14,22 @@ Hooks are how configs:
 It assumes you’ve read the top‑level `README.md` and have a basic picture of
 the pipeline (`extract → mapping → normalize → write`).
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+Hooks follow this vocabulary for consistency with runtime, artifact, and telemetry.
+
 ---
 
 ## 1. Mental model
@@ -25,7 +41,7 @@ At a high level:
 - At certain phases, it calls **hook functions** defined in `ade_config.hooks`.
 - Hooks receive:
   - the current `RunContext`,
-  - shared per‑run `state` dict,
+  - shared per‑run `run_state` dict,
   - the manifest,
   - artifact and telemetry sinks,
   - and phase‑specific objects (tables, workbook, result).
@@ -36,7 +52,8 @@ Hooks are **config‑owned**:
 - The config defines *what* those hooks do.
 
 There is no global/shared state between runs; hooks only see per‑run state
-through `RunContext` and `state`.
+through `RunContext` and `run_state` (exposed as `state` for backward
+compatibility).
 
 ---
 
@@ -47,9 +64,9 @@ invoked in this order:
 
 | Stage name        | When it runs                                       | What is available / allowed to change                                  |
 | ----------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
-| `on_run_start`    | After manifest + telemetry initialized, before IO | Read/initialize `state`, add notes, never touches tables or workbook    |
+| `on_run_start`    | After manifest + telemetry initialized, before IO | Read/initialize `run_state`, add notes, never touches tables or workbook|
 | `on_after_extract`| After `RawTable[]` built, before column mapping   | Inspect/modify `RawTable` objects                                       |
-| `on_after_mapping`| After `MappedTable[]` built, before normalization | Inspect/modify `MappedTable` objects (mappings and extras)              |
+| `on_after_mapping`| After `MappedTable[]` built, before normalization | Inspect/modify `MappedTable` objects (`column_map.mapped_columns` / `unmapped_columns`) |
 | `on_before_save`  | After `NormalizedTable[]`, before writing files   | Inspect `NormalizedTable[]`, modify `Workbook` (formatting, summary)    |
 | `on_run_end`      | After run success/failure determined              | Inspect `RunResult`, emit metrics/notes, **no further pipeline changes** |
 
@@ -107,7 +124,7 @@ If a hook module cannot be imported, the engine:
 
 ## 4. HookRegistry and invocation
 
-Internally, `config_runtime` builds a **`HookRegistry`** from the manifest.
+Internally, the config loader builds a **`HookRegistry`** from the manifest.
 
 Responsibilities:
 
@@ -141,7 +158,7 @@ Hooks should take a single `HookContext` argument for consistency:
 ```python
 from dataclasses import dataclass
 from typing import Any
-from ade_engine.config_runtime.hook_registry import HookContext, HookStage
+from ade_engine.config.hook_registry import HookContext, HookStage  # legacy path: ade_engine.config_runtime.hook_registry
 from ade_engine.core.types import RunResult, RunContext
 from ade_engine.core.pipeline import RawTable, MappedTable, NormalizedTable
 from ade_engine.infra.artifact import ArtifactSink
@@ -151,7 +168,7 @@ from openpyxl import Workbook
 @dataclass
 class HookContext:
     run: RunContext
-    state: dict[str, Any]
+    run_state: dict[str, Any]
     manifest: ManifestContext
     artifact: ArtifactSink
     events: EventSink | None
@@ -167,7 +184,7 @@ def run(context: HookContext) -> None:
 
 Guidelines:
 
-* Use `context.state` for mutable per‑run data; treat `context.run` as read‑only engine context.
+* Use `context.run_state` for mutable per‑run data; treat `context.run` as read‑only engine context.
 * Use `context.logger` for notes/events; reach for `context.artifact`/`context.events` only when you need sink-level control.
 * `context.tables`, `context.workbook`, and `context.result` are stage-dependent and may be `None`.
 * If you choose to expose a keyword‑only hook signature instead of the context object, include `**_` to absorb new parameters.
@@ -179,9 +196,9 @@ Guidelines:
 Hooks have real power; this section defines what is safe to mutate at each
 stage.
 
-### 6.1 `state`
+### 6.1 `run_state` (aka `state` in scripts)
 
-* `state` is the same dict exposed to detectors, transforms, validators, and
+* `run_state` is the same dict exposed to detectors, transforms, validators, and
   hooks.
 * It is **per run**; no sharing between runs.
 * You can freely add, update, or delete keys.
@@ -203,16 +220,16 @@ stage.
     * tweak header or data rows (e.g., trimming, fixing obvious anomalies).
   * Keep invariants intact:
 
-* `header_row` and `data_rows` must remain aligned with `header_row_index`,
-      `first_data_index`, `last_data_index`.
+    * `header_row` and `data_rows` must remain aligned with `header_row_index`,
+      `first_data_row_index`, `last_data_row_index`.
 
 * `on_after_mapping`:
 
   * Receives `MappedTable[]`.
   * You may:
 
-    * override mappings for specific columns,
-* adjust `extras` (`UnmappedColumn` list),
+    * override mappings for specific columns (`column_map.mapped_columns`),
+    * adjust `column_map.unmapped_columns` (drop/rename extras),
     * change field order if your writer mode supports it.
   * Be careful not to introduce holes or duplicates in mapping.
 
@@ -223,7 +240,7 @@ stage.
 
     * reorder tables for writing,
     * drop tables,
-    * (carefully) adjust `issues` collections.
+    * (carefully) adjust `validation_issues` collections.
   * Individual row values are usually better handled during normalization,
     not here, but small fixes are allowed if necessary.
 
@@ -262,8 +279,8 @@ Below are typical uses of each hook stage.
 ```python
 # ade_config/hooks/on_run_start.py
 def run(ctx):
-    ctx.state["start_timestamp"] = ctx.run.started_at.isoformat()
-    ctx.state["config_version"] = ctx.manifest["info"]["version"]
+    ctx.run_state["start_timestamp"] = ctx.run.started_at.isoformat()
+    ctx.run_state["config_version"] = ctx.manifest["info"]["version"]
 
     ctx.logger.note(
         "Run started",
@@ -418,7 +435,7 @@ When adding or modifying hooks in a config:
 3. **Create hook modules** in `ade_config/hooks/` with a `run(...)` function:
 
    * use keyword‑only signature,
-4. **Use `logger` for notes/events**, `state` for shared run data.
+4. **Use `logger` for notes/events**, `run_state` for shared run data.
 5. **Mutate only what’s safe** for the stage (see section 6).
 6. **Test end‑to‑end**:
 

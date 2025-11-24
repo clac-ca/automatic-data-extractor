@@ -6,6 +6,22 @@ how events are modeled, written, filtered, and consumed via `events.ndjson`.
 It focuses on the **event stream**, not on `artifact.json`. For the artifact
 schema, see `06-artifact-json.md`.
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+Telemetry payloads mirror artifact/run models and reuse these names.
+
 ---
 
 ## 1. Goal and mental model

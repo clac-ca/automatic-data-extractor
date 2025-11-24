@@ -7,6 +7,22 @@ It is written for engine maintainers and advanced config authors who need to
 understand how the runtime behaves and how to keep changes safe and
 predictable over time.
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+Tests and fixtures should use the same vocabulary as runtime and docs.
+
 ---
 
 ## 1. Goals and principles
@@ -63,7 +79,7 @@ apps/ade-engine/
     test_normalize.py
     test_write.py
   test_engine_runtime.py
-  test_config_runtime_loader.py
+  test_config_loader.py  # legacy name in repo: test_config_runtime_loader.py
   test_artifact.py
   test_telemetry.py
   test_cli.py
@@ -86,7 +102,7 @@ Unit tests live close to the corresponding module:
 * `tests/pipeline/test_normalize.py` → `pipeline/normalize.py`
 * `tests/pipeline/test_write.py` → `pipeline/write.py`
 * `tests/test_engine_runtime.py` → `engine.py`, `types.py`
-* `tests/test_config_runtime_loader.py` → `config_runtime/loader.py`, `schemas/manifest.py`
+* `tests/test_config_loader.py` (legacy: `test_config_runtime_loader.py`) → `config/loader.py`, `schemas/manifest.py`
 * `tests/test_artifact.py` → `artifact.py`
 * `tests/test_telemetry.py` → `telemetry.py`
 * `tests/test_cli.py` → `cli.py`, `__main__.py`
@@ -194,7 +210,7 @@ Key tests:
 Tests here should not depend on real `ade_config` packages; use mocks or
 minimal in‑memory stubs.
 
-### 4.2 Config runtime (`config_runtime/`, `schemas/manifest.py`)
+### 4.2 Config runtime (`config/`, legacy `config_runtime/`, `schemas/manifest.py`)
 
 Key tests:
 
@@ -282,7 +298,7 @@ Key tests:
 
 * Single combined sheet:
 
-  * Headers appear in `manifest.columns.order` followed by extras.
+  * Headers appear in `manifest.columns.order` followed by unmapped columns (if `append_unmapped_columns` is enabled).
   * Data rows written in stable, documented order.
 * Per‑table sheet mode (if supported by writer config):
 
@@ -493,7 +509,7 @@ Debugging steps:
    * `RunResult.error`,
    * `artifact.run.error`,
    * `events.ndjson` (`run_failed` event payload).
-3. Add a minimal repro to `tests/test_config_runtime_loader.py` or
+3. Add a minimal repro to `tests/test_config_loader.py` (legacy: `test_config_runtime_loader.py`) or
    `tests/test_engine_runtime.py` if the error indicates a gap in engine
    validation.
 

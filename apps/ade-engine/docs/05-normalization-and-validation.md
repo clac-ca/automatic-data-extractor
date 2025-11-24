@@ -18,6 +18,22 @@ It assumes you’ve read:
 - `03-io-and-table-detection.md` (how we get `RawTable`), and  
 - `04-column-mapping.md` (how we get `MappedTable`).
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+This stage keeps field/column naming strict to avoid ambiguity.
+
 ---
 
 ## 1. Role in the pipeline
@@ -62,7 +78,7 @@ Where:
 
 * `ctx: RunContext`
 
-  * Per-run context (paths, manifest, metadata, shared `state` dict, timestamps).
+  * Per-run context (paths, manifest, metadata, shared `run_state` dict, timestamps).
 * `cfg: ConfigRuntime`
 
   * Config runtime object exposing:
@@ -75,8 +91,7 @@ Where:
   * Output of the mapping stage:
 
     * `raw: RawTable`
-    * `columns: list[MappedColumn]`
-    * `extras: list[UnmappedColumn]`
+    * `column_map: ColumnMap` (`mapped_columns` + `unmapped_columns`)
 * `logger: PipelineLogger`
 
   * Unified logging/telemetry/artifact helper.
@@ -87,7 +102,7 @@ Returns:
 
   * `mapped` — original `MappedTable`
   * `rows` — 2D list of normalized values
-  * `issues` — list of `ValidationIssue`
+  * `validation_issues` — list of `ValidationIssue`
 
 ---
 
@@ -114,7 +129,7 @@ Normalization respects that order:
   * Iterate over `columns.order` and include all defined fields.
 * **Extra columns**:
 
-  * Appended later (based on `MappedTable.extras`), after all canonical fields.
+  * Appended later (based on `MappedTable.column_map.unmapped_columns`), after all canonical fields.
 
 The final `NormalizedTable.rows` is ordered as:
 
@@ -122,7 +137,7 @@ The final `NormalizedTable.rows` is ordered as:
 [c1, c2, ..., cN, extra1, extra2, ...]
 ```
 
-where `c1..cN` follow `columns.order` and `extra*` follow `MappedTable.extras`.
+where `c1..cN` follow `columns.order` and `extra*` follow `MappedTable.column_map.unmapped_columns`.
 
 ### 3.2 Seeding the canonical row
 
@@ -131,10 +146,10 @@ For each data row in `mapped.raw.data_rows`:
 1. Start with an empty `row: dict[str, Any]`.
 2. For each canonical field in `manifest.columns.order`:
 
-   * Find its `MappedColumn` in `mapped.columns` (if any).
+   * Find its `MappedColumn` in `mapped.column_map.mapped_columns` (if any).
    * If mapped:
 
-     * Read the raw cell from `mapped.raw.data_rows[row_idx][mapping.index]`.
+     * Read the raw cell from `mapped.raw.data_rows[row_idx][mapped_col.source_column_index]`.
      * Set `row[field_name] = raw_value`.
    * If not mapped:
 
@@ -153,7 +168,7 @@ This seeded `row` is the input to the transform phase.
 * Data row `i` is at original row index:
 
 ```python
-row_index = mapped.raw.first_data_index + i
+row_index = mapped.raw.first_data_row_index + i
 ```
 
 This index is passed into transforms and validators and appears in
@@ -174,7 +189,7 @@ Standard keyword-only signature:
 def transform(
     *,
     run: RunContext,              # config-facing view of the run
-    state: dict,                  # shared per-run scratch space
+    run_state: dict,              # shared per-run scratch space
     row_index: int,               # original sheet row index (1-based)
     field_name: str,              # canonical field
     value,                        # current value for this field
@@ -190,7 +205,7 @@ def transform(
 Parameters to remember:
 
 * `run`: full run context (paths, metadata).
-* `state`: mutable dict shared across all rows and scripts within this run.
+* `run_state`: mutable dict shared across all rows and scripts within this run.
 * `row_index`: traceability back to original file.
 * `field_name`, `value`, `row`: the core of the normalization work.
 * `field_config`: the manifest’s field config for this field (e.g., label, required).
@@ -274,7 +289,7 @@ Standard keyword-only signature:
 def validate(
     *,
     run: RunContext,
-    state: dict,
+    run_state: dict,
     row_index: int,
     field_name: str,
     value,
@@ -339,7 +354,7 @@ The engine wraps these into `ValidationIssue` objects, adding:
   * They can validate both `value` and cross-field relationships via `row`.
 * Cross-row constraints:
 
-  * May be implemented using `state` to collect information across rows
+  * May be implemented using `run_state` to collect information across rows
     (e.g., track duplicates) and report issues during or after normalization.
   * For “summary” behavior, `on_run_end` hooks can also be used.
 
@@ -367,7 +382,7 @@ If a validator raises an exception:
 class NormalizedTable:
     mapped: MappedTable
     rows: list[list[Any]]           # normalized matrix
-    issues: list[ValidationIssue]   # all row-level issues
+    validation_issues: list[ValidationIssue]   # all row-level issues
     output_sheet_name: str          # chosen by writer stage
 ```
 
@@ -389,7 +404,7 @@ For each data row:
 
    ```python
    extra_values = []
-   for extra in mapped.extras:
+   for extra in mapped.column_map.unmapped_columns:
        col_idx = extra.source_column_index  # 0-based raw column index
        extra_values.append(
            mapped.raw.data_rows[row_offset][col_idx]
@@ -407,7 +422,7 @@ Invariants:
 
 * All rows in a `NormalizedTable` have the **same length**.
 * Canonical columns always appear in manifest order.
-* Extra columns appear in `mapped.extras` order.
+* Extra columns appear in `mapped.column_map.unmapped_columns` order.
 
 ### 6.2 Aggregating issues
 
@@ -418,7 +433,7 @@ For each row:
 
   * `row_index`
   * `field`
-* Append them to `NormalizedTable.issues`.
+* Append them to `NormalizedTable.validation_issues`.
 
 Normalization does **not** decide whether issues are “fatal” or not; it only
 records them. Policy decisions (e.g., “fail the run if any `severity="error"`”)
@@ -436,7 +451,7 @@ During or after normalization, the artifact recorder (`ArtifactSink`) receives:
 
 * For each table:
 
-  * Validation issues: written under `tables[*].validation`.
+  * Validation issues: written under `tables[*].validation_issues`.
 * For each issue:
 
   * `row_index`, `field`, `code`, `severity`, `message`, `details`.
@@ -475,11 +490,11 @@ The exact event set is flexible, but the pattern is:
   * Date formats, locales, thresholds, etc.
 * Keep transforms **local** when possible:
 
-  * Avoid cross-row dependencies unless you have a clear pattern using `state`.
+  * Avoid cross-row dependencies unless you have a clear pattern using `run_state`.
 * Avoid:
 
   * Network calls per row.
-  * Unbounded in-memory structures (e.g., storing all rows in `state`).
+  * Unbounded in-memory structures (e.g., storing all rows in `run_state`).
 
 ### 8.2 Writing good validators
 
@@ -498,7 +513,7 @@ The exact event set is flexible, but the pattern is:
   * Inspect the full `row` (e.g., “if `end_date` < `start_date`”).
 * For cross-row checks:
 
-  * Use `state` to accumulate and check after all rows are seen (or in a
+  * Use `run_state` to accumulate and check after all rows are seen (or in a
     dedicated pass/hook).
 
 ### 8.3 Debugging
@@ -510,7 +525,7 @@ The exact event set is flexible, but the pattern is:
 
   * Input workbook → mapped headers (`artifact.mapping`) →
     normalized rows (`NormalizedTable.rows`) →
-    validation issues (`artifact.validation`).
+    validation issues (`artifact.validation_issues`).
 
 ---
 
@@ -524,10 +539,10 @@ Some known edge cases and potential future enhancements:
   * Normalization should produce:
 
     * `rows = []`,
-    * `issues = []`.
+    * `validation_issues = []`.
 * **Completely unmapped tables**:
 
-  * All columns become extras; canonical row has only `None` values.
+  * All columns become `unmapped_columns`; canonical row has only `None` values.
   * Transform/validate may be skipped for fields with no mapping
     (depending on design choice).
 * **Batch-level validation**:

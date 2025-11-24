@@ -7,6 +7,24 @@ It assumes you’ve read `ade_engine/README.md` and understand that the engine
 is **path‑based and backend‑job‑agnostic**: it sees source/output/log paths and opaque
 metadata for telemetry correlation, not job IDs or queues in its own models.
 
+## Terminology
+
+| Concept        | Term in code      | Notes                                                     |
+| -------------- | ----------------- | --------------------------------------------------------- |
+| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
+| Config package | `config_package`  | Installed `ade_config` package for this run               |
+| Config version | `manifest.version`| Version declared by the config package manifest           |
+| Build          | build             | Virtual environment built for a specific config version   |
+| User data file | `source_file`     | Original spreadsheet on disk                              |
+| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
+| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
+| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
+| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+
+CLI help text should stick to this vocabulary: “input files” refers only to
+CLI parameters (`--input/--input-dir`), while “source files” describe the user
+spreadsheets being processed.
+
 ---
 
 ## 1. Goals of the CLI
