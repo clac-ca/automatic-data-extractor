@@ -235,7 +235,7 @@ Properties:
 * `error: RunError | None`
   Structured error with `code` (e.g., `config_error`, `input_error`, `hook_error`, `pipeline_error`, `unknown_error`), `stage` (e.g., `load_config`, `extracting`, `mapping`, `normalizing`, `writing_output`, `hooks`), and `message`.
 * `output_paths: tuple[Path, ...]`
-  One or more normalized workbook paths (often a single workbook).
+  One or more normalized workbook paths (often a single workbook). CLI JSON uses the same key for consistency.
 * `artifact_path: Path`
   Path to `artifact.json`.
 * `events_path: Path`

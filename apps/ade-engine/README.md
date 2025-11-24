@@ -1099,6 +1099,23 @@ Hook stages (manifest keys → `HookStage` mapping):
 
 ---
 
+### 9. CLI flag → RunRequest mapping
+
+Use consistent mappings between CLI flags and `RunRequest` fields:
+
+| CLI flag        | RunRequest field  |
+|-----------------|-------------------|
+| `--input`       | `input_files`     |
+| `--input-root`  | `input_root`      |
+| `--input-sheet` | `input_sheets`    |
+| `--output-dir`  | `output_root`     |
+| `--logs-dir`    | `logs_root`       |
+| `--config-package` | `config_package` |
+| `--manifest-path`  | `manifest_path`  |
+| `--safe-mode`      | `safe_mode`      |
+
+Docs and help text should phrase mappings explicitly, e.g., “`--output-dir` → `RunRequest.output_root`”.
+
 ## 9. CLI usage
 
 `cli.py` provides a small command‑line interface; `__main__.py` forwards to it.
