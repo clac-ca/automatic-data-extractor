@@ -1,0 +1,421 @@
+# IO and Table Detection
+
+This document describes how the ADE engine:
+
+1. Discovers **input files** (CSV/XLSX),
+2. Streams **rows** from those files in a memory‑friendly way, and
+3. Uses **row detectors** from `ade_config` to turn raw sheets into `RawTable`
+   objects that feed the mapping stage.
+
+It assumes you’ve read:
+
+- `README.md` (high‑level architecture)
+- `01-engine-runtime.md`
+- `02-config-and-manifest.md`
+
+Relevant modules:
+
+- `io.py` — low‑level file and sheet IO.
+- `pipeline/extract.py` — table detection over streamed rows.
+- `ade_config.row_detectors` — config‑side detection scripts.
+
+---
+
+## 1. Responsibilities and constraints
+
+The IO + extract layer has three core responsibilities:
+
+1. **Turn a `RunRequest` into a deterministic sequence of input files.**
+2. **Stream rows** from CSV/XLSX without loading whole workbooks into memory.
+3. **Locate tables** in each sheet by running row detectors and emitting
+   `RawTable` objects.
+
+Design constraints:
+
+- **No job/backend knowledge** — everything is path‑based.
+- **Streaming‑friendly** — large workbooks should not require large amounts
+  of memory.
+- **Config‑driven** — row detectors are provided by `ade_config`, not hard‑coded.
+- **Predictable ordering** — given the same inputs and config, detection is
+  deterministic.
+
+The output of this layer is a list of `RawTable` objects that fully describe
+each detected table, including header row, data rows, and location metadata.
+
+---
+
+## 2. From RunRequest to input files
+
+### 2.1 Sources: `input_files` vs `input_root`
+
+`RunRequest` offers two ways to specify inputs:
+
+- `input_files: Sequence[Path]`  
+  Explicit list of files to process.
+
+- `input_root: Path`  
+  A directory to scan for input files.
+
+Invariants enforced upstream (in `Engine.run`):
+
+- Exactly **one** of `input_files` or `input_root` must be set.
+- Paths are normalized to absolute paths before use.
+
+### 2.2 File discovery
+
+When `input_root` is provided, `io.list_input_files` is used to discover files:
+
+```python
+def list_input_files(input_root: Path) -> list[Path]:
+    """
+    Return a sorted list of CSV/XLSX files under input_root.
+
+    - Ignores hidden files and directories (implementation detail).
+    - Filters by extension (.csv, .xlsx).
+    - Returns absolute Paths in a deterministic order.
+    """
+````
+
+Characteristics:
+
+* **Deterministic order** — ensures reproducible results and artifact output.
+* **Simple filter** — engine currently supports `.csv` and `.xlsx` only.
+* Discovery is **shallow vs recursive** based on implementation; whatever we
+  choose should be documented and stable.
+
+When `input_files` is provided, `list_input_files` is skipped; the engine uses
+the given list as‑is (after normalization).
+
+### 2.3 File type classification
+
+Each discovered input is classified by extension:
+
+* `.csv` → **CSV file**
+* `.xlsx` → **XLSX workbook**
+
+Unsupported extensions are rejected early with a clear, user‑facing error
+(e.g., “File `foo.xls` has unsupported extension `.xls`”).
+
+---
+
+## 3. CSV IO
+
+### 3.1 Streaming rows from CSV
+
+CSV files are treated as a single logical sheet.
+
+`io.py` provides a helper similar to:
+
+```python
+def iter_csv_rows(path: Path) -> Iterable[tuple[int, list]]:
+    """
+    Stream (row_index, row_values) from a CSV file.
+
+    - row_index is 1-based.
+    - row_values is a list of Python primitives (usually strings).
+    - Uses UTF-8 with BOM tolerance by default.
+    """
+```
+
+Behavior:
+
+* Uses `csv.reader` (or equivalent) to iterate rows.
+* Keeps only one row in memory at a time.
+* Passes raw values straight into row detectors; further normalization can
+  happen in detectors or later stages if needed.
+
+### 3.2 CSV and tables
+
+By default, the engine assumes:
+
+* **One potential table per CSV file.**
+
+Row detectors still decide where the header and data blocks are, but the engine
+does not try to find multiple independent tables in a single CSV. That is a
+possible future extension.
+
+---
+
+## 4. XLSX IO
+
+### 4.1 Workbook loading
+
+XLSX files are opened in streaming mode using `openpyxl`:
+
+```python
+from openpyxl import load_workbook
+
+def open_workbook(path: Path):
+    return load_workbook(
+        filename=path,
+        read_only=True,
+        data_only=True,
+    )
+```
+
+Design goals:
+
+* Never load entire workbook into memory when not necessary.
+* Always work in terms of standard Python primitives:
+  strings, numbers, booleans, `None`.
+
+### 4.2 Sheet selection
+
+The mapping from a workbook to sheets is:
+
+* If `RunRequest.input_sheets` is **not** provided:
+
+  * Process all visible sheets in workbook order.
+* If `input_sheets` **is** provided:
+
+  * Restrict to the named sheets.
+  * Missing sheet names are treated as a **hard error** (“Worksheet `Foo`
+    not found in `input.xlsx`”).
+
+This mapping is applied per workbook, so different workbooks can have different
+sheet sets.
+
+### 4.3 Streaming rows from sheets
+
+`io.py` provides a helper like:
+
+```python
+def iter_sheet_rows(path: Path, sheet_name: str) -> Iterable[tuple[int, list]]:
+    """
+    Stream (row_index, row_values) from a sheet in an XLSX file.
+
+    - row_index is 1-based.
+    - row_values is a list of simple Python values (str, float, bool, None, ...).
+    """
+```
+
+Typical logic:
+
+* Use `worksheet.iter_rows(values_only=True)` under the hood.
+* Normalize values:
+
+  * Excel blanks → `None`.
+  * Formulas → evaluated values via `data_only=True` (not formulas).
+
+The exact normalization strategy (e.g., whether to keep `None` or coerce to
+`""`) should be stable and documented; any changes must be coordinated with
+detectors and config authors.
+
+---
+
+## 5. Row detectors and table detection
+
+### 5.1 Role of row detectors
+
+Row detectors live in `ade_config.row_detectors` and are responsible for
+identifying:
+
+* **header rows** — where column names live,
+* **data rows** — the main body of the table.
+
+The engine **does not** hard‑code any notion of a header row or data start/end;
+it relies entirely on detector scores and a small set of heuristics.
+
+### 5.2 Detector API (config side)
+
+A typical row detector has this shape:
+
+```python
+def detect_header_or_data(
+    *,
+    job,                 # RunContext (named "job" for historical reasons)
+    state: dict,
+    row_index: int,      # 1-based index within the sheet
+    row_values: list,    # raw cell values for this row
+    manifest: dict,
+    env: dict | None,
+    logger,
+    **_,
+) -> dict:
+    """
+    Return a dict with per-label scores.
+
+    Example:
+        {"scores": {"header": 0.7, "data": 0.1}}
+    """
+```
+
+Conventions:
+
+* `job` is read‑only from the config’s perspective (it is a `RunContext`).
+* `state` is a per‑run dict that detectors may use to coordinate across rows.
+* `manifest` and `env` provide config‑level context (locale, date formats, etc.).
+* `logger` allows emitting notes and telemetry if needed.
+* Functions must accept `**_` to remain forwards‑compatible.
+
+Return contract:
+
+* A dict containing a `"scores"` key:
+
+  * `"scores"` is a map from labels to floats.
+  * Typical labels are `"header"` and `"data"`, but detectors may emit more
+    specialized labels as long as the engine knows how to interpret them.
+
+### 5.3 Aggregation and scoring
+
+For each row of each sheet:
+
+1. Engine calls all row detectors with that row.
+2. Each detector returns a `"scores"` map.
+3. Engine aggregates scores by label (e.g., `"header"`, `"data"`) by
+   **summing contributions**.
+
+The result is a per‑row summary like:
+
+```python
+RowScore = {
+    "row_index": 12,
+    "header_score": 0.85,
+    "data_score": 0.15,
+}
+```
+
+Exact thresholds and label names are implementation details but should be
+documented in code comments and tests.
+
+### 5.4 Heuristics for deciding table boundaries
+
+Using row scores, `pipeline/extract.py` decides where tables begin and end.
+
+Baseline behavior (for a single table per sheet):
+
+1. Scan rows top‑down until a row passes a **header threshold**:
+
+   * First such row → header row.
+2. Starting from the row after the header:
+
+   * Rows that pass a **data threshold** are considered data rows.
+   * Trailing blocks of rows with very low data signal are ignored.
+3. If no header or data block is found:
+
+   * The sheet does not produce a `RawTable`.
+   * Engine logs an informative diagnostic.
+
+For CSV, the same logic is applied, but there is only a single “sheet.”
+
+Heuristics (thresholds, minimum row counts, gap handling) are tunable in code
+and may be influenced by manifest defaults (e.g., minimum data rows).
+
+---
+
+## 6. RawTable model
+
+Once a table is identified, the engine materializes a `RawTable` dataclass
+(see `types.py`), conceptually:
+
+```python
+@dataclass
+class RawTable:
+    source_file: Path
+    source_sheet: str | None
+    header_row: list[str]          # normalized header cells
+    data_rows: list[list[Any]]     # all data rows for the table
+    header_index: int              # 1-based row index of header in the sheet
+    first_data_index: int          # 1-based row index of first data row
+    last_data_index: int           # 1-based row index of last data row
+```
+
+Details:
+
+* `source_file` — absolute path to the input file.
+* `source_sheet` — sheet name for XLSX; `None` for CSV.
+* `header_row` — header cells normalized to strings (e.g. `None` → `""`).
+* `data_rows` — full set of rows between `first_data_index` and
+  `last_data_index` that the algorithm considers part of the table.
+* Indices are **1‑based** and correspond to original sheet row numbers; this
+  is important for traceability and artifact reporting.
+
+`RawTable` is the only table‑level type passed into column mapping.
+
+---
+
+## 7. Integration with artifact and telemetry
+
+### 7.1 Artifact entries
+
+During extraction, the engine records basic information in the artifact
+(via `ArtifactSink`), such as:
+
+* For each table:
+
+  * `input_file`
+  * `input_sheet`
+  * `header.row_index`
+  * `header.cells`
+  * row counts, etc.
+
+This allows later inspection of what the engine believed the table shape was,
+even before mapping/normalization.
+
+### 7.2 Telemetry events
+
+`PipelineLogger` is available during extraction and may emit events like:
+
+* `pipeline_transition` with phase `"EXTRACTING"`.
+* `file_discovered` and `file_processed` for each file.
+* `table_detected` for each `RawTable` built.
+
+These events are written to `events.ndjson` and can be consumed by the ADE
+backend for realtime progress indicators or metrics.
+
+---
+
+## 8. Edge cases and error handling
+
+### 8.1 Empty files / sheets
+
+* If a file or sheet yields no rows at all:
+
+  * Engine records a note and skip it.
+  * No `RawTable` is created.
+* If detectors cannot identify a header/data region:
+
+  * Engine may:
+
+    * Treat it as “no tables found on sheet,” and/or
+    * Emit a warning in artifact/telemetry.
+
+Policies should be consistent and covered by tests.
+
+### 8.2 Missing or invalid sheets
+
+* If a sheet name listed in `input_sheets` does not exist:
+
+  * The run fails with a clear error.
+  * Artifact indicates failure cause under `run.error`.
+* If a workbook cannot be opened (corrupt file):
+
+  * The run fails similarly, with an explicit “could not read file” error.
+
+### 8.3 Multiple tables per sheet (future)
+
+The initial implementation can assume **one logical table per sheet**, but
+the architecture is compatible with a future where:
+
+* A sheet yields multiple `RawTable` objects, each with its own header/data
+  region.
+* Table detection logic becomes more sophisticated (e.g., gap‑based segmentation).
+
+When/if this is implemented, it should be documented here and in
+`pipeline/extract.py`.
+
+---
+
+## 9. Summary
+
+The IO and table detection layer is responsible for:
+
+1. Turning a `RunRequest` into a **deterministic list of input files**.
+2. Streaming **rows** from CSV/XLSX in a memory‑conscious way.
+3. Using **config‑provided row detectors** to identify table boundaries and
+   emit `RawTable` objects with precise sheet/row metadata.
+
+Everything beyond this point — column mapping, normalization, artifact detail —
+is layered on top of these `RawTable`s. If extraction is correct and well
+instrumented, the rest of the pipeline can reliably reason about what the
+engine “saw” in the original spreadsheets.
