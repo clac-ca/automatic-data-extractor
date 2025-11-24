@@ -184,7 +184,6 @@ def transform(
     manifest: dict,
     env: dict | None,
     logger,
-    **_,
 ) -> dict | None:
     ...
 ```
@@ -198,6 +197,7 @@ Parameters to remember:
 * `field_meta`: the manifest’s metadata for this field (e.g., label, required).
 * `env`: config‑level environment values (locale, date formats, etc.).
 * `logger`: use for notes/events (not `print`).
+* Include `**_` in signatures to allow future parameters without breaking configs.
 
 ### 4.2 Call order & data flow
 
@@ -285,7 +285,6 @@ def validate(
     manifest: dict,
     env: dict | None,
     logger,
-    **_,
 ) -> list[dict]:
     ...
 ```
