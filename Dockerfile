@@ -1,28 +1,29 @@
 # syntax=docker/dockerfile:1.6
 
+# Keep base versions configurable but with sane defaults
 ARG PYTHON_VERSION=3.12
 ARG NODE_VERSION=20
 
-# -----------------------------------------------------------------------------
-# Stage 1: Build frontend (Vite SPA)
-# -----------------------------------------------------------------------------
-FROM node:${NODE_VERSION}-alpine AS web-build
+# =============================================================================
+# Stage 1: Frontend build (Vite SPA)
+# =============================================================================
+FROM node:${NODE_VERSION}-alpine AS frontend-build
 WORKDIR /app
 
-# Install frontend dependencies using only package manifests (better caching)
+# Install frontend dependencies using only manifest files (cache-friendly)
 COPY apps/ade-web/package*.json apps/ade-web/
 RUN npm ci --prefix apps/ade-web --no-audit --no-fund
 
-# Copy source and telemetry schemas needed at build time
+# Copy SPA sources and telemetry schemas required at build-time
 COPY apps/ade-web apps/ade-web
 COPY apps/ade-engine/src/ade_engine/schemas apps/ade-engine/src/ade_engine/schemas
 
-# Build production SPA bundle
+# Build production bundle
 RUN npm run build --prefix apps/ade-web
 
-# -----------------------------------------------------------------------------
-# Stage 2: Build backend / Python packages
-# -----------------------------------------------------------------------------
+# =============================================================================
+# Stage 2: Backend build (install Python packages)
+# =============================================================================
 FROM python:${PYTHON_VERSION}-slim AS backend-build
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -31,30 +32,30 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# System deps to compile any native extensions during pip install
+# System deps for building Python packages (kept out of final image)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy minimal metadata first for better caching
-COPY README.md ./ \
-     apps/ade-cli/pyproject.toml    apps/ade-cli/ \
-     apps/ade-engine/pyproject.toml apps/ade-engine/ \
-     apps/ade-api/pyproject.toml    apps/ade-api/
+# Copy minimal metadata first to maximize layer cache reuse
+COPY README.md ./
+COPY apps/ade-cli/pyproject.toml    apps/ade-cli/
+COPY apps/ade-engine/pyproject.toml apps/ade-engine/
+COPY apps/ade-api/pyproject.toml    apps/ade-api/
 
-# Now copy the full apps tree
+# Now copy full sources
 COPY apps ./apps
 
-# Install CLI, engine, and API into /install so we can copy into runtime
+# Install CLI, engine, and API into an isolated prefix (/install)
 RUN python -m pip install -U pip \
-    && pip install --no-cache-dir --prefix=/install \
+    && python -m pip install --no-cache-dir --prefix=/install \
         ./apps/ade-cli \
         ./apps/ade-engine \
         ./apps/ade-api
 
-# -----------------------------------------------------------------------------
-# Stage 3: Runtime image
-# -----------------------------------------------------------------------------
+# =============================================================================
+# Stage 3: Runtime image (what actually runs in prod)
+# =============================================================================
 FROM python:${PYTHON_VERSION}-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -68,20 +69,22 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# OCI labels: nice to have in registries
 LABEL org.opencontainers.image.title="automatic-data-extractor" \
       org.opencontainers.image.description="ADE — Automatic Data Extractor" \
       org.opencontainers.image.source="https://github.com/clac-ca/automatic-data-extractor"
 
-# Copy installed packages and console scripts from the build stage
+# Bring in installed Python packages + console scripts
 COPY --from=backend-build /install /usr/local
 
-# Copy source tree for Alembic configs, migrations, templates, etc.
+# Copy source tree (for migrations, templates, alembic.ini, etc.)
 COPY apps ./apps
 
-# Copy built SPA into the API's static assets directory
-COPY --from=web-build /app/apps/ade-web/dist ./apps/ade-api/src/ade_api/web/static
+# Copy built SPA into FastAPI's static directory
+COPY --from=frontend-build /app/apps/ade-web/dist \
+    ./apps/ade-api/src/ade_api/web/static
 
-# Create dedicated user and data directory, then fix ownership
+# Create non-root user and data directory, then fix ownership
 RUN groupadd -r ade && useradd -r -g ade ade \
     && mkdir -p /app/data/db /app/data/documents \
     && chown -R ade:ade /app

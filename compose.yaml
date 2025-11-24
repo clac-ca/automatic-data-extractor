@@ -1,18 +1,20 @@
 services:
   ade:
-    image: ghcr.io/clac-ca/automatic-data-extractor:local
     build:
       context: .
       dockerfile: ./Dockerfile
-    container_name: ade
+
+    # Optional: set an explicit image name for the built image
+    # image: ghcr.io/clac-ca/automatic-data-extractor:dev
+
     env_file:
       - .env
+
     ports:
       - "8000:8000"
+
+    # Store everything ADE produces in ./data on the host
     volumes:
       - ./data:/app/data
-    restart: unless-stopped
 
-# Uncomment to use a named volume instead of a bind mount
-# volumes:
-#   ade-data:
+    restart: unless-stopped
