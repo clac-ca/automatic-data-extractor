@@ -246,8 +246,10 @@ stage.
 
 ### 6.3 `workbook` (on_before_save only)
 
-* `workbook` is an openpyxl `Workbook` that the engine will save after the
-  hook stage.
+* `workbook` is the live **openpyxl `Workbook`** the engine is about to save.
+  Use standard openpyxl APIs (styles, charts, row/column dimensions, images)
+  as documented in the openpyxl tutorial. Do **not** call `.save()`; the
+  engine owns the save/close lifecycle.
 * You may:
 
   * create new sheets (e.g., summary, readme, metrics),
