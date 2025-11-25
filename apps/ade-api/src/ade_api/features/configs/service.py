@@ -61,13 +61,13 @@ _MAX_FILE_SIZE = 512 * 1024  # 512 KiB
 _MAX_ASSET_FILE_SIZE = 5 * 1024 * 1024  # 5 MiB
 
 
-def _serialize_config_version(configuration: Configuration) -> ConfigVersionRecord:
+def _serialize_configuration_version(configuration: Configuration) -> ConfigVersionRecord:
     return ConfigVersionRecord(
-        config_version_id=configuration.config_id,
-        config_id=configuration.config_id,
+        configuration_version_id=configuration.id,
+        configuration_id=configuration.id,
         workspace_id=configuration.workspace_id,
         status=configuration.status,
-        semver=str(configuration.config_version) if configuration.config_version else None,
+        semver=str(configuration.configuration_version) if configuration.configuration_version else None,
         content_digest=configuration.content_digest,
         created_at=configuration.created_at,
         updated_at=configuration.updated_at,
@@ -96,24 +96,24 @@ class ConfigurationsService:
     async def list_configurations(self, *, workspace_id: str) -> list[Configuration]:
         return list(await self._repo.list_for_workspace(workspace_id))
 
-    async def list_config_versions(
+    async def list_configuration_versions(
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
     ) -> list[ConfigVersionRecord]:
         configuration = await self._require_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
-        return [_serialize_config_version(configuration)]
+        return [_serialize_configuration_version(configuration)]
 
     async def get_configuration(
-        self, *, workspace_id: str, config_id: str
+        self, *, workspace_id: str, configuration_id: str
     ) -> Configuration:
         return await self._require_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
 
     async def create_configuration(
@@ -123,11 +123,11 @@ class ConfigurationsService:
         display_name: str,
         source: ConfigSource,
     ) -> Configuration:
-        config_id = generate_ulid()
+        configuration_id = generate_ulid()
         try:
             await self._materialize_source(
                 workspace_id=workspace_id,
-                config_id=config_id,
+                configuration_id=configuration_id,
                 source=source,
             )
         except ConfigSourceInvalidError:
@@ -135,17 +135,17 @@ class ConfigurationsService:
         except Exception:
             await self._storage.delete_config(
                 workspace_id=workspace_id,
-                config_id=config_id,
+                configuration_id=configuration_id,
                 missing_ok=True,
             )
             raise
 
         record = Configuration(
+            id=configuration_id,
             workspace_id=workspace_id,
-            config_id=config_id,
             display_name=display_name,
             status=ConfigurationStatus.DRAFT,
-            config_version=0,
+            configuration_version=0,
         )
         self._session.add(record)
         await self._session.flush()
@@ -156,10 +156,10 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        source_config_id: str,
+        source_configuration_id: str,
         display_name: str,
     ) -> Configuration:
-        source = ConfigSourceClone(type="clone", config_id=source_config_id)
+        source = ConfigSourceClone(type="clone", configuration_id=source_configuration_id)
         return await self.create_configuration(
             workspace_id=workspace_id,
             display_name=display_name,
@@ -170,13 +170,13 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
     ) -> ValidationResult:
         configuration = await self._require_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
-        config_path = await self._storage.ensure_config_path(workspace_id, config_id)
+        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
         issues, digest = await self._storage.validate_path(config_path)
         return ValidationResult(configuration=configuration, issues=issues, content_digest=digest)
 
@@ -184,19 +184,19 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
     ) -> Configuration:
         configuration = await self._require_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
-        config_path = await self._storage.ensure_config_path(workspace_id, config_id)
+        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
         issues, digest = await self._storage.validate_path(config_path)
         if issues:
             raise ConfigValidationFailedError(issues)
 
         if configuration.status is ConfigurationStatus.DRAFT:
-            configuration.config_version = max(configuration.config_version or 0, 0) + 1
+            configuration.configuration_version = max(configuration.configuration_version or 0, 0) + 1
             configuration.content_digest = digest
         elif configuration.status in {
             ConfigurationStatus.PUBLISHED,
@@ -209,7 +209,7 @@ class ConfigurationsService:
         else:
             raise ConfigStateError("Configuration is not activatable")
 
-        await self._demote_active(workspace_id=workspace_id, exclude=config_id)
+        await self._demote_active(workspace_id=workspace_id, exclude=configuration_id)
 
         configuration.status = ConfigurationStatus.ACTIVE
         configuration.content_digest = configuration.content_digest or digest
@@ -222,23 +222,23 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
     ) -> Configuration:
         configuration = await self._require_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
 
         if configuration.status is not ConfigurationStatus.DRAFT:
             raise ConfigStateError("Configuration must be a draft before publishing")
 
-        config_path = await self._storage.ensure_config_path(workspace_id, config_id)
+        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
         issues, digest = await self._storage.validate_path(config_path)
         if issues:
             raise ConfigValidationFailedError(issues)
 
         configuration.status = ConfigurationStatus.PUBLISHED
-        configuration.config_version = max(configuration.config_version or 0, 0) + 1
+        configuration.configuration_version = max(configuration.configuration_version or 0, 0) + 1
         configuration.content_digest = digest
         await self._session.flush()
         await self._session.refresh(configuration)
@@ -248,11 +248,11 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
     ) -> Configuration:
         configuration = await self._require_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
         if configuration.status == ConfigurationStatus.INACTIVE:
             return configuration
@@ -265,7 +265,7 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
         prefix: str,
         depth: str,
         include: list[str] | None,
@@ -277,9 +277,9 @@ class ConfigurationsService:
     ) -> dict:
         configuration = await self._require_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
-        config_path = await self._storage.ensure_config_path(workspace_id, config_id)
+        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
         index = await run_in_threadpool(_build_file_index, config_path)
 
         normalized_prefix, prefix_is_file = _normalize_prefix_argument(
@@ -314,7 +314,7 @@ class ConfigurationsService:
 
         listing = {
             "workspace_id": workspace_id,
-            "config_id": config_id,
+            "configuration_id": configuration_id,
             "status": configuration.status,
             "capabilities": {
                 "editable": configuration.status == ConfigurationStatus.DRAFT,
@@ -342,11 +342,11 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
         relative_path: str,
         include_content: bool = True,
     ) -> dict:
-        config_path = await self._storage.ensure_config_path(workspace_id, config_id)
+        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
         rel_path = _normalize_editable_path(relative_path)
         file_path = _ensure_allowed_file_path(config_path, rel_path)
         if not file_path.is_file():
@@ -357,7 +357,7 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
         relative_path: str,
         content: bytes,
         parents: bool,
@@ -366,10 +366,10 @@ class ConfigurationsService:
     ) -> dict:
         configuration = await self._require_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
         _ensure_editable_status(configuration)
-        config_path = await self._storage.ensure_config_path(workspace_id, config_id)
+        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
         rel_path = _normalize_editable_path(relative_path)
         file_path = _ensure_allowed_file_path(config_path, rel_path)
         size_limit = (
@@ -396,16 +396,16 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
         relative_path: str,
         if_match: str | None,
     ) -> None:
         configuration = await self._require_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
         _ensure_editable_status(configuration)
-        config_path = await self._storage.ensure_config_path(workspace_id, config_id)
+        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
         rel_path = _normalize_editable_path(relative_path)
         file_path = _ensure_allowed_file_path(config_path, rel_path)
         await run_in_threadpool(_delete_file_checked, file_path, if_match)
@@ -417,15 +417,15 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
         relative_path: str,
     ) -> Path:
         configuration = await self._require_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
         _ensure_editable_status(configuration)
-        config_path = await self._storage.ensure_config_path(workspace_id, config_id)
+        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
         rel_path = _normalize_editable_path(relative_path)
         dir_path = _ensure_allowed_directory_path(config_path, rel_path)
         await run_in_threadpool(dir_path.mkdir, 0o755, True)
@@ -438,16 +438,16 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
         relative_path: str,
         recursive: bool,
     ) -> None:
         configuration = await self._require_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
         _ensure_editable_status(configuration)
-        config_path = await self._storage.ensure_config_path(workspace_id, config_id)
+        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
         rel_path = _normalize_editable_path(relative_path)
         dir_path = _ensure_allowed_directory_path(config_path, rel_path)
         if not dir_path.exists():
@@ -464,7 +464,7 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
         source_path: str,
         dest_path: str,
         overwrite: bool,
@@ -472,10 +472,10 @@ class ConfigurationsService:
     ) -> dict:
         configuration = await self._require_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
         _ensure_editable_status(configuration)
-        config_path = await self._storage.ensure_config_path(workspace_id, config_id)
+        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
 
         src_rel = _normalize_editable_path(source_path)
         dest_rel = _normalize_editable_path(dest_path)
@@ -529,22 +529,22 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
     ) -> bytes:
-        config_path = await self._storage.ensure_config_path(workspace_id, config_id)
+        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
         return await run_in_threadpool(_build_zip_bytes, config_path)
 
     async def _materialize_source(
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
         source: ConfigSource,
     ) -> None:
         if isinstance(source, ConfigSourceTemplate):
             await self._storage.materialize_from_template(
                 workspace_id=workspace_id,
-                config_id=config_id,
+                configuration_id=configuration_id,
                 template_id=source.template_id,
             )
             return
@@ -552,8 +552,8 @@ class ConfigurationsService:
         if isinstance(source, ConfigSourceClone):
             await self._storage.materialize_from_clone(
                 workspace_id=workspace_id,
-                source_config_id=source.config_id,
-                new_config_id=config_id,
+                source_configuration_id=source.configuration_id,
+                new_configuration_id=configuration_id,
             )
             return
 
@@ -561,7 +561,7 @@ class ConfigurationsService:
 
     async def _demote_active(self, workspace_id: str, exclude: str) -> None:
         existing = await self._repo.get_active(workspace_id)
-        if existing is None or existing.config_id == exclude:
+        if existing is None or existing.id == exclude:
             return
         existing.status = ConfigurationStatus.INACTIVE
         await self._session.flush()
@@ -570,14 +570,14 @@ class ConfigurationsService:
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
     ) -> Configuration:
         configuration = await self._repo.get(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
         if configuration is None:
-            raise ConfigurationNotFoundError(config_id)
+            raise ConfigurationNotFoundError(configuration_id)
         return configuration
 
 
@@ -626,7 +626,7 @@ class DestinationExistsError(Exception):
 
 def _ensure_editable_status(configuration: Configuration) -> None:
     if configuration.status != ConfigurationStatus.DRAFT:
-        raise ConfigStateError("config_not_editable")
+        raise ConfigStateError("configuration_not_editable")
 
 
 def _normalize_editable_path(path: str) -> PurePosixPath:

@@ -4,7 +4,7 @@ This document describes the **hook system** that lets `ade_config` plug custom
 logic into well‑defined points of an ADE engine run, without changing the
 engine core.
 
-Hooks are how configs:
+Hooks are how configurations:
 
 - add custom reporting,
 - adjust tables or mappings,
@@ -46,7 +46,7 @@ At a high level:
   - artifact and telemetry sinks,
   - and phase‑specific objects (tables, workbook, result).
 
-Hooks are **config‑owned**:
+Hooks are **configuration-owned**:
 
 - The engine defines *when* hooks are called and *what* data they see.
 - The config defines *what* those hooks do.
@@ -426,7 +426,7 @@ When in doubt, check:
 
 ## 10. Hook author checklist
 
-When adding or modifying hooks in a config:
+When adding or modifying hooks in a configuration:
 
 1. **Decide the stage(s)** you need:
 
@@ -446,4 +446,4 @@ When adding or modifying hooks in a config:
    * verify hooks behave as expected.
 
 With this model, hooks give you powerful extension points while keeping the
-core engine small, predictable, and reusable across many configs.
+core engine small, predictable, and reusable across many configurations.

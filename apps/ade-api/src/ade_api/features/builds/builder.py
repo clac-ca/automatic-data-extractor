@@ -77,7 +77,7 @@ class VirtualEnvironmentBuilder:
         *,
         build_id: str,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
         target_path: Path,
         config_path: Path,
         engine_spec: str,
@@ -197,7 +197,7 @@ class VirtualEnvironmentBuilder:
                 {
                     "build_id": build_id,
                     "workspace_id": workspace_id,
-                    "config_id": config_id,
+                    "configuration_id": configuration_id,
                     "python_version": python_version,
                     "engine_version": engine_version,
                 },
@@ -207,7 +207,7 @@ class VirtualEnvironmentBuilder:
         except Exception as exc:  # pragma: no cover - defensive cleanup
             await self._remove_target(target_path)
             message = (
-                f"Failed to build venv for workspace={workspace_id} config={config_id}: {exc}"
+                f"Failed to build venv for workspace={workspace_id} configuration={configuration_id}: {exc}"
             )
             raise BuildExecutionError(message, build_id=build_id) from exc
 

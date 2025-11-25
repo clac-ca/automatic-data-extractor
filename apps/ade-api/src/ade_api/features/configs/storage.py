@@ -12,6 +12,9 @@ from pathlib import Path
 
 from fastapi.concurrency import run_in_threadpool
 
+from ade_api.settings import Settings
+from ade_api.storage_layout import workspace_config_root
+
 from .exceptions import (
     ConfigPublishConflictError,
     ConfigSourceInvalidError,
@@ -40,9 +43,23 @@ _COPY_IGNORE_PATTERNS = (
 class ConfigStorage:
     """Manage filesystem copies and validation for configurations."""
 
-    def __init__(self, *, templates_root: Path, configs_root: Path) -> None:
+    def __init__(
+        self,
+        *,
+        templates_root: Path,
+        configs_root: Path | None = None,
+        settings: Settings | None = None,
+    ) -> None:
+        if configs_root is None and settings is None:
+            raise ValueError("ConfigStorage requires settings or configs_root")
         self._templates_root = templates_root.expanduser().resolve()
-        self._configs_root = configs_root.expanduser().resolve()
+        if configs_root is None:
+            assert settings is not None
+            base_root = settings.configs_dir
+        else:
+            base_root = configs_root
+        self._configs_root = base_root.expanduser().resolve()
+        self._settings = settings
 
     @property
     def templates_root(self) -> Path:
@@ -53,16 +70,18 @@ class ConfigStorage:
         return self._configs_root
 
     def workspace_root(self, workspace_id: str) -> Path:
+        if self._settings is not None:
+            return workspace_config_root(self._settings, workspace_id)
         return self._configs_root / workspace_id / "config_packages"
 
-    def config_path(self, workspace_id: str, config_id: str) -> Path:
-        return self.workspace_root(workspace_id) / config_id
+    def config_path(self, workspace_id: str, configuration_id: str) -> Path:
+        return self.workspace_root(workspace_id) / configuration_id
 
     async def materialize_from_template(
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
         template_id: str,
     ) -> None:
         template_path = (self._templates_root / template_id).resolve()
@@ -75,34 +94,34 @@ class ConfigStorage:
         await self._materialize_from_source(
             source=template_path,
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
 
     async def materialize_from_clone(
         self,
         *,
         workspace_id: str,
-        source_config_id: str,
-        new_config_id: str,
+        source_configuration_id: str,
+        new_configuration_id: str,
     ) -> None:
-        source_path = self.config_path(workspace_id, source_config_id)
+        source_path = self.config_path(workspace_id, source_configuration_id)
         exists = await run_in_threadpool(source_path.is_dir)
         if not exists:
             raise ConfigSourceNotFoundError(
-                f"Configuration '{source_config_id}' not found"
+                f"Configuration '{source_configuration_id}' not found"
             )
         await self._materialize_from_source(
             source=source_path,
             workspace_id=workspace_id,
-            config_id=new_config_id,
+            configuration_id=new_configuration_id,
         )
 
-    async def ensure_config_path(self, workspace_id: str, config_id: str) -> Path:
-        path = self.config_path(workspace_id, config_id)
+    async def ensure_config_path(self, workspace_id: str, configuration_id: str) -> Path:
+        path = self.config_path(workspace_id, configuration_id)
         exists = await run_in_threadpool(path.is_dir)
         if not exists:
             raise ConfigStorageNotFoundError(
-                f"Configuration files missing for {config_id}"
+                f"Configuration files missing for {configuration_id}"
             )
         return path
 
@@ -110,10 +129,10 @@ class ConfigStorage:
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
         missing_ok: bool = True,
     ) -> None:
-        path = self.config_path(workspace_id, config_id)
+        path = self.config_path(workspace_id, configuration_id)
 
         def _remove() -> None:
             try:
@@ -182,11 +201,11 @@ class ConfigStorage:
         *,
         source: Path,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
     ) -> None:
         workspace_root = self.workspace_root(workspace_id)
-        destination = workspace_root / config_id
-        staging = workspace_root / f".staging-{config_id}-{secrets.token_hex(4)}"
+        destination = workspace_root / configuration_id
+        staging = workspace_root / f".staging-{configuration_id}-{secrets.token_hex(4)}"
 
         async def _copy_to_stage() -> None:
             def _copy() -> None:
@@ -250,6 +269,8 @@ def _calculate_digest(root: Path) -> str:
 def _collect_digest_files(root: Path) -> list[Path]:
     def _iter() -> Iterable[Path]:
         for path in root.rglob("*"):
+            if ".venv" in path.parts:
+                continue
             if path.is_file() and path.suffix.lower() in _DIGEST_SUFFIXES:
                 yield path
 
@@ -258,4 +279,8 @@ def _collect_digest_files(root: Path) -> list[Path]:
     return files
 
 
-__all__ = ["ConfigStorage"]
+__all__ = ["ConfigStorage", "compute_config_digest"]
+def compute_config_digest(root: Path) -> str:
+    """Public helper to hash a configuration source tree (excluding .venv)."""
+
+    return _calculate_digest(root)

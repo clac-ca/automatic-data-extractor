@@ -1,6 +1,6 @@
 # 09 – Workbench editor and scripting
 
-The **Config Builder workbench** is an IDE‑style surface used to edit ADE configuration packages and run builds/validations directly from the browser.
+The **Config Builder workbench** is the dedicated editing window used to edit ADE configuration packages and run environment builds, validation runs, and test runs directly from the browser. Use “workbench” for the whole window and “editor” only for the Monaco instance.
 
 This document covers the internal architecture of the workbench in `ade-web`:
 
@@ -14,7 +14,12 @@ This document covers the internal architecture of the workbench in `ade-web`:
 - The Monaco‑based **CodeEditor** and **theme** preference.
 - ADE‑specific **scripting helpers** for detectors, transforms, validators, and hooks.
 
-Config lifecycles and manifest details live in `08-configurations-and-config-builder.md`. Core naming (e.g. “run”) is defined in `01-domain-model-and-naming.md`.
+Workbench run actions use the canonical `RunOptions` shape
+(`dryRun`/`validateOnly`/`inputSheetNames` with optional `mode`) in camelCase
+and convert those to backend snake_case fields. Environment builds are separate
+`Build` entities; validation runs and test runs are always `Run` entities.
+
+Configuration lifecycles and manifest details live in `08-configurations-and-config-builder.md`. Core naming (e.g. “run”) is defined in `01-domain-model-and-naming.md`.
 
 ---
 
@@ -22,8 +27,8 @@ Config lifecycles and manifest details live in `08-configurations-and-config-bui
 
 A workbench session is always scoped to a **single configuration in a single workspace**.
 
-- **Session key**: `(workspaceId, configId)`
-- At any given time, in a browser tab, there is at most **one active workbench** for that `(workspaceId, configId)`.
+- **Session key**: `(workspaceId, configurationId)`
+- At any given time, in a browser tab, there is at most **one active workbench** for that `(workspaceId, configurationId)`.
 - Session‑scoped state includes:
   - Window state (restored / maximized / docked).
   - Open tabs and MRU order.
@@ -34,7 +39,7 @@ A workbench session is always scoped to a **single configuration in a single wor
 
 Typical entry:
 
-- User clicks “Open editor” or similar from the Config Builder screen.
+- User clicks “Open in workbench” (UI label may read “Open editor”) from the Config Builder screen.
 - Current URL is captured as the **return path** and stored under:
 
   ```text
@@ -134,7 +139,7 @@ The workbench uses a familiar editor layout so it’s easy to orient yourself:
 Leftmost vertical bar that selects the **mode**:
 
 * **Explorer** – file tree. (Implemented.)
-* **Search** – reserved for future in‑config search.
+* **Search** – reserved for future in‑configuration search.
 * **SCM** – reserved for future source control features.
 * **Extensions** – reserved for future extensibility.
 * **Settings** (gear) – workbench‑level preferences.
@@ -143,7 +148,7 @@ Currently, only **Explorer** is active; the others are placeholders.
 
 ### 2.2 Explorer panel
 
-Left sidebar that shows the **config file tree**:
+Left sidebar that shows the **configuration file tree**:
 
 * Renders `WorkbenchFileNode` trees (see §3).
 * Highlights the currently active file.
@@ -176,7 +181,7 @@ Center panel that hosts the tab strip and Monaco editor.
 
   * Uses the shared `CodeEditor` (see §7).
   * Binds ⌘S / Ctrl+S to save the active file.
-  * Uses the resolved editor theme for `(workspaceId, configId)`.
+  * Uses the resolved editor theme for `(workspaceId, configurationId)`.
   * Displays language‑appropriate syntax highlighting (`language` from tab/file metadata).
 
 ### 2.4 Console and validation panel (bottom)
@@ -196,7 +201,7 @@ Bottom strip toggles between:
 
 * **Validation tab**
 
-  * Shows structured validation issues from a validation run or `validate_only` operation:
+  * Shows structured validation issues from a validation run (`RunOptions.validateOnly`):
 
     ```ts
     interface ValidationIssue {
@@ -205,7 +210,7 @@ Bottom strip toggles between:
       file?: string;
       line?: number;
       column?: number;
-      path?: string; // manifest/config path
+      path?: string; // manifest/configuration path
     }
     ```
   * Issues can be grouped by file / table / severity.
@@ -265,7 +270,7 @@ export interface WorkbenchFileNode {
 
 **Invariants:**
 
-* `id` is a canonical, slash‑separated path relative to the config root.
+* `id` is a canonical, slash‑separated path relative to the configuration root.
 * `name === basename(id)`.
 * Folders (`kind: "folder"`) may have `children`; files do not.
 * `language` is present for editable files; folders can leave it undefined.
@@ -325,7 +330,7 @@ The tree itself is **pure** (no side effects). Operations go through APIs and th
 
   * Selected file.
   * Open tabs (see §4.3).
-* **Create / rename / delete** → call appropriate config file endpoints, then refresh or incrementally update the tree.
+* **Create / rename / delete** → call appropriate configuration file endpoints, then refresh or incrementally update the tree.
 
 ---
 
@@ -420,7 +425,7 @@ A dedicated hook manages tab state and IO for file content:
 
 ### 4.3 Tab persistence
 
-We persist tab **identity**, not content, to allow seamless reloads without storing code outside the config.
+We persist tab **identity**, not content, to allow seamless reloads without storing code outside the configuration package.
 
 ```ts
 interface PersistedWorkbenchTabs {
@@ -433,7 +438,7 @@ interface PersistedWorkbenchTabs {
 Storage key:
 
 ```text
-ade.ui.workspace.<workspaceId>.config.<configId>.tabs
+ade.ui.workspace.<workspaceId>.configuration.<configurationId>.tabs
 ```
 
 Hydration algorithm:
@@ -574,7 +579,7 @@ interface ConsolePanelPreferences {
 Storage key:
 
 ```text
-ade.ui.workspace.<workspaceId>.config.<configId>.console
+ade.ui.workspace.<workspaceId>.configuration.<configurationId>.console
 ```
 
 Hydration:
@@ -609,7 +614,7 @@ The **Build environment** button starts a build and streams events into the cons
 Conceptually:
 
 ```ts
-streamBuild(workspaceId, configId, options, signal);
+streamBuild(workspaceId, configurationId, options, signal);
 ```
 
 * Uses NDJSON to deliver events (status updates, log lines).
@@ -629,16 +634,18 @@ Keyboard shortcuts (wired in workbench chrome):
 * ⌘B / Ctrl+B → default build behaviour.
 * ⇧⌘B / Ctrl+Shift+B → force rebuild.
 
-### 7.2 Run and validation streams
+### 7.2 Run streams (validation and test modes)
 
 The **Run extraction** button in the workbench:
 
 * Opens a dialog that lets the user choose a document and optionally sheet names.
-* On confirm, starts a run (using the current config) and streams events into the console.
+* On confirm, starts a run (using the current configuration) with `RunOptions`
+  (camelCase → snake_case) and streams events into the console.
 
-Validation:
+Validation runs:
 
-* The **Run validation** button triggers a `validate_only` run.
+* The **Validation run** action triggers a run with `RunOptions.validateOnly:
+  true` (often `mode: "validation"`).
 * While running:
 
   * Console shows streamed events.
@@ -655,7 +662,7 @@ Error handling:
 
 ## 8. Editor and theme
 
-The workbench uses a shared Monaco wrapper component and per‑config theme preferences.
+The workbench uses a shared Monaco wrapper component and per‑configuration theme preferences.
 
 ### 8.1 CodeEditor
 
@@ -702,12 +709,12 @@ export type EditorThemeId = "ade-dark" | "vs-light";
 
 Hook:
 
-* `useEditorThemePreference(workspaceId, configId)`:
+* `useEditorThemePreference(workspaceId, configurationId)`:
 
   * Storage key:
 
     ```text
-    ade.ui.workspace.<workspaceId>.config.<configId>.editor-theme
+    ade.ui.workspace.<workspaceId>.configuration.<configurationId>.editor-theme
     ```
 
   * Returns:
@@ -731,7 +738,7 @@ Monaco setup:
 
 ## 9. ADE scripting helpers
 
-To make config editing safer and more discoverable, the workbench augments Monaco with ADE‑aware helpers.
+To make configuration editing safer and more discoverable, the workbench augments Monaco with ADE‑aware helpers.
 
 ### 9.1 Goals
 
@@ -965,7 +972,7 @@ When evolving the workbench, keep these principles in mind:
 
 * **Scripting surface as contract**
 
-  * Treat the documented ADE entrypoints and parameters as a public contract for config authors.
+  * Treat the documented ADE entrypoints and parameters as a public contract for configuration authors.
   * Update helper specs and this doc together when those contracts change.
 
 This document is the source of truth for the workbench editor and scripting architecture. If implementation diverges, update the implementation *and* this file together so future developers and agents can reason about `ade-web` without guesswork.

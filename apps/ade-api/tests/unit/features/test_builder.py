@@ -61,7 +61,7 @@ async def test_builder_installs_dependencies(monkeypatch: pytest.MonkeyPatch, tm
         async for event in builder.build_stream(
             build_id="build",
             workspace_id="workspace",
-            config_id="config",
+            configuration_id="config",
             target_path=tmp_path / "venv",
             config_path=config_root,
             engine_spec=engine_spec,

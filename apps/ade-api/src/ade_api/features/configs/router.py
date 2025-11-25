@@ -22,7 +22,7 @@ from fastapi import (
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from ade_api.shared.dependency import (
-    get_configs_service,
+    get_configurations_service,
     require_authenticated,
     require_csrf,
     require_workspace,
@@ -67,7 +67,7 @@ from .service import (
 
 router = APIRouter(
     prefix="/workspaces/{workspace_id}",
-    tags=["configs"],
+    tags=["configurations"],
     dependencies=[Security(require_authenticated)],
 )
 
@@ -150,12 +150,12 @@ def _parse_range_header(header_value: str, total_size: int) -> tuple[int, int]:
 )
 async def list_configurations(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     page: Annotated[PageParams, Depends()],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.Read"),
+            require_workspace("Workspace.Configurations.Read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -172,19 +172,19 @@ async def list_configurations(
 
 
 @router.get(
-    "/configurations/{config_id}",
+    "/configurations/{configuration_id}",
     response_model=ConfigurationRecord,
     response_model_exclude_none=True,
     summary="Retrieve configuration metadata",
 )
 async def read_configuration(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.Read"),
+            require_workspace("Workspace.Configurations.Read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -192,58 +192,58 @@ async def read_configuration(
     try:
         record = await service.get_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(
-            status.HTTP_404_NOT_FOUND, detail="config_not_found"
+            status.HTTP_404_NOT_FOUND, detail="configuration_not_found"
         ) from exc
     return ConfigurationRecord.model_validate(record)
 
 
 @router.get(
-    "/configurations/{config_id}/versions",
+    "/configurations/{configuration_id}/versions",
     response_model=list[ConfigVersionRecord],
     summary="List configuration versions (drafts and published)",
     response_model_exclude_none=False,
 )
-async def list_config_versions_endpoint(
+async def list_configuration_versions_endpoint(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.Read"),
+            require_workspace("Workspace.Configurations.Read"),
             scopes=["{workspace_id}"],
         ),
     ],
 ) -> list[ConfigVersionRecord]:
     try:
-        versions = await service.list_config_versions(
+        versions = await service.list_configuration_versions(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
     except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="config_not_found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
     return [ConfigVersionRecord.model_validate(version) for version in versions]
 
 
 @router.get(
-    "/configurations/{config_id}/files",
+    "/configurations/{configuration_id}/files",
     response_model=FileListing,
     response_model_exclude_none=True,
     summary="List editable files and directories",
 )
 async def list_config_files(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
     request: Request,
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.Read"),
+            require_workspace("Workspace.Configurations.Read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -259,7 +259,7 @@ async def list_config_files(
     try:
         listing = await service.list_files(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
             prefix=prefix,
             depth=depth,
             include=include or [],
@@ -270,7 +270,7 @@ async def list_config_files(
             order=order,
         )
     except ConfigurationNotFoundError:
-        _problem("config_not_found", status.HTTP_404_NOT_FOUND)
+        _problem("configuration_not_found", status.HTTP_404_NOT_FOUND)
     except InvalidDepthError:
         _problem(
             "invalid_depth",
@@ -306,11 +306,11 @@ async def list_config_files(
 )
 async def create_configuration(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.ReadWrite"),
+            require_workspace("Workspace.Configurations.ReadWrite"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -344,7 +344,7 @@ async def create_configuration(
 
 
 @router.post(
-    "/configurations/{config_id}/validate",
+    "/configurations/{configuration_id}/validate",
     dependencies=[Security(require_csrf)],
     response_model=ConfigurationValidateResponse,
     summary="Validate the configuration on disk",
@@ -352,12 +352,12 @@ async def create_configuration(
 )
 async def validate_configuration(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.ReadWrite"),
+            require_workspace("Workspace.Configurations.ReadWrite"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -365,21 +365,20 @@ async def validate_configuration(
     try:
         result = await service.validate_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(
-            status.HTTP_404_NOT_FOUND, detail="config_not_found"
+            status.HTTP_404_NOT_FOUND, detail="configuration_not_found"
         ) from exc
     except ConfigStorageNotFoundError as exc:
         raise HTTPException(
-            status.HTTP_404_NOT_FOUND, detail="config_storage_missing"
+            status.HTTP_404_NOT_FOUND, detail="configuration_storage_missing"
         ) from exc
 
     payload = ConfigurationValidateResponse(
         id=result.configuration.id,
         workspace_id=workspace_id,
-        config_id=config_id,
         status=result.configuration.status,
         content_digest=result.content_digest,
         issues=result.issues,
@@ -388,7 +387,7 @@ async def validate_configuration(
 
 
 @router.get(
-    "/configurations/{config_id}/files/{file_path:path}",
+    "/configurations/{configuration_id}/files/{file_path:path}",
     responses={
         status.HTTP_200_OK: {"content": {"application/octet-stream": {} }},
         status.HTTP_206_PARTIAL_CONTENT: {"content": {"application/octet-stream": {}}},
@@ -397,14 +396,14 @@ async def validate_configuration(
 )
 async def read_config_file(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
     file_path: str,
     request: Request,
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.Read"),
+            require_workspace("Workspace.Configurations.Read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -415,12 +414,12 @@ async def read_config_file(
     try:
         info = await service.read_file(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
             relative_path=file_path,
             include_content=True,
         )
     except ConfigurationNotFoundError:
-        _problem("config_not_found", status.HTTP_404_NOT_FOUND)
+        _problem("configuration_not_found", status.HTTP_404_NOT_FOUND)
     except FileNotFoundError:
         _problem("file_not_found", status.HTTP_404_NOT_FOUND)
     except InvalidPathError as exc:
@@ -494,18 +493,18 @@ async def read_config_file(
 
 
 @router.head(
-    "/configurations/{config_id}/files/{file_path:path}",
+    "/configurations/{configuration_id}/files/{file_path:path}",
     responses={status.HTTP_200_OK: {"model": None}},
 )
 async def head_config_file(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
     file_path: str,
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.Read"),
+            require_workspace("Workspace.Configurations.Read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -515,12 +514,12 @@ async def head_config_file(
     try:
         info = await service.read_file(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
             relative_path=file_path,
             include_content=False,
         )
     except ConfigurationNotFoundError:
-        _problem("config_not_found", status.HTTP_404_NOT_FOUND)
+        _problem("configuration_not_found", status.HTTP_404_NOT_FOUND)
     except FileNotFoundError:
         _problem("file_not_found", status.HTTP_404_NOT_FOUND)
     except InvalidPathError as exc:
@@ -542,7 +541,7 @@ async def head_config_file(
 
 
 @router.post(
-    "/configurations/{config_id}/activate",
+    "/configurations/{configuration_id}/activate",
     dependencies=[Security(require_csrf)],
     response_model=ConfigurationRecord,
     summary="Activate a configuration",
@@ -550,12 +549,12 @@ async def head_config_file(
 )
 async def activate_configuration_endpoint(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.ReadWrite"),
+            require_workspace("Workspace.Configurations.ReadWrite"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -566,14 +565,14 @@ async def activate_configuration_endpoint(
     try:
         record = await service.activate_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
     except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="config_not_found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
     except ConfigStorageNotFoundError as exc:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            detail="config_storage_missing",
+            detail="configuration_storage_missing",
         ) from exc
     except ConfigValidationFailedError as exc:
         detail = {
@@ -588,7 +587,7 @@ async def activate_configuration_endpoint(
 
 
 @router.post(
-    "/configurations/{config_id}/publish",
+    "/configurations/{configuration_id}/publish",
     dependencies=[Security(require_csrf)],
     response_model=ConfigurationRecord,
     summary="Publish a configuration draft",
@@ -596,12 +595,12 @@ async def activate_configuration_endpoint(
 )
 async def publish_configuration_endpoint(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.ReadWrite"),
+            require_workspace("Workspace.Configurations.ReadWrite"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -611,14 +610,14 @@ async def publish_configuration_endpoint(
     try:
         record = await service.publish_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
     except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="config_not_found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
     except ConfigStorageNotFoundError as exc:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            detail="config_storage_missing",
+            detail="configuration_storage_missing",
         ) from exc
     except ConfigValidationFailedError as exc:
         detail = {
@@ -633,7 +632,7 @@ async def publish_configuration_endpoint(
 
 
 @router.post(
-    "/configurations/{config_id}/deactivate",
+    "/configurations/{configuration_id}/deactivate",
     dependencies=[Security(require_csrf)],
     response_model=ConfigurationRecord,
     summary="Deactivate a configuration (was 'archive')",
@@ -641,12 +640,12 @@ async def publish_configuration_endpoint(
 )
 async def deactivate_configuration_endpoint(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.ReadWrite"),
+            require_workspace("Workspace.Configurations.ReadWrite"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -654,27 +653,27 @@ async def deactivate_configuration_endpoint(
     try:
         record = await service.deactivate_configuration(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
     except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="config_not_found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
     return ConfigurationRecord.model_validate(record)
 
 
 @router.get(
-    "/configurations/{config_id}/export",
+    "/configurations/{configuration_id}/export",
     responses={
         status.HTTP_200_OK: {"content": {"application/zip": {}}},
     },
 )
 async def export_config(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.Read"),
+            require_workspace("Workspace.Configurations.Read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -685,19 +684,19 @@ async def export_config(
     try:
         blob = await service.export_zip(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
         )
     except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="config_not_found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
     stream = io.BytesIO(blob)
     headers = {
-        "Content-Disposition": f'attachment; filename="{config_id}.zip"',
+        "Content-Disposition": f'attachment; filename="{configuration_id}.zip"',
     }
     return StreamingResponse(stream, media_type="application/zip", headers=headers)
 
 
 @router.put(
-    "/configurations/{config_id}/files/{file_path:path}",
+    "/configurations/{configuration_id}/files/{file_path:path}",
     dependencies=[Security(require_csrf)],
     response_model=FileWriteResponse,
     responses={
@@ -707,14 +706,14 @@ async def export_config(
 )
 async def upsert_config_file(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
     file_path: str,
     request: Request,
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.ReadWrite"),
+            require_workspace("Workspace.Configurations.ReadWrite"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -728,7 +727,7 @@ async def upsert_config_file(
     try:
         result = await service.write_file(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
             relative_path=file_path,
             content=data,
             parents=parents,
@@ -736,9 +735,9 @@ async def upsert_config_file(
             if_none_match=if_none_match,
         )
     except ConfigurationNotFoundError:
-        _problem("config_not_found", status.HTTP_404_NOT_FOUND)
+        _problem("configuration_not_found", status.HTTP_404_NOT_FOUND)
     except ConfigStateError as exc:
-        _problem("config_not_editable", status.HTTP_409_CONFLICT, detail=str(exc))
+        _problem("configuration_not_editable", status.HTTP_409_CONFLICT, detail=str(exc))
     except FileNotFoundError:
         _problem("file_not_found", status.HTTP_404_NOT_FOUND)
     except InvalidPathError as exc:
@@ -779,20 +778,20 @@ async def upsert_config_file(
 
 
 @router.delete(
-    "/configurations/{config_id}/files/{file_path:path}",
+    "/configurations/{configuration_id}/files/{file_path:path}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_config_file(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
     file_path: str,
     request: Request,
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.ReadWrite"),
+            require_workspace("Workspace.Configurations.ReadWrite"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -803,14 +802,14 @@ async def delete_config_file(
     try:
         await service.delete_file(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
             relative_path=file_path,
             if_match=if_match,
         )
     except ConfigurationNotFoundError:
-        _problem("config_not_found", status.HTTP_404_NOT_FOUND)
+        _problem("configuration_not_found", status.HTTP_404_NOT_FOUND)
     except ConfigStateError as exc:
-        _problem("config_not_editable", status.HTTP_409_CONFLICT, detail=str(exc))
+        _problem("configuration_not_editable", status.HTTP_409_CONFLICT, detail=str(exc))
     except FileNotFoundError:
         _problem("file_not_found", status.HTTP_404_NOT_FOUND)
     except InvalidPathError as exc:
@@ -829,19 +828,19 @@ async def delete_config_file(
 
 
 @router.post(
-    "/configurations/{config_id}/directories/{directory_path:path}",
+    "/configurations/{configuration_id}/directories/{directory_path:path}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_201_CREATED,
 )
 async def create_config_directory(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
     directory_path: str,
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.ReadWrite"),
+            require_workspace("Workspace.Configurations.ReadWrite"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -851,11 +850,11 @@ async def create_config_directory(
     try:
         await service.create_directory(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
             relative_path=directory_path,
         )
     except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="config_not_found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
     except ConfigStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except InvalidPathError as exc:
@@ -866,19 +865,19 @@ async def create_config_directory(
 
 
 @router.delete(
-    "/configurations/{config_id}/directories/{directory_path:path}",
+    "/configurations/{configuration_id}/directories/{directory_path:path}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_config_directory(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
     directory_path: str,
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.ReadWrite"),
+            require_workspace("Workspace.Configurations.ReadWrite"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -889,12 +888,12 @@ async def delete_config_directory(
     try:
         await service.delete_directory(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
             relative_path=directory_path,
             recursive=recursive,
         )
     except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="config_not_found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
     except ConfigStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except FileNotFoundError:
@@ -907,21 +906,21 @@ async def delete_config_directory(
 
 
 @router.patch(
-    "/configurations/{config_id}/files/{file_path:path}",
+    "/configurations/{configuration_id}/files/{file_path:path}",
     dependencies=[Security(require_csrf)],
     response_model=FileRenameResponse,
     summary="Rename or move a file",
 )
 async def rename_config_file(
     workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
     file_path: str,
     payload: FileRenameRequest,
-    service: Annotated[ConfigurationsService, Depends(get_configs_service)],
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configs.ReadWrite"),
+            require_workspace("Workspace.Configurations.ReadWrite"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -933,14 +932,14 @@ async def rename_config_file(
     try:
         result = await service.rename_entry(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
             source_path=file_path,
             dest_path=payload.to,
             overwrite=payload.overwrite,
             dest_if_match=payload.dest_if_match,
         )
     except ConfigurationNotFoundError:
-        _problem("config_not_found", status.HTTP_404_NOT_FOUND)
+        _problem("configuration_not_found", status.HTTP_404_NOT_FOUND)
     except FileNotFoundError:
         _problem("file_not_found", status.HTTP_404_NOT_FOUND)
     except InvalidPathError as exc:
@@ -948,7 +947,7 @@ async def rename_config_file(
     except PathNotAllowedError as exc:
         _problem("path_not_allowed", status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ConfigStateError as exc:
-        _problem("config_not_editable", status.HTTP_409_CONFLICT, detail=str(exc))
+        _problem("configuration_not_editable", status.HTTP_409_CONFLICT, detail=str(exc))
     except PreconditionRequiredError:
         _problem("precondition_required", status.HTTP_428_PRECONDITION_REQUIRED)
     except PreconditionFailedError as exc:

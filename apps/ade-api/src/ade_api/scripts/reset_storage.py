@@ -57,6 +57,7 @@ def _gather_storage_targets(settings: Settings) -> list[Path]:
         if normalized is not None:
             targets.add(normalized)
 
+    add(settings.workspaces_dir)
     add(settings.documents_dir)
     add(settings.configs_dir)
     add(settings.venvs_dir)

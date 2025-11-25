@@ -68,11 +68,7 @@ def upgrade() -> None:
     _create_document_tags()
     _create_api_keys()
     _create_system_settings()
-    _create_configs()
-    _create_config_versions()
-    _create_workspace_config_states()
     _create_configurations()
-    _create_configuration_builds()
     _create_runs()
     _create_run_logs()
     _create_builds()
@@ -617,7 +613,6 @@ def _create_configurations() -> None:
         "configurations",
         sa.Column("id", sa.String(length=26), primary_key=True),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
-        sa.Column("config_id", sa.String(length=26), nullable=False),
         sa.Column("display_name", sa.String(length=255), nullable=False),
         sa.Column(
             "status",
@@ -626,12 +621,24 @@ def _create_configurations() -> None:
             server_default=sa.text("'draft'"),
         ),
         sa.Column(
-            "config_version",
+            "configuration_version",
             sa.Integer(),
             nullable=False,
             server_default=sa.text("0"),
         ),
         sa.Column("content_digest", sa.String(length=80), nullable=True),
+        sa.Column("build_status", BUILDSTATUS, nullable=False, server_default=sa.text("'queued'")),
+        sa.Column("engine_spec", sa.String(length=255), nullable=True),
+        sa.Column("engine_version", sa.String(length=50), nullable=True),
+        sa.Column("python_version", sa.String(length=50), nullable=True),
+        sa.Column("python_interpreter", sa.String(length=255), nullable=True),
+        sa.Column("built_configuration_version", sa.Integer(), nullable=True),
+        sa.Column("built_content_digest", sa.String(length=80), nullable=True),
+        sa.Column("last_build_started_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("last_build_finished_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("last_build_error", sa.Text(), nullable=True),
+        sa.Column("last_build_id", sa.String(length=40), nullable=True),
+        sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("activated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
@@ -640,7 +647,6 @@ def _create_configurations() -> None:
             ["workspaces.id"],
             ondelete="CASCADE",
         ),
-        sa.UniqueConstraint("workspace_id", "config_id"),
     )
     op.create_index(
         "configurations_workspace_status_idx",
@@ -648,81 +654,14 @@ def _create_configurations() -> None:
         ["workspace_id", "status"],
         unique=False,
     )
-    op.create_index(
-        "configurations_workspace_active_unique",
-        "configurations",
-        ["workspace_id"],
-        unique=True,
-        sqlite_where=sa.text("status = 'active'"),
-        postgresql_where=sa.text("status = 'active'"),
-    )
-
-
-def _create_configuration_builds() -> None:
-    op.create_table(
-        "configuration_builds",
-        sa.Column("id", sa.String(length=26), primary_key=True),
-        sa.Column("workspace_id", sa.String(length=26), nullable=False),
-        sa.Column("config_id", sa.String(length=26), nullable=False),
-        sa.Column("configuration_id", sa.String(length=26), nullable=False),
-        sa.Column("build_id", sa.String(length=26), nullable=False),
-        sa.Column("status", sa.String(length=20), nullable=False),
-        sa.Column("venv_path", sa.Text(), nullable=False),
-        sa.Column("config_version", sa.Integer(), nullable=True),
-        sa.Column("content_digest", sa.String(length=128), nullable=True),
-        sa.Column("engine_version", sa.String(length=50), nullable=True),
-        sa.Column("engine_spec", sa.String(length=255), nullable=True),
-        sa.Column("python_version", sa.String(length=50), nullable=True),
-        sa.Column("python_interpreter", sa.String(length=255), nullable=True),
-        sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("built_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("error", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["workspace_id"],
-            ["workspaces.id"],
-            ondelete="CASCADE",
-        ),
-        sa.ForeignKeyConstraint(
-            ["configuration_id"],
-            ["configurations.id"],
-            ondelete="CASCADE",
-        ),
-        sa.UniqueConstraint("workspace_id", "config_id", "build_id"),
-        sa.CheckConstraint(
-            "status in ('building','active','inactive','failed')",
-            name="configuration_builds_status_check",
-        ),
-    )
-    op.create_index(
-        "configuration_builds_active_idx",
-        "configuration_builds",
-        ["configuration_id"],
-        unique=True,
-        sqlite_where=sa.text("status = 'active'"),
-        postgresql_where=sa.text("status = 'active'"),
-    )
-    op.create_index(
-        "configuration_builds_building_idx",
-        "configuration_builds",
-        ["configuration_id"],
-        unique=True,
-        sqlite_where=sa.text("status = 'building'"),
-        postgresql_where=sa.text("status = 'building'"),
-    )
-
-
 def _create_runs() -> None:
     op.create_table(
         "runs",
         sa.Column("id", sa.String(length=40), primary_key=True),
         sa.Column("configuration_id", sa.String(length=26), nullable=False),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
-        sa.Column("config_id", sa.String(length=26), nullable=False),
-        sa.Column("config_version_id", sa.String(length=26), nullable=True),
+        sa.Column("configuration_version_id", sa.String(length=26), nullable=True),
+        sa.Column("build_id", sa.String(length=40), nullable=True),
         sa.Column("status", RUNSTATUS, nullable=False, server_default="queued"),
         sa.Column("exit_code", sa.Integer(), nullable=True),
         sa.Column("attempt", sa.Integer(), nullable=False, server_default=sa.text("1")),
@@ -759,7 +698,7 @@ def _create_runs() -> None:
             ondelete="SET NULL",
         ),
     )
-    op.create_index("runs_config_idx", "runs", ["config_id"], unique=False)
+    op.create_index("runs_configuration_idx", "runs", ["configuration_id"], unique=False)
     op.create_index("runs_workspace_idx", "runs", ["workspace_id"], unique=False)
     op.create_index("runs_status_idx", "runs", ["status"], unique=False)
     op.create_index(
@@ -768,7 +707,9 @@ def _create_runs() -> None:
         ["input_document_id"],
         unique=False,
     )
-    op.create_index("runs_config_version_idx", "runs", ["config_version_id"], unique=False)
+    op.create_index(
+        "runs_configuration_version_idx", "runs", ["configuration_version_id"], unique=False
+    )
     op.create_index(
         "runs_workspace_created_idx",
         "runs",
@@ -797,10 +738,7 @@ def _create_builds() -> None:
         "builds",
         sa.Column("id", sa.String(length=40), primary_key=True),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
-        sa.Column("config_id", sa.String(length=26), nullable=False),
         sa.Column("configuration_id", sa.String(length=26), nullable=False),
-        sa.Column("configuration_build_id", sa.String(length=26), nullable=True),
-        sa.Column("build_ref", sa.String(length=26), nullable=True),
         sa.Column("status", BUILDSTATUS, nullable=False, server_default="queued"),
         sa.Column("exit_code", sa.Integer(), nullable=True),
         sa.Column(
@@ -819,16 +757,10 @@ def _create_builds() -> None:
             ["configurations.id"],
             ondelete="CASCADE",
         ),
-        sa.ForeignKeyConstraint(
-            ["configuration_build_id"],
-            ["configuration_builds.id"],
-            ondelete="SET NULL",
-        ),
     )
     op.create_index("builds_workspace_idx", "builds", ["workspace_id"], unique=False)
-    op.create_index("builds_config_idx", "builds", ["config_id"], unique=False)
+    op.create_index("builds_configuration_idx", "builds", ["configuration_id"], unique=False)
     op.create_index("builds_status_idx", "builds", ["status"], unique=False)
-    op.create_index("builds_build_ref_idx", "builds", ["build_ref"], unique=False)
 
 
 def _create_build_logs() -> None:

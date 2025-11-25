@@ -45,6 +45,10 @@ class RunCreateOptions(BaseSchema):
 
     dry_run: bool = False
     validate_only: bool = False
+    force_rebuild: bool = Field(
+        default=False,
+        description="If true, rebuild the configuration environment before running.",
+    )
     input_document_id: ULIDStr | None = None
     input_sheet_name: str | None = Field(
         default=None,
@@ -69,8 +73,8 @@ class RunResource(BaseSchema):
 
     id: str
     object: RunObjectType = Field(default="ade.run", alias="object")
-    config_id: str
-    config_version_id: str | None = None
+    configuration_id: str
+    configuration_version_id: str | None = None
     submitted_by_user_id: str | None = None
     input_document_id: str | None = Field(
         default=None,
@@ -144,7 +148,7 @@ class RunCreatedEvent(RunEventBase):
 
     type: Literal["run.created"] = "run.created"
     status: RunStatusLiteral
-    config_id: str
+    configuration_id: str
 
 
 class RunStartedEvent(RunEventBase):

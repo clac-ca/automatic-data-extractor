@@ -1,6 +1,29 @@
 # ADE Web — Domain model & naming
 
-This document defines the domain concepts that the ADE web app works with and how we name them in the UI, API shapes, and frontend code. It’s meant to keep the frontend in lockstep with the ADE engine and API (workspaces, config packages, builds, runs, documents, artifacts).
+This document defines the domain concepts that the ADE web app works with and how we name them in the UI, API shapes, and frontend code. It’s meant to keep the frontend in lockstep with the ADE engine and API (workspaces, configurations backed by configuration packages, builds, runs, documents, artifacts).
+
+---
+
+## Naming contract (quick checklist)
+
+Keep these names and IDs aligned across UI copy, types, routes, and folders:
+
+- Workspace – Workspace, `workspaceId`
+- Configuration – Configuration, `configurationId`
+- Configuration package – backing Python project for a Configuration (never a separate UI entity)
+- Configuration version – `ConfigurationVersion`, `configurationVersionId`
+- Build – Build, `buildId` (environment)
+- Run – Run, `runId`
+- Document – Document, `documentId`
+- Artifact – `RunArtifact` / Artifact, tied to `runId`
+- Routes: `/workspaces`, `/workspaces/:workspaceId/{documents|runs|config-builder|settings}`
+- Feature folders: `features/workspace-shell/sections/{documents|runs|config-builder|settings}`
+- API modules: `workspacesApi`, `configurationsApi`, `documentsApi`, `runsApi`, `buildsApi`
+- Storage prefix: `ade.ui.workspace.<workspaceId>…`
+
+**Config Builder naming rule:** the nav label is **Config Builder**, the route segment is `/config-builder`, and the screen/folder lives at `features/workspace-shell/sections/config-builder`. Keep all three in sync.
+
+If this table and the folder structure always agree, onboarding stays trivial for new contributors and agents.
 
 ---
 
@@ -16,7 +39,7 @@ This document defines the domain concepts that the ADE web app works with and ho
 
 1. Share a single mental model of “things” in ADE Web.
 2. Align user‑facing names, API types, and filesystem terms.
-3. Avoid subtle “run vs run”-style inconsistencies.
+3. Avoid subtle run naming inconsistencies.
 4. Make it obvious how to name new screens, hooks, and types.
 
 ---
@@ -26,16 +49,16 @@ This document defines the domain concepts that the ADE web app works with and ho
 At a high level:
 
 1. A **Workspace** owns everything for a given team/tenant.
-2. Within a workspace, users author **Config packages** — installable `ade_config` projects. 
-3. Each config package can be **built** into a virtualenv that includes `ade_engine` + that `ade_config`. 
-4. Users upload **Documents** (Excel/CSV) to the workspace. 
+2. Within a workspace, users author **Configurations** — workspace concepts backed by installable `ade_config` (Python configuration) packages.
+3. Each Configuration can be **built** into a virtualenv that includes `ade_engine` + that `ade_config`.
+4. Users upload **Documents** (Excel/CSV) to the workspace.
 5. Users launch **Runs** that execute a **Build** against one or more **Documents**, producing **Artifacts** (`output.xlsx` and `artifact.json`).
 
 Conceptually:
 
 ```text
 Workspace
- ├─ Config packages
+ ├─ Configurations (backed by configuration packages)
  │    ├─ Builds
  │    │    └─ Runs
  │    │         ├─ Input documents
@@ -49,15 +72,15 @@ Workspace
 
 ### 3.1 Summary table
 
-| Concept        | UI label        | Recommended TS type name   | Typical ID field(s)            | Backend / storage hints                     |
-| -------------- | --------------- | -------------------------- | ------------------------------ | ------------------------------------------- |
-| Workspace      | Workspace       | `Workspace`                | `workspaceId`                  | `workspaces/<workspace_id>/…`               |
-| Config package | Config package  | `ConfigPackage`            | `configId`, `workspaceId`      | `config_packages/<config_id>/…`             |
-| Build          | Build           | `Build`                    | `buildId`, `configId`          | `.venv/<config_id>/ade-runtime/build.json`  |
-| Run (run)      | Run             | `Run`                      | `runId` (UI), `runId` (engine) | `runs/<run_id>/…`                           |
-| Document       | Document        | `Document`                 | `documentId`, `workspaceId`    | `documents/<document_id>.<ext>`             |
-| Artifact       | Artifact        | `Artifact` / `RunArtifact` | `runId` / `runId`              | `runs/<run_id>/logs/artifact.json`          |
-| Template       | Config template | `ConfigTemplate`           | `templateId`                   | `templates/config_packages/…`               |
+| Concept        | UI label        | Recommended TS type name   | Typical ID field(s)                     | Backend / storage hints                       |
+| -------------- | --------------- | -------------------------- | --------------------------------------- | --------------------------------------------- |
+| Workspace      | Workspace       | `Workspace`                | `workspaceId`                           | `workspaces/<workspace_id>/…`                 |
+| Configuration  | Configuration   | `Configuration`            | `configurationId`, `workspaceId`        | `configurations/<configuration_id>/…`         |
+| Build          | Build           | `Build`                    | `buildId`, `configurationId`            | `.venv/<configuration_id>/ade-runtime/build.json`  |
+| Run            | Run             | `Run`                      | `runId`                                 | `runs/<run_id>/…`                             |
+| Document       | Document        | `Document`                 | `documentId`, `workspaceId`             | `documents/<document_id>.<ext>`               |
+| Artifact       | Artifact        | `Artifact` / `RunArtifact` | `runId`                                 | `runs/<run_id>/logs/artifact.json`            |
+| Template       | Config template | `ConfigTemplate`           | `templateId`                            | `templates/config_packages/…`                 |
 
 > The exact TS types come from `@schema` (OpenAPI‑generated); in the web app we usually alias those to ergonomic names rather than importing from `@generated-types` directly. 
 
@@ -68,7 +91,7 @@ Workspace
 **What it represents**
 
 * Top‑level container and isolation boundary.
-* Owns config packages, runs/runs, documents, artifacts, and runtime state under `./data/workspaces/<workspace_id>/…`. 
+* Owns configurations (backed by configuration packages), runs, documents, artifacts, and runtime state under `./data/workspaces/<workspace_id>/…`. 
 
 **User‑facing naming**
 
@@ -108,44 +131,45 @@ Workspace
 
 ---
 
-### 3.3 Config package
+### 3.3 Configuration
 
 **What it represents**
 
-* A versioned, installable **`ade_config` package** containing detectors, transforms, validators, and hooks.
-* Source of truth lives under a workspace: `config_packages/<config_id>/…`. 
+* A workspace‑scoped **Configuration** that describes how ADE processes documents.
+* Each Configuration is **backed by an installable `ade_config` Python package** containing detectors, transforms, validators, hooks, and a manifest.
+* Source of truth for the backing package lives under a workspace: `configurations/<configuration_id>/…` (and may be represented on disk as `config_packages/<configuration_id>/…`).
 
 **User‑facing naming**
 
-* Singular: **Config package**
-* Plural: **Config packages**
-* Use this term consistently in UI copy (avoid “config project” / “ruleset” unless explicitly defined as synonyms).
+* Singular: **Configuration**
+* Plural: **Configurations**
+* When referring to the Python packaging form, call it the **backing configuration package**; keep “Configuration” in UI copy and React components.
 
 **Code & API naming**
 
 * IDs:
 
-  * `configId: string`
+  * `configurationId: string`
   * `workspaceId: string`
 * Common fields:
 
   * `name`, `description`
-  * `version` / `displayVersion` (if applicable)
+  * `status` / `displayVersion` (if applicable)
   * `createdAt`, `updatedAt`
-* Backend convention: `config_id`, `config_packages/…`
+* Backend convention: `configuration_id`, canonical path `configurations/…` (with the backing package stored under `config_packages/…`).
 
 **Frontend conventions**
 
-* Type alias: `type ConfigPackage = Schema.ConfigPackage…;`
+* Type alias: `type Configuration = Schema.Configuration…;`
 * Hooks:
 
-  * `useConfigPackages(workspaceId)`
-  * `useConfigPackage({ workspaceId, configId })`
+  * `useConfigurations(workspaceId)`
+  * `useConfiguration({ workspaceId, configurationId })`
 * Components:
 
-  * `<ConfigPackageList />`
-  * `<ConfigPackageDetail />`
-  * `<CreateConfigPackageDialog />`
+  * `<ConfigurationList />`
+  * `<ConfigurationDetail />`
+  * `<CreateConfigurationDialog />`
 
 ---
 
@@ -153,10 +177,10 @@ Workspace
 
 **What it represents**
 
-* A build is a **frozen Python environment** (virtualenv) for a specific config package:
+* A build is a **frozen Python environment** (virtualenv) for a specific Configuration:
 
-  * Contains `ade_engine`, the `ade_config` package, and its dependencies.
-* Build metadata lives alongside the venv under `.venv/<config_id>/ade-runtime/build.json`. 
+  * Contains `ade_engine`, the backing `ade_config` package, and its dependencies.
+* Build metadata lives alongside the venv under `.venv/<configuration_id>/ade-runtime/build.json`.
 
 **User‑facing naming**
 
@@ -173,7 +197,7 @@ Workspace
 * IDs:
 
   * `buildId` (if surfaced as a first‑class entity)
-  * `configId`, `workspaceId`
+  * `configurationId`, `workspaceId`
 * Typical fields:
 
   * `status` (`"pending" | "running" | "succeeded" | "failed"` – actual values defined by the API)
@@ -185,8 +209,8 @@ Workspace
 * Type: `Build`
 * Hooks:
 
-  * `useBuilds(configId)`
-  * `useBuild(configId, buildId)`
+  * `useBuilds(configurationId)`
+  * `useBuild(configurationId, buildId)`
   * `useTriggerBuild()` mutation
 * Components:
 
@@ -195,12 +219,12 @@ Workspace
 
 ---
 
-### 3.5 Run (run)
+### 3.5 Run
 
 **What it represents**
 
 * A **Run** is a user‑visible execution of a build against one or more documents.
-* The engine/backend call this concept a **run**; the filesystem layout exposes `runs/<run_id>/input`, `output`, `logs/…`. 
+* The backend wire field is `run_id`; we map that once to `runId` in the frontend and keep **Run** as the domain concept.
 
 **Terminology rule**
 
@@ -209,16 +233,15 @@ Workspace
   * “Run history”, “Run details”, “Start run”
 * In **code & API**:
 
-  * It’s acceptable to use `runId` to match the engine/run schema.
-  * But the overall type should still be `Run` in the frontend.
+  * Use the `Run` type and the field name `runId` (mapped from `run_id`).
+  * If the engine exposes an additional identifier, carry it as `engineRunId` instead of duplicating `runId`.
 
 **Code & API naming**
 
 * IDs:
 
-  * `runId` (frontend field name) — often the same value as `runId`
-  * `runId` (backend/engine naming)
-  * `workspaceId`, `configId`, `buildId`
+* `runId` (frontend field name mapped from `run_id`)
+* `workspaceId`, `configurationId`, `buildId`
 * Typical fields:
 
   * `status` (`"queued"`, `"running"`, `"succeeded"`, `"failed"`, etc. — defined by API)
@@ -231,8 +254,7 @@ Workspace
 
   ```ts
   interface Run {
-    runId: string;   // alias for underlying run_id
-    runId: string;   // raw engine identifier, if needed
+    runId: string;   // domain ID mapped from run_id
     status: RunStatus;
     // …
   }
@@ -240,7 +262,7 @@ Workspace
 
 * Hooks:
 
-  * `useRuns(configId)` / `useRunsForBuild(buildId)`
+* `useRuns(configurationId)` / `useRunsForBuild(buildId)`
   * `useRun(runId)`
   * `useStartRun()` mutation
 
@@ -319,7 +341,7 @@ Workspace
 
 * IDs:
 
-  * `runId` / `runId`
+  * `runId`
 * Fields typically follow the artifact schema (see `docs/14-run_artifact_json.md` in the backend docs). 
 
 **Frontend conventions**
@@ -340,7 +362,7 @@ Workspace
 
 **What it represents**
 
-* A **template** for bootstrapping new config packages.
+* A **template** for bootstrapping new configuration packages.
 * Backend templates live under `apps/ade-api/src/ade_api/templates/config_packages/`. 
 
 **Naming**
@@ -357,14 +379,14 @@ Workspace
 
 1. **Prefer domain words over implementation words**
 
-   * Use **Run** instead of **Run** in UI.
-   * Use **Config package** instead of “ruleset” or “profile”.
+   * Use **Run** in UI copy.
+   * Use **Configuration** instead of ad‑hoc terms like “ruleset” or “profile”, and only mention the backing **configuration package** when describing Python packaging.
 2. **Mirror backend identifiers but adapt to JS/TS style**
 
-   * Backend JSON / URLs: `workspace_id`, `config_id`, `run_id`. 
+   * Backend JSON / URLs: `workspace_id`, `configuration_id`, `run_id`. 
    * TypeScript / React:
 
-     * `workspaceId`, `configId`, `runId` / `runId`.
+     * `workspaceId`, `configurationId`, `runId`.
 3. **Single canonical name per concept**
 
    * Don’t mix “workspace” vs “project”, “run” vs “execution” in the same surface.
@@ -391,7 +413,7 @@ Workspace
   type Run = RunEnvelope;
   ```
 
-* Use **PascalCase** for type names (`Workspace`, `ConfigPackage`, `Build`, `Run`).
+* Use **PascalCase** for type names (`Workspace`, `Configuration`, `Build`, `Run`).
 
 * Avoid `IWorkspace` / `TWorkspace` prefixes.
 
@@ -404,11 +426,12 @@ Workspace
 * Always use `<entity>Id`:
 
   * `workspaceId`
-  * `configId`
+  * `configurationId`
   * `buildId`
   * `runId`
   * `documentId`
-  * If you need the raw engine ID: add `runId` instead of overloading `runId`.
+  * If you need the raw engine ID: keep mapping it into `runId`, or add a distinct `engineRunId`.
+* Do the snake_case → camelCase translation exactly once in `schema/` mapping helpers (e.g. `fromApiRun`, `fromApiConfiguration`) so screens never see `run_id`/`configuration_id`.
 
 **Relationship shape examples**
 
@@ -417,17 +440,16 @@ interface WorkspaceRef {
   workspaceId: string;
 }
 
-interface ConfigPackageRef extends WorkspaceRef {
-  configId: string;
+interface ConfigurationRef extends WorkspaceRef {
+  configurationId: string;
 }
 
-interface BuildRef extends ConfigPackageRef {
+interface BuildRef extends ConfigurationRef {
   buildId: string;
 }
 
-interface RunRef extends BuildRef {
-  runId: string;   // UI name
-  runId: string;   // engine name (optional)
+interface RunRef {
+  runId: string;
 }
 ```
 
@@ -459,12 +481,12 @@ interface RunRef extends BuildRef {
 * Data‑fetch hooks:
 
   * `useWorkspaces()`
-  * `useConfigPackages(workspaceId)`
-  * `useRuns(configId)`
+  * `useConfigurations(workspaceId)`
+  * `useRuns(workspaceId)`
 * Mutation hooks:
 
   * `useCreateWorkspace()`
-  * `useCreateConfigPackage()`
+  * `useCreateConfiguration()`
   * `useTriggerBuild()`
   * `useStartRun()`
 
@@ -474,8 +496,7 @@ interface RunRef extends BuildRef {
 * Route param names must match the `<entity>Id` convention:
 
   * `/workspaces/:workspaceId`
-  * `/workspaces/:workspaceId/config-packages/:configId`
-  * `/workspaces/:workspaceId/config-packages/:configId/builds/:buildId`
+  * `/workspaces/:workspaceId/config-builder` (and any nested params like `:configurationId` or `/builds/:buildId` if used)
   * `/runs/:runId` (or nested, depending on actual router structure)
 
 ---
@@ -508,13 +529,13 @@ interface RunRef extends BuildRef {
 End‑to‑end naming for a typical user flow:
 
 1. User selects a **Workspace** (`workspaceId`).
-2. They open a **Config package** (`configId`) and click **Build**.
-3. The system creates/updates a **Build** for that config (`buildId`) and shows its **Build status**.
+2. They open a **Configuration** (`configurationId`) and click **Build**.
+3. The system creates/updates a **Build** for that Configuration (`buildId`) and shows its **Build status**.
 4. They **Upload document(s)** to the workspace (`documentId`).
-5. From the config/build screen they click **Start run**:
+5. From the configuration/build screen they click **Start run**:
 
    * Web sends a `runId`‑centric request to the API.
-   * UI shows a **Run** in the run list with `runId` (alias for `runId`).
+   * UI shows a **Run** in the run list with `runId` mapped from the backend `run_id`.
 6. When the run completes, UI links to the **Artifact**:
 
    * “Download output workbook”

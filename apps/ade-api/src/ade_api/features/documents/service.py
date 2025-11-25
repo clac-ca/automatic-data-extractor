@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ade_api.features.runs.models import Run, RunStatus
 from ade_api.features.users.models import User
 from ade_api.settings import Settings
+from ade_api.storage_layout import workspace_documents_root
 from ade_api.shared.db import generate_ulid
 from ade_api.shared.pagination import paginate_sql
 from ade_api.shared.types import OrderBy
@@ -50,7 +51,6 @@ class DocumentsService:
         documents_dir = settings.documents_dir
         if documents_dir is None:
             raise RuntimeError("Document storage directory is not configured")
-        self._storage = DocumentStorage(documents_dir)
         self._repository = DocumentsRepository(session)
 
     async def create_document(
@@ -68,13 +68,14 @@ class DocumentsService:
         now = datetime.now(tz=UTC)
         expiration = self._resolve_expiration(expires_at, now)
         document_id = generate_ulid()
-        stored_uri = self._storage.make_stored_uri(document_id)
+        storage = self._storage_for(workspace_id)
+        stored_uri = storage.make_stored_uri(document_id)
 
         if upload.file is None:  # pragma: no cover - UploadFile always supplies file
             raise RuntimeError("Upload stream is not available")
 
         await upload.seek(0)
-        stored = await self._storage.write(
+        stored = await storage.write(
             stored_uri,
             upload.file,
             max_bytes=self._settings.storage_upload_max_bytes,
@@ -95,7 +96,7 @@ class DocumentsService:
             expires_at=expiration,
             last_run_at=None,
         )
-        await self._capture_worksheet_metadata(document, self._storage.path_for(stored_uri))
+        await self._capture_worksheet_metadata(document, storage.path_for(stored_uri))
         self._session.add(document)
         await self._session.flush()
         stmt = self._repository.base_query(workspace_id).where(Document.id == document_id)
@@ -161,7 +162,8 @@ class DocumentsService:
 
         document = await self._get_document(workspace_id, document_id)
         cached_sheets = self._cached_worksheets(document)
-        path = self._storage.path_for(document.stored_uri)
+        storage = self._storage_for(workspace_id)
+        path = storage.path_for(document.stored_uri)
 
         exists = await run_in_threadpool(path.exists)
         if not exists:
@@ -217,7 +219,8 @@ class DocumentsService:
         """Return a document record and async iterator for its bytes."""
 
         document = await self._get_document(workspace_id, document_id)
-        path = self._storage.path_for(document.stored_uri)
+        storage = self._storage_for(workspace_id)
+        path = storage.path_for(document.stored_uri)
         exists = await run_in_threadpool(path.exists)
         if not exists:
             raise DocumentFileMissingError(
@@ -225,7 +228,7 @@ class DocumentsService:
                 stored_uri=document.stored_uri,
             )
 
-        stream = self._storage.stream(document.stored_uri)
+        stream = storage.stream(document.stored_uri)
 
         async def _guarded() -> AsyncIterator[bytes]:
             try:
@@ -257,7 +260,8 @@ class DocumentsService:
             document.deleted_by_user_id = getattr(actor, "id", None)
         await self._session.flush()
 
-        await self._storage.delete(document.stored_uri)
+        storage = self._storage_for(workspace_id)
+        await storage.delete(document.stored_uri)
 
     async def _get_document(self, workspace_id: str, document_id: str) -> Document:
         document = await self._repository.get_document(
@@ -423,6 +427,10 @@ class DocumentsService:
             return
 
         document.attributes["worksheets"] = [sheet.model_dump() for sheet in sheets]
+
+    def _storage_for(self, workspace_id: str) -> DocumentStorage:
+        base = workspace_documents_root(self._settings, workspace_id)
+        return DocumentStorage(base)
 
     @staticmethod
     def _inspect_workbook(path: Path) -> list[DocumentSheet]:

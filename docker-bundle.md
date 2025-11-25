@@ -460,7 +460,7 @@ automatic-data-extractor/
 
 Bundled ADE config templates now live under `apps/ade-api/src/ade_api/templates/config_packages/` inside the backend package.
 
-Everything ADE produces (documents, configs, venvs, runs, cache, …) lands under `./data/...` by default. Each storage path (`ADE_DOCUMENTS_DIR`, `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_RUNS_DIR`, `ADE_PIP_CACHE_DIR`) can point anywhere so you can mount different volumes as needed.
+Everything ADE produces (documents, configs, venvs, runs, cache, …) lands under `./data/workspaces/<workspace_id>/...` by default. Use `ADE_WORKSPACES_DIR` to move the workspace root, or override `ADE_DOCUMENTS_DIR`, `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, or `ADE_RUNS_DIR` to place a specific storage type elsewhere—ADE always nests the workspace ID under the override.
 
 ---
 
@@ -596,10 +596,11 @@ ADE is configured via environment variables; defaults work for local dev.
 
 | Variable                  | Default                  | Purpose                                                   |
 | ------------------------- | ------------------------ | --------------------------------------------------------- |
-| `ADE_DOCUMENTS_DIR`       | `./data/documents`       | Uploaded files + generated artifacts                      |
-| `ADE_CONFIGS_DIR`         | `./data/config_packages` | Installable config projects                               |
-| `ADE_VENVS_DIR`           | `./data/.venv`           | One Python virtualenv per `config_id`                     |
-| `ADE_RUNS_DIR`            | `./data/runs`            | Per-run working directories                               |
+| `ADE_WORKSPACES_DIR`      | `./data/workspaces`      | Workspace root for ADE storage                            |
+| `ADE_DOCUMENTS_DIR`       | `./data/workspaces`      | Base for documents (`<ws>/documents/...`)                 |
+| `ADE_CONFIGS_DIR`         | `./data/workspaces`      | Base for configs (`<ws>/config_packages/...`)             |
+| `ADE_VENVS_DIR`           | `./data/workspaces`      | Base for venvs (`<ws>/.venv/<cfg>/<id>/...`)              |
+| `ADE_RUNS_DIR`            | `./data/workspaces`      | Per-run working directories (`<ws>/runs/<run_id>/...`)    |
 | `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`       | pip download/build cache                                  |
 | `ADE_SAFE_MODE`           | `false`                  | Skip engine execution while runs API returns safe-mode    |
 | `ADE_MAX_CONCURRENCY`     | `2`                      | Backend dispatcher parallelism                            |

@@ -3,7 +3,7 @@
 ADE turns messy spreadsheets into consistent, auditable workbooks through a simple, repeatable flow:
 
 1. **Config** — define detection, mapping, and transformation rules ([`01-config-packages.md`](./01-config-packages.md))
-2. **Build** — set up a dedicated virtual environment (`.venv/<config_id>/`) with `ade_engine` and your `ade_config` installed
+2. **Build** — set up a dedicated virtual environment (`.venv/<config_id>/<build_id>/`) with `ade_engine` and your `ade_config` installed
 3. **Run** — use that frozen environment to process one or more input files deterministically
 
 At run runtime, the **ADE Engine** and your versioned **ADE Config** are installed in an isolated virtual environment (venv) and produce a normalized Excel workbook.
@@ -59,7 +59,7 @@ automatic-data-extractor/
 
 Bundled ADE config templates now live under `apps/ade-api/src/ade_api/templates/config_packages/` and ship with the backend package.
 
-Everything ADE produces (config_packages, venvs, runs, logs, cache, etc.) is persisted under `./data`. Individual subdirectories can be overridden via environment variables (`ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_RUNS_DIR`, etc.), but by default they are organized as subfolders under the data root. In production, this folder is typically mounted to an external file share so it persists across restarts.
+Everything ADE produces (config_packages, venvs, runs, logs, cache, etc.) is persisted under `./data/workspaces/<workspace_id>/...` by default. Set `ADE_WORKSPACES_DIR` to move the workspace root, or override `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_RUNS_DIR`, or `ADE_DOCUMENTS_DIR` to relocate a specific storage type—ADE always nests the workspace ID beneath the override. In production, mount this folder to external storage so it persists across restarts.
 
 ```text
 ./data/
@@ -74,13 +74,11 @@ Everything ADE produces (config_packages, venvs, runs, logs, cache, etc.) is per
 │     │        ├─ hooks/            # on_run_start/after_mapping/before_save/on_run_end
 │     │        ├─ manifest.json     # read via importlib.resources
 │     ├─ .venv/                     # Python virtual environments organized by workspace
-│     │  └─ <workspace_id>/
-│     │     └─ <config_id>/
-│     │        └─ <build_id>/       # unique per build
-│     │           ├─ bin/python
-│     │           └─ <site-packages>/
-│     │              ├─ ade_engine/
-│     │              └─ ade_config/
+│     │  └─ <config_id>/<build_id>/ # unique per build
+│     │     ├─ bin/python
+│     │     └─ <site-packages>/
+│     │        ├─ ade_engine/
+│     │        └─ ade_config/
 │     ├─ runs/
 │     │  └─ <run_id>/
 │     │     ├─ input/               # Uploaded files
@@ -219,7 +217,7 @@ Once the configuration environment is built, ADE can process real spreadsheets s
 **Manifest check (current CLI)**
 
 ```bash
-${ADE_VENVS_DIR}/<config_id>/bin/python -I -B -m ade_engine
+${ADE_VENVS_DIR}/<workspace_id>/.venv/<config_id>/<build_id>/bin/python -I -B -m ade_engine
 ```
 
 This placeholder command prints the engine version together with the installed
@@ -246,10 +244,11 @@ ADE is configured via environment variables so it remains simple and portable. D
 
 | Variable                  | Default                         | What it controls                                            |
 | ------------------------- | ------------------------------- | ----------------------------------------------------------- |
-| `ADE_DOCUMENTS_DIR`       | `./data/documents`              | Uploaded files + generated artifacts                        |
-| `ADE_CONFIGS_DIR`         | `./data/config_packages`        | Where GUI‑managed, installable config projects live         |
-| `ADE_VENVS_DIR`           | `./data/.venv`                  | Builds environments (one per `config_id`)                   |
-| `ADE_RUNS_DIR`            | `./data/runs`                   | Per‑run working directories                                 |
+| `ADE_WORKSPACES_DIR`      | `./data/workspaces`             | Workspace root for ADE storage                              |
+| `ADE_DOCUMENTS_DIR`       | `./data/workspaces`             | Base for documents (`<ws>/documents/...`)                   |
+| `ADE_CONFIGS_DIR`         | `./data/workspaces`             | Base for configs (`<ws>/config_packages/...`)               |
+| `ADE_VENVS_DIR`           | `./data/workspaces`             | Base for venvs (`<ws>/.venv/<cfg>/<build>/...`)             |
+| `ADE_RUNS_DIR`            | `./data/workspaces`             | Per‑run working directories (`<ws>/runs/<run_id>/...`)      |
 | `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`              | pip cache for wheels/sdists (speeds up building)            |
 | `ADE_MAX_CONCURRENCY`     | `2`                             | Backend dispatcher parallelism                              |
 | `ADE_QUEUE_SIZE`          | `10`                            | Max enqueued runs before the API returns 429                |
@@ -258,8 +257,7 @@ ADE is configured via environment variables so it remains simple and portable. D
 | `ADE_WORKER_MEM_MB`       | `512`                           | Best‑effort address‑space ceiling per run (POSIX `rlimit`)  |
 | `ADE_WORKER_FSIZE_MB`     | `100`                           | Best‑effort max file size a run can create (POSIX `rlimit`) |
 
-If upgrading from a deployment that used `data/runs`, move existing run data to `data/runs` (or set `ADE_RUNS_DIR`) before starti
-ng the service to avoid mixed storage roots.
+Workspace IDs are always nested beneath the configured roots, even when you override one storage type.
 
 ### Bypass authentication for local debugging
 

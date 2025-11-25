@@ -798,7 +798,7 @@ def map_table(
 ```
 
 After all tables have been mapped, the engine invokes any `on_after_mapping` hooks,
-passing the list of `MappedTable` objects. This is the ideal place for configs to:
+passing the list of `MappedTable` objects. This is the ideal place for configurations to:
 
 * tweak or correct mappings,
 * reorder or drop fields,

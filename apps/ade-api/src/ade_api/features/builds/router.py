@@ -71,7 +71,7 @@ async def _execute_build_background(
 
 
 @router.post(
-    "/workspaces/{workspace_id}/configs/{config_id}/builds",
+    "/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
     response_model=BuildResource,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
@@ -79,13 +79,13 @@ async def _execute_build_background(
 async def create_build_endpoint(
     *,
     workspace_id: Annotated[str, PathParam(min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, PathParam(min_length=1, description="Configuration identifier")],
+    configuration_id: Annotated[str, PathParam(min_length=1, description="Configuration identifier")],
     payload: BuildCreateRequest,
     background_tasks: BackgroundTasks,
     _actor: Annotated[
         object,
         Security(
-            require_workspace("Workspace.Configs.ReadWrite"),
+            require_workspace("Workspace.Configurations.ReadWrite"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -94,7 +94,7 @@ async def create_build_endpoint(
     try:
         build, context = await service.prepare_build(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
             options=payload.options,
         )
     except ConfigurationNotFoundError as exc:
