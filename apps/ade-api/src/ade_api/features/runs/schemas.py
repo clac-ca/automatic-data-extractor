@@ -8,7 +8,7 @@ from pydantic import Field
 
 from ade_api.shared.core.ids import ULIDStr
 from ade_api.shared.core.schema import BaseSchema
-from ade_api.shared.pagination import Page, PageParams
+from ade_api.shared.pagination import Page
 
 RunObjectType = Literal["ade.run"]
 RunEventObjectType = Literal["ade.run.event"]

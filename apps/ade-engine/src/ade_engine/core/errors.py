@@ -1,8 +1,6 @@
 """Engine error hierarchy and helpers."""
 from __future__ import annotations
 
-from typing import Any
-
 from .types import RunError, RunErrorCode, RunPhase
 
 

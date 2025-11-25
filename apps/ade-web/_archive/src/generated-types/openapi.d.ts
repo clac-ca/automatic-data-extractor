@@ -919,6 +919,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workspace Runs Endpoint */
+        get: operations["list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}": {
         parameters: {
             query?: never;
@@ -2153,6 +2170,24 @@ export type components = {
         RunOutputListing: {
             /** Files */
             files?: components["schemas"]["RunOutputFile"][];
+        };
+        /**
+         * RunPage
+         * @description Paginated collection of ``RunResource`` items.
+         */
+        RunPage: {
+            /** Items */
+            items: components["schemas"]["RunResource"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Total */
+            total?: number | null;
         };
         /**
          * RunResource
@@ -5835,6 +5870,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunResource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
+                input_document_id?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": ("queued" | "running" | "succeeded" | "failed" | "canceled")[] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunPage"];
                 };
             };
             /** @description Validation Error */

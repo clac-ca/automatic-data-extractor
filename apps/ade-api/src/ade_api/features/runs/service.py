@@ -592,7 +592,7 @@ class RunsService:
         return paths
 
     @staticmethod
-    def _document_descriptor(document: "Document") -> dict[str, Any]:
+    def _document_descriptor(document: Document) -> dict[str, Any]:
         return {
             "document_id": document.id,
             "display_name": document.original_filename,
