@@ -61,9 +61,9 @@ FROM python:${PYTHON_VERSION}-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
-    API_ROOT=/app/apps/ade-api \
-    ALEMBIC_INI_PATH=/app/apps/ade-api/alembic.ini \
-    ALEMBIC_MIGRATIONS_DIR=/app/apps/ade-api/migrations \
+    ADE_API_ROOT=/app/apps/ade-api \
+    ADE_ALEMBIC_INI_PATH=/app/apps/ade-api/alembic.ini \
+    ADE_ALEMBIC_MIGRATIONS_DIR=/app/apps/ade-api/migrations \
     ADE_SERVER_HOST=0.0.0.0 \
     ADE_SERVER_PORT=8000
 

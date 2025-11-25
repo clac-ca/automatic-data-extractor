@@ -1,132 +1,133 @@
 # 02 – Architecture and project structure
 
-This document describes how `ade-web` is organised on disk, how the main layers of the frontend relate to each other, and what naming and dependency rules we follow.
+This document describes how `ade-web` is organised on disk, how the main layers depend on each other, and the naming conventions we use for files and modules.
 
-If you’re wondering **“where should this code live?”** or **“what is allowed to import what?”**, this is the document to read.
-
----
-
-## 1. Goals and design principles
-
-The architecture is intentionally simple:
-
-- **Feature‑first**: group code by feature/route, not by technical layer.
-- **Clear layering**: app shell → feature screens → shared infra & UI.
-- **Predictable imports**: avoid circular dependencies and “god modules”.
-- **Obvious naming**: file and folder names should make intent obvious to humans and AI agents.
-- **Local complexity**: keep tricky logic isolated in a small number of well‑named modules.
-
-Domain terminology (Workspace, Document, Job, Configuration, etc.) is defined in detail in `01-domain-model-and-naming.md` and reused here.
+If **01‑domain‑model‑and‑naming** tells you *what* the app talks about (workspaces, documents, runs, configurations), this doc tells you *where* that logic lives and *how* it is wired together.
 
 ---
 
-## 2. High‑level runtime architecture
+## 1. Goals and principles
 
-At runtime, the app is built from four main layers:
+The architecture is intentionally boring and predictable:
 
-1. **App shell (`app/`)**
-   - Mounts React, sets up providers, and routes between screens.
-   - Owns the *global* layout (top bar, workspace shell frame).
-   - Does not contain domain logic.
+- **Feature‑first** – code is grouped by user‑facing feature (auth, documents, runs, config builder), not by technical layer.
+- **Layered** – app shell → features → shared utilities & UI primitives → types.
+- **One‑way dependencies** – each layer imports “downwards” only, which keeps cycles and hidden couplings out.
+- **Obvious naming** – given a route or concept name, you should know what file to search for.
 
-2. **Feature screens (`features/`, aliased as `@features` or `@screens`)**
-   - Route‑level containers for functional areas:
-     - Auth, workspace directory, workspace shell + its sections (Documents, Jobs, Config Builder, Settings, Overview).
-   - Fetch data via hooks, compose UI components, handle workflows.
-
-3. **Shared infrastructure (`shared/`, aliased as `@shared`)**
-   - Cross‑cutting utilities and hooks:
-     - Navigation helpers, URL state, local storage, NDJSON streaming, keyboard handling, permission checks, etc.
-   - Contains no JSX that renders UI.
-
-4. **UI library (`ui/`, aliased as `@ui`)**
-   - Reusable, presentational components:
-     - Buttons, forms, alerts, layout primitives, top bar, search field, code editor wrapper, etc.
-   - No domain knowledge and no data fetching.
-
-Supporting layers:
-
-- **`schema/`** – hand‑written domain models and schema helpers.
-- **`generated-types/`** – backend‑generated TypeScript types (if used).
-- **`test/`** – Vitest setup, test utilities, and factories.
-
-App entry looks like:
-
-```tsx
-// main.tsx
-ReactDOM.createRoot(rootEl).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
-
-// App.tsx (simplified)
-export function App() {
-  return (
-    <NavProvider>
-      <AppProviders>
-        <ScreenSwitch />
-      </AppProviders>
-    </NavProvider>
-  );
-}
-````
-
-`ScreenSwitch` maps the current location to a feature screen component (see doc `03-routing-navigation-and-url-state.md`).
+Everything below exists to make those goals explicit.
 
 ---
 
-## 3. Directory layout
+## 2. Top‑level layout
 
-The canonical layout for `apps/ade-web/src` is:
+All relevant code lives under `apps/ade-web/src`:
 
 ```text
-src/
-  app/                   # App shell, providers, global layout & routing
-  features/              # Route/feature slices (was: screens)
-    auth/
-    workspace-directory/
-    workspace-shell/
-      WorkspaceShellScreen.tsx
-      documents/
-      jobs/
-      config-builder/
-      settings/
-      overview/
-  ui/                    # Reusable presentational components
-  shared/                # Cross-cutting hooks and utilities
-  schema/                # Hand-written domain schemas/models
-  generated-types/       # Backend-generated API types
-  test/                  # Vitest setup + shared testing helpers
-```
+apps/ade-web/
+  src/
+    app/              # App shell: providers, global layout, top-level routing
+    features/         # Route/feature slices (aliased as "@screens")
+    ui/               # Reusable presentational components
+    shared/           # Cross-cutting hooks, utilities, and API modules (no UI)
+    schema/           # Hand-written domain models / schemas
+    generated-types/  # Types generated from backend schemas
+    test/             # Vitest setup and shared testing helpers
+````
 
-Each top‑level folder has a well‑defined responsibility.
+> For historical reasons, the TS/Vite alias `@screens` points to `src/features`. In this doc we refer to the directory as `features/`, but you may see `@screens/...` imports in the code.
 
-### 3.1 `app/` – App shell and providers
+At a high level:
 
-**Contains:**
-
-* `App.tsx` – root component.
-* `ScreenSwitch.tsx` – top‑level route switch.
-* `NavProvider/` – custom navigation provider and hooks.
-* `AppProviders/` – global providers (React Query, theming, etc.).
-* Optional high‑level layout wrappers (e.g. a global error boundary).
-
-**Does not contain:**
-
-* Feature‑specific logic.
-* Direct API calls.
-* UI components that belong in `ui/`.
-
-If you’re wiring top‑level providers, shells, or routing, it goes here.
+* `app/` is the **composition root**.
+* `features/` contains **route‑level features**.
+* `ui/` contains **UI primitives** with no domain knowledge.
+* `shared/` contains **infrastructure** and **cross‑cutting logic**.
+* `schema/` and `generated-types/` define **types**.
+* `test/` holds **test infrastructure**.
 
 ---
 
-### 3.2 `features/` – Feature screens and domain flows
+## 3. Layers and dependency rules
 
-`features/` contains **route‑level screens** and deeply related feature code.
+We treat the codebase as layered, with imports flowing “down” only:
+
+```text
+        app
+        ↑
+     features
+     ↑     ↑
+    ui   shared
+      ↑    ↑
+   schema  generated-types
+        ↑
+       test (can see everything)
+```
+
+Allowed dependencies:
+
+* `app/` → may import from `features/`, `ui/`, `shared/`, `schema/`, `generated-types/`.
+* `features/` → may import from `ui/`, `shared/`, `schema/`, `generated-types/`.
+* `ui/` → may import from `shared/`, `schema/`, `generated-types/`.
+* `shared/` → may import from `schema/`, `generated-types/`.
+* `schema/` → may import from `generated-types/` (if needed).
+* `generated-types/` → must not import from anywhere else.
+* `test/` → may import from anything in `src/`, but nothing in `src/` should import from `@test`.
+
+Forbidden dependencies:
+
+* `ui/` **must not** import from `features/` or `app/`.
+* `shared/` **must not** import from `features/`, `ui/`, or `app/`.
+* `features/` **must not** import from `app/`.
+
+If you ever want to import “upwards” (e.g. from `shared/` to `features/`), that’s a sign the code should be moved into a smaller module at the right layer.
+
+---
+
+## 4. `app/` – application shell
+
+**Responsibility:** Compose the entire app: providers, navigation, top‑level layout, and screen selection.
 
 Typical structure:
+
+```text
+src/app/
+  App.tsx
+  ScreenSwitch.tsx
+  NavProvider/
+    NavProvider.tsx
+    Link.tsx
+    NavLink.tsx
+  AppProviders/
+    AppProviders.tsx
+  layout/
+    GlobalLayout.tsx
+    WorkspaceShellLayout.tsx
+```
+
+What belongs here:
+
+* `<App>` – root component used in `main.tsx`.
+* `NavProvider` – custom navigation context built on `window.history`.
+* `AppProviders` – React Query client and other global providers.
+* `ScreenSwitch` – top‑level route switch that decides which feature screen to show.
+* High‑level layout wrappers (e.g. global error boundary, shell frame).
+
+What does **not** belong here:
+
+* Feature‑specific logic (documents, runs, configs, etc.).
+* Direct API calls to `/api/v1/...`.
+* Reusable UI primitives (those go in `ui/`).
+
+`app/` is glue and composition only.
+
+---
+
+## 5. `features/` – route‑level features
+
+**Responsibility:** Implement user‑facing features and screens: auth, workspace directory, workspace shell, and each shell section (Documents, Runs, Config Builder, Settings, Overview).
+
+Example structure:
 
 ```text
 src/features/
@@ -134,390 +135,460 @@ src/features/
     LoginScreen.tsx
     AuthCallbackScreen.tsx
     LogoutScreen.tsx
-    authApi.ts               # optionally shared/api instead
     useLoginMutation.ts
   workspace-directory/
     WorkspaceDirectoryScreen.tsx
     WorkspaceCard.tsx
-    WorkspaceDirectoryEmptyState.tsx
+    useWorkspaceDirectoryQuery.ts
   workspace-shell/
     WorkspaceShellScreen.tsx
-    documents/
-      DocumentsScreen.tsx
-      DocumentsTable.tsx
-      DocumentsFilters.tsx
-      useDocumentsQuery.ts
-    jobs/
-      JobsScreen.tsx
-      JobsTable.tsx
-      useJobsQuery.ts
-    config-builder/
-      ConfigBuilderScreen.tsx
-      ConfigList.tsx
-      workbench/
-        WorkbenchWindow.tsx
-        WorkbenchExplorer.tsx
-        WorkbenchTabs.tsx
-        useWorkbenchFiles.ts
-        useWorkbenchUrlState.ts
-    settings/
-      WorkspaceSettingsScreen.tsx
-      GeneralSettingsTab.tsx
-      MembersTab.tsx
-      RolesTab.tsx
-    overview/
-      WorkspaceOverviewScreen.tsx
+    nav/
+      WorkspaceNav.tsx
+      useWorkspaceNavItems.ts
+    sections/
+      documents/
+        DocumentsScreen.tsx
+        DocumentsTable.tsx
+        DocumentsFilters.tsx
+        useDocumentsQuery.ts
+        useUploadDocumentMutation.ts
+      runs/
+        RunsScreen.tsx
+        RunsTable.tsx
+        RunsFilters.tsx
+        useRunsQuery.ts
+        useStartRunMutation.ts
+      config-builder/
+        ConfigBuilderScreen.tsx
+        ConfigList.tsx
+        workbench/
+          WorkbenchWindow.tsx
+          WorkbenchExplorer.tsx
+          WorkbenchTabs.tsx
+          useWorkbenchFiles.ts
+          useWorkbenchUrlState.ts
+      settings/
+        WorkspaceSettingsScreen.tsx
+        MembersTab.tsx
+        RolesTab.tsx
+      overview/
+        WorkspaceOverviewScreen.tsx
 ```
 
-**Contains:**
+What belongs here:
 
-* Screen components (`*Screen.tsx`).
-* Feature‑specific hooks and helper components.
-* Small amounts of feature‑local state and logic.
+* **Screen components** (`*Screen.tsx`) that:
 
-**Does not contain:**
+  * Decide which data to fetch.
+  * Map URL state to props.
+  * Compose `ui/` components into a page.
+  * Choose which mutations to call on user actions.
 
-* Cross‑cutting utilities (should go in `shared/`).
-* Generic UI components likely to be reused (should go in `ui/`).
+* **Feature‑specific hooks**:
 
-Think of `features/` as: “What appears at a URL and all the glue around it.”
+  * `useDocumentsQuery`, `useRunsQuery`, `useStartRunMutation`, `useWorkspaceMembersQuery`, etc.
+
+* **Feature‑specific components**:
+
+  * `DocumentsTable`, `RunsFilters`, `ConfigList`, `RunExtractionDialog`.
+
+What does **not** belong here:
+
+* Generic UI primitives (buttons, inputs, layout) → `ui/`.
+* Cross‑feature logic (API clients, storage helpers) → `shared/`.
+
+When you add a new route or screen, it should live under `features/`, in a folder that mirrors the URL path.
 
 ---
 
-### 3.3 `ui/` – UI component library
+## 6. `ui/` – presentational component library
 
-`ui/` holds reusable, domain‑agnostic UI components built on Tailwind.
+**Responsibility:** Provide reusable UI components with no knowledge of ADE’s domain concepts. They render markup, accept props, and raise events; they don’t know what a “run”, “workspace”, or “configuration” is.
 
-Examples:
+Example structure:
 
 ```text
 src/ui/
-  Button.tsx
-  SplitButton.tsx
-  Input.tsx
-  TextArea.tsx
-  Select.tsx
-  FormField.tsx
-  Alert.tsx
-  Avatar.tsx
-  ProfileDropdown.tsx
-  Tabs/
-    TabsRoot.tsx
-    TabsList.tsx
-    TabsTrigger.tsx
-    TabsContent.tsx
-  ContextMenu.tsx
-  GlobalTopBar.tsx
-  GlobalSearchField.tsx
-  CodeEditor.tsx
+  button/
+    Button.tsx
+    SplitButton.tsx
+  form/
+    Input.tsx
+    TextArea.tsx
+    Select.tsx
+    FormField.tsx
+  feedback/
+    Alert.tsx
+    ToastContainer.tsx
+  nav/
+    Tabs/
+      TabsRoot.tsx
+      TabsList.tsx
+      TabsTrigger.tsx
+      TabsContent.tsx
+    ContextMenu.tsx
+  identity/
+    Avatar.tsx
+    ProfileDropdown.tsx
+  layout/
+    Page.tsx
+    SidebarLayout.tsx
+  global/
+    GlobalTopBar.tsx
+    GlobalSearchField.tsx
+  code/
+    CodeEditor.tsx
 ```
 
-**Rules:**
+What belongs here:
 
-* No calls to APIs.
-* No knowledge of ADE‑specific domain objects.
-* Props should be generic (`label`, `value`, `onChange`, `tone`, etc.).
+* Buttons, split buttons, links styled as buttons.
+* Inputs, textareas, selects, form field wrappers.
+* Alerts, banners, toasts.
+* Tabs, context menus, dropdowns.
+* Avatars and profile menus.
+* Global top bar and search field components.
+* Monaco editor wrapper (`CodeEditor`).
 
-Screens compose these primitives and add domain behaviour on top.
+What does **not** belong here:
+
+* Business logic (no calls to `*Api` modules).
+* Domain types in props (prefer generic names like `items`, `onSelect` rather than `runs`, `onRunClick`).
+* Route knowledge (no `navigate` calls).
+
+Screens in `features/` own domain logic and pass data into these components.
 
 ---
 
-### 3.4 `shared/` – Cross‑cutting utilities and hooks
+## 7. `shared/` – cross‑cutting utilities and hooks
 
-`shared/` contains logic used by many features but not tied to rendering.
+**Responsibility:** Provide non‑UI building blocks used by many features. This includes API clients, URL helpers, storage utilities, streaming helpers, permission checks, keyboard shortcut wiring, etc.
 
-Examples:
+Example structure:
 
 ```text
 src/shared/
-  nav/
-    routes.ts              # URL builders like workspaceDocuments(workspaceId)
-  url-state/
-    useSearchParams.ts
-    urlState.ts
-  storage/
-    localStorage.ts        # namespaced storage helpers
-  permissions/
-    permissions.ts         # hasPermission, hasAnyPermission helpers
-  streams/
-    ndjson.ts              # NDJSON streaming helpers
-  keyboard/
-    shortcuts.ts           # global/workbench shortcut registration
   api/
-    httpClient.ts          # fetch wrapper
-    authApi.ts             # optionally here instead of in features/*
+    authApi.ts
     workspacesApi.ts
     documentsApi.ts
-    jobsApi.ts
+    runsApi.ts
     configsApi.ts
     buildsApi.ts
     rolesApi.ts
+    safeModeApi.ts
+  nav/
+    routes.ts             # route builders like workspaceRuns(workspaceId)
+  url-state/
+    urlState.ts           # toURLSearchParams, getParam, setParams
+    useSearchParams.ts
+    SearchParamsOverrideProvider.tsx
+  navigation-blockers/
+    useNavigationBlocker.ts
+  storage/
+    storage.ts            # namespaced localStorage helpers
+  streams/
+    ndjson.ts             # NDJSON streaming and event parsing
+  keyboard/
+    shortcuts.ts          # global/workbench shortcut registration
+  permissions/
+    permissions.ts        # hasPermission, hasAnyPermission
+  time/
+    formatters.ts         # time/date formatting helpers
 ```
 
-**Contains:**
+What belongs here:
 
-* Pure functions and hooks that don’t care about *where* they are used.
-* Infrastructure code like HTTP clients and NDJSON stream parsers.
-* Route builders that keep raw path strings out of features.
+* **API modules** wrapping `/api/v1/...`:
 
-**Does not contain:**
+  * `documentsApi.listWorkspaceDocuments`, `runsApi.listWorkspaceRuns`, `runsApi.startRun`, `configsApi.listConfigurations`, etc.
 
-* JSX for UI components (that belongs in `ui/`).
-* Screen‑specific state (belongs in `features/`).
+* **URL helpers**:
 
-When in doubt: if it has no visual representation and could be used in multiple features, it probably belongs here.
+  * `toURLSearchParams`, `getParam`, `setParams`.
+  * `useSearchParams` hook and `SearchParamsOverrideProvider`.
 
----
+* **Route builders**:
 
-### 3.5 `schema/` and `generated-types/`
+  * Functions that produce pathnames from IDs:
 
-These folders represent the type system.
+    * `workspaceDocuments(workspaceId)`, `workspaceRuns(workspaceId)`, etc.
 
-* **`schema/`**
+* **Infrastructure hooks and utilities**:
 
-  * Hand‑written domain models and helpers:
+  * `useNavigationBlocker`.
+  * Local storage read/write with ADE‑specific namespacing.
+  * NDJSON stream parsing.
+  * Permission check helpers.
+  * Keyboard shortcut registration helpers.
 
-    * E.g. `WorkspaceSummary`, `DocumentSummary`, `JobSummary`, `Configuration`, `ConfigVersion`.
-  * Optional Zod schemas or runtime validation.
-  * Mapping functions from raw API responses to domain types.
+What does **not** belong here:
 
-* **`generated-types/`**
+* JSX components.
+* Feature‑specific business logic (that belongs under `features/`).
+* Any knowledge of `Screen` components.
 
-  * Types generated from backend schemas or OpenAPI.
-  * May be used directly in `schema/` or wrapped.
-
-Guideline:
-
-> Features should import domain types from `@schema`, not reach into `@generated-types` directly.
-
-This avoids tight coupling to backend codegen decisions.
+If a utility function does not render UI and is reused by multiple features, it probably belongs in `shared/`.
 
 ---
 
-### 3.6 `test/` – Test setup and helpers
+## 8. `schema/` and `generated-types/` – types and models
 
-**Contains:**
+### 8.1 `generated-types/`
 
-* `setup.ts` for Vitest (JSDOM, polyfills, global config).
-* Shared factories/mock builders (e.g. `makeWorkspace`, `makeDocument`, `makeJob`).
-* Test helpers like `renderWithProviders`.
+**Responsibility:** Contain types generated directly from backend schemas (e.g. OpenAPI codegen).
 
-Actual test files live near the code they test (e.g. `features/documents/DocumentsScreen.test.tsx`), but `test/` hosts common scaffolding.
+* These types are the “raw wire” shapes.
+* This folder is a leaf: it should not import from anywhere else in `src/`.
 
----
+You can use these types directly where appropriate, but often it’s better to wrap them in `schema/` so the rest of the app works with stable, frontend‑friendly models.
 
-## 4. Dependency rules
+### 8.2 `schema/`
 
-We enforce simple “downward only” imports to keep the graph clean:
+**Responsibility:** Define the frontend domain types and any mapping from backend models.
+
+Example structure:
 
 ```text
-app
-└── features
-    ├── ui
-    ├── shared
-    ├── schema
-    └── generated-types
+src/schema/
+  workspace.ts
+  document.ts
+  run.ts
+  configuration.ts
+  permissions.ts
 ```
 
-More precisely:
+Typical content:
 
-* `ui/` **must not** import from:
+* `WorkspaceSummary`, `WorkspaceDetail`.
+* `DocumentSummary`, `DocumentDetail`, `DocumentStatus`.
+* `RunSummary`, `RunDetail`, `RunStatus`.
+* `Configuration`, `ConfigVersion`.
+* Permission and role models.
 
-  * `features/`
-  * `app/`
+You can also provide mapping helpers:
 
-* `shared/` **must not** import from:
+```ts
+// run.ts
+import type { ApiRun } from "@generated-types";
 
-  * `features/`
-  * `ui/`
-  * `app/`
+export interface RunSummary {
+  id: string;
+  status: RunStatus;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  // ...
+}
 
-* `schema/` **must not** import from:
+export function fromApiRun(apiRun: ApiRun): RunSummary {
+  // convert and normalise fields here
+}
+```
 
-  * `features/`
-  * `ui/`
-  * `app/`
-
-* `generated-types/` **must not** import from anything outside itself.
-
-* `features/` **may** import from:
-
-  * `ui/`
-  * `shared/`
-  * `schema/`
-  * `generated-types/` (but we prefer going through `schema/`).
-
-* `app/` **may** import from:
-
-  * `features/`
-  * `ui/`
-  * `shared/`
-  * `schema/`
-
-If you find yourself wanting to import “upwards” (e.g. from `shared/` into `features/` and back), that’s usually a sign that some logic should be pulled into a new, smaller module in `shared/`.
+Features import types from `@schema`, not from `@generated-types`, to keep the rest of the code insulated from backend schema churn.
 
 ---
 
-## 5. File and naming conventions
+## 9. `test/` – testing setup and helpers
 
-Consistent names make the repo searchable and predictable.
+**Responsibility:** Provide shared testing configuration and helpers.
 
-### 5.1 Components
+Example structure:
 
-* **Screen components**: `*Screen.tsx`
+```text
+src/test/
+  setup.ts             # Vitest config: JSDOM, polyfills, globals
+  factories.ts         # test data builders (workspaces, documents, runs, configs)
+  test-utils.tsx       # renderWithProviders, etc.
+```
 
-  * `LoginScreen.tsx`
-  * `WorkspaceDirectoryScreen.tsx`
-  * `WorkspaceShellScreen.tsx`
-  * `DocumentsScreen.tsx`, `JobsScreen.tsx`, `ConfigBuilderScreen.tsx`, `WorkspaceSettingsScreen.tsx`
+* `setup.ts` is referenced from `vitest.config.ts` and runs before each test.
+* Factories can live here or near their domains, but this is the central place for shared ones.
+* Only test code should import from `@test/*`.
 
-* **Feature components**:
-
-  * Use descriptive names: `DocumentsTable.tsx`, `JobsFilters.tsx`, `ConfigList.tsx`, `RunExtractionDialog.tsx`.
-
-* **UI primitives**:
-
-  * Simple, generic names: `Button`, `SplitButton`, `Input`, `Alert`, `TabsRoot`, `GlobalTopBar`.
-
-### 5.2 Hooks
-
-Name hooks by intent:
-
-* **Data fetching (React Query):**
-
-  * `useDocumentsQuery`
-  * `useJobsQuery`
-  * `useConfigurationsQuery`
-  * `useWorkspaceMembersQuery`
-
-* **Mutations:**
-
-  * `useUploadDocumentMutation`
-  * `useSubmitJobMutation`
-  * `useActivateConfigurationMutation`
-
-* **State/infra:**
-
-  * `useSafeModeStatus`
-  * `useWorkbenchUrlState`
-  * `useSearchParams`
-  * `useNavigationBlocker`
-
-Hooks live in the feature folder if they are specific to one screen,
-or in `shared/` if they are generic.
-
-### 5.3 API modules
-
-API functions live in `shared/api` (or, if you prefer, in each feature folder, but the pattern stays the same).
-
-* File names: `<domain>Api.ts`
-
-  * `authApi.ts`
-  * `workspacesApi.ts`
-  * `documentsApi.ts`
-  * `jobsApi.ts`
-  * `configsApi.ts`
-  * `buildsApi.ts`
-  * `rolesApi.ts`
-  * `safeModeApi.ts`
-
-* Function naming: `verb + Noun` with nouns matching domain terms in doc 01:
-
-  * `listWorkspaces`, `createWorkspace`, `updateWorkspace`.
-  * `listWorkspaceDocuments`, `uploadDocument`, `deleteDocument`.
-  * `listWorkspaceJobs`, `submitJob`.
-  * `listConfigurations`, `activateConfiguration`, `deactivateConfiguration`.
-
-Feature hooks wrap these functions and bind them to React Query.
+Tests for a specific component or hook live alongside that code (e.g. `RunsScreen.test.tsx` next to `RunsScreen.tsx`).
 
 ---
 
-## 6. Path aliases
+## 10. Path aliases and import style
 
-The Vite/TSconfig aliases are:
+We use a small set of TS/Vite aliases to keep imports readable:
 
 * `@app` → `src/app`
-* `@features` (or `@screens`) → `src/features`
+* `@features` / `@screens` → `src/features`
 * `@ui` → `src/ui`
 * `@shared` → `src/shared`
 * `@schema` → `src/schema`
 * `@generated-types` → `src/generated-types`
-* `@test` → `src/test`
+* `@test` → `src/test` (tests only)
 
-Usage guidelines:
+Guidelines:
 
-* Prefer aliases over relative paths for cross‑folder imports:
+* Use aliases when crossing top‑level directories:
 
   ```ts
-  // good
-  import { GlobalTopBar } from "@ui/GlobalTopBar";
-  import { useSearchParams } from "@shared/url-state/useSearchParams";
-  import { WorkspaceSummary } from "@schema/workspaces";
+  // Good
+  import { WorkspaceShellScreen } from "@features/workspace-shell/WorkspaceShellScreen";
+  import { GlobalTopBar } from "@ui/global/GlobalTopBar";
+  import { listWorkspaceRuns } from "@shared/api/runsApi";
+  import { RunSummary } from "@schema/run";
 
-  // avoid
-  import { GlobalTopBar } from "../../ui/GlobalTopBar";
+  // Avoid
+  import { listWorkspaceRuns } from "../../../shared/api/runsApi";
   ```
 
-* Within a folder (e.g. inside `features/workspace-shell/documents`), relative imports are fine and often clearer.
+* Within a small feature folder, relative imports are fine and often clearer:
+
+  ```ts
+  // inside features/workspace-shell/sections/runs
+  import { RunsTable } from "./RunsTable";
+  import { useRunsQuery } from "./useRunsQuery";
+  ```
+
+* Use barrel files (`index.ts`) sparingly and only for small, coherent clusters; they can hide dependency direction and complicate tree‑shaking.
 
 ---
 
-## 7. Worked example: Documents feature
+## 11. Naming conventions
 
-Putting it all together, here is how the **Documents** feature fits into the structure:
+This section summarises naming conventions used in this document. See **01‑domain‑model‑and‑naming** for the domain vocabulary itself.
+
+### 11.1 Screens and containers
+
+* Screen components end with `Screen`:
+
+  * `LoginScreen`, `WorkspaceDirectoryScreen`, `WorkspaceShellScreen`.
+  * `DocumentsScreen`, `RunsScreen`, `ConfigBuilderScreen`, `WorkspaceSettingsScreen`, `WorkspaceOverviewScreen`.
+
+* Each screen file is named identically to its component, and exports it as the default or main named export.
+
+### 11.2 Feature components
+
+* Feature‑local components describe their role:
+
+  * `DocumentsTable`, `DocumentsFilters`, `RunsTable`, `RunsFilters`, `ConfigList`, `RunExtractionDialog`.
+
+* Folder structure mirrors URL structure:
+
+  * `/workspaces/:workspaceId/documents` → `features/workspace-shell/sections/documents/`.
+  * `/workspaces/:workspaceId/runs` → `features/workspace-shell/sections/runs/`.
+
+### 11.3 Hooks
+
+* **Queries** use `use<Domain><What>Query`:
+
+  * `useDocumentsQuery`, `useRunsQuery`, `useConfigurationsQuery`, `useWorkspaceMembersQuery`.
+
+* **Mutations** use `use<Verb><Domain>Mutation`:
+
+  * `useUploadDocumentMutation`, `useStartRunMutation`, `useActivateConfigurationMutation`, `useDeactivateConfigurationMutation`.
+
+* **State / infra hooks** use descriptive names:
+
+  * `useSafeModeStatus`, `useWorkbenchUrlState`, `useNavigationBlocker`, `useSearchParams`.
+
+### 11.4 API modules
+
+* API modules live under `shared/api` and are named `<domain>Api.ts`:
+
+  * `authApi.ts`, `workspacesApi.ts`, `documentsApi.ts`, `runsApi.ts`, `configsApi.ts`, `buildsApi.ts`, `rolesApi.ts`, `safeModeApi.ts`.
+
+* Functions are “verb + noun” with noun matching the domain model:
+
+  ```ts
+  listWorkspaces();
+  createWorkspace(input);
+  listWorkspaceDocuments(workspaceId, params);
+  uploadDocument(workspaceId, file);
+  listWorkspaceRuns(workspaceId, params);
+  startRun(workspaceId, payload);
+  listConfigurations(workspaceId, params);
+  activateConfiguration(workspaceId, configId);
+  ```
+
+Feature hooks wrap these functions into React Query calls.
+
+### 11.5 Types and models
+
+* Domain types are singular, PascalCase:
+
+  * `WorkspaceSummary`, `WorkspaceDetail`.
+  * `DocumentSummary`, `DocumentDetail`, `DocumentStatus`.
+  * `RunSummary`, `RunDetail`, `RunStatus`.
+  * `Configuration`, `ConfigVersion`.
+
+* If you need to distinguish backend wire types, use a clear prefix/suffix (`ApiRun`, `ApiDocument`) and isolate them in `schema/` or `generated-types/`.
+
+---
+
+## 12. Worked example: the Documents feature
+
+To make the structure concrete, here’s how the **Documents** section of the workspace shell fits into the architecture.
 
 ```text
 src/
   app/
-    ScreenSwitch.tsx          # routes /workspaces/:id/documents to DocumentsScreen
+    ScreenSwitch.tsx              # Routes /workspaces/:id/documents → DocumentsScreen
   features/
     workspace-shell/
-      documents/
-        DocumentsScreen.tsx   # entrypoint for the Documents section
-        DocumentsTable.tsx
-        DocumentsFilters.tsx
-        RunExtractionDialog.tsx
-        useDocumentsQuery.ts
-        useUploadDocumentMutation.ts
+      sections/
+        documents/
+          DocumentsScreen.tsx
+          DocumentsTable.tsx
+          DocumentsFilters.tsx
+          RunExtractionDialog.tsx
+          useDocumentsQuery.ts
+          useUploadDocumentMutation.ts
   ui/
-    Button.tsx
-    Input.tsx
-    Alert.tsx
-    GlobalTopBar.tsx
+    button/Button.tsx
+    form/Input.tsx
+    feedback/Alert.tsx
+    global/GlobalTopBar.tsx
   shared/
-    api/
-      documentsApi.ts         # listWorkspaceDocuments, uploadDocument, etc.
-    url-state/
-      useSearchParams.ts
-    permissions/
-      permissions.ts          # hasPermission for upload/execute actions
+    api/documentsApi.ts           # listWorkspaceDocuments, uploadDocument, deleteDocument...
+    url-state/useSearchParams.ts
+    nav/routes.ts                 # workspaceDocuments(workspaceId)
+    permissions/permissions.ts
   schema/
-    documents.ts              # DocumentSummary, DocumentDetail, enums
+    document.ts                   # DocumentSummary, DocumentDetail, DocumentStatus
 ```
 
-* `ScreenSwitch` sees `/workspaces/:workspaceId/documents` and renders `DocumentsScreen`.
-* `DocumentsScreen`:
+Flow:
 
-  * Uses `useDocumentsQuery` to fetch data.
-  * Composes `GlobalTopBar` and `DocumentsTable`.
-  * Uses `Button` from `@ui` for “Upload document”.
-* `DocumentsTable` is purely presentational; it receives `DocumentSummary[]` and callbacks.
-* `useDocumentsQuery` wraps `documentsApi.listWorkspaceDocuments` with React Query.
-* `documentsApi.ts` is the only place that knows about `/api/v1/workspaces/{workspace_id}/documents`, and returns typed data using `DocumentSummary` from `@schema`.
+1. **Routing**
 
-This pattern scales cleanly to Jobs, Config Builder, Settings, and any new sections you add.
+   * `ScreenSwitch` examines the current location.
+   * `/workspaces/:workspaceId/documents` is mapped to `DocumentsScreen`.
 
----
+2. **Screen logic**
 
-By adhering to this structure and these naming and dependency rules, `ade-web` stays:
+   * `DocumentsScreen`:
 
-* **Predictable** – new contributors and AI agents can quickly find the right place for any change.
-* **Composable** – UI primitives are reusable and domain‑agnostic.
-* **Maintainable** – cross‑cutting logic is centralised, and features don’t leak into each other.
+     * Reads search parameters (`q`, `status`, `sort`, `view`) via `useSearchParams` from `@shared/url-state`.
+     * Calls `useDocumentsQuery(workspaceId, filters)` to fetch data.
+     * Renders `GlobalTopBar` and the page layout.
+     * Composes `DocumentsFilters`, `DocumentsTable`, and `RunExtractionDialog`.
+     * Wires buttons to `useUploadDocumentMutation` and navigation helpers from `@shared/nav/routes`.
 
-Any time you add a new feature or route, start by deciding:
+3. **Data fetching**
 
-1. Which **feature folder** it belongs in.
-2. Which parts are **presentational** (`ui/`) vs **domain logic** (`features/`) vs **shared infra** (`shared/`).
+   * `useDocumentsQuery` uses React Query and `documentsApi.listWorkspaceDocuments` under the hood.
+   * `documentsApi` builds the `/api/v1/workspaces/{workspace_id}/documents` URL and parses the JSON response.
+   * The response is mapped into `DocumentSummary[]` using types from `@schema/document`.
 
-If that’s clear, the rest of the implementation tends to fall into place.
+4. **Presentation**
+
+   * `DocumentsTable` and `DocumentsFilters` are presentational components:
+
+     * They receive data and callbacks via props.
+     * They use `ui` primitives (`Button`, `Input`, `Alert`) for consistent look and accessibility.
+
+The **Runs** section follows the same pattern, with:
+
+* `features/workspace-shell/sections/runs/…`
+* `RunsScreen`, `RunsTable`, `useRunsQuery`, `useStartRunMutation`.
+* `shared/api/runsApi.ts`.
+* Domain types in `schema/run.ts`.
+
+If you follow the structure and rules in this doc, adding or changing a feature should always feel the same: pick the right folder in `features/`, wire it through `app/ScreenSwitch.tsx`, use `shared/` for cross‑cutting logic, and build the UI out of `ui/` primitives.

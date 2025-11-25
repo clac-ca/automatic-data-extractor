@@ -1,473 +1,509 @@
-# 07 – Documents, jobs, and runs
+# 07 – Documents and Runs
 
-This document describes how ADE Web models **documents** and **jobs**, how users start and monitor processing, and how these concepts map to backend APIs and frontend components.
+This document describes how ADE Web models and implements:
 
-It is written for implementers. For terminology and canonical naming, see **01‑domain‑model‑and‑naming.md**.
+- **Documents** – immutable input files inside a workspace.
+- **Runs** – executions of the ADE engine against one or more documents.
+- The **Documents** and **Runs** sections of the workspace shell.
+- **Run options** and **per‑document run preferences**.
 
----
+It is written for frontend engineers and backend integrators. For canonical terminology (Workspace, Document, Run, Configuration, Safe mode, etc.) see `01-domain-model-and-naming.md`.
 
-## 1. Scope and goals
-
-This doc covers:
-
-- The **data model and lifecycle** for documents and jobs.
-- The UX and component structure of the **Documents** and **Jobs** sections.
-- How users **run extraction** for one or more documents, including options.
-- How we **remember run preferences** per document.
-- The relevant **backend endpoints** and how they are consumed in the frontend.
-
-It intentionally does **not** cover:
-
-- Configuration/version lifecycle (see **08‑configurations‑and‑config‑builder.md**).
-- The Config Builder workbench (see **09‑workbench‑editor‑and‑scripting.md**).
+> **Terminology note**  
+> In this document we use **run** as the primary term for engine executions.  
+> Some backend endpoints still use `/jobs` in their path; treat those as *run APIs* with legacy naming.
 
 ---
 
-## 2. Concepts and relationships
+## 1. Conceptual model
 
 At a high level:
 
-- A **document** is an immutable uploaded input file (Excel, CSV, PDF, …) that belongs to a **workspace**.
-- A **job** is a workspace‑scoped execution of ADE against one or more documents using a specific **config version** and set of **run options**.
-- Each job may internally correspond to one or more **engine runs** in the backend. ADE Web treats these as implementation details and exposes **jobs** as the primary user‑facing concept.
+- A **document** is an immutable input file that belongs to a workspace.
+- A **run** is one execution of ADE against a set of documents using a particular configuration and options.
+- ADE Web exposes:
+  - A **Documents** section for managing inputs.
+  - A **Runs** section for the workspace‑wide run ledger.
+  - Run entry points from **Documents** and **Config Builder**.
 
-The primary relationships:
+### 1.1 Relationships
 
 - A **workspace** owns many **documents**.
-- A **workspace** owns many **jobs**.
-- A **job** references:
-  - One workspace,
-  - One config (and a specific version),
-  - One or more input documents (by ID),
-  - Run‑time options (dry‑run, validate‑only, worksheet selection, …).
+- A **workspace** owns many **runs**.
+- A **run** references:
+  - One workspace.
+  - One configuration and version (when applicable).
+  - One or more input documents.
+  - Optional run‑time options (dry run, validate only, sheet selection, …).
+
+Documents and runs are **loosely coupled**:
+
+- Documents are immutable and never edited by runs.
+- Runs always refer to documents by ID; they do not mutate document content.
 
 ---
 
-## 3. Documents
+## 2. Documents
 
-### 3.1 Document data model
+### 2.1 Data model
 
-A document is an immutable input owned by a workspace.
-
-**Key fields (frontend model):**
+Frontend view of a document in lists:
 
 ```ts
 export interface DocumentSummary {
   id: string;
   workspaceId: string;
+
   name: string;              // usually original filename
   contentType: string;       // e.g. "application/vnd.ms-excel"
   sizeBytes: number;
-  status: DocumentStatus;    // see below
-  createdAt: string;         // ISO timestamp
+
+  status: DocumentStatus;    // uploaded | processing | processed | failed | archived
+  createdAt: string;         // ISO 8601 string
   uploadedBy: UserSummary;
-  lastJob?: {
-    id: string;
-    status: JobStatus;
-    finishedAt?: string;
-    summary?: string | null;
-  };
+
+  lastRun?: DocumentLastRunSummary | null;
+}
+
+export interface DocumentLastRunSummary {
+  id: string;
+  status: RunStatus;
+  finishedAt?: string | null;
+  message?: string | null;   // optional human‑readable note
 }
 ````
 
-We keep a separate `DocumentDetail` type if the detail endpoint exposes additional metadata. The UI primarily uses `DocumentSummary` in list views.
+A separate `DocumentDetail` type can extend this if the detail endpoint returns more metadata.
 
-### 3.2 Document status lifecycle
+**Immutability:**
 
-`DocumentStatus` is defined centrally (see doc 01). ADE Web relies on the backend to calculate it, but the UI assumes:
+* Uploading a revised version produces a **new** `document.id`.
+* All run APIs use document IDs; they never modify the underlying file.
 
-* `uploaded` – file is stored; no job has started.
-* `processing` – at least one job is currently running for this document.
-* `processed` – the last job completed successfully.
-* `failed` – the last job completed with an error.
-* `archived` – the document is retained for history but not shown in normal flows.
+### 2.2 Status lifecycle
+
+`DocumentStatus` is defined centrally; ADE Web does not derive it from runs.
+
+Conceptually:
+
+* `uploaded` – file is stored, no run yet.
+* `processing` – at least one active run includes this document.
+* `processed` – the last relevant run succeeded.
+* `failed` – the last relevant run failed.
+* `archived` – document is retained for history but excluded from normal interactions.
 
 Typical transitions:
 
-* New upload → `uploaded`.
-* User starts a job → `processing`.
-* Job succeeds → `processed`.
-* Job fails → `failed`.
-* Document archived via explicit action → `archived`.
+* `null` → `uploaded` when upload completes.
+* `uploaded | processed | failed` → `processing` when a run starts.
+* `processing` → `processed` on successful completion.
+* `processing` → `failed` on error.
+* Any → `archived` via explicit user action.
 
-The **Documents** screen never mutates `status` directly; it refetches document data after relevant operations (upload, job completion, archive).
+The UI:
 
-### 3.3 Documents screen
-
-**Location:** `features/workspace-shell/documents/`
-
-**Primary components:**
-
-* `DocumentsScreen` – route container for `/workspaces/:workspaceId/documents`.
-* `DocumentsToolbar` – search box, filters, upload button.
-* `DocumentsTable` – paginated list of documents.
-* `DocumentRow` – row rendering for a single document.
-* `DocumentActions` – per‑row actions (run extraction, download, archive).
-
-**Data flow:**
-
-* Query params:
-
-  * `q`: search string (name, maybe source metadata).
-  * `status`: comma‑separated filter.
-  * `sort`: sort key (e.g. `-created_at`, `-last_job_at`).
-  * `view`: preset (e.g. `all`, `mine`, `attention`, `recent`).
-
-* Hook:
-
-  ```ts
-  const { data, isLoading, error } = useDocumentsQuery(workspaceId, { q, status, sort, view });
-  ```
-
-* Backend:
-
-  * Maps onto `GET /api/v1/workspaces/{workspace_id}/documents` with corresponding query params.
-
-**UX behaviour:**
-
-* Search is debounced; changing filters updates the URL via `useSearchParams`.
-* Status pills / filters are mirrored in the URL for shareability.
-* Clicking a row:
-
-  * Either opens a document detail view (if you have one), or
-  * Brings up a contextual “Run extraction” dialog prefilled with this document.
-
-### 3.4 Document upload
-
-Uploading is considered an operation within the Documents section.
-
-**Trigger:**
-
-* Toolbar “Upload” button.
-* Keyboard shortcut: `⌘U` / `Ctrl+U` when Documents screen is active.
-
-**Flow:**
-
-1. User selects file(s) via file picker or drag‑and‑drop.
-
-2. ADE Web calls:
-
-   ```ts
-   useUploadDocumentMutation(workspaceId)
-   // -> POST /api/v1/workspaces/{workspace_id}/documents
-   ```
-
-3. On success:
-
-   * UI shows a success toast (“Uploaded 3 documents”).
-   * Documents query is invalidated/refetched.
-   * Newly uploaded documents appear with `status: uploaded`.
-
-4. On error:
-
-   * Error toast and inline `Alert` in upload dialog/dropzone.
-   * The error message from the backend is surfaced verbatim where appropriate.
-
-Uploads are **synchronous** from the UI’s perspective; we do not currently implement resumable uploads.
-
-### 3.5 Document sheets
-
-For multi‑sheet spreadsheets, ADE Web surfaces sheet information where relevant (e.g. run dialogs).
-
-**Backend contract:**
-
-* `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/sheets` returns:
-
-  ```ts
-  export interface DocumentSheet {
-    name: string;
-    index: number;
-    isActive: boolean;
-  }
-  ```
-
-**Frontend usage:**
-
-* Hook: `useDocumentSheetsQuery(workspaceId, documentId)`.
-* Used in:
-
-  * **Run extraction** dialogs (Documents screen & Config Builder).
-  * Any document detail page that needs to preview which sheets exist.
-
-**Behaviour:**
-
-* If sheets endpoint succeeds:
-
-  * Dialog shows a list of worksheets with checkboxes.
-  * Default selection is:
-
-    * `isActive` sheet(s) if flagged, or
-    * All sheets if none are flagged.
-
-* If sheets endpoint fails or is unavailable:
-
-  * Show a non‑blocking warning (inline `Alert`).
-  * Provide a simple “Use all worksheets” option.
-  * The run request omits `input_sheet_names`, leaving selection to the backend.
-
-ADE Web never attempts to interpret sheet content; it only displays metadata and sends sheet names to the backend as requested.
+* Displays `status` as a badge in the Documents list.
+* Shows `lastRun` as a secondary indicator (“Last run: succeeded 2 hours ago”).
+* Only changes status by refetching from the backend.
 
 ---
 
-## 4. Jobs and engine runs
+## 3. Documents screen architecture
 
-In the UI, **jobs** are the primary unit of work. The backend may expose “runs” as a lower‑level concept; ADE Web hides that complexity unless explicitly needed.
+**Route:** `/workspaces/:workspaceId/documents`
+**Responsibilities:**
 
-### 4.1 Job data model
+1. List and filter documents in the workspace.
+2. Provide upload and download actions.
+3. Provide “Run extraction” entry points.
+4. Surface last run status and key metadata.
 
-**Key fields (frontend model):**
+### 3.1 Data sources and hooks
+
+Typical hooks used by `DocumentsScreen`:
 
 ```ts
-export interface JobSummary {
+const [searchParams, setSearchParams] = useSearchParams();
+const filters = parseDocumentFilters(searchParams);
+
+const documentsQuery = useDocumentsQuery(workspaceId, filters);
+const uploadMutation = useUploadDocumentMutation(workspaceId);
+```
+
+* `useDocumentsQuery` → `GET /api/v1/workspaces/{workspace_id}/documents`
+* `useUploadDocumentMutation` → `POST /api/v1/workspaces/{workspace_id}/documents`
+* `useDocumentSheetsQuery` (lazy) → `GET /documents/{document_id}/sheets`
+
+These hooks live in the Documents feature folder and delegate HTTP details to `shared` API modules.
+
+### 3.2 Filters, search, and sorting
+
+Documents URL state is encoded via query parameters:
+
+* `q` – free‑text search (by name, possibly other fields).
+
+* `status` – comma‑separated list of document statuses.
+
+* `sort` – sort key, e.g.:
+
+  * `-created_at` (newest first)
+  * `-last_run_at` (recent runs first)
+
+* `view` – optional preset (e.g. `all`, `mine`, `attention`, `recent`).
+
+Rules:
+
+* Filter changes are reflected in the URL using `setSearchParams`.
+* For small, frequent adjustments (toggling a status pill), we call `setSearchParams` with `{ replace: true }` to avoid polluting history.
+
+### 3.3 Upload flow
+
+User flow:
+
+1. User clicks “Upload documents” or presses `⌘U` / `Ctrl+U`.
+2. A file picker opens (or a drag‑and‑drop zone is available).
+3. For each selected file, `uploadMutation.mutate({ file })` is called.
+4. During upload:
+
+   * Show progress (if easily available).
+   * Disable duplicate submissions of the same file selection.
+5. On success:
+
+   * Show a success toast (“Uploaded 3 documents”).
+   * Invalidate the documents query to refresh the list.
+6. On failure:
+
+   * Show an error toast and/or inline `Alert` with backend error text.
+
+Implementation guidelines:
+
+* Keep upload UX optimistic but let the documents query be the source of truth for final status.
+* Handle duplicate file names gracefully; they are not required to be unique.
+
+### 3.4 Row actions
+
+Each `DocumentRow` typically exposes:
+
+* **Download** – invokes `GET /documents/{document_id}/download`.
+* **Run extraction** – opens the run dialog (section 8).
+* **Archive/Delete** – invokes `DELETE /documents/{document_id}` (usually soft delete).
+
+Run‑related actions must be:
+
+* **Permission‑gated** – hidden/disabled if the user cannot start runs.
+* **Safe‑mode‑aware** – disabled with a clear tooltip when Safe mode is enabled.
+
+---
+
+## 4. Document sheets
+
+For multi‑sheet spreadsheets, the user can choose which worksheets to process.
+
+### 4.1 API contract
+
+Endpoint:
+
+```text
+GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/sheets
+```
+
+Expected shape:
+
+```ts
+export interface DocumentSheet {
+  name: string;
+  index: number;
+  isActive?: boolean;  // optional “active”/default sheet signal
+}
+```
+
+Errors and unsupported types:
+
+* If the backend can’t list sheets (unsupported format, parse failure, etc.), it may return an error or an empty list.
+* The frontend must gracefully fall back to a “use all sheets” mode.
+
+### 4.2 Use in run dialogs
+
+`useDocumentSheetsQuery(workspaceId, documentId)` is called:
+
+* Lazily when a run dialog opens **and** the document looks like a spreadsheet.
+* Or on demand when the user expands a “Sheets” section.
+
+UI behaviour:
+
+* If sheets are returned:
+
+  * Show a multi‑select checklist of worksheet names.
+  * Default selection:
+
+    * All sheets, or
+    * Only `isActive` sheets if the backend provides that signal.
+
+* If sheets cannot be loaded:
+
+  * Show a small inline warning (“Couldn’t load worksheets; running on all sheets.”).
+  * Omit `inputSheetNames` from the run request.
+
+Selected sheet names are passed to the run API as `input_sheet_names`.
+
+---
+
+## 5. Runs
+
+A **run** is one execution of the ADE engine. ADE Web exposes two main perspectives on runs:
+
+* The **Runs** ledger – workspace‑wide history (`/workspaces/:workspaceId/runs`, API currently `/jobs`).
+* **Config‑scoped runs** – initiated from Config Builder against a specific configuration.
+
+### 5.1 Run data model
+
+Workspace‑level run summary:
+
+```ts
+export interface RunSummary {
   id: string;
   workspaceId: string;
-  status: JobStatus;            // queued | running | succeeded | failed | cancelled
+  status: RunStatus;        // queued | running | succeeded | failed | cancelled
+
   createdAt: string;
   startedAt?: string | null;
   finishedAt?: string | null;
 
-  initiator: UserSummary | SystemInitiator;
-  configurationId: string;
-  configurationName: string;
-  configurationVersion: string; // stable identifier/tag
+  initiatedBy: UserSummary | "system";
+
+  configurationId?: string | null;
+  configurationVersionId?: string | null;
 
   inputDocuments: {
     count: number;
     examples: Array<{ id: string; name: string }>;
   };
 
-  options: {
-    dryRun?: boolean;
-    validateOnly?: boolean;
-    inputSheetNames?: string[] | null;
-  };
+  options?: RunOptions;
+  message?: string | null;
+}
 
-  summary?: string | null;      // human-readable summary, if provided
-  errorMessage?: string | null;
+export interface RunOptions {
+  dryRun?: boolean;
+  validateOnly?: boolean;
+  inputSheetNames?: string[];
 }
 ```
 
-A `JobDetail` type extends this with log/telemetry/outputs references.
+A `RunDetail` type extends this with:
 
-### 4.2 Job lifecycle
+* Full document list.
+* Links to outputs (artifact + individual files).
+* Optional telemetry summary.
+* Log/console linkage.
 
-`JobStatus` is defined centrally (see doc 01):
+### 5.2 Run status
 
-* `queued` – request accepted, waiting to start.
-* `running` – job is actively processing.
-* `succeeded` – job completed successfully.
-* `failed` – job completed with an error.
-* `cancelled` – job ended early by user/system.
+`RunStatus` values:
 
-Status transitions are entirely driven by the backend. ADE Web receives them via:
+* `queued` – accepted, waiting to start.
+* `running` – currently executing.
+* `succeeded` – completed successfully.
+* `failed` – completed with error.
+* `cancelled` – terminated early by user/system.
 
-* Polling of job detail.
-* Or NDJSON event streams (see below).
+Status semantics are the same whether the run came from:
 
-The frontend maps these statuses to:
+* Documents screen.
+* Runs screen.
+* Config Builder (test runs).
 
-* Visual badges (colour + label).
-* Filter pills on the Jobs screen.
-
-### 4.3 Jobs screen
-
-**Location:** `features/workspace-shell/jobs/`
-
-**Primary components:**
-
-* `JobsScreen` – route container for `/workspaces/:workspaceId/jobs`.
-* `JobsFilters` – status/config/initiator/date filters.
-* `JobsTable` – paginated list of jobs.
-* `JobRow` – single job row.
-* `JobStatusBadge` – consistent status rendering.
-
-**Data flow:**
-
-* Query params (typical):
-
-  * `status`: comma‑separated job statuses.
-  * `config`: filter by configuration id/version.
-  * `initiator`: filter by user id or “system”.
-  * `from`, `to`: date range.
-
-* Hook:
-
-  ```ts
-  const { data, isLoading, error } = useJobsQuery(workspaceId, filters);
-  ```
-
-* Backend:
-
-  * `GET /api/v1/workspaces/{workspace_id}/jobs`.
-
-**UX behaviour:**
-
-* Clicking a row opens a job detail view:
-
-  * Either a full screen route (e.g. `/workspaces/:id/jobs/:jobId`), or
-  * A drawer/modal overlay.
-
-* From the job detail, users can:
-
-  * Download artifacts and outputs.
-  * Inspect logs and telemetry.
-  * Navigate back to a related document or configuration.
-
-### 4.4 Job detail and logs
-
-**Backend endpoints:**
-
-* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}` – job metadata.
-* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/artifact` – combined outputs.
-* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs` – list of output files.
-* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs/{output_path}` – single file download.
-* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/logs` – log file download or NDJSON stream, depending on implementation.
-
-**Frontend structure:**
-
-* `JobDetailPanel` (or screen) composes:
-
-  * A **summary header** (job id, status, config, initiator, document info).
-  * A **logs/console** panel (if streaming or showing text logs).
-  * An **outputs** panel (artifact + individual outputs).
-  * A **telemetry** summary (rows processed, warnings, etc.), when available.
-
-**Streaming vs file download:**
-
-* Where the backend exposes NDJSON logs (recommended), ADE Web uses a `useJobLogStream` hook that:
-
-  * Connects to the logs endpoint.
-  * Parses events line‑by‑line.
-  * Updates incremental console output.
-
-* Where only a static log file download is available, ADE Web:
-
-  * Shows a “Download logs” button.
-  * Optionally offers a “View logs inline” mode by fetching and rendering the file client‑side.
-
-The important point: the Jobs UI is designed to accommodate both streaming and non‑streaming backends via a thin abstraction in `shared/ndjson` or `shared/logs`.
+ADE Web never infers status; it shows what the backend reports.
 
 ---
 
-## 5. Running extraction from a document
+## 6. Runs ledger screen
 
-Jobs can be created from multiple entry points. The most common is “Run extraction” for a specific document.
+Conceptually: **Runs** is the workspace‑wide ledger of engine activity.
 
-### 5.1 Run extraction dialog (Documents)
+**Route:** `/workspaces/:workspaceId/runs` (UI; underlying backend routes currently use `/jobs`)
+**Responsibilities:**
+
+1. Show all runs in a workspace.
+2. Allow filtering/sorting by status, configuration, initiator, and time.
+3. Provide access to logs, telemetry, and outputs.
+
+### 6.1 Data and filters
+
+Hook:
+
+```ts
+const filters = parseRunFilters(searchParams);
+const runsQuery = useRunsQuery(workspaceId, filters);
+// internally calls GET /api/v1/workspaces/{workspace_id}/jobs
+```
+
+Typical filters encoded in the URL:
+
+* `status` – comma‑separated `RunStatus` values.
+* `config` – configuration id or version.
+* `initiator` – user id or `system`.
+* `from`, `to` – created‑at time window.
+
+### 6.2 Run list UI
+
+Each row shows:
+
+* Run ID (short display form).
+* Status badge.
+* Configuration name/version (if present).
+* Input document summary (“3 documents”, with tooltip listing examples).
+* Initiator.
+* Created time and duration.
+
+Row interaction:
+
+* Clicking a row opens a **Run detail** view, either:
+
+  * As its own route: `/workspaces/:workspaceId/runs/:runId`, or
+  * As a side panel/dialog anchored on the list.
+
+### 6.3 Run detail and logs
+
+Run detail view composes:
+
+* **Header:**
+
+  * Run ID, status, configuration, initiator.
+  * Timestamps and duration.
+
+* **Logs/console:**
+
+  * Either streaming NDJSON, or a loaded log file.
+  * Rendered similarly to the Config Builder console.
+
+* **Telemetry summary:**
+
+  * Rows processed, warnings, errors, per‑table counts, etc. (when available).
+
+* **Outputs:**
+
+  * Link to combined artifact download.
+  * Table of individual output files.
+
+Data sources:
+
+* `useRunQuery(workspaceId, runId)` → `GET /jobs/{job_id}` or `/runs/{run_id}`.
+* `useRunOutputsQuery(workspaceId, runId)` → `/jobs/{job_id}/outputs` or `/runs/{run_id}/outputs`.
+* `useRunLogsStream(workspaceId, runId)`:
+
+  * Connects to `/jobs/{job_id}/logs` or `/runs/{run_id}/logs`.
+  * Parses NDJSON events.
+  * Updates console output incrementally.
+
+While a run is `queued` or `running`:
+
+* The detail view holds an active log stream.
+* The Runs ledger may poll or simply rely on detail views to trigger refreshes.
+
+---
+
+## 7. Starting runs
+
+Users can start new runs from multiple surfaces:
+
+* **Documents** section: “Run extraction” for a specific document.
+* **Runs** section: “New run” (if you support multi‑document runs).
+* **Config Builder**: “Run extraction” against a sample document (config‑scoped).
+
+### 7.1 Run options in the UI
+
+ADE Web exposes run options as the backend supports them:
+
+* **Dry run**
+
+  * Label: “Dry run (don’t write outputs)”.
+  * Intended for testing.
+
+* **Validate only**
+
+  * Label: “Run validators only”.
+  * Skip full extraction.
+
+* **Sheet selection**
+
+  * Label and UI: “Worksheets”.
+  * Uses sheet metadata described in section 4.
+
+General rules:
+
+* Options live under an “Advanced settings” expander in run dialogs.
+* Defaults are product decisions and may be remembered per document (see next section).
+
+### 7.2 Workspace‑level run creation (Documents & Runs)
 
 From the **Documents** screen:
 
 1. User clicks “Run extraction” on a document row.
 
-2. ADE Web opens a `RunExtractionDialog` with:
+2. ADE Web opens `RunDocumentDialog` with:
 
-   * The current workspace and selected document prefilled.
-   * A configuration selector (with active config/version default).
-   * An optional worksheet selector (for spreadsheets).
-   * Advanced options (dry run, validate only).
+   * Selected document prefilled.
+   * Preferred configuration/version and sheet subset loaded from per‑document preferences (if any).
 
-3. On “Run job”:
+3. On submit:
 
-   * ADE Web constructs a `JobCreateRequest`.
-   * Safe mode is checked before and during submit (buttons disabled with tooltip if enabled).
-   * A job is created via backend (see below).
-   * The dialog closes and:
+   * ADE Web calls `POST /api/v1/workspaces/{workspace_id}/jobs` (legacy path for workspace runs).
+   * Payload includes:
 
-     * Either navigates to the job detail view, or
-     * Shows a toast with a link to the job.
+     * `input_document_ids: [documentId]`
+     * Optional `input_sheet_names`
+     * Optional `dry_run` / `validate_only`
+     * Selected configuration/version identifiers.
 
-### 5.2 Run options
+4. On success:
 
-Run options are driven by backend capabilities, but the frontend standardises them as:
+   * Show a success toast.
+   * Optionally navigate to the Run detail view.
+   * Invalidate runs and documents queries.
 
-```ts
-export interface JobRunOptions {
-  dryRun?: boolean;
-  validateOnly?: boolean;
-  inputSheetNames?: string[];   // subset of sheets from /sheets endpoint
-}
-```
+From the **Runs** screen:
 
-UI rules:
+* A “New run” action could open a similar dialog allowing multiple documents to be selected.
 
-* **Dry run:**
+### 7.3 Config‑scoped runs (Config Builder)
 
-  * Labelled clearly (“Dry run – don’t write final outputs”).
-  * Only shown if supported by backend / configuration.
+Config Builder uses **config‑scoped runs** primarily for test/validation:
 
-* **Validate only:**
+* `POST /api/v1/configs/{config_id}/runs` with a similar payload.
+* Response provides a `run_id`.
+* ADE Web streams that run’s events into the workbench console via `/api/v1/runs/{run_id}/logs`.
 
-  * “Run validators only” checkbox or similar.
-  * Mutually exclusive with some other options if the backend requires it.
-
-* **Input sheet names:**
-
-  * Multi‑select of available sheets.
-  * Omitted from request if “all sheets” are selected.
-
-### 5.3 Backend interaction
-
-There are two relevant job‑creation endpoints in the API:
-
-* **Workspace jobs:**
-
-  * `POST /api/v1/workspaces/{workspace_id}/jobs` (`submit_job_endpoint`).
-  * Best for general user‑triggered jobs from Documents screen.
-
-* **Config‑scoped runs:**
-
-  * `POST /api/v1/configs/{config_id}/runs` (`create_run_endpoint`).
-  * Used by Config Builder for test runs / validation runs scoped to a config.
-
-ADE Web uses:
-
-* `/workspaces/{workspace_id}/jobs` for **normal operational jobs** (Documents and Jobs screens).
-* `/configs/{config_id}/runs` for **Config Builder test runs** (see doc 09).
-
-A typical workspace job request looks like:
-
-```json
-{
-  "configuration_id": "cfg_123",
-  "configuration_version": "v2024.05.01",
-  "input_document_ids": ["doc_abc"],
-  "dry_run": false,
-  "validate_only": false,
-  "input_sheet_names": ["Sheet1", "Sheet2"]
-}
-```
-
-The response returns a `job_id` which is used to:
-
-* Link to `/workspaces/:workspaceId/jobs` (filtered to that job), and/or
-* Subscribe to its logs.
+The semantics (status, options, outputs) are identical; only the entry point and visual context differ. Full details live in `09-workbench-editor-and-scripting.md`.
 
 ---
 
-## 6. Per‑document run preferences
+## 8. Per‑document run preferences
 
-To make repeated runs smoother, ADE Web remembers user preferences **per document, per workspace**.
+To make repeated runs smoother, ADE Web remembers per‑document, per‑workspace, per‑user preferences.
 
-### 6.1 What we store
+### 8.1 What is persisted
 
-For each document, we remember:
+For each `(workspaceId, documentId, user)` we may store:
 
-* **Preferred configuration**:
+```ts
+export interface DocumentRunPreferences {
+  configurationId?: string;
+  configurationVersionId?: string;
+  inputSheetNames?: string[];
+  options?: {
+    dryRun?: boolean;
+    validateOnly?: boolean;
+  };
+  version: 1;
+}
+```
 
-  * `configurationId`
-  * `configurationVersion` (when explicitly selected)
+Fields are optional; missing fields fall back to sensible defaults.
 
-* **Preferred sheet subset**:
+### 8.2 Storage and keying
 
-  * `inputSheetNames` used in the last successful run started from the Documents screen.
-
-* **Optional run options** (if you decide to persist them):
-
-  * `dryRun`, `validateOnly`.
-
-### 6.2 Storage and keying
-
-Preferences are stored in localStorage via a shared helper, never via direct `window.localStorage` calls inside features.
+Preferences live in browser `localStorage` via a shared helper, not direct calls from components.
 
 Key pattern:
 
@@ -475,171 +511,163 @@ Key pattern:
 ade.ui.workspace.<workspaceId>.document.<documentId>.run-preferences
 ```
 
-Value shape (JSON):
+Invariants:
 
-```ts
-interface DocumentRunPreferences {
-  configurationId?: string;
-  configurationVersion?: string;
-  inputSheetNames?: string[];
-  dryRun?: boolean;
-  validateOnly?: boolean;
-  // version field reserved for future migrations
-  version: 1;
-}
-```
+* **Per‑user** and **per‑workspace** (keys include `workspaceId`).
+* Never contain secrets; safe to clear.
+* Backend remains the source of truth for configuration availability.
 
-### 6.3 Behaviour
+### 8.3 Read/write strategy
 
-* On opening a **Run extraction** dialog:
+**Reading on dialog open:**
 
-  * ADE Web reads preferences (if present).
-  * Valid configuration and version IDs are resolved against current configuration list.
-  * If a referenced config/version no longer exists, the preference is ignored (and optionally cleared).
+* When a run dialog opens for a document:
 
-* On submitting a job from the dialog:
+  1. Load preferences with `getDocumentRunPreferences(workspaceId, documentId)`.
+  2. Check that referenced configuration/version still exists:
 
-  * Preferences are updated with the latest choices.
+     * If not, drop those fields from the loaded preferences.
+  3. Use the remaining fields to pre‑fill config, version, sheet selection, and advanced options.
 
-* Reset:
+**Writing on successful submit:**
 
-  * The dialog may include “Reset to defaults”, which clears the stored preferences for that document.
+* After a run is successfully submitted from the Documents screen:
 
-Preferences are purely **client‑side**; clearing browser storage must not affect backend behaviour.
+  * Merge the final dialog choices into `DocumentRunPreferences`.
+  * Save using `setDocumentRunPreferences(...)`.
 
----
+**Reset:**
 
-## 7. Backend contracts (summary)
+* Run dialog may expose “Reset to defaults”, which:
 
-This section summarises the backend routes ADE Web expects for documents and jobs. For full detail, see **04‑data‑layer‑and‑backend‑contracts.md**.
-
-### 7.1 Documents
-
-* `GET /api/v1/workspaces/{workspace_id}/documents`
-
-  * Filters: `q`, `status`, `sort`, `view` (implementation‑defined).
-  * Returns `DocumentSummary[]`.
-
-* `POST /api/v1/workspaces/{workspace_id}/documents`
-
-  * Multipart upload.
-  * Returns created `Document` metadata.
-
-* `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}`
-
-  * Returns `DocumentDetail`.
-
-* `DELETE /api/v1/workspaces/{workspace_id}/documents/{document_id}`
-
-  * Soft delete / archive.
-
-* `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/download`
-
-  * Raw file download.
-
-* `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/sheets`
-
-  * Sheet metadata (name, index, `is_active`).
-
-### 7.2 Jobs and runs
-
-* `GET /api/v1/workspaces/{workspace_id}/jobs`
-
-  * Jobs ledger, filterable by status, config, date, initiator.
-
-* `POST /api/v1/workspaces/{workspace_id}/jobs`
-
-  * Submit general jobs (documents + config version + options).
-
-* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}`
-
-  * Job detail.
-
-* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/artifact`
-
-  * Combined outputs (e.g. zip).
-
-* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs`
-
-  * List of individual outputs.
-
-* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs/{output_path}`
-
-  * Download individual output.
-
-* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/logs`
-
-  * Log download or NDJSON stream.
-
-* `POST /api/v1/configs/{config_id}/runs`
-
-  * Config‑scoped runs; used by Config Builder for test/validate runs.
-
-* `GET /api/v1/runs/{run_id}` / `.../logs` / `.../outputs` (if utilized)
-
-  * Low‑level run detail/logs; ADE Web treats these as implementation details behind jobs/config runs.
-
----
-
-## 8. Safe mode interactions
-
-Safe mode (see **05‑auth‑session‑rbac‑and‑safe‑mode.md**) affects the Documents and Jobs workflows:
-
-* When `safeMode.enabled === true`:
-
-  * **Blocked actions:**
-
-    * “Run extraction” buttons on the Documents screen.
-    * “Run job” submit in run dialogs.
-    * Any restart job / rerun actions (if implemented).
-
-  * **Allowed actions:**
-
-    * Uploading documents (if you choose to allow it).
-    * Viewing documents and jobs.
-    * Downloading outputs and logs.
-
-* UX:
-
-  * A workspace‑level safe mode banner is visible in the shell.
-  * Actions are disabled rather than hidden, with tooltips:
-
-    > “Safe mode is enabled: <detail from backend>”
+  * Clears the `run-preferences` entry for that document.
+  * Reverts to system defaults on next open.
 
 Implementation detail:
 
-* The feature layer checks safe mode via a shared hook (`useSafeModeStatus`) and uses that to disable controls and/or show banners.
-* Safe mode is also enforced server‑side; UI disabling is purely to avoid surprise.
+* All logic should live in a small module (e.g. `shared/runPreferences.ts`) and a feature hook (`useDocumentRunPreferences`), so changing key patterns or versioning is centralised.
 
 ---
 
-## 9. Implementation notes and extension points
+## 9. Backend contracts (summary)
 
-A few “architectural” decisions to keep in mind:
+The Documents and Runs features depend on the following backend endpoints. Detailed typings and error semantics are documented in `04-data-layer-and-backend-contracts.md`.
 
-* The **Documents** and **Jobs** sections are deliberately **thin**:
+### 9.1 Documents
 
-  * Most data‑fetching logic lives in `shared/` API hooks.
-  * The screens focus on wiring URL state + UI components to those hooks.
+* `GET /api/v1/workspaces/{workspace_id}/documents`
+  List documents (supports `q`, `status`, `sort`, `view`).
 
-* Jobs are the **only user‑facing execution primitive**:
+* `POST /api/v1/workspaces/{workspace_id}/documents`
+  Upload a document.
 
-  * “Run” is treated as a verb in UI copy (“Run job”, “Run extraction”).
-  * The `runs` API is used behind the scenes (Config Builder) but not surfaced as a separate domain in the UI.
+* `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}`
+  Retrieve document metadata.
 
-* Per‑document run preferences are strictly **per user** and **per workspace**:
+* `DELETE /api/v1/workspaces/{workspace_id}/documents/{document_id}`
+  Soft delete / archive.
 
-  * They should never leak across users.
-  * They should be safe to clear at any time.
+* `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/download`
+  Download original file.
 
-* The design allows future extension:
+* `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/sheets`
+  List worksheets (optional, spreadsheet only).
 
-  * **Bulk jobs:** multiple documents selected → single job request with `input_document_ids` array.
-  * **Job cancellation:** adding a “Cancel job” action that calls a future `/jobs/{job_id}/cancel` endpoint.
-  * **Saved queries:** extend Documents/Jobs filters to support named filter presets.
+### 9.2 Workspace runs (ledger)
 
-When adding new features touching documents/jobs, ensure:
+*Backend naming currently uses `/jobs`; conceptually these are runs.*
 
-* Status enums and domain names are updated in **01‑domain‑model‑and‑naming.md**.
-* New endpoints are mapped in **04‑data‑layer‑and‑backend‑contracts.md**.
-* Any additional persisted preferences follow the existing key‑naming scheme (see section 6.2 and doc 10).
+* `GET /api/v1/workspaces/{workspace_id}/jobs`
+  List runs for the workspace (filters by status, configuration, initiator, date).
+
+* `POST /api/v1/workspaces/{workspace_id}/jobs`
+  Start a new workspace run (used by Documents / Runs).
+
+* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}`
+  Run detail.
+
+* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/artifact`
+  Download combined outputs.
+
+* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs`
+  List individual output files.
+
+* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs/{output_path}`
+  Download a single output.
+
+* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/logs`
+  Run logs (ideally NDJSON stream, but can be a file).
+
+### 9.3 Config‑scoped runs
+
+Used by Config Builder:
+
+* `POST /api/v1/configs/{config_id}/runs`
+  Start a config‑scoped run.
+
+* `GET /api/v1/runs/{run_id}`
+  Run detail.
+
+* `GET /api/v1/runs/{run_id}/artifact` (if provided).
+
+* `GET /api/v1/runs/{run_id}/outputs` + `/outputs/{output_path}`.
+
+* `GET /api/v1/runs/{run_id}/logs`
+  NDJSON event stream.
+
+All run endpoints should share consistent `RunStatus` values and event semantics.
+
+---
+
+## 10. Safe mode interactions
+
+Safe mode (see `05-auth-session-rbac-and-safe-mode.md`) acts as a kill switch for engine execution.
+
+In the context of Documents and Runs:
+
+* When **Safe mode is enabled**:
+
+  * Run dialogs cannot submit.
+  * “Run extraction” buttons are disabled.
+  * Any “New run” actions are disabled.
+* Read‑only operations still work:
+
+  * Listing documents and runs.
+  * Viewing run details.
+  * Downloading artifacts, outputs, and logs.
+
+UI behaviour:
+
+* A workspace‑level safe mode banner is shown inside the shell.
+* Disabled controls show a tooltip such as:
+
+  > “Safe mode is enabled: <backend message>”
+
+Server‑side checks remain authoritative; UI disabling is a convenience to avoid surprises.
+
+---
+
+## 11. Design invariants
+
+To keep this surface easy to reason about (for humans and AI agents), we rely on a few invariants:
+
+1. **Documents show backend status.**
+   ADE Web never infers document status from run history; it merely displays what the backend reports.
+
+2. **Run semantics are consistent everywhere.**
+   Status values, options (`dryRun`, `validateOnly`, `inputSheetNames`), and timestamps mean the same thing in:
+
+   * Documents last‑run summaries,
+   * Runs ledger,
+   * Config‑scoped runs.
+
+3. **Runs are append‑only.**
+   Runs are created, progress, and complete; they are not edited after creation. “Run again” always creates a new run.
+
+4. **Per‑document run preferences are hints, not configuration.**
+   They influence UI defaults only. If configurations disappear or change, preferences are safely ignored.
+
+5. **Safe mode always wins.**
+   If Safe mode is on, the UI never attempts to create new runs, and the backend enforces that rule.
+
+With these invariants respected, the Documents and Runs features remain predictable and easy to extend, and the mapping between frontend behaviour and backend APIs stays clear.

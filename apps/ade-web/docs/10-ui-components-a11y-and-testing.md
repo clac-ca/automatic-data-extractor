@@ -1,45 +1,39 @@
 # 10. UI components, accessibility, and testing
 
-This document describes the `src/ui` component library, how it is structured, and how we keep it accessible and well‑tested.
+This document describes the UI component layer in `ade-web`: what lives in `src/ui`, how components are designed, the accessibility and keyboard conventions they follow, how user preferences are persisted, and how we test UI behaviour.
 
-It is written for developers adding or modifying UI components and for anyone wiring those components into features under `src/features`.
+It assumes you’ve read:
 
-> **Key principles**
->
-> - `src/ui` is **presentational**: no business logic, no data fetching.
-> - Components are **accessible by default**: ARIA, keyboard, and focus are first‑class.
-> - Behaviour is **predictable**: consistent props, naming, and interaction patterns.
-> - Components are **tested**: new components ship with tests that exercise user‑visible behaviour.
+* [`01-domain-model-and-naming.md`](./01-domain-model-and-naming.md) for terminology (e.g. *run*, *document*, *workspace*).
+* [`06-workspace-layout-and-sections.md`](./06-workspace-layout-and-sections.md) for the high‑level layout.
 
 ---
 
-## 1. Scope and responsibilities of `src/ui`
+## 1. Scope of the UI layer
 
-The `src/ui` folder is the app‑specific component library for ADE Web.
+All reusable UI components live in `src/ui`. The layer has a narrow, intentional scope:
 
-Responsibilities:
+* **Responsibilities**
 
-- Provide reusable **visual primitives** (buttons, inputs, alerts, layout scaffolding).
-- Provide **composite widgets** that are UI‑heavy but domain‑agnostic (tabs, context menus, top bar, profile dropdown, search field, editor shell).
-- Establish **accessibility and keyboard conventions** that features can rely on.
-- Expose **stable APIs** so features can be refactored without rewriting UI.
+  * Provide **presentational primitives** (buttons, form controls, alerts, layout scaffolding).
+  * Provide **composite widgets** that are UI‑heavy but domain‑agnostic (tabs, context menus, top bar, search field, code editor wrapper).
+  * Encode **accessibility and keyboard patterns** so features don’t have to re‑implement them.
+  * Offer **stable, predictable APIs** for feature code to compose.
 
-Non‑responsibilities:
+* **Non‑responsibilities**
 
-- No HTTP calls or React Query hooks.
-- No business/domain logic (workspaces, documents, jobs, configs, roles).
-- No direct `localStorage` access (persistence is handled in `src/shared`).
-- No routing/navigation logic beyond what is required to render links.
+  * No HTTP or React Query calls.
+  * No knowledge of ADE concepts (no runs/documents/workspaces inside `src/ui`).
+  * No permission checks or business rules.
+  * No direct `localStorage` or routing logic.
 
-If you find yourself needing domain data or making decisions based on permissions, that logic belongs in a feature component under `src/features`, not in `src/ui`.
+If a component needs to know *which* run to start, *who* the user is, or *whether* an action is allowed, that logic belongs in `src/features`, not `src/ui`.
 
 ---
 
-## 2. UI architecture and patterns
+## 2. Structure of `src/ui`
 
-### 2.1 Folder structure
-
-Typical layout:
+The UI library is organised by function, not by domain:
 
 ```text
 src/ui/
@@ -57,499 +51,673 @@ src/ui/
     Avatar.tsx
     ProfileDropdown.tsx
   navigation/
-    Tabs.tsx
+    TabsRoot.tsx
+    TabsList.tsx
+    TabsTrigger.tsx
+    TabsContent.tsx
     ContextMenu.tsx
   shell/
     GlobalTopBar.tsx
     GlobalSearchField.tsx
   code-editor/
     CodeEditor.tsx
-````
-
-We group components by **function** (button, form, feedback, navigation, etc.), not by feature.
-
-When adding a new component:
-
-1. Place it in the appropriate folder (or create a new one if it clearly doesn’t fit).
-2. Keep **one main component per file**.
-3. Export from that file; optional barrel files (`index.ts`) are okay but not required.
-
-### 2.2 Component design constraints
-
-All UI components follow these constraints:
-
-* **Tailwind first**
-  Styling is implemented using Tailwind utility classes with a small number of shared class helpers where needed.
-
-* **Controlled vs uncontrolled**
-  Inputs (`Input`, `TextArea`, `Select`) are capable of being controlled; they may expose `defaultValue` as a convenience, but external state is the source of truth.
-
-* **No ambient singletons**
-  Components do not reach into global state (no hidden contexts); any configuration comes via props.
-
-* **Stateless where possible**
-  Components should be as stateless as reasonable. If local state is required (e.g. open/close state for menus), it should not encode domain semantics.
-
-### 2.3 Props and naming conventions
-
-* Component names are **PascalCase** (`Button`, `SplitButton`, `GlobalTopBar`).
-* Boolean props start with **`is`** or **`has`** (e.g. `isLoading`, `hasError`).
-* Event handlers follow React conventions (`onClick`, `onSelect`, `onClose`).
-* Variant‑style props are usually `variant: "primary" | "secondary" | ...`.
-
-Example:
-
-```tsx
-<Button
-  variant="primary"
-  size="md"
-  isLoading={isSubmitting}
-  onClick={handleSubmit}
->
-  Save changes
-</Button>
+  ...
 ```
+
+Conventions:
+
+* One **main component per file** (e.g. `Button.tsx` exports `Button`).
+* Optional small helper components may live next to the main one if they are tightly coupled.
+* Barrels (`index.ts`) are allowed but not required; they should not hide important component names.
+
+### 2.1 Design constraints
+
+All `src/ui` components follow a few design rules:
+
+* **Presentational**
+  They receive data and callbacks via props; they don’t fetch or derive it from global state.
+
+* **Minimal internal state**
+  Local state is used only for UI concerns (open/closed, focus, hover), never for domain state.
+
+* **Tailwind for styling**
+  Styling is implemented with Tailwind classes. Shared class helpers are fine where they improve reuse.
+
+* **Predictable APIs**
+
+  * Components are PascalCase (`Button`, `GlobalTopBar`).
+  * Boolean props are `isX`/`hasX` (e.g. `isLoading`).
+  * Event handlers are `onX` (e.g. `onClick`, `onSelect`).
 
 ---
 
-## 3. Core primitives
+## 3. Component categories
 
-This section summarises the major UI components and the patterns they implement. For detailed prop signatures, see the component source.
+This section summarises the main component families and their expected usage patterns.
 
 ### 3.1 Buttons
 
 #### `Button`
 
-* **Variants**: `primary`, `secondary`, `ghost`, `danger`.
-* **Sizes**: `sm`, `md`, `lg`.
-* **Loading state**: `isLoading` disables the button and shows a spinner, but still renders children for layout stability.
+Generic clickable action.
 
-Usage guidelines:
+* **Variants**
 
-* Use `primary` for the main action in a view.
-* Use `secondary` for inline actions that are still important but not primary.
-* Use `ghost` for low‑emphasis actions (e.g. “Cancel”).
-* Use `danger` for destructive actions; pair with a confirmation pattern at the feature level.
+  * `"primary"` – main call‑to‑action in a view (e.g. “Start run”, “Upload document”).
+  * `"secondary"` – important but secondary actions (e.g. “Cancel”, “Back”).
+  * `"ghost"` – low‑emphasis actions (e.g. “View logs”, “More details”).
+  * `"danger"` – destructive actions (e.g. “Delete configuration”).
+
+* **Sizes**
+  `"sm"`, `"md"`, `"lg"` (default is `"md"`).
+
+* **Loading state**
+
+  * `isLoading` disables the button and shows an inline spinner.
+  * Clicks are ignored while `isLoading` is true.
+
+Example:
+
+```tsx
+<Button variant="primary" isLoading={isSubmitting} onClick={handleStartRun}>
+  Start run
+</Button>
+```
 
 #### `SplitButton`
 
-Combined primary action + dropdown menu.
+Primary action plus a small dropdown of related actions. The canonical example is the Config Builder **Build environment** control.
 
-* Left part: main action (e.g. “Build / reuse environment”).
-* Right part: toggle menu (e.g. “Force rebuild now”, “Force rebuild after current build”).
+* Left segment: calls `onPrimaryClick` (e.g. “Build / reuse environment”).
+* Right segment: opens a dropdown (often backed by `ContextMenu`) with secondary options (e.g. “Force rebuild now”).
 
-Usage guidelines:
+Guidelines:
 
-* Use when there is a **single most common** action and 2–3 related variations.
-* The primary click should match the most common action (respecting user expectations and safe defaults).
+* Use when there is **one obvious default** and 1–3 related expert options.
+* The primary action should correspond to the “safe, common” behaviour.
 
-### 3.2 Forms
+---
 
-#### `Input`, `TextArea`, `Select`
+### 3.2 Form controls
 
-* Share consistent padding, border, and focus rings.
-* Accept an `invalid` prop that triggers error styling and sets `aria-invalid`.
+#### `Input`
 
-They do *not* render labels or errors themselves; that is handled by `FormField`.
+Single‑line text input.
+
+* Props: `value`, `onChange`, `type`, `placeholder`, etc.
+* `invalid` prop applies error styling and sets `aria-invalid="true"`.
+
+#### `TextArea`
+
+Multi‑line text input.
+
+* Shares styling and error handling with `Input`.
+
+#### `Select`
+
+Styled wrapper around a native `<select>`.
+
+* Visual alignment with `Input` and `TextArea`.
+* Optional disabled placeholder option for “no selection”.
 
 #### `FormField`
 
-Wraps a label + control + hint + error:
+Wrapper that connects a control to a label, hint, and error message.
 
-* Props: `label`, `hint`, `error`, and `fieldId` for the underlying control.
-* Automatically wires:
+* Props:
 
-  * `<label htmlFor={fieldId}>`
-  * `aria-describedby` on the control (hint/error).
-  * `aria-invalid` when `error` is present.
+  * `label: string`
+  * `hint?: string`
+  * `error?: string`
+  * `fieldId?: string`
+  * `children: ReactNode` (exactly one form control)
 
-Usage:
+Behaviour:
+
+* Ensures a `<label>` is associated with the control (`htmlFor` / `id`).
+* Sets `aria-describedby` to hint and/or error elements.
+* Sets `aria-invalid` when `error` is present.
+
+Example:
 
 ```tsx
-<FormField
-  label="Workspace name"
-  hint="Shown in the sidebar and top bar."
-  error={errors.name}
-  fieldId="workspace-name"
->
+<FormField label="Workspace name" hint="Shown in the sidebar" error={errors.name}>
   <Input
-    id="workspace-name"
     value={name}
-    onChange={handleChange}
-/>
+    onChange={e => setName(e.target.value)}
+    invalid={Boolean(errors.name)}
+  />
 </FormField>
 ```
+
+---
 
 ### 3.3 Feedback
 
 #### `Alert`
 
-* Prop: `tone: "info" | "success" | "warning" | "danger"`.
-* May render an optional `heading` and an icon appropriate to the tone.
-* Used for inline, persistent messages (at section or panel level).
+Inline, non‑modal message.
 
-Usage guidelines:
+* Props:
 
-* Use `info` for neutral announcements.
-* Use `success` for “sticky” success messages that should remain visible.
-* Use `warning` for recoverable issues.
-* Use `danger` for critical issues or destructive confirmation contexts.
+  * `tone: "info" | "success" | "warning" | "danger"`
+  * Optional `heading`
+  * Optional icon (chosen based on tone)
 
-Global toasts and banners are composed from `Alert` plus positioning logic at a higher level.
+Usage:
 
-### 3.4 Identity & profile
+* Section‑level issues or guidance.
+* Long‑lived success messages (“This configuration is now active.”).
+* Local warnings (“This run used an older configuration version.”).
+
+Global banners and toasts are composed using `Alert` styles at higher layers (see § 5).
+
+---
+
+### 3.4 Identity
 
 #### `Avatar`
 
-* Derives initials from `name` or `email`.
-* Supports `sm`, `md`, `lg` sizes.
-* Can optionally display a small presence indicator if needed in the future.
+Text‑based avatar.
+
+* Derives initials from `name` (preferred) or `email`.
+* Sizes: `"sm"`, `"md"`, `"lg"`.
+
+Used for:
+
+* Users in the top bar and member lists.
+* Workspaces in nav and cards (workspaces may use first letter or initials of their name).
 
 #### `ProfileDropdown`
 
-* Shows current user name/email and a menu of actions.
-* Handles:
+User menu in the top bar.
 
-  * Click to open/close.
-  * Outside click to close.
-  * Escape key to close.
-  * Focus management between trigger and menu items.
+* Shows:
 
-Feature code is responsible for wiring the menu actions, including sign‑out.
+  * Display name.
+  * Email address.
+* Offers actions such as:
 
-### 3.5 Navigation components
+  * “Sign out”
+  * Links to profile/account settings (if present).
+
+Behaviour:
+
+* Opens on click.
+* Closes on:
+
+  * Outside click.
+  * Escape key.
+  * Selecting an item.
+* Manages focus so keyboard users can open, move within, and close the menu without getting “lost”.
+
+---
+
+### 3.5 Navigation widgets
 
 #### Tabs (`TabsRoot`, `TabsList`, `TabsTrigger`, `TabsContent`)
 
-* Implements an accessible tablist:
+Accessible tab system:
 
-  * `role="tablist"` on `TabsList`.
-  * `role="tab"` and `aria-selected` on `TabsTrigger`.
-  * `role="tabpanel"` and `aria-labelledby` on `TabsContent`.
+* `TabsRoot` owns state (selected tab).
+* `TabsList` wraps triggers, sets `role="tablist"`.
+* `TabsTrigger` is a `<button>` with `role="tab"`, `aria-selected`, and `aria-controls`.
+* `TabsContent` is a container with `role="tabpanel"` and `aria-labelledby`.
 
-* Keyboard behaviour:
+Keyboard:
 
-  * `Left`/`Right` arrow to move between tabs.
-  * `Home` moves to first tab, `End` to last.
-  * Tab selection can be decoupled from focus when needed.
+* `ArrowLeft` / `ArrowRight` move between tabs.
+* `Home` / `End` jump to first / last.
+* Focus and selection behaviour matches ARIA authoring practices.
+
+Tabs are used for:
+
+* Splitting views within a section (e.g. “Console” vs “Validation” in the workbench).
+* Settings sub‑sections where URL state isn’t required.
 
 #### `ContextMenu`
 
-* Right‑click or keyboard‑invoked context menu.
-* Positions itself within the viewport to avoid clipping.
-* Keyboard behaviour:
+Right‑click / kebab‑menu popup:
 
-  * `ArrowUp`/`ArrowDown` to navigate items.
-  * `Enter`/`Space` to activate.
+* Takes a list of items:
+
+  * `label`
+  * Optional `icon`
+  * Optional `shortcut` string (visual only)
+  * `onSelect`
+  * `danger?: boolean`
+  * `disabled?: boolean`
+
+* Positions itself within the viewport to avoid overflow.
+
+* Keyboard:
+
+  * `ArrowUp` / `ArrowDown` to move.
+  * `Enter` / `Space` to select.
   * `Esc` to close.
 
-Features provide the item list (labels, actions, optional icons and danger flags).
+Used for:
+
+* Workbench file tree (file/folder actions).
+* Workbench tabs (close, close others, etc.).
+* Any context‑sensitive menu where right‑click behaviour helps.
+
+---
 
 ### 3.6 Top bar and search
 
 #### `GlobalTopBar`
 
-* Top‑level layout for:
+Shell‑level horizontal bar used in both the Workspace directory and Workspace shell.
 
-  * Product/brand.
-  * Workspace context (breadcrumbs, environment label).
-  * Actions (buttons).
-  * Profile menu.
-  * `secondaryContent` for filters, breadcrumbs, or extra context.
+Slots:
+
+* `brand` – product or workspace directory branding.
+* `leading` – breadcrumbs or current context (workspace name, environment label).
+* `actions` – top‑level actions (e.g. “Start run”, “Upload”).
+* `trailing` – typically `ProfileDropdown`.
+* `secondaryContent` – optional row for filters, breadcrumbs, or hints.
+
+Responsive behaviour:
+
+* On narrow viewports, the bar collapses to prioritise brand, search, and profile.
 
 #### `GlobalSearchField`
 
-* Composed inside `GlobalTopBar` when search is available.
+Search field embedded into `GlobalTopBar`.
 
-* Supports:
+Capabilities:
 
-  * Controlled or uncontrolled value.
-  * Optional scope label (e.g. “Within workspace”).
-  * Keyboard shortcut (`⌘K` / `Ctrl+K`) to focus.
-  * Suggestion dropdown with keyboard navigation:
+* Optional scope label (e.g. “Within workspace”).
 
-    * `ArrowUp`/`ArrowDown` to move.
-    * `Enter` to select.
-    * `Esc` to close.
+* Controlled/uncontrolled mode.
 
-* Feature code supplies the suggestion list, loading state, and what happens when a suggestion is selected.
+* Global shortcut:
 
-### 3.7 Code editor shell (`CodeEditor`)
+  * `⌘K` on macOS.
+  * `Ctrl+K` on Windows/Linux.
 
-`CodeEditor` wraps Monaco and hides its loading and configuration details.
+* Suggestions dropdown:
 
-* Props include:
+  * Arrow keys to navigate.
+  * Enter to select.
+  * Esc to close.
 
-  * `language` (e.g. `python`, `json`).
-  * `path` (virtual file path; used for Monaco models).
-  * `theme` (`ade-dark` or `vs-light`).
-  * `readOnly`.
-  * `onChange` and `onSaveShortcut`.
+The field itself remains generic; feature code decides:
 
-* Provides an imperative handle:
-
-  * `focus()` to focus the editor.
-  * `revealLine(lineNumber)` to scroll to a line.
-
-All ADE‑specific editor behaviour (script helpers, diagnostics, decorations) is configured at the workbench level, not inside `CodeEditor`.
+* Which suggestions to show.
+* How to handle “submit” and “select” actions (e.g. navigate to a run, filter documents).
 
 ---
 
-## 4. Accessibility guidelines
+### 3.7 Code editor wrapper
 
-Accessibility (a11y) is not optional. Any new or modified component in `src/ui` must respect these guidelines.
+#### `CodeEditor`
 
-### 4.1 Roles, labels, and relationships
+A thin wrapper for Monaco, used by the Config Builder workbench.
 
-* All interactive components must have:
+Responsibilities:
 
-  * A semantic element (`button`, `a`, `input`, etc.), or
-  * An appropriate ARIA role (e.g. `role="menuitem"`).
+* Manage Monaco’s lifecycle and lazy loading.
+
+* Expose a `ref` with:
+
+  * `focus()`
+  * `revealLine(lineNumber: number)`
+
+* Handle:
+
+  * `language` (string ID, e.g. `"python"`, `"json"`).
+  * `path` (virtual file path for Monaco’s model).
+  * `theme` (`"ade-dark"` or `"vs-light"`).
+  * `value` / `onChange`.
+  * `readOnly`.
+  * `onSaveShortcut` (wired to `⌘S` / `Ctrl+S`).
+
+It does **not** know about ADE script semantics; those are configured by the workbench layer (see [`09-workbench-editor-and-scripting.md`](./09-workbench-editor-and-scripting.md)).
+
+---
+
+## 4. Accessibility patterns
+
+Accessibility is a core requirement. UI components are responsible for exposing correct semantics; features only provide content.
+
+### 4.1 Semantic roles and labels
+
+* Use semantic elements wherever possible:
+
+  * Buttons are `<button>`, links are `<a>`, lists are `<ul>/<li>`.
+
+* When semantics require ARIA:
+
+  * Tabs, menus, toolbars, and context menus use ARIA roles (`role="tab"`, `role="menu"`, etc.).
+  * `Alert` uses `role="status"` or `role="alert"` where appropriate.
 
 * Labels:
 
-  * Inputs should be associated with `<label>` elements whenever visible.
-  * Icon‑only buttons should have `aria-label` or `aria-labelledby`.
+  * Icon‑only buttons must have `aria-label` or `aria-labelledby`.
+  * `FormField` ensures text labels are linked to inputs via `for`/`id`.
 
-* Relationships:
+### 4.2 Focus behaviour
 
-  * `FormField` manages `aria-describedby` to connect hints/errors to inputs.
-  * Tabs and panels use `aria-controls`/`aria-labelledby` appropriately.
+Patterns:
 
-### 4.2 Keyboard accessibility
+* **Dropdowns/menus** (`ProfileDropdown`, `ContextMenu`):
 
-* All interactive elements must be reachable with `Tab` and operable with keyboard.
+  * When opened via keyboard, focus moves into the menu.
+  * Tab/Shift+Tab cycle within the menu.
+  * Esc closes the menu and returns focus to the trigger.
 
-* Patterns:
+* **Overlays** (maximised workbench, future modals):
 
-  * Buttons and menu items respond to `Enter` and `Space`.
-  * Menus and dropdowns trap focus while open and close on `Esc`.
-  * Tabs respond to arrow keys as described above.
+  * Background content is visually de‑emphasised and not focusable.
+  * Focus is trapped within the overlay.
+  * Esc closes or restores (subject to unsaved‑changes handling) and returns focus.
 
-* When introducing a new interactive widget, copy keyboard behaviour from an existing one (e.g. `ContextMenu` for menus, Tabs for tablists) where appropriate.
+* **Tab order**:
 
-### 4.3 Focus management
+  * Interactive elements must be reachable via Tab in a logical order.
+  * Avoid `tabIndex` except where needed to support composite widgets (tabs, menus).
 
-* **Modals and overlays** (e.g. maximised workbench, dialogs):
+### 4.3 Keyboard interactions
 
-  * Trap focus within the overlay while open.
-  * Return focus to the trigger element when closed.
-  * Close on `Esc`.
+For each widget:
 
-* **Dropdowns and menus**:
+* **Buttons and triggers**:
 
-  * When opened via keyboard, focus the first item.
-  * Keep focus inside until the user selects or closes.
+  * React to `Enter` and `Space`.
+  * Visually indicate focus.
 
-* Avoid manual `document.activeElement` manipulations where React focus management suffices.
+* **Tabs**:
 
-### 4.4 Announcing changes
+  * Left/Right/Home/End manage focus and selection as per ARIA guidelines.
 
-* Use `role="status"` or `role="alert"` for important messages:
+* **Menus**:
 
-  * For global banners (safe mode, connectivity issues), `role="status"` with polite announcements.
-  * For destructive errors, consider `role="alert"`.
+  * Arrow keys move between items.
+  * Enter/Space selects.
+  * Esc cancels.
 
-* Toasts should be announced as status updates when they represent critical feedback.
-
-### 4.5 Reduced motion and animations
-
-* If you add animations:
-
-  * Respect `prefers-reduced-motion` where relevant.
-  * Prefer subtle transitions for state changes; avoid large parallax or continuous movement.
+Shortcuts (below) build on top of these primitives.
 
 ---
 
 ## 5. Keyboard shortcuts
 
-Keyboard shortcuts are part of the UI design. They must be consistent and scoped.
+Keyboard shortcuts are implemented centrally (e.g. in `src/shared/keyboard`). UI components may display shortcut hints, but they do not bind global listeners themselves.
 
 ### 5.1 Global shortcuts
 
-* `⌘K` / `Ctrl+K` – Focus the global search field (directory or shell).
-* `⌘U` / `Ctrl+U` – Open document upload (when a documents view is active).
+* `⌘K` / `Ctrl+K`
+  Focus the `GlobalSearchField` or open a workspace search overlay.
 
-Guidelines:
+* `⌘U` / `Ctrl+U`
+  Open the document upload flow in the Documents section (when available).
 
-* Only active on screens where the action makes sense.
-* Do not override browser shortcuts on generic inputs (if a text field is focused, do nothing).
+Rules:
+
+* Global shortcuts **must not** override browser behaviour when focus is in:
+
+  * Text inputs.
+  * Textareas.
+  * Content‑editable regions.
+
+* If a screen does not support a shortcut (e.g. `⌘U` on the Config Builder), the handler must no‑op.
 
 ### 5.2 Workbench shortcuts
 
-Inside the Config Builder workbench:
+Scoped to the Config Builder workbench:
 
-* `⌘S` / `Ctrl+S` – Save active editor file.
+* `⌘S` / `Ctrl+S` – Save active file in `CodeEditor`.
 * `⌘B` / `Ctrl+B` – Build / reuse environment.
 * `⇧⌘B` / `Ctrl+Shift+B` – Force rebuild.
 * `⌘W` / `Ctrl+W` – Close active editor tab.
-* `⌘Tab` / `Ctrl+Tab` – Move forward by most‑recently‑used tab order.
-* `⇧⌘Tab` / `Shift+Ctrl+Tab` – Move backward by MRU.
-* `Ctrl+PageUp/PageDown` – Move left/right by visual tab order.
+* `⌘Tab` / `Ctrl+Tab` – Switch to most recently used tab (forward).
+* `⇧⌘Tab` / `Shift+Ctrl+Tab` – Switch MRU backward.
+* `Ctrl+PageUp` / `Ctrl+PageDown` – Cycle tabs by visual order.
 
 Guidelines:
 
-* Shortcuts are registered at the workbench level, not inside `CodeEditor`.
-* They should be disabled when focus is in generic inputs not related to code (e.g. search fields) to avoid surprising behaviour.
-
-### 5.3 Implementing shortcuts
-
-Shortcut handlers typically live in feature code (e.g. workbench container), not in `src/ui`. Components in `src/ui` may expose hooks or utilities to make binding easier (e.g. `useKeybinding`), but they do not make assumptions about domain actions.
+* Implemented in the workbench container, not in `CodeEditor` or tab components directly.
+* Use `preventDefault()` only when a shortcut is actually handled.
+* Shortcuts should be disabled while modal dialogs in the workbench are open, unless they are explicitly designed to work there.
 
 ---
 
-## 6. Notifications and messaging patterns
+## 6. Notifications
 
-ADE Web has three primary notification surfaces:
-
-1. **Toasts** – transient feedback for quick operations.
-2. **Banners** – persistent messages at the top of a workspace or section.
-3. **Inline alerts** – local to a panel or form.
+Notifications are built from the same primitives (`Alert`, top‑bar/banners) but rendered at different scopes.
 
 ### 6.1 Toasts
 
-* Built from an `Alert`‑like primitive, rendered in a global layer.
+Short‑lived messages that appear in a corner overlay.
 
-* Use for:
+Use for:
 
-  * Success feedback on saves.
-  * Minor errors that don’t block the entire page.
+* Fast, non‑blocking feedback:
 
-* Should auto‑dismiss after a short time, with an accessible reading window.
+  * “Run queued.”
+  * “File saved.”
+  * “Document uploaded.”
+
+Behaviour:
+
+* Auto‑dismiss after a short duration.
+* Accessible via a status region so screen readers receive updates.
 
 ### 6.2 Banners
 
-* Rendered inside the workspace shell, above section content.
+Persistent messages at the top of a workspace or section.
 
-* Use for:
+Use for:
 
-  * Safe mode messages.
-  * Connectivity warnings.
-  * Major environment‑level issues.
+* Safe mode notifications.
+* Connectivity problems.
+* Important system‑level warnings.
 
-* Should remain visible until the underlying condition changes or a user action dismisses them (if appropriate).
+Behaviour:
+
+* Rendered under `GlobalTopBar` in the Workspace shell.
+* Remain visible until the underlying condition changes or a user closes them (if dismissible).
 
 ### 6.3 Inline alerts
 
-* Use `Alert` directly inside sections or panels.
-* Appropriate for:
+Local to a panel or form:
 
-  * Form validation summaries at the top of the form.
-  * Resource‑specific issues (e.g. a particular job or config failed to load).
+* Validation summary at the top of a form.
+* Warning about a specific run or configuration.
+* Guidance in an empty state.
+
+These use `Alert` directly within the layout.
 
 ---
 
 ## 7. State persistence and user preferences
 
-State persistence is implemented in `src/shared/storage` and *used* by features, but the UI library is designed with these patterns in mind.
+UI state and preferences are stored in `localStorage` via helpers in `src/shared/storage`. Components in `src/ui` are written to work cleanly whether preferences are present or absent.
 
 ### 7.1 Key naming convention
 
-All persisted UI state keys follow the pattern:
+All preference keys follow:
 
 ```text
-ade.ui.workspace.<workspaceId>.<scope>
+ade.ui.workspace.<workspaceId>.<suffix>
 ```
 
 Examples:
 
-* `ade.ui.workspace.<ws>.nav.collapsed`
-* `ade.ui.workspace.<ws>.workbench.returnPath`
-* `ade.ui.workspace.<ws>.config.<configId>.tabs`
-* `ade.ui.workspace.<ws>.config.<configId>.console`
-* `ade.ui.workspace.<ws>.config.<configId>.editor-theme`
-* `ade.ui.workspace.<ws>.document.<documentId>.run-preferences`
+* `ade.ui.workspace.<workspaceId>.nav.collapsed`
+* `ade.ui.workspace.<workspaceId>.workbench.returnPath`
+* `ade.ui.workspace.<workspaceId>.config.<configId>.tabs`
+* `ade.ui.workspace.<workspaceId>.config.<configId>.console`
+* `ade.ui.workspace.<workspaceId>.config.<configId>.editor-theme`
+* `ade.ui.workspace.<workspaceId>.document.<documentId>.run-preferences`
 
-Guidelines:
+Rules:
 
-* Keys are **per‑user** and **per‑workspace**; never encode secrets or auth data.
-* Clearing localStorage must leave the app in a safe, usable state.
+* Keys are **per user**, **per workspace**, and optionally **per config** or **per document**.
+* Only non‑sensitive data is stored; clearing storage should never break server state.
+* No tokens, secrets, or PII beyond IDs that are already visible in the UI.
 
-### 7.2 Preferences that involve `src/ui` components
+### 7.2 Persisted preferences
 
-Relevant examples:
+Current preferences include:
 
-* **Left nav collapsed state**
-  Affects the navigation shell components (not in `src/ui`, but the pattern is shared).
+* **Workspace nav collapsed state**
 
-* **Workbench tabs and MRU list**
-  Drives which files are opened when the editor mounts; `Tabs` components must handle initial selection gracefully.
+  * Suffix: `nav.collapsed` (boolean).
 
-* **Console open/closed state and height**
-  Determines initial layout; resizing logic should read defaults and then honour user adjustments.
+* **Workbench return path**
+
+  * Suffix: `workbench.returnPath` (string URL).
+  * Used when exiting the workbench to navigate back to where the user came from.
+
+* **Workbench open tabs**
+
+  * Suffix: `config.<configId>.tabs`.
+  * Value: `PersistedWorkbenchTabs` (open tab IDs, active ID, MRU list).
+
+* **Workbench console state**
+
+  * Suffix: `config.<configId>.console`.
+  * Value: `ConsolePanelPreferences` (open/closed + height fraction).
 
 * **Editor theme preference**
-  Controls `CodeEditor`’s `theme` prop.
+
+  * Suffix: `config.<configId>.editor-theme`.
+  * Value: `"system" | "light" | "dark"`.
 
 * **Per‑document run preferences**
-  Affect initial values in run dialogs; `FormField` etc. should render these as “just state”.
 
-Components themselves remain decoupled; they simply render state passed from feature code.
+  * Suffix: `document.<documentId>.run-preferences`.
+  * Value: last used config, config version, sheet selections, optional run flags.
 
----
+### 7.3 Access patterns
 
-## 8. UI testing and quality
+All storage access goes through helpers such as:
 
-UI testing ensures that components behave correctly across refactors and prevent regressions in keyboard/a11y behaviour.
+* `getPreference(workspaceId, suffix, defaultValue?)`
+* `setPreference(workspaceId, suffix, value)`
+* `clearWorkspacePreferences(workspaceId)`
 
-### 8.1 Testing stack
-
-* **Test runner**: Vitest.
-* **Environment**: `jsdom` for browser‑like APIs.
-* **Setup**: `src/test/setup.ts` for global configuration and polyfills.
-* **Coverage**: v8 coverage configuration is enabled.
-
-### 8.2 What to test in `src/ui`
-
-For each component, tests should verify:
-
-* **Rendering**:
-
-  * Renders expected DOM structure given props.
-  * Applies correct classes for variants and states.
-
-* **Interaction**:
-
-  * Click interactions call the appropriate callbacks.
-  * Keyboard interactions behave as documented (e.g. Tabs arrow keys, ContextMenu navigation).
-
-* **Accessibility**:
-
-  * ARIA attributes are present and correctly wired (`aria-invalid`, `aria-selected`, `role="tab"`, etc.).
-  * Focus management behaves as expected (particularly for dropdowns/menus).
-
-Example categories:
-
-* `Button`: loading state disables click, renders spinner.
-* `Tabs`: keyboard navigation, ARIA attributes, tab selection vs focus.
-* `ProfileDropdown`: open/close on click, outside click and `Esc`, focus returns to trigger.
-* `GlobalSearchField`: shortcut focusing, suggestion navigation.
-
-### 8.3 Integration tests at feature level
-
-Not strictly part of `src/ui`, but important for overall behaviour:
-
-* Navigation flows (route changes) using `Link` and `NavLink`.
-* Workbench state (tabs, console, URL state) using `CodeEditor`, tabs, and layout panels.
-* Documents/jobs flows with actual components composed together.
-
-These tests live in `src/features/**/__tests__` and exercise multiple components in concert.
-
-### 8.4 Adding or changing a component
-
-When adding a new component or changing behaviour:
-
-1. Update the component implementation under `src/ui`.
-
-2. Add or update tests:
-
-   * Component tests under `src/ui/**/__tests__`.
-   * Integration tests if behaviour changes at feature level.
-
-3. Verify keyboard and screen‑reader behaviour locally (tab through, try world‑without‑mouse).
-
-4. If props or behaviour changes are significant, update this document and any references in other docs (e.g. Config Builder docs if it affects the workbench).
+Feature code (not `src/ui`) calls these helpers. Components simply receive the derived state via props.
 
 ---
 
-By following these patterns, `src/ui` remains a small but powerful library: predictable to use, accessible out of the box, and safe to evolve as the rest of ADE Web grows.
+## 8. Testing and quality
+
+UI behaviour is validated with Vitest and React Testing Library. The goal is to test real user‑visible behaviour, not implementation details.
+
+### 8.1 Test environment
+
+Configuration (see `vitest.config.ts`):
+
+* `environment: "jsdom"`
+* `setupFiles: "./src/test/setup.ts"`
+* `globals: true`
+* `coverage.provider: "v8"`
+
+`src/test/setup.ts` is responsible for:
+
+* Installing DOM polyfills as needed.
+* Configuring React Testing Library defaults.
+* Optionally mocking `window.matchMedia` and similar browser APIs.
+
+### 8.2 Testing `src/ui` components
+
+For each component, prefer small, focused tests:
+
+* **Buttons**
+
+  * Click invokes `onClick`.
+  * `isLoading` disables the button and renders a spinner.
+  * Correct classes for variants and sizes.
+
+* **Form controls / `FormField`**
+
+  * `FormField` wires label, hint, and error via `for`/`id` and `aria-describedby`.
+  * `invalid` sets `aria-invalid`.
+
+* **Tabs**
+
+  * Correct ARIA roles and attributes.
+  * Arrow keys change focus and selection.
+  * Only the active panel is visible.
+
+* **ContextMenu**
+
+  * Opens on trigger.
+  * Items can be navigated by keyboard.
+  * Calls `onSelect` and closes on selection or Esc.
+
+* **ProfileDropdown**
+
+  * Opens/closes with click and Esc.
+  * Focus returns to trigger on close.
+
+Tests should focus on:
+
+* **What** the user sees and can do.
+* Not **how** the component is implemented internally.
+
+### 8.3 Testing keyboard shortcuts
+
+Shortcuts are tested at the feature level, but they rely on UI components behaving correctly.
+
+Examples:
+
+* Global search:
+
+  * Simulate `Ctrl+K`.
+  * Assert that `GlobalSearchField` is focused.
+  * Assert no action when a text input has focus.
+
+* Workbench shortcuts:
+
+  * Render workbench with `CodeEditor` and tabs.
+  * Simulate `Ctrl+S` and assert the save handler is called.
+  * Simulate `Ctrl+W` and assert the active tab closes.
+
+These tests live under `src/features/.../__tests__/` and treat `src/ui` components as black boxes.
+
+### 8.4 Testing state persistence
+
+Test the storage helpers and features that rely on them:
+
+* Storage helpers:
+
+  * Correct key computation given workspace/config/document IDs.
+  * Graceful handling of missing/malformed data.
+
+* Workbench:
+
+  * Hydrates tabs from persisted state.
+  * Writes updated state when tabs open/close.
+
+* Preferences:
+
+  * Editor theme, console state, nav collapse.
+
+UI components are not tested against `localStorage` directly; they assume their props are already configured.
+
+### 8.5 Quality conventions
+
+To keep the UI layer maintainable:
+
+* **No direct globals**
+
+  * Don’t call `window.location` or `localStorage` directly in `src/ui`.
+  * Don’t attach global event listeners from `src/ui` without a clear cleanup path.
+
+* **Linting & formatting**
+
+  * Components must pass ESLint and Prettier checks enforced by the repo.
+
+* **Keep docs in sync**
+
+  * When adding a new UI component, shortcut, or preference:
+
+    * Update this document.
+    * If behaviour affects workbench or layout, update the relevant docs (`06`, `09`).
+
+This keeps the UI layer small, predictable, and easy for both humans and AI agents to understand and extend.

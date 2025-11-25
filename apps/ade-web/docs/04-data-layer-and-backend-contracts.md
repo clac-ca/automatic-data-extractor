@@ -1,39 +1,39 @@
 # 04 – Data layer and backend contracts
 
-This document describes how `ade-web` talks to the ADE backend:
+This document explains how `ade-web` talks to the ADE backend:
 
-- The **data layer architecture** (HTTP client, API modules, React Query hooks).
-- How we **group `/api/v1/...` routes** into domain‑specific modules.
-- How we **type** responses and model them in the frontend.
-- How **streaming NDJSON endpoints** are consumed.
-- Our **error handling and retry** conventions.
+- the **data layer architecture** (HTTP client, API modules, React Query hooks),
+- how `/api/v1/...` routes are **grouped by domain**,
+- how we model **runs**, workspaces, documents, and configs in the data layer,
+- and how we handle **streaming**, **errors**, and **caching**.
 
-Treat this as the canonical spec for frontend ↔ backend contracts. When new endpoints are added to the backend, they should either fit into one of the modules described here or motivate a new module.
+It is the implementation‑level companion to:
+
+- the domain language in `01-domain-model-and-naming.md`, and
+- the UX overview in the top‑level `README.md`.
+
+All terminology here uses **run** as the primary execution unit. Backend routes that currently use `/jobs` are treated as “workspace run ledger” endpoints.
 
 ---
 
-## 1. Goals and layering
+## 1. Architecture and goals
 
-The data layer is built around a few simple goals:
+The data layer has three tiers:
 
-- **Single source of truth** for each backend route.
-- **Type‑safe** access to backend data.
-- **Predictable caching** with React Query.
-- **Separation of concerns**:
-  - HTTP details & error handling live in a shared **HTTP client**.
-  - Each backend “area” has a small, focused **API module**.
-  - Screens use **React Query hooks** built on those modules.
+1. A **thin HTTP client** that knows how to call `/api/v1/...` and normalise errors.
+2. **Domain API modules** (e.g. `workspacesApi`, `documentsApi`, `runsApi`) that wrap specific endpoints.
+3. **React Query hooks** in feature folders that connect those modules to UI components.
 
-The layering looks like this:
+Flow:
 
 ```text
 [ Screens / Features ]
         │
         ▼
-[ React Query hooks ]  e.g. useWorkspacesQuery, useDocumentsQuery
+[ React Query hooks ]  e.g. useWorkspaceRunsQuery, useDocumentsQuery
         │
         ▼
-[ API modules ]        e.g. workspacesApi, documentsApi
+[ API modules ]        e.g. workspacesApi, documentsApi, runsApi
         │
         ▼
 [ HTTP client ]        shared/api/httpClient.ts
@@ -42,607 +42,795 @@ The layering looks like this:
 [ ADE API ]            /api/v1/...
 ````
 
-* API modules are **pure TypeScript** (no React).
-* React Query hooks are defined in feature folders and **only** call API modules.
+Design goals:
+
+* **Single source of truth** for each endpoint.
+* **Type‑safe** responses with explicit models.
+* **Predictable caching** via React Query.
+* **Clear separation**:
+
+  * Screens know about hooks and domain types.
+  * Hooks know about API modules.
+  * API modules know about HTTP and paths.
+
+No UI code calls `fetch` directly; everything goes through the shared HTTP client.
 
 ---
 
-## 2. React Query configuration and conventions
+## 2. HTTP client
 
-React Query is configured in `AppProviders`:
+All HTTP calls go through a shared client in `src/shared/api/httpClient.ts` (or equivalent).
 
-```ts
-new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      staleTime: 30_000,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
-```
+### 2.1 Responsibilities
 
-**Conventions:**
+The HTTP client is responsible for:
 
-* **Query keys** are simple arrays, grouped by domain:
+* Building the full URL (e.g. `/api/v1/...` under the `/api` proxy).
+* Serialising request bodies (JSON by default).
+* Attaching credentials (cookies, headers) as required.
+* Parsing JSON responses.
+* Exposing streaming bodies when needed (for NDJSON).
+* Mapping non‑2xx responses to a unified `ApiError`.
 
-  * Workspaces: `['workspaces']`, `['workspaces', workspaceId]`
-  * Documents: `['workspaces', workspaceId, 'documents', params]`
-  * Jobs: `['workspaces', workspaceId, 'jobs', params]`
-  * Configurations: `['workspaces', workspaceId, 'configurations']`
-  * Safe mode: `['system', 'safe-mode']`
-  * Session: `['session']`
+It deliberately does **not** know about workspaces, runs, configs, etc.
 
-  Use objects or serialisable parameter bags as the **last element** when needed.
+### 2.2 Basic interface
 
-* **Hooks** follow a consistent naming scheme:
-
-  * Queries: `use<Domain><What>Query`
-    e.g. `useWorkspacesQuery`, `useWorkspaceDocumentsQuery`.
-  * Mutations: `use<Verb><Domain>Mutation`
-    e.g. `useUploadDocumentMutation`, `useSubmitJobMutation`.
-
-* **Staleness**:
-
-  * For most list/detail queries we accept a 30s `staleTime`.
-  * For highly dynamic views (e.g. running jobs/builds) we rely on:
-
-    * **Streaming updates** for state.
-    * Manual `refetch()` on significant UI events.
-
----
-
-## 3. HTTP client and base URL
-
-All HTTP calls go through a single shared client in `src/shared/api/httpClient.ts` (or equivalent).
-
-### 3.1 Base URL and proxy
-
-* In development, Vite proxies `/api` → the backend port, so the client simply calls paths like `/api/v1/...`.
-* In production, the frontend is served behind the backend, and `/api` is routed appropriately.
-
-The HTTP client:
-
-* Handles JSON encoding/decoding.
-* Attaches credentials (e.g. cookies) as required.
-* Normalises errors into a consistent shape.
-
-### 3.2 Client interface
-
-At a minimum:
+A minimal shape:
 
 ```ts
-interface ApiErrorPayload {
+export interface ApiErrorPayload {
   status: number;
   message: string;
   code?: string;
   details?: unknown;
 }
 
-class ApiError extends Error {
+export class ApiError extends Error {
   status: number;
   code?: string;
   details?: unknown;
 }
 
-async function apiRequest<T>(
+export async function apiRequest<T>(
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
-  options?: { query?: Record<string, unknown>; body?: unknown; signal?: AbortSignal },
+  options?: {
+    query?: Record<string, unknown>;
+    body?: unknown;
+    signal?: AbortSignal;
+    headers?: Record<string, string>;
+  },
 ): Promise<T> {
   // ...
 }
 ```
 
-**Rules:**
+Rules:
 
-* API modules do **not** use `fetch` directly; they only call `apiRequest`.
-* `apiRequest` is responsible for:
+* API modules **only** use `apiRequest`; they never use `fetch` directly.
+* `apiRequest` throws an `ApiError` for any non‑2xx status, with a meaningful `message` where possible.
 
-  * Building the full URL with query params.
-  * Throwing `ApiError` for non‑2xx responses.
-  * Returning the parsed JSON for success.
+### 2.3 Authentication and 401/403
+
+* 401 (unauthenticated) is handled at a **global** layer (e.g. invalidate session, redirect to `/login`).
+* 403 (forbidden) is surfaced to the UI as a permissions error.
+
+The HTTP client itself does not automatically refresh tokens; that logic lives in the auth/session layer and React Query hooks.
+
+---
+
+## 3. React Query
+
+React Query orchestrates fetching, caching, and background updates.
+
+### 3.1 Query client configuration
+
+`AppProviders` creates a single `QueryClient` with sane defaults:
+
+* `retry: 1` – most ADE errors are not transient.
+* `staleTime: 30_000` – many reads can be reused for ~30 seconds.
+* `refetchOnWindowFocus: false` – avoids surprise reloads when switching tabs.
+
+These can be overridden per query (e.g. for health checks).
+
+### 3.2 Query keys
+
+Query keys must be:
+
+* **Stable** – same inputs → same key.
+* **Descriptive** – easy to inspect in devtools.
+* **Scoped** – from global → workspace → resource.
+
+Patterns:
+
+* Session & permissions:
+
+  * `['session']`
+  * `['permissions', 'effective']`
+
+* Workspaces:
+
+  * `['workspaces']`
+  * `['workspace', workspaceId]`
+  * `['workspace', workspaceId, 'members']`
+  * `['workspace', workspaceId, 'roles']`
+
+* Documents:
+
+  * `['workspace', workspaceId, 'documents', params]`
+  * `['workspace', workspaceId, 'document', documentId]`
+  * `['workspace', workspaceId, 'document', documentId, 'sheets']`
+
+* Runs:
+
+  * `['workspace', workspaceId, 'runs', params]`     // lists from `/jobs` endpoints
+  * `['workspace', workspaceId, 'run', runId]`       // detail via `/jobs/{job_id}`
+  * `['run', runId]`                                 // detail via `/runs/{run_id}` if used directly
+  * `['run', runId, 'outputs']`
+
+* Configurations:
+
+  * `['workspace', workspaceId, 'configurations']`
+  * `['workspace', workspaceId, 'configuration', configId]`
+  * `['workspace', workspaceId, 'configuration', configId, 'versions']`
+  * `['workspace', workspaceId, 'configuration', configId, 'files']`
+
+* System:
+
+  * `['system', 'safe-mode']`
+  * `['system', 'health']`
+
+Filters and sort options go into a `params` object that is part of the key.
+
+### 3.3 Query and mutation hooks
+
+For each domain:
+
+* API modules export **plain functions** (`listWorkspaceRuns`, `uploadDocument`, `activateConfiguration`).
+* Features define **hooks** that wrap those functions in React Query:
+
+  * Queries: `useWorkspaceRunsQuery(workspaceId, filters)`, `useDocumentsQuery(workspaceId, filters)`.
+  * Mutations: `useCreateRunMutation(workspaceId)`, `useUploadDocumentMutation(workspaceId)`.
+
+Hooks live near the screen components that use them (e.g. `features/workspace-shell/runs/useWorkspaceRunsQuery.ts`) and depend on the shared API modules.
 
 ---
 
 ## 4. Domain API modules
 
-All backend routes are grouped into small, focussed API modules under `src/shared/api/`. Each module exports plain functions; React hooks live in feature folders.
+Domain API modules live under `src/shared/api/`. Each module owns a set of related endpoints and exposes typed functions.
 
-Below we describe the intended module layout and how `/api/v1/...` routes map into them.
+Naming:
 
-> **Note:** Function names are indicative. Exact naming can vary as long as the intent is clear and consistent.
+* Modules: `authApi`, `workspacesApi`, `documentsApi`, `runsApi`, `configsApi`, `buildsApi`, `rolesApi`, `systemApi`, `apiKeysApi`.
+* Functions: `<verb><Noun>` (e.g. `listWorkspaceRuns`, `createRun`, `activateConfiguration`).
 
-### 4.1 Auth & session (`authApi.ts`)
+Below we describe what each module covers and how it maps to backend routes.
 
-Backend routes:
+### 4.1 Auth & session (`authApi`)
 
-* `GET  /api/v1/auth/providers` – list configured auth providers.
-* `GET  /api/v1/setup/status` – check if initial admin setup is required.
-* `POST /api/v1/setup` – create the first administrator account.
-* `POST /api/v1/auth/session` – create a browser session (email/password).
-* `DELETE /api/v1/auth/session` – terminate the active session.
-* `POST /api/v1/auth/session/refresh` – refresh session.
-* `GET  /api/v1/auth/session` – read active session profile (canonical session endpoint).
-* `GET  /api/v1/auth/me` / `GET /api/v1/users/me` – user profile convenience endpoints.
-* `GET  /api/v1/auth/sso/login` – initiate SSO login.
-* `GET  /api/v1/auth/sso/callback` – handle SSO callback.
+**Responsibilities**
 
-> For `ade-web`, **`GET /api/v1/auth/session` is the canonical session endpoint**. Other “me” endpoints are treated as legacy or supplemental.
+* Initial setup.
+* Login/logout (email/password and SSO).
+* Session and current user.
 
-Typical functions:
+**Key routes**
 
-* `getSetupStatus()`
+* Setup:
+
+  * `GET  /api/v1/setup/status` – read initial setup status.
+  * `POST /api/v1/setup`        – complete first admin setup.
+
+* Session:
+
+  * `POST   /api/v1/auth/session`         – create session.
+  * `GET    /api/v1/auth/session`         – read session (canonical “who am I?”).
+  * `POST   /api/v1/auth/session/refresh` – refresh session.
+  * `DELETE /api/v1/auth/session`         – logout.
+
+* Auth providers:
+
+  * `GET /api/v1/auth/providers` – configured auth providers.
+  * `GET /api/v1/auth/sso/login` – initiate SSO login (302 redirect).
+  * `GET /api/v1/auth/sso/callback` – finish SSO login.
+
+* User profile:
+
+  * `GET /api/v1/users/me` or `GET /api/v1/auth/me` – authenticated user (name, email, id).
+
+**Example functions**
+
+* `readSetupStatus()`
 * `completeSetup(payload)`
 * `listAuthProviders()`
 * `createSession(credentials)`
 * `refreshSession()`
 * `deleteSession()`
-* `getSession()` – wraps `GET /auth/session`.
+* `readSession()`
+* `readCurrentUser()`
 
-SSO endpoints are usually not called directly from the SPA (they cause full‑page redirects), but `authApi` can expose helpers to construct URLs.
+Hooks:
 
-### 4.2 Workspaces & members (`workspacesApi.ts`)
+* `useSetupStatusQuery()`
+* `useSessionQuery()`
+* `useCurrentUserQuery()`
+* `useLoginMutation()`, `useLogoutMutation()`
 
-Backend routes:
+### 4.2 Permissions & global roles (`rolesApi`)
 
-* `GET  /api/v1/workspaces` – list workspaces for user.
-* `POST /api/v1/workspaces` – create workspace.
-* `GET  /api/v1/workspaces/{workspace_id}` – read workspace detail/context.
-* `PATCH /api/v1/workspaces/{workspace_id}` – update workspace metadata.
-* `DELETE /api/v1/workspaces/{workspace_id}` – delete workspace.
-* `POST /api/v1/workspaces/{workspace_id}/default` – mark as user’s default.
+**Responsibilities**
 
-Membership & roles at workspace scope:
+* Global roles.
+* Global role assignments.
+* Permission catalog and effective permissions.
 
-* `GET  /api/v1/workspaces/{workspace_id}/members`
-* `POST /api/v1/workspaces/{workspace_id}/members`
-* `DELETE /api/v1/workspaces/{workspace_id}/members/{membership_id}`
-* `PUT  /api/v1/workspaces/{workspace_id}/members/{membership_id}/roles`
+**Key routes**
 
-Workspace‑role definitions and assignments:
+* Permissions:
 
-* `GET  /api/v1/workspaces/{workspace_id}/roles`
-* `GET  /api/v1/workspaces/{workspace_id}/role-assignments`
-* `POST /api/v1/workspaces/{workspace_id}/role-assignments`
-* `DELETE /api/v1/workspaces/{workspace_id}/role-assignments/{assignment_id}`
+  * `GET  /api/v1/permissions`             – permission catalog.
+  * `GET  /api/v1/me/permissions`          – effective permissions.
+  * `POST /api/v1/me/permissions/check`    – check specific permissions.
 
-Typical functions:
+* Global roles:
 
-* `listWorkspaces()`
-* `createWorkspace(payload)`
-* `getWorkspace(workspaceId)`
-* `updateWorkspace(workspaceId, patch)`
-* `deleteWorkspace(workspaceId)`
-* `setDefaultWorkspace(workspaceId)`
+  * `GET    /api/v1/roles`
+  * `POST   /api/v1/roles`
+  * `GET    /api/v1/roles/{role_id}`
+  * `PATCH  /api/v1/roles/{role_id}`
+  * `DELETE /api/v1/roles/{role_id}`
 
-Membership:
+* Global role assignments:
 
-* `listWorkspaceMembers(workspaceId)`
-* `addWorkspaceMember(workspaceId, payload)`
-* `removeWorkspaceMember(workspaceId, membershipId)`
-* `replaceWorkspaceMemberRoles(workspaceId, membershipId, roleIds)`
+  * `GET    /api/v1/role-assignments`
+  * `POST   /api/v1/role-assignments`
+  * `DELETE /api/v1/role-assignments/{assignment_id}`
 
-Workspace roles:
-
-* `listWorkspaceRoles(workspaceId)`
-* `listWorkspaceRoleAssignments(workspaceId)`
-* `createWorkspaceRoleAssignment(workspaceId, payload)`
-* `deleteWorkspaceRoleAssignment(workspaceId, assignmentId)`
-
-### 4.3 Documents (`documentsApi.ts`)
-
-Backend routes:
-
-* `GET  /api/v1/workspaces/{workspace_id}/documents` – list documents.
-* `POST /api/v1/workspaces/{workspace_id}/documents` – upload document.
-* `GET  /api/v1/workspaces/{workspace_id}/documents/{document_id}` – read metadata.
-* `DELETE /api/v1/workspaces/{workspace_id}/documents/{document_id}` – soft delete.
-* `GET  /api/v1/workspaces/{workspace_id}/documents/{document_id}/download` – download original file.
-* `GET  /api/v1/workspaces/{workspace_id}/documents/{document_id}/sheets` – list worksheets.
-
-Typical functions:
-
-* `listDocuments(workspaceId, params)`
-* `uploadDocument(workspaceId, file, options)`
-* `getDocument(workspaceId, documentId)`
-* `deleteDocument(workspaceId, documentId)`
-* `downloadDocument(workspaceId, documentId)` – returns a `Blob` or download URL.
-* `listDocumentSheets(workspaceId, documentId)`
-
-Uploads are typically implemented with `FormData`. The API function should hide those details behind a simple signature.
-
-### 4.4 Jobs & runs (`jobsApi.ts`, `runsApi.ts`)
-
-Jobs (workspace‑scoped):
-
-* `GET  /api/v1/workspaces/{workspace_id}/jobs` – list jobs.
-* `POST /api/v1/workspaces/{workspace_id}/jobs` – submit job.
-* `GET  /api/v1/workspaces/{workspace_id}/jobs/{job_id}` – read job detail.
-* `GET  /api/v1/workspaces/{workspace_id}/jobs/{job_id}/artifact` – download artifact.
-* `GET  /api/v1/workspaces/{workspace_id}/jobs/{job_id}/logs` – download job logs.
-* `GET  /api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs` – list outputs.
-* `GET  /api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs/{output_path}` – download output file.
-
-Runs (engine‑level, when used directly):
-
-* `POST /api/v1/configs/{config_id}/runs` – create run.
-* `GET  /api/v1/runs/{run_id}` – get run.
-* `GET  /api/v1/runs/{run_id}/logs` – streaming run logs (NDJSON).
-* `GET  /api/v1/runs/{run_id}/logfile` – download logs file.
-* `GET  /api/v1/runs/{run_id}/artifact` – download run artifact.
-* `GET  /api/v1/runs/{run_id}/outputs` – list outputs.
-* `GET  /api/v1/runs/{run_id}/outputs/{output_path}` – download output.
-
-In the UI we generally talk about **Jobs** and treat “runs” as implementation detail. For clarity:
-
-* `jobsApi` covers workspace jobs, their artifacts, and downloadable outputs.
-* `runsApi` is a lower‑level module used where we need fine‑grained streaming control (e.g. Config Builder validation).
-
-Typical functions:
-
-* Jobs:
-
-  * `listJobs(workspaceId, params)`
-  * `submitJob(workspaceId, payload)`  // includes document IDs, config version, options
-  * `getJob(workspaceId, jobId)`
-  * `downloadJobArtifact(workspaceId, jobId)`
-  * `listJobOutputs(workspaceId, jobId)`
-  * `downloadJobOutput(workspaceId, jobId, outputPath)`
-
-* Runs (if/where used):
-
-  * `createRun(configId, payload)`
-  * `getRun(runId)`
-  * `downloadRunArtifact(runId)`
-  * `listRunOutputs(runId)`
-  * `downloadRunOutput(runId, outputPath)`
-
-Streaming log endpoints are covered separately in §6.
-
-### 4.5 Configurations & builds (`configsApi.ts`, `buildsApi.ts`)
-
-Configurations (workspace scope):
-
-* `GET  /api/v1/workspaces/{workspace_id}/configurations` – list configs.
-* `POST /api/v1/workspaces/{workspace_id}/configurations` – create config (from template/clone).
-* `GET  /api/v1/workspaces/{workspace_id}/configurations/{config_id}` – config metadata.
-* `GET  /api/v1/workspaces/{workspace_id}/configurations/{config_id}/versions` – list versions.
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/activate` – activate config.
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/deactivate` – deactivate config.
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/publish` – publish draft.
-* `GET  /api/v1/workspaces/{workspace_id}/configurations/{config_id}/export` – export config.
-
-Config files & directories (workbench):
-
-* `GET    /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files` – list editable files/directories.
-* `GET    /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}` – read file content.
-* `PUT    /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}` – upsert file.
-* `PATCH  /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}` – rename/move file.
-* `DELETE /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}` – delete file.
-* `POST   /api/v1/workspaces/{workspace_id}/configurations/{config_id}/directories/{directory_path}` – create directory.
-* `DELETE /api/v1/workspaces/{workspace_id}/configurations/{config_id}/directories/{directory_path}` – delete directory.
-
-Builds:
-
-* `POST /api/v1/workspaces/{workspace_id}/configs/{config_id}/builds` – create build.
-* `GET  /api/v1/builds/{build_id}` – get build.
-* `GET  /api/v1/builds/{build_id}/logs` – streaming build logs (NDJSON).
-
-Validation:
-
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/validate` – validate config on disk.
-
-Typical functions (configsApi):
-
-* `listConfigurations(workspaceId)`
-* `createConfiguration(workspaceId, payload)`
-* `getConfiguration(workspaceId, configId)`
-* `listConfigVersions(workspaceId, configId)`
-* `activateConfiguration(workspaceId, configId)`
-* `deactivateConfiguration(workspaceId, configId)`
-* `publishConfiguration(workspaceId, configId)`
-* `exportConfiguration(workspaceId, configId)`
-
-Files:
-
-* `listConfigFiles(workspaceId, configId)`
-* `getConfigFile(workspaceId, configId, path)`
-* `upsertConfigFile(workspaceId, configId, path, content, options)`  // includes ETag preconditions
-* `renameConfigFile(workspaceId, configId, fromPath, toPath)`
-* `deleteConfigFile(workspaceId, configId, path)`
-* `createConfigDirectory(workspaceId, configId, path)`
-* `deleteConfigDirectory(workspaceId, configId, path)`
-
-Builds (buildsApi):
-
-* `createBuild(workspaceId, configId, options)`  // returns buildId
-* `getBuild(buildId)`
-* (Streaming logs: see §6)
-
-Validation:
-
-* `validateConfiguration(workspaceId, configId, options)` – may integrate with streaming if implemented that way.
-
-### 4.6 Roles & permissions (`rolesApi.ts`)
-
-Backend routes:
-
-* `GET  /api/v1/permissions` – list permission catalog.
-* `GET  /api/v1/me/permissions` – effective permissions for caller.
-* `POST /api/v1/me/permissions/check` – check specific permissions.
-
-Global roles:
-
-* `GET  /api/v1/roles` – list global roles.
-* `POST /api/v1/roles` – create global role.
-* `GET  /api/v1/roles/{role_id}` – read role.
-* `PATCH /api/v1/roles/{role_id}` – update role.
-* `DELETE /api/v1/roles/{role_id}` – delete role.
-
-Global role assignments:
-
-* `GET  /api/v1/role-assignments` – list assignments.
-* `POST /api/v1/role-assignments` – create assignment.
-* `DELETE /api/v1/role-assignments/{assignment_id}` – delete assignment.
-
-Typical functions:
+**Example functions**
 
 * `listPermissions()`
-* `getEffectivePermissions()`
-* `checkPermissions(payload)`
+* `readEffectivePermissions()`
+* `checkPermissions(request)`
 * `listGlobalRoles()`
 * `createGlobalRole(payload)`
-* `getGlobalRole(roleId)`
+* `readGlobalRole(roleId)`
 * `updateGlobalRole(roleId, patch)`
 * `deleteGlobalRole(roleId)`
 * `listGlobalRoleAssignments()`
 * `createGlobalRoleAssignment(payload)`
 * `deleteGlobalRoleAssignment(assignmentId)`
 
-Workspace‑level roles and assignments live in `workspacesApi` (§4.2).
+Hooks:
 
-### 4.7 System & safe mode (`systemApi.ts`)
+* `useEffectivePermissionsQuery()`
+* `usePermissionCatalogQuery()`
+* Admin screens: `useGlobalRolesQuery()`, `useGlobalRoleAssignmentsQuery()`
 
-Backend routes:
+### 4.3 Workspaces & membership (`workspacesApi`)
 
-* `GET  /api/v1/health` – service health status.
-* `GET  /api/v1/system/safe-mode` – read safe mode.
-* `PUT  /api/v1/system/safe-mode` – update safe mode.
+**Responsibilities**
 
-Typical functions:
+* Workspace lifecycle and metadata.
+* Membership within a workspace.
+* Workspace‑scoped roles and role assignments.
+* Default workspace.
 
-* `getHealth()`
-* `getSafeMode()`
+**Key routes**
+
+* Workspaces:
+
+  * `GET    /api/v1/workspaces`
+  * `POST   /api/v1/workspaces`
+  * `GET    /api/v1/workspaces/{workspace_id}`
+  * `PATCH  /api/v1/workspaces/{workspace_id}`
+  * `DELETE /api/v1/workspaces/{workspace_id}`
+  * `POST   /api/v1/workspaces/{workspace_id}/default`
+
+* Members:
+
+  * `GET    /api/v1/workspaces/{workspace_id}/members`
+  * `POST   /api/v1/workspaces/{workspace_id}/members`
+  * `DELETE /api/v1/workspaces/{workspace_id}/members/{membership_id}`
+  * `PUT    /api/v1/workspaces/{workspace_id}/members/{membership_id}/roles`
+
+* Workspace roles & assignments:
+
+  * `GET    /api/v1/workspaces/{workspace_id}/roles`
+  * `GET    /api/v1/workspaces/{workspace_id}/role-assignments`
+  * `POST   /api/v1/workspaces/{workspace_id}/role-assignments`
+  * `DELETE /api/v1/workspaces/{workspace_id}/role-assignments/{assignment_id}`
+
+**Example functions**
+
+* Workspaces:
+
+  * `listWorkspaces()`
+  * `createWorkspace(payload)`
+  * `readWorkspace(workspaceId)`
+  * `updateWorkspace(workspaceId, patch)`
+  * `deleteWorkspace(workspaceId)`
+  * `setDefaultWorkspace(workspaceId)`
+
+* Members:
+
+  * `listWorkspaceMembers(workspaceId)`
+  * `addWorkspaceMember(workspaceId, payload)`
+  * `removeWorkspaceMember(workspaceId, membershipId)`
+  * `updateWorkspaceMemberRoles(workspaceId, membershipId, roles)`
+
+* Workspace‑scoped roles:
+
+  * `listWorkspaceRoles(workspaceId)`
+  * `listWorkspaceRoleAssignments(workspaceId)`
+  * `createWorkspaceRoleAssignment(workspaceId, payload)`
+  * `deleteWorkspaceRoleAssignment(workspaceId, assignmentId)`
+
+Hooks:
+
+* `useWorkspacesQuery()`
+* `useWorkspaceQuery(workspaceId)`
+* `useWorkspaceMembersQuery(workspaceId)`
+* `useWorkspaceRolesQuery(workspaceId)`
+
+### 4.4 Documents (`documentsApi`)
+
+**Responsibilities**
+
+* Document upload and listing per workspace.
+* Document metadata and download.
+* Sheet metadata for spreadsheet‑like inputs.
+
+**Key routes**
+
+* `GET  /api/v1/workspaces/{workspace_id}/documents`
+* `POST /api/v1/workspaces/{workspace_id}/documents`
+* `GET  /api/v1/workspaces/{workspace_id}/documents/{document_id}`
+* `DELETE /api/v1/workspaces/{workspace_id}/documents/{document_id}`
+* `GET  /api/v1/workspaces/{workspace_id}/documents/{document_id}/download`
+* `GET  /api/v1/workspaces/{workspace_id}/documents/{document_id}/sheets`
+
+**Example functions**
+
+* `listDocuments(workspaceId, params)`
+* `uploadDocument(workspaceId, file, options?)`
+* `readDocument(workspaceId, documentId)`
+* `deleteDocument(workspaceId, documentId)`
+* `downloadDocument(workspaceId, documentId)`
+* `listDocumentSheets(workspaceId, documentId)`
+
+Hooks:
+
+* `useDocumentsQuery(workspaceId, filters)`
+* `useDocumentQuery(workspaceId, documentId)`
+* `useDocumentSheetsQuery(workspaceId, documentId)`
+
+Mutations:
+
+* `useUploadDocumentMutation(workspaceId)`
+* `useDeleteDocumentMutation(workspaceId)`
+
+### 4.5 Runs (`runsApi`)
+
+**Responsibilities**
+
+* Workspace run ledger (list of all runs in a workspace).
+* Per‑run artifacts, outputs, and log files.
+* Config‑initiated runs (e.g. from Config Builder).
+* Run‑level streaming logs.
+
+There are two groups of endpoints:
+
+* Workspace‑scoped ledger endpoints, currently under `/jobs` in the API.
+* Global run endpoints, under `/runs`.
+
+In the frontend we treat both as variants of the same **Run** domain concept.
+
+**Key routes: workspace run ledger (under `/jobs`)**
+
+* `GET  /api/v1/workspaces/{workspace_id}/jobs` – list runs for workspace.
+* `POST /api/v1/workspaces/{workspace_id}/jobs` – submit new run.
+* `GET  /api/v1/workspaces/{workspace_id}/jobs/{job_id}` – read run summary.
+* `GET  /api/v1/workspaces/{workspace_id}/jobs/{job_id}/artifact` – download artifact.
+* `GET  /api/v1/workspaces/{workspace_id}/jobs/{job_id}/logs` – download logs file.
+* `GET  /api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs` – list outputs.
+* `GET  /api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs/{output_path}` – download output.
+
+**Key routes: config‑scoped & global run endpoints**
+
+* `POST /api/v1/configs/{config_id}/runs` – start a run for a given config.
+* `GET  /api/v1/runs/{run_id}` – read run detail.
+* `GET  /api/v1/runs/{run_id}/artifact` – download artifact.
+* `GET  /api/v1/runs/{run_id}/logfile` – download logs file.
+* `GET  /api/v1/runs/{run_id}/logs` – stream logs (NDJSON).
+* `GET  /api/v1/runs/{run_id}/outputs` – list outputs.
+* `GET  /api/v1/runs/{run_id}/outputs/{output_path}` – download output.
+
+**Example functions**
+
+Workspace‑level:
+
+* `listWorkspaceRuns(workspaceId, params)`
+* `createWorkspaceRun(workspaceId, payload)`
+* `readWorkspaceRun(workspaceId, runId)`           // wraps `/jobs/{job_id}`
+* `listWorkspaceRunOutputs(workspaceId, runId)`
+* `downloadWorkspaceRunOutput(workspaceId, runId, outputPath)`
+* `downloadWorkspaceRunArtifact(workspaceId, runId)`
+* `downloadWorkspaceRunLogFile(workspaceId, runId)`
+
+Config/global‑level:
+
+* `createConfigRun(configId, payload)`             // wraps `/configs/{config_id}/runs`
+* `readRun(runId)`                                 // wraps `/runs/{run_id}`
+* `listRunOutputs(runId)`
+* `downloadRunOutput(runId, outputPath)`
+* `downloadRunArtifact(runId)`
+* `downloadRunLogFile(runId)`
+* `streamRunLogs(runId)`                           // wraps `/runs/{run_id}/logs`
+
+Hooks:
+
+* `useWorkspaceRunsQuery(workspaceId, filters)`
+* `useRunQuery(runId)` (or `useWorkspaceRunQuery(workspaceId, runId)` depending on which endpoint you use)
+* `useCreateWorkspaceRunMutation(workspaceId)`
+* `useCreateConfigRunMutation(configId)`
+
+Streaming hook:
+
+* `useRunLogsStream(runId)` for the live run console.
+
+### 4.6 Configurations & builds (`configsApi`, `buildsApi`)
+
+**Responsibilities**
+
+* Configuration entities and versions.
+* Config file tree and file contents for the workbench.
+* Build and validate operations.
+
+**Key routes: configurations**
+
+* `GET  /api/v1/workspaces/{workspace_id}/configurations`
+* `POST /api/v1/workspaces/{workspace_id}/configurations`
+* `GET  /api/v1/workspaces/{workspace_id}/configurations/{config_id}`
+* `GET  /api/v1/workspaces/{workspace_id}/configurations/{config_id}/versions`
+* `POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/activate`
+* `POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/deactivate`
+* `POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/publish`
+* `POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/validate`
+* `GET  /api/v1/workspaces/{workspace_id}/configurations/{config_id}/export`
+
+**Key routes: config files**
+
+* `GET    /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files`
+* `GET    /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}`
+* `PUT    /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}`
+* `PATCH  /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}`
+* `DELETE /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}`
+* `POST   /api/v1/workspaces/{workspace_id}/configurations/{config_id}/directories/{directory_path}`
+* `DELETE /api/v1/workspaces/{workspace_id}/configurations/{config_id}/directories/{directory_path}`
+
+**Key routes: builds**
+
+* `POST /api/v1/workspaces/{workspace_id}/configs/{config_id}/builds`
+* `GET  /api/v1/builds/{build_id}`
+* `GET  /api/v1/builds/{build_id}/logs` – stream build logs (NDJSON).
+
+**Example functions**
+
+Configurations:
+
+* `listConfigurations(workspaceId)`
+* `createConfiguration(workspaceId, payload)`
+* `readConfiguration(workspaceId, configId)`
+* `listConfigVersions(workspaceId, configId)`
+* `activateConfiguration(workspaceId, configId)`
+* `deactivateConfiguration(workspaceId, configId)`
+* `publishConfiguration(workspaceId, configId)`
+* `validateConfiguration(workspaceId, configId, payload)`
+* `exportConfiguration(workspaceId, configId)`
+
+Config files:
+
+* `listConfigFiles(workspaceId, configId)`
+* `readConfigFile(workspaceId, configId, filePath)`
+* `upsertConfigFile(workspaceId, configId, filePath, content, options?)`  // includes ETag preconditions.
+* `renameConfigFile(workspaceId, configId, filePath, newPath)`
+* `deleteConfigFile(workspaceId, configId, filePath)`
+* `createConfigDirectory(workspaceId, configId, dirPath)`
+* `deleteConfigDirectory(workspaceId, configId, dirPath)`
+
+Builds:
+
+* `createBuild(workspaceId, configId, options)`  // returns `buildId`.
+* `readBuild(buildId)`
+* `streamBuildLogs(buildId)`
+
+Hooks:
+
+* `useConfigurationsQuery(workspaceId)`
+* `useConfigurationQuery(workspaceId, configId)`
+* `useConfigVersionsQuery(workspaceId, configId)`
+* `useConfigFilesQuery(workspaceId, configId)`
+* `useCreateBuildMutation(workspaceId, configId)`
+* `useBuildLogsStream(buildId)`
+
+### 4.7 System & safe mode (`systemApi`)
+
+**Responsibilities**
+
+* System health.
+* Safe mode status and updates.
+
+**Key routes**
+
+* `GET /api/v1/health`
+* `GET /api/v1/system/safe-mode`
+* `PUT /api/v1/system/safe-mode`
+
+**Example functions**
+
+* `readHealth()`
+* `readSafeMode()`
 * `updateSafeMode(payload)`
 
-These functions are consumed by:
+Hooks:
 
-* The global health indicator (if any).
-* Safe mode banner and Settings controls.
+* `useSafeModeQuery()`
+* `useUpdateSafeModeMutation()`
 
-### 4.8 Users & API keys (`usersApi.ts`, `apiKeysApi.ts`)
+### 4.8 Users & API keys (`usersApi`, `apiKeysApi`)
 
-Users:
+**Responsibilities**
 
-* `GET /api/v1/users` – list users (admin only).
+* User directory (admin use).
+* API key management for users.
 
-API keys:
+**Key routes**
 
-* `GET    /api/v1/auth/api-keys` – list API keys.
-* `POST   /api/v1/auth/api-keys` – create API key.
-* `DELETE /api/v1/auth/api-keys/{api_key_id}` – revoke API key.
+* Users:
 
-Typical functions:
+  * `GET /api/v1/users` – list all users (admin only).
 
-* `listUsers(params)`
+* API keys:
+
+  * `GET    /api/v1/auth/api-keys`
+  * `POST   /api/v1/auth/api-keys`
+  * `DELETE /api/v1/auth/api-keys/{api_key_id}`
+
+**Example functions**
+
+* `listUsers(params?)`
 * `listApiKeys()`
 * `createApiKey(payload)`
 * `revokeApiKey(apiKeyId)`
 
-These modules power administrative surfaces when present (e.g. API key management UI).
+Hooks:
+
+* `useUsersQuery()`
+* `useApiKeysQuery()`
+* `useCreateApiKeyMutation()`
+* `useRevokeApiKeyMutation()`
 
 ---
 
 ## 5. Typed models and schemas
 
-The data layer uses TypeScript types from two primary sources:
+The data layer uses TypeScript types from two places:
 
-1. **Generated types** (if available) under `src/generated-types/`.
-2. **Hand‑written domain models** under `src/schema/`.
+1. **Generated types** (if present) in `src/generated-types/`.
+2. **Domain models** in `src/schema/`.
 
 ### 5.1 Generated types
 
-* Generated types mirror the backend OpenAPI or Pydantic models.
-* They are authoritative for field names and raw response shapes.
-* They should not be imported directly in screens if they reveal unstable internal structure.
+Generated types:
 
-We may still use them in API modules:
+* Mirror backend schemas 1:1 (field names, nested structures).
+* Are authoritative for the wire format.
+* May expose internal details that we don’t want to leak into screens.
 
-```ts
-import type { ApiWorkspace, ApiJob } from '@generated-types';
-
-function toWorkspaceSummary(api: ApiWorkspace): WorkspaceSummary { /* ... */ }
-```
+We typically consume them only in API modules and mapping functions.
 
 ### 5.2 Domain models
 
-Domain models live under `src/schema/` and give us stable, UI‑centric types:
+Domain models in `src/schema/` provide UI‑oriented shapes:
 
 * `WorkspaceSummary`, `WorkspaceDetail`
 * `DocumentSummary`, `DocumentDetail`
-* `JobSummary`, `JobDetail`
+* `RunSummary`, `RunDetail`
 * `Configuration`, `ConfigVersion`
 * `SafeModeStatus`, etc.
 
-API modules are responsible for mapping wire types into these domain models. This gives us:
-
-* A place to **rename** awkward backend fields without touching every screen.
-* A stable layer when backend schemas evolve.
-
----
-
-## 6. Streaming NDJSON endpoints
-
-ADE exposes streaming NDJSON logs for long‑running operations. The data layer wraps these as **streams of events**, not as React Query queries.
-
-### 6.1 Endpoints
-
-Current streaming endpoints:
-
-* Build logs:
-
-  * `GET /api/v1/builds/{build_id}/logs`
-
-* Run logs:
-
-  * `GET /api/v1/runs/{run_id}/logs`
-
-These endpoints return `Content-Type: application/x-ndjson` (or similar) and stream events like:
-
-```jsonl
-{"type":"build.started","timestamp":"...","data":{...}}
-{"type":"build.log","timestamp":"...","data":{"level":"info","message":"..."}}
-{"type":"build.completed","timestamp":"...","data":{"status":"succeeded"}}
-```
-
-Exactly which event types exist is defined by the engine/backend; the frontend treats them as opaque `event.type` + `event.data`.
-
-### 6.2 Streaming client abstraction
-
-Streaming support lives in `src/shared/ndjson/` and exposes a small API, for example:
+API modules are responsible for mapping:
 
 ```ts
-interface StreamOptions {
-  signal?: AbortSignal;
-}
-
-type NdjsonEvent = { type: string; [key: string]: any };
-
-function streamNdjson(
-  path: string,
-  options?: StreamOptions,
-): AsyncIterable<NdjsonEvent> { /* ... */ }
+function toRunSummary(apiRun: ApiRun): RunSummary { /* ... */ }
 ```
 
-On top of this, we can build domain‑specific helpers:
+This gives us:
 
-* `streamBuildEvents(buildId, options)`
-* `streamRunEvents(runId, options)`
-
-These:
-
-* Handle reconnection/backoff if desired.
-* Decode and normalise event payloads when appropriate.
-
-### 6.3 Consumption in features
-
-In the Config Builder workbench and job detail views, we use streaming helpers in React components, typically via `useEffect` and `AbortController`:
-
-* Start streaming when the component mounts or when the run/build starts.
-* Append log events to a console buffer in React state.
-* Stop streaming when the component unmounts or the job/build reaches a terminal state.
-
-**Important:**
-
-* Streaming is **not** wrapped in React Query. Query state represents **snapshots**, whereas streams represent **ongoing event flows**.
-* We must always supply an `AbortSignal` to avoid leaking connections.
+* A stable surface for screens, even if backend fields change.
+* A clear place to rename things (e.g. `job_id` → `runId` in the UI).
 
 ---
 
-## 7. Error handling and retry policy
+## 6. Streaming NDJSON logs
 
-Errors are handled consistently across API modules and hooks.
+Some endpoints stream logs/events as NDJSON. We treat these as **event streams**, not as “queries”.
 
-### 7.1 Normalised errors
+### 6.1 Streaming abstraction
 
-`apiRequest` throws an `ApiError` with:
+A small module in `src/shared/ndjson/` provides a generic NDJSON reader, for example:
+
+```ts
+export interface NdjsonEvent {
+  type?: string;
+  [key: string]: unknown;
+}
+
+export function streamNdjson(
+  path: string,
+  options?: { signal?: AbortSignal },
+  onEvent?: (event: NdjsonEvent) => void,
+): Promise<void> {
+  // open fetch, read chunks, split by newline, JSON.parse, call onEvent
+}
+```
+
+Key characteristics:
+
+* Accepts an `AbortSignal` so callers can terminate the stream.
+* Parses each line as JSON; lines that fail to parse are either ignored or reported via an error callback.
+
+### 6.2 Run and build logs
+
+Used by:
+
+* Config Builder:
+
+  * `streamBuildLogs(buildId)` → `/api/v1/builds/{build_id}/logs`.
+
+* Run consoles:
+
+  * `streamRunLogs(runId)` → `/api/v1/runs/{run_id}/logs`.
+
+Event format is determined by the backend. We expect at minimum:
+
+* A `type` field (e.g. `"log"`, `"status"`, `"summary"`).
+* A `timestamp`.
+* Either a `message` or structured `data`.
+
+UI code in the workbench or run detail screen:
+
+* Appends log lines to a console buffer.
+* Updates derived status (e.g. completed, failed) when a terminal event arrives.
+
+### 6.3 Cancellation and errors
+
+Streaming helpers:
+
+* Always create an `AbortController` in the calling component.
+* Cancel the stream on unmount or when the user closes the console.
+
+Error handling:
+
+* Network or server errors should be surfaced as a **console banner** (“Stream disconnected”) rather than thrown.
+* The component may optionally allow manual retry.
+
+We deliberately do **not** wrap NDJSON streams in React Query; they are long‑lived event flows, not snapshot fetches.
+
+---
+
+## 7. Error handling and retry
+
+### 7.1 `ApiError` handling
+
+Every endpoint that fails returns an `ApiError` from the HTTP client:
 
 * `status` – HTTP status code.
-* `message` – user‑facing message, if available.
-* `code` – optional backend error code string.
-* `details` – optional machine‑readable details.
+* `message` – user‑friendly message when available.
+* `code` – optional machine code from backend.
+* `details` – optional structured payload.
 
-API modules do **not** catch errors; they let them propagate to React Query or explicit callers.
+API modules do not catch these errors; they are allowed to propagate to React Query.
 
-### 7.2 React Query errors
+### 7.2 Where to surface errors
 
-React Query queries:
+Guidelines:
 
-* Use the default `retry: 1` unless there is a reason to override.
-* Surface errors to screens via `error` state. Screens decide whether to:
+* **Mutations (buttons/forms)**:
 
-  * Show an inline `Alert`.
-  * Render a full “Something went wrong” state.
-  * Trigger a toast notification.
+  * Show a toast for “one‑off” actions (start run, save file).
+  * Show inline error text for validation problems.
 
-For certain status codes we follow specific patterns:
+* **List/detail screens**:
 
-* `401 Unauthorized`:
+  * Use an inline `Alert` in the main content area if loading fails.
+  * For critical surfaces, show a full “something went wrong” state with a retry button.
 
-  * A global handler may invalidate the session and redirect to `/login`.
+* **Streaming consoles**:
 
-* `403 Forbidden`:
+  * Show a console‑local banner on stream errors.
+  * Don’t crash the surrounding screen.
 
-  * Usually shown inline (e.g. “You don’t have permission to view jobs in this workspace.”).
+### 7.3 Retry policy
 
-* `404 Not Found`:
+Default `retry: 1` is fine for most queries.
 
-  * For detail pages, show a not‑found state rather than a generic error.
+Override with `retry: false` when:
 
-### 7.3 Mutations
+* Hitting permission endpoints that will not succeed without user state change (403).
+* Calling validation endpoints where repeated attempts won’t help.
 
-Mutations (create/update/delete):
+Mutations:
 
-* Use React Query’s `useMutation`.
-
-* On success:
-
-  * Update or invalidate relevant query keys (`invalidateQueries`).
-  * Show a success toast where appropriate.
-
-* On error:
-
-  * Show an inline error on the form if possible (e.g. validation errors).
-  * Otherwise show a toast with `error.message`.
-
-### 7.4 Network issues and timeouts
-
-The HTTP client may implement:
-
-* A global network error handler (e.g. show a “connection lost” banner).
-* Optional timeouts for long‑running non‑streaming requests.
-
-Streaming endpoints rely on:
-
-* Aborting via `AbortController` when the user navigates away.
-* A simple reconnection strategy if the connection drops unexpectedly (optional; can be done at the `streamNdjson` layer).
+* Rely on explicit user retries (e.g. clicking “Run again”) rather than automatic retry.
 
 ---
 
-## 8. Adding new endpoints
+## 8. Contracts, invariants, and adding endpoints
 
-When a new backend route is added, follow this process:
+### 8.1 Invariants
+
+To keep the data layer predictable:
+
+* **Single owner per endpoint**
+
+  * Each backend route is wrapped by exactly one function in one module.
+  * Screens and hooks never embed raw URLs.
+
+* **Explicit types**
+
+  * No `any` for responses; map to domain models.
+  * Backend changes should be reflected in `schema/` and, where needed, in mapping functions.
+
+* **No direct `fetch`**
+
+  * Only the HTTP client talks to `fetch` / XHR.
+  * This keeps auth, error handling, and logging consistent.
+
+* **Run‑centric terminology**
+
+  * All execution units are “runs” in frontend types, hooks, and screens.
+  * API module mapping handles backend field names like `job_id` → `runId`.
+
+* **Backend‑agnostic**
+
+  * ADE Web depends on the *behaviour* and *shapes* described here, not on any specific backend implementation.
+  * As long as `/api/v1/...` contracts are preserved, different backends can power the UI.
+
+### 8.2 Adding a new endpoint
+
+When a new backend route appears:
 
 1. **Choose a module**
 
-   * Pick an existing `*Api` module based on the resource (workspaces, documents, jobs, configs, roles, system, auth, users).
-   * If truly new domain, create a new `xyzApi.ts`.
+   * Workspaces, documents, runs, configurations, roles, auth, system, etc.
+   * If it doesn’t fit, introduce a new module in `shared/api`.
 
 2. **Add a typed function**
 
-   * Implement a thin, typed function in that module using `apiRequest`.
-   * Map the wire response into an appropriate domain model if needed.
+   * Implement `<verb><Noun>` in that module using `apiRequest`.
+   * Map the wire shape into a domain model if needed.
 
-3. **Add or reuse a hook**
+3. **Add a hook**
 
-   * In the relevant feature folder, create `useXxxQuery` or `useXxxMutation` using the new API function.
-   * Use consistent query keys and invalidation patterns.
+   * Create `useXxxQuery` or `useXxxMutation` in the relevant feature folder.
+   * Use a consistent query key pattern and invalidate affected keys on write.
 
-4. **Update documentation**
+4. **Update types**
 
-   * Update this doc’s relevant section to include the new path and function.
-   * If the new feature introduces a new domain concept, also update `01-domain-model-and-naming.md`.
+   * Add or adjust domain types in `schema/`.
+   * Wire in generated types if you have them.
 
-By keeping this structure, the data layer stays predictable and easy to navigate—for humans and for tooling.
+5. **Update docs**
+
+   * Add the route and function to the relevant section of this file.
+   * If it introduces a new domain concept, update `01-domain-model-and-naming.md`.
+
+6. **Add tests**
+
+   * Unit tests for the API function (mocking `apiRequest`).
+   * Integration tests for the feature, when appropriate.
+
+Following these rules keeps the data layer small, obvious, and easy to navigate—for both humans and AI agents—while making it straightforward to evolve the ADE backend over time.

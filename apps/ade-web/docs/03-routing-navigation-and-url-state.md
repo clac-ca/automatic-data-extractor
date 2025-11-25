@@ -1,35 +1,41 @@
 # 03 – Routing, navigation, and URL state
 
-This document describes how ADE Web maps URLs to screens, how navigation is implemented without a third‑party router, and how we use query parameters to encode shareable UI state.
+This document describes how ADE Web turns URLs into screens, how navigation works in our single‑page app, and how we use query parameters to store shareable UI state.
 
-It assumes you’re familiar with the domain model in `01-domain-model-and-naming.md` and the project structure in `02-architecture-and-project-structure.md`.
+Use this as the reference for anything that:
 
----
+- Reads or writes the browser location.
+- Navigates between screens.
+- Encodes view state (filters, tabs, layout) in the URL.
 
-## 1. Goals and design principles
+It assumes you’ve read:
 
-Our routing and navigation layer is designed around a few simple rules:
-
-1. **The URL is the source of truth** for “where am I?”  
-   Reloading the page must reconstruct the same screen and key view state.
-
-2. **Single‑page app, browser‑native navigation.**  
-   We use the History API directly (`pushState` / `replaceState` / `popstate`) instead of a third‑party router.
-
-3. **Predictable back/forward behaviour.**  
-   All navigation (programmatic and link clicks) goes through the same code path as `popstate`, so blockers and side‑effects behave the same.
-
-4. **URLs are safe to share.**  
-   The pathname and query string encode enough to re‑open a view (documents list filters, config builder layout, settings tab, etc.).
-
-5. **Minimal custom primitives.**  
-   One provider (`NavProvider`), one hook to read (`useLocation()`), one hook to navigate (`useNavigate()`), and one hook to block navigation (`useNavigationBlocker()`).
+- `01-domain-model-and-naming.md` for core terms (workspace, document, run, configuration).
+- `02-architecture-and-project-structure.md` for where code lives.
 
 ---
 
-## 2. Runtime stack
+## 1. Goals and principles
 
-The routing stack is composed in `main.tsx` and `App.tsx`:
+The routing and navigation layer is designed to be:
+
+- **Predictable** – the URL always tells you “where you are” and “what you’re looking at”.
+- **Shareable** – copying the URL should reopen the same view with the same filters/layout.
+- **Small** – a thin wrapper around `window.history`, not a framework inside a framework.
+- **Guardable** – editors can block navigation when there are unsaved changes.
+
+We follow a few rules:
+
+1. The **location bar is authoritative**. A reload should land you back on the same screen with the same view state.
+2. All navigation goes through **`NavProvider`** (`useNavigate` / `Link` / `NavLink`), not raw `history.pushState`.
+3. **Query parameters** are the standard way to represent view‑level state that should survive refresh and be shareable.
+4. Navigation blockers are **opt‑in and local** to the features that need them (e.g. the Config Builder workbench).
+
+---
+
+## 2. Routing stack overview
+
+The high‑level stack looks like this:
 
 ```tsx
 // main.tsx
@@ -41,7 +47,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 ````
 
 ```tsx
-// App.tsx (conceptual)
+// App.tsx
 export function App() {
   return (
     <NavProvider>
@@ -53,45 +59,35 @@ export function App() {
 }
 ```
 
-* **`NavProvider`** owns the current `location` and wires up the browser History API.
-* **`AppProviders`** configures React Query and other cross‑cutting providers.
-* **`ScreenSwitch`** looks at `location.pathname` and chooses the top‑level screen.
+* **`NavProvider`**
+  Owns the current location, listens to `popstate`, applies navigation blockers, and exposes navigation hooks.
 
-All routing, navigation, and URL state flows are built on top of this stack.
+* **`AppProviders`**
+  Wraps the app with React Query and any other cross‑cutting providers.
+
+* **`ScreenSwitch`**
+  Looks at `location.pathname` and chooses the top‑level screen. It is the **only place** that maps raw paths to top‑level React components.
+
+Everything below `ScreenSwitch` (workspaces, documents, runs, Config Builder) uses URL‑encoded view state and query parameters.
 
 ---
 
-## 3. Path routing
+## 3. Route map
 
-### 3.1 Normalisation and invariants
+### 3.1 Top‑level routes
 
-Before we do any routing:
-
-* Pathnames are normalised to **remove trailing slashes**
-  (e.g. `/workspaces/123/` → `/workspaces/123`).
-
-* The `location` we expose always has:
-
-  * `pathname` – slash‑prefixed path without query/hash.
-  * `search` – raw `?q=...` query string (or `""`).
-  * `hash` – raw `#...` fragment (or `""`).
-
-Consumers should treat `pathname` as immutable within a render.
-
-### 3.2 Top‑level routes
-
-`ScreenSwitch` is a simple “router switch” on `pathname` (pseudo‑code):
+`ScreenSwitch` handles a small, explicit set of path prefixes (pseudo‑code):
 
 ```ts
 switch (true) {
-  case path === "/":                return <HomeOrEntryScreen />;
-  case path === "/login":           return <LoginScreen />;
-  case path === "/auth/callback":   return <AuthCallbackScreen />;
-  case path === "/setup":           return <SetupScreen />;
-  case path === "/logout":          return <LogoutScreen />;
+  case path === "/":                  return <EntryScreen />;
+  case path === "/login":             return <LoginScreen />;
+  case path === "/auth/callback":     return <AuthCallbackScreen />;
+  case path === "/setup":             return <SetupScreen />;
+  case path === "/logout":            return <LogoutScreen />;
 
-  case path === "/workspaces":      return <WorkspaceDirectoryScreen />;
-  case path === "/workspaces/new":  return <CreateWorkspaceScreen />;
+  case path === "/workspaces":        return <WorkspaceDirectoryScreen />;
+  case path === "/workspaces/new":    return <CreateWorkspaceScreen />;
 
   case path.startsWith("/workspaces/"):
     return <WorkspaceShellScreen />;
@@ -101,42 +97,48 @@ switch (true) {
 }
 ```
 
-Top‑level routes are:
+Supported top‑level routes:
 
-| Path                           | Purpose                                      |
-| ------------------------------ | -------------------------------------------- |
-| `/`                            | Entry strategy (redirect to login/setup/app) |
-| `/login`                       | Sign‑in                                      |
-| `/auth/callback`               | Auth provider callback                       |
-| `/setup`                       | First‑time admin setup                       |
-| `/logout`                      | Logout and session cleanup                   |
-| `/workspaces`                  | Workspace directory                          |
-| `/workspaces/new`              | Create workspace                             |
-| `/workspaces/:workspaceId/...` | Workspace shell + sections                   |
+| Path                         | Responsibility                              |
+| ---------------------------- | ------------------------------------------- |
+| `/`                          | Entry strategy (decide login/setup/app).    |
+| `/login`                     | Login form & auth provider selection.       |
+| `/auth/callback`             | Auth provider callback handler.             |
+| `/setup`                     | First‑time administrator setup.             |
+| `/logout`                    | Logout and session teardown.                |
+| `/workspaces`                | Workspace directory.                        |
+| `/workspaces/new`            | Create a workspace.                         |
+| `/workspaces/:workspaceId/*` | Workspace shell and all workspace sections. |
+| `*`                          | Global “Not found” screen.                  |
 
-### 3.3 Workspace shell routes
+We **normalize trailing slashes**:
 
-The **Workspace shell** handles all paths under `/workspaces/:workspaceId`. The path segment immediately after the workspace ID selects the section:
+* `/foo/` → `/foo`
+* `/workspaces/123/runs/` → `/workspaces/123/runs`
 
-* `/workspaces/:workspaceId/documents`
-* `/workspaces/:workspaceId/jobs`
-* `/workspaces/:workspaceId/config-builder`
-* `/workspaces/:workspaceId/settings`
-* `/workspaces/:workspaceId/overview` (optional)
+This avoids subtle “same page, different URL” duplication.
 
-Inside `WorkspaceShellScreen`, we typically:
+### 3.2 Workspace shell routes
 
-1. Parse `workspaceId` from the pathname.
-2. Fetch workspace context (name, environment, permissions).
-3. Route the **section** based on the next segment.
+Inside `/workspaces/:workspaceId`, the next path segment selects the section:
 
-If the section segment is not recognised, we show a **workspace‑local** “Section not found” state instead of the global 404. This lets users recover by switching sections without losing workspace context.
+| Segment          | Example path                     | Section                       |
+| ---------------- | -------------------------------- | ----------------------------- |
+| `documents`      | `/workspaces/123/documents`      | Documents list & run triggers |
+| `runs`           | `/workspaces/123/runs`           | Run history (runs ledger)     |
+| `config-builder` | `/workspaces/123/config-builder` | Config list + workbench       |
+| `settings`       | `/workspaces/123/settings`       | Workspace settings            |
+| `overview`*      | `/workspaces/123/overview`       | Overview/summary (optional)   |
+
+* The `overview` section is optional; if not present, the shell can redirect to a default (e.g. Documents).
+
+If the workspace ID is valid but the section segment is unknown, the shell should render a **workspace‑local “Section not found”** state, not the global 404. This lets the user switch to another section without leaving the workspace.
 
 ---
 
-## 4. Navigation layer (`NavProvider`)
+## 4. Navigation model (`NavProvider`)
 
-We implement a small navigation layer on top of the History API so that all navigation flows share the same code and blocker logic.
+`NavProvider` is our small custom router: it owns `location`, exposes navigation hooks, and coordinates blockers.
 
 ### 4.1 Core types
 
@@ -150,386 +152,473 @@ type LocationLike = {
 type NavigationKind = "push" | "replace" | "pop";
 
 type NavigationIntent = {
-  readonly to: string;        // target URL string (pathname + search + hash)
-  readonly location: LocationLike; // resolved URL parts
+  readonly to: string;             // full URL string (path + search + hash)
+  readonly location: LocationLike; // parsed target
   readonly kind: NavigationKind;
 };
 
 type NavigationBlocker = (intent: NavigationIntent) => boolean;
 ```
 
-* **`NavigationIntent`** captures a proposed navigation.
-* **`NavigationBlocker`** can veto it by returning `false`.
+* **`LocationLike`** – the minimal location object we expose to components.
+* **`NavigationIntent`** – “we are about to navigate to `to`”.
+* **`NavigationBlocker`** – returns `true` to allow navigation, `false` to cancel.
 
 ### 4.2 Provider behaviour
 
-`NavProvider` does three things:
+`NavProvider`:
 
-1. **Initial state**
+1. **Initialises location**
 
    * Reads `window.location` on mount.
-   * Normalises `pathname` and builds an initial `LocationLike`.
+   * Normalises the pathname (e.g. trims trailing `/`).
 
-2. **Back/forward (`popstate`)**
+2. **Handles back/forward (`popstate`)**
 
-   * Listens for the `popstate` event.
-   * On `popstate`, constructs a `NavigationIntent` with `kind: "pop"` and the new location.
-   * Runs *all registered blockers*:
+   * Subscribes to `window.onpopstate`.
+   * On event:
 
-     * If any returns `false`, it **restores the previous URL** via `pushState` and **does not** update internal location.
-     * Otherwise, it updates its `location` state and notifies consumers.
+     * Constructs a `NavigationIntent` with `kind: "pop"` and the new target.
+     * Runs all registered blockers:
 
-3. **Programmatic navigation**
+       * If **any** returns `false`:
 
-   * Exposes `navigate(to, { replace? })` via `useNavigate()` (see below).
-   * For programmatic navigations, it:
+         * Reverts to the previous URL via `history.pushState`.
+         * Does **not** update its internal `location` state.
+       * Otherwise, updates `location`.
 
-     1. Resolves the target URL with `new URL(to, window.location.origin)`.
-     2. Builds a `NavigationIntent` with `kind: "push"` or `"replace"`.
-     3. Runs blockers; if any returns `false`, abort.
-     4. Calls `history.pushState` or `history.replaceState`.
-     5. Dispatches its own `PopStateEvent` so the rest of the app treats it exactly like a natural navigation.
+3. **Handles programmatic navigation**
 
-This “re‑dispatch” pattern ensures that **all** navigation flows (back/forward buttons, links, programmatic navigate) pass through the same logic and blockers.
+   * Exposes `navigate(to, options?)` via `useNavigate()` (see below).
+   * For programmatic calls:
 
-### 4.3 Hooks
+     * Resolves `to` with `new URL(to, window.location.origin)`.
+     * Builds a `NavigationIntent` with `kind: "push"` or `"replace"`.
+     * Runs blockers.
+     * If allowed:
 
-`NavProvider` exposes three hooks:
+       * Calls `history.pushState` or `history.replaceState`.
+       * Dispatches a synthetic `PopStateEvent` so all navigation paths go through the same logic.
 
-#### `useLocation()`
+The result: back/forward, `Link` clicks, and `navigate()` all share one code path and one blocker mechanism.
 
-* Returns the current `LocationLike`:
+### 4.3 Reading the current location (`useLocation`)
 
-  * `{ pathname, search, hash }`
-* Updates whenever the provider’s location state changes.
-* Treat as read‑only; do not mutate the object.
+```ts
+const { pathname, search, hash } = useLocation();
+```
 
-#### `useNavigate()`
+* Returns the current `LocationLike`.
+* Updates whenever navigation is accepted.
+* Use this in any component that needs to:
+
+  * Match route segments (e.g. active nav items).
+  * Parse query parameters (`new URLSearchParams(search)`).
+
+**Do not** read `window.location` directly inside React components.
+
+### 4.4 Programmatic navigation (`useNavigate`)
 
 ```ts
 type NavigateOptions = { replace?: boolean };
+type Navigate = (to: string, options?: NavigateOptions) => void;
 
-type NavigateFn = (to: string, options?: NavigateOptions) => void;
+const navigate = useNavigate();
+navigate("/workspaces");
 ```
 
-* Returns a `navigate` function that:
+* `to` can be:
 
-  * Accepts any `to` that `new URL(to, origin)` understands:
+  * An absolute path (`/workspaces/123/runs`).
+  * A relative path (`../documents`).
+  * A query‑only change (`?view=members`).
 
-    * Absolute path (`/workspaces`),
-    * Relative path (`../jobs`),
-    * Same‑page query change (`?view=members`).
+* `replace: true` uses `history.replaceState`, substituting the current entry rather than pushing a new one.
 
-  * Uses `replace` when you don’t want to add a history entry (e.g. updating filters).
+**Guidelines:**
 
-* Always goes through the blocker mechanism.
+* Use `replace: true` when you’re **fixing** or **normalising** a URL (e.g. invalid `view` value → `view=general`).
+* Use the default (`replace: false`) when you’re taking a **logical step** (navigating to another screen).
 
-#### `useNavigationBlocker(blocker, when = true)`
+Never call `history.pushState` or `window.location` directly for internal navigation; always go through `navigate`.
 
-* Registers a **blocker** while `when` is truthy.
-* Typical use:
+### 4.5 Navigation blockers (`useNavigationBlocker`)
 
-  * Editors (e.g. Config Builder workbench) use it to prevent losing unsaved changes.
-  * Implementation pattern:
+Use navigation blockers when a view has **unsaved changes** that shouldn’t be lost silently.
 
-    * Allow navigation if `pathname` is unchanged (query/hash‑only changes).
-    * Otherwise, prompt the user (“Discard changes?”) and return `true/false` accordingly.
+Conceptual API:
 
-Blockers must be **fast** and side‑effect‑free except for user prompts.
+```ts
+useNavigationBlocker(blocker: NavigationBlocker, when: boolean);
+```
+
+Example pattern for the Config Builder editor:
+
+```ts
+const { pathname } = useLocation();
+
+useNavigationBlocker(
+  (intent) => {
+    if (!hasUnsavedChanges) return true;
+
+    const samePath = intent.location.pathname === pathname;
+    if (samePath) {
+      // allow query/hash changes even when dirty
+      return true;
+    }
+
+    // Show your own confirmation UI instead of window.confirm in the real code
+    return window.confirm("You have unsaved changes. Leave without saving?");
+  },
+  hasUnsavedChanges,
+);
+```
+
+Guidelines:
+
+* Blockers should be **local** to the component that owns the unsaved state.
+* They must be **fast** and side‑effect‑free apart from prompting the user.
+* Always treat query/hash‑only changes specially (usually allowed even when dirty).
 
 ---
 
-## 5. SPA link components
+## 5. SPA links (`Link` and `NavLink`)
 
-We wrap `<a>` to get SPA behaviour without losing native browser semantics.
+We wrap `<a>` to get SPA navigation while preserving browser semantics (right‑click, middle‑click, copy link).
 
 ### 5.1 `Link`
 
-**Goals:**
+Conceptual props:
 
-* Always render a real `<a href="...">` so:
+```ts
+interface LinkProps
+  extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
+  to: string;
+  replace?: boolean;
+}
+```
 
-  * Middle‑click, right‑click → “Open in new tab”, “Copy link” work.
-* Intercept plain left‑clicks and navigate via `navigate()`.
+Behaviour:
 
-**Behaviour:**
-
-* Props (simplified):
-
-  ```ts
-  interface LinkProps
-    extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
-    to: string;
-    replace?: boolean;
-  }
-  ```
+* Renders `<a href={to}>…</a>`.
 
 * On click:
 
-  1. Call any `onClick` handler.
-  2. If `event.defaultPrevented` → do nothing else.
-  3. If any modifier key is pressed (`meta`, `ctrl`, `shift`, `alt`) → let the browser handle it.
-  4. If it’s a plain left‑click:
+  1. Calls any `onClick` handler.
+  2. If `event.defaultPrevented`, does nothing else.
+  3. If a modifier key is pressed (`meta`, `ctrl`, `shift`, `alt`) or it’s not a left‑click:
+
+     * Let the browser handle it (new tab/window, context menu).
+  4. Otherwise:
 
      * `preventDefault()`.
      * Call `navigate(to, { replace })`.
 
-Use `Link` for all internal navigation within the app.
+Use `Link` for all **internal** navigations where you would otherwise use `<a>`.
 
 ### 5.2 `NavLink`
 
-`NavLink` extends `Link` with an **active** state:
+`NavLink` adds an “active” state on top of `Link`:
 
-* It computes `isActive` from the current `pathname` and the `to` prop:
+```ts
+const isActive = end
+  ? pathname === to
+  : pathname === to || pathname.startsWith(`${to}/`);
+```
 
-  ```ts
-  const isActive = end
-    ? pathname === to
-    : pathname === to || pathname.startsWith(`${to}/`);
-  ```
+Extra props:
 
-* API:
+* `end?: boolean` – if true, only exact path matches are active.
+* `className?: string | ((state: { isActive: boolean }) => string)`.
+* `children: ReactNode | ((state: { isActive: boolean }) => ReactNode)`.
 
-  ```ts
-  interface NavLinkProps extends LinkProps {
-    end?: boolean;
-    className?: string | ((args: { isActive: boolean }) => string);
-    children:
-      | React.ReactNode
-      | ((args: { isActive: boolean }) => React.ReactNode);
+Typical usage for left navigation inside the workspace shell:
+
+```tsx
+<NavLink
+  to={routes.workspaceRuns(workspaceId)}
+  className={({ isActive }) =>
+    clsx("nav-item", isActive && "nav-item--active")
   }
-  ```
+>
+  Runs
+</NavLink>
+```
 
-* Use cases:
-
-  * Left nav items in the workspace shell.
-  * Tabs that are backed by routes.
-
-This pattern allows conditional classes (`isActive` → bold, different background) without duplicating active logic in many places.
+Use `NavLink` anywhere you want route‑aware styling, e.g. nav menus, route‑backed tabs.
 
 ---
 
-## 6. Query strings and URL helpers
+## 6. URL state and search parameters
 
-We centralise low‑level query string operations in `shared/urlState.ts`.
+### 6.1 Why encode state in the URL
 
-### 6.1 Basic helpers
+We use query parameters for view‑level state that:
 
-#### `toURLSearchParams(init)`
+* Should survive refresh,
+* Should be shareable via URL, and
+* Does not need to stay private.
 
-Accepts a **SearchParamsInit** and returns a `URLSearchParams`. Supported inputs:
+Examples:
 
-* String (`"q=foo&status=processed"`),
-* `string[][]`,
-* `URLSearchParams`,
-* A record `{ [key: string]: string | string[] | null | undefined }`.
+* Documents filters and sort order.
+* Which settings tab is selected.
+* Config Builder layout (editor vs split vs zen, which pane is open).
 
-Null/undefined values are omitted.
+Plain local component state is fine for **purely ephemeral** UI (e.g. whether a dropdown is open). If a user might:
 
-#### `getParam(search, key)`
+* Bookmark it,
+* Share it with a teammate, or
+* Expect the browser back button to step through it,
 
-* `search`: raw `location.search` string (with or without leading `?`).
-* Returns the first value for `key` or `null` if not present.
+it should live in the URL.
 
-#### `setParams(url, patch)`
+### 6.2 Low‑level helpers
 
-* `url`: `URL` instance.
-* `patch`: same shape as `toURLSearchParams` init.
-* Returns a string of the updated `path + search + hash`.
-* Typically used internally by `useSearchParams`.
+Helpers in `shared/urlState` handle raw query string operations:
 
-### 6.2 Conventions
+* `toURLSearchParams(init)`
 
-* Treat query strings as **view state**, not data storage.
-* Keep parameter names short and stable (`q`, `view`, `status`, `sort`).
-* Avoid encoding large or sensitive payloads into the URL.
+  * Accepts strings, `URLSearchParams`, arrays, or plain objects.
+  * Produces a `URLSearchParams` instance.
 
----
+* `getParam(search, key)`
 
-## 7. `useSearchParams` hook
+  * Extracts a single value from a `search` string (with or without `?`).
 
-`useSearchParams()` is the standard way to read and update query parameters inside a screen.
+* `setParams(url, patch)`
 
-### 7.1 API
+  * Patches query parameters on a `URL` object and returns the new `path + search + hash`.
+
+You rarely need these directly; they power `useSearchParams()`.
+
+### 6.3 `useSearchParams()`
+
+API:
 
 ```ts
 const [params, setSearchParams] = useSearchParams();
-
-// params: URLSearchParams (current query string)
-// setSearchParams: (init, options?) => void
 ```
 
-Where:
+* `params` – current `URLSearchParams` for `location.search`.
+* `setSearchParams(init, options?)` – update query parameters:
 
-```ts
-type SearchParamsInit =
-  | string
-  | string[][]
-  | URLSearchParams
-  | Record<string, string | string[] | null | undefined>
-  | ((prev: URLSearchParams) => SearchParamsInit);
+  ```ts
+  type SearchParamsInit =
+    | string
+    | string[][]
+    | URLSearchParams
+    | Record<string, string | string[] | null | undefined>
+    | ((prev: URLSearchParams) => SearchParamsInit);
 
-interface SetSearchParamsOptions {
-  replace?: boolean; // default false
-}
-```
+  interface SetSearchParamsOptions {
+    replace?: boolean;
+  }
+  ```
 
-### 7.2 Behaviour
+When called:
 
-* Reads the current query string from `useLocation().search`.
-* `setSearchParams(init, options)`:
+1. We compute the new `URLSearchParams`.
+2. Build a full target URL with the current `pathname` and `hash`.
+3. Call `navigate(target, { replace })` under the hood.
 
-  1. Resolves `init` (if it’s a function, call it with the current `URLSearchParams`).
-  2. Uses `toURLSearchParams` to build a new `URLSearchParams`.
-  3. Combines it with the current `pathname` and `hash` to get a target URL.
-  4. Calls `navigate(target, { replace })` internally.
+**Usage patterns:**
 
-This ensures:
+* Patch in place:
 
-* The URL in the address bar always reflects the current query string.
-* Back/forward navigation works as expected when toggling filters or tabs.
+  ```ts
+  setSearchParams(prev => {
+    const params = new URLSearchParams(prev);
 
-### 7.3 Guidelines
+    if (nextStatus) params.set("status", nextStatus);
+    else params.delete("status");
 
-* Use `replace: true` for **ephemeral view tweaks** (filters, tabs) to avoid bloating history.
-* Use `replace: false` for **logical navigation steps** (wizard pages, major mode switches).
-* Always use this hook instead of manually writing to `window.location.search`.
+    return params;
+  }, { replace: true });
+  ```
 
----
+* Use `replace: true` when tweaking filters or tabs (back button should skip over tiny changes).
 
-## 8. `SearchParamsOverrideProvider`
+* Use `replace: false` if query changes represent a new logical step in a flow (less common).
 
-Most screens should use the real URL search parameters.
+### 6.4 `SearchParamsOverrideProvider`
 
-`SearchParamsOverrideProvider` exists for rare cases where a subtree needs **local query‑like state** that behaves like `useSearchParams` but shouldn’t touch the browser’s address bar.
+Most of the app should talk to the **real** URL. `SearchParamsOverrideProvider` exists for a few niche cases where a subtree needs **query‑like** state but must not mutate `window.location`.
 
-### 8.1 API (conceptual)
+Conceptually:
 
 ```ts
 interface SearchParamsOverrideValue {
   readonly params: URLSearchParams;
   readonly setSearchParams: (
-    init: SearchParamsInit,
+    init: SetSearchParamsInit,
     options?: SetSearchParamsOptions,
   ) => void;
 }
 ```
 
-* The provider injects a custom `params` and `setSearchParams`.
-* Inside the provider, `useSearchParams()` returns the override instead of reading from `location.search`.
+Within the provider:
 
-### 8.2 When to use
+* `useSearchParams()` returns the override instead of the global URL‑backed one.
 
-* Embedded dialogs or panels that reuse components expecting `useSearchParams`, but where URL changes would be confusing or undesirable.
-* Legacy flows that need to present “virtual” query state while you refactor them to real URLs.
+Use cases:
 
-### 8.3 Rules of thumb
+* Embedded flows that reuse components expecting `useSearchParams`, but where URL changes would be misleading.
+* Transitional/legacy flows where you cannot yet change the real URL model.
 
-* **Do not** wrap entire screens or sections with overrides—this defeats the purpose of shareable URLs.
-* Document each usage explicitly with a comment explaining why the override is necessary and temporary if possible.
+Rules:
+
+* **Do not** wrap whole sections or screens; that defeats deep‑linking.
+* Document each usage with a comment explaining why the override is needed.
+* Prefer migrating to real URL state over time.
 
 ---
 
-## 9. Conventional query parameters
+## 7. Canonical query parameters
 
-This section documents the main query parameters used across ADE Web. Exact semantics belong to the feature docs; here we record **names and scopes**.
+This section defines the expected query parameters per view. Having one place to look keeps naming consistent.
 
-### 9.1 Auth and setup
+### 7.1 Auth
 
-* `redirectTo`
+On `/login` and related auth routes:
 
-  * Used on `/login` and other auth routes.
-  * Must be a **relative, same‑origin path** (validated both client and server).
-  * Example: `/login?redirectTo=/workspaces`.
+* `redirectTo` (string):
 
-### 9.2 Workspace settings
+  * Target path after successful login.
+  * Must be a **relative**, same‑origin path.
+  * Examples: `/workspaces`, `/workspaces/123/documents`.
 
-* `view`
+The backend and frontend both validate `redirectTo` to avoid open redirects.
 
-  * Used on `/workspaces/:workspaceId/settings`.
-  * Values: `general`, `members`, `roles`.
-  * Invalid values are normalised back to `general`.
+### 7.2 Workspace settings
 
-### 9.3 Documents list
+On `/workspaces/:workspaceId/settings`:
+
+* `view` (string):
+
+  * Allowed values: `general`, `members`, `roles`.
+  * Controls which tab is active.
+
+Behaviour:
+
+* Invalid or missing `view` is normalised to `general` using `navigate(..., { replace: true })` to keep history clean.
+
+### 7.3 Documents
 
 On `/workspaces/:workspaceId/documents`:
 
-* `q` – free text search (name, source, etc.).
-* `status` – comma‑separated statuses (`uploaded,processing,failed`).
-* `sort` – sort key (e.g. `-created_at`, `-last_run_at`).
-* `view` – optional preset (`all`, `mine`, `team`, `attention`, `recent`).
+* `q` (string):
 
-These parameters should be considered part of the **shareable URL** for any documents view.
+  * Free‑text query (document name, source, etc.).
 
-### 9.4 Jobs list
+* `status` (string):
 
-On `/workspaces/:workspaceId/jobs` (if implemented with query parameters):
+  * Comma‑separated document statuses.
+  * Example: `status=uploaded,processed,failed`.
 
-* Typical parameters:
+* `sort` (string):
 
-  * `status` – job status filter.
-  * `config` – configuration id filter.
-  * `initiator` – user filter.
-  * `from`, `to` – date range filters.
+  * Sort key and direction.
+  * Examples: `sort=-created_at`, `sort=-last_run_at`.
 
-Even where these aren’t yet implemented, new filters should follow this pattern.
+* `view` (string):
 
-### 9.5 Config Builder workbench
+  * View preset.
+  * Suggested values: `all`, `mine`, `team`, `attention`, `recent`.
 
-The Config Builder workbench encodes layout and selection in query parameters. Full semantics live in `09-workbench-editor-and-scripting.md`, but the keys are:
+These parameters make documents views sharable:
 
-* `tab` – top‑level builder tab (currently `editor`).
-* `pane` – bottom panel tab (`console`, `validation`).
-* `console` – `open` or `closed`.
-* `view` – layout mode (`editor`, `split`, `zen`).
-* `file` – currently selected file id/path.
+> “Show me all failed documents in workspace X” should be a URL, not just a filter in memory.
 
-Key properties:
+### 7.4 Runs
 
-* Defaults are defined in a single place (`DEFAULT_CONFIG_BUILDER_SEARCH`).
-* We only write **non‑default** values back into the URL to keep query strings clean.
+On `/workspaces/:workspaceId/runs`:
 
----
+* `status` (string, optional):
 
-## 10. Patterns and anti‑patterns
+  * Comma‑separated run statuses.
 
-### 10.1 Patterns to follow
+* `config` (string, optional):
 
-* **Use route helpers**, not string concatenation:
+  * Filter by configuration ID.
 
-  * Prefer `routes.workspaceDocuments(workspaceId)` over `"/workspaces/" + workspaceId + "/documents"` sprinkled around.
+* `initiator` (string, optional):
 
-* **Always navigate via `navigate()` or `Link`/`NavLink`.**
+  * Filter by user id/email.
 
-  * Never write to `window.location` directly for internal navigation.
+* `from`, `to` (string, optional):
 
-* **Encode meaningful view state in the URL.**
+  * ISO‑8601 date boundaries for run start time.
 
-  * Filters, selected settings tab, config builder layout mode—anything users may want to bookmark or share.
+These names should be stable so that links from other parts of the UI (e.g. “View runs for this config”) can construct correct URLs.
 
-* **Use `replace: true` for “tuning”, `replace: false` for “steps”.**
+### 7.5 Config Builder (summary)
 
-  * Tuning = change filters, hide/show panels.
-  * Steps = navigate between logically distinct pages.
+On `/workspaces/:workspaceId/config-builder` with an active workbench:
 
-### 10.2 Anti‑patterns to avoid
+* `pane` (string):
 
-* **Directly reading or writing `window.location`** in screens or components.
+  * Bottom panel tab: `console` or `validation`.
 
-  * If you need `pathname`, `search`, or `hash`, use `useLocation()`.
+* `console` (string):
 
-* **Holding a second copy of “where we are” in React state.**
+  * Console visibility: `open` or `closed`.
 
-  * The URL + `useLocation()` is the single source of truth.
+* `view` (string):
 
-* **Using `SearchParamsOverrideProvider` as a general solution.**
+  * Layout mode: `editor`, `split`, `zen`.
 
-  * It’s an escape hatch. Prefer real URL state whenever possible.
+* `file` (string):
 
-* **Large or sensitive payloads in the query string.**
+  * ID/path of the active file in the workbench.
 
-  * URLs are logged, cached, and potentially shared. Keep them small and non‑sensitive.
+The Config Builder URL state is documented in detail in `09-workbench-editor-and-scripting.md`. The important rule here: we only write **non‑default** values back into the URL to keep it tidy.
 
 ---
 
-By adhering to these conventions, ADE Web’s routing layer remains small, predictable, and easy to reason about. New screens should plug into `ScreenSwitch`, use `NavProvider` primitives, and encode their view state via `useSearchParams` so deep links and navigation remain robust as the app evolves.
+## 8. Extending the route map and URL state
+
+When adding new routes or URL‑encoded state, follow this checklist:
+
+1. **Decide the owner and scope**
+
+   * Global (auth, setup, workspace directory) vs workspace‑scoped (`/workspaces/:workspaceId/...`).
+   * Which feature folder will own the screen (`features/workspace-shell/runs`, etc.).
+
+2. **Add a `Screen` component and hook it into `ScreenSwitch`**
+
+   * Create `SomethingScreen.tsx` under the appropriate feature folder.
+   * Add a branch in `ScreenSwitch` (for top‑level) or in `WorkspaceShellScreen` (for sections).
+
+3. **Define route helpers**
+
+   * Centralise URL construction in a `routes.ts` module:
+
+     ```ts
+     export const routes = {
+       workspaceDocuments: (id: string) =>
+         `/workspaces/${id}/documents`,
+       workspaceRuns: (id: string) =>
+         `/workspaces/${id}/runs`,
+       // ...
+     };
+     ```
+
+   * Use these helpers in `Link` / `NavLink` and navigation logic instead of ad‑hoc strings.
+
+4. **Register query parameters here**
+
+   * Add a row/section in §7 for new query parameters.
+   * Decide names and allowed values up front; avoid one‑off strings sprinkled in components.
+
+5. **Use `useSearchParams()` in your feature**
+
+   * Do not hand‑parse `location.search`.
+   * Prefer `setSearchParams(prev => ...)` with `{ replace: true }` for filters.
+
+6. **Avoid surprises**
+
+   * Don’t override history in unexpected ways.
+   * Don’t encode large or sensitive payloads in the URL.
+
+If we follow these patterns, the routing and URL‑state model stays small, obvious, and easy to extend as ADE Web grows.

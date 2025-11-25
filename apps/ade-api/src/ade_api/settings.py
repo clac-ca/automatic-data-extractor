@@ -18,7 +18,43 @@ from pydantic_settings.sources import DotEnvSettingsSource, EnvSettingsSource
 # ---- Defaults ---------------------------------------------------------------
 
 MODULE_DIR = Path(__file__).resolve().parent
-DEFAULT_API_ROOT = MODULE_DIR.parent.parent
+
+
+def _candidate_api_roots() -> list[Path]:
+    """Return candidate directories that may hold alembic.ini + migrations."""
+
+    candidates = [
+        MODULE_DIR.parent.parent,  # source layout: apps/ade-api
+        MODULE_DIR,  # packaged assets alongside the module (if bundled)
+        MODULE_DIR.parent,  # site-packages/ade_api
+        Path.cwd() / "apps" / "ade-api",  # common repo/docker working directory
+        Path.cwd(),  # final fallback to current working directory
+    ]
+
+    seen: set[Path] = set()
+    resolved: list[Path] = []
+    for path in candidates:
+        try:
+            absolute = path.expanduser().resolve()
+        except OSError:
+            continue
+        if absolute not in seen:
+            seen.add(absolute)
+            resolved.append(absolute)
+    return resolved
+
+
+def _detect_api_root() -> Path:
+    """Pick a sensible API root that actually contains Alembic assets."""
+
+    default_root = MODULE_DIR.parent.parent
+    for candidate in _candidate_api_roots():
+        if (candidate / "alembic.ini").exists() and (candidate / "migrations").exists():
+            return candidate
+    return default_root
+
+
+DEFAULT_API_ROOT = _detect_api_root()
 DEFAULT_WEB_DIR = MODULE_DIR / "web"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173"]
@@ -210,7 +246,7 @@ class Settings(BaseSettings):
     debug: bool = False
     dev_mode: bool = False
     app_name: str = "Automatic Data Extractor API"
-    app_version: str = "0.1.0"
+    app_version: str = "0.2.0"
     api_docs_enabled: bool = False
     docs_url: str = "/docs"
     redoc_url: str = "/redoc"
