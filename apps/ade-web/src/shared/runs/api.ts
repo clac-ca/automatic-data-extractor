@@ -15,6 +15,7 @@ export type RunCreateOptions = components["schemas"]["RunCreateOptions"];
 export interface RunStreamOptions {
   readonly dry_run?: boolean;
   readonly validate_only?: boolean;
+   readonly force_rebuild?: boolean;
   readonly input_document_id?: string;
   readonly input_sheet_name?: string;
   readonly input_sheet_names?: readonly string[];
