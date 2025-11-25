@@ -67,11 +67,6 @@ automatic-data-extractor/
 ├─ docs/                                    # Developer guides, HOWTOs, runbooks
 ├─ scripts/                                 # Repo-level helper scripts
 │
-├─ infra/                                   # Deployment infrastructure
-│  ├─ docker/
-│  │  └─ api.Dockerfile                     # Multi-stage build: web → api/src/ade_api/web/static
-│  ├─ compose.yaml                          # Local prod-style stack
-│  └─ k8s/                                  # Optional: Helm/manifests
 │
 ├─ .env.example                             # Example env vars
 ├─ .editorconfig
