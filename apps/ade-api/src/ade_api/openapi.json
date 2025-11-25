@@ -5554,6 +5554,142 @@
         }
       }
     },
+    "/api/v1/workspaces/{workspace_id}/runs": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Workspace Runs Endpoint",
+        "operationId": "list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "include_total",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Total"
+            }
+          },
+          {
+            "name": "input_document_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+                  "description": "ULID (26-character string)."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Input Document Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "queued",
+                        "running",
+                        "succeeded",
+                        "failed",
+                        "canceled"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Status"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/runs/{run_id}": {
       "get": {
         "tags": [
@@ -5888,588 +6024,6 @@
               "title": "Run Id"
             },
             "description": "Run identifier"
-          },
-          {
-            "name": "output_path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Output Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response"
-          },
-          "404": {
-            "description": "Output not found"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/workspaces/{workspace_id}/jobs": {
-      "post": {
-        "tags": [
-          "jobs"
-        ],
-        "summary": "Submit Job Endpoint",
-        "operationId": "submit_job_endpoint_api_v1_workspaces__workspace_id__jobs_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/JobSubmissionRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobRecord"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "tags": [
-          "jobs"
-        ],
-        "summary": "List Jobs Endpoint",
-        "operationId": "list_jobs_endpoint_api_v1_workspaces__workspace_id__jobs_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Status"
-            }
-          },
-          {
-            "name": "input_document_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Input Document Id"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 500,
-              "minimum": 1,
-              "default": 100,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/JobRecord"
-                  },
-                  "title": "Response List Jobs Endpoint Api V1 Workspaces  Workspace Id  Jobs Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}": {
-      "get": {
-        "tags": [
-          "jobs"
-        ],
-        "summary": "Read Job Endpoint",
-        "operationId": "read_job_endpoint_api_v1_workspaces__workspace_id__jobs__job_id__get",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "job_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Job identifier",
-              "title": "Job Id"
-            },
-            "description": "Job identifier"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobRecord"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/artifact": {
-      "get": {
-        "tags": [
-          "jobs"
-        ],
-        "summary": "Download Job Artifact",
-        "operationId": "download_job_artifact_api_v1_workspaces__workspace_id__jobs__job_id__artifact_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "job_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Job identifier",
-              "title": "Job Id"
-            },
-            "description": "Job identifier"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response"
-          },
-          "404": {
-            "description": "Artifact unavailable"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/logs": {
-      "get": {
-        "tags": [
-          "jobs"
-        ],
-        "summary": "Download Job Logs",
-        "operationId": "download_job_logs_api_v1_workspaces__workspace_id__jobs__job_id__logs_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "job_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Job identifier",
-              "title": "Job Id"
-            },
-            "description": "Job identifier"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response"
-          },
-          "404": {
-            "description": "Logs unavailable"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs": {
-      "get": {
-        "tags": [
-          "jobs"
-        ],
-        "summary": "List Job Outputs",
-        "operationId": "list_job_outputs_api_v1_workspaces__workspace_id__jobs__job_id__outputs_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "job_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Job identifier",
-              "title": "Job Id"
-            },
-            "description": "Job identifier"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobOutputListing"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Outputs unavailable"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs/{output_path}": {
-      "get": {
-        "tags": [
-          "jobs"
-        ],
-        "summary": "Download Job Output",
-        "operationId": "download_job_output_api_v1_workspaces__workspace_id__jobs__job_id__outputs__output_path__get",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "job_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Job identifier",
-              "title": "Job Id"
-            },
-            "description": "Job identifier"
           },
           {
             "name": "output_path",
@@ -7647,22 +7201,6 @@
       },
       "DocumentLastRun": {
         "properties": {
-          "job_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 26,
-                "minLength": 26,
-                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-                "description": "ULID (26-character string)."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Job Id",
-            "description": "Latest job ULID when the run came from a job."
-          },
           "run_id": {
             "anyOf": [
               {
@@ -7676,15 +7214,7 @@
             "description": "Latest run identifier when the execution was streamed directly."
           },
           "status": {
-            "type": "string",
-            "enum": [
-              "queued",
-              "running",
-              "succeeded",
-              "failed",
-              "cancelled"
-            ],
-            "title": "Status"
+            "$ref": "#/components/schemas/RunStatus"
           },
           "run_at": {
             "anyOf": [
@@ -7697,7 +7227,7 @@
               }
             ],
             "title": "Run At",
-            "description": "Timestamp for the latest job or run event (completion/start)."
+            "description": "Timestamp for the latest run event (completion/start)."
           },
           "message": {
             "anyOf": [
@@ -7851,7 +7381,7 @@
                 "type": "null"
               }
             ],
-            "description": "Latest job execution associated with the document when available."
+            "description": "Latest run execution associated with the document when available."
           }
         },
         "additionalProperties": false,
@@ -8438,427 +7968,6 @@
         ],
         "title": "HealthComponentStatus",
         "description": "Represents the health of an individual system component."
-      },
-      "JobConfigVersion": {
-        "properties": {
-          "config_version_id": {
-            "type": "string",
-            "title": "Config Version Id"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title"
-          },
-          "semver": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Semver"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "config_version_id"
-        ],
-        "title": "JobConfigVersion",
-        "description": "Descriptor for the configuration version used by a job."
-      },
-      "JobInputDocument": {
-        "properties": {
-          "document_id": {
-            "type": "string",
-            "maxLength": 26,
-            "minLength": 26,
-            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Document Id",
-            "description": "ULID (26-character string)."
-          },
-          "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "original_filename": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Original Filename"
-          },
-          "content_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Content Type"
-          },
-          "byte_size": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Byte Size"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "document_id"
-        ],
-        "title": "JobInputDocument",
-        "description": "Minimal representation of a document attached to a job."
-      },
-      "JobOutputFile": {
-        "properties": {
-          "path": {
-            "type": "string",
-            "title": "Path"
-          },
-          "byte_size": {
-            "type": "integer",
-            "title": "Byte Size"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "path",
-          "byte_size"
-        ],
-        "title": "JobOutputFile",
-        "description": "Single file emitted by a job output directory."
-      },
-      "JobOutputListing": {
-        "properties": {
-          "files": {
-            "items": {
-              "$ref": "#/components/schemas/JobOutputFile"
-            },
-            "type": "array",
-            "title": "Files"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "JobOutputListing",
-        "description": "Collection of files produced by a job run."
-      },
-      "JobRecord": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "maxLength": 26,
-            "minLength": 26,
-            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Id",
-            "description": "ULID (26-character string)."
-          },
-          "workspace_id": {
-            "type": "string",
-            "maxLength": 26,
-            "minLength": 26,
-            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Workspace Id",
-            "description": "ULID (26-character string)."
-          },
-          "config_id": {
-            "type": "string",
-            "maxLength": 26,
-            "minLength": 26,
-            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Config Id",
-            "description": "ULID (26-character string)."
-          },
-          "config_version_id": {
-            "type": "string",
-            "title": "Config Version Id"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "queued",
-              "running",
-              "succeeded",
-              "failed",
-              "cancelled"
-            ],
-            "title": "Status"
-          },
-          "queued_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Queued At"
-          },
-          "started_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Started At"
-          },
-          "completed_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completed At"
-          },
-          "cancelled_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cancelled At"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Updated At"
-          },
-          "input_documents": {
-            "items": {
-              "$ref": "#/components/schemas/JobInputDocument"
-            },
-            "type": "array",
-            "title": "Input Documents"
-          },
-          "config_title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Config Title"
-          },
-          "config_version": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/JobConfigVersion"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "submitted_by_user": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/JobSubmittedBy"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "submitted_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Submitted By"
-          },
-          "error_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Message"
-          },
-          "summary": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Summary"
-          },
-          "artifact_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Artifact Uri"
-          },
-          "logs_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Logs Uri"
-          },
-          "output_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Output Uri"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "workspace_id",
-          "config_id",
-          "config_version_id",
-          "status",
-          "queued_at",
-          "updated_at"
-        ],
-        "title": "JobRecord",
-        "description": "API representation of a persisted job."
-      },
-      "JobSubmissionRequest": {
-        "properties": {
-          "input_document_id": {
-            "type": "string",
-            "maxLength": 26,
-            "minLength": 26,
-            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Input Document Id",
-            "description": "Document ULID to process."
-          },
-          "config_version_id": {
-            "type": "string",
-            "title": "Config Version Id",
-            "description": "Configuration version identifier."
-          },
-          "options": {
-            "$ref": "#/components/schemas/RunCreateOptions"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "input_document_id",
-          "config_version_id"
-        ],
-        "title": "JobSubmissionRequest",
-        "description": "Payload accepted when enqueuing a new job."
-      },
-      "JobSubmittedBy": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "maxLength": 26,
-            "minLength": 26,
-            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Id",
-            "description": "ULID (26-character string)."
-          },
-          "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          },
-          "email": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Email"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id"
-        ],
-        "title": "JobSubmittedBy",
-        "description": "Subset of user fields for the submitting actor."
       },
       "LoginRequest": {
         "properties": {
@@ -9659,6 +8768,55 @@
         "title": "RunOutputListing",
         "description": "Collection of files produced by a streaming run."
       },
+      "RunPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RunResource"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "has_next": {
+            "type": "boolean",
+            "title": "Has Next"
+          },
+          "has_previous": {
+            "type": "boolean",
+            "title": "Has Previous"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "has_next",
+          "has_previous"
+        ],
+        "title": "RunPage",
+        "description": "Paginated collection of ``RunResource`` items."
+      },
       "RunResource": {
         "properties": {
           "id": {
@@ -9675,6 +8833,28 @@
             "type": "string",
             "title": "Config Id"
           },
+          "config_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Version Id"
+          },
+          "submitted_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted By User Id"
+          },
           "input_document_id": {
             "anyOf": [
               {
@@ -9686,6 +8866,15 @@
             ],
             "title": "Input Document Id",
             "description": "Document ULID staged for this run when provided."
+          },
+          "input_documents": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Input Documents",
+            "description": "Descriptors for all input documents staged for the run."
           },
           "input_sheet_name": {
             "anyOf": [
@@ -9726,6 +8915,33 @@
             ],
             "title": "Status"
           },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt",
+            "default": 1
+          },
+          "retry_of_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Of Run Id"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          },
           "created": {
             "type": "integer",
             "title": "Created"
@@ -9752,6 +8968,17 @@
             ],
             "title": "Finished"
           },
+          "canceled": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canceled"
+          },
           "exit_code": {
             "anyOf": [
               {
@@ -9776,6 +9003,39 @@
             },
             "type": "array",
             "title": "Processed Files"
+          },
+          "artifact_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Uri"
+          },
+          "output_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Uri"
+          },
+          "logs_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logs Uri"
           },
           "artifact_path": {
             "anyOf": [
@@ -9832,6 +9092,18 @@
         ],
         "title": "RunResource",
         "description": "API representation of a persisted ADE run."
+      },
+      "RunStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "canceled"
+        ],
+        "title": "RunStatus",
+        "description": "Lifecycle states for ADE runs."
       },
       "SafeModeStatus": {
         "properties": {

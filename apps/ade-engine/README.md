@@ -30,7 +30,7 @@ engine.
 Use these names everywhere in code comments, telemetry, docs, and filenames.
 Avoid synonyms like “input file” (use **source file**), “output file” (say
 **output workbook** or explicitly refer to artifact/events), or mixing “field”
-and “column”. Backend notions like job/workspace/tenant remain outside the
+and “column”. Backend notions like run request/workspace/tenant remain outside the
 engine and only show up as opaque metadata if the caller passes them.
 
 ---
@@ -62,7 +62,7 @@ In production, the ADE API:
 - and calls the engine with **file paths** (source / output / logs).
 
 From the engine’s perspective, it just runs synchronously inside an isolated environment
-with `ade_config` installed; **it is run-scoped only—job IDs and workspace concepts belong to the backend**.
+with `ade_config` installed; **it is run-scoped only—run IDs and workspace concepts belong to the backend**.
 
 ---
 
@@ -92,12 +92,12 @@ The deployment model is:
   - Worker activates that venv and invokes the engine with explicit paths:
 
     ```bash
-    # Typical worker invocation from the ADE API (one run, often dispatched from a backend job queue)
+    # Typical worker invocation from the ADE API (one run, often dispatched from a backend run queue)
     /path/to/.venv/<config_id>/<build_id>/bin/python \
       -m ade_engine \
-      --input /data/jobs/<job_id>/input/input.xlsx \
-      --output-dir /data/jobs/<job_id>/output \
-      --logs-dir /data/jobs/<job_id>/logs
+      --input /data/runs/<run_id>/input/input.xlsx \
+      --output-dir /data/runs/<run_id>/output \
+      --logs-dir /data/runs/<run_id>/logs
     ```
 
   - The engine:
@@ -106,22 +106,22 @@ The deployment model is:
     - runs the pipeline once for that call,
     - writes the normalized workbook (e.g., `normalized.xlsx`), `artifact.json`, `events.ndjson` to the given output/logs dirs.
 
-The **engine does not know or care about backend job IDs**. It only needs:
+The **engine does not know or care about backend run IDs**. It only needs:
 
 - the config to use (`config_package`, `manifest_path`),
 - one or more **source files**,
 - where to write the output workbook(s) and logs.
 
-The ADE API is responsible for mapping those paths back to any job record in its own database.
+The ADE API is responsible for mapping those paths back to any run record in its own database.
 
 The engine has **no knowledge** of:
 
 - the ADE API,
 - workspaces, config package registry, or queues,
-- backend jobs or their IDs,
+- backend run requests or their IDs,
 - how many threads/processes are running.
 
-It is a pure “source files → normalized workbook + logs” component. The backend may choose to associate one backend job with one or many runs; that mapping stays outside the engine.
+It is a pure “source files → normalized workbook + logs” component. The backend may choose to associate one backend run request with one or many runs; that mapping stays outside the engine.
 
 ---
 
@@ -355,21 +355,21 @@ Safe mode (e.g., `ADE_SAFE_MODE=1`) is handled by the outer app: it may choose n
 
 In the simplest case, the ADE API:
 
-* resolves the run’s primary **source file** (often inside a backend job folder, e.g. `/data/jobs/<job_id>/input/input.xlsx`),
-* chooses output/logs dirs (e.g. `/data/jobs/<job_id>/output` and `/data/jobs/<job_id>/logs`),
+* resolves the run’s primary **source file** (often inside a backend run folder, e.g. `/data/runs/<run_id>/input/input.xlsx`),
+* chooses output/logs dirs (e.g. `/data/runs/<run_id>/output` and `/data/runs/<run_id>/logs`),
 * and calls:
 
 ```python
 RunRequest(
     config_package="ade_config",
-    input_files=[Path("/data/jobs/<job_id>/input/input.xlsx")],
-    output_dir=Path("/data/jobs/<job_id>/output"),
-    logs_dir=Path("/data/jobs/<job_id>/logs"),
-    metadata={"job_id": "<job_id>", "config_id": "<config_id>"},
+    input_files=[Path("/data/runs/<run_id>/input/input.xlsx")],
+    output_dir=Path("/data/runs/<run_id>/output"),
+    logs_dir=Path("/data/runs/<run_id>/logs"),
+    metadata={"run_id": "<run_id>", "config_id": "<config_id>"},
 )
 ```
 
-The engine doesn’t know what `job_id` means; if provided, metadata is treated as opaque and only echoed in telemetry for correlation.
+The engine doesn’t know what `run_id` means; if provided, metadata is treated as opaque and only echoed in telemetry for correlation.
 
 **RunError** and **RunResult**
 
@@ -459,8 +459,8 @@ Guidelines:
 `_error_to_run_error(exc, stage)`) so `RunResult`, artifact, and telemetry all
 share the same `code`/`message`/`stage`.
 
-The ADE backend may include a `job_id` inside `metadata`, but the engine just
-treats it as opaque metadata. The engine is always run-scoped; any job/run
+The ADE backend may include a `run_request_id` inside `metadata`, but the engine just
+treats it as opaque metadata. The engine is always run-scoped; any run request/run
 mapping is a backend concern.
 
 Because all per‑run state lives on `RunContext` and not on the `Engine` instance
@@ -700,7 +700,7 @@ Under the hood, `Engine.run()`:
 The engine is single‑run and synchronous: **one call → one pipeline run**. Concurrency
 across runs is handled by the ADE API / worker framework, which:
 
-* looks up the backend record (job/task/request) associated with the run,
+* looks up the backend record (run request/task/request) associated with the run,
 * resolves source/output/log paths,
 * then calls `Engine.run()` (or the CLI) in the appropriate venv.
 
@@ -713,7 +713,7 @@ A typical integration in the ADE backend looks like:
 2. Backend:
 
    * ensures a venv exists for `<config_id>/<build_id>` with `ade_engine` + `ade_config` installed,
-   * resolves the document path and creates a per-run working folder (often nested inside a backend job directory) with `input/`, `output/`, `logs/`.
+   * resolves the document path and creates a per-run working folder (under the backend runs directory) with `input/`, `output/`, `logs/`.
 
 3. Backend enqueues a worker task that:
 
@@ -725,17 +725,17 @@ A typical integration in the ADE backend looks like:
 
      result = run(
          config_package="ade_config",
-         input_files=[Path(f"/data/jobs/{job_id}/input/input.xlsx")],
-         output_dir=Path(f"/data/jobs/{job_id}/output"),
-         logs_dir=Path(f"/data/jobs/{job_id}/logs"),
-         metadata={"job_id": job_id, "config_id": config_id},
+        input_files=[Path(f"/data/runs/{run_id}/input/input.xlsx")],
+        output_dir=Path(f"/data/runs/{run_id}/output"),
+        logs_dir=Path(f"/data/runs/{run_id}/logs"),
+        metadata={"run_id": run_id, "config_id": config_id},
      )
      ```
 
 4. Backend stores `RunResult` info and/or parses `artifact.json` and `events.ndjson`
-   to update backend job status, reports, etc.
+   to update backend run status, reports, etc.
 
-The engine has **no idea** that a backend “job” exists; it only sees file paths and metadata.
+The engine has **no idea** that a backend run record exists; it only sees file paths and metadata.
 
 ---
 
@@ -1018,8 +1018,8 @@ The backing JSON shape is simple and self‑describing; structurally it might lo
 ```
 
 Because every worker writes its own `artifact.json` for its run
-(often in a per‑run logs folder living under a backend job directory),
-the ADE API can safely run many runs in parallel across backend jobs without the engine
+(often in a per‑run logs folder living under a backend run request directory),
+the ADE API can safely run many runs in parallel across backend run requests without the engine
 needing any shared global state.
 
 Opaque metadata passed via `RunRequest.metadata` is **only** echoed in telemetry envelopes for correlation; it is not stored in `artifact.json`.
@@ -1041,7 +1041,7 @@ The envelope roughly looks like:
   "run_id": "run-uuid-or-correlation-id",
   "timestamp": "2024-01-01T12:34:56Z",
   "metadata": {
-    "job_id": "optional-job-id-from-backend",
+    "run_request_id": "optional-run request-id-from-backend",
     "config_id": "config-abc",
     "workspace_id": "ws-123"
   },
@@ -1261,9 +1261,9 @@ ade-engine run --manifest-path ./config/manifest.json --input ./input.xlsx --out
 
 # Run the engine on a single file (typical worker call, paths chosen by backend)
 ade-engine run \
-  --input ./data/jobs/<job_id>/input/input.xlsx \
-  --output-dir ./data/jobs/<job_id>/output \
-  --logs-dir ./data/jobs/<job_id>/logs \
+  --input ./data/runs/<run_id>/input/input.xlsx \
+  --output-dir ./data/runs/<run_id>/output \
+  --logs-dir ./data/runs/<run_id>/logs \
   --config-package ade_config \
   --manifest-path ./data/config_packages/my-config/manifest.json
 ```
@@ -1285,7 +1285,7 @@ The CLI prints a JSON summary mirroring `RunResult`:
 }
 ```
 
-The ADE backend uses this pattern to run asynchronously: the API enqueues a job or task,
+The ADE backend uses this pattern to run asynchronously: the API enqueues a run request or task,
 a worker process/thread in the correct venv executes the CLI for a single run,
 the engine does its work and writes outputs/logs, and the API reads
 `artifact.json`/`events.ndjson` to drive UIs and reports.
@@ -1299,7 +1299,7 @@ This architecture is intentionally:
 * **Config‑centric** – ADE engine is a generic spreadsheet pipeline,
   driven entirely by `ade_config` (manifest + scripts).
 * **Path‑based, run‑scoped** – the engine deals in **files and folders** only.
-  Higher‑level orchestration (jobs, queues, retries) lives in the ADE API.
+  Higher‑level orchestration (run requests, queues, retries) lives in the ADE API.
 * **Predictable** – All public entry points and file names follow standard patterns:
 
   * `Engine.run`, `RunRequest`/`RunResult`

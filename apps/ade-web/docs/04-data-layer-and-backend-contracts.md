@@ -12,7 +12,7 @@ It is the implementation‑level companion to:
 - the domain language in `01-domain-model-and-naming.md`, and
 - the UX overview in the top‑level `README.md`.
 
-All terminology here uses **run** as the primary execution unit. Backend routes that currently use `/jobs` are treated as “workspace run ledger” endpoints.
+All terminology here uses **run** as the primary execution unit. Backend routes that currently use `/runs` are treated as “workspace run ledger” endpoints.
 
 ---
 
@@ -164,8 +164,8 @@ Patterns:
 
 * Runs:
 
-  * `['workspace', workspaceId, 'runs', params]`     // lists from `/jobs` endpoints
-  * `['workspace', workspaceId, 'run', runId]`       // detail via `/jobs/{job_id}`
+  * `['workspace', workspaceId, 'runs', params]`     // lists from `/runs` endpoints
+  * `['workspace', workspaceId, 'run', runId]`       // detail via `/runs/{run_id}`
   * `['run', runId]`                                 // detail via `/runs/{run_id}` if used directly
   * `['run', runId, 'outputs']`
 
@@ -422,20 +422,20 @@ Mutations:
 
 There are two groups of endpoints:
 
-* Workspace‑scoped ledger endpoints, currently under `/jobs` in the API.
+* Workspace‑scoped ledger endpoints, currently under `/runs` in the API.
 * Global run endpoints, under `/runs`.
 
 In the frontend we treat both as variants of the same **Run** domain concept.
 
-**Key routes: workspace run ledger (under `/jobs`)**
+**Key routes: workspace run ledger (under `/runs`)**
 
-* `GET  /api/v1/workspaces/{workspace_id}/jobs` – list runs for workspace.
-* `POST /api/v1/workspaces/{workspace_id}/jobs` – submit new run.
-* `GET  /api/v1/workspaces/{workspace_id}/jobs/{job_id}` – read run summary.
-* `GET  /api/v1/workspaces/{workspace_id}/jobs/{job_id}/artifact` – download artifact.
-* `GET  /api/v1/workspaces/{workspace_id}/jobs/{job_id}/logs` – download logs file.
-* `GET  /api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs` – list outputs.
-* `GET  /api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs/{output_path}` – download output.
+* `GET  /api/v1/workspaces/{workspace_id}/runs` – list runs for workspace.
+* `POST /api/v1/workspaces/{workspace_id}/runs` – submit new run.
+* `GET  /api/v1/workspaces/{workspace_id}/runs/{run_id}` – read run summary.
+* `GET  /api/v1/workspaces/{workspace_id}/runs/{run_id}/artifact` – download artifact.
+* `GET  /api/v1/workspaces/{workspace_id}/runs/{run_id}/logs` – download logs file.
+* `GET  /api/v1/workspaces/{workspace_id}/runs/{run_id}/outputs` – list outputs.
+* `GET  /api/v1/workspaces/{workspace_id}/runs/{run_id}/outputs/{output_path}` – download output.
 
 **Key routes: config‑scoped & global run endpoints**
 
@@ -453,7 +453,7 @@ Workspace‑level:
 
 * `listWorkspaceRuns(workspaceId, params)`
 * `createWorkspaceRun(workspaceId, payload)`
-* `readWorkspaceRun(workspaceId, runId)`           // wraps `/jobs/{job_id}`
+* `readWorkspaceRun(workspaceId, runId)`           // wraps `/runs/{run_id}`
 * `listWorkspaceRunOutputs(workspaceId, runId)`
 * `downloadWorkspaceRunOutput(workspaceId, runId, outputPath)`
 * `downloadWorkspaceRunArtifact(workspaceId, runId)`
@@ -650,7 +650,7 @@ function toRunSummary(apiRun: ApiRun): RunSummary { /* ... */ }
 This gives us:
 
 * A stable surface for screens, even if backend fields change.
-* A clear place to rename things (e.g. `job_id` → `runId` in the UI).
+* A clear place to rename things (e.g. `run_id` → `runId` in the UI).
 
 ---
 
@@ -792,7 +792,7 @@ To keep the data layer predictable:
 * **Run‑centric terminology**
 
   * All execution units are “runs” in frontend types, hooks, and screens.
-  * API module mapping handles backend field names like `job_id` → `runId`.
+  * API module mapping handles backend field names like `run_id` → `runId`.
 
 * **Backend‑agnostic**
 

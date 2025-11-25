@@ -22,8 +22,8 @@ This catalog mirrors the registry that will live in the database. Each permissio
 | `Workspace.Documents.ReadWrite` | workspace | Manage documents | Upload, update, delete, or restore workspace documents. |
 | `Workspace.Configs.Read` | workspace | Read configs | View configuration packages, drafts, and published versions. |
 | `Workspace.Configs.ReadWrite` | workspace | Manage configs | Create, edit, publish, revert, or delete configuration packages. |
-| `Workspace.Jobs.Read` | workspace | Read jobs | Inspect job history and status. |
-| `Workspace.Jobs.ReadWrite` | workspace | Manage jobs | Submit, cancel, retry, or reprioritise jobs within the workspace. |
+| `Workspace.Runs.Read` | workspace | Read runs | Inspect run history and status. |
+| `Workspace.Runs.ReadWrite` | workspace | Manage runs | Submit, cancel, retry, or reprioritise runs within the workspace. |
 
 ## Admin UI sketch
 

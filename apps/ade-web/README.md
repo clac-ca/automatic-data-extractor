@@ -69,7 +69,7 @@ Inside a workspace, ADE Web uses a reusable **workspace shell**:
   - “Switch workspace” affordance.
   - Primary sections:
     - Documents
-    - Jobs
+    - Runs
     - Config Builder
     - Settings
   - Collapse/expand state is persisted **per workspace** (each workspace remembers nav compactness).
@@ -78,7 +78,7 @@ Inside a workspace, ADE Web uses a reusable **workspace shell**:
   - Workspace name and optional environment label (e.g. “Production”, “Staging”).
   - Context‑aware **search** (via `GlobalSearchField`):
     - On **Documents**, it acts as a document‑scoped search.
-    - Elsewhere, it can search within the workspace (sections, configs, jobs).
+    - Elsewhere, it can search within the workspace (sections, configs, runs).
   - A profile dropdown (`ProfileDropdown`) with user display name/email and actions like “Sign out”.
 
 - **Mobile navigation**:
@@ -104,7 +104,7 @@ Certain routes (especially the **Config Builder** workbench) can temporarily hid
 
 A **workspace** is the primary unit of organisation and isolation:
 
-- Owns **documents**, **jobs/runs**, **config packages**, and **membership/roles**.
+- Owns **documents**, **runs/runs**, **config packages**, and **membership/roles**.
 - Has a human‑readable **name** and a stable **slug/ID** that appear in the UI and URLs.
 - Has **settings** (name, slug, environment labels, safe mode, etc.).
 - Is governed by **workspace‑scoped RBAC**.
@@ -130,9 +130,9 @@ Per workspace:
   - **Content type** and **size** (used to show “Excel spreadsheet • 2.3 MB”).
   - **Status**:
     - `uploaded` – file is stored but not yet processed.
-    - `processing` – currently being processed by a job.
-    - `processed` – last job completed successfully.
-    - `failed` – last job ended in error.
+    - `processing` – currently being processed by a run.
+    - `processed` – last run completed successfully.
+    - `failed` – last run ended in error.
     - `archived` – kept for history, not actively used.
   - **Timestamps** (created/uploaded at).
   - **Uploader** (user who uploaded the file).
@@ -144,7 +144,7 @@ Per workspace:
 Documents are treated as **immutable inputs**:
 
 - Re‑uploading a revised file results in a **new document**.
-- Jobs always refer to the original uploaded file by ID.
+- Runs always refer to the original uploaded file by ID.
 
 Multi‑sheet spreadsheets can expose **worksheet metadata**:
 
@@ -154,14 +154,14 @@ Multi‑sheet spreadsheets can expose **worksheet metadata**:
 
 ---
 
-### Runs (jobs)
+### Runs (runs)
 
-A **run** (or **job**) is a single execution of ADE against a set of inputs with a particular config version.
+A **run** (or **run**) is a single execution of ADE against a set of inputs with a particular config version.
 
 Key ideas:
 
-- Jobs are **workspace‑scoped** and usually tied to at least one document.
-- Each job includes:
+- Runs are **workspace‑scoped** and usually tied to at least one document.
+- Each run includes:
   - **Status**: `queued`, `running`, `succeeded`, `failed`, `cancelled`.
   - **Timestamps**:
     - Queued / created,
@@ -190,7 +190,7 @@ For a given document:
   - Preferred subset of sheet names.
 - These preferences are stored in local, workspace‑scoped storage and reapplied the next time you run that document.
 
-The backend exposes **streaming NDJSON APIs** for job events:
+The backend exposes **streaming NDJSON APIs** for run events:
 
 - ADE Web uses these for:
   - Live status updates,
@@ -326,7 +326,7 @@ Permissions govern actions such as:
 - Creating/updating **workspace roles**.
 - Toggling **safe mode**.
 - Editing and activating **config versions**.
-- Running **jobs** and **test runs**.
+- Running **runs** and **test runs**.
 - Viewing **logs** and **telemetry**.
 
 Backend responsibilities:
@@ -369,7 +369,7 @@ Pathnames are **normalised** to avoid trailing‑slash variants (`/foo/` → `/f
 Inside `/workspaces/:workspaceId`, the first path segment after the workspace ID selects the section:
 
 - `/documents` – Documents list and document run UI.
-- `/jobs` – Jobs ledger (workspace‑wide run history).
+- `/runs` – Runs ledger (workspace‑wide run history).
 - `/config-builder` – Config overview and Config Builder workbench.
 - `/settings` – Workspace settings (tabs controlled by `view` query param).
 - `/overview` – Optional overview/summary surface.
@@ -657,7 +657,7 @@ To make ADE config editing more discoverable, the Monaco editor is augmented wit
 
   * `row_detectors/…` → row detectors.
   * `column_detectors/…` → column detectors / transforms / validators.
-  * `hooks/…` → job hooks.
+  * `hooks/…` → run hooks.
 * **Features**:
 
   * **Hover**:
@@ -677,7 +677,7 @@ The shared script API is expressed as `AdeFunctionSpec` records. Conceptually im
   ```python
   def detect_*(
       *,
-      job,
+      run,
       state,
       row_index: int,
       row_values: list,
@@ -695,7 +695,7 @@ The shared script API is expressed as `AdeFunctionSpec` records. Conceptually im
   # Detector
   def detect_*(
       *,
-      job,
+      run,
       state,
       field_name: str,
       field_meta: dict,
@@ -712,7 +712,7 @@ The shared script API is expressed as `AdeFunctionSpec` records. Conceptually im
   # Transform
   def transform(
       *,
-      job,
+      run,
       state,
       row_index: int,
       field_name: str,
@@ -726,7 +726,7 @@ The shared script API is expressed as `AdeFunctionSpec` records. Conceptually im
   # Validator
   def validate(
       *,
-      job,
+      run,
       state,
       row_index: int,
       field_name: str,
@@ -742,9 +742,9 @@ The shared script API is expressed as `AdeFunctionSpec` records. Conceptually im
 * **Hooks** (`hooks/*.py`):
 
   ```python
-  def on_job_start(
+  def on_run_start(
       *,
-      job_id: str,
+      run_id: str,
       manifest: dict,
       env: dict | None = None,
       artifact: dict | None = None,
@@ -772,7 +772,7 @@ The shared script API is expressed as `AdeFunctionSpec` records. Conceptually im
   ):
       ...
 
-  def on_job_end(
+  def on_run_end(
       *,
       artifact: dict | None = None,
       logger=None,
@@ -1096,7 +1096,7 @@ export function getWorkbenchReturnPathStorageKey(workspaceId: string) {
 
 Pattern:
 
-1. When navigating **into** the workbench from a section (e.g. Documents/Jobs/Settings), store the current URL.
+1. When navigating **into** the workbench from a section (e.g. Documents/Runs/Settings), store the current URL.
 2. When closing or exiting the workbench, navigate back to the stored path and clear it.
 
 This keeps “back to where I was” behaviour predictable.
@@ -1114,7 +1114,7 @@ High‑level behaviours of the main workspace sections:
   * Trigger runs against a selected config version.
   * Show per‑document last run status and quick actions.
 
-* **Jobs**
+* **Runs**
 
   * Workspace‑wide ledger of runs.
   * Filter by status, config, date range, and initiator.
@@ -1218,7 +1218,7 @@ At a high level, the backend must provide:
   * Download endpoint for raw document.
   * Optional document sheets metadata (`name`, index, `is_active`).
 
-* **Jobs / runs**
+* **Runs / runs**
 
   * Create run (document + config version + options).
   * NDJSON streaming endpoint for run events:
@@ -1479,13 +1479,13 @@ These components ensure consistent layout, accessibility, and styling across ADE
 
 ADE Web is the operational and configuration console for Automatic Data Extractor:
 
-* **Analysts** use it to upload documents, run extractions, inspect jobs, and download outputs.
+* **Analysts** use it to upload documents, run extractions, inspect runs, and download outputs.
 * **Workspace owners / engineers** use it to evolve Python‑based config packages, validate and test changes, and safely roll out new versions using the Config Builder workbench.
 * **Admins** use it to manage workspaces, members, roles, SSO hints, and safe mode.
 
 This README captures:
 
-* The **conceptual model** (workspaces, documents, jobs, configs, safe mode, roles),
+* The **conceptual model** (workspaces, documents, runs, configs, safe mode, roles),
 * The **navigation and URL‑state conventions** (custom history, SPA links, search params, deep linking),
 * The **Config Builder workbench model** (file tree, tabs, ADE script helpers, console, validation, inspector, theme, window states),
 * The **backend contracts** ADE Web expects,

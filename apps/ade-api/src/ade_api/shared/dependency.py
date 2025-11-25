@@ -36,7 +36,6 @@ if TYPE_CHECKING:
     from ade_api.features.configs.service import ConfigurationsService
     from ade_api.features.documents.service import DocumentsService
     from ade_api.features.health.service import HealthService
-    from ade_api.features.jobs.service import JobsService
     from ade_api.features.runs.service import RunsService
     from ade_api.features.system_settings.service import SafeModeService, SystemSettingsService
     from ade_api.features.users.service import UsersService
@@ -153,17 +152,6 @@ def get_runs_service(
         supervisor=_RUN_SUPERVISOR,
         safe_mode_service=get_safe_mode_service(session=session, settings=settings),
     )
-
-
-def get_jobs_service(
-    session: SessionDep,
-    settings: SettingsDep,
-) -> JobsService:
-    """Return a jobs service configured for the current request."""
-
-    from ade_api.features.jobs.service import JobsService
-
-    return JobsService(session=session, settings=settings)
 
 
 _bearer_scheme = HTTPBearer(auto_error=False)

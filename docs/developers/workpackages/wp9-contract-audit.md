@@ -83,9 +83,9 @@ Key inventory:
 | `BuildEnsureRequest` | `BaseModel` (`extra="forbid"`) | Should inherit `BaseSchema` so defaults consistent. |
 | `BuildEnsureResponse` | `BaseModel` | Implements custom `model_dump` to exclude `None`; unify via base + `exclude_none`. |
 
-### Jobs (`apps/ade-api/src/ade_api/features/jobs/schemas.py`)
+### Runs (`apps/ade-api/src/ade_api/features/runs/schemas.py`)
 
-Single `JobPlaceholder(BaseModel)` with `id: str`. Needs real DTO or removal.
+Single `RunPlaceholder(BaseModel)` with `id: str`. Needs real DTO or removal.
 
 ### Shared pagination (`apps/ade-api/src/ade_api/shared/pagination.py`)
 
@@ -205,7 +205,7 @@ Pending refactor steps:
 
 ## 10. Next Steps Checklist
 
-- [ ] Update `BaseSchema` config + migrate all DTOs (configs, builds, jobs, pagination) to inherit from it.
+- [ ] Update `BaseSchema` config + migrate all DTOs (configs, builds, runs, pagination) to inherit from it.
 - [ ] Introduce shared `ULIDStr` + update every `*_id` field.
 - [ ] Define canonical enums + apply to ORM columns and schemas.
 - [ ] Make every `*Update` schema partial (notably `RoleUpdate`).
@@ -223,7 +223,7 @@ This document should evolve alongside the implementation to track which gaps hav
 ## 11. Implementation Plan (draft)
 
 1. **Core primitives first**
-   - Update `BaseSchema` defaults (extra forbid, populate by name, from_attributes, `exclude_none=True`) and migrate `Page`, `PageParams`, `FilterBase`, configs/builds/jobs schemas to inherit from it.
+   - Update `BaseSchema` defaults (extra forbid, populate by name, from_attributes, `exclude_none=True`) and migrate `Page`, `PageParams`, `FilterBase`, configs/builds/runs schemas to inherit from it.
    - Create `apps/ade-api/src/ade_api/shared/core/types.py` (or extend `shared/core/ids.py`) with shared `ULID_PATTERN` + `ULIDStr` and begin replacing raw `str` annotations across schemas, filters, services.
 2. **Enum + ORM alignment**
    - Define `ConfigurationStatus`, `ScopeType`, `PrincipalType`, and move SQLAlchemy columns to use `Enum(..., native_enum=False)` referencing the Python `Enum`.

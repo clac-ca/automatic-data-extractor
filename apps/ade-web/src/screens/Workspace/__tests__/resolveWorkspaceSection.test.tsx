@@ -7,7 +7,7 @@ vi.mock("@screens/Workspace/sections/Documents", () => ({ default: () => <div>do
 vi.mock("@screens/Workspace/sections/Documents/components/DocumentDetail", () => ({
   default: () => <div>document detail</div>,
 }));
-vi.mock("@screens/Workspace/sections/Jobs", () => ({ default: () => <div>jobs</div> }));
+vi.mock("@screens/Workspace/sections/Runs", () => ({ default: () => <div>runs</div> }));
 vi.mock("@screens/Workspace/sections/ConfigBuilder", () => ({ default: () => <div>configs</div> }));
 vi.mock("@screens/Workspace/sections/ConfigBuilder/detail", () => ({
   default: () => <div>config detail</div>,
@@ -61,5 +61,10 @@ describe("resolveWorkspaceSection", () => {
       kind: "redirect",
       to: "/workspaces/ws-1/config-builder/cfg-2?tab=detail#focus",
     });
+  });
+
+  it("returns the runs section for the runs slug", () => {
+    const result = resolveWorkspaceSection(workspaceId, ["runs"], "", "");
+    expect(result).toMatchObject({ kind: "content", key: "runs" });
   });
 });

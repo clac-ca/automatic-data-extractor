@@ -341,16 +341,16 @@ Keep short inline status notes as you go.
 
 **Goal:** Prepare integration tasks for backend and frontend now that the engine runtime is complete.
 
-- [x] Update `apps/ade-api` run orchestration to invoke the new engine CLI/`Engine.run` API, wiring artifact/events paths into job records. (CLI args + run summary wired)
+- [x] Update `apps/ade-api` run orchestration to invoke the new engine CLI/`Engine.run` API, wiring artifact/events paths into run records. (CLI args + run summary wired)
 - [x] Extend `apps/ade-api` schemas and responses to surface `artifact.json` and telemetry event locations returned by the engine.
 - [x] Teach `apps/ade-api` build/venv flow to bundle the new end-to-end config fixtures or equivalent sample configs for sandbox runs. *(Added a sandbox template mirroring the engine E2E fixtures for quick smoke tests.)*
 - [x] Update `apps/ade-web` screens to display run artifacts and telemetry summaries, including mapped/unmapped columns and validation issues.
 - [x] Add frontend API bindings for any new backend fields (artifact/events paths) and render download links in the run detail UI.
 - [x] Document the available config templates (default + sandbox) and provide a sandbox quickstart in the backend docs/README once the UI surfaces them.
-- [x] Evaluate and refactor the `apps/ade-api` job worker path to reuse the new engine orchestration (reduce duplication with `RunsService` now that engine integration is complete).
-  - Refactored `JobsService.execute_job` to consume `RunsService` run stream frames directly, update job state from the completion event (including artifact/log/output URIs), and only fall back to run reconciliation when the stream is unavailable.
+- [x] Evaluate and refactor the `apps/ade-api` run worker path to reuse the new engine orchestration (reduce duplication with `RunsService` now that engine integration is complete).
+  - Refactored `RunsService.execute_run` to consume `RunsService` run stream frames directly, update run state from the completion event (including artifact/log/output URIs), and only fall back to run reconciliation when the stream is unavailable.
 - [x] Tidy `apps/ade-api` run-service imports so logging is initialized alongside the other stdlib dependencies used for the module logger.
-- [x] Ensure the Documents screen uses the job routes to load artifacts, telemetry, and outputs for the latest job so engine results surface in the drawer.
+- [x] Ensure the Documents screen uses the run routes to load artifacts, telemetry, and outputs for the latest run so engine results surface in the drawer.
 
 > Note: The default `ade-api` config template now uses the v1 manifest shape (relative module paths) and the engine exports the telemetry event JSON schema for `ade-web` imports.
 

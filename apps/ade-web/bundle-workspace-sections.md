@@ -8,7 +8,7 @@
 # - apps/ade-web/src/main.tsx
 # - apps/ade-web/src/screens/Workspace/sections/Documents/components/DocumentDetail.tsx
 # - apps/ade-web/src/screens/Workspace/sections/Documents/index.tsx - route.tsx — Workspace Documents (polished, compact UI)
-# - apps/ade-web/src/screens/Workspace/sections/Jobs/index.tsx
+# - apps/ade-web/src/screens/Workspace/sections/Runs/index.tsx
 # - apps/ade-web/src/screens/Workspace/sections/Overview/index.tsx
 # - apps/ade-web/src/screens/Workspace/sections/Settings/components/SafeModeControls.tsx
 # - apps/ade-web/src/screens/Workspace/sections/Settings/components/WorkspaceMembersSection.tsx
@@ -85,7 +85,7 @@ Inside a workspace (`/workspaces/:workspaceId/...`) ADE Web uses a reusable **wo
   - “Switch workspace” affordance.
   - Primary sections:
     - Documents
-    - Jobs
+    - Runs
     - Config Builder
     - Settings
   - Collapse/expand state is persisted **per workspace** (so each workspace “remembers” whether you prefer a compact nav).
@@ -94,7 +94,7 @@ Inside a workspace (`/workspaces/:workspaceId/...`) ADE Web uses a reusable **wo
   - Workspace name and optional environment label (e.g. “Production”, “Staging”).
   - Context‑aware **search**:
     - On the **Documents** section, it acts as a document‑scoped search.
-    - Elsewhere, it can search within the workspace (sections, configs, jobs).
+    - Elsewhere, it can search within the workspace (sections, configs, runs).
   - A profile dropdown (user’s display name/email, sign‑out, etc.).
 
 - **Mobile navigation**:
@@ -120,7 +120,7 @@ Certain routes (especially the **Config Builder** workbench) can temporarily hid
 
 A **workspace** is the primary unit of organisation and isolation:
 
-- Owns **documents**, **jobs/runs**, **config packages**, and **membership/roles**.
+- Owns **documents**, **runs/runs**, **config packages**, and **membership/roles**.
 - Has a human‑readable **name** and a stable **slug/ID** that appear in the UI and URLs.
 - Has **settings** (name, slug, environment labels, safe mode, etc.).
 - Is governed by **workspace‑scoped RBAC**.
@@ -146,9 +146,9 @@ Per workspace:
   - **Content type** and **size** (used to show “Excel spreadsheet • 2.3 MB”).
   - **Status**:
     - `uploaded` – file is stored but not yet processed.
-    - `processing` – currently being processed by a job.
-    - `processed` – last job completed successfully.
-    - `failed` – last job ended in error.
+    - `processing` – currently being processed by a run.
+    - `processed` – last run completed successfully.
+    - `failed` – last run ended in error.
     - `archived` – kept for history, not actively used.
   - **Timestamps** (created/uploaded at).
   - **Uploader** (user who uploaded the file).
@@ -160,7 +160,7 @@ Per workspace:
 Documents are treated as **immutable inputs**:
 
 - Re‑uploading a revised file results in a **new document**.
-- Jobs always refer to the original uploaded file by ID.
+- Runs always refer to the original uploaded file by ID.
 
 Multi‑sheet spreadsheets can expose **worksheet metadata**:
 
@@ -170,14 +170,14 @@ Multi‑sheet spreadsheets can expose **worksheet metadata**:
 
 ---
 
-### Runs (jobs)
+### Runs (runs)
 
-A **run** (or **job**) is a single execution of ADE against a set of inputs with a particular config version.
+A **run** (or **run**) is a single execution of ADE against a set of inputs with a particular config version.
 
 Key ideas:
 
-- Jobs are **workspace‑scoped** and usually tied to at least one document.
-- Each job includes:
+- Runs are **workspace‑scoped** and usually tied to at least one document.
+- Each run includes:
   - **Status**: `queued`, `running`, `succeeded`, `failed`, `cancelled`.
   - **Timestamps**:
     - Queued / created,
@@ -206,7 +206,7 @@ For a given document:
   - Preferred subset of sheet names.
 - These preferences are stored in local, workspace‑scoped storage and reapplied the next time you run that document.
 
-The backend exposes **streaming NDJSON APIs** for job events:
+The backend exposes **streaming NDJSON APIs** for run events:
 
 - ADE Web uses these for:
   - Live status updates,
@@ -347,7 +347,7 @@ Permissions govern actions such as:
 - Creating/updating **workspace roles**.
 - Toggling **safe mode**.
 - Editing and activating **config versions**.
-- Running **jobs** and **test runs**.
+- Running **runs** and **test runs**.
 - Viewing **logs** and **telemetry**.
 
 Backend responsibilities:
@@ -391,7 +391,7 @@ Paths are **normalised** to avoid trailing‑slash variants (`/foo/` becomes `/f
 Within `/workspaces/:workspaceId`, the first path segment after the workspace ID selects the section:
 
 - `/documents` – Documents list and document run UI.
-- `/jobs` – Jobs ledger.
+- `/runs/api` – Runs ledger.
 - `/config-builder` – Config overview and Builder routes:
   - e.g. `/config-builder/:configId` for a specific config,
   - nested routes for the editor workbench.
@@ -1293,7 +1293,7 @@ Code reinforces:
   * Keep the tab selection in sync with the URL by calling `setSearchParams` with `{ replace: true }`.
 * Tabs lazily mount their content so inactive tabs do not incur unnecessary data fetching.
 
-### Workbench return path (Settings ↔ Config Builder / Documents / Jobs)
+### Workbench return path (Settings ↔ Config Builder / Documents / Runs)
 
 To keep flows smooth between operational views and config editing, a helper key is used:
 
@@ -1305,7 +1305,7 @@ export function getWorkbenchReturnPathStorageKey(workspaceId: string) {
 
 When entering the workbench from any workspace section:
 
-* The app can store the originating URL (e.g. filtered Documents view, Jobs query, or Settings tab).
+* The app can store the originating URL (e.g. filtered Documents view, Runs query, or Settings tab).
 
 When exiting the workbench:
 
@@ -1493,13 +1493,13 @@ This enables:
 
 ADE Web is the operational and configuration console for Automatic Data Extractor:
 
-* **Analysts** use it to upload documents, run extractions, inspect jobs, and download outputs.
+* **Analysts** use it to upload documents, run extractions, inspect runs, and download outputs.
 * **Workspace owners / engineers** use it to evolve Python‑based config packages, validate and test changes, and safely roll out new versions.
 * **Admins** use it to manage workspaces, members, roles, SSO hints, and safe mode.
 
 This README captures:
 
-* The **conceptual model** (workspaces, documents, jobs, configs, safe mode, roles),
+* The **conceptual model** (workspaces, documents, runs, configs, safe mode, roles),
 * The **navigation and URL‑state conventions** (custom history, search params, deep linking),
 * The **workbench model** for config packages (file tree, tabs, layout, editor theme, unsaved changes, build & run integration),
 * And the **backend contracts** ADE Web expects.
@@ -2129,14 +2129,14 @@ import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
 import {
-  fetchJob,
-  fetchJobOutputs,
-  fetchJobArtifact,
-  fetchJobTelemetry,
-  type JobOutputListing,
-  type JobRecord,
-  type JobStatus,
-} from "@shared/jobs";
+  fetchRun,
+  fetchRunOutputs,
+  fetchRunArtifact,
+  fetchRunTelemetry,
+  type RunOutputListing,
+  type RunResource,
+  type RunStatus,
+} from "@shared/runs/api";
 import { ArtifactSummary, TelemetrySummary } from "@shared/runs/RunInsights";
 
 import { Alert } from "@ui/Alert";
@@ -2147,7 +2147,7 @@ import { Button } from "@ui/Button";
 
 type DocumentStatus = components["schemas"]["DocumentStatus"];
 type DocumentRecord = components["schemas"]["DocumentOut"];
-type JobSubmissionPayload = components["schemas"]["JobSubmissionRequest"];
+type RunSubmissionPayload = components["schemas"]["RunSubmissionRequest"];
 type DocumentListPage = components["schemas"]["DocumentPage"];
 
 type ListDocumentsQuery = {
@@ -2445,7 +2445,7 @@ export default function WorkspaceDocumentsRoute() {
     [],
   );
 
-  const renderJobStatus = useCallback((documentItem: DocumentRecord) => <DocumentJobStatus document={documentItem} />, []);
+  const renderRunStatus = useCallback((documentItem: DocumentRecord) => <DocumentRunStatus document={documentItem} />, []);
 
   const handleOpenFilePicker = useCallback(() => {
     fileInputRef.current?.click();
@@ -2632,7 +2632,7 @@ export default function WorkspaceDocumentsRoute() {
                   onDownloadDocument={handleDownloadDocument}
                   onRunDocument={handleOpenRunDrawer}
                   downloadingId={downloadingId}
-                  renderJobStatus={renderJobStatus}
+                  renderRunStatus={renderRunStatus}
                   safeModeEnabled={safeModeEnabled}
                   safeModeMessage={safeModeDetail}
                   safeModeLoading={safeModeLoading}
@@ -2761,17 +2761,17 @@ function useDeleteWorkspaceDocuments(workspaceId: string) {
   });
 }
 
-function useSubmitJob(workspaceId: string) {
+function useSubmitRun(workspaceId: string) {
   const queryClient = useQueryClient();
 
-  return useMutation<JobRecord, Error, JobSubmissionPayload>({
+  return useMutation<RunResource, Error, RunSubmissionPayload>({
     mutationFn: async (payload) => {
-      const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/jobs", {
+      const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/runs/api", {
         params: { path: { workspace_id: workspaceId } },
         body: payload,
       });
-      if (!data) throw new Error("Expected job payload.");
-      return data as JobRecord;
+      if (!data) throw new Error("Expected run payload.");
+      return data as RunResource;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
@@ -3149,7 +3149,7 @@ interface DocumentsTableProps {
   readonly onDownloadDocument?: (document: DocumentRecord) => void;
   readonly onRunDocument?: (document: DocumentRecord) => void;
   readonly downloadingId?: string | null;
-  readonly renderJobStatus?: (document: DocumentRecord) => ReactNode;
+  readonly renderRunStatus?: (document: DocumentRecord) => ReactNode;
   readonly safeModeEnabled?: boolean;
   readonly safeModeMessage?: string;
   readonly safeModeLoading?: boolean;
@@ -3167,7 +3167,7 @@ function DocumentsTable({
   onDownloadDocument,
   onRunDocument,
   downloadingId = null,
-  renderJobStatus,
+  renderRunStatus,
   safeModeEnabled = false,
   safeModeMessage,
   safeModeLoading = false,
@@ -3257,7 +3257,7 @@ function DocumentsTable({
                   </span>
                 </td>
                 <td className="px-2 py-2 align-middle">
-                  {renderJobStatus ? renderJobStatus(document) : null}
+                  {renderRunStatus ? renderRunStatus(document) : null}
                 </td>
                 <td className="px-2 py-2 align-middle">
                   <span
@@ -3457,7 +3457,7 @@ interface RunExtractionDrawerProps {
   readonly workspaceId: string;
   readonly documentRecord: DocumentRecord | null;
   readonly onClose: () => void;
-  readonly onRunSuccess?: (job: JobRecord) => void;
+  readonly onRunSuccess?: (run: RunResource) => void;
   readonly onRunError?: (message: string) => void;
   readonly safeModeEnabled?: boolean;
   readonly safeModeMessage?: string;
@@ -3518,7 +3518,7 @@ interface DrawerContentProps {
   readonly workspaceId: string;
   readonly documentRecord: DocumentRecord;
   readonly onClose: () => void;
-  readonly onRunSuccess?: (job: JobRecord) => void;
+  readonly onRunSuccess?: (run: RunResource) => void;
   readonly onRunError?: (message: string) => void;
   readonly safeModeEnabled?: boolean;
   readonly safeModeMessage?: string;
@@ -3541,18 +3541,18 @@ function RunExtractionDrawerContent({
   const configsQuery = useConfigsQuery({ workspaceId });
   const [selectedConfigId, setSelectedConfigId] = useState<string>("");
   const [selectedVersionId, setSelectedVersionId] = useState<string>("");
-  const submitJob = useSubmitJob(workspaceId);
+  const submitRun = useSubmitRun(workspaceId);
   const { preferences, setPreferences } = useDocumentRunPreferences(
     workspaceId,
     documentRecord.id,
   );
-  const [activeJobId, setActiveJobId] = useState<string | null>(
-    documentRecord.last_run?.job_id ?? null,
+  const [activeRunId, setActiveRunId] = useState<string | null>(
+    documentRecord.last_run?.run_id ?? null,
   );
 
   useEffect(() => {
-    setActiveJobId(documentRecord.last_run?.job_id ?? null);
-  }, [documentRecord.id, documentRecord.last_run?.job_id]);
+    setActiveRunId(documentRecord.last_run?.run_id ?? null);
+  }, [documentRecord.id, documentRecord.last_run?.run_id]);
 
   const allConfigs = useMemo(() => configsQuery.data?.items ?? [], [configsQuery.data]);
   const selectableConfigs = useMemo(
@@ -3647,13 +3647,13 @@ function RunExtractionDrawerContent({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const safeModeDetail = safeModeMessage ?? DEFAULT_SAFE_MODE_MESSAGE;
 
-  const jobQuery = useQuery({
-    queryKey: ["job", workspaceId, activeJobId],
+  const runQuery = useQuery({
+    queryKey: ["run", workspaceId, activeRunId],
     queryFn: ({ signal }) =>
-      activeJobId
-        ? fetchJob(workspaceId, activeJobId, signal)
-        : Promise.reject(new Error("No job selected")),
-    enabled: Boolean(activeJobId),
+      activeRunId
+        ? fetchRun(workspaceId, activeRunId, signal)
+        : Promise.reject(new Error("No run selected")),
+    enabled: Boolean(activeRunId),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "running" || status === "queued" ? 2000 : false;
@@ -3661,38 +3661,38 @@ function RunExtractionDrawerContent({
   });
 
   const outputsQuery = useQuery({
-    queryKey: ["job-outputs", workspaceId, activeJobId],
+    queryKey: ["run-outputs", workspaceId, activeRunId],
     queryFn: ({ signal }) =>
-      activeJobId
-        ? fetchJobOutputs(workspaceId, activeJobId, signal)
-        : Promise.reject(new Error("No job selected")),
+      activeRunId
+        ? fetchRunOutputs(workspaceId, activeRunId, signal)
+        : Promise.reject(new Error("No run selected")),
     enabled:
-      Boolean(activeJobId) &&
-      (jobQuery.data?.status === "succeeded" || jobQuery.data?.status === "failed"),
+      Boolean(activeRunId) &&
+      (runQuery.data?.status === "succeeded" || runQuery.data?.status === "failed"),
     staleTime: 5_000,
   });
 
   const artifactQuery = useQuery({
-    queryKey: ["job-artifact", workspaceId, activeJobId],
+    queryKey: ["run-artifact", workspaceId, activeRunId],
     queryFn: ({ signal }) =>
-      activeJobId
-        ? fetchJobArtifact(workspaceId, activeJobId, signal)
-        : Promise.reject(new Error("No job selected")),
+      activeRunId
+        ? fetchRunArtifact(workspaceId, activeRunId, signal)
+        : Promise.reject(new Error("No run selected")),
     enabled:
-      Boolean(activeJobId) &&
-      (jobQuery.data?.status === "succeeded" || jobQuery.data?.status === "failed"),
+      Boolean(activeRunId) &&
+      (runQuery.data?.status === "succeeded" || runQuery.data?.status === "failed"),
     staleTime: 5_000,
   });
 
   const telemetryQuery = useQuery({
-    queryKey: ["job-telemetry", workspaceId, activeJobId],
+    queryKey: ["run-telemetry", workspaceId, activeRunId],
     queryFn: ({ signal }) =>
-      activeJobId
-        ? fetchJobTelemetry(workspaceId, activeJobId, signal)
-        : Promise.reject(new Error("No job selected")),
+      activeRunId
+        ? fetchRunTelemetry(workspaceId, activeRunId, signal)
+        : Promise.reject(new Error("No run selected")),
     enabled:
-      Boolean(activeJobId) &&
-      (jobQuery.data?.status === "succeeded" || jobQuery.data?.status === "failed"),
+      Boolean(activeRunId) &&
+      (runQuery.data?.status === "succeeded" || runQuery.data?.status === "failed"),
     staleTime: 5_000,
   });
 
@@ -3744,13 +3744,13 @@ function RunExtractionDrawerContent({
     );
   }, []);
 
-  const currentJob = jobQuery.data ?? null;
-  const jobStatus = currentJob?.status ?? null;
-  const jobRunning = jobStatus === "running" || jobStatus === "queued";
-  const downloadBase = activeJobId
-    ? `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/jobs/${encodeURIComponent(activeJobId)}`
+  const currentRun = runQuery.data ?? null;
+  const runStatus = currentRun?.status ?? null;
+  const runRunning = runStatus === "running" || runStatus === "queued";
+  const downloadBase = activeRunId
+    ? `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/runs/api/${encodeURIComponent(activeRunId)}`
     : null;
-  const outputFiles: JobOutputListing["files"] = outputsQuery.data?.files ?? [];
+  const outputFiles: RunOutputListing["files"] = outputsQuery.data?.files ?? [];
   const artifact = artifactQuery.data ?? null;
   const telemetryEvents = telemetryQuery.data ?? [];
 
@@ -3798,8 +3798,8 @@ function RunExtractionDrawerContent({
 
   const hasConfigurations = selectableConfigs.length > 0;
   const runDisabled =
-    submitJob.isPending ||
-    jobRunning ||
+    submitRun.isPending ||
+    runRunning ||
     safeModeLoading ||
     safeModeEnabled ||
     !hasConfigurations ||
@@ -3819,30 +3819,30 @@ function RunExtractionDrawerContent({
       return;
     }
     setErrorMessage(null);
-    setActiveJobId(null);
+    setActiveRunId(null);
     const sheetList = normalizedSheetSelection;
     const runOptions =
       sheetList.length > 0
         ? { dry_run: false, validate_only: false, input_sheet_names: sheetList }
         : { dry_run: false, validate_only: false };
-    submitJob.mutate(
+    submitRun.mutate(
       {
         input_document_id: documentRecord.id,
         config_version_id: selectedVersionId,
         options: runOptions,
       },
       {
-        onSuccess: (job) => {
+        onSuccess: (run) => {
           setPreferences({
             configId: selectedConfig.config_id,
             configVersionId: selectedVersionId,
             sheetNames: sheetList.length ? sheetList : null,
           });
-          onRunSuccess?.(job);
-          setActiveJobId(job.id);
+          onRunSuccess?.(run);
+          setActiveRunId(run.id);
         },
         onError: (error) => {
-          const message = error instanceof Error ? error.message : "Unable to submit extraction job.";
+          const message = error instanceof Error ? error.message : "Unable to submit extraction run.";
           setErrorMessage(message);
           onRunError?.(message);
         },
@@ -3871,9 +3871,9 @@ function RunExtractionDrawerContent({
         <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <h2 id={titleId} className="text-lg font-semibold text-slate-900">Run extraction</h2>
-            <p id={descriptionId} className="text-xs text-slate-500">Prepare and submit a processing job.</p>
+            <p id={descriptionId} className="text-xs text-slate-500">Prepare and submit a processing run.</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={submitJob.isPending}>
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={submitRun.isPending}>
             Close
           </Button>
         </header>
@@ -3912,7 +3912,7 @@ function RunExtractionDrawerContent({
                     setSelectedConfigId(value);
                     setSelectedVersionId("");
                   }}
-                  disabled={submitJob.isPending}
+                  disabled={submitRun.isPending}
                 >
                   <option value="">Select configuration</option>
                   {selectableConfigs.map((config) => (
@@ -3936,7 +3936,7 @@ function RunExtractionDrawerContent({
                     <Select
                       value={selectedVersionId}
                       onChange={(event) => setSelectedVersionId(event.target.value)}
-                      disabled={submitJob.isPending}
+                      disabled={submitRun.isPending}
                     >
                       <option value="">Select version</option>
                       {versionOptions.map((version) => (
@@ -3979,7 +3979,7 @@ function RunExtractionDrawerContent({
                       variant="ghost"
                       size="sm"
                       onClick={() => setSelectedSheets([])}
-                      disabled={submitJob.isPending}
+                      disabled={submitRun.isPending}
                     >
                       Use all worksheets
                     </Button>
@@ -4003,7 +4003,7 @@ function RunExtractionDrawerContent({
                 variant="ghost"
                 size="sm"
                 onClick={() => setSelectedSheets([])}
-                disabled={submitJob.isPending}
+                disabled={submitRun.isPending}
               >
                 Use all worksheets
                   </Button>
@@ -4039,20 +4039,20 @@ function RunExtractionDrawerContent({
             )}
           </section>
 
-          {activeJobId ? (
+          {activeRunId ? (
             <section className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Latest run</p>
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <p className="font-semibold text-slate-800" title={activeJobId}>
-                      Job {activeJobId}
+                    <p className="font-semibold text-slate-800" title={activeRunId}>
+                      Run {activeRunId}
                     </p>
                     <p className="text-xs text-slate-500">
-                      Status: {jobStatus ?? "loading…"}
+                      Status: {runStatus ?? "loading…"}
                     </p>
                   </div>
-                  {jobRunning ? <SpinnerIcon className="h-4 w-4 text-slate-500" /> : null}
+                  {runRunning ? <SpinnerIcon className="h-4 w-4 text-slate-500" /> : null}
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -4060,11 +4060,11 @@ function RunExtractionDrawerContent({
                     href={downloadBase ? `${downloadBase}/artifact` : undefined}
                     className={clsx(
                       "inline-flex items-center rounded border px-3 py-1 text-xs font-semibold transition",
-                      downloadBase && !jobRunning
+                      downloadBase && !runRunning
                         ? "border-slate-300 text-slate-700 hover:bg-slate-100"
                         : "cursor-not-allowed border-slate-200 text-slate-400",
                     )}
-                    aria-disabled={jobRunning || !downloadBase}
+                    aria-disabled={runRunning || !downloadBase}
                   >
                     Download artifact
                   </a>
@@ -4136,13 +4136,13 @@ function RunExtractionDrawerContent({
         </div>
 
         <footer className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={submitJob.isPending}>
+          <Button type="button" variant="ghost" onClick={onClose} disabled={submitRun.isPending}>
             Cancel
           </Button>
           <Button
             type="button"
             onClick={handleSubmit}
-            isLoading={submitJob.isPending}
+            isLoading={submitRun.isPending}
             disabled={runDisabled}
             title={runButtonTitle}
           >
@@ -4314,9 +4314,9 @@ function EmptyState({ onUploadClick }: { onUploadClick: () => void }) {
   );
 }
 
-/* ------------------------------ Job status chip ------------------------------ */
+/* ------------------------------ Run status chip ------------------------------ */
 
-function DocumentJobStatus({ document }: { document: DocumentRecord }) {
+function DocumentRunStatus({ document }: { document: DocumentRecord }) {
   const lastRun = document.last_run;
   if (!lastRun) return <span className="text-xs text-slate-400">No runs yet</span>;
 
@@ -4325,10 +4325,10 @@ function DocumentJobStatus({ document }: { document: DocumentRecord }) {
       <span
         className={clsx(
           "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
-          jobStatusBadgeClass(lastRun.status as JobStatus),
+          runStatusBadgeClass(lastRun.status as RunStatus),
         )}
       >
-        {formatJobStatus(lastRun.status as JobStatus)}
+        {formatRunStatus(lastRun.status as RunStatus)}
         {lastRun.run_at ? (
           <span className="ml-1 font-normal text-slate-500">{formatRelativeTime(lastRun.run_at)}</span>
         ) : null}
@@ -4338,7 +4338,7 @@ function DocumentJobStatus({ document }: { document: DocumentRecord }) {
   );
 }
 
-function jobStatusBadgeClass(status: JobStatus) {
+function runStatusBadgeClass(status: RunStatus) {
   switch (status) {
     case "succeeded":
       return "bg-success-100 text-success-700";
@@ -4351,7 +4351,7 @@ function jobStatusBadgeClass(status: JobStatus) {
   }
 }
 
-function formatJobStatus(status: JobStatus) {
+function formatRunStatus(status: RunStatus) {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
@@ -4402,7 +4402,7 @@ function getFocusableElements(container: HTMLElement) {
 }
 ```
 
-# apps/ade-web/src/screens/Workspace/sections/Jobs/index.tsx
+# apps/ade-web/src/screens/Workspace/sections/Runs/index.tsx
 ```tsx
 import { useMemo, useState } from "react";
 import clsx from "clsx";
@@ -4410,13 +4410,13 @@ import clsx from "clsx";
 import { useInfiniteQuery } from "@tanstack/react-query";
 
 import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
-import { fetchWorkspaceJobs, workspaceJobsKeys, type JobRecord, type JobStatus } from "@shared/jobs";
+import { fetchWorkspaceRuns, workspaceRunsKeys, type RunResource, type RunStatus } from "@shared/runs/api";
 
 import { Button } from "@ui/Button";
 import { Select } from "@ui/Select";
 import { PageState } from "@ui/PageState";
 
-const JOB_STATUS_LABELS: Record<JobStatus, string> = {
+const JOB_STATUS_LABELS: Record<RunStatus, string> = {
   succeeded: "Succeeded",
   failed: "Failed",
   running: "Running",
@@ -4424,7 +4424,7 @@ const JOB_STATUS_LABELS: Record<JobStatus, string> = {
   cancelled: "Cancelled",
 };
 
-const JOB_STATUS_CLASSES: Record<JobStatus, string> = {
+const JOB_STATUS_CLASSES: Record<RunStatus, string> = {
   succeeded: "bg-success-100 text-success-700",
   failed: "bg-rose-100 text-rose-700",
   running: "bg-brand-50 text-brand-700",
@@ -4448,9 +4448,9 @@ const SORT_OPTIONS = [
 
 const JOBS_PAGE_SIZE = 100;
 
-export default function WorkspaceJobsRoute() {
+export default function WorkspaceRunsRoute() {
   const { workspace } = useWorkspaceContext();
-  const [selectedStatuses, setSelectedStatuses] = useState<Set<JobStatus>>(new Set());
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<RunStatus>>(new Set());
   const [timeRange, setTimeRange] = useState<(typeof TIME_RANGE_OPTIONS)[number]["value"]>("7d");
   const [sortOrder, setSortOrder] = useState<(typeof SORT_OPTIONS)[number]["value"]>("recent");
   const [searchTerm, setSearchTerm] = useState("");
@@ -4458,11 +4458,11 @@ export default function WorkspaceJobsRoute() {
 
   const singleStatusForQuery = selectedStatuses.size === 1 ? Array.from(selectedStatuses)[0] : null;
 
-  const jobsQuery = useInfiniteQuery<JobRecord[]>({
-    queryKey: workspaceJobsKeys.list(workspace.id, { status: singleStatusForQuery ?? "all" }),
+  const runsQuery = useInfiniteQuery<RunResource[]>({
+    queryKey: workspaceRunsKeys.list(workspace.id, { status: singleStatusForQuery ?? "all" }),
     initialPageParam: 0,
     queryFn: ({ pageParam, signal }) =>
-      fetchWorkspaceJobs(
+      fetchWorkspaceRuns(
         workspace.id,
         {
           status: singleStatusForQuery,
@@ -4477,12 +4477,12 @@ export default function WorkspaceJobsRoute() {
     staleTime: 30_000,
   });
 
-  const jobs = useMemo(() => {
-    const pages = jobsQuery.data?.pages ?? [];
+  const runs = useMemo(() => {
+    const pages = runsQuery.data?.pages ?? [];
     return pages.flat();
-  }, [jobsQuery.data?.pages]);
+  }, [runsQuery.data?.pages]);
 
-  const filteredJobs = useMemo(() => {
+  const filteredRuns = useMemo(() => {
     const now = Date.now();
     const normalizedSearch = searchTerm.trim().toLowerCase();
     const timeConfig = TIME_RANGE_OPTIONS.find((option) => option.value === timeRange);
@@ -4493,38 +4493,38 @@ export default function WorkspaceJobsRoute() {
       [customStartMs, customEndMs] = [customEndMs, customStartMs];
     }
 
-    return jobs
-      .filter((job) => {
-        if (selectedStatuses.size > 0 && !selectedStatuses.has(job.status as JobStatus)) {
+    return runs
+      .filter((run) => {
+        if (selectedStatuses.size > 0 && !selectedStatuses.has(run.status as RunStatus)) {
           return false;
         }
         if (timeRange === "custom") {
-          const startedAt = getJobStartTimestamp(job);
+          const startedAt = getRunStartTimestamp(run);
           if (customStartMs && startedAt < customStartMs) return false;
           if (customEndMs && startedAt > customEndMs) return false;
         } else if (horizon) {
-          const startedAt = getJobStartTimestamp(job);
+          const startedAt = getRunStartTimestamp(run);
           if (now - startedAt > horizon) return false;
         }
         if (normalizedSearch) {
-          if (!jobSearchHaystack(job).includes(normalizedSearch)) return false;
+          if (!runSearchHaystack(run).includes(normalizedSearch)) return false;
         }
         return true;
       })
       .sort((a, b) => {
         switch (sortOrder) {
           case "oldest":
-            return getJobStartTimestamp(a) - getJobStartTimestamp(b);
+            return getRunStartTimestamp(a) - getRunStartTimestamp(b);
           case "duration_desc":
             return durationMs(b) - durationMs(a);
           case "recent":
           default:
-            return getJobStartTimestamp(b) - getJobStartTimestamp(a);
+            return getRunStartTimestamp(b) - getRunStartTimestamp(a);
         }
       });
-  }, [jobs, selectedStatuses, timeRange, sortOrder, searchTerm, customRange]);
+  }, [runs, selectedStatuses, timeRange, sortOrder, searchTerm, customRange]);
 
-  const toggleStatus = (status: JobStatus) => {
+  const toggleStatus = (status: RunStatus) => {
     setSelectedStatuses((current) => {
       const next = new Set(current);
       if (next.has(status)) next.delete(status);
@@ -4542,20 +4542,20 @@ export default function WorkspaceJobsRoute() {
   };
 
   const handleExport = () => {
-    if (filteredJobs.length === 0) return;
-    const rows = filteredJobs.map((job) => [
-      job.id,
-      deriveDocumentName(job) ?? "—",
-      deriveConfigLabel(job),
-      deriveTriggeredBy(job) ?? "—",
-      job.status,
-      formatTimestamp(getJobStartTimestamp(job)),
-      formatTimestamp(getJobEndTimestamp(job)),
-      (durationMs(job) / 1000).toFixed(1),
-      (job as { error_message?: string }).error_message ?? "",
+    if (filteredRuns.length === 0) return;
+    const rows = filteredRuns.map((run) => [
+      run.id,
+      deriveDocumentName(run) ?? "—",
+      deriveConfigLabel(run),
+      deriveTriggeredBy(run) ?? "—",
+      run.status,
+      formatTimestamp(getRunStartTimestamp(run)),
+      formatTimestamp(getRunEndTimestamp(run)),
+      (durationMs(run) / 1000).toFixed(1),
+      (run as { error_message?: string }).error_message ?? "",
     ]);
     const header = [
-      "Job ID",
+      "Run ID",
       "Document",
       "Config",
       "Triggered by",
@@ -4572,7 +4572,7 @@ export default function WorkspaceJobsRoute() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `jobs-${new Date().toISOString()}.csv`;
+    link.download = `runs-${new Date().toISOString()}.csv`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -4582,12 +4582,12 @@ export default function WorkspaceJobsRoute() {
       <div className="rounded-xl border border-slate-200 bg-white/95 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Jobs</p>
-            <h1 className="text-lg font-semibold text-slate-900 sm:text-xl">{workspace.name ?? "Workspace"} jobs</h1>
-            <p className="text-xs text-slate-500">Review previous runs, filter by status, and export job history.</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Runs</p>
+            <h1 className="text-lg font-semibold text-slate-900 sm:text-xl">{workspace.name ?? "Workspace"} runs</h1>
+            <p className="text-xs text-slate-500">Review previous runs, filter by status, and export run history.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={handleExport} disabled={filteredJobs.length === 0}>
+            <Button variant="secondary" size="sm" onClick={handleExport} disabled={filteredRuns.length === 0}>
               Export CSV
             </Button>
             <Button variant="ghost" size="sm" onClick={clearFilters}>
@@ -4637,7 +4637,7 @@ export default function WorkspaceJobsRoute() {
           <div className="flex-1 min-w-[220px]">
             <input
               type="search"
-              placeholder="Search jobs by ID, document, or config"
+              placeholder="Search runs by ID, document, or config"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
@@ -4647,19 +4647,19 @@ export default function WorkspaceJobsRoute() {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white">
-        {jobsQuery.isError ? (
+        {runsQuery.isError ? (
           <div className="py-16">
             <PageState
               variant="error"
-              title="Unable to load jobs"
-              description="We couldn’t fetch job history right now. Try reloading the page."
+              title="Unable to load runs"
+              description="We couldn’t fetch run history right now. Try reloading the page."
             />
           </div>
-        ) : jobsQuery.isLoading ? (
-          <div className="py-16 text-center text-sm text-slate-500">Loading jobs…</div>
-        ) : filteredJobs.length === 0 ? (
+        ) : runsQuery.isLoading ? (
+          <div className="py-16 text-center text-sm text-slate-500">Loading runs…</div>
+        ) : filteredRuns.length === 0 ? (
           <div className="py-16 text-center">
-            <p className="text-sm text-slate-500">No jobs match the current filters.</p>
+            <p className="text-sm text-slate-500">No runs match the current filters.</p>
           </div>
         ) : (
           <>
@@ -4667,7 +4667,7 @@ export default function WorkspaceJobsRoute() {
               <table className="min-w-full table-fixed border-separate border-spacing-0 text-sm text-slate-700">
                 <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className="px-3 py-2 text-left">Job ID</th>
+                    <th className="px-3 py-2 text-left">Run ID</th>
                     <th className="px-3 py-2 text-left">Document</th>
                     <th className="px-3 py-2 text-left">Config</th>
                     <th className="px-3 py-2 text-left">Triggered by</th>
@@ -4677,19 +4677,19 @@ export default function WorkspaceJobsRoute() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredJobs.map((job) => {
-                    const documentName = deriveDocumentName(job);
-                    const configLabel = deriveConfigLabel(job);
-                    const triggeredBy = deriveTriggeredBy(job);
-                    const status = job.status as JobStatus;
+                  {filteredRuns.map((run) => {
+                    const documentName = deriveDocumentName(run);
+                    const configLabel = deriveConfigLabel(run);
+                    const triggeredBy = deriveTriggeredBy(run);
+                    const status = run.status as RunStatus;
                     return (
-                      <tr key={job.id} className="border-t border-slate-100">
-                        <td className="px-3 py-2 font-mono text-xs text-slate-500">{job.id}</td>
+                      <tr key={run.id} className="border-t border-slate-100">
+                        <td className="px-3 py-2 font-mono text-xs text-slate-500">{run.id}</td>
                         <td className="px-3 py-2">
                           <p className="truncate font-semibold text-slate-900">{documentName ?? "—"}</p>
                           <p className="text-xs text-slate-500">
-                            {Array.isArray((job as { input_documents?: unknown[] }).input_documents)
-                              ? `${(job as { input_documents?: unknown[] }).input_documents?.length ?? 0} document(s)`
+                            {Array.isArray((run as { input_documents?: unknown[] }).input_documents)
+                              ? `${(run as { input_documents?: unknown[] }).input_documents?.length ?? 0} document(s)`
                               : "—"}
                           </p>
                         </td>
@@ -4698,11 +4698,11 @@ export default function WorkspaceJobsRoute() {
                         </td>
                         <td className="px-3 py-2 text-slate-600">{triggeredBy ?? "—"}</td>
                         <td className="px-3 py-2 text-slate-600">
-                          <time dateTime={new Date(getJobStartTimestamp(job)).toISOString()}>
-                            {formatTimestamp(getJobStartTimestamp(job))}
+                          <time dateTime={new Date(getRunStartTimestamp(run)).toISOString()}>
+                            {formatTimestamp(getRunStartTimestamp(run))}
                           </time>
                         </td>
-                        <td className="px-3 py-2 text-slate-600">{formatDuration(durationMs(job))}</td>
+                        <td className="px-3 py-2 text-slate-600">{formatDuration(durationMs(run))}</td>
                         <td className="px-3 py-2">
                           <span
                             className={clsx(
@@ -4719,15 +4719,15 @@ export default function WorkspaceJobsRoute() {
                 </tbody>
               </table>
             </div>
-            {jobsQuery.hasNextPage ? (
+            {runsQuery.hasNextPage ? (
               <div className="border-t border-slate-200 bg-slate-50/60 px-3 py-2 text-center">
                 <Button
                   variant="ghost"
-                  onClick={() => jobsQuery.fetchNextPage()}
-                  disabled={jobsQuery.isFetchingNextPage}
-                  isLoading={jobsQuery.isFetchingNextPage}
+                  onClick={() => runsQuery.fetchNextPage()}
+                  disabled={runsQuery.isFetchingNextPage}
+                  isLoading={runsQuery.isFetchingNextPage}
                 >
-                  Load more jobs
+                  Load more runs
                 </Button>
               </div>
             ) : null}
@@ -4742,12 +4742,12 @@ function StatusPillBar({
   selected,
   onToggle,
 }: {
-  selected: ReadonlySet<JobStatus>;
-  onToggle: (status: JobStatus) => void;
+  selected: ReadonlySet<RunStatus>;
+  onToggle: (status: RunStatus) => void;
 }) {
   return (
     <div className="flex flex-wrap gap-1.5">
-      {(Object.keys(JOB_STATUS_LABELS) as JobStatus[]).map((status) => {
+      {(Object.keys(JOB_STATUS_LABELS) as RunStatus[]).map((status) => {
         const active = selected.has(status);
         return (
           <button
@@ -4769,63 +4769,63 @@ function StatusPillBar({
   );
 }
 
-function deriveDocumentName(job: JobRecord) {
-  const documents = (job as { input_documents?: unknown[] }).input_documents;
+function deriveDocumentName(run: RunResource) {
+  const documents = (run as { input_documents?: unknown[] }).input_documents;
   if (!Array.isArray(documents) || documents.length === 0) return null;
   const primary = documents[0] as Record<string, string> | undefined;
   if (!primary) return null;
   return primary.display_name ?? primary.name ?? primary.original_filename ?? primary.id ?? null;
 }
 
-function deriveConfigLabel(job: JobRecord) {
-  const configVersion = (job as { config_version?: Record<string, string> }).config_version;
+function deriveConfigLabel(run: RunResource) {
+  const configVersion = (run as { config_version?: Record<string, string> }).config_version;
   if (configVersion) {
     return configVersion.title ?? configVersion.semver ?? configVersion.config_version_id ?? "—";
   }
-  return (job as { config_title?: string }).config_title ?? (job as { config_id?: string }).config_id ?? "—";
+  return (run as { config_title?: string }).config_title ?? (run as { config_id?: string }).config_id ?? "—";
 }
 
-function deriveTriggeredBy(job: JobRecord) {
-  const submitted = (job as { submitted_by_user?: { display_name?: string; email?: string } }).submitted_by_user;
+function deriveTriggeredBy(run: RunResource) {
+  const submitted = (run as { submitted_by_user?: { display_name?: string; email?: string } }).submitted_by_user;
   if (submitted) return submitted.display_name ?? submitted.email ?? null;
-  return (job as { submitted_by?: string }).submitted_by ?? null;
+  return (run as { submitted_by?: string }).submitted_by ?? null;
 }
 
-function jobSearchHaystack(job: JobRecord) {
+function runSearchHaystack(run: RunResource) {
   return [
-    job.id,
-    deriveDocumentName(job),
-    deriveConfigLabel(job),
-    deriveTriggeredBy(job),
-    job.status,
-    (job as { error_message?: string }).error_message,
-    (job as { summary?: string }).summary,
+    run.id,
+    deriveDocumentName(run),
+    deriveConfigLabel(run),
+    deriveTriggeredBy(run),
+    run.status,
+    (run as { error_message?: string }).error_message,
+    (run as { summary?: string }).summary,
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
 }
 
-function getJobStartTimestamp(job: JobRecord) {
+function getRunStartTimestamp(run: RunResource) {
   const ms =
-    (job as { started_at?: string }).started_at ??
-    (job as { queued_at?: string }).queued_at ??
-    (job as { created_at?: string }).created_at ??
-    ((job as { created?: number }).created ? (job as { created?: number }).created * 1000 : null);
+    (run as { started_at?: string }).started_at ??
+    (run as { queued_at?: string }).queued_at ??
+    (run as { created_at?: string }).created_at ??
+    ((run as { created?: number }).created ? (run as { created?: number }).created * 1000 : null);
   return typeof ms === "string" ? new Date(ms).getTime() : typeof ms === "number" ? ms : Date.now();
 }
 
-function getJobEndTimestamp(job: JobRecord) {
+function getRunEndTimestamp(run: RunResource) {
   const ms =
-    (job as { completed_at?: string }).completed_at ??
-    (job as { cancelled_at?: string }).cancelled_at ??
-    (job as { updated_at?: string }).updated_at;
+    (run as { completed_at?: string }).completed_at ??
+    (run as { cancelled_at?: string }).cancelled_at ??
+    (run as { updated_at?: string }).updated_at;
   return typeof ms === "string" ? new Date(ms).getTime() : typeof ms === "number" ? ms : Date.now();
 }
 
-function durationMs(job: JobRecord) {
-  const start = getJobStartTimestamp(job);
-  const end = getJobEndTimestamp(job);
+function durationMs(run: RunResource) {
+  const start = getRunStartTimestamp(run);
+  const end = getRunEndTimestamp(run);
   if (!start || !end) return 0;
   return Math.max(0, end - start);
 }

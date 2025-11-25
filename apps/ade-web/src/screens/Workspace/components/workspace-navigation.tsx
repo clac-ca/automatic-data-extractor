@@ -47,7 +47,7 @@ export const DirectoryIcon = createIcon(
   "M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1v-8.5Z",
 );
 
-type WorkspaceSectionId = "documents" | "jobs" | "config-builder" | "settings";
+type WorkspaceSectionId = "documents" | "runs" | "config-builder" | "settings";
 
 interface WorkspaceSectionDescriptor {
   readonly id: WorkspaceSectionId;
@@ -64,9 +64,9 @@ const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
     icon: DocumentsIcon,
   },
   {
-    id: "jobs",
-    path: "jobs",
-    label: "Jobs",
+    id: "runs",
+    path: "runs",
+    label: "Runs",
     icon: JobsIcon,
   },
   {

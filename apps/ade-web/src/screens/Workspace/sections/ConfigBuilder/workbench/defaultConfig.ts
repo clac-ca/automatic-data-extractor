@@ -87,7 +87,7 @@ ADE_ENV=development
 from ade_engine import ConfigContext
 
 def build_header(context: ConfigContext) -> dict[str, str]:
-    """Return metadata for ADE jobs."""
+    """Return metadata for ADE runs."""
     return {
         "workspace": context.workspace_id,
         "generated_at": context.generated_at.isoformat(),

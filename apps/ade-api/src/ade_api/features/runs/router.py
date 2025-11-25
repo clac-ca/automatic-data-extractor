@@ -27,14 +27,18 @@ from ade_api.shared.dependency import (
     require_authenticated,
     require_csrf,
 )
+from ade_api.shared.pagination import PageParams
 
+from .models import RunStatus
 from .schemas import (
+    RunFilters,
     RunCreateOptions,
     RunCreateRequest,
     RunLogsResponse,
     RunOutputFile,
     RunOutputListing,
     RunResource,
+    RunPage,
 )
 from .service import (
     DEFAULT_STREAM_LIMIT,
@@ -129,6 +133,28 @@ async def create_run_endpoint(
             return
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+
+
+@router.get(
+    "/workspaces/{workspace_id}/runs",
+    response_model=RunPage,
+    response_model_exclude_none=True,
+)
+async def list_workspace_runs_endpoint(
+    workspace_id: Annotated[str, Path(min_length=1, description="Workspace identifier")],
+    page: Annotated[PageParams, Depends()],
+    filters: Annotated[RunFilters, Depends()],
+    service: RunsService = runs_service_dependency,
+) -> RunPage:
+    statuses = [RunStatus(value) for value in filters.status] if filters.status else None
+    return await service.list_runs(
+        workspace_id=workspace_id,
+        statuses=statuses,
+        input_document_id=filters.input_document_id,
+        page=page.page,
+        page_size=page.page_size,
+        include_total=page.include_total,
+    )
 
 
 @router.get("/runs/{run_id}", response_model=RunResource)

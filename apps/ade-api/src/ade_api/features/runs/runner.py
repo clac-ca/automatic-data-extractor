@@ -34,12 +34,12 @@ class ADEProcessRunner:
         self,
         *,
         command: list[str],
-        job_dir: Path,
+        run_dir: Path,
         env: dict[str, str],
         poll_interval: float = 0.2,
     ) -> None:
         self._command = command
-        self._job_dir = job_dir
+        self._run_dir = run_dir
         self._env = env
         self._poll_interval = poll_interval
         self._queue: asyncio.Queue[RunnerFrame | None] = asyncio.Queue()
@@ -89,7 +89,7 @@ class ADEProcessRunner:
             await self._queue.put(None)
 
     async def _capture_telemetry(self, process: asyncio.subprocess.Process) -> None:
-        events_path = self._job_dir / "logs" / "events.ndjson"
+        events_path = self._run_dir / "logs" / "events.ndjson"
         position = 0
         try:
             while True:

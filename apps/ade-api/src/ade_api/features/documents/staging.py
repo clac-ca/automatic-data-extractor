@@ -1,4 +1,4 @@
-"""Shared helpers for staging workspace documents into job directories."""
+"""Shared helpers for staging workspace documents into run directories."""
 
 from __future__ import annotations
 
@@ -20,11 +20,11 @@ async def stage_document_input(
     document: Document,
     storage: DocumentStorage,
     session: AsyncSession,
-    job_dir: Path,
+    run_dir: Path,
 ) -> Path:
-    """Copy ``document`` into ``job_dir/input`` and update access metadata."""
+    """Copy ``document`` into ``run_dir/input`` and update access metadata."""
 
-    input_dir = job_dir / "input"
+    input_dir = run_dir / "input"
     input_dir.mkdir(parents=True, exist_ok=True)
 
     source = storage.path_for(document.stored_uri)

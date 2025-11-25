@@ -4,7 +4,7 @@ ADE is a lightweight, configurable engine for normalizing Excel/CSV files at sca
 ## Monorepo overview
 
 * **Frontend** — React (Vite) SPA to author config packages and trigger builds/runs.
-* **Backend** — FastAPI service that stores metadata, builds isolated Python environments, and orchestrates jobs.
+* **Backend** — FastAPI service that stores metadata, builds isolated Python environments, and orchestrates runs.
 * **Engine** — Installable `ade_engine` package that executes detectors/hooks and writes outputs.
 * **Config packages** — Installable `ade_config` projects you author; versioned and built per workspace.
 
@@ -81,7 +81,7 @@ The React SPA at `apps/ade-web/` uses a history-based navigation helper instead 
 
 Navigation helpers live in `@app/nav` (`history.tsx`, `Link.tsx`, `urlState.ts`). Consume `useNavigate`/`useLocation` from there, and render links with `Link`/`NavLink` from the same module.
 
-Everything ADE produces (config_packages, venvs, jobs, logs, cache, etc..) is persisted under `./data/...` by default. Override `ADE_DOCUMENTS_DIR`, `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_JOBS_DIR`, or `ADE_PIP_CACHE_DIR` to relocate any storage area.
+Everything ADE produces (config_packages, venvs, runs, logs, cache, etc..) is persisted under `./data/...` by default. Override `ADE_DOCUMENTS_DIR`, `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_RUNS_DIR`, or `ADE_PIP_CACHE_DIR` to relocate any storage area.
 
 ```text
 ./data/
@@ -106,8 +106,8 @@ Everything ADE produces (config_packages, venvs, jobs, logs, cache, etc..) is pe
 │     │     └─ <site-packages>/
 │     │        ├─ ade_engine/
 │     │        └─ ade_config/
-│     ├─ jobs/
-│     │  └─ <job_id>/
+│     ├─ runs/
+│     │  └─ <run_id>/
 │     │     ├─ input/               # Uploaded files
 │     │     ├─ output/              # Generated files
 │     │     └─ logs/

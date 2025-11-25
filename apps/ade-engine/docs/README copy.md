@@ -14,19 +14,19 @@ I’ll assume the existing `README.md` is the **00‑overview** and start number
 
   * `Workspace`
   * `Document`
-  * `Job` vs `Run` (pick one canonical UI term, describe how it maps to `/jobs` and `/runs` endpoints).
+  * `Run` (canonical execution term; maps to `/runs` endpoints).
   * `Config` / `Configuration`
   * `ConfigVersion` / `Build` / `Draft` / `Active` / `Inactive`
   * `User`, `Member`, `Role`, `Permission`
   * `SafeMode`
 * How these terms appear in:
 
-  * URLs (`/workspaces/:workspaceId/jobs`)
-  * Components (`WorkspaceShell`, `DocumentsScreen`, `JobsScreen`, etc.)
+  * URLs (`/workspaces/:workspaceId/runs`)
+  * Components (`WorkspaceShell`, `DocumentsScreen`, `RunsScreen`, etc.)
   * Backend routes (mapping table to `/api/v1/...`).
 * Rules like:
 
-  * “In the UI and React code we say *Job*, we only use *Run* when referring directly to engine/`/runs` API.”
+  * “In the UI and React code we say *Run* to mirror the engine and `/runs` API.”
   * “We say *Config* for user‑facing configs, *ConfigVersion* for specific versions.”
 * Short glossary section for contributors.
 
@@ -46,7 +46,7 @@ I’ll assume the existing `README.md` is the **00‑overview** and start number
   apps/ade-web/
     src/
       app/           # App shell, providers, routing, entry points
-      features/      # Feature slices (documents, jobs, configs, settings, auth, etc.)
+      features/      # Feature slices (documents, runs, configs, settings, auth, etc.)
       ui/            # Reusable UI components and primitives
       shared/        # Cross-cutting utilities (hooks, urlState, storage, logging)
       schema/        # Shared types / zod schemas / generated types
@@ -147,14 +147,14 @@ I’ll assume the existing `README.md` is the **00‑overview** and start number
 
   * Workspaces (`/api/v1/workspaces...`)
   * Documents (`/api/v1/workspaces/{workspace_id}/documents...`)
-  * Jobs (`/api/v1/workspaces/{workspace_id}/jobs...`)
+  * Runs (`/api/v1/workspaces/{workspace_id}/runs...`)
   * Configs/builds (`/api/v1/workspaces/{workspace_id}/configurations...`, `/builds`, `/runs`)
   * Safe mode (`/api/v1/system/safe-mode`)
   * Roles/permissions (`/api/v1/me/permissions`, `/api/v1/workspaces/{workspace_id}/roles...`, etc.)
 * How streaming NDJSON endpoints are wrapped:
 
   * Build logs (`/api/v1/builds/{build_id}/logs`)
-  * Run/job logs (`/api/v1/runs/{run_id}/logs`, `/jobs/{job_id}/logs`).
+  * Run logs (`/api/v1/runs/{run_id}/logs`).
 * Error handling conventions:
 
   * Common error type or normalisation step.
@@ -224,9 +224,9 @@ I’ll assume the existing `README.md` is the **00‑overview** and start number
 
 ---
 
-## 08-documents-jobs-and-runs-ui-flows.md
+## 08-documents-and-runs-ui-flows.md
 
-**Goal:** Describe the core operational flows: uploading docs, running jobs, viewing history.
+**Goal:** Describe the core operational flows: uploading docs, running configs, viewing run history.
 
 **Scope:**
 
@@ -240,12 +240,12 @@ I’ll assume the existing `README.md` is the **00‑overview** and start number
 
   * Run dialog (select config, config version, sheet selection, dry-run, validate-only).
   * Remembering per-document run preferences (and how/where stored).
-* Jobs screen:
+* Runs screen:
 
   * Workspace-wide run history, filters (status, config, initiator, date range).
-  * How job status maps to UI states.
+  * How run status maps to UI states.
   * Links to logs, telemetry, outputs/artifacts.
-* Relationship between “jobs” and “runs” in the UI vs backend:
+* Relationship between runs in the UI and backend:
 
   * Clear mapping back to the terminology in **01-domain-model-and-terminology.md**.
 

@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import Field, field_validator
 
-from ade_api.features.jobs.schemas import JobStatusLiteral
+from ade_api.features.runs.models import RunStatus
 from ade_api.shared.core.ids import ULIDStr
 from ade_api.shared.core.schema import BaseSchema
 from ade_api.shared.pagination import Page
@@ -74,7 +74,7 @@ class DocumentOut(BaseSchema):
     )
     last_run: DocumentLastRun | None = Field(
         default=None,
-        description="Latest job execution associated with the document when available.",
+        description="Latest run execution associated with the document when available.",
     )
 
     @field_validator("metadata", mode="before")
@@ -99,17 +99,14 @@ class DocumentOut(BaseSchema):
 class DocumentLastRun(BaseSchema):
     """Minimal representation of the last engine execution for a document."""
 
-    job_id: ULIDStr | None = Field(
-        default=None, description="Latest job ULID when the run came from a job."
-    )
     run_id: str | None = Field(
         default=None,
         description="Latest run identifier when the execution was streamed directly.",
     )
-    status: JobStatusLiteral
+    status: RunStatus
     run_at: datetime | None = Field(
         default=None,
-        description="Timestamp for the latest job or run event (completion/start).",
+        description="Timestamp for the latest run event (completion/start).",
     )
     message: str | None = Field(
         default=None,

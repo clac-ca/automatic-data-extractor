@@ -64,7 +64,7 @@ permissions:
   contents: read
   packages: write
 
-jobs:
+runs:
   test-and-build:
     runs-on: ubuntu-latest
     steps:
@@ -149,7 +149,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: clac-ca/automatic-data-extractor
 
-jobs:
+runs:
   changelog-release:
     name: changelog-release
     runs-on: ubuntu-latest
@@ -428,7 +428,7 @@ flowchart LR
     F --> G["Normalized .xlsx + artifact.json"]
 ```
 
-Under the hood, each run executes your **ADE Config** (detectors, transforms, validators, hooks) inside a dedicated virtual environment alongside the **ADE Engine** runtime. Results and logs are written atomically per job.
+Under the hood, each run executes your **ADE Config** (detectors, transforms, validators, hooks) inside a dedicated virtual environment alongside the **ADE Engine** runtime. Results and logs are written atomically per run.
 
 
 <details>
@@ -460,7 +460,7 @@ automatic-data-extractor/
 
 Bundled ADE config templates now live under `apps/ade-api/src/ade_api/templates/config_packages/` inside the backend package.
 
-Everything ADE produces (documents, configs, venvs, jobs, cache, …) lands under `./data/...` by default. Each storage path (`ADE_DOCUMENTS_DIR`, `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_JOBS_DIR`, `ADE_PIP_CACHE_DIR`) can point anywhere so you can mount different volumes as needed.
+Everything ADE produces (documents, configs, venvs, runs, cache, …) lands under `./data/...` by default. Each storage path (`ADE_DOCUMENTS_DIR`, `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_RUNS_DIR`, `ADE_PIP_CACHE_DIR`) can point anywhere so you can mount different volumes as needed.
 
 ---
 
@@ -484,7 +484,7 @@ Then:
 1. Open **[http://localhost:8000](http://localhost:8000)**
 2. Create a workspace and a **Config Package** (start from the “Default” template)
 3. Click **Build**
-4. Upload a sample file (see `examples/`) and **Run** a job
+4. Upload a sample file (see `examples/`) and **Run** a run
 5. Download `output.xlsx` and inspect `logs/artifact.json`
 
 > Each built config has its own frozen virtualenv to keep runs reproducible.
@@ -599,15 +599,15 @@ ADE is configured via environment variables; defaults work for local dev.
 | `ADE_DOCUMENTS_DIR`       | `./data/documents`       | Uploaded files + generated artifacts                      |
 | `ADE_CONFIGS_DIR`         | `./data/config_packages` | Installable config projects                               |
 | `ADE_VENVS_DIR`           | `./data/.venv`           | One Python virtualenv per `config_id`                     |
-| `ADE_JOBS_DIR`            | `./data/jobs`            | Per-job working directories                               |
+| `ADE_RUNS_DIR`            | `./data/runs`            | Per-run working directories                               |
 | `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`       | pip download/build cache                                  |
 | `ADE_SAFE_MODE`           | `false`                  | Skip engine execution while runs API returns safe-mode    |
 | `ADE_MAX_CONCURRENCY`     | `2`                      | Backend dispatcher parallelism                            |
 | `ADE_QUEUE_SIZE`          | `10`                     | Back-pressure threshold before HTTP 429                   |
 | `ADE_JOB_TIMEOUT_SECONDS` | `300`                    | Wall-clock timeout per worker                             |
-| `ADE_WORKER_CPU_SECONDS`  | `60`                     | Best-effort CPU limit per job (POSIX rlimit)              |
-| `ADE_WORKER_MEM_MB`       | `512`                    | Best-effort address-space ceiling per job (POSIX rlimit)  |
-| `ADE_WORKER_FSIZE_MB`     | `100`                    | Best-effort max file size a job may create (POSIX rlimit) |
+| `ADE_WORKER_CPU_SECONDS`  | `60`                     | Best-effort CPU limit per run (POSIX rlimit)              |
+| `ADE_WORKER_MEM_MB`       | `512`                    | Best-effort address-space ceiling per run (POSIX rlimit)  |
+| `ADE_WORKER_FSIZE_MB`     | `100`                    | Best-effort max file size a run may create (POSIX rlimit) |
 
 </details>
 
@@ -619,8 +619,8 @@ Output: normalized `.xlsx` (Excel via `openpyxl`, CSV via stdlib).
 ## Learn more
 
 * **Config Packages** — `docs/01-config-packages.md`
-* **Job Orchestration** — `docs/02-job-orchestration.md`
-* **Artifact Reference** — `docs/14-job_artifact_json.md`
+* **Run Orchestration** — `docs/02-run-orchestration.md`
+* **Artifact Reference** — `docs/14-run_artifact_json.md`
 * **Glossary** — `docs/12-glossary.md`
 
 ---

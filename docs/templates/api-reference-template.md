@@ -32,9 +32,9 @@ Errors:
 
 ---
 
-## POST /jobs — Create a job
+## POST /runs — Create a run
 
-Description: Creates a new job.
+Description: Creates a new run.
 
 Request body:
 
@@ -48,7 +48,7 @@ Request body:
 Example request:
 
 ```bash
-curl -s -X POST http://localhost:8000/api/jobs \
+curl -s -X POST http://localhost:8000/api/runs \
   -H 'Content-Type: application/json' \
   -d '{"name":"example","priority":5}'
 ```
@@ -56,7 +56,7 @@ curl -s -X POST http://localhost:8000/api/jobs \
 Example response:
 
 ```json
-{ "id": "job_123", "name": "example", "status": "queued" }
+{ "id": "run_123", "name": "example", "status": "queued" }
 ```
 
 Errors:
@@ -68,7 +68,7 @@ Errors:
 
 ## Data model
 
-Job object:
+Run object:
 
 - `id` (string) — Identifier
 - `name` (string) — Human‑readable name

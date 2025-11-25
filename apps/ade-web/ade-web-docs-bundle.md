@@ -6,7 +6,7 @@
 # - apps/ade-web/docs/04-data-layer-and-backend-contracts.md - 04-data-layer-and-backend-contracts
 # - apps/ade-web/docs/05-auth-session-rbac-and-safe-mode.md - 05-auth-session-rbac-and-safe-mode
 # - apps/ade-web/docs/06-workspace-layout-and-sections.md - 06-workspace-layout-and-sections
-# - apps/ade-web/docs/07-documents-jobs-and-runs.md - 07-documents-jobs-and-runs
+# - apps/ade-web/docs/07-documents-runs-and-runs.md - 07-documents-runs-and-runs
 # - apps/ade-web/docs/08-configurations-and-config-builder.md - 08-configurations-and-config-builder
 # - apps/ade-web/docs/09-workbench-editor-and-scripting.md - 09-workbench-editor-and-scripting
 # - apps/ade-web/docs/10-ui-components-a11y-and-testing.md - 10-ui-components-a11y-and-testing
@@ -84,7 +84,7 @@ Inside a workspace, ADE Web uses a reusable **workspace shell**:
   - “Switch workspace” affordance.
   - Primary sections:
     - Documents
-    - Jobs
+    - Runs
     - Config Builder
     - Settings
   - Collapse/expand state is persisted **per workspace** (each workspace remembers nav compactness).
@@ -93,7 +93,7 @@ Inside a workspace, ADE Web uses a reusable **workspace shell**:
   - Workspace name and optional environment label (e.g. “Production”, “Staging”).
   - Context‑aware **search** (via `GlobalSearchField`):
     - On **Documents**, it acts as a document‑scoped search.
-    - Elsewhere, it can search within the workspace (sections, configs, jobs).
+    - Elsewhere, it can search within the workspace (sections, configs, runs).
   - A profile dropdown (`ProfileDropdown`) with user display name/email and actions like “Sign out”.
 
 - **Mobile navigation**:
@@ -119,7 +119,7 @@ Certain routes (especially the **Config Builder** workbench) can temporarily hid
 
 A **workspace** is the primary unit of organisation and isolation:
 
-- Owns **documents**, **jobs/runs**, **config packages**, and **membership/roles**.
+- Owns **documents**, **runs/runs**, **config packages**, and **membership/roles**.
 - Has a human‑readable **name** and a stable **slug/ID** that appear in the UI and URLs.
 - Has **settings** (name, slug, environment labels, safe mode, etc.).
 - Is governed by **workspace‑scoped RBAC**.
@@ -145,9 +145,9 @@ Per workspace:
   - **Content type** and **size** (used to show “Excel spreadsheet • 2.3 MB”).
   - **Status**:
     - `uploaded` – file is stored but not yet processed.
-    - `processing` – currently being processed by a job.
-    - `processed` – last job completed successfully.
-    - `failed` – last job ended in error.
+    - `processing` – currently being processed by a run.
+    - `processed` – last run completed successfully.
+    - `failed` – last run ended in error.
     - `archived` – kept for history, not actively used.
   - **Timestamps** (created/uploaded at).
   - **Uploader** (user who uploaded the file).
@@ -159,7 +159,7 @@ Per workspace:
 Documents are treated as **immutable inputs**:
 
 - Re‑uploading a revised file results in a **new document**.
-- Jobs always refer to the original uploaded file by ID.
+- Runs always refer to the original uploaded file by ID.
 
 Multi‑sheet spreadsheets can expose **worksheet metadata**:
 
@@ -169,14 +169,14 @@ Multi‑sheet spreadsheets can expose **worksheet metadata**:
 
 ---
 
-### Runs (jobs)
+### Runs (runs)
 
-A **run** (or **job**) is a single execution of ADE against a set of inputs with a particular config version.
+A **run** (or **run**) is a single execution of ADE against a set of inputs with a particular config version.
 
 Key ideas:
 
-- Jobs are **workspace‑scoped** and usually tied to at least one document.
-- Each job includes:
+- Runs are **workspace‑scoped** and usually tied to at least one document.
+- Each run includes:
   - **Status**: `queued`, `running`, `succeeded`, `failed`, `cancelled`.
   - **Timestamps**:
     - Queued / created,
@@ -205,7 +205,7 @@ For a given document:
   - Preferred subset of sheet names.
 - These preferences are stored in local, workspace‑scoped storage and reapplied the next time you run that document.
 
-The backend exposes **streaming NDJSON APIs** for job events:
+The backend exposes **streaming NDJSON APIs** for run events:
 
 - ADE Web uses these for:
   - Live status updates,
@@ -341,7 +341,7 @@ Permissions govern actions such as:
 - Creating/updating **workspace roles**.
 - Toggling **safe mode**.
 - Editing and activating **config versions**.
-- Running **jobs** and **test runs**.
+- Running **runs** and **test runs**.
 - Viewing **logs** and **telemetry**.
 
 Backend responsibilities:
@@ -384,7 +384,7 @@ Pathnames are **normalised** to avoid trailing‑slash variants (`/foo/` → `/f
 Inside `/workspaces/:workspaceId`, the first path segment after the workspace ID selects the section:
 
 - `/documents` – Documents list and document run UI.
-- `/jobs` – Jobs ledger (workspace‑wide run history).
+- `/runs` – Runs ledger (workspace‑wide run history).
 - `/config-builder` – Config overview and Config Builder workbench.
 - `/settings` – Workspace settings (tabs controlled by `view` query param).
 - `/overview` – Optional overview/summary surface.
@@ -672,7 +672,7 @@ To make ADE config editing more discoverable, the Monaco editor is augmented wit
 
   * `row_detectors/…` → row detectors.
   * `column_detectors/…` → column detectors / transforms / validators.
-  * `hooks/…` → job hooks.
+  * `hooks/…` → run hooks.
 * **Features**:
 
   * **Hover**:
@@ -692,7 +692,7 @@ The shared script API is expressed as `AdeFunctionSpec` records. Conceptually im
   ```python
   def detect_*(
       *,
-      job,
+      run,
       state,
       row_index: int,
       row_values: list,
@@ -710,7 +710,7 @@ The shared script API is expressed as `AdeFunctionSpec` records. Conceptually im
   # Detector
   def detect_*(
       *,
-      job,
+      run,
       state,
       field_name: str,
       field_meta: dict,
@@ -727,7 +727,7 @@ The shared script API is expressed as `AdeFunctionSpec` records. Conceptually im
   # Transform
   def transform(
       *,
-      job,
+      run,
       state,
       row_index: int,
       field_name: str,
@@ -741,7 +741,7 @@ The shared script API is expressed as `AdeFunctionSpec` records. Conceptually im
   # Validator
   def validate(
       *,
-      job,
+      run,
       state,
       row_index: int,
       field_name: str,
@@ -757,9 +757,9 @@ The shared script API is expressed as `AdeFunctionSpec` records. Conceptually im
 * **Hooks** (`hooks/*.py`):
 
   ```python
-  def on_job_start(
+  def on_run_start(
       *,
-      job_id: str,
+      run_id: str,
       manifest: dict,
       env: dict | None = None,
       artifact: dict | None = None,
@@ -787,7 +787,7 @@ The shared script API is expressed as `AdeFunctionSpec` records. Conceptually im
   ):
       ...
 
-  def on_job_end(
+  def on_run_end(
       *,
       artifact: dict | None = None,
       logger=None,
@@ -1111,7 +1111,7 @@ export function getWorkbenchReturnPathStorageKey(workspaceId: string) {
 
 Pattern:
 
-1. When navigating **into** the workbench from a section (e.g. Documents/Jobs/Settings), store the current URL.
+1. When navigating **into** the workbench from a section (e.g. Documents/Runs/Settings), store the current URL.
 2. When closing or exiting the workbench, navigate back to the stored path and clear it.
 
 This keeps “back to where I was” behaviour predictable.
@@ -1129,7 +1129,7 @@ High‑level behaviours of the main workspace sections:
   * Trigger runs against a selected config version.
   * Show per‑document last run status and quick actions.
 
-* **Jobs**
+* **Runs**
 
   * Workspace‑wide ledger of runs.
   * Filter by status, config, date range, and initiator.
@@ -1233,7 +1233,7 @@ At a high level, the backend must provide:
   * Download endpoint for raw document.
   * Optional document sheets metadata (`name`, index, `is_active`).
 
-* **Jobs / runs**
+* **Runs / runs**
 
   * Create run (document + config version + options).
   * NDJSON streaming endpoint for run events:
@@ -1494,13 +1494,13 @@ These components ensure consistent layout, accessibility, and styling across ADE
 
 ADE Web is the operational and configuration console for Automatic Data Extractor:
 
-* **Analysts** use it to upload documents, run extractions, inspect jobs, and download outputs.
+* **Analysts** use it to upload documents, run extractions, inspect runs, and download outputs.
 * **Workspace owners / engineers** use it to evolve Python‑based config packages, validate and test changes, and safely roll out new versions using the Config Builder workbench.
 * **Admins** use it to manage workspaces, members, roles, SSO hints, and safe mode.
 
 This README captures:
 
-* The **conceptual model** (workspaces, documents, jobs, configs, safe mode, roles),
+* The **conceptual model** (workspaces, documents, runs, configs, safe mode, roles),
 * The **navigation and URL‑state conventions** (custom history, SPA links, search params, deep linking),
 * The **Config Builder workbench model** (file tree, tabs, ADE script helpers, console, validation, inspector, theme, window states),
 * The **backend contracts** ADE Web expects,
@@ -1533,9 +1533,9 @@ For each, define:
 Entities to cover:
 
 * **Workspace directory** vs **Workspace shell**.
-* **Workspace** (owner of documents, jobs, configs, members).
+* **Workspace** (owner of documents, runs, configs, members).
 * **Document**.
-* **Job** (the main term in the UI – “job” vs “run”).
+* **Run** (the main term in the UI – “run” vs “run”).
 * **Run** (if used in the UI at all) – or explicitly state it’s a backend/internal name only.
 * **Build** (Config build, not engine build if there’s a distinction).
 * **Configuration / Config** (and how those two words are used).
@@ -1551,9 +1551,9 @@ Subsections:
 * **Documents**
 
   * Allowed statuses and meanings: `uploaded`, `processing`, `processed`, `failed`, `archived`.
-  * Trigger events that move between statuses (upload, job start, job completion, delete/archive).
+  * Trigger events that move between statuses (upload, run start, run completion, delete/archive).
 
-* **Jobs**
+* **Runs**
 
   * Allowed statuses: `queued`, `running`, `succeeded`, `failed`, `cancelled`.
   * Relationship to runs/builds if relevant.
@@ -1574,25 +1574,25 @@ Subsections:
 
 * **UI vs backend naming:**
 
-  * Use **Job** consistently in the UI for `/jobs`.
+  * Use **Run** consistently in the UI for `/runs`.
   * Reserve **Run** for engine-level concepts or API object names if needed.
   * Use **Config** for UX & helper code (`ConfigList`, `useConfigsQuery`).
   * Use **Configuration** for TS types that mirror backend data (`Configuration`, `ConfigurationVersion`).
 
 * **Type names:**
 
-  * Singular, PascalCase domain types: `Workspace`, `WorkspaceSummary`, `Document`, `JobSummary`, `Configuration`, `ConfigVersion`.
+  * Singular, PascalCase domain types: `Workspace`, `WorkspaceSummary`, `Document`, `RunSummary`, `Configuration`, `ConfigVersion`.
   * `Summary` for list-row types, `Detail` for fully hydrated types.
 
 * **Hook names:**
 
-  * Queries: `use<Domain><What>Query` (`useDocumentsQuery`, `useJobsQuery`).
+  * Queries: `use<Domain><What>Query` (`useDocumentsQuery`, `useRunsQuery`).
   * Mutations: `use<Verb><Domain>Mutation` (`useUploadDocumentMutation`).
   * UI state: `use<Something>State` or explicit (`useWorkbenchUrlState`, `useSafeModeStatus`).
 
 * **File and component names:**
 
-  * Screens: `<Domain>Screen.tsx` (`DocumentsScreen`, `JobsScreen`).
+  * Screens: `<Domain>Screen.tsx` (`DocumentsScreen`, `RunsScreen`).
   * Shells: `WorkspaceShellScreen`.
   * Presentational components: `GlobalTopBar`, `ProfileDropdown`, `DocumentsTable`.
 
@@ -1604,14 +1604,14 @@ Subsections:
 
 * Example rows:
 
-  * Workspace, Document, Job, Configuration, Config version, Safe mode.
+  * Workspace, Document, Run, Configuration, Config version, Safe mode.
 
 ### 6. Reserved and non-preferred terms
 
 * List of words we **don’t** use, or aliases we explicitly discourage:
 
   * Don’t call a workspace a “project”.
-  * Don’t call jobs “tasks”.
+  * Don’t call runs “tasks”.
   * Don’t call configs “pipelines” in the UI.
   * etc.
 
@@ -1655,7 +1655,7 @@ For each top level:
 * **`features/`**
 
   * Route/feature slices (was `screens`).
-  * Subfolders: `auth`, `workspace-directory`, `workspace-shell/documents`, `jobs`, `config-builder`, `settings`, `overview`.
+  * Subfolders: `auth`, `workspace-directory`, `workspace-shell/documents`, `runs`, `config-builder`, `settings`, `overview`.
   * Each subfolder contains the screen component(s), feature-specific hooks, and sub-components.
 
 * **`ui/`**
@@ -1712,20 +1712,20 @@ Mention: we prefer `@features` going forward, but keep `@screens` as a compatibi
 
 * **Screens & shells:**
 
-  * `DocumentsScreen.tsx`, `JobsScreen.tsx`, `ConfigBuilderScreen.tsx`, `WorkspaceShellScreen.tsx`.
+  * `DocumentsScreen.tsx`, `RunsScreen.tsx`, `ConfigBuilderScreen.tsx`, `WorkspaceShellScreen.tsx`.
 
 * **Feature components:**
 
-  * Feature-scoped chunks: `DocumentsTable.tsx`, `JobsFilters.tsx`, `ConfigList.tsx`.
+  * Feature-scoped chunks: `DocumentsTable.tsx`, `RunsFilters.tsx`, `ConfigList.tsx`.
 
 * **Hooks:**
 
-  * In feature folders: `useDocumentsQuery.ts`, `useSubmitJobMutation.ts`.
+  * In feature folders: `useDocumentsQuery.ts`, `useSubmitRunMutation.ts`.
   * In `shared/`: `useSafeModeStatus.ts`, `useSearchParams.ts`.
 
 * **API modules:**
 
-  * `authApi.ts`, `workspacesApi.ts`, `documentsApi.ts`, `jobsApi.ts`, `configsApi.ts`, `buildsApi.ts`, `rolesApi.ts`.
+  * `authApi.ts`, `workspacesApi.ts`, `documentsApi.ts`, `runsApi.ts`, `configsApi.ts`, `buildsApi.ts`, `rolesApi.ts`.
   * Thin, typed wrappers around fetch/axios.
 
 * **Barrels (optional):**
@@ -1773,7 +1773,7 @@ Mention: we prefer `@features` going forward, but keep `@screens` as a compatibi
 * Structure of workspace URLs:
 
   * `/workspaces/:workspaceId/documents`
-  * `/workspaces/:workspaceId/jobs`
+  * `/workspaces/:workspaceId/runs`
   * `/workspaces/:workspaceId/config-builder`
   * `/workspaces/:workspaceId/settings`
   * `/workspaces/:workspaceId/overview` (optional).
@@ -1891,11 +1891,11 @@ Mention: we prefer `@features` going forward, but keep `@screens` as a compatibi
 
 * Structure:
 
-  * Domain modules: `authApi.ts`, `workspacesApi.ts`, `documentsApi.ts`, `jobsApi.ts`, `configsApi.ts`, `buildsApi.ts`, `runsApi.ts`, `rolesApi.ts`, etc.
+  * Domain modules: `authApi.ts`, `workspacesApi.ts`, `documentsApi.ts`, `runsApi.ts`, `configsApi.ts`, `buildsApi.ts`, `runsApi.ts`, `rolesApi.ts`, etc.
 
 * Function naming:
 
-  * `listWorkspaces`, `createWorkspace`, `listDocuments`, `uploadDocument`, `listJobs`, `submitJob`, `listConfigurations`, `activateConfiguration`, etc.
+  * `listWorkspaces`, `createWorkspace`, `listDocuments`, `uploadDocument`, `listRuns`, `submitRun`, `listConfigurations`, `activateConfiguration`, etc.
 
 ### 4. Mapping ADE API routes to modules
 
@@ -1923,9 +1923,9 @@ Group the routes (from your CSV) by domain:
   * `/workspaces/{workspace_id}/documents`.
   * `/documents/{document_id}` CRUD, `/download`, `/sheets`.
 
-* **Jobs & runs (`jobsApi`, `runsApi`)**
+* **Runs & runs (`runsApi`, `runsApi`)**
 
-  * `/workspaces/{workspace_id}/jobs` (ledger, artifact, logs, outputs).
+  * `/workspaces/{workspace_id}/runs` (ledger, artifact, logs, outputs).
   * `/api/v1/runs/{run_id}...` if used directly.
 
 * **Configurations & builds (`configsApi`, `buildsApi`)**
@@ -1947,7 +1947,7 @@ Explain:
 
 * How `schema/` and `generated-types/` are used:
 
-  * Domain models: `WorkspaceSummary`, `DocumentSummary`, `JobSummary`.
+  * Domain models: `WorkspaceSummary`, `DocumentSummary`, `RunSummary`.
   * Generated models from backend schemas.
 
 * Mapping patterns:
@@ -1959,7 +1959,7 @@ Explain:
 * Endpoints:
 
   * Build logs: `/builds/{build_id}/logs`.
-  * Job logs: `/runs/{run_id}/logs`, `/jobs/{job_id}/logs` (depending on which you use).
+  * Run logs: `/runs/{run_id}/logs`, `/runs/{run_id}/logs` (depending on which you use).
 
 * Abstractions in `shared/ndjson`:
 
@@ -1969,7 +1969,7 @@ Explain:
 * Consumption in features:
 
   * Build console in Config Builder.
-  * Job detail view console.
+  * Run detail view console.
 
 ### 7. Error handling & retries
 
@@ -2086,7 +2086,7 @@ Explain:
 
 * Exactly what is blocked:
 
-  * New jobs/runs.
+  * New runs/runs.
   * Config builds/validations.
   * Activate/publish actions.
 
@@ -2140,7 +2140,7 @@ Explain:
 * Where `GlobalSearchField` appears:
 
   * In directory: workspace search.
-  * In shell: workspace-scoped search (documents/jobs/configs).
+  * In shell: workspace-scoped search (documents/runs/configs).
 
 * Responsive behaviour:
 
@@ -2172,7 +2172,7 @@ Explain:
 
   * Workspace avatar/name.
   * Switch workspace affordance.
-  * Sections: Documents, Jobs, Config Builder, Settings, Overview.
+  * Sections: Documents, Runs, Config Builder, Settings, Overview.
   * Collapse/expand and per-workspace persistence.
 
 * Mobile navigation:
@@ -2191,7 +2191,7 @@ Explain:
 For each section, 1–2 paragraphs and link to the detailed doc:
 
 * **Documents** (doc 07).
-* **Jobs** (doc 07).
+* **Runs** (doc 07).
 * **Config Builder** (docs 08–09).
 * **Settings** (doc 05 for RBAC + this for UX).
 * **Overview** (optional).
@@ -2208,11 +2208,11 @@ Mention, briefly:
 * Where toast notifications originate and what they’re used for.
 ```
 
-# apps/ade-web/docs/07-documents-jobs-and-runs.md
+# apps/ade-web/docs/07-documents-runs-and-runs.md
 ```markdown
-# 07-documents-jobs-and-runs
+# 07-documents-runs-and-runs
 
-**Purpose:** All operator workflows: working with documents, jobs, and runs.
+**Purpose:** All operator workflows: working with documents, runs, and runs.
 
 ### 1. Overview
 
@@ -2271,27 +2271,27 @@ Mention, briefly:
 
   * If endpoint missing or fails → show warning and “Use all worksheets”.
 
-### 5. Jobs (workspace ledger)
+### 5. Runs (workspace ledger)
 
-* Job fields recap:
+* Run fields recap:
 
   * `id`, `status`, timestamps, initiator, config version, input documents, outputs.
 
-* Jobs screen:
+* Runs screen:
 
   * Filters: status, config, date range, initiator.
-  * Columns: Job ID, status, config, created at, duration, initiator.
+  * Columns: Run ID, status, config, created at, duration, initiator.
 
-* Job detail view:
+* Run detail view:
 
-  * Link path (e.g. `/workspaces/:id/jobs/:jobId` if you have it).
+  * Link path (e.g. `/workspaces/:id/runs/:runId` if you have it).
   * Tabs/panels for logs, telemetry, outputs.
 
 ### 6. Runs and run options
 
-* How “job” vs “run” are presented:
+* How “run” vs “run” are presented:
 
-  * If the UI only exposes jobs, say so.
+  * If the UI only exposes runs, say so.
   * If there’s a separate “run detail” surface, describe it.
 
 * Run options:
@@ -2316,16 +2316,16 @@ Mention, briefly:
 
 * Cross-link to doc 10 section on persistence.
 
-### 8. Backend contracts for documents & jobs
+### 8. Backend contracts for documents & runs
 
 * Endpoint list with quick notes:
 
   * Documents: `/workspaces/{workspace_id}/documents`, `/documents/{document_id}`, `/download`, `/sheets`.
-  * Jobs: `/workspaces/{workspace_id}/jobs`, `/jobs/{job_id}/artifact`, `/logs`, `/outputs`.
+  * Runs: `/workspaces/{workspace_id}/runs`, `/runs/{run_id}/artifact`, `/logs`, `/outputs`.
 
 * Mapping to hooks:
 
-  * `useDocumentsQuery`, `useUploadDocumentMutation`, `useJobsQuery`, `useJobOutputsQuery`, etc.
+  * `useDocumentsQuery`, `useUploadDocumentMutation`, `useRunsQuery`, `useRunOutputsQuery`, etc.
 ```
 
 # apps/ade-web/docs/08-configurations-and-config-builder.md
@@ -2579,7 +2579,7 @@ Mention, briefly:
   * Column detectors.
   * Transforms.
   * Validators.
-  * Hooks (`on_job_start`, `after_mapping`, `before_save`, `on_job_end`).
+  * Hooks (`on_run_start`, `after_mapping`, `before_save`, `on_run_end`).
 
 * Note: helpers are guidance only, not enforcement of backend behaviour.
 ```

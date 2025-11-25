@@ -7,7 +7,7 @@
   "required": [
     "schema",
     "artifact_version",
-    "job",
+    "run",
     "config",
     "engine",
     "rules",
@@ -21,12 +21,12 @@
     "schema": { "type": "string", "const": "ade.artifact/v1" },
     "artifact_version": { "type": "string", "const": "1.1" },
 
-    "job": {
+    "run": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["job_id", "status", "started_at", "completed_at", "source_file"],
+      "required": ["run_id", "status", "started_at", "completed_at", "source_file"],
       "properties": {
-        "job_id": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "minLength": 1 },
         "config_version_id": { "type": ["string", "null"] },
         "trace_id": { "type": ["string", "null"] },
         "status": { "type": "string", "enum": ["succeeded", "failed"] },
@@ -102,7 +102,7 @@
     "summary": {
       "oneOf": [
         { "type": "null" },
-        { "$ref": "#/$defs/JobSummary" }
+        { "$ref": "#/$defs/RunSummary" }
       ]
     },
 
@@ -371,7 +371,7 @@
       }
     },
 
-    "JobSummary": {
+    "RunSummary": {
       "type": "object",
       "additionalProperties": false,
       "required": ["rows_written", "columns_written", "issues_found"],

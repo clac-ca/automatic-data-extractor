@@ -46,9 +46,18 @@ async def test_run_defaults_and_log_cascade(session: AsyncSession) -> None:
     await session.refresh(run, attribute_names=["logs"])
 
     assert run.status is RunStatus.QUEUED
+    assert run.attempt == 1
+    assert run.retry_of_run_id is None
+    assert run.trace_id is None
+    assert run.config_version_id is None
+    assert run.input_documents is None
     assert isinstance(run.created_at, datetime)
     assert run.started_at is None
     assert run.finished_at is None
+    assert run.canceled_at is None
+    assert run.artifact_uri is None
+    assert run.output_uri is None
+    assert run.logs_uri is None
     assert run.logs == []
 
     log = RunLog(run_id=run.id, message="hello world")
