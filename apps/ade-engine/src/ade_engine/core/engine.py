@@ -54,7 +54,7 @@ class Engine:
 
     def __init__(self, *, telemetry: TelemetryConfig | None = None, engine_info: EngineInfo | None = None) -> None:
         self.telemetry = telemetry or TelemetryConfig()
-        self.engine_info = engine_info or EngineInfo(name="ade-engine", version="0.1.2")
+        self.engine_info = engine_info or EngineInfo(name="ade-engine", version="0.2.0")
         self.logger = logging.getLogger(__name__)
 
     def run(self, request: RunRequest | None = None, **kwargs: Any) -> RunResult:

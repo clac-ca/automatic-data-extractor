@@ -3,93 +3,128 @@
 [![CI](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci.yml/badge.svg)](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci.yml)
 [![Release](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/release.yml/badge.svg)](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/release.yml)
 
-ADE turns messy spreadsheets into consistent, auditable workbooks. It detects tables/columns, applies your rules, and produces normalized Excel files with a full audit trail.
+ADE turns messy spreadsheets into consistent, auditable workbooks.
 
-## Monorepo overview
+It:
 
-* **Frontend** — React (Vite) SPA for configs, builds, and runs.
-* **Backend** — FastAPI service for metadata, builds, and orchestration.
-* **Engine** — `ade_engine` package that executes detectors/hooks.
-* **Config packages** — Your installable `ade_config` projects (versioned per workspace).
-
-## How it works (at a glance)
-
-```mermaid
-flowchart LR
-    A["Input file"] --> B["Pass 1 – Find tables<br/>(rows → structure)"]
-    B --> C["Pass 2 – Map columns<br/>(columns → meaning)"]
-    C --> D["Pass 3 – Transform values<br/>(optional)"]
-    D --> E["Pass 4 – Validate values<br/>(optional)"]
-    E --> F["Pass 5 – Finalize workbook<br/>(output + audit)"]
-    F --> G["Normalized .xlsx + artifact.json"]
-```
-
-Under the hood, each run executes your **ADE Config** (detectors, transforms, validators, hooks) inside a dedicated virtual environment alongside the **ADE Engine** runtime. Results and logs are written atomically per job.
-
-
-<details>
-<summary><strong>Repository layout</strong></summary>
-
-```
-automatic-data-extractor/
-├─ apps/
-│  ├─ ade-api/            # FastAPI service (serves /api + static SPA)
-│  │  ├─ pyproject.toml
-│  │  ├─ src/ade_api/     # Backend package
-│  │  ├─ migrations/
-│  │  └─ tests/
-│  └─ ade-web/            # React (Vite) SPA
-│     ├─ package.json
-│     └─ src/…
-├─ packages/
-│  └─ ade-engine/         # Runtime: ade_engine (bundled manifest + telemetry schemas)
-├─ tools/
-│  └─ ade-cli/            # Python orchestration CLI (console script: ade)
-├─ examples/              # Sample inputs/outputs
-├─ docs/                  # Developer guide, HOWTOs, runbooks
-├─ infra/                 # Deployment bits (Docker, compose)
-├─ scripts/               # Helper scripts (legacy or ad hoc)
-└─ .env.example           # Documented env vars
-```
-
-</details>
-
-Bundled ADE config templates now live under `apps/ade-api/src/ade_api/templates/config_packages/` inside the backend package.
-
-Everything ADE produces (documents, configs, venvs, jobs, cache, …) lands under `./data/...` by default. Each storage path (`ADE_DOCUMENTS_DIR`, `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_JOBS_DIR`, `ADE_PIP_CACHE_DIR`) can point anywhere so you can mount different volumes as needed.
+- Detects tables and columns in your source files
+- Applies your custom rules and validation logic
+- Produces normalized Excel workbooks with a detailed audit trail
 
 ---
 
-## Getting started
+## 1. Repository layout
 
-### Option 1 — Docker (recommended)
+```text
+automatic-data-extractor/
+├─ Dockerfile          # Main app image: API + built SPA
+├─ compose.yaml        # Local Docker stack (single service: ade)
+├─ .env.example        # Example environment configuration
+├─ apps/
+│  ├─ ade-api/         # FastAPI backend (serves /api + static SPA)
+│  ├─ ade-web/         # React (Vite) frontend SPA
+│  ├─ ade-cli/         # Python CLI (console entry: `ade`)
+│  └─ ade-engine/      # Engine runtime used by the API/CLI
+├─ docs/               # Developer docs & runbooks
+├─ examples/           # Sample input/output files
+├─ scripts/            # Helper / legacy scripts
+└─ ...
+````
 
-**Prereqs:** Docker & Docker Compose.
+Everything ADE produces at runtime (documents, jobs, venvs, caches, etc.) goes under `./data/...` by default (inside the container: `/app/data`).
+
+---
+
+## 2. Quick start with Docker (recommended)
+
+### 2.1 Prerequisites
+
+* [Git](https://git-scm.com/downloads)
+* [Docker](https://docs.docker.com/get-docker/)
+* [Docker Compose](https://docs.docker.com/compose/install/) (often included in recent Docker Desktop installs)
+
+### 2.2 Run ADE with Docker Compose
 
 ```bash
+# 1. Clone the repo
 git clone https://github.com/clac-ca/automatic-data-extractor.git
 cd automatic-data-extractor
+
+# 2. Create local env file (edit as needed)
 cp .env.example .env
 
-# Start the stack (API + built SPA)
-docker compose -f infra/compose.yaml up --build
+# 3. Build and start the app (API + SPA)
+docker compose up --build
 ```
 
-Then:
+Then open:
 
-1. Open **[http://localhost:8000](http://localhost:8000)**
-2. Create a workspace and a **Config Package** (start from the “Default” template)
-3. Click **Build**
-4. Upload a sample file (see `examples/`) and **Run** a job
-5. Download `output.xlsx` and inspect `logs/artifact.json`
+* **[http://localhost:8000](http://localhost:8000)**
 
-> Each built config has its own frozen virtualenv to keep runs reproducible.
-
-#### Using the published image
+To stop the stack:
 
 ```bash
-docker pull ghcr.io/clac-ca/automatic-data-extractor:latest
+docker compose down
+```
+
+To start it again without rebuilding:
+
+```bash
+docker compose up -d
+```
+
+---
+
+## 3. Rebuilding the Docker container in development
+
+When you change backend or frontend code and want a fresh container image:
+
+From the repo root:
+
+```bash
+# Rebuild the image and recreate the container
+docker compose up --build
+```
+
+or, if the container is already running:
+
+```bash
+# Just rebuild the image
+docker compose build
+
+# Then restart the container
+docker compose up -d
+```
+
+If you want to rebuild by hand:
+
+```bash
+# Build image directly
+docker build -t ghcr.io/clac-ca/automatic-data-extractor:local .
+
+# Run it
 mkdir -p data
+docker run -d \
+  --name ade \
+  -p 8000:8000 \
+  -v "$(pwd)/data:/app/data" \
+  --env-file .env \
+  ghcr.io/clac-ca/automatic-data-extractor:local
+```
+
+---
+
+## 4. Using the published image (no local build)
+
+If you don’t want to build from source, you can run a published image from GHCR.
+
+```bash
+# From inside the repo (for .env and ./data)
+cp .env.example .env
+mkdir -p data
+
+docker pull ghcr.io/clac-ca/automatic-data-extractor:latest
+
 docker run -d \
   --name ade \
   -p 8000:8000 \
@@ -98,31 +133,44 @@ docker run -d \
   ghcr.io/clac-ca/automatic-data-extractor:latest
 ```
 
----
+Then go to **[http://localhost:8000](http://localhost:8000)**.
 
-### Option 2 — Local development (API + Web)
-
-**Prereqs:** Python 3.x, Node.js (latest LTS).
-
-#### macOS / Linux
+To stop and remove the container:
 
 ```bash
-# Clone the repository
+docker stop ade
+docker rm ade
+```
+
+---
+
+## 5. Local development (without Docker)
+
+### 5.1 Prerequisites
+
+* Python 3.12 (or compatible 3.x)
+* Node.js 20 (or latest LTS)
+* `git`
+
+### 5.2 macOS / Linux
+
+```bash
+# Clone the repo
 git clone https://github.com/clac-ca/automatic-data-extractor.git
 cd automatic-data-extractor
 
-# Create a local .env file (edit as needed)
+# Create a local .env
 cp .env.example .env
 
 # Create and activate a virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Upgrade packaging tools (recommended for editable installs)
+# Upgrade packaging tools
 pip install -U pip setuptools wheel
 
-# Install ADE backend components in editable mode
-pip install -e apps/ade-cli       # ADE CLI (console entrypoint: `ade`)
+# Install backend components in editable mode
+pip install -e apps/ade-cli       # ADE CLI (console: `ade`)
 pip install -e apps/ade-engine
 pip install -e apps/ade-api
 
@@ -136,97 +184,100 @@ ade --help
 ade dev
 ```
 
-Notes:
+Dev URLs:
 
 * API: **[http://localhost:8000](http://localhost:8000)**
-* Web: **[http://localhost:5173](http://localhost:5173)**
-  (set `VITE_API_URL=http://localhost:8000` in `apps/ade-web/.env.local` if needed)
-* `./setup.sh` is safe to re-run; it will reuse `.venv` and update dependencies.
+* Web (Vite dev server): **[http://localhost:5173](http://localhost:5173)**
 
-#### Windows (PowerShell)
+If needed, set `VITE_API_URL=http://localhost:8000` in `apps/ade-web/.env.local`.
+
+### 5.3 Windows (PowerShell)
 
 ```powershell
 git clone https://github.com/clac-ca/automatic-data-extractor.git
 cd automatic-data-extractor
+
 copy .env.example .env
 
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 pip install -U pip setuptools wheel
-pip install -e tools/ade-cli
-pip install -e packages/ade-engine
+
+pip install -e apps/ade-cli
+pip install -e apps/ade-engine
 pip install -e apps/ade-api
 
 cd apps/ade-web
 npm install
 cd ../..
+
 ade dev
 ```
 
-Additional `ade` commands:
+---
 
-* `ade dev --backend-only` / `--frontend-only` — run a single surface
-* `ade build` — build the frontend and copy it into `ade-api` static assets
+## 6. ADE CLI basics
+
+Once installed (locally or inside the container), the `ade` CLI provides useful commands:
+
+* `ade dev` — run backend + frontend dev servers
+* `ade dev --backend-only` / `ade dev --frontend-only` — run just one surface
+* `ade build` — build the frontend and bundle it into the backend static assets
 * `ade start` — run the backend using the built SPA
-* `ade docker up|logs|down` — manage Docker stack (no venv required, just Docker)
+* `ade ci` — run the full CI suite (lint, tests, build)
+
+See `ade --help` for more options.
 
 ---
 
-## Concepts in the UI
+## 7. Configuration
 
-* **Config package (`ade_config`)** — Python package with detectors, transforms, validators, hooks.
-* **Build** — creates a dedicated virtualenv per config and installs `ade_engine` + your `ade_config` (+ deps).
-* **Run** — processes inputs using that frozen environment and writes `output.xlsx` + `artifact.json`.
+ADE is configured via environment variables; the recommended way is:
 
-Config packages are versioned so you can draft, test, roll back, and extend safely.
+1. Copy `.env.example` → `.env`
+2. Adjust values as needed
 
----
+Key variables (defaults assume `WORKDIR=/app` inside the container):
 
-## Configuration & environment
+| Variable                  | Default                  | Purpose                                    |
+| ------------------------- | ------------------------ | ------------------------------------------ |
+| `ADE_DOCUMENTS_DIR`       | `./data/documents`       | Uploaded files + generated artifacts       |
+| `ADE_CONFIGS_DIR`         | `./data/config_packages` | Installable config packages                |
+| `ADE_VENVS_DIR`           | `./data/.venv`           | Per‑config virtualenvs                     |
+| `ADE_JOBS_DIR`            | `./data/jobs`            | Per‑job working directories                |
+| `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`       | pip download/build cache                   |
+| `ADE_SAFE_MODE`           | `false`                  | If `true`, skips engine execution          |
+| `ADE_MAX_CONCURRENCY`     | `2`                      | Backend worker concurrency                 |
+| `ADE_QUEUE_SIZE`          | `10`                     | Queue length before HTTP 429 backpressure  |
+| `ADE_JOB_TIMEOUT_SECONDS` | `300`                    | Wall‑clock timeout per job                 |
+| `ADE_WORKER_CPU_SECONDS`  | `60`                     | Best‑effort CPU limit per job              |
+| `ADE_WORKER_MEM_MB`       | `512`                    | Best‑effort memory limit per job (MB)      |
+| `ADE_WORKER_FSIZE_MB`     | `100`                    | Best‑effort max file size a job may create |
 
-ADE is configured via environment variables; defaults work for local dev.
-
-<details>
-<summary><strong>Common variables</strong></summary>
-
-| Variable                  | Default                  | Purpose                                                   |
-| ------------------------- | ------------------------ | --------------------------------------------------------- |
-| `ADE_DOCUMENTS_DIR`       | `./data/documents`       | Uploaded files + generated artifacts                      |
-| `ADE_CONFIGS_DIR`         | `./data/config_packages` | Installable config projects                               |
-| `ADE_VENVS_DIR`           | `./data/.venv`           | One Python virtualenv per `config_id`                     |
-| `ADE_JOBS_DIR`            | `./data/jobs`            | Per-job working directories                               |
-| `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`       | pip download/build cache                                  |
-| `ADE_SAFE_MODE`           | `false`                  | Skip engine execution while runs API returns safe-mode    |
-| `ADE_MAX_CONCURRENCY`     | `2`                      | Backend dispatcher parallelism                            |
-| `ADE_QUEUE_SIZE`          | `10`                     | Back-pressure threshold before HTTP 429                   |
-| `ADE_JOB_TIMEOUT_SECONDS` | `300`                    | Wall-clock timeout per worker                             |
-| `ADE_WORKER_CPU_SECONDS`  | `60`                     | Best-effort CPU limit per job (POSIX rlimit)              |
-| `ADE_WORKER_MEM_MB`       | `512`                    | Best-effort address-space ceiling per job (POSIX rlimit)  |
-| `ADE_WORKER_FSIZE_MB`     | `100`                    | Best-effort max file size a job may create (POSIX rlimit) |
-
-</details>
-
-Input formats: `.xlsx`, `.csv`.
-Output: normalized `.xlsx` (Excel via `openpyxl`, CSV via stdlib).
+In Docker, these resolve under `/app`, so `./data/...` becomes `/app/data/...`.
 
 ---
 
-## Learn more
+## 8. CI & releases
 
-* **Config Packages** — `docs/01-config-packages.md`
-* **Job Orchestration** — `docs/02-job-orchestration.md`
-* **Artifact Reference** — `docs/14-job_artifact_json.md`
-* **Glossary** — `docs/12-glossary.md`
+* **CI (`.github/workflows/ci.yml`)**
 
----
+  * Installs editable packages
+  * Runs `ade ci` (OpenAPI checks, lint, tests, build)
+  * Builds the Docker image from `./Dockerfile`
+  * Pushes images to GHCR on `main` (tags: `latest`, `sha-<commit>`)
 
-## CI & releases
+* **Releases (`.github/workflows/release.yml`)**
 
-* `ci.yml` — installs editable packages, runs `ade ci` (OpenAPI, lint, test, build), and builds the Docker image. Pushes to `main` publish `ghcr.io/clac-ca/automatic-data-extractor:latest` + commit-sha tags.
-* `release.yml` — reads version from `apps/ade-api/pyproject.toml`, pulls the changelog entry, creates a GitHub release, and publishes versioned images (e.g. `:0.1.0` + `:latest`).
+  * Reads the version from `apps/ade-api/pyproject.toml`
+  * Uses `CHANGELOG.md` to create a GitHub Release
+  * Builds and pushes versioned images:
 
-Pull a specific image:
+    * `ghcr.io/clac-ca/automatic-data-extractor:<version>`
+    * `ghcr.io/clac-ca/automatic-data-extractor:latest`
+
+To pull a specific image:
 
 ```bash
 docker pull ghcr.io/clac-ca/automatic-data-extractor:<tag>
@@ -234,12 +285,16 @@ docker pull ghcr.io/clac-ca/automatic-data-extractor:<tag>
 
 ---
 
-## Contributing
+## 9. Contributing
 
-PRs and issues are welcome. Please run linters/tests via the `ade` CLI (and mirror the CI steps in `.github/workflows/`) before opening a PR.
+* Open issues or PRs on GitHub
+* Before opening a PR:
+
+  * Run `ade ci` locally if possible, or
+  * Mirror the steps in `.github/workflows/ci.yml`
 
 ---
 
-## License
+## 10. License
 
-Released under **TBD** — see [LICENSE](LICENSE).
+See [LICENSE](LICENSE).

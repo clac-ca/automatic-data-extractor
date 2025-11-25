@@ -42,7 +42,7 @@ async def test_builder_installs_dependencies(monkeypatch: pytest.MonkeyPatch, tm
     ) -> str:
         if "sys.version_info" in command[-1]:
             return "3.12.1"
-        return "0.1.0"
+        return "0.2.0"
 
     async def _write_metadata(target: Path, payload: dict[str, str]) -> None:  # noqa: D401
         return None

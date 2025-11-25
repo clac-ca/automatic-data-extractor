@@ -961,7 +961,7 @@ The backing JSON shape is simple and self‑describing; structurally it might lo
     "started_at": "2024-01-01T12:00:00Z",
     "completed_at": "2024-01-01T12:00:05Z",
     "outputs": [".../normalized.xlsx"],
-    "engine_version": "0.1.0"
+    "engine_version": "0.2.0"
   },
   "config": {
     "schema": "ade.manifest/v1",
@@ -1272,7 +1272,7 @@ The CLI prints a JSON summary mirroring `RunResult`:
 
 ```jsonc
 {
-  "engine_version": "0.1.0",
+  "engine_version": "0.2.0",
   "run": {
     "id": "run-uuid",
     "status": "succeeded",

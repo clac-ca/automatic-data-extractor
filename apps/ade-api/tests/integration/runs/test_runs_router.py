@@ -147,7 +147,7 @@ async def _seed_real_configuration(
             venv_path=str(venv_path),
             config_version=config.config_version,
             content_digest=config.content_digest,
-            engine_version="0.1.0",
+            engine_version="0.2.0",
             engine_spec=settings.engine_spec,
             python_version=sys.version.split()[0],
             python_interpreter=str(python_exe),

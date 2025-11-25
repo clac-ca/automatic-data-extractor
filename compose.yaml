@@ -1,0 +1,21 @@
+services:
+  ade:
+    image: ghcr.io/clac-ca/automatic-data-extractor:local
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+
+    env_file:
+      - .env
+
+    ports:
+      - "8000:8000"
+
+    # Store everything ADE produces in a managed Docker volume
+    volumes:
+      - ade_data:/app/data
+
+    restart: unless-stopped
+
+volumes:
+  ade_data:

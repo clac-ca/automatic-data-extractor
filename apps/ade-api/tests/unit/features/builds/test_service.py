@@ -85,7 +85,7 @@ def service_factory(tmp_path: Path) -> Callable[[AsyncSession, FakeBuilder | Non
             """
 [project]
 name = "ade-engine"
-version = "0.1.0"
+version = "0.2.0"
 """.strip(),
             encoding="utf-8",
         )
@@ -156,7 +156,7 @@ async def test_prepare_build_reuses_active(session: AsyncSession, tmp_path: Path
         config_version=configuration.config_version,
         content_digest=configuration.content_digest,
         engine_spec=service.settings.engine_spec,
-        engine_version="0.1.0",
+        engine_version="0.2.0",
         python_interpreter=service.settings.python_bin,
         built_at=utc_now(),
     )
@@ -185,7 +185,7 @@ async def test_stream_build_success(session: AsyncSession, tmp_path: Path, servi
             BuilderStepEvent(step=BuildStep.INSTALL_ENGINE, message="install"),
             BuilderLogEvent(message="log 2"),
             BuilderArtifactsEvent(
-                artifacts=BuildArtifacts(python_version="3.12.1", engine_version="0.1.0")
+                artifacts=BuildArtifacts(python_version="3.12.1", engine_version="0.2.0")
             ),
         ]
     )
