@@ -39,6 +39,7 @@ Everything ADE produces at runtime (documents, jobs, venvs, caches, etc.) goes u
 
 ### 2.1 Prerequisites
 
+* [Git](https://git-scm.com/downloads)
 * [Docker](https://docs.docker.com/get-docker/)
 * [Docker Compose](https://docs.docker.com/compose/install/) (often included in recent Docker Desktop installs)
 
