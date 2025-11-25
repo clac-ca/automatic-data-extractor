@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.6
 
-# Keep base versions configurable but with sane defaults
+# Base versions (override at build time if needed)
 ARG PYTHON_VERSION=3.12
 ARG NODE_VERSION=20
 
@@ -8,18 +8,20 @@ ARG NODE_VERSION=20
 # Stage 1: Frontend build (Vite SPA)
 # =============================================================================
 FROM node:${NODE_VERSION}-alpine AS frontend-build
-WORKDIR /app
 
-# Install frontend dependencies using only manifest files (cache-friendly)
-COPY apps/ade-web/package*.json apps/ade-web/
-RUN npm ci --prefix apps/ade-web --no-audit --no-fund
+# We'll build the SPA from here:
+WORKDIR /app/apps/ade-web
 
-# Copy SPA sources and telemetry schemas required at build-time
-COPY apps/ade-web apps/ade-web
-COPY apps/ade-engine/src/ade_engine/schemas apps/ade-engine/src/ade_engine/schemas
+# Install frontend dependencies using only manifest files (better caching)
+COPY apps/ade-web/package*.json ./
+RUN npm ci --no-audit --no-fund
+
+# Copy SPA sources and telemetry schemas required at build time
+COPY apps/ade-web/ ./
+COPY apps/ade-engine/src/ade_engine/schemas ../ade-engine/src/ade_engine/schemas
 
 # Build production bundle
-RUN npm run build --prefix apps/ade-web
+RUN npm run build
 
 # =============================================================================
 # Stage 2: Backend build (install Python packages)
@@ -43,15 +45,16 @@ COPY apps/ade-cli/pyproject.toml    apps/ade-cli/
 COPY apps/ade-engine/pyproject.toml apps/ade-engine/
 COPY apps/ade-api/pyproject.toml    apps/ade-api/
 
+RUN python -m pip install -U pip
+
 # Now copy full sources
 COPY apps ./apps
 
 # Install CLI, engine, and API into an isolated prefix (/install)
-RUN python -m pip install -U pip \
-    && python -m pip install --no-cache-dir --prefix=/install \
-        ./apps/ade-cli \
-        ./apps/ade-engine \
-        ./apps/ade-api
+RUN python -m pip install --no-cache-dir --prefix=/install \
+    ./apps/ade-cli \
+    ./apps/ade-engine \
+    ./apps/ade-api
 
 # =============================================================================
 # Stage 3: Runtime image (what actually runs in prod)
@@ -61,9 +64,9 @@ FROM python:${PYTHON_VERSION}-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
-    ADE_API_ROOT=/app/apps/ade-api \
-    ADE_ALEMBIC_INI_PATH=/app/apps/ade-api/alembic.ini \
-    ADE_ALEMBIC_MIGRATIONS_DIR=/app/apps/ade-api/migrations \
+    API_ROOT=/app/apps/ade-api \
+    ALEMBIC_INI_PATH=/app/apps/ade-api/alembic.ini \
+    ALEMBIC_MIGRATIONS_DIR=/app/apps/ade-api/migrations \
     ADE_SERVER_HOST=0.0.0.0 \
     ADE_SERVER_PORT=8000
 
@@ -77,7 +80,7 @@ LABEL org.opencontainers.image.title="automatic-data-extractor" \
 # Bring in installed Python packages + console scripts
 COPY --from=backend-build /install /usr/local
 
-# Copy source tree (for migrations, templates, alembic.ini, etc.)
+# Copy app source tree (migrations, templates, etc.)
 COPY apps ./apps
 
 # Copy built SPA into FastAPI's static directory
