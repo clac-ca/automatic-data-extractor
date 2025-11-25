@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import os
 from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -65,7 +66,7 @@ DEFAULT_ALEMBIC_MIGRATIONS = DEFAULT_API_ROOT / "migrations"
 DEFAULT_DOCUMENTS_DIR = DEFAULT_STORAGE_ROOT / "documents"
 DEFAULT_CONFIGS_DIR = DEFAULT_STORAGE_ROOT / "config_packages"
 DEFAULT_VENVS_DIR = DEFAULT_STORAGE_ROOT / ".venv"
-DEFAULT_JOBS_DIR = DEFAULT_STORAGE_ROOT / "jobs"
+DEFAULT_RUNS_DIR = DEFAULT_STORAGE_ROOT / "runs"
 DEFAULT_PIP_CACHE_DIR = DEFAULT_STORAGE_ROOT / "cache" / "pip"
 DEFAULT_SQLITE_PATH = DEFAULT_STORAGE_ROOT / "db" / DEFAULT_DB_FILENAME
 DEFAULT_ENGINE_SPEC = "apps/ade-engine"
@@ -270,7 +271,7 @@ class Settings(BaseSettings):
     documents_dir: Path = Field(default=DEFAULT_DOCUMENTS_DIR)
     configs_dir: Path = Field(default=DEFAULT_CONFIGS_DIR)
     venvs_dir: Path = Field(default=DEFAULT_VENVS_DIR)
-    jobs_dir: Path = Field(default=DEFAULT_JOBS_DIR)
+    runs_dir: Path = Field(default=DEFAULT_RUNS_DIR)
     pip_cache_dir: Path = Field(default=DEFAULT_PIP_CACHE_DIR)
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
@@ -315,10 +316,10 @@ class Settings(BaseSettings):
     auth_disabled_user_email: str = "developer@example.test"
     auth_disabled_user_name: str | None = "Development User"
 
-    # Jobs & workers
+    # Runs & workers
     max_concurrency: int | None = Field(default=None, ge=1)
     queue_size: int | None = Field(default=None, ge=1)
-    job_timeout_seconds: int | None = Field(default=None, ge=1)  # accepts '5m', '300'
+    run_timeout_seconds: int | None = Field(default=None, ge=1)  # accepts '5m', '300'
     worker_cpu_seconds: int | None = Field(default=None, ge=1)   # plain seconds
     worker_mem_mb: int | None = Field(default=None, ge=1)
     worker_fsize_mb: int | None = Field(default=None, ge=1)
@@ -392,12 +393,12 @@ class Settings(BaseSettings):
             return None
         return _parse_duration(v, field_name=info.field_name)
 
-    @field_validator("job_timeout_seconds", mode="before")
+    @field_validator("run_timeout_seconds", mode="before")
     @classmethod
-    def _v_job_timeout(cls, v: Any) -> int | None:
+    def _v_run_timeout(cls, v: Any) -> int | None:
         if v in (None, ""):
             return None
-        return int(_parse_duration(v, field_name="job_timeout_seconds").total_seconds())
+        return int(_parse_duration(v, field_name="run_timeout_seconds").total_seconds())
 
     @field_validator("secret_key", mode="before")
     @classmethod
@@ -455,7 +456,7 @@ class Settings(BaseSettings):
         )
         self.configs_dir = _resolve_path(self.configs_dir, default=DEFAULT_CONFIGS_DIR)
         self.venvs_dir = _resolve_path(self.venvs_dir, default=DEFAULT_VENVS_DIR)
-        self.jobs_dir = _resolve_path(self.jobs_dir, default=DEFAULT_JOBS_DIR)
+        self.runs_dir = _resolve_path(self.runs_dir, default=DEFAULT_RUNS_DIR)
         self.pip_cache_dir = _resolve_path(
             self.pip_cache_dir, default=DEFAULT_PIP_CACHE_DIR
         )

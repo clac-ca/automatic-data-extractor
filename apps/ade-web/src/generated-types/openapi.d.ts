@@ -1021,109 +1021,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/jobs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Jobs Endpoint */
-        get: operations["list_jobs_endpoint_api_v1_workspaces__workspace_id__jobs_get"];
-        put?: never;
-        /** Submit Job Endpoint */
-        post: operations["submit_job_endpoint_api_v1_workspaces__workspace_id__jobs_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read Job Endpoint */
-        get: operations["read_job_endpoint_api_v1_workspaces__workspace_id__jobs__job_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/artifact": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Download Job Artifact */
-        get: operations["download_job_artifact_api_v1_workspaces__workspace_id__jobs__job_id__artifact_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/logs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Download Job Logs */
-        get: operations["download_job_logs_api_v1_workspaces__workspace_id__jobs__job_id__logs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Job Outputs */
-        get: operations["list_job_outputs_api_v1_workspaces__workspace_id__jobs__job_id__outputs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs/{output_path}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Download Job Output */
-        get: operations["download_job_output_api_v1_workspaces__workspace_id__jobs__job_id__outputs__output_path__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/system/safe-mode": {
         parameters: {
             query?: never;
@@ -1601,23 +1498,14 @@ export type components = {
          */
         DocumentLastRun: {
             /**
-             * Job Id
-             * @description Latest job ULID when the run came from a job.
-             */
-            job_id?: string | null;
-            /**
              * Run Id
              * @description Latest run identifier when the execution was streamed directly.
              */
             run_id?: string | null;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            status: components["schemas"]["RunStatus"];
             /**
              * Run At
-             * @description Timestamp for the latest job or run event (completion/start).
+             * @description Timestamp for the latest run event (completion/start).
              */
             run_at?: string | null;
             /**
@@ -1684,7 +1572,7 @@ export type components = {
             tags?: string[];
             /** @description Summary of the uploading user when available. */
             uploader?: components["schemas"]["UploaderOut"] | null;
-            /** @description Latest job execution associated with the document when available. */
+            /** @description Latest run execution associated with the document when available. */
             last_run?: components["schemas"]["DocumentLastRun"] | null;
         };
         /**
@@ -1942,151 +1830,6 @@ export type components = {
              * @description Optional human-readable note about the component state.
              */
             detail?: string | null;
-        };
-        /**
-         * JobConfigVersion
-         * @description Descriptor for the configuration version used by a job.
-         */
-        JobConfigVersion: {
-            /** Config Version Id */
-            config_version_id: string;
-            /** Title */
-            title?: string | null;
-            /** Semver */
-            semver?: string | null;
-        };
-        /**
-         * JobInputDocument
-         * @description Minimal representation of a document attached to a job.
-         */
-        JobInputDocument: {
-            /**
-             * Document Id
-             * @description ULID (26-character string).
-             */
-            document_id: string;
-            /** Display Name */
-            display_name?: string | null;
-            /** Name */
-            name?: string | null;
-            /** Original Filename */
-            original_filename?: string | null;
-            /** Content Type */
-            content_type?: string | null;
-            /** Byte Size */
-            byte_size?: number | null;
-        };
-        /**
-         * JobOutputFile
-         * @description Single file emitted by a job output directory.
-         */
-        JobOutputFile: {
-            /** Path */
-            path: string;
-            /** Byte Size */
-            byte_size: number;
-        };
-        /**
-         * JobOutputListing
-         * @description Collection of files produced by a job run.
-         */
-        JobOutputListing: {
-            /** Files */
-            files?: components["schemas"]["JobOutputFile"][];
-        };
-        /**
-         * JobRecord
-         * @description API representation of a persisted job.
-         */
-        JobRecord: {
-            /**
-             * Id
-             * @description ULID (26-character string).
-             */
-            id: string;
-            /**
-             * Workspace Id
-             * @description ULID (26-character string).
-             */
-            workspace_id: string;
-            /**
-             * Config Id
-             * @description ULID (26-character string).
-             */
-            config_id: string;
-            /** Config Version Id */
-            config_version_id: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
-            /**
-             * Queued At
-             * Format: date-time
-             */
-            queued_at: string;
-            /** Started At */
-            started_at?: string | null;
-            /** Completed At */
-            completed_at?: string | null;
-            /** Cancelled At */
-            cancelled_at?: string | null;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** Input Documents */
-            input_documents?: components["schemas"]["JobInputDocument"][];
-            /** Config Title */
-            config_title?: string | null;
-            config_version?: components["schemas"]["JobConfigVersion"] | null;
-            submitted_by_user?: components["schemas"]["JobSubmittedBy"] | null;
-            /** Submitted By */
-            submitted_by?: string | null;
-            /** Error Message */
-            error_message?: string | null;
-            /** Summary */
-            summary?: string | null;
-            /** Artifact Uri */
-            artifact_uri?: string | null;
-            /** Logs Uri */
-            logs_uri?: string | null;
-            /** Output Uri */
-            output_uri?: string | null;
-        };
-        /**
-         * JobSubmissionRequest
-         * @description Payload accepted when enqueuing a new job.
-         */
-        JobSubmissionRequest: {
-            /**
-             * Input Document Id
-             * @description Document ULID to process.
-             */
-            input_document_id: string;
-            /**
-             * Config Version Id
-             * @description Configuration version identifier.
-             */
-            config_version_id: string;
-            options?: components["schemas"]["RunCreateOptions"];
-        };
-        /**
-         * JobSubmittedBy
-         * @description Subset of user fields for the submitting actor.
-         */
-        JobSubmittedBy: {
-            /**
-             * Id
-             * @description ULID (26-character string).
-             */
-            id: string;
-            /** Display Name */
-            display_name?: string | null;
-            /** Email */
-            email?: string | null;
         };
         /**
          * LoginRequest
@@ -2426,11 +2169,22 @@ export type components = {
             object: "ade.run";
             /** Config Id */
             config_id: string;
+            /** Config Version Id */
+            config_version_id?: string | null;
+            /** Submitted By User Id */
+            submitted_by_user_id?: string | null;
             /**
              * Input Document Id
              * @description Document ULID staged for this run when provided.
              */
             input_document_id?: string | null;
+            /**
+             * Input Documents
+             * @description Descriptors for all input documents staged for the run.
+             */
+            input_documents?: {
+                [key: string]: unknown;
+            }[];
             /**
              * Input Sheet Name
              * @description Worksheet name used when ingesting XLSX inputs.
@@ -2446,18 +2200,35 @@ export type components = {
              * @enum {string}
              */
             status: "queued" | "running" | "succeeded" | "failed" | "canceled";
+            /**
+             * Attempt
+             * @default 1
+             */
+            attempt: number;
+            /** Retry Of Run Id */
+            retry_of_run_id?: string | null;
+            /** Trace Id */
+            trace_id?: string | null;
             /** Created */
             created: number;
             /** Started */
             started?: number | null;
             /** Finished */
             finished?: number | null;
+            /** Canceled */
+            canceled?: number | null;
             /** Exit Code */
             exit_code?: number | null;
             /** Output Paths */
             output_paths?: string[];
             /** Processed Files */
             processed_files?: string[];
+            /** Artifact Uri */
+            artifact_uri?: string | null;
+            /** Output Uri */
+            output_uri?: string | null;
+            /** Logs Uri */
+            logs_uri?: string | null;
             /** Artifact Path */
             artifact_path?: string | null;
             /** Events Path */
@@ -2467,6 +2238,12 @@ export type components = {
             /** Error Message */
             error_message?: string | null;
         };
+        /**
+         * RunStatus
+         * @description Lifecycle states for ADE runs.
+         * @enum {string}
+         */
+        RunStatus: "queued" | "running" | "succeeded" | "failed" | "canceled";
         /**
          * SafeModeStatus
          * @description Represents the current safe mode state.
@@ -6258,272 +6035,6 @@ export interface operations {
             path: {
                 /** @description Run identifier */
                 run_id: string;
-                output_path: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Output not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_jobs_endpoint_api_v1_workspaces__workspace_id__jobs_get: {
-        parameters: {
-            query?: {
-                status?: string | null;
-                input_document_id?: string | null;
-                limit?: number;
-                offset?: number;
-            };
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobRecord"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    submit_job_endpoint_api_v1_workspaces__workspace_id__jobs_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["JobSubmissionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    read_job_endpoint_api_v1_workspaces__workspace_id__jobs__job_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Job identifier */
-                job_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_job_artifact_api_v1_workspaces__workspace_id__jobs__job_id__artifact_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Job identifier */
-                job_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Artifact unavailable */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_job_logs_api_v1_workspaces__workspace_id__jobs__job_id__logs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Job identifier */
-                job_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Logs unavailable */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_job_outputs_api_v1_workspaces__workspace_id__jobs__job_id__outputs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Job identifier */
-                job_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobOutputListing"];
-                };
-            };
-            /** @description Outputs unavailable */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_job_output_api_v1_workspaces__workspace_id__jobs__job_id__outputs__output_path__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Job identifier */
-                job_id: string;
                 output_path: string;
             };
             cookie?: never;

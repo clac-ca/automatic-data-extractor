@@ -59,9 +59,9 @@
       "additionalProperties": false,
       "properties": {
         "on_activate": { "$ref": "#/$defs/HookList" },
-        "on_job_start": { "$ref": "#/$defs/HookList" },
+        "on_run_start": { "$ref": "#/$defs/HookList" },
         "on_after_extract": { "$ref": "#/$defs/HookList" },
-        "on_job_end": { "$ref": "#/$defs/HookList" }
+        "on_run_end": { "$ref": "#/$defs/HookList" }
       }
     },
     "columns": {

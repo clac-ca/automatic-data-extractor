@@ -535,7 +535,7 @@ Behaviour:
      * Output artifact links (if provided).
 
 5. The run also appears in the global **Runs** history view (see
-   `07-documents-and-runs.md`), which may still be backed by `/jobs` endpoints
+   `07-documents-and-runs.md`), which may still be backed by `/runs` endpoints
    server‑side.
 
 ---

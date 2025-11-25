@@ -15,7 +15,6 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.features.jobs.repository import JobsRepository
 from ade_api.features.runs.models import Run, RunStatus
 from ade_api.features.users.models import User
 from ade_api.settings import Settings
@@ -53,7 +52,6 @@ class DocumentsService:
             raise RuntimeError("Document storage directory is not configured")
         self._storage = DocumentStorage(documents_dir)
         self._repository = DocumentsRepository(session)
-        self._jobs_repository = JobsRepository(session)
 
     async def create_document(
         self,
@@ -275,41 +273,21 @@ class DocumentsService:
         workspace_id: str,
         documents: Sequence[DocumentOut],
     ) -> None:
-        """Populate ``last_run`` on each document using recent job + run data."""
+        """Populate ``last_run`` on each document using recent run data."""
 
         if not documents:
             return
 
-        summaries = await self._jobs_repository.latest_runs_for_documents(
-            workspace_id=workspace_id,
-            document_ids=[document.id for document in documents],
-        )
         run_summaries = await self._latest_stream_runs(
             workspace_id=workspace_id, documents=documents
         )
         for document in documents:
-            job_summary = summaries.get(document.id)
-            run_summary = run_summaries.get(document.id)
-
-            winner = None
-            if job_summary and run_summary:
-                job_ts = job_summary.run_at or datetime.min.replace(tzinfo=UTC)
-                run_ts = run_summary.run_at or datetime.min.replace(tzinfo=UTC)
-                winner = run_summary if run_ts >= job_ts else job_summary
-            else:
-                winner = run_summary or job_summary
-
-            if winner is None:
+            summary = run_summaries.get(document.id)
+            if summary is None:
                 document.last_run = None
                 continue
 
-            document.last_run = DocumentLastRun(
-                job_id=getattr(winner, "job_id", None),
-                run_id=getattr(winner, "run_id", None),
-                status=winner.status,
-                run_at=winner.run_at,
-                message=winner.message,
-            )
+            document.last_run = summary
 
     async def _latest_stream_runs(
         self, *, workspace_id: str, documents: Sequence[DocumentOut]
@@ -335,10 +313,9 @@ class DocumentsService:
                 continue
             timestamp = run.finished_at or run.started_at or run.created_at
             status_value = (
-                "cancelled" if run.status == RunStatus.CANCELED else run.status.value
+                RunStatus.CANCELED if run.status == RunStatus.CANCELED else run.status
             )
             latest[doc_id] = DocumentLastRun(
-                job_id=None,
                 run_id=run.id,
                 status=status_value,
                 run_at=timestamp,

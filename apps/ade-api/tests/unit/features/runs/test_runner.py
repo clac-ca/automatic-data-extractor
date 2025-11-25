@@ -26,7 +26,7 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
         "    'version': '1.0.0',\n"
         "    'run_id': 'run-1',\n"
         "    'timestamp': '2024-01-01T00:00:00Z',\n"
-        "    'metadata': {'job_id': 'job-1'},\n"
+        "    'metadata': {'run_id': 'run-1'},\n"
         "    'event': {'event': 'pipeline_transition', 'level': 'info', 'payload': {'phase': 'mapping'}},\n"
         "}\n"
         "time.sleep(0.05)\n"
@@ -35,7 +35,7 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
     )
 
     command = [sys.executable, str(script), str(events_path)]
-    runner = ADEProcessRunner(command=command, job_dir=tmp_path, env=os.environ.copy())
+    runner = ADEProcessRunner(command=command, run_dir=tmp_path, env=os.environ.copy())
 
     frames = []
     async for frame in runner.stream():

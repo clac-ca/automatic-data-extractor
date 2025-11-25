@@ -268,7 +268,7 @@ The frontend should:
 * Avoid implementing custom token logic.
 * Trigger a refresh only when the backend’s contract requires it (e.g. via a small helper hook that calls refresh on certain error codes, then retries the failed request).
 
-The exact refresh policy is backend‑driven; the frontend’s job is to re‑read `Session` and `EffectivePermissions` whenever the backend indicates that the session has changed.
+The exact refresh policy is backend‑driven; the frontend’s run is to re‑read `Session` and `EffectivePermissions` whenever the backend indicates that the session has changed.
 
 ### 4.3 Global vs workspace‑local data
 
@@ -548,7 +548,7 @@ UI behaviour:
 
     > “Disabled while safe mode is enabled: Maintenance window – new runs are temporarily disabled.”
 
-The backend may still reject blocked operations; the UI’s job is to make the state obvious and avoid a confusing “click → no‑op” experience.
+The backend may still reject blocked operations; the UI’s run is to make the state obvious and avoid a confusing “click → no‑op” experience.
 
 ### 6.4 Safe mode banner
 

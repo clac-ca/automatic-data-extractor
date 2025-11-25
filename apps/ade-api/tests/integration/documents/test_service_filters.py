@@ -8,7 +8,7 @@ from ade_api.features.documents.filters import DocumentFilters, DocumentSource, 
 from ade_api.features.documents.models import Document, DocumentTag
 from ade_api.features.documents.service import DocumentsService
 from ade_api.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
-from ade_api.features.jobs.models import Job, JobStatus
+from ade_api.features.runs.models import Run, RunStatus
 from ade_api.features.users.models import User
 from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import get_settings
@@ -78,8 +78,8 @@ async def _build_documents_fixture(session):
     return workspace, uploader, colleague, processed, uploaded
 
 
-async def _ensure_config_version(session, workspace_id: str) -> tuple[str, str]:
-    """Create minimal configuration row to satisfy job foreign keys."""
+async def _ensure_config_version(session, workspace_id: str) -> tuple[str, str, str]:
+    """Create minimal configuration row to satisfy run foreign keys."""
 
     configuration = Configuration(
         workspace_id=workspace_id,
@@ -90,7 +90,7 @@ async def _ensure_config_version(session, workspace_id: str) -> tuple[str, str]:
     session.add(configuration)
     await session.flush()
 
-    return configuration.config_id, configuration.config_id
+    return configuration.id, configuration.config_id, str(configuration.config_version)
 
 
 async def test_list_documents_applies_filters_and_sorting() -> None:
@@ -221,16 +221,20 @@ async def test_list_documents_includes_last_run_summary() -> None:
         )
 
         now = datetime.now(tz=UTC)
-        config_id, config_version_id = await _ensure_config_version(session, str(workspace.id))
-        job = Job(
+        configuration_id, config_id, config_version_id = await _ensure_config_version(
+            session, str(workspace.id)
+        )
+        run = Run(
+            id=generate_ulid(),
             workspace_id=str(workspace.id),
+            configuration_id=configuration_id,
             config_id=config_id,
             config_version_id=config_version_id,
             submitted_by_user_id=uploader.id,
-            status=JobStatus.FAILED,
+            status=RunStatus.FAILED,
             attempt=1,
-            retry_of_job_id=None,
-            input_hash=None,
+            retry_of_run_id=None,
+            input_document_id=processed.id,
             input_documents=[
                 {"document_id": processed.id, "name": processed.original_filename},
             ],
@@ -238,14 +242,13 @@ async def test_list_documents_includes_last_run_summary() -> None:
             artifact_uri=None,
             output_uri=None,
             logs_uri=None,
-            run_request_uri=None,
-            queued_at=now - timedelta(minutes=10),
+            created_at=now - timedelta(minutes=10),
             started_at=now - timedelta(minutes=5),
-            completed_at=now - timedelta(minutes=1),
-            cancelled_at=None,
+            finished_at=now - timedelta(minutes=1),
+            canceled_at=None,
             error_message="Request failed with status 404",
         )
-        session.add(job)
+        session.add(run)
         await session.flush()
 
         service = DocumentsService(session=session, settings=settings)
@@ -267,10 +270,10 @@ async def test_list_documents_includes_last_run_summary() -> None:
 
         processed_record = next(item for item in result.items if item.id == processed.id)
         assert processed_record.last_run is not None
-        assert processed_record.last_run.job_id == job.id
-        assert processed_record.last_run.status == JobStatus.FAILED.value
+        assert processed_record.last_run.run_id == run.id
+        assert processed_record.last_run.status == RunStatus.FAILED
         assert processed_record.last_run.message == "Request failed with status 404"
-        assert processed_record.last_run.run_at == job.completed_at
+        assert processed_record.last_run.run_at == run.finished_at
 
         uploaded_record = next(item for item in result.items if item.id == uploaded.id)
         assert uploaded_record.last_run is None

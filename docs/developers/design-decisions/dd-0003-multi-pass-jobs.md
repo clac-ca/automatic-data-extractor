@@ -1,4 +1,4 @@
-# DD-0003: Multi‑Pass Jobs
+# DD-0003: Multi‑Pass Runs
 
 Date: 2025-10-29
 
@@ -21,4 +21,4 @@ Four passes: (1) row analysis & headers, (2) detection & mapping (sample‑based
 
 ## Links
 
-- See: `../02-job-orchestration.md`
+- See: `../02-run-orchestration.md`

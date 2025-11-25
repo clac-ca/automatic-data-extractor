@@ -1,7 +1,7 @@
 # WP7 — Observability, Housekeeping & Docs
 
 ## Goal
-Make the end-to-end config/build/job system easy to operate through structured logs, periodic sweeps, and updated documentation.
+Make the end-to-end config/build/run system easy to operate through structured logs, periodic sweeps, and updated documentation.
 
 ## Observability
 * Emit structured logs for:
@@ -22,6 +22,6 @@ Make the end-to-end config/build/job system easy to operate through structured l
 * Add `docs/developers/00-config-router.md` (or equivalent) summarizing the config endpoints, lifecycle, and unified creation pipeline.
 
 ## Acceptance
-* Logs make it straightforward to trace creation → edit → build → job.
+* Logs make it straightforward to trace creation → edit → build → run.
 * Startup sweeps leave the workspace dirs clean without touching active configs/builds.
 * Docs accurately explain how to create, activate, build, run, and troubleshoot configs end-to-end.

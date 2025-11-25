@@ -11,7 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Refactor configuration build orchestration to stream NDJSON events, persist build/log tables, and expose `/api/v1/.../builds` endpoints with background execution.
 - Document the streaming builds API contract in `docs/ade_builds_api_spec.md` and synchronize the work package/plan guidance for downstream agents.
 - Wire the config builder console to the streaming build/run APIs with NDJSON helpers, formatter tests, and refreshed workbench controls.
-- Introduce `ADE_SAFE_MODE` to boot the API/UI without executing config packages, surfacing a health component and UI banner while job submissions return HTTP 400.
+- Introduce `ADE_SAFE_MODE` to boot the API/UI without executing config packages, surfacing a health component and UI banner while run submissions return HTTP 400.
 - Deliver workspace chrome toggles and a redesigned documents page with filters, grid/list views, bulk actions, and an inspector drawer.
 - Introduce an Angular workspace directory service with loading and error states to power the app shell navigation.
 - Rebuild the ADE frontend in `apps/ade-web/` with a Vite/React workspace shell, focus mode, inspector context, and document/configuration surfaces.
@@ -30,7 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Simplify SSO discovery by removing in-process metadata and JWKS caches in favour of per-request fetches.
 - Drop configurable provider lists; `/auth/providers` now surfaces the default SSO option whenever OIDC is enabled.
 - Relocate Alembic migrations to `ade/db/migrations/` and let the engine manage bootstrap/metadata loading for autogenerate.
-- Introduce per-feature service dependencies and repositories (documents, configurations, jobs, users, health) to keep routers thin, scaffold system-settings helpers for future admin flows, and mount the v1 router from `ade/v1/router.py`.
+- Introduce per-feature service dependencies and repositories (documents, configurations, runs, users, health) to keep routers thin, scaffold system-settings helpers for future admin flows, and mount the v1 router from `ade/v1/router.py`.
 - Replace the legacy workspace layout with a four-zone navigation model (top bar, collapsible left rail, main surface, optional inspector) and persist per-workspace chrome state.
 - Simplify router spine: remove remote-mounted AppShell chrome, render workspace nav/top bar inside `WorkspaceLayout`, and gate private routes with a plain session-guarded Outlet.
 - Move the backend package under `apps/ade-api/src/ade_api/` and align tooling, docs, and build outputs with the new location.

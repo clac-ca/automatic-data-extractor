@@ -22,7 +22,7 @@ def ensure_runtime_dirs(settings: Settings | None = None) -> None:
     resolved = settings or get_settings()
 
     targets: set[Path] = set()
-    for attribute in ("documents_dir", "configs_dir", "venvs_dir", "jobs_dir", "pip_cache_dir"):
+    for attribute in ("documents_dir", "configs_dir", "venvs_dir", "runs_dir", "pip_cache_dir"):
         candidate = getattr(resolved, attribute, None)
         if candidate is not None:
             targets.add(Path(candidate))
