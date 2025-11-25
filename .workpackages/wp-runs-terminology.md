@@ -138,7 +138,7 @@ data/
 - Docs in `apps/ade-web/docs` and bundled markdowns (`README.md`, bundle-*.md, ade-web-docs-bundle.md, docs/01-domain-model...`, `03-routing`, `04-data-layer`, `06-workspace-layout`, `07-documents-jobs-and-runs`, etc.) → rewrite to runs-only.
 
 ### Repo docs (outside frontend)
-- Job-focused docs to rewrite or retire: `docs/developers/workpackages/wp6-jobs-integration.md`, `_archive/02-job-orchestration.md`, `_archive/14-job_artifact_json.md`, `dd-0003-multi-pass-jobs.md`, empty `docs/developers/03-run-jobs.md`.
+- Job-focused docs to rewrite or retire: `docs/README.md` (“jobs run”, “monitoring jobs”), `docs/developers/README.md` (numerous job mentions, paths, tables, hook names), `docs/templates/api-reference-template.md` (POST /jobs template), `docs/reference/glossary.md` (job definition), `docs/reference/api-guide.md` (jobs routes), `docs/reference/runs_frontend_integration.md` (calls out legacy jobs endpoints), `docs/developers/02-build-venv.md` (job language and tables), `docs/admin-guide/permission_catalog.md` (Workspace.Jobs scopes), `docs/developers/schemas/*` (artifact schema job node), `docs/developers/workpackages/wp5/wp6/wp7/wp9/wp10/wp11` (job terminology), `docs/developers/design-decisions/dd-0002/dd-0003`, `docs/developers/01-config-packages.md` (job params in hooks), `docs/templates` references. Rewrite to runs-only or delete obsolete sections.
 - Engine docs: `apps/ade-engine/docs/01-engine-runtime.md` mentions “backend jobs” metadata → update to runs wording if keeping metadata examples.
 
 ### Storage layout

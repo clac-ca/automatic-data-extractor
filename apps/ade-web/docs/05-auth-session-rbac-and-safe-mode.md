@@ -1,423 +1,483 @@
-# 05 – Auth, session, RBAC, and safe mode
+# 05 – Auth, Session, RBAC, and Safe Mode
 
-This document explains how ADE Web handles:
+ADE Web relies on the backend for:
 
 - **Authentication** (setup, login, logout, SSO),
-- The **session model** on the frontend,
-- **Roles & permissions** (RBAC) at global and workspace scope,
-- The **safe mode** kill‑switch and how it affects the UI.
+- The current **session** (who is the signed‑in user),
+- **Roles & permissions** (RBAC),
+- A global **safe mode** kill switch that blocks new runs.
 
-It is written from the frontend’s point of view: how we consume the backend APIs and how we structure the code so that auth, permissions, and safe mode are predictable and easy to work with.
+This document describes how the frontend models these concepts and how they are used to shape the UI.
 
-For domain terminology (Workspace, Job, Configuration, etc.), see  
+For domain terminology (Workspace, Document, Run, Configuration, etc.), see  
 [`01-domain-model-and-naming.md`](./01-domain-model-and-naming.md).
 
 ---
 
-## 1. Goals and principles
+## 1. Goals and scope
 
-Auth/RBAC/safe mode in ADE Web should:
+**Goals**
 
-1. **Feel transparent to users**  
-   - Permissions are enforced without surprises.  
-   - If you can’t do something, you either don’t see it or you see it clearly disabled with an explanation.
+- One clear, consistent mental model for auth, session, RBAC, and safe mode.
+- Make it obvious where to fetch identity and permissions, and how to check them.
+- Ensure safe mode behaviour is consistent everywhere runs can be started.
+- Keep the frontend thin: permission decisions are made on the backend; the UI only consumes them.
 
-2. **Be simple to reason about in code**  
-   - One **canonical session shape** and one **effective permissions shape**.  
-   - Thin, well‑named hooks for permission checks.
+**Non‑goals**
 
-3. **Avoid duplication of policy**  
-   - Backend remains the source of truth for permissions and safe mode.  
-   - Frontend never tries to “re‑implement RBAC”; it only checks booleans.
+- Describing the backend’s full auth/RBAC implementation.
+- Enumerating every possible permission key.
 
-4. **Stay secure by default**  
-   - No secrets in localStorage.  
-   - No open redirects.  
-   - No accidental access to workspaces a user doesn’t belong to.
+Only frontend‑relevant behaviour and contracts are covered here.
 
 ---
 
-## 2. High‑level architecture
+## 2. Core frontend models
 
-On the backend, auth and RBAC are exposed via:
+### 2.1 Session (who is signed in)
 
-- **Auth & session** endpoints:
-  - `GET /api/v1/auth/session` – active session profile  
-  - `POST /api/v1/auth/session` – create session (email/password)  
-  - `DELETE /api/v1/auth/session` – terminate session  
-  - `POST /api/v1/auth/session/refresh` – refresh session  
-  - `GET /api/v1/auth/providers` – auth provider list  
-  - `GET /api/v1/auth/sso/login` / `GET /api/v1/auth/sso/callback` – SSO roundtrip  
-  - `GET /api/v1/setup/status` / `POST /api/v1/setup` – initial admin setup
+The **Session** describes the current principal (signed‑in user) and their high‑level context.
 
-- **Identity, roles, permissions**:
-  - `GET  /api/v1/users/me` – authenticated user profile  
-  - `GET  /api/v1/me/permissions` – effective permissions for the caller  
-  - `POST /api/v1/me/permissions/check` – check specific permissions  
-  - `GET/POST/PATCH/DELETE /api/v1/roles` – global roles  
-  - `GET/POST/DELETE /api/v1/role-assignments` – global role assignments  
-  - `GET /api/v1/workspaces/{workspace_id}/roles` – workspace roles  
-  - `GET/POST/DELETE /api/v1/workspaces/{workspace_id}/role-assignments` – workspace role assignments  
-  - `GET/POST/DELETE /api/v1/workspaces/{workspace_id}/members` – workspace members and their roles
+```ts
+export interface Session {
+  readonly user: {
+    readonly id: string;
+    readonly name: string;
+    readonly email: string;
+    readonly avatarUrl?: string | null;
+  };
 
-- **Safe mode**:
-  - `GET /api/v1/system/safe-mode` – current safe mode status  
-  - `PUT /api/v1/system/safe-mode` – toggle safe mode and update message
+  /** Optional "home" workspace used as a default landing. */
+  readonly defaultWorkspaceId?: string | null;
 
-On the frontend we model this as three main concepts:
+  /** Lightweight view of where this user belongs. */
+  readonly workspaceMemberships: readonly WorkspaceMembershipSummary[];
+}
 
-1. A **Session** query – “who am I and am I logged in?”
-2. An **EffectivePermissions** query – “what am I allowed to do?”
-3. A **SafeModeStatus** query – “is engine execution currently blocked?”
+export interface WorkspaceMembershipSummary {
+  readonly workspaceId: string;
+  readonly workspaceName: string;
+  /** Role ids/slugs in this workspace (for display and mapping to permissions). */
+  readonly roles: readonly string[];
+}
+````
 
-Screens then compose these three pieces using small, predictable hooks.
+Characteristics:
+
+* Fetched via `GET /api/v1/auth/session` (or `GET /api/v1/users/me` if that is the canonical endpoint).
+* Cached with React Query.
+* Treated as the **single source of truth** for “who am I?”; we do not duplicate user identity elsewhere.
+
+We **do not** persist session data or tokens in `localStorage`. Auth is handled by the backend (typically via cookies). The frontend simply reads and reacts to the session.
+
+### 2.2 Effective permissions
+
+The frontend does not recompute permission graphs. Instead it consumes a pre‑computed set of permission keys from the backend.
+
+```ts
+export interface EffectivePermissions {
+  /** Global permissions that apply regardless of workspace. */
+  readonly global: readonly string[];
+
+  /** Optional: per‑workspace permission keys. */
+  readonly workspaces?: Record<string, readonly string[]>;
+}
+```
+
+This is fetched via:
+
+* `GET /api/v1/me/permissions`, optionally accompanied by:
+* `POST /api/v1/me/permissions/check` for specific “does the caller have X?” questions.
+
+Permissions are **string keys** like:
+
+* `Workspaces.Create`
+* `Workspace.Runs.Read`
+* `Workspace.Runs.Run`
+* `Workspace.Settings.ReadWrite`
+* `System.SafeMode.Read`
+* `System.SafeMode.ReadWrite`
+
+The exact catalog is backend‑defined and discoverable via `GET /api/v1/permissions` for settings UIs.
+
+### 2.3 Safe mode status
+
+Safe mode is represented as:
+
+```ts
+export interface SafeModeStatus {
+  readonly enabled: boolean;
+  readonly detail: string | null;  // human-readable explanation
+}
+```
+
+* Fetched from `GET /api/v1/system/safe-mode`.
+* Cached via React Query with a moderate `staleTime`.
+* Drives:
+
+  * A persistent banner inside the workspace shell.
+  * Disabling all **run‑invoking** actions (starting new runs, config builds, validations, activations that trigger runs).
 
 ---
 
-## 3. Initial setup flow
+## 3. Initial setup and authentication flows
 
-When ADE is first deployed, **no users exist**. ADE Web must detect this and prompt for initial administrator setup.
+### 3.1 First‑run setup
 
-### 3.1 Setup detection
+On first deployment, ADE may require a “first admin” to be created.
 
-On app start, the entry strategy does:
+The entry strategy:
 
 1. Call `GET /api/v1/setup/status`.
-2. If the API responds “setup required”:
-   - Navigate to `/setup`.
+2. If `requires_setup == true`:
+
+   * Navigate to `/setup`.
+   * Render the first‑admin setup screen.
 3. Otherwise:
-   - Continue with normal auth/session checks.
 
-The **Setup screen** at `/setup`:
+   * Proceed to normal login/session checks.
 
-- Collects the details for the first admin user (email, name, password).
-- Calls `POST /api/v1/setup`.
-- On success:
-  - Redirects to `/login` with a success message, or directly signs in (depending on backend behaviour).
+The setup screen:
 
-Setup endpoints are **public**, but can only be called when the backend says setup is required. All subsequent requests should see “setup not required” and be rejected if someone tries to hit `/setup` again.
+* Collects the first admin’s information (e.g. name, email, password).
+* Calls `POST /api/v1/setup` to create the user and initial session.
+* On success, redirects to:
 
----
+  * The workspace directory (`/workspaces`), or
+  * A validated `redirectTo` path, if present.
 
-## 4. Authentication flows
+Setup endpoints are public but should be callable only while `requires_setup == true`. After setup, this flag becomes false and the `/setup` path should redirect to `/login` or `/workspaces`.
 
-ADE Web supports:
+### 3.2 Email/password login
 
-- Email/password login.
-- SSO login.
-- Session refresh and logout.
+Email/password authentication uses:
 
-### 4.1 Email/password login
-
-The **Login screen** (`/login`) is responsible for:
-
-- Rendering the list of auth providers (from `GET /api/v1/auth/providers`).
-- Rendering an email/password form when local auth is enabled.
+* `POST /api/v1/auth/session` – create a session.
+* `DELETE /api/v1/auth/session` – terminate the current session.
+* `POST /api/v1/auth/session/refresh` – optional session refresh.
 
 Flow:
 
-1. User submits email/password.
-2. Frontend calls `POST /api/v1/auth/session` with credentials.
-3. On success:
-   - Session cookie is set by the backend (http‑only).
-   - We invalidate and refetch the **Session** and **EffectivePermissions** queries.
-   - We redirect:
-     - To `redirectTo` query param if present and valid.
-     - Otherwise to the workspace directory (`/workspaces`) or default workspace.
+1. On `/login`, render the login form.
+2. On submit:
 
-Errors:
+   * Call `createSession({ email, password })`.
+   * On success:
 
-- Invalid credentials → inline form error, no redirect.
-- Other errors → generic error message.
+     * Invalidate and refetch the `session` and `effectivePermissions` queries.
+     * Redirect to `redirectTo` (if safe) or to the default route.
+3. On invalid credentials:
 
-We do **not** store the session token in localStorage; we rely on the backend’s cookie/session implementation.
+   * Show an inline form error.
+4. On other errors:
 
-### 4.2 SSO login
+   * Show a generic error and keep the user on `/login`.
 
-If SSO providers are configured:
+Logout:
 
-- The Login screen shows provider buttons based on `GET /api/v1/auth/providers`.
-- Clicking a provider:
-  - Navigates to `GET /api/v1/auth/sso/login?provider=<id>&redirectTo=<path>`.
-  - Backend immediately responds with `302` to the IdP.
+* Initiated via “Sign out” in the profile menu.
+* Calls `DELETE /api/v1/auth/session`.
+* Clears the React Query cache and navigates to `/login`.
 
-On successful IdP authentication:
+At no point are credentials or tokens written to `localStorage`.
 
-- IdP redirects to `GET /api/v1/auth/sso/callback?...`.
-- Backend validates the result, creates the session and sets cookies.
-- Backend then redirects back to ADE Web (e.g. `/auth/callback`).
+### 3.3 SSO login
 
-On the **Auth callback screen** (`/auth/callback`):
+When SSO is enabled, providers are listed via:
 
-1. Optionally show a short “Signing you in…” state.
-2. Invalidate and refetch Session & permissions.
-3. Redirect to:
-   - `redirectTo` from the callback URL (if valid and same‑origin).
-   - Otherwise workspace directory or default workspace.
+* `GET /api/v1/auth/providers`.
 
-### 4.3 Session refresh
+SSO flow:
 
-Sessions can expire. To provide a smooth experience:
+1. `/login` renders buttons for each provider.
+2. Clicking a provider navigates to `GET /api/v1/auth/sso/login?provider=<id>&redirectTo=<path>`:
 
-- A refresh mechanism calls `POST /api/v1/auth/session/refresh` when:
-  - Certain errors indicate an expiring session, or
-  - A background job refresh timer runs (if implemented).
+   * Backend responds with a redirect to the IdP.
+3. After IdP authentication, the user is redirected to `GET /api/v1/auth/sso/callback`.
+4. Backend verifies the callback, establishes a session, and then redirects to the ADE Web app (e.g. `/auth/callback`).
 
-On successful refresh:
+The `/auth/callback` screen:
 
-- Backend extends cookies.
-- We refetch Session & permissions if needed.
+* Optionally shows a “Signing you in…” loading state.
+* Refetches the `session` and `effectivePermissions` queries.
+* Redirects just like email/password login:
 
-On failure:
+  * To a validated `redirectTo`, or
+  * To the default route.
 
-- We treat the user as logged out:
-  - Clear any in‑memory session state.
-  - Redirect to `/login` with a “session expired” message.
+### 3.4 Redirect handling
 
-### 4.4 Logout
+`redirectTo` is used to send the user back to where they were going, for example:
 
-From the **Profile dropdown**, “Sign out”:
+* After login,
+* After SSO callback,
+* After first‑run setup.
 
-1. Calls `DELETE /api/v1/auth/session`.
-2. Regardless of success/failure:
-   - Clears React Query cache and any in‑memory auth state.
-   - Navigates to `/login`.
+Redirect safety rules:
 
-While logout is in progress:
+* Accept only **relative paths**, e.g. `/workspaces/123/runs`.
+* Reject any string that:
 
-- Disable the sign‑out button.
-- Optionally show “Signing out…” text.
+  * Contains a scheme (`://`),
+  * Starts with `//`,
+  * Resolves outside the current origin,
+  * Starts with suspicious prefixes (`javascript:`, etc).
 
----
-
-## 5. Session model on the frontend
-
-We treat **“who am I?”** as a single canonical object.
-
-### 5.1 Session query
-
-`useSessionQuery()` (in `shared/auth`):
-
-- Calls `GET /api/v1/auth/session`.
-- Returns:
-
-  ```ts
-  interface Session {
-    user: {
-      id: string;
-      email: string;
-      name: string;
-      avatarUrl?: string | null;
-    };
-    // Optionally:
-    defaultWorkspaceId?: string | null;
-    globalPermissions?: string[];
-    // Any other flags the backend chooses to expose.
-  }
-````
-
-* If the request returns 401/403:
-
-  * Treat as “not authenticated”.
-  * Screens that require auth redirect to `/login`.
-
-### 5.2 User profile
-
-`GET /api/v1/users/me` may provide more detailed profile information (e.g. extra fields).
-
-We normally:
-
-* Use `Session.user` for most UI (display name, email).
-* Use `/users/me` only for areas that need extended info (e.g. profile management screen).
-
-To keep things simple:
-
-* `useSessionQuery` is considered the **one true source** of “current user” for the rest of the app.
-* If we need more fields, we add them to the backend’s session shape and the `Session` interface.
-
----
-
-## 6. Roles & permissions (RBAC)
-
-RBAC provides:
-
-* **Global roles & assignments** for system‑level capabilities.
-* **Workspace roles & assignments** for per‑workspace capabilities.
-* **Effective permissions** for answering yes/no permission checks.
-
-### 6.1 Effective permissions
-
-We centralise permission evaluation in the backend, and the frontend only asks for effective results.
-
-`useEffectivePermissionsQuery()`:
-
-* Calls `GET /api/v1/me/permissions`.
-* Returns:
-
-  ```ts
-  interface EffectivePermissions {
-    // Flattened set of permission keys the user has globally.
-    global: string[];
-
-    // Optionally: per-workspace map.
-    workspaces?: Record<string, string[]>; // workspaceId -> permissions
-  }
-  ```
-
-When we need to check a specific set of permissions **for one action** and don’t want to transfer all of them, we can use:
-
-* `POST /api/v1/me/permissions/check` with a list of permission keys.
-* The corresponding helper: `checkPermissions(keys)` – returns a boolean or per‑key result.
-
-However, the **preferred pattern** is to fetch effective permissions once and reuse them.
-
-### 6.2 Global roles & assignments
-
-Frontend exposure:
-
-* Screens to list and manage global roles and assignments are usually restricted to high‑privilege users.
-
-Endpoints:
-
-* `GET /api/v1/roles` – list global roles.
-* `POST /api/v1/roles` – create role.
-* `PATCH /api/v1/roles/{role_id}` – update role.
-* `DELETE /api/v1/roles/{role_id}` – delete role.
-* `GET /api/v1/role-assignments` – list global assignments.
-* `POST /api/v1/role-assignments` – assign a role to a principal.
-* `DELETE /api/v1/role-assignments/{assignment_id}` – remove assignment.
-
-The UI:
-
-* May have an “Admin” section for system‑wide role management.
-* Will be permission‑gated by a global permission (e.g. `System.Roles.ReadWrite`).
-
-### 6.3 Workspace roles & assignments
-
-A workspace defines its own roles that aggregate permissions.
-
-Endpoints:
-
-* `GET /api/v1/workspaces/{workspace_id}/roles` – list workspace roles.
-* `GET /api/v1/workspaces/{workspace_id}/role-assignments` – list role assignments.
-* `POST /api/v1/workspaces/{workspace_id}/role-assignments` – assign a workspace role to a principal.
-* `DELETE /api/v1/workspaces/{workspace_id}/role-assignments/{assignment_id}` – remove an assignment.
-* `GET /api/v1/workspaces/{workspace_id}/members` – list workspace members and their roles.
-* `POST /api/v1/workspaces/{workspace_id}/members` – add a member.
-* `DELETE /api/v1/workspaces/{workspace_id}/members/{membership_id}` – remove a member.
-* `PUT /api/v1/workspaces/{workspace_id}/members/{membership_id}/roles` – replace roles for a member.
-
-The **Settings → Members** and **Settings → Roles** tabs (see `06-workspace-layout-and-sections.md`) use these endpoints.
-
-### 6.4 Permission helpers
-
-To make permission checks uniform, we expose a small set of helpers in `shared/permissions`:
+We centralise this logic in a helper, e.g.:
 
 ```ts
-function hasPermission(
-  permissions: EffectivePermissions,
-  key: string,
-  workspaceId?: string,
-): boolean;
-
-function hasAnyPermission(
-  permissions: EffectivePermissions,
-  keys: string[],
-  workspaceId?: string,
-): boolean;
+function resolveRedirectPath(raw?: string | null): string;
 ```
 
-Usage patterns:
+If validation fails or `redirectTo` is omitted:
 
-* **Global actions** (creating workspaces, toggling safe mode):
+* Fallback to:
 
-  ```ts
-  const canCreateWorkspace = hasPermission(perms, "Workspaces.Create");
-  ```
-
-* **Workspace actions** (editing members, running jobs):
-
-  ```ts
-  const canManageMembers = hasPermission(
-    perms,
-    "Workspace.Members.ReadWrite",
-    workspaceId,
-  );
-  ```
-
-These helpers are used in:
-
-* **Nav construction**: decide which nav items to show.
-* **Screens**: decide whether to show entire sections.
-* **Buttons/forms**: decide whether to show actions and whether to disable them.
-
-We avoid sprinkling raw permission key strings directly throughout screens. Instead:
-
-* Expose small domain helpers when possible, e.g. `canEditWorkspaceMembers(perms, workspaceId)` that calls `hasPermission` under the hood.
+  * The user’s default workspace (if `Session.defaultWorkspaceId` is set), or
+  * The workspace directory (`/workspaces`).
 
 ---
 
-## 7. Permission UX patterns
+## 4. Session lifecycle and caching
 
-Permissions should be visible and predictable in the UI.
+### 4.1 Fetching the session
 
-### 7.1 Hide vs disable
+On app startup and after any login/logout, ADE Web fetches the session:
 
-Guidelines:
+* `GET /api/v1/auth/session` (or equivalent).
 
-* **Hide** actions a user should not know exist:
+`useSessionQuery()`:
 
-  * “Create workspace” for non‑admins.
-  * “Manage global roles” section for non‑system admins.
+* Wraps the React Query call.
+* Treats 401/403 as “no active session”.
 
-* **Disable with explanation** when the user is aware of the concept but not allowed to perform it:
+Behaviour:
 
-  * Safe mode toggle for non‑admins.
-  * “Add member” button when user can see members but cannot edit.
+* If the user navigates to an authenticated route and `useSessionQuery()` resolves as unauthenticated:
 
-Disable pattern:
+  * Redirect them to `/login` with an optional `redirectTo` back to the original path.
 
-* Use the `disabled` prop on buttons and show a tooltip:
+### 4.2 Refreshing the session
 
-  * “You don’t have permission to manage workspace members.”
-  * “Safe mode can only be toggled by system administrators.”
+If the backend offers `POST /api/v1/auth/session/refresh`, it can be used to:
 
-### 7.2 Empty states and redirects
+* Extend session lifetime without forcing the user back to `/login`.
 
-If a user navigates directly to a section without permissions:
+The frontend should:
 
-* Either:
+* Avoid implementing custom token logic.
+* Trigger a refresh only when the backend’s contract requires it (e.g. via a small helper hook that calls refresh on certain error codes, then retries the failed request).
 
-  * Redirect back to a safe default (e.g. Documents), and show a toast/banners explaining they don’t have access, or
-  * Render a full‑page `Alert` stating “You do not have permission to access Workspace Settings”.
+The exact refresh policy is backend‑driven; the frontend’s job is to re‑read `Session` and `EffectivePermissions` whenever the backend indicates that the session has changed.
 
-Which pattern to choose depends on the section:
+### 4.3 Global vs workspace‑local data
 
-* Settings → better to show a clear “no access” state.
-* Hidden Admin sections → better to route them away.
+We intentionally separate:
 
-### 7.3 Navigation and section availability
+* **Global identity & permissions** (from `Session` and `EffectivePermissions`),
+* **Workspace‑local context** (from workspace endpoints).
 
-The **Workspace shell** (left nav) is built based on permissions:
+Workspace context comes from:
 
-* Only show **Settings** tab if the user has at least read access to any workspace settings.
-* Only show **Config Builder** if they have read access to configurations.
+* `GET /api/v1/workspaces/{workspace_id}` – workspace metadata and membership summary.
+* `GET /api/v1/workspaces/{workspace_id}/members` – detailed list of members and roles.
+* `GET /api/v1/workspaces/{workspace_id}/roles` – workspace role definitions.
 
-If a permission change happens during a session (e.g. admin revokes roles), a refresh or a revalidation of the Session/permissions queries will update the UI accordingly.
+The UI uses:
+
+* Session + membership summaries for top‑level decisions (what workspaces to show).
+* Workspace‑specific endpoints for detailed management screens.
 
 ---
 
-## 8. Safe mode
+## 5. RBAC model and permission checks
 
-Safe mode is a **global kill switch** that stops all engine execution.
+### 5.1 Permission keys
 
-From the frontend perspective it is:
+Permissions are represented as strings and follow a descriptive pattern:
 
-* A shared piece of state (fetched via a dedicated query).
-* A source of truth for disabling engine‑invoking actions.
-* A banner that explains why things are blocked.
+* `<Scope>.<Area>.<Action>`
 
-### 8.1 Backend contract
+Examples:
+
+* `Workspaces.Create`
+* `Workspace.Runs.Read` – view runs in a workspace.
+* `Workspace.Runs.Run` – start new runs.
+* `Workspace.Settings.Read`
+* `Workspace.Settings.ReadWrite`
+* `Workspace.Members.Read`
+* `Workspace.Members.ReadWrite`
+* `System.SafeMode.Read`
+* `System.SafeMode.ReadWrite`
+
+The full catalog is provided by `GET /api/v1/permissions` and is primarily used by the Roles/Permissions UIs.
+
+### 5.2 Global and workspace roles
+
+Roles are defined and assigned via the API; the frontend treats them as named bundles of permissions.
+
+**Global roles**
+
+* Endpoints:
+
+  * `GET /api/v1/roles`
+  * `POST /api/v1/roles`
+  * `GET /api/v1/roles/{role_id}`
+  * `PATCH /api/v1/roles/{role_id}`
+  * `DELETE /api/v1/roles/{role_id}`
+
+* Assignments:
+
+  * `GET /api/v1/role-assignments`
+  * `POST /api/v1/role-assignments`
+  * `DELETE /api/v1/role-assignments/{assignment_id}`
+
+**Workspace roles**
+
+* Endpoints:
+
+  * `GET /api/v1/workspaces/{workspace_id}/roles`
+  * `GET /api/v1/workspaces/{workspace_id}/role-assignments`
+  * `POST /api/v1/workspaces/{workspace_id}/role-assignments`
+  * `DELETE /api/v1/workspaces/{workspace_id}/role-assignments/{assignment_id}`
+
+* Membership:
+
+  * `GET /api/v1/workspaces/{workspace_id}/members`
+  * `POST /api/v1/workspaces/{workspace_id}/members`
+  * `DELETE /api/v1/workspaces/{workspace_id}/members/{membership_id}`
+  * `PUT /api/v1/workspaces/{workspace_id}/members/{membership_id}/roles`
+
+The **Roles** and **Members** panels in Settings are thin UIs over these endpoints. The core run/document/config flows should not depend on the specifics of role assignment; they only consume effective permission keys.
+
+### 5.3 Effective permissions query
+
+We expose a dedicated query for permissions:
+
+```ts
+function useEffectivePermissionsQuery(): {
+  data?: EffectivePermissions;
+  isLoading: boolean;
+  error?: unknown;
+}
+```
+
+Implementation:
+
+* Calls `GET /api/v1/me/permissions`.
+* Returns at least:
+
+  ```ts
+  {
+    global: string[];
+    workspaces?: Record<string, string[]>;
+  }
+  ```
+
+In many cases the global set is sufficient:
+
+* Global actions like creating workspaces or toggling safe mode are gated by global permissions.
+* Workspace actions can either use `workspaces[workspaceId]` or derive workspace permissions from membership if the backend does not include them in `/me/permissions`.
+
+### 5.4 Permission helpers and usage
+
+Helpers in `shared/permissions` make checks uniform:
+
+```ts
+export function hasPermission(
+  permissions: readonly string[] | undefined,
+  key: string,
+): boolean {
+  return !!permissions?.includes(key);
+}
+
+export function hasAnyPermission(
+  permissions: readonly string[] | undefined,
+  keys: readonly string[],
+): boolean {
+  return !!permissions && keys.some((k) => permissions.includes(k));
+}
+```
+
+Workspace helpers:
+
+```ts
+export function useWorkspacePermissions(workspaceId: string) {
+  const { data: effective } = useEffectivePermissionsQuery();
+  const workspacePerms =
+    effective?.workspaces?.[workspaceId] ?? ([] as string[]);
+
+  return { permissions: workspacePerms };
+}
+
+export function useCanInWorkspace(workspaceId: string, permission: string) {
+  const { permissions } = useWorkspacePermissions(workspaceId);
+  return hasPermission(permissions, permission);
+}
+```
+
+Typical usage:
+
+* **Navigation construction**
+
+  ```ts
+  const canSeeSettings = useCanInWorkspace(workspaceId, "Workspace.Settings.Read");
+
+  const items = [
+    { id: "runs", path: "/runs", visible: true },
+    { id: "settings", path: "/settings", visible: canSeeSettings },
+  ].filter((item) => item.visible);
+  ```
+
+* **Action buttons**
+
+  ```tsx
+  const canStartRuns = useCanInWorkspace(workspaceId, "Workspace.Runs.Run");
+
+  <Button
+    onClick={onStartRun}
+    disabled={!canStartRuns || safeModeEnabled}
+    title={
+      !canStartRuns
+        ? "You don't have permission to start runs in this workspace."
+        : safeModeEnabled
+        ? `Safe mode is enabled: ${safeModeDetail ?? ""}`
+        : undefined
+    }
+  >
+    Run
+  </Button>;
+  ```
+
+### 5.5 Hide vs disable
+
+We use a simple policy:
+
+* **Hide** features that the user should not know exist:
+
+  * Global Admin screens,
+  * “Create workspace” action, if they lack `Workspaces.Create`.
+
+* **Disable with explanation** for features the user understands conceptually but cannot execute *right now*:
+
+  * Run buttons for users who can see runs but lack `Workspace.Runs.Run`.
+  * Safe mode toggle for users with read but not write access.
+
+Disabled actions should always have a tooltip explaining **why**:
+
+* “You don’t have permission to start runs in this workspace.”
+* “Only system administrators can toggle safe mode.”
+
+---
+
+## 6. Safe mode
+
+Safe mode is a global switch that stops new engine work from executing. ADE Web must:
+
+* Reflect its current status to the user.
+* Proactively block all run‑invoking actions at the UI layer.
+
+### 6.1 Backend contract
 
 Endpoints:
 
@@ -426,159 +486,215 @@ Endpoints:
   ```json
   {
     "enabled": true,
-    "detail": "Maintenance window – engine temporarily paused."
+    "detail": "Maintenance window – new runs are temporarily disabled."
   }
   ```
 
 * `PUT /api/v1/system/safe-mode`:
 
-  * Requires a permission such as `System.Settings.ReadWrite`.
-  * Accepts an object with `enabled` and `detail`.
+  * Permission‑gated (e.g. requires `System.SafeMode.ReadWrite`).
+  * Accepts:
 
-### 8.2 Safe mode query
+    ```json
+    {
+      "enabled": true,
+      "detail": "Reasonable, user-facing explanation."
+    }
+    ```
 
-`useSafeModeQuery()`:
+### 6.2 Safe mode hook
 
-* Calls `GET /api/v1/system/safe-mode`.
+Frontend exposes:
 
-* Returns:
+```ts
+function useSafeModeStatus(): {
+  data?: SafeModeStatus;
+  isLoading: boolean;
+  error?: unknown;
+  refetch: () => void;
+}
+```
 
-  ```ts
-  interface SafeModeStatus {
-    enabled: boolean;
-    detail?: string | null;
-  }
+Implementation details:
+
+* Wraps `GET /api/v1/system/safe-mode` in a React Query query.
+* Uses a `staleTime` on the order of tens of seconds (exact value configurable).
+* Allows manual refetch (e.g. after toggling safe mode).
+
+### 6.3 What safe mode blocks
+
+When `enabled === true`, ADE Web must block **starting new runs** and any other action that causes the engine to execute.
+
+Examples:
+
+* Starting a new run from:
+
+  * The Documents screen (“Run extraction”),
+  * The Runs ledger (“New run”, if present),
+  * The Config Builder workbench (“Run extraction” within the editor).
+
+* Starting a **build** of a configuration environment.
+
+* Starting **validate‑only** runs (validation of configs or manifests).
+
+* Activating/publishing configurations if that triggers background engine work.
+
+UI behaviour:
+
+* All such controls must:
+
+  * Be disabled (not clickable),
+  * Show a tooltip like:
+
+    > “Disabled while safe mode is enabled: Maintenance window – new runs are temporarily disabled.”
+
+The backend may still reject blocked operations; the UI’s job is to make the state obvious and avoid a confusing “click → no‑op” experience.
+
+### 6.4 Safe mode banner
+
+When safe mode is on:
+
+* Render a **persistent banner** inside the workspace shell:
+
+  * Located just below the global top bar, above section content.
+  * Present in all workspace sections (Runs, Documents, Config Builder, Settings, etc.).
+
+* Recommended copy:
+
+  ```text
+  Safe mode is enabled. New runs, builds, and validations are temporarily disabled.
   ```
 
-* Refetch strategy:
+* If `detail` is provided by the backend, append or incorporate it:
 
-  * On app focus.
-  * When certain stuck states are detected (optional).
-  * Or at a modest interval if desired.
+  ```text
+  Safe mode is enabled: Maintenance window – new runs are temporarily disabled.
+  ```
 
-### 8.3 UI behaviour when safe mode is enabled
+The banner should be informational only; it does not itself contain primary actions.
 
-When `enabled === true`:
+### 6.5 Toggling safe mode
 
-1. **Banner in workspace shell**
+Toggling safe mode is an administrative action.
 
-   * Renders below the `GlobalTopBar`.
-   * Shows a succinct message, e.g.
-     “Safe mode is enabled. New jobs, builds, validations, and activations are temporarily disabled.”
-   * Includes the backend’s `detail` message verbatim.
+UI pattern (e.g. in a System/Settings screen):
 
-2. **Disable engine‑invoking actions**
-   Typical actions to disable:
+* Show current state (`enabled` / `disabled`) and editable `detail` field.
 
-   * Document‑level “Run extraction”.
-   * Workspace Jobs “New job” actions (if any).
-   * Config Builder:
+* Require:
 
-     * “Build environment” button.
-     * “Run validation” button.
-     * “Run extraction” from workbench.
-     * “Publish/activate” buttons.
+  * `System.SafeMode.Read` to view current status.
+  * `System.SafeMode.ReadWrite` to change it.
 
-   Disabled controls must:
+* The toggle workflow:
 
-   * Provide tooltips explaining:
-     “Safe mode is enabled: <detail>”
+  1. User edits the switch and/or message.
+  2. UI calls `PUT /api/v1/system/safe-mode`.
+  3. On success:
 
-3. **Read‑only behaviour remains**
-   Safe mode **does not** block:
+     * Refetch safe mode status.
+     * Show a success toast (“Safe mode enabled”/“Safe mode disabled”).
+  4. On 403:
 
-   * Viewing documents and jobs.
-   * Viewing and downloading logs/outputs.
-   * Editing configurations on disk (if backend allows this).
-   * Navigating around the UI.
-
-The UI must not silently ignore clicks; every disabled action should be obviously disabled and explain why.
-
-### 8.4 Toggling safe mode
-
-The **System / Settings** area (or equivalent) exposes a small management UI for safe mode:
-
-* Visible only to users with appropriate permission.
-* Shows current `enabled` state and `detail` message.
-* Allows:
-
-  * Toggle on/off.
-  * Editing the detail message.
-
-Flow:
-
-1. User changes the toggle or edits the message.
-2. Frontend calls `PUT /api/v1/system/safe-mode`.
-3. On success:
-
-   * Refetch `SafeModeStatus`.
-   * Show a success toast (“Safe mode disabled” / “Safe mode enabled”).
-
-On 403:
-
-* Show an inline error `Alert` indicating insufficient permission.
+     * Show an inline error `Alert` (“You do not have permission to change safe mode.”).
 
 ---
 
-## 9. Security considerations
+## 7. Security considerations
 
-### 9.1 Redirect handling
+### 7.1 Redirect safety
 
-ADE Web uses a `redirectTo` query parameter for post‑login and post‑SSO redirects.
+Any time `redirectTo` is used (login, SSO, setup), we must:
 
-Rules:
+* Accept only relative URLs (starting with `/`).
+* Reject:
 
-* Only allow **same‑origin relative paths**, e.g.:
+  * Absolute URLs (`https://…`),
+  * Protocol‑relative URLs (`//…`),
+  * `javascript:` or similar schemes.
 
-  * `redirectTo=/workspaces`
-  * `redirectTo=/workspaces/123/documents?view=team`
+Safe logic belongs in a single helper (`resolveRedirectPath`) that is used by:
 
-* Reject or ignore:
+* The login flow.
+* The SSO callback screen.
+* The setup screen.
 
-  * Full URLs (`https://example.com/...`).
-  * Protocol‑relative URLs (`//evil.com/...`).
-  * Paths with suspicious components (`//`, `\`, etc.).
+If `redirectTo` is unsafe or missing:
 
-If `redirectTo` is absent or invalid:
+* Redirect to `/workspaces` or to the user’s default workspace path.
 
-* Fallback to the default route (directory or default workspace).
+### 7.2 Storage safety
 
-### 9.2 Storage and secrets
-
-We never store:
+We **never** store:
 
 * Passwords,
 * Tokens,
-* Session identifiers,
+* Raw session objects,
 
-in localStorage or sessionStorage. Auth is handled via secure cookies and in‑memory state.
+in `localStorage` or `sessionStorage`.
 
-LocalStorage is used only for:
+We **do** store:
 
-* UI preferences (workbench layout, theme),
-* Per‑document run defaults,
-* Per‑workspace nav collapse and return path.
+* UI preferences such as:
 
-See `10-ui-components-a11y-and-testing.md` for a full list of keys and patterns.
+  * Left nav collapsed/expanded,
+  * Workbench layout,
+  * Editor theme,
+  * Per‑document run defaults,
 
-### 9.3 Workspace isolation
+under namespaced keys like:
 
-Even though permission enforcement happens server‑side, the frontend must:
+* `ade.ui.workspace.<workspaceId>.nav.collapsed`
+* `ade.ui.workspace.<workspaceId>.config.<configId>.console`
+* `ade.ui.workspace.<workspaceId>.document.<documentId>.run-preferences`
 
-* Never construct URLs for workspaces that the user cannot see (based on workspace list and permissions).
-* Treat 403s on workspace endpoints explicitly and show a clear “Access denied” state.
+All such values are:
 
-This avoids confusing UX even when backend checks are strict.
+* Non‑sensitive,
+* Safe to clear at any time,
+* Derived from information already visible in URLs or UI.
+
+See `10-ui-components-a11y-and-testing.md` for the full list of persisted preferences.
+
+### 7.3 CSRF and CORS
+
+CSRF and CORS are primarily backend concerns, but ADE Web should:
+
+* Use `credentials: "include"` when the backend uses cookie‑based auth.
+* Use the Vite dev server’s `/api` proxy in development to avoid CORS headaches locally.
+* Avoid manually setting auth headers unless explicitly required by the backend design.
+
+Cookies should be configured with appropriate `Secure` and `SameSite` attributes; this is out of scope for the frontend but the assumptions should be documented in backend configuration.
 
 ---
 
-## 10. Summary
+## 8. Checklist for new features
 
-* **Auth**: handled via `/auth/session` (email/password) and `/auth/sso/*` (SSO). Setup is a one‑time flow via `/setup`.
-* **Session**: `useSessionQuery` is the single source of truth for “who am I”.
-* **RBAC**: backend computes effective permissions; frontend calls `useEffectivePermissionsQuery` and uses small `hasPermission` helpers rather than re‑implementing policy.
-* **UI gating**: nav, screens, and actions are all driven from the same permission set; we use consistent hide/disable patterns.
-* **Safe mode**: read from `/system/safe-mode`, surfaced as a banner, and used to disable all engine‑invoking actions with clear explanations.
-* **Security**: no secrets in localStorage, no open redirects, and clear handling of 401/403.
+When adding a feature that touches auth, permissions, or runs:
 
-With this structure in place, auth, session, RBAC, and safe mode should be easy to understand for both developers and AI agents, and straightforward to extend as ADE grows.
+1. **Define the permission(s)**
+
+   * Which permission key(s) gate the feature?
+   * Are they global (`Workspaces.Create`) or workspace‑scoped (`Workspace.Runs.Run`)?
+
+2. **Wire into helpers**
+
+   * Use `hasPermission` / `useCanInWorkspace` instead of checking raw strings in multiple places.
+   * Prefer a small domain helper (e.g. `canStartRuns(workspaceId)`).
+
+3. **Respect safe mode**
+
+   * If the feature starts or schedules new runs or builds, disable it when `SafeModeStatus.enabled === true`.
+   * Add an explanatory tooltip mentioning safe mode.
+
+4. **Handle unauthenticated users**
+
+   * Do not assume `useSessionQuery().data` is always present.
+   * Redirect to `/login` when required.
+
+5. **Avoid leaking information**
+
+   * Hide admin‑only sections entirely if the user lacks the relevant read permissions.
+   * Disable rather than hide when the existence of the feature is already obvious from the context.
+
+With these patterns, auth, RBAC, and safe mode remain predictable and easy to extend as ADE evolves.

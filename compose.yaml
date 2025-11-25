@@ -13,8 +13,11 @@ services:
     ports:
       - "8000:8000"
 
-    # Store everything ADE produces in ./data on the host
+    # Store everything ADE produces in a managed Docker volume
     volumes:
-      - ./data:/app/data
+      - ade_data:/app/data
 
     restart: unless-stopped
+
+volumes:
+  ade_data:

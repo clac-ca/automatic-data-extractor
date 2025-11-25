@@ -1,448 +1,513 @@
 # 06 – Workspace layout and sections
 
-This document describes how ADE Web structures the **workspace‑level UI**:
+This document describes the **workspace‑level UI layout** in ADE Web:
 
-- The relationship between the **Workspace directory** and the **Workspace shell**.
-- How the **global top bar**, **navigation**, and **sections** are composed.
-- Where **banners** and **notifications** appear.
-- What each main workspace section is responsible for, at a layout/UX level.
+- The **Workspace directory** (`/workspaces`) – where users discover and select workspaces.
+- The **Workspace shell** (`/workspaces/:workspaceId/...`) – the frame around a single workspace.
+- The **sections inside a workspace** (Documents, Runs, Config Builder, Settings, Overview) and how they plug into the shell.
+- Where **banners**, **safe mode messaging**, and **notifications** appear.
 
-It is intentionally **frontend‑centric**: it describes components, layout, and responsibilities, and defers detailed behaviour to other docs.
+It focuses on **layout and responsibilities**, not API details or low‑level component props.
 
-> See also:
-> - `01-domain-model-and-naming.md` – glossary and naming.
-> - `03-routing-navigation-and-url-state.md` – URL/route model.
-> - `07-documents-jobs-and-runs.md` – detailed operator workflows.
-> - `08-configurations-and-config-builder.md` and `09-workbench-editor-and-scripting.md` – Config Builder internals.
-> - `10-ui-components-a11y-and-testing.md` – UI component details and accessibility.
+> Related docs:
+> - [`01-domain-model-and-naming.md`](./01-domain-model-and-naming.md) – definitions of Workspace, Document, Run, Config, etc.
+> - [`03-routing-navigation-and-url-state.md`](./03-routing-navigation-and-url-state.md) – route structure and navigation helpers.
+> - [`07-documents-and-runs.md`](./07-documents-and-runs.md) – detailed behaviour of the Documents and Runs sections.
+> - [`08-configurations-and-config-builder.md`](./08-configurations-and-config-builder.md) and [`09-workbench-editor-and-scripting.md`](./09-workbench-editor-and-scripting.md) – Config Builder internals.
+> - [`10-ui-components-a11y-and-testing.md`](./10-ui-components-a11y-and-testing.md) – UI primitives, accessibility, and keyboard patterns.
 
 ---
 
-## 1. Layers: directory vs shell
+## 1. UX layers: directory vs shell
 
-ADE Web separates workspace UX into two layers:
+ADE Web has two distinct workspace layers:
 
-1. **Workspace directory** – the entry point after sign‑in, showing all workspaces a user can access.
-2. **Workspace shell** – the frame around a *single* workspace, containing its sections (Documents, Jobs, Config Builder, Settings, Overview).
+1. **Workspace directory**  
+   - Route: `/workspaces` (+ `/workspaces/new`).  
+   - Shows all workspaces the user can access.  
+   - Lets users **select** or **create** workspaces.  
+   - Does *not* render the workspace shell.
 
-They share common layout primitives:
+2. **Workspace shell**  
+   - Routes: `/workspaces/:workspaceId/...`.  
+   - Wraps all activity **inside a single workspace**.  
+   - Provides a stable frame: top bar, left nav, banners.  
+   - Hosts section screens: Documents, Runs, Config Builder, Settings, Overview.
 
-- A **global top bar** rendered via `GlobalTopBar`.
-- A central **content column** that adapts between desktop and mobile.
-- A consistent placement for **banners** and **toast notifications**.
+The rule:
 
-The rule of thumb:
-
-- The **Workspace directory** is where you **pick a workspace**.
-- The **Workspace shell** is where you **do work inside that workspace**.
+- `/workspaces` → **directory only**.  
+- `/workspaces/:workspaceId/...` → **shell + section**.
 
 ---
 
 ## 2. Global top bar (`GlobalTopBar`)
 
-The global top bar is the primary horizontal frame element and appears on *all* “app” screens (directory and shell).
+The **global top bar** is shared between the directory and the shell. It is the horizontal frame that indicates *where you are* and exposes *what you can do next*.
 
 ### 2.1 Responsibilities
 
-`GlobalTopBar` is responsible for:
+- Show **context** (directory vs specific workspace).
+- Host **primary actions** for the current surface.
+- Provide a **search** field (scope depends on view).
+- Expose the **profile menu**.
+- Provide an anchor for **global banners** directly beneath it.
 
-- Showing **brand** and high‑level context.
-- Providing a **search affordance** appropriate to the current view.
-- Hosting **primary actions** (e.g. “Create workspace”, “Upload document”).
-- Exposing the **profile menu** (avatar + user actions).
-- Providing an optional **secondary row** for breadcrumbs, filters, or view pills.
+### 2.2 Layout slots
 
-The intent: users should be able to glance at the top bar and know *where* they are and what the main “next action” is.
+`GlobalTopBar` is a layout component with named slots:
 
-### 2.2 Slots and composition
+- `brand` – left‑aligned:
+  - Directory: “Workspace directory” + ADE product label.
+  - Shell: workspace name + optional environment label.
+- `leading` – breadcrumbs or lightweight context.
+- `actions` – main buttons (e.g. “Create workspace”, “Upload document”, “Run extraction”).
+- `trailing` – profile / user menu (`ProfileDropdown`).
+- `secondaryContent` – optional row underneath for filters, breadcrumbs, tabs.
 
-`GlobalTopBar` is a layout component with explicit slots:
+The top bar may contain a `GlobalSearchField` in its main row.
 
-- `brand` – leftmost brand and context:
+### 2.3 Behaviour per layer
 
-  - Workspace directory: static label (e.g. “Workspace directory”) plus product name.
-  - Workspace shell: workspace name and optional environment label (e.g. `Acme Corp · Production`).
+- **Directory (`/workspaces`)**
+  - `brand`: static label + product name.
+  - `actions`: “Create workspace” if user has permission.
+  - `secondaryContent`: may hold workspace search and guidance text.
+  - Search: filters workspace cards (name/slug); bound to `⌘K` / `Ctrl+K`.
 
-- `leading` – contextual breadcrumbs or additional context on the left.
+- **Workspace shell (`/workspaces/:workspaceId/...`)**
+  - `brand`: workspace name + environment label (e.g. `Acme · Production`).
+  - `leading`: optional section name or breadcrumbs.
+  - `actions`: section‑specific actions (e.g. “Upload document”, “Run extraction”, “New configuration”).
+  - `trailing`: `ProfileDropdown`.
+  - `secondaryContent`: often used for section filters or tabs.
+  - Search: workspace‑scoped, usually **section‑aware**:
+    - Documents: filters documents.
+    - Runs: filters runs.
+    - Other sections: workspace‑wide search surface.
 
-- `actions` – primary buttons:
-
-  - Directory: “Create workspace” (if user has permission).
-  - Shell: varies by section; e.g. “Upload document” on Documents, “New configuration” in Config Builder.
-
-- `trailing` – profile + menus:
-
-  - Usually the `ProfileDropdown` component.
-
-- `secondaryContent` – optional row under the main bar:
-
-  - Breadcrumbs, tabs, filters, or inline alerts specific to a section.
-
-Implementations of `WorkspaceDirectoryScreen` and `WorkspaceShellScreen` are responsible for populating these slots appropriately.
-
-### 2.3 Search behaviour
-
-The top bar embeds an optional `GlobalSearchField`:
-
-- **Directory**:
-
-  - Acts as workspace search; filters workspace cards by name/slug.
-  - Bound to `⌘K` / `Ctrl+K`.
-
-- **Workspace shell**:
-
-  - Acts as workspace‑scoped search.
-  - Behaviour may be section‑aware:
-    - On Documents: search documents.
-    - On Jobs: search/filter by job id or initiator.
-    - Elsewhere: search within the workspace (configs, sections, help links, etc.).
-
-The search field is *always aligned visually*, even if hidden for a given screen, so the layout does not jump between sections.
+From a layout standpoint, the top bar’s **height and structure** are stable; only the slot content changes between screens.
 
 ---
 
 ## 3. Workspace directory (`/workspaces`)
 
-`WorkspaceDirectoryScreen` is the main entry after login and is responsible for:
+The Workspace directory is the first stop after sign‑in for most users.
 
-- Listing workspaces the user is a member of.
-- Providing a way to **create** a workspace (if allowed).
-- Helping users understand how to **organise** workspaces.
+### 3.1 Responsibilities
 
-### 3.1 Layout
+- List workspaces the user has access to.
+- Provide search / quick jump to a workspace.
+- Allow workspace creation (if the user has permission).
+- Offer light guidance on how to structure workspaces.
 
-The layout is intentionally simple:
+### 3.2 Layout & structure
 
-- **Top bar**:
+The directory screen is typically structured as:
 
-  - `brand`: “Workspace directory”.
-  - `actions`: “Create workspace” button (permission‑gated).
-  - `trailing`: `ProfileDropdown`.
-
+- **GlobalTopBar** configured for “directory”.
 - **Main content**:
+  - Header section with title and brief description.
+  - Workspace search field.
+  - Workspace list (cards) or an empty‑state panel.
+  - Optional right‑hand guidance column.
 
-  - A **header section** with:
-    - Title (e.g. “Workspaces”).
-    - Short explanatory copy.
-  - A **search box** tied to `GlobalSearchField`.
-  - A **list of workspace cards**.
-  - Optionally, a **right‑hand panel** with guidance/checklists.
+On small viewports, the right‑hand guidance collapses below or is omitted; the list remains the focus.
 
-On narrow screens, the right‑hand panel collapses below the list or is hidden entirely.
+### 3.3 Workspace search
 
-### 3.2 Search behaviour
+- Implemented via `GlobalSearchField` configured for workspaces.
+- Behaviours:
+  - Filters workspace cards by **name** and **slug**.
+  - `⌘K` / `Ctrl+K` focuses the search when the directory is active.
+  - Pressing Enter with a clearly best match may jump directly to that workspace.
 
-The directory search:
+Search is **purely client‑side** over the current list in typical deployments, but nothing in the layout assumes that.
 
-- Filters workspace cards by **name** and **slug**.
-- Supports keyboard focus via `⌘K` / `Ctrl+K`.
-- May support “type to filter” plus Enter to jump to the best match.
+### 3.4 Actions and permissions
 
-The implementation should be stateless and deterministic: given the current set of workspaces and a query, the result set and “best match” behaviour is fully predictable.
+- “Create workspace” appears only if the user has the relevant permission (e.g. `Workspaces.Create`).
+- If the user lacks this permission and has no workspaces:
+  - The screen explains that they must be **invited**.
+  - Suggest linking to admin contact or documentation if available.
 
-### 3.3 Workspace cards
+### 3.5 Empty and loading states
 
-Each card represents a workspace summary:
+Common states:
 
-- Visible fields:
+- **Loading**: skeleton workspace cards and disabled actions while queries are in flight.
+- **No workspaces & can create**:
+  - Headline: “You don’t have any workspaces yet.”
+  - Description: short explanation of what workspaces are for.
+  - Primary CTA: “Create your first workspace”.
+- **No workspaces & cannot create**:
+  - Headline: “You’re not a member of any workspaces yet.”
+  - Body: “Ask an administrator to invite you.”
 
-  - Name and slug.
-  - Optional environment label (e.g. Production).
-  - Whether it is the user’s **default workspace**.
-  - A compact summary of the user’s roles/permissions in that workspace.
+### 3.6 Workspace cards
 
-- Actions:
+Each workspace is represented by a card that includes:
 
-  - Click anywhere on the card to open the workspace shell at the default section (Documents).
-  - Secondary affordances (if present) such as “Open settings” should be visually subordinate.
+- Name.
+- Slug or human‑friendly short ID.
+- Optional **environment label** (e.g. Production, Staging).
+- Optional indication that this is the user’s **default workspace**.
+- Compact summary of the user’s roles/permissions (e.g. “Owner”, “Editor”).
 
-### 3.4 Empty states
+Clicking a card:
 
-The directory has two structurally different empty states:
+- Navigates to `/workspaces/:workspaceId/documents` (or another chosen default section) inside the **Workspace shell**.
 
-1. **User can create workspaces, but has none**:
+The optional right‑hand panel can include:
 
-   - Show a prominent CTA to “Create your first workspace”.
-   - Provide a short explanation of what workspaces are used for.
-
-2. **User cannot create workspaces and has none**:
-
-   - Explain that they must be invited to a workspace.
-   - Offer contact guidance (e.g. “Ask your admin to add you”).
+- Examples of workspace organisation (per client, per environment, etc.).
+- A short checklist for new deployments (invite admins, configure roles, set default workspace).
 
 ---
 
 ## 4. Workspace shell (`/workspaces/:workspaceId/...`)
 
-`WorkspaceShellScreen` is the frame around everything that happens *inside* a workspace. It owns:
+The Workspace shell renders everything inside a single workspace. It owns the frame; sections own their content.
 
-- The **shell layout** (top bar, left nav, main content).
-- Section selection and routing.
-- Shell‑level banners and notifications.
+### 4.1 Responsibilities
 
-### 4.1 Shell layout (desktop)
+- Load and expose **workspace context**:
+  - Name, slug, environment label.
+  - Membership and permissions.
+  - Safe mode status (via shared query).
+- Render stable **shell chrome**:
+  - Left navigation (section switcher).
+  - Workspace‑specific top bar.
+  - Banner strip (safe mode, connectivity).
+- Host **section screens** inside the main content area.
+- Handle shell‑level loading/error states (e.g. workspace not found).
 
-On desktop‑sized viewports, the shell layout is:
+The shell is implemented by a dedicated screen component, e.g. `WorkspaceShellScreen`.
 
-```tsx
-<AppShell>
-  <GlobalTopBar ... />
+### 4.2 Route boundary
 
-  <ShellBody>
-    <WorkspaceNav />      {/* left column */}
-    <WorkspaceContent>    {/* right column */}
-      <ShellBanners />    {/* safe mode, cross-cutting alerts */}
-      <SectionScreen />   {/* Documents / Jobs / Config Builder / Settings / Overview */}
-    </WorkspaceContent>
-  </ShellBody>
+All routes under `/workspaces/:workspaceId` are expected to be rendered inside the shell. Examples:
 
-  <ToastsContainer />     {/* global toasts, usually bottom-right */}
-</AppShell>
-````
+- `/workspaces/:workspaceId/documents`
+- `/workspaces/:workspaceId/runs`
+- `/workspaces/:workspaceId/config-builder`
+- `/workspaces/:workspaceId/settings`
+- `/workspaces/:workspaceId/overview` (optional)
 
-Key points:
+The shell:
 
-* **WorkspaceNav** is vertically anchored and scrolls independently from the main content where possible.
-* **ShellBanners** render above section content, below the top bar.
-* Section screens do **not** re‑render the top bar or the left nav; they only fill `WorkspaceContent`.
+- Fetches workspace metadata once.
+- Renders a **workspace‑level error state** if the workspace cannot be loaded (e.g. 404, permission denied).
+- Then resolves the section based on the first path segment after `:workspaceId`.
 
-### 4.2 Workspace nav
+### 4.3 Layout regions (desktop)
 
-The left navigation shows:
+Conceptually, the shell layout on desktop is:
 
-* Workspace avatar/initials and name.
-* A “Switch workspace” affordance.
-* Primary navigation items:
+- **Top bar** – `GlobalTopBar` in “workspace” mode.
+- **Banner strip** – cross‑cutting banners (safe mode, connectivity).
+- **Body**:
 
-  * Documents.
-  * Jobs.
-  * Config Builder.
-  * Settings.
-  * Overview (optional section).
+  - Left: `WorkspaceNav` (vertical).
+  - Right: `WorkspaceContent` (section content).
 
-The nav uses `NavLink` so active styling is driven by the **path**. The rule:
+- **Overlay layer** – modals, maximised workbench, mobile nav, toasts.
 
-* Clicking a nav item updates the route to `/workspaces/:workspaceId/<section>`.
-* The shell decides which `SectionScreen` to render from the path segment.
-
-#### Per‑workspace collapsed state
-
-The nav can be collapsed/expanded. This state is:
-
-* **Stored per workspace** using the shared storage naming pattern.
-* Read when the shell loads, not every time a section renders.
-
-Collapsing only changes layout (icon‑only nav vs icon+label), not which sections are available.
-
-### 4.3 Shell layout (mobile)
-
-On mobile‑sized viewports:
-
-* The left nav becomes a **slide‑in drawer**:
-
-  * Opened by a menu button in the `GlobalTopBar`.
-  * Closed by:
-
-    * Selecting a nav item.
-    * Tapping outside the drawer.
-    * Pressing Escape.
-
-* Body scroll is **locked** while the nav is open to prevent scrolling the background content.
-
-The top bar and section content remain the same; only nav presentation changes.
-
-### 4.4 Section resolution
-
-`WorkspaceShellScreen` is responsible for mapping the first path segment after `:workspaceId` into a section:
-
-* `/workspaces/:workspaceId/documents` → `DocumentsScreen`.
-* `/workspaces/:workspaceId/jobs` → `JobsScreen`.
-* `/workspaces/:workspaceId/config-builder` → `ConfigBuilderScreen`.
-* `/workspaces/:workspaceId/settings` → `WorkspaceSettingsScreen`.
-* `/workspaces/:workspaceId/overview` → `WorkspaceOverviewScreen`.
-
-Unknown sections should produce a **workspace‑local “Section not found”** state rendered inside the shell. The page must **not** fall back to the global 404 to avoid implying the entire app is broken.
+Sections render only inside `WorkspaceContent`. They must not duplicate the top bar or left nav.
 
 ---
 
-## 5. Workspace sections (overview)
+## 5. Left navigation (desktop)
 
-This section defines each main workspace section at a **layout and responsibility** level. Detailed behaviour lives in other docs.
+The left nav is the primary way to navigate between sections within a workspace.
 
-### 5.1 Documents section
+### 5.1 Contents and ordering
 
-**Route:** `/workspaces/:workspaceId/documents`
-**Screen:** `DocumentsScreen`
-**Details:** see `07-documents-jobs-and-runs.md`.
+Typical ordering:
 
-Responsibilities:
+1. **Workspace identity**
+   - Avatar/initials computed from workspace name.
+   - Workspace name.
+   - Environment label if present.
+   - “Switch workspace” action (e.g. link back to `/workspaces` or a quick switcher dialog).
 
-* List documents owned by the workspace with filters and sorting.
-* Provide an upload flow (`Upload document` button + keyboard shortcut).
-* Surface per‑document status and last job summary.
-* Provide an entry point to **run extraction** against a selected configuration.
+2. **Section links**
+   - Documents.
+   - Runs.
+   - Config Builder.
+   - Settings.
+   - Overview (if enabled).
 
-Layout considerations:
+Section links use `NavLink` so they reflect active state based on the current path.
 
-* On desktop, primary content is a table/list of documents; filters sit above or to the side.
-* The top bar’s `actions` slot typically includes:
+### 5.2 Behaviour & permissions
 
-  * “Upload document”.
-  * Optional view toggle (list vs cards, if implemented).
+- **Active styling** is derived from the current path segment; for example, `/workspaces/:workspaceId/runs/...` marks the Runs item active.
+- **Permissions** determine what appears:
+  - Some sections may be completely hidden if the user cannot view them.
+  - Alternatively, a section can be visible but disabled with a tooltip explaining the missing permission.
 
-### 5.2 Jobs section
+The shell decides the hiding strategy; individual sections should not second‑guess it.
 
-**Route:** `/workspaces/:workspaceId/jobs`
-**Screen:** `JobsScreen`
-**Details:** see `07-documents-jobs-and-runs.md`.
+### 5.3 Collapse and persistence
 
-Responsibilities:
+On larger screens, the nav can be collapsed to icon‑only mode:
 
-* Show the workspace‑wide ledger of jobs.
-* Allow filtering by status, configuration, date range, and initiator.
-* Provide links to job detail views (logs, telemetry, outputs).
+- When collapsed:
 
-Layout considerations:
+  - Icons remain visible.
+  - Workspace name and section labels are hidden or reduced.
 
-* Primary layout is a table with filter controls.
-* Job details may be:
+- Collapse state is persisted **per workspace** with a key such as:
 
-  * A separate screen, or
-  * A side panel anchored to the list.
+  - `ade.ui.workspace.<workspaceId>.nav.collapsed`
 
-In either case, the Jobs section is the **canonical place** where a user looks for “what is running / what just ran”.
+Rules:
 
-### 5.3 Config Builder section
-
-**Route:** `/workspaces/:workspaceId/config-builder`
-**Screen:** `ConfigBuilderScreen`
-**Details:** see `08-configurations-and-config-builder.md` and `09-workbench-editor-and-scripting.md`.
-
-Responsibilities:
-
-* List configurations for the workspace.
-* Expose configuration‑level actions (clone, export, activate/deactivate).
-* Host the **Config Builder workbench** for editing a configuration’s files and manifest.
-* Keep a consistent “return path” when exiting the workbench.
-
-Layout considerations:
-
-* In its simplest state, the section shows a list/table of configurations.
-* When a configuration is being edited:
-
-  * The workbench appears as an **overlay** (maximised) or **embedded** (restored) inside the section’s content area.
-  * The shell (top bar + nav) remains visible even when the workbench is maximised.
-
-### 5.4 Settings section
-
-**Route:** `/workspaces/:workspaceId/settings`
-**Screen:** `WorkspaceSettingsScreen`
-**Details:** RBAC aspects in `05-auth-session-rbac-and-safe-mode.md`.
-
-Responsibilities:
-
-* Hold settings that are **scoped to a single workspace**:
-
-  * Name, slug, environment label.
-  * Membership management (members, invites).
-  * Workspace roles and permissions.
-  * Safe mode toggle and message (if permission allows).
-
-Layout considerations:
-
-* Tabbed layout driven by `view` query param (e.g. `view=general|members|roles`).
-* Subsections mount lazily to avoid unnecessary data fetching.
-* The top bar’s `leading` slot may show “Settings” + workspace name; `actions` may be empty or show context‑specific actions (e.g. “Invite member”).
-
-### 5.5 Overview section (optional)
-
-**Route:** `/workspaces/:workspaceId/overview`
-**Screen:** `WorkspaceOverviewScreen` (optional)
-
-Responsibilities:
-
-* Provide a high‑level dashboard view for the workspace:
-
-  * Recent jobs.
-  * Documents that need attention.
-  * Config versions and safe mode status.
-
-Layout considerations:
-
-* Overview is intentionally **aggregated** and **read‑only**; primary actions belong in the individual sections.
-* If implemented, Overview should be the **first nav item** or clearly positioned as a “home” within the workspace.
+- Default = expanded.
+- Manual user choice should be honoured on subsequent visits.
+- Auto‑collapse on very narrow viewports is allowed but should be treated as separate from the stored preference.
 
 ---
 
-## 6. Banners and notifications
+## 6. Mobile navigation
 
-The shell defines **where** cross‑cutting messages appear so individual sections don’t invent their own placements.
+On smaller viewports, the left nav is presented as a **slide‑in drawer**.
 
-### 6.1 Banners
+### 6.1 Trigger and layout
 
-Banners are full‑width messages that sit **inside `WorkspaceContent`, above the section screen**:
+- A menu button (usually in the top bar) opens the workspace nav.
+- The nav slides in from the left and covers or pushes the content.
+- A semi‑transparent background overlay (scrim) appears behind the nav.
 
-* **Safe mode banner**:
+### 6.2 Behaviour and closing rules
 
-  * Shown whenever the safe mode status endpoint reports `enabled`.
-  * Contains the human‑readable detail message.
-  * Appears on all workspace sections.
+When the nav is open:
 
-* **Connectivity / system banners**:
+- **Body scroll is locked** so the background content does not scroll.
+- Focus is moved into the nav and should remain there until the nav closes.
 
-  * For significant issues (e.g. lost connection to backend).
-  * May appear alongside or below the safe mode banner.
+The nav closes when:
 
-Sections may add **section‑local banners** below the shell banners, typically for:
+- A section link is selected.
+- The user taps on the scrim outside the nav.
+- The user presses the Escape key.
+- The user activates an explicit close button (if present).
 
-* “Console was automatically collapsed due to limited vertical space.”
-* “Some filters could not be applied; showing partial results.”
-
-### 6.2 Toast notifications
-
-Toasts are ephemeral messages rendered via a `ToastsContainer`, typically:
-
-* Anchored to the bottom‑right of the viewport.
-* Triggered by:
-
-  * Success/failure of mutations (upload, save, run, activate, etc.).
-  * Non‑blocking issues that don’t merit a full banner.
-
-Toasts are **global** to the app; sections dispatch them but do not manage their layout.
+These behaviours keep mobile navigation predictable and prevent layout jitter when switching sections.
 
 ---
 
-## 7. Design guidelines for new sections
+## 7. Workspace sections (overview)
 
-When introducing a new workspace section, follow these rules:
+Each section is a dedicated screen inside the shell’s main content area. This section defines their **responsibilities and relationships** to the shell; detailed workflows live in other docs.
 
-1. **Live inside the shell**
+### 7.1 Documents
 
-   * New sections must be mounted under `WorkspaceShellScreen`, with:
+- **Route:** `/workspaces/:workspaceId/documents`  
+- **Screen:** `DocumentsScreen`  
+- **Persona:** analysts/operators.
 
-     * A left‑nav item.
-     * A dedicated route segment (`/workspaces/:workspaceId/<section>`).
-     * A `<SectionName>Screen` component in `features/workspace-shell/<section>/`.
+Responsibilities:
 
-2. **Use the top bar slots**
+- List and filter documents in the workspace.
+- Provide upload capabilities.
+- Show each document’s status and **last run** summary.
+- Offer actions such as “Run extraction”, “Download source file”, “Delete/archive”.
 
-   * Populate `GlobalTopBar` slots (`brand`, `leading`, `actions`) instead of creating ad‑hoc headers.
-   * If the section has its own tab strip, consider `secondaryContent` for it.
+Shell integration:
 
-3. **Respect banners**
+- Top bar `actions` typically include “Upload document”.
+- `GlobalSearchField` filters visible documents by name and additional criteria.
+- Section banners (e.g. validation warnings) appear below the shell’s banner strip.
 
-   * Do not render full‑width messages above `ShellBanners`.
-   * Section‑local banners should appear immediately below shell banners.
+Detailed behaviour is in [`07-documents-and-runs.md`](./07-documents-and-runs.md).
 
-4. **Re‑use common patterns**
+### 7.2 Runs
 
-   * Lists + filter bar for “collections”.
-   * Detail panels or sub‑screens for “single item” views.
-   * Use `GlobalSearchField` when appropriate instead of custom search controls.
+- **Route:** `/workspaces/:workspaceId/runs`  
+- **Screen:** `RunsScreen`  
+- **Persona:** analysts/operators/engineers.
 
-5. **Keep shell consistent**
+Responsibilities:
 
-   * New sections must not alter the shell chrome (top bar, nav) beyond slot content.
-   * Shell layout should feel identical when switching sections.
+- Show a **workspace‑wide ledger of runs**.
+- Allow filtering by status, configuration, initiator, date range, and possibly document.
+- Provide links to:
+  - Run detail view.
+  - Logs and telemetry (via NDJSON streams).
+  - Output artifacts and individual output files.
 
-By following this structure, the workspace experience remains predictable and easy to navigate, and new sections can be added without surprising users or future developers.
+Shell integration:
+
+- Top bar `leading` may display “Runs” with time range or filter summary.
+- Top bar `actions` are often empty; run creation usually starts from Documents or Config Builder.
+- `GlobalSearchField` can search by run id, document name, or initiator depending on configuration.
+
+Detailed behaviour is in [`07-documents-and-runs.md`](./07-documents-and-runs.md).
+
+### 7.3 Config Builder
+
+- **Route:** `/workspaces/:workspaceId/config-builder`  
+- **Screen:** `ConfigBuilderScreen`  
+- **Persona:** workspace owners/engineers.
+
+Responsibilities:
+
+- Show configurations available in the workspace.
+- Provide actions: create/clone/export configurations, activate/deactivate versions.
+- Host the **Config Builder workbench** for editing configuration code and manifest.
+- Manage the “return path” so users can exit the workbench back to where they came from.
+
+Shell integration:
+
+- Top bar `actions` may include “New configuration”.
+- Workbench can be **embedded** or **maximised** (immersive); see §9.
+
+Details:
+
+- Configuration list: [`08-configurations-and-config-builder.md`](./08-configurations-and-config-builder.md).
+- Workbench/editor: [`09-workbench-editor-and-scripting.md`](./09-workbench-editor-and-scripting.md).
+
+### 7.4 Settings
+
+- **Route:** `/workspaces/:workspaceId/settings`  
+- **Screen:** `WorkspaceSettingsScreen`  
+- **Persona:** workspace admins/owners.
+
+Responsibilities:
+
+- Manage workspace metadata (name, slug, environment label).
+- Manage members and workspace‑scoped roles.
+- Expose safe mode controls and other admin settings (subject to permissions).
+
+Shell integration:
+
+- Often uses `secondaryContent` in the top bar to place tab controls (e.g. General, Members, Roles).
+- Section content is tabbed and controlled by a `view` query parameter.
+
+RBAC and safe mode are described in [`05-auth-session-rbac-and-safe-mode.md`](./05-auth-session-rbac-and-safe-mode.md).
+
+### 7.5 Overview (optional)
+
+- **Route:** `/workspaces/:workspaceId/overview`  
+- **Screen:** `WorkspaceOverviewScreen` (if implemented).
+
+Responsibilities:
+
+- Provide a **summary** surface for the workspace:
+  - Recent runs.
+  - Documents that need attention.
+  - Current configuration status.
+  - Safe mode state.
+
+Shell integration:
+
+- Typically appears as the first item in the nav or clearly marked as “Home”.
+- Primarily read‑only; actions are delegated to other sections.
+
+---
+
+## 8. Banners and notifications
+
+The shell defines **where** banners and notifications appear so sections behave consistently.
+
+### 8.1 Banner strip
+
+Immediately beneath `GlobalTopBar` is a **banner strip** reserved for:
+
+- **Safe mode banner**:
+  - Always present when safe mode is enabled.
+  - Contains the human‑readable message from the safe mode endpoint.
+  - Appears on all workspace sections.
+
+- **Other cross‑cutting banners**:
+  - Connectivity issues (“Lost connection; retrying…”).
+  - Global warnings (e.g. “Using a deprecated configuration version”).
+
+Ordering is:
+
+1. Safe mode (highest priority).
+2. Connectivity / critical issues.
+3. Informational environment messages.
+
+Section‑local banners (e.g. “Filters could not be applied”) should be rendered **inside the section**, below this strip.
+
+### 8.2 Toast notifications
+
+Toast notifications are transient messages, rendered in a global container (typically top‑right or bottom‑right):
+
+- Used for:
+  - Successful actions (saved, uploaded, run started).
+  - Minor failures that don’t block the flow.
+- Not used for:
+  - Long‑lived states or critical errors that require user decisions.
+
+The shell ensures toasts sit **above** content and banners in the z‑order but does not itself decide when to show them; sections and shared hooks trigger them.
+
+---
+
+## 9. Immersive layouts and special cases
+
+Most sections are standard list/detail pages, but some flows use **immersive** layouts that temporarily emphasise content over shell chrome.
+
+### 9.1 Config Builder workbench (immersive mode)
+
+The Config Builder workbench supports window states (see [`09-workbench-editor-and-scripting.md`](./09-workbench-editor-and-scripting.md)):
+
+- **Restored**:
+  - Appears embedded in the Config Builder section.
+  - Shell (top bar + nav + banners) fully visible.
+
+- **Maximised**:
+  - Workbench expands to fill the viewport.
+  - Nav and possibly the banner strip may be visually hidden.
+  - Top bar may be reduced to a thin chrome or hidden entirely.
+
+- **Docked/minimised**:
+  - Workbench is hidden; a dock control allows restoring it.
+
+Layout rules:
+
+- Immersive mode must provide an obvious **“Exit”** control to return to standard layout.
+- Even if banners are visually collapsed, safe mode and other important states should remain one click away.
+- Window state is part of presentation; routes remain under `/workspaces/:workspaceId/config-builder`.
+
+### 9.2 Workspace‑local “Section not found”
+
+If the path segment after `/workspaces/:workspaceId/` does not map to a known section:
+
+- Render a **workspace‑local “Section not found”** state *inside the shell*.
+- Do **not** show the global 404 – the workspace context is valid, only the section is invalid.
+- Provide a clear way back to a valid section (e.g. button: “Go to Documents”).
+
+---
+
+## 10. Guidelines for new sections
+
+When adding new workspace sections, apply these rules:
+
+1. **Section lives under the shell**  
+   - Route: `/workspaces/:workspaceId/<sectionSlug>`.  
+   - Nav item in `WorkspaceNav`.  
+   - Screen component in `features/workspace-shell/<section>/`.
+
+2. **Use top bar slots rather than custom headers**  
+   - `brand` and `leading` communicate where you are.  
+   - `actions` hosts your primary call‑to‑action.  
+   - `secondaryContent` is the place for section‑level tabs or filters.
+
+3. **Respect banner and toast conventions**  
+   - Global banners always sit in the shell’s banner strip.  
+   - Section‑local banners go **inside** section content.  
+   - Use toasts for short‑lived feedback, not persistent states.
+
+4. **Re‑use list/detail patterns**  
+   - For collections: list/table + filter toolbar.  
+   - For individual items: detail view, often linked from a list row.
+
+5. **Keep navigation predictable**  
+   - Don’t invent new global nav elements; plug into `WorkspaceNav`.  
+   - Use `NavLink` so active state follows the URL.
+
+By keeping a clear separation between **shell responsibilities** (context, navigation, banners) and **section responsibilities** (data, workflows), the workspace experience stays predictable and easy to extend, even as we add new run types or features in the future.
