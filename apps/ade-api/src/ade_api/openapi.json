@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Automatic Data Extractor API",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "paths": {
     "/api/v1/health": {
@@ -3666,14 +3666,7 @@
             "description": "Document not found within the workspace."
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "The workbook exists but could not be parsed for worksheets."
           }
         }
       }
@@ -3910,6 +3903,87 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ConfigurationRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/versions": {
+      "get": {
+        "tags": [
+          "configs"
+        ],
+        "summary": "List configuration versions (drafts and published)",
+        "operationId": "list_config_versions_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__versions_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "config_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Configuration identifier",
+              "title": "Config Id"
+            },
+            "description": "Configuration identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConfigVersionRecord"
+                  },
+                  "title": "Response List Config Versions Endpoint Api V1 Workspaces  Workspace Id  Configurations  Config Id  Versions Get"
                 }
               }
             }
@@ -4731,6 +4805,94 @@
                 "default": {
                   "ensure_build": false
                 }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/publish": {
+      "post": {
+        "tags": [
+          "configs"
+        ],
+        "summary": "Publish a configuration draft",
+        "operationId": "publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__publish_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "config_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Configuration identifier",
+              "title": "Config Id"
+            },
+            "description": "Configuration identifier"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null",
+                "description": "Publish the current draft into a frozen version without activating it.",
+                "title": "Payload"
               }
             }
           }
@@ -7097,6 +7259,105 @@
         "title": "ConfigValidationIssue",
         "description": "Description of a validation issue found on disk."
       },
+      "ConfigVersionRecord": {
+        "properties": {
+          "config_version_id": {
+            "type": "string",
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Config Version Id",
+            "description": "ULID (26-character string)."
+          },
+          "config_id": {
+            "type": "string",
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Config Id",
+            "description": "ULID (26-character string)."
+          },
+          "workspace_id": {
+            "type": "string",
+            "maxLength": 26,
+            "minLength": 26,
+            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+            "title": "Workspace Id",
+            "description": "ULID (26-character string)."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConfigurationStatus"
+          },
+          "semver": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Semver"
+          },
+          "content_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Digest"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "config_version_id",
+          "config_id",
+          "workspace_id",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ConfigVersionRecord",
+        "description": "Serialized configuration version metadata."
+      },
       "ConfigurationActivateRequest": {
         "properties": {
           "ensure_build": {
@@ -7285,6 +7546,7 @@
         "type": "string",
         "enum": [
           "draft",
+          "published",
           "active",
           "inactive"
         ],
@@ -7404,18 +7666,14 @@
           "run_id": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 26,
-                "minLength": 26,
-                "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-                "description": "ULID (26-character string)."
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
             "title": "Run Id",
-            "description": "Latest run ULID when the execution was streamed directly."
+            "description": "Latest run identifier when the execution was streamed directly."
           },
           "status": {
             "type": "string",
@@ -9504,6 +9762,42 @@
               }
             ],
             "title": "Exit Code"
+          },
+          "output_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Output Paths"
+          },
+          "processed_files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Processed Files"
+          },
+          "artifact_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Path"
+          },
+          "events_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events Path"
           },
           "summary": {
             "anyOf": [

@@ -95,7 +95,7 @@ async def _prepare_service(
         config_version=configuration.config_version,
         content_digest=configuration.content_digest,
         engine_spec=settings.engine_spec,
-        engine_version="0.1.0",
+        engine_version="0.2.0",
         python_interpreter=settings.python_bin,
         built_at=utc_now(),
     )

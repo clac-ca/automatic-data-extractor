@@ -1,6 +1,6 @@
 {
   "schema": "ade.manifest/v1",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "name": "Sandbox Minimal Config",
   "description": "Sample config mirroring the ade_engine end-to-end fixtures.",
   "script_api_version": 1,

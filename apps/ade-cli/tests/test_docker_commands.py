@@ -6,7 +6,7 @@ from ade_tools.commands import common, docker
 
 
 def test_docker_up_uses_docker_cli(monkeypatch, tmp_path):
-    compose = tmp_path / "infra" / "compose.yaml"
+    compose = tmp_path / "compose.yaml"
     compose.parent.mkdir(parents=True)
     compose.write_text("services: {}")
 
@@ -28,7 +28,7 @@ def test_docker_up_uses_docker_cli(monkeypatch, tmp_path):
 
 
 def test_docker_logs_passes_service(monkeypatch, tmp_path):
-    compose = tmp_path / "infra" / "compose.yaml"
+    compose = tmp_path / "compose.yaml"
     compose.parent.mkdir(parents=True)
     compose.write_text("services: {}")
 

@@ -1,6 +1,6 @@
 {
   "schema": "ade.manifest/v1",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "name": "Default ADE Workspace Config",
   "description": "Starter config that detects a simple person/member schema.",
   "script_api_version": 1,

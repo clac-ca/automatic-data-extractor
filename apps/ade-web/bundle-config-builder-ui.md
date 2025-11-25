@@ -1,5 +1,5 @@
 # Logical module layout (source -> sections below):
-# - apps/ade-web/README.md - ADE Web
+# - apps/ade-web/README.md
 # - apps/ade-web/src/app/App.tsx
 # - apps/ade-web/src/app/AppProviders.tsx
 # - apps/ade-web/src/app/nav/Link.tsx
@@ -20,98 +20,98 @@
 
 # apps/ade-web/README.md
 ```markdown
+````markdown
 # ADE Web
 
-ADE Web is the browser-based front‑end for the Automatic Data Extractor (ADE) platform.
+ADE Web is the browser‑based front‑end for the **Automatic Data Extractor (ADE)** platform.
 
-It gives two main personas a single place to work:
+It serves two main personas:
 
-- **Workspace owners / engineers** – define and evolve config packages (Python packages) that describe how documents are processed, manage safe mode, and administer workspaces, users, and SSO.
-- **End users / analysts** – upload documents, run extractions, monitor progress, inspect logs and telemetry, and download structured outputs.
+- **Workspace owners / engineers** – design and evolve configuration packages (Python packages) that describe how documents are processed; manage safe mode; and administer workspaces, SSO, roles, and members.
+- **End users / analysts / operators** – upload documents, run extractions, monitor progress, inspect logs and telemetry, and download structured outputs.
 
-This document describes **what** ADE Web does and how it should behave in an ideal implementation. It is intentionally backend‑agnostic and should be treated as the product‑level specification for the ADE Web UI and its contracts with the backend.
+This document describes **what** ADE Web does and the behaviour it expects from any compatible backend. It is intentionally **backend‑agnostic** and should be treated as the product‑level specification for ADE Web and its contracts with the backend.
 
 ---
 
 ## High‑level UX & layout
 
-ADE Web has two major “layers”:
+ADE Web has two major layers:
 
-1. **Workspace directory** – finding and creating workspaces.
-2. **Workspace shell** – working inside a specific workspace (Documents, Jobs, Config Builder, Settings).
+1. **Workspace directory** – where users discover and create workspaces.
+2. **Workspace shell** – where users operate inside a specific workspace.
 
-Both layers share a consistent structure:
+Both layers share common patterns:
 
-- A **global top bar** with:
-  - Brand/context (e.g. “Workspace directory” or current workspace name on mobile),
-  - A **search box** (scope depends on context),
-  - A user avatar and menu (profile, sign‑out, etc.).
-- A main content area that adapts between desktop and mobile.
+- A **top bar** with brand/context, search, and profile menu.
+- A main content area that adapts to desktop and mobile.
+- A consistent approach to **navigation**, **URL state**, **safe mode banners**, and **notifications**.
 
 ### Workspace directory layout
 
-The **Workspace directory** (`/workspaces`) is the entry point after sign‑in:
+The **Workspace directory** (`/workspaces`) is the primary entry point after sign‑in:
 
-- Top bar brand:
-  - “Workspace directory”
-  - Subtitle “Automatic Data Extractor”.
-- A **search box** for workspaces:
-  - Keyboard shortcut hint (e.g. `⌘K` / `Ctrl+K`),
-  - Suggestions (top matching workspaces),
-  - Pressing Enter jumps to the best match.
-- Optional **actions**:
-  - “Create workspace” for users with `Workspaces.Create` permission.
-- Main content:
-  - Either:
-    - An **empty state** inviting the user to create their first workspace, or
-    - A **card grid** of visible workspaces, each showing:
-      - Workspace name,
-      - Slug,
-      - A “Default” badge (for the user’s default workspace),
-      - The permissions the user has in that workspace (e.g. Owner, Runner, Viewer).
+- Header:
+  - Brand “Workspace directory”.
+  - Subtitle such as “Automatic Data Extractor”.
+- A **workspace search box**:
+  - Filters by workspace name/slug.
+  - Supports keyboard focus via a global shortcut (`⌘K` / `Ctrl+K`).
+  - Enter can jump directly to the best match.
+- **Actions** (permission‑gated):
+  - “Create workspace” is shown only if the user has `Workspaces.Create`.
 
-A right‑hand side panel offers guidance:
+Main content:
 
-- **Workspace tips** (why multiple workspaces, how to structure them).
-- A **setup checklist** (invite admins, review configs before production, etc.).
+- **Empty states**:
+  - If the user can create workspaces but has none: a CTA to create the first workspace.
+  - If the user cannot create workspaces: a message explaining they need to be added to a workspace.
+- **Workspace cards** when there are workspaces:
+  - Name and slug.
+  - Whether the workspace is marked as the user’s **default**.
+  - A compact summary of the user’s roles/permissions in that workspace.
+  - Click opens the workspace shell (default section, typically Documents).
+
+A right‑hand panel can provide:
+
+- **Guidance** on how to structure workspaces (per client, per environment, etc.).
+- A **short checklist** for new deployments (invite admins, configure roles, review configs before production).
 
 ### Workspace shell layout
 
-Inside a workspace (`/workspaces/:workspaceId/...`), ADE Web presents a **workspace shell**:
+Inside a workspace (`/workspaces/:workspaceId/...`) ADE Web uses a reusable **workspace shell**:
 
 - **Left navigation (desktop)**:
-  - A workspace card showing initials, name, and “Switch workspace”.
-  - A collapsible primary nav, with items:
+  - Workspace avatar/initials and name.
+  - “Switch workspace” affordance.
+  - Primary sections:
     - Documents
     - Jobs
     - Config Builder
-    - Workspace Settings
-  - Collapse/expand state is persisted **per workspace**.
+    - Settings
+  - Collapse/expand state is persisted **per workspace** (so each workspace “remembers” whether you prefer a compact nav).
 
 - **Top bar**:
-  - On desktop:
-    - A search box whose **scope** depends on the current section:
-      - In **Documents**, the search box filters documents.
-      - Elsewhere, it searches within the workspace and lets you jump to sections.
-    - A user **Profile dropdown** (display name + email, sign‑out, etc.).
-  - On mobile:
-    - A **menu button** opens a slide‑in navigation panel for workspace sections.
+  - Workspace name and optional environment label (e.g. “Production”, “Staging”).
+  - Context‑aware **search**:
+    - On the **Documents** section, it acts as a document‑scoped search.
+    - Elsewhere, it can search within the workspace (sections, configs, jobs).
+  - A profile dropdown (user’s display name/email, sign‑out, etc.).
 
-- **Main content**:
-  - The current section’s content (Documents, Jobs, Config Builder, Settings).
-  - A **safe mode banner** at the top of the content area when safe mode is active.
-  - A **notifications layer** (toasts) for feedback on actions.
+- **Mobile navigation**:
+  - The left nav becomes a slide‑in panel:
+    - Opens via a menu button.
+    - Locks body scroll while open.
+    - Closes on navigation, tapping outside, or pressing Esc.
 
-- **Immersive mode (Config Builder)**:
-  - Certain Config Builder routes use a full‑height, “workbench” layout.
-  - When the workbench is **maximised**, the workspace nav and top bar disappear to give a distraction‑free editing experience.
-  - An internal window state tracks when the workbench is maximised/minimised.
+- **Safe mode banner**:
+  - When safe mode is active, a persistent banner appears within the workspace shell explaining that runs/builds are paused.
 
-On mobile, opening the workspace nav:
+- **Notifications**:
+  - Toasts for success/error messages.
+  - Banners for cross‑cutting issues like safe mode or connectivity.
 
-- Shows a **slide‑in panel** with sections and workspace name.
-- Locks body scroll while the panel is open.
-- Lets you close with a close button, tapping outside, or navigating.
+Certain routes (especially the **Config Builder** workbench) can temporarily hide parts of the shell in favour of an immersive, IDE‑like layout.
 
 ---
 
@@ -119,13 +119,12 @@ On mobile, opening the workspace nav:
 
 ### Workspaces
 
-A **workspace** is the primary unit of organisation in ADE:
+A **workspace** is the primary unit of organisation and isolation:
 
-- Isolates **documents**, **runs**, **config packages**, and **access control**.
-- Has a human‑readable **name** and stable **slug/ID** that appear in the UI and URLs.
-- Has **one active config version** at any point for “normal” runs.
-- Is governed by **safe mode** and **role‑based access control (RBAC)**.
-- May have a **default** flag for each user, used as their preferred workspace.
+- Owns **documents**, **jobs/runs**, **config packages**, and **membership/roles**.
+- Has a human‑readable **name** and a stable **slug/ID** that appear in the UI and URLs.
+- Has **settings** (name, slug, environment labels, safe mode, etc.).
+- Is governed by **workspace‑scoped RBAC**.
 
 Users sign in, land on the **Workspace directory**, and then select (or create) a workspace before they can work with documents or configs.
 
@@ -133,289 +132,579 @@ Users sign in, land on the **Workspace directory**, and then select (or create) 
 
 ### Documents
 
-A **document** is any input you feed into ADE:
+A **document** is any input file processed by ADE, often:
 
-- Typically:
-  - Spreadsheets (e.g., XLSX),
-  - CSV/TSV files,
-  - Other supported tabular or semi‑structured formats.
+- Spreadsheets: `.xls`, `.xlsx`, `.xlsm`, `.xlsb`
+- CSV/TSV files: `.csv`, `.tsv`
+- PDFs and other semi‑structured formats (e.g. `.pdf`)
 
 Per workspace:
 
 - Documents are **uploaded into** and **owned by** that workspace.
-- Each document has:
-  - A **name** (often the filename),
-  - A **type** (e.g., XLSX, CSV),
-  - Optional **tags** (e.g., client, period),
-  - A history of **runs**.
-- Documents are **immutable inputs**:
-  - Uploading a revised file creates a **new document**.
-  - Runs always refer to the original upload.
+- Each document includes:
+  - A unique **ID**.
+  - **Name** (often the original filename).
+  - **Content type** and **size** (used to show “Excel spreadsheet • 2.3 MB”).
+  - **Status**:
+    - `uploaded` – file is stored but not yet processed.
+    - `processing` – currently being processed by a job.
+    - `processed` – last job completed successfully.
+    - `failed` – last job ended in error.
+    - `archived` – kept for history, not actively used.
+  - **Timestamps** (created/uploaded at).
+  - **Uploader** (user who uploaded the file).
+  - **Last run summary** (`last_run`):
+    - Status (`succeeded`, `failed`, `running`, etc.),
+    - A short message (if provided),
+    - When it last ran.
+
+Documents are treated as **immutable inputs**:
+
+- Re‑uploading a revised file results in a **new document**.
+- Jobs always refer to the original uploaded file by ID.
+
+Multi‑sheet spreadsheets can expose **worksheet metadata**:
+
+- ADE Web calls a document‑sheets endpoint to learn about sheets:
+  - `name`, index, and whether a sheet is “active”.
+- Run dialogs (including the Config Builder’s *Run extraction* flow) can then offer sheet‑level selection.
 
 ---
 
 ### Runs (jobs)
 
-A **run** is a single execution of ADE against a specific input using a specific config version.
+A **run** (or **job**) is a single execution of ADE against a set of inputs with a particular config version.
 
-Conceptually:
+Key ideas:
 
-- Runs are always **scoped to a workspace**, and generally to a **document**.
-- Each run includes:
-  - **Status**: `queued → running → succeeded / failed / canceled`,
-  - **Timestamps**: created / started / completed,
-  - **Triggering user**,
-  - **Config version** used,
-  - Links to **output artifacts** (CSV/JSON/other),
-  - **Logs and telemetry** (via NDJSON streams).
+- Jobs are **workspace‑scoped** and usually tied to at least one document.
+- Each job includes:
+  - **Status**: `queued`, `running`, `succeeded`, `failed`, `cancelled`.
+  - **Timestamps**:
+    - Queued / created,
+    - Started,
+    - Completed / cancelled.
+  - **Initiator** (user who triggered it, or system).
+  - **Config version** used.
+  - References to **input documents** (display names and counts).
+  - Links to **outputs**:
+    - An overall artifact (e.g., zipped outputs),
+    - A list of named output files,
+    - Logs/telemetry streams or downloads.
+  - Optional **summary** and **error message**.
 
-Runs surface in:
+Run options (as supported by the backend) include:
 
-- **Documents** (per‑document history and details),
-- **Jobs** (workspace‑wide monitoring and auditing).
+- `dry_run` – exercise the pipeline without emitting final outputs.
+- `validate_only` – run validators and checks, but not full extraction.
+- `input_sheet_names` – when provided, only these spreadsheet worksheets are processed.
 
-The backend exposes **streaming APIs** (NDJSON):
+For a given document:
 
-- ADE Web consumes these streams so that status, logs, and telemetry update **in real time** while a job is running.
-- Completed runs can replay the same event stream for consistent run history.
+- ADE Web can remember **per‑document run preferences**:
+  - Preferred config,
+  - Preferred config version,
+  - Preferred subset of sheet names.
+- These preferences are stored in local, workspace‑scoped storage and reapplied the next time you run that document.
+
+The backend exposes **streaming NDJSON APIs** for job events:
+
+- ADE Web uses these for:
+  - Live status updates,
+  - Logs,
+  - Telemetry summaries (rows processed, warnings, etc.).
+- The same streams can be replayed to show historical run details.
+
+The Config Builder workbench uses the same run APIs to:
+
+- Trigger *validation‑only* runs for a config version.
+- Trigger *extraction* runs directly from the editor against recent workspace documents.
+- Display the latest run’s outputs, artifact, and telemetry in a dedicated **Run summary** panel alongside the console.
 
 ---
 
 ### Config packages & versions
 
-A **config package** is a Python package that tells ADE how to interpret, validate, and extract data for a workspace.
+A **config package** is a Python package that tells ADE how to:
 
-Key ideas:
+- Interpret specific document formats,
+- Validate incoming data,
+- Transform it into structured outputs.
 
-- A workspace may hold **one or more config packages** (e.g. pipelines, client variants).
-- Each config package is versioned into **config versions**.
-- At any time, the workspace has **one active config version** that is used for standard runs.
-- Each config version comprises:
-  - Python package code,
-  - Configuration and schema files,
-  - A **manifest** describing output columns and table‑level behaviour,
-  - Optional scripts (transforms, validators, helpers).
+Per workspace:
 
-For simplicity, user‑facing docs emphasise three statuses:
+- There may be **one or many** config packages (e.g., per client, per pipeline).
+- Each package has **config versions** (immutable snapshots).
+- Exactly **one version is active** for “normal” runs at any time.
+
+#### Version lifecycle
+
+The product‑level lifecycle is:
 
 - **Draft**
-  - Editable in the Config Builder.
-  - Supports:
-    - File/script editing,
-    - Manifest editing,
-    - Builds, validations, test runs.
+  - Fully editable.
+  - Can be built, validated, and used for **test** runs.
 - **Active**
-  - Exactly **one active version per workspace** for “normal” runs.
-  - Treated as **read‑only** in the UI.
+  - Exactly one active version per workspace.
+  - Read‑only in the UI.
+  - Used by default for new runs unless another version is explicitly selected.
 - **Inactive**
-  - Older versions, kept for history and rollback.
-  - Not used for new runs unless cloned into a new draft.
+  - Older or retired versions.
+  - Not used for new runs.
+  - Kept for history, audit, and rollback.
 
-Internally, backends may support extra states (published, archived, deleted) but the primary UI contract is the `draft → active → inactive` lifecycle.
+Backends may add internal states (e.g. “published”, “archived”), but ADE Web presents the version lifecycle as **Draft → Active → Inactive**.
+
+Typical flows:
+
+1. Clone the **active** version (or a known‑good inactive one) into a new **draft**.
+2. Edit code, config files, and manifest in the Config Builder.
+3. Run builds/validations and test runs against sample documents.
+4. When satisfied, **activate** the draft:
+   - It becomes **Active**.
+   - The previous active version becomes **Inactive**.
+5. Monitor early runs and adjust via new drafts as needed.
 
 ---
 
 ### Manifest & schema
 
-Each config version has a **manifest** that describes the expected outputs and table behaviour:
+Each config version exposes a structured **manifest** describing expected outputs and per‑table behaviour.
 
-- **Columns**:
-  - `key` – stable identifier,
-  - `label` – human‑friendly name,
-  - `path` – where the value comes from in extracted data,
-  - `ordinal` – ordering,
-  - `required` – whether the column must be present,
-  - `enabled` – whether the column is included in outputs,
-  - `depends_on` – optional dependencies on other columns.
-- **Table section**:
-  - Optional `transform` script path,
-  - Optional `validators` script path.
+For columns:
+
+- `key` – stable identifier.
+- `label` – human‑friendly display name.
+- `path` – where the value comes from in extracted data.
+- `ordinal` – sorting/order.
+- `required` – whether the column must be present.
+- `enabled` – whether it appears in outputs.
+- `depends_on` – optional column dependencies.
+
+Table‑level options:
+
+- `transform` – script used to transform raw rows.
+- `validators` – scripts for table‑level or row‑level validation.
 
 ADE Web:
 
-- Parses the manifest into a structured representation,
+- Parses the manifest into a structured model.
 - Surfaces it in the Config Builder for:
-  - Column reordering,
-  - Toggling enabled/disabled,
-  - Toggling required flags,
-  - Inspecting or editing transform/validator hooks.
-- Sends **manifest patches** to the backend, preserving unknown fields so forward compatibility is maintained.
+  - Reordering columns,
+  - Toggling enabled/required flags,
+  - Linking transform/validator scripts.
+- Sends **patches** to the backend, preserving unknown fields so the backend schema can evolve without breaking the UI.
 
 ---
 
 ### Safe mode
 
-ADE includes a **safe mode** mechanism as a kill switch for engine execution:
+ADE includes a **safe mode** kill switch for engine execution.
 
-- When **safe mode is enabled**:
-  - New runs, builds, and test runs are blocked.
-  - Read‑only operations still work:
-    - Viewing documents,
-    - Inspecting runs and logs,
-    - Downloading existing artifacts.
-- Safe mode is **system‑scoped**, with an optional extension to workspace scope (ideal behaviour):
-  - Backends expose a system‑wide `enabled` flag and human‑readable `detail` message.
-  - Workspace settings may surface additional per‑workspace controls.
+When **safe mode is enabled**:
 
-In the UI:
+- Engine‑invoking actions are blocked, including:
+  - New runs,
+  - Draft builds/validations,
+  - Test runs,
+  - Activations.
+- Read‑only operations continue to work:
+  - Viewing documents,
+  - Inspecting old runs,
+  - Downloading existing artifacts.
 
-- A **global banner** shows when safe mode is active, reusing the backend’s message or a sensible default.
-- Workspace‑level actions that execute the engine (Run, Build, Test, Activate) are disabled with tooltips explaining why.
-- Authorised users see safe mode controls under Settings.
+Behaviour:
+
+- Safe mode is primarily **system‑wide**; optionally it can be extended with workspace scope.
+- The backend exposes a **status endpoint** with:
+  - `enabled: boolean`,
+  - A human‑readable `detail` message.
+- ADE Web periodically checks this status and:
+  - Shows a banner with the detail message when enabled.
+  - Disables “Run”, “Run extraction”, “Build”, “Test run”, and “Activate” buttons.
+  - Uses clear tooltips (e.g. “Safe mode is enabled: …”) instead of silent failures.
+
+Management:
+
+- System safe mode is controlled via Settings and requires a permission like `System.Settings.ReadWrite`.
+- The UI:
+  - Shows current state (enabled/disabled) and detail.
+  - Lets authorised users update the message.
+  - Provides a single toggle to enable/disable safe mode.
 
 ---
 
 ### Roles & permissions
 
-ADE Web is designed around **workspace‑scoped RBAC**:
+ADE Web is designed around **RBAC** (role‑based access control):
 
-- Users have roles per workspace (e.g. Owner, Maintainer, Runner, Viewer).
-- Roles govern capabilities such as:
-  - Creating/deleting **workspaces**,
-  - Managing **members** and roles,
-  - Toggling **safe mode**,
-  - Editing and activating **config versions**,
-  - Running **builds/test runs**,
-  - Triggering **document runs**,
-  - Viewing **logs and telemetry**.
+- Users hold **roles** per workspace (e.g. Owner, Maintainer, Reviewer, Viewer).
+- Roles aggregate **permissions** (e.g. `Workspace.Members.ReadWrite`, `Workspace.Roles.ReadWrite`).
 
-Permissions are enforced by the backend; ADE Web only:
+Permissions govern actions such as:
 
-- Reads the user’s roles/permissions,
-- Enables/disables or hides UI controls accordingly,
-- Uses feature flags like `Workspaces.Create` or `Users.Read.All` as hints for what to show.
+- Creating/deleting **workspaces**.
+- Managing **workspace members**.
+- Creating/updating **workspace roles**.
+- Toggling **safe mode**.
+- Editing and activating **config versions**.
+- Running **jobs** and **test runs**.
+- Viewing **logs** and **telemetry**.
 
----
+Backend responsibilities:
 
-### Authentication, SSO & first‑time setup
+- Encode permissions in the session / workspace membership.
+- Enforce permissions server‑side on all operations.
 
-Authentication is handled centrally by ADE’s backend.
+Frontend responsibilities:
 
-#### First‑run setup
-
-On a fresh deployment:
-
-- A **Setup status** endpoint indicates that setup is required.
-- ADE Web routes users to `/setup` where they:
-  - Configure the first admin account,
-  - Optionally configure or select SSO providers,
-  - Complete the initial bootstrap.
-- After successful setup, ADE Web:
-  - Establishes a session,
-  - Redirects to `/workspaces` (or another safe default).
-
-If setup is not required, `/setup` behaves like a protected route and redirects to the app.
-
-#### Login & SSO
-
-Normal sign‑in uses `/login`:
-
-- ADE Web calls an **auth providers** API to list:
-  - Local login (if enabled),
-  - SSO providers (id + label + optional icon),
-  - Whether `force_sso` is true.
-- When `force_sso` is true:
-  - The UI either hides the local form or drives directly into SSO.
-- Unaudited or unsafe `redirectTo` parameters are sanitised:
-  - Only internal, single‑origin paths are honoured.
-  - Auth callbacks and setup flows also sanitise redirect destinations.
-
-Redirect behaviour:
-
-1. Use a `return_to` field from the session (if set),
-2. Else, use a validated `redirectTo` query parameter from the URL,
-3. Else, send the user to the default app home (`/workspaces`).
+- Read permissions from session and workspace membership.
+- Hide or disable UI controls the user cannot use.
+- Use permission keys as hints (e.g. show members tab only if the user can see the membership list).
 
 ---
 
 ## Routes & navigation model
 
-ADE Web runs as a **single‑page app** with a lightweight custom navigation layer.
+ADE Web is a **single‑page React app** with a lightweight custom navigation layer built on `window.history`.
 
-### Top‑level routes
+### Top‑level routes (`App.tsx`)
 
-- `/` – Entry point; decides where to send the user (login, setup, or app).
+At the app entry point, `App` wraps everything in:
+
+- `NavProvider` – custom navigation context.
+- `AppProviders` – global React Query provider and dev tools.
+
+`ScreenSwitch` inspects the **current pathname** (normalised to strip trailing slashes) and renders:
+
+- `/` – Home / entry strategy (decides whether to send the user to login, setup, or the app).
 - `/login` – Sign‑in and auth provider selection.
 - `/auth/callback` – Auth provider callback handler.
-- `/setup` – First‑time setup flow.
+- `/setup` – First‑run setup flow.
 - `/logout` – Logout screen.
 - `/workspaces` – Workspace directory.
 - `/workspaces/new` – Create workspace.
-- `/workspaces/:workspaceId` – Workspace shell (Documents, Jobs, Config Builder, Settings).
-- Any other path – Not found.
+- `/workspaces/:workspaceId/...` – Workspace shell; the exact internal route is resolved inside the workspace screen.
+- Any other path – “Not found” screen.
+
+Paths are **normalised** to avoid trailing‑slash variants (`/foo/` becomes `/foo`).
 
 Within `/workspaces/:workspaceId`, the first path segment after the workspace ID selects the section:
 
-- `/documents` – Documents list and document details.
-- `/jobs` – Jobs list.
-- `/config-builder` – Config overview and details:
-  - `/config-builder/:configId` – Config details (metadata, versions, etc.).
-  - `/config-builder/:configId/editor` – Full workbench editor for that config.
-- `/settings` – Workspace settings.
-- `/overview` – Optional overview/summary section.
-- Legacy `/configs/...` paths are redirected into `/config-builder/...`.
+- `/documents` – Documents list and document run UI.
+- `/jobs` – Jobs ledger.
+- `/config-builder` – Config overview and Builder routes:
+  - e.g. `/config-builder/:configId` for a specific config,
+  - nested routes for the editor workbench.
+- `/settings` – Workspace settings:
+  - Uses a `view` query parameter to choose sub‑tabs (general, members, roles).
+- `/overview` – Optional overview/summary surface.
 
-### Navigation behaviour
+Unknown section paths inside a workspace show a **workspace‑local “Section not found”** state rather than a global 404.
 
-ADE Web uses a `NavProvider` based on the browser `history` API:
+### Custom navigation layer (`NavProvider`, `Link`, `NavLink`)
 
-- `Link` intercepts clicks and performs SPA navigation unless the user explicitly opens links in a new tab/window (Ctrl/⌘/Shift/Alt clicks).
-- `NavLink` knows whether it is “active” (either exact match or prefix match) and can render:
-  - Different classes,
-  - Different children,
-  - Based on the `isActive` flag.
+Navigation is handled by a small custom system instead of a third‑party router:
 
-A **navigation blocker** mechanism allows screens to intercept transitions:
+- `NavProvider` holds the current `location`:
 
-- For example, the Config Builder can register a blocker when there are unsaved edits.
-- Navigation attempts (including back/forward) are turned into “intents” that blockers can veto.
-- If vetoed, the app returns the user to the current URL.
+  ```ts
+  type LocationLike = { pathname: string; search: string; hash: string };
+````
+
+* Hooks:
+
+  * `useLocation()` – read the current location.
+  * `useNavigate()` – push or replace a new URL.
+  * `useNavigationBlocker(blocker, when)` – register a function that can veto navigations.
+
+#### SPA links
+
+`Link` wraps `<a>` and:
+
+* Sets `href={to}` for semantics and right‑click behaviour.
+* Intercepts **unmodified** left‑clicks:
+
+  * Calls any user `onClick`.
+  * If `event.defaultPrevented` is false and no modifier keys are held:
+
+    * Calls `preventDefault()`.
+    * Uses `navigate(to, { replace })` to perform SPA navigation.
+* For modified clicks (`metaKey`, `ctrlKey`, `shiftKey`, `altKey`), it **does not intercept**; the browser opens a new tab/window as usual.
+
+`NavLink` builds on `Link` and:
+
+```ts
+const isActive = end
+  ? pathname === to
+  : pathname === to || pathname.startsWith(`${to}/`);
+```
+
+* Accepts:
+
+  * `className` as a string or `(args: { isActive: boolean }) => string`.
+  * `children` as a React node or `(args: { isActive: boolean }) => ReactNode`.
+* Enables active styling and “active” render variants for nav items.
+
+#### Back/forward and blockers (`history.tsx`)
+
+`NavProvider` integrates with the browser history:
+
+* Maintains a stateful `loc` derived from `window.location`.
+* Subscribes to `popstate`:
+
+  * Builds a `nextLocation` from the new URL.
+
+  * Constructs a `NavigationIntent`:
+
+    ```ts
+    type NavigationIntent = {
+      readonly to: string;
+      readonly location: LocationLike;
+      readonly kind: "push" | "replace" | "pop";
+    };
+    ```
+
+  * Runs all registered **navigation blockers** with `{ kind: "pop", ... }`.
+
+  * If any blocker returns `false`:
+
+    * Uses `window.history.pushState` to restore the previous location.
+    * Does **not** update internal state.
+
+  * If allowed:
+
+    * Updates `loc` so `useLocation()` consumers re‑render.
+
+Programmatic navigation via `useNavigate()`:
+
+* `navigate(to, opts)`:
+
+  * Resolves `to` relative to `window.location.origin` using `new URL(to, origin)`.
+  * Builds `nextLocation` and `NavigationIntent` with `kind` = `"push"` or `"replace"`.
+  * Runs blockers; if any returns `false`, navigation is cancelled.
+  * If allowed:
+
+    * Calls `window.history.pushState` or `replaceState`.
+    * Manually dispatches `new PopStateEvent("popstate")` so the same logic runs as for user‑initiated navigation.
+
+#### Navigation blockers
+
+A **navigation blocker** is a function:
+
+```ts
+type NavigationBlocker = (intent: NavigationIntent) => boolean;
+```
+
+* Returning `false` cancels that navigation.
+* Register using:
+
+```ts
+useNavigationBlocker(blocker, when);
+```
+
+* `when` controls whether the blocker is active.
+* The hook automatically registers/unregisters as needed.
+
+Typical usage:
+
+* Config Builder and other editors use blockers to guard against losing unsaved changes.
+* Blockers commonly:
+
+  * Skip navigation if the target path is the same (e.g. just search/hash changing).
+  * Optionally bypass checks in specific circumstances (e.g. “Save then navigate”).
 
 ---
 
-### URL state & search parameters
+## URL state & search parameters
 
-ADE Web encodes important state into the URL to make views shareable and recoverable on refresh.
+ADE Web encodes important UI state in the URL so views can be shared and restored on refresh.
 
-Generic helpers:
+Helpers in `urlState.ts` provide:
 
-- Convert JS objects or tuples into `URLSearchParams`.
-- Provide utilities to:
-  - Read a single parameter by key,
-  - Apply a patch (set/remove params) and build a new URL,
-  - Override search params in nested components.
+* `toURLSearchParams(init)` – build `URLSearchParams` from:
 
-Important uses of URL state:
+  * A query string,
+  * A tuple array,
+  * An existing `URLSearchParams`,
+  * A record of keys → value/array.
+* `getParam(search, key)` – read a single param from a raw search string.
+* `setParams(url, patch)` – patch query params on a `URL` and return the path+search+hash string.
 
-- **Documents list** – for example:
-  - `q` – free‑text search across document names.
-  - Pagination and sorting parameters (ideal behaviour).
-- **Config Builder** – see below.
-- **Auth flows** – `redirectTo` for post‑login routing.
+### Hook: `useSearchParams`
 
-#### Config Builder search state
+`useSearchParams()` is a React hook that:
 
-The Config Builder persists its layout and file selection in the URL:
+* Reads the current query string from `useLocation()`.
 
-- `tab` – primary tab (currently `editor`).
-- `pane` – bottom panel (`console` or `validation`/`problems`).
-- `console` – whether the bottom panel is `open` or `closed`.
-- `view` – layout mode:
-  - `editor` – editor‑only,
-  - `split` – editor + console,
-  - `zen` – minimal, editor‑focused view.
-- `file` (or legacy `path`) – currently open file or script.
+* Returns:
 
-Helpers:
+  ```ts
+  const [params, setSearchParams] = useSearchParams();
+  // params: URLSearchParams
+  // setSearchParams: (init: SearchParamsInit | (prev) => SearchParamsInit, options?: { replace?: boolean }) => void
+  ```
 
-- **Read**: parse all relevant parameters into a `ConfigBuilderSearchState`, with flags indicating which were explicitly present.
-- **Merge**: apply a patch to the current state and serialise to the URL, only persisting non‑default values.
+* When called, `setSearchParams`:
 
-This makes it possible to:
+  * Computes the new `URLSearchParams`.
+  * Builds a new URL preserving `pathname` and `hash`.
+  * Calls `navigate(target, { replace })` under the hood.
 
-- Bookmark a specific config version and file with the console open in validation mode.
-- Share a URL that opens the Builder in exactly the layout you see.
-- Refresh without losing your place.
+### Search params overrides
+
+A context, `SearchParamsOverrideProvider`, allows nested components to **override** the behaviour of `useSearchParams`:
+
+* The override value supplies:
+
+  * A synthetic `params` object.
+  * A `setSearchParams` implementation.
+* Inside that subtree:
+
+  * `useSearchParams()` will use the override instead of the global URL.
+* This is useful when:
+
+  * A dialog or embedded panel wants to manage “local” query state while still being aware of the outer URL.
+  * Legacy flows need to simulate query changes without actually altering the browser address bar.
+
+Most sections use the **global** URL state directly, but the override hook is available for advanced cases.
+
+---
+
+## Config Builder – URL‑driven layout & workbench model
+
+The **Config Builder** is implemented as an IDE‑like workbench. Its layout, panel state, and file selection are encoded in query parameters and mirrored into internal state.
+
+### Config Builder URL state (`readConfigBuilderSearch` & `mergeConfigBuilderSearch`)
+
+Config Builder layout and file selection are encoded in query parameters:
+
+```ts
+export type ConfigBuilderTab = "editor";
+export type ConfigBuilderPane = "console" | "validation";
+export type ConfigBuilderConsole = "open" | "closed";
+export type ConfigBuilderView = "editor" | "split" | "zen";
+
+export interface ConfigBuilderSearchState {
+  readonly tab: ConfigBuilderTab;
+  readonly pane: ConfigBuilderPane;
+  readonly console: ConfigBuilderConsole;
+  readonly view: ConfigBuilderView;
+  readonly file?: string;
+}
+```
+
+Defaults:
+
+```ts
+export const DEFAULT_CONFIG_BUILDER_SEARCH: ConfigBuilderSearchState = {
+  tab: "editor",
+  pane: "console",
+  console: "closed",
+  view: "editor",
+};
+```
+
+#### Reading builder state
+
+`readConfigBuilderSearch(source)`:
+
+* Accepts a `URLSearchParams` or raw search string.
+
+* Normalises values:
+
+  * `console` → `"open"` or `"closed"` (anything else → `"closed"`).
+  * `pane` → `"console"` or `"validation"` (legacy `"problems"` maps to `"validation"`).
+  * `view` → `"editor" | "split" | "zen"` (invalid → `"editor"`).
+  * `file` reads `file` or legacy `path`.
+
+* Returns a **snapshot**:
+
+  ```ts
+  export interface ConfigBuilderSearchSnapshot extends ConfigBuilderSearchState {
+    readonly present: {
+      readonly tab: boolean;
+      readonly pane: boolean;
+      readonly console: boolean;
+      readonly view: boolean;
+      readonly file: boolean;
+    };
+  }
+  ```
+
+* The `present` flags indicate which keys were explicitly set in the URL vs inherited defaults. This allows the UI to distinguish “user explicitly set this” vs “just using defaults”.
+
+#### Merging builder state
+
+`mergeConfigBuilderSearch(current, patch)`:
+
+* Reads the current state from `current` (a `URLSearchParams`).
+* Merges:
+
+  * Global defaults,
+  * Existing state,
+  * `patch` values.
+* Produces a new `URLSearchParams` where:
+
+  * All builder‑related keys are **wiped first** (`tab`, `pane`, `console`, `view`, `file`, `path`).
+  * Only **non‑default** values are written back.
+  * `file` is omitted if empty/undefined.
+
+Result:
+
+* URLs stay clean: defaults are not redundantly encoded.
+* Deep‑linking is explicit and stable: only state that actually matters or differs from defaults appears in the query string.
+
+### Workbench URL state hook (`useWorkbenchUrlState`)
+
+Config Builder’s workbench consumes the helpers via `useWorkbenchUrlState`:
+
+```ts
+interface WorkbenchUrlState {
+  readonly fileId?: string;
+  readonly pane: ConfigBuilderPane;
+  readonly console: ConfigBuilderConsole;
+  readonly consoleExplicit: boolean;
+  readonly setFileId: (fileId: string | undefined) => void;
+  readonly setPane: (pane: ConfigBuilderPane) => void;
+  readonly setConsole: (console: ConfigBuilderConsole) => void;
+}
+```
+
+Behaviour:
+
+* Uses `useSearchParams()` + `readConfigBuilderSearch(params)` to derive the snapshot.
+* `setFileId`, `setPane`, `setConsole`:
+
+  * Guard against no‑ops (do nothing if already at the desired value).
+  * Use `mergeConfigBuilderSearch(current, patch)` to compute a new search string.
+  * Call `setSearchParams` with `{ replace: true }` so history stays clean (tweaking panel state does not spam the back button).
+
+The `consoleExplicit` flag indicates whether the user has explicitly toggled the console panel in the URL (present vs implied).
+
+---
+
+## Other notable search params
+
+Outside Config Builder, some important query parameters:
+
+* **Documents**
+
+  * `q` – free‑text search (document name, source, etc.).
+  * `status` – comma‑separated list of document statuses.
+  * `sort` – sort order (e.g. `-created_at`, `-last_run_at`).
+  * `view` – view preset (`mine`, `team`, `attention`, `recent`).
+
+* **Settings**
+
+  * `view` – active settings tab (`general`, `members`, `roles`).
+
+* **Auth flows**
+
+  * `redirectTo` – desired post‑login path.
+
+    * Must be a safe, same‑origin relative path.
+    * Backend and frontend both validate it to avoid open redirects.
 
 ---
 
@@ -423,472 +712,800 @@ This makes it possible to:
 
 ### Workspace directory (`/workspaces`)
 
-The workspace directory presents:
+The directory screen presents:
 
-- A **search box** for workspaces:
-  - Filters workspaces by name and slug.
-  - Keyboard shortcut (platform‑aware) to focus the search.
-  - Suggestions for the most relevant workspaces; selecting a suggestion jumps to that workspace.
-- Optional **“Create workspace”** button:
-  - Shown only to users with the right permission (e.g. `Workspaces.Create`).
+* A **search box** to filter workspaces by name or slug.
+* An optional “Create workspace” button (permission‑gated).
+* Cards for each workspace with:
 
-Main content varies depending on data:
+  * Name and slug,
+  * Default badge (if this is the user’s default workspace),
+  * A concise list of role labels.
 
-- **No workspaces & can create**:
-  - An empty‑state card encouraging workspace creation.
-- **No workspaces & cannot create**:
-  - An informational empty state explaining that the user needs to be added to a workspace.
-- **Workspaces available**:
-  - A **card grid**, each card linking to:
-    - `/workspaces/:id/documents` (the default workspace section).
-  - Each card shows:
-    - Name,
-    - Slug,
-    - “Default” badge (if applicable),
-    - A comma‑separated list of permissions/roles.
+Clicking a card navigates into the workspace shell, typically landing on Documents.
 
 ### Create workspace (`/workspaces/new`)
 
-The **Create workspace** form is available to authenticated users (and only fully unlocked for users with certain permissions).
+Users with `Workspaces.Create` (and any additional deployment‑specific permissions) can create a new workspace.
 
 Form fields:
 
-- **Workspace name**:
-  - Required, length‑limited.
-- **Workspace slug**:
-  - Required, lowercase and URL‑safe.
-  - Automatically **slugified from the name** until the slug field is manually edited:
-    - Lowercases the name,
-    - Replaces non‑alphanumeric characters with `-`,
-    - Trims leading/trailing dashes,
-    - Enforces a max length.
-- **Workspace owner** (optional):
-  - Only shown when the user has permission to read the user directory (e.g. `Users.Read.All`).
-  - Defaults to the current user.
-  - Dropdown of users (paged with a “Load more users…” button).
-  - If the owner field is available and cleared, the form will require an owner to be selected.
+* **Workspace name**:
+
+  * Required.
+  * Length‑limited (e.g. ≤ 255 characters).
+* **Workspace slug**:
+
+  * Required.
+  * Lowercase and URL‑friendly.
+  * Pattern like: `^[a-z0-9]+(?:-[a-z0-9]+)*$`.
+  * Auto‑slugified from name until the user edits it.
+* **Workspace owner** (optional, permission‑gated):
+
+  * Shown only if the user can read the user directory (e.g. `Users.Read.All`).
+  * Defaults to the current user.
+  * Select from a paginated, searchable list of users.
 
 Validation:
 
-- Client‑side validation:
-  - Name and slug required,
-  - Slug pattern (lowercase letters, numbers, dashes).
-- Server‑side validation:
-  - Name and slug uniqueness errors are displayed inline,
-  - Any field‑specific API errors are mapped to their respective inputs,
-  - A generic root error covers non‑field issues.
+* **Client‑side** via a schema (e.g. Zod):
 
-On successful creation:
+  * Required fields,
+  * Length and pattern checks.
+* **Server‑side**:
 
-- The user is redirected to `/workspaces/:id` (which immediately normalises to the workspace’s default section).
-
----
-
-## Workspace shell sections
-
-Within a workspace, the shell is driven by the URL and the workspace nav.
-
-### Documents
-
-The **Documents** section is where analysts and operators run extractions.
-
-#### Document list
-
-A **paginated, filterable table** of documents:
-
-- Columns:
-  - Name,
-  - Type,
-  - Tags,
-  - Last run status,
-  - Last run time,
-  - Last run triggered by.
-- Filters and search:
-  - Free‑text search (driven by `q` query param),
-  - Type/tag filters (ideal behaviour),
-  - Time‑window filter for “recently used” documents.
-
-The top‑bar search switches to a **document‑scoped search** when you’re on the Documents section.
-
-#### Uploading documents
-
-From the Documents section, users can:
-
-- Upload via an **Upload** button and/or drag‑and‑drop area.
-- See:
-  - Upload progress,
-  - Errors for unsupported types, size limits, or server errors.
+  * Uniqueness checks for name/slug,
+  * Field‑specific error messages mapped back to the form,
+  * A generic error banner for non‑field issues.
 
 On success:
 
-- A new document is created in the workspace.
-- It appears in the table.
-- It becomes immediately eligible for runs.
-
-#### Document details & runs
-
-Selecting a document opens a **details view** (panel or dedicated screen) showing:
-
-- Metadata:
-  - Name, type, size,
-  - Uploaded by, uploaded at,
-  - Tags / other editable metadata.
-- Latest run status:
-  - Status, duration,
-  - Config version used,
-  - Output links.
-
-Actions:
-
-- **Run** – start an extraction run for this document.
-- **View runs** – open a per‑document run history view (Document Runs Drawer).
-
-Safe mode:
-
-- When safe mode is active, the **Run** action is disabled.
-- Tooltips and inline messaging explain why.
-
-#### Document Runs Drawer
-
-The **Document Runs Drawer** shows recent runs for the selected document:
-
-- Each run shows:
-  - Status,
-  - Start/complete times,
-  - Triggering user,
-  - Config version used.
-- Selecting a run shows:
-  - Live or replayed logs (NDJSON),
-  - Telemetry (e.g. rows processed, warnings),
-  - Links to output files.
-
-This drawer is designed as a **single console** for that document: upload, run, watch, debug, and download, all in one place.
+* ADE Web invalidates workspace lists.
+* The user is redirected to `/workspaces/:workspaceId` (which normalises to the default section).
 
 ---
 
-### Jobs
+## Config Builder workbench
 
-The **Jobs** section is a workspace‑wide view of recent and running jobs.
+The **Config Builder** uses a workbench abstraction to present a repository‑like view of a config package, backed by a file listing from the backend.
 
-#### Jobs list
+The workbench is designed to feel like a lightweight IDE:
 
-A **chronological table** of runs:
+* **Activity bar** on the far left (Explorer, Search, SCM, Extensions).
+* **Explorer** tree for files.
+* **Tabbed editor** in the centre with keyboard shortcuts and drag‑reordering.
+* **Inspector** on the right for file metadata.
+* **Bottom panel** for console logs and validation output.
+* A **chrome header** with Save, Build, Run validation, Run extraction, panel toggles, and window controls.
 
-- Columns:
-  - Run ID,
-  - Document,
-  - Status,
-  - Start/completion timestamps,
-  - Duration,
-  - User,
-  - Config version.
-- Filters:
-  - Status (running/succeeded/failed/canceled),
-  - Time window,
-  - Document,
-  - Config version,
-  - User.
+### Workbench window & session model
 
-#### Job details & logs
+A **workbench session** is tracked per workspace/config pair via a `WorkbenchWindowContext` (not shown in this file):
 
-Selecting a job opens a detailed view:
+* The Config Builder route (`ConfigEditorWorkbenchRoute`) opens a session for the selected config:
 
-- **Streamed logs**:
-  - NDJSON events, interleaving log lines, run lifecycle events, and telemetry.
-- **Telemetry**:
-  - Structured counters (rows processed, warnings, etc.).
-- **Artifacts**:
-  - Listing and downloads for output files.
+  ```ts
+  openSession({
+    workspaceId,
+    configId,
+    configName: `${workspace.name} · ${resolvedName}`,
+  });
+  ```
 
-This view supports:
+* `windowState` is one of:
 
-- Incident response and debugging,
-- Auditing,
-- Export of job summaries (ideal behaviour).
+  * `"restored"` – workbench is rendered inline inside the Config Builder section.
+  * `"maximized"` – workbench uses a fixed, immersive overlay layout; background scrolling is disabled by temporarily setting `document.documentElement.style.overflow = "hidden"`.
+  * `"minimized"` – workbench is docked elsewhere (e.g. in a bottom dock), and the Config Builder route shows a “Workbench docked” placeholder.
+
+The `Workbench` chrome exposes window controls:
+
+* **Minimize** – delegates to `onMinimizeWindow`.
+* **Maximize / Restore** – toggles between inline and immersive modes.
+* **Close** – closes the session and returns to the Config Builder overview.
+
+This separation lets the workspace shell decide where and how to present the editor while the workbench remains self‑contained.
+
+### File tree representation (`WorkbenchFileNode`)
+
+Internally, the workbench models the package as a tree of nodes:
+
+```ts
+export type WorkbenchFileKind = "file" | "folder";
+
+export interface WorkbenchFileMetadata {
+  size?: number | null;
+  modifiedAt?: string | null;
+  contentType?: string | null;
+  etag?: string | null;
+}
+
+export interface WorkbenchFileNode {
+  id: string;          // canonical path, e.g. "ade_config/detectors/membership.py"
+  name: string;        // display name, e.g. "membership.py"
+  kind: WorkbenchFileKind;
+  language?: string;   // editor language id (e.g. "python", "json")
+  children?: WorkbenchFileNode[];
+  metadata?: WorkbenchFileMetadata | null;
+}
+```
+
+Typical tree root for a config package:
+
+* A folder such as `ade_config` with children:
+
+  * `manifest.json`,
+  * `config.env`,
+  * `header.py`,
+  * `detectors` folder,
+  * `hooks` folder,
+  * `tests` folder.
+
+A **default tree** and file contents are used for local development and to seed an empty workbench:
+
+* `DEFAULT_FILE_TREE` – in‑memory representation of a canonical sample package.
+* `DEFAULT_FILE_CONTENT` – map of file IDs to initial content strings.
+
+#### Building the tree from backend listing (`createWorkbenchTreeFromListing`)
+
+The backend exposes a flat file listing (e.g. `FileListing`) with entries:
+
+* `path` – full path,
+* `name` – base name,
+* `parent` – parent path,
+* `kind` – `"file"` or `"dir"`,
+* `depth` – depth integer,
+* `size`, `mtime`, `content_type`, `etag`.
+
+`createWorkbenchTreeFromListing(listing)`:
+
+* Derives a **root ID** (from `root`, `prefix` or first entry’s parent).
+* Normalises paths using `canonicalizePath` (trims trailing slashes).
+* Ensures folders are created along the way with `ensureFolder`.
+* Populates a root `WorkbenchFileNode` and inserts children:
+
+  * For directories:
+
+    * Ensures a folder node exists.
+    * Sets metadata.
+  * For files:
+
+    * Creates `WorkbenchFileNode` with:
+
+      * `language` inferred from extension (`json`, `python`, `typescript`, `markdown`, etc.).
+      * Metadata from listing.
+* Children are sorted via `compareNodes`:
+
+  * Folders before files.
+  * Alphabetical by `name` within each group.
+
+Helpers:
+
+* `extractName(path)` – basename from canonicalised path.
+* `deriveParent(path)` – parent path or `""` for root.
+* `findFileNode(root, id)` – search to find a node by ID.
+* `findFirstFile(root)` – find the first file node (folder‑first traversal), used as the default open file.
+
+### Workbench tabs, content, persistence & keyboard interaction
+
+Open files are managed as a tab strip via `useWorkbenchFiles`.
+
+`WorkbenchFileTab`:
+
+```ts
+export type WorkbenchFileTabStatus = "loading" | "ready" | "error";
+
+export interface WorkbenchFileTab {
+  id: string;
+  name: string;
+  language?: string;
+  initialContent: string;   // last-saved content
+  content: string;          // current editor buffer
+  status: WorkbenchFileTabStatus;
+  error?: string | null;
+  etag?: string | null;
+  metadata?: WorkbenchFileMetadata | null;
+  pinned?: boolean;
+  saving?: boolean;
+  saveError?: string | null;
+  lastSavedAt?: string | null;
+}
+```
+
+`useWorkbenchFiles` orchestrates:
+
+* The list of open tabs.
+* Which tab is currently **active**.
+* Lazy loading of file contents (`loadFile`).
+* Tracking **dirty** state (`content !== initialContent`).
+* Saving and save error states.
+* Rearranging and pinning tabs.
+* MRU‑style recent tab ordering for quick switching.
+* Optional cross‑session persistence in scoped storage.
+
+Persisted structure:
+
+```ts
+interface PersistedWorkbenchTabs {
+  readonly openTabs: readonly (string | { id: string; pinned?: boolean })[];
+  readonly activeTabId?: string | null;
+  readonly mru?: readonly string[];
+}
+```
+
+Behaviour highlights:
+
+* **Hydration**:
+
+  * If persistence is provided:
+
+    * Recreates tabs from the stored snapshot (only for nodes still present in the current tree).
+    * Restores pinned state, active tab, and MRU order.
+  * Else:
+
+    * Opens `initialActiveFileId` if valid, or the first file in the tree.
+
+* **Tab lifecycle**:
+
+  * `openFile(fileId)` – creates/activates a tab (initially `loading`, content fetched via `loadFile`).
+  * `selectTab(fileId)` – activates an existing tab; if it previously failed, transitions back to `"loading"` to retry.
+  * `closeTab`, `closeOtherTabs`, `closeTabsToRight`, `closeAllTabs` – mirrors typical IDE behaviour.
+  * `moveTab(fileId, targetIndex, { zone })` – drag‑and‑drop reordering, respecting zones:
+
+    * `"pinned"` – dedicated left‑hand group.
+    * `"regular"` – standard tabs.
+
+* **Pinning**:
+
+  * `pinTab`, `unpinTab`, `toggleTabPin` – pinned tabs stay at the left and are treated separately for ordering.
+
+* **Recent‑tab navigation**:
+
+  * `selectRecentTab("forward" | "backward")` – cycles through visible tabs using MRU order.
+  * Keyboard shortcuts handled in `EditorArea`:
+
+    * `Ctrl/Cmd+Tab` – recent‑tab forward.
+    * `Shift+Ctrl/Cmd+Tab` – recent‑tab backward.
+    * `Ctrl/Cmd+PageUp/PageDown` – cycle tabs by visual order.
+    * `Ctrl/Cmd+W` – close active tab.
+
+* **Loading content**:
+
+  * Tabs start as `status: "loading"`.
+  * `loadFile` uses `readConfigFileJson` + React Query (`configsKeys.file`) to fetch:
+
+    * `content` (possibly base64 decoded),
+    * `etag` for concurrency.
+  * On success: `status: "ready"`, `initialContent = content`, `metadata` updated.
+  * On failure: `status: "error"`, `error` message set; `TabsContent` offers a retry affordance.
+
+* **Editing & saving**:
+
+  * `updateContent(fileId, content)`:
+
+    * Updates the buffer and marks tab as ready if it wasn’t.
+  * Save path:
+
+    * `beginSavingTab` → call `useSaveConfigFileMutation` (`saveConfigFile`) → `completeSavingTab` or `failSavingTab`.
+    * On success:
+
+      * `initialContent` updated to the current buffer.
+      * `etag`, `metadata.size`, `metadata.modifiedAt` refreshed.
+      * `lastSavedAt` set to now; a success banner (“Saved X”) is shown.
+    * On concurrency error (`412`):
+
+      * Tab enters error state.
+      * Workbench reloads the latest version via `reloadFileFromServer`.
+      * A warning banner explains that the file was reloaded and should be reviewed before saving again.
+
+* **Dirty tracking**:
+
+  * `isDirty` is `true` if any `ready` tab has `content !== initialContent`.
+  * Used by the unsaved‑changes guard.
+
+All tab operations are surfaced via `EditorArea`, which:
+
+* Renders the tab strip (pinned + regular).
+* Supports drag‑and‑drop reordering via dnd‑kit.
+* Provides tab‑level context menus (save, save all, pin/unpin, close variants).
+* Provides an overflow “open editors list” menu.
+* Mounts a `CodeEditor` for the active tab:
+
+  * `language` and `path` are passed through for syntax highlighting.
+  * Save shortcut is forwarded to workbench (`⌘S` / `Ctrl+S`).
+
+### Panel layout, resizing & persistence
+
+The workbench layout can show or hide three side/bottom panels:
+
+* **Explorer** (left)
+* **Inspector** (right)
+* **Console / Validation** bottom panel
+
+Key details:
+
+* All panel sizes are stored as **fractions** of available width/height and are clamped to min/max pixel bounds:
+
+  * Explorer: `EXPLORER_LIMITS` (min/max width).
+  * Inspector: `INSPECTOR_LIMITS` (min/max width).
+  * Console: `OUTPUT_LIMITS` (min/max height), plus global minimums for editor and console.
+* Widths are recalculated when the container resizes (via `ResizeObserver`), and fractions are re‑clamped.
+* Vertical and horizontal `PanelResizeHandle` components drive pointer‑drag sizing:
+
+  * Use `trackPointerDrag` and set cursor (`col-resize` / `row-resize`).
+* Console height:
+
+  * Stored as a fraction (`ConsolePanelPreferences`).
+  * Hydrated once from scoped storage.
+  * Auto‑closes (with a banner message) on very small viewports where maintaining the console would make the editor unreadable.
+  * Toggling console, explorer, or inspector emits a custom `window` event `"ade:workbench-layout"` to let observers respond.
+
+Explorer and inspector visibility:
+
+* Explorer visibility toggles via:
+
+  * Activity bar selection (Explorer view).
+  * “Hide explorer” icon in the Explorer header.
+  * Workbench chrome explorer toggle.
+* Inspector is visible only when there is an active file; a toggle in the chrome shows/hides it.
+
+Console open/closed state is reflected in the Config Builder URL (`console=open/closed`) and in console panel preferences.
+
+### Explorer
+
+`Explorer` renders the config file tree:
+
+* Visual style inspired by VS Code (dark/light tokens).
+* Always shows the root’s children; root itself is implicit.
+* Folders:
+
+  * Expand/collapse state stored in a `Set<string>` of node IDs.
+  * `collectExpandedFolderIds` pre‑expands all folders at first render; “Collapse all” keeps the root expanded.
+* Files:
+
+  * Styled by extension/language (JSON, Python, TS, etc. get coloured icons).
+  * Show **Active** badge for the currently opened tab, **Open** for the rest.
+* Context menu on folders:
+
+  * Expand / collapse.
+  * Collapse all.
+  * Copy path.
+* Context menu on files:
+
+  * Open.
+  * Close / Close others / Close tabs to the right / Close all (mirrors editor tab operations).
+  * Copy path.
+
+Copying file paths uses the Clipboard API when available and falls back to a hidden textarea + `document.execCommand("copy")`.
+
+### Inspector
+
+`Inspector` shows a skinny right‑hand panel with metadata for the active file:
+
+* File:
+
+  * Name, path, language.
+* Metadata:
+
+  * Size (formatted to B / KB / MB / GB),
+  * Last modified (locale string),
+  * Content type,
+  * ETag.
+* Editor:
+
+  * Load status (`loading`, `ready`, `error`),
+  * Dirty flag (based on `content !== initialContent`).
+
+This is intentionally simple, but provides a stable layout for future schema‑aware helpers.
+
+### Console & validation (`BottomPanel`)
+
+The bottom panel (`BottomPanel`) hosts two tabs:
+
+* **Console**
+* **Validation**
+
+**Console tab**:
+
+* Displays:
+
+  * An optional **Run summary card** for the latest extraction run.
+  * A streaming list of `WorkbenchConsoleLine` entries (timestamp, level, message).
+* Levels:
+
+  * `info`, `warning`, `error`, `success` – styled differently for labels, prompts, and message text.
+* Run summary card:
+
+  * Shows run ID, status, document name, and worksheet selection.
+  * Provides download links:
+
+    * `artifact` (e.g. zipped outputs),
+    * `logfile` / telemetry.
+  * Summarises:
+
+    * Output files (paths + sizes),
+    * Artifact structure (via `ArtifactSummary`),
+    * Telemetry (`TelemetrySummary`).
+
+**Validation tab**:
+
+* Shows `WorkbenchValidationState`:
+
+  * `status` – `idle`, `running`, `success`, `error`.
+  * `messages` – list of issues with `level` (`error`, `warning`, or informational), `message`, and optional `path`.
+  * `lastRunAt` – last validation time.
+  * `error` – top‑level error message.
+* Renders:
+
+  * A header with a status line and “Last run …”.
+  * A list of issues or a fallback message (e.g. “Trigger validation from the workbench header…”).
+
+Validation status strings are human‑readable (e.g. “Validation completed with 3 issues.”).
+
+### Build & validation pipeline
+
+The workbench header includes a **Build environment** control, implemented via `streamBuild`:
+
+* **Primary build button**:
+
+  * Default: “Build environment”.
+  * When the backend reports that the environment was **reused**, console and banner messages explain that it is already up to date and hint that you can force a rebuild.
+  * If a build is in progress, label changes to “Building…”.
+* **Force rebuild**:
+
+  * You can request a forced rebuild by:
+
+    * Holding `Shift` or `Alt` while clicking the build button.
+    * Toggling a *force next rebuild* chrome icon.
+    * Using the split‑button menu option “Force rebuild now”.
+* **Build menu** (split button):
+
+  * “Build / reuse environment” – normal build (reusing current environment when possible).
+  * “Force rebuild now” – immediate forced rebuild.
+  * “Force rebuild after current build” – queue a forced rebuild after any currently running build.
+
+All build streams are printed to the console via `describeBuildEvent`. Completion status is summarised with banners (success, cancelled, or error).
+
+### Running validation
+
+The **Run validation** button in the header:
+
+* Starts a `validate_only` run via `startRunStream({ validate_only: true }, { mode: "validation" })`.
+* Shows progress in the console and updates validation state:
+
+  * On success:
+
+    * Issues from `result.issues` are mapped into `validation.messages`.
+    * `lastRunAt` updated.
+    * `digest` stored (e.g. content hash).
+  * On error:
+
+    * Status `error`, message stored in `validation.error`.
+
+While a validation is running, further validations are disabled until completion.
+
+### Running extraction from the workbench
+
+The **Run extraction** button opens a `RunExtractionDialog`:
+
+* Fetches up to 50 most‑recent documents for the workspace via:
+
+  ```ts
+  GET /api/v1/workspaces/{workspace_id}/documents?sort=-created_at&page_size=50
+  ```
+
+* Lets the user:
+
+  * Select a document.
+  * Optionally select worksheet(s) for spreadsheet inputs:
+
+    * Worksheet metadata loaded via `fetchDocumentSheets`.
+    * Selection is de‑duplicated and validated against the available sheets.
+    * “Use all worksheets” resets selection to process the entire file.
+
+* When the user confirms:
+
+  * Calls `startRunStream` with:
+
+    * `input_document_id`,
+    * `input_sheet_names` (list),
+    * `input_sheet_name` (single name when only one is selected).
+  * Closes the dialog and streams events into the console.
+
+On run completion:
+
+* The latest run summary is populated (outputs, artifact, telemetry).
+* Console banners summarise success/failure.
+
+### Editor theme preference (`useEditorThemePreference`)
+
+Workbench editor theme honours user preferences:
+
+```ts
+export type EditorThemePreference = "system" | "light" | "dark";
+export type EditorThemeId = "ade-dark" | "vs-light";
+```
+
+Behaviour:
+
+* Preference is stored in scoped storage:
+
+  ```ts
+  `ade.ui.workspace.${workspaceId}.config.${configId}.editor-theme`
+  ```
+
+* System dark mode is detected via:
+
+  ```ts
+  window.matchMedia("(prefers-color-scheme: dark)");
+  ```
+
+* Resolved theme:
+
+  ```ts
+  pref === "dark" || (pref === "system" && systemPrefersDark)
+    ? "ade-dark"
+    : "vs-light";
+  ```
+
+`useEditorThemePreference` returns `{ preference, resolvedTheme, setPreference }` and reacts to both system theme changes and storage updates. The workbench header exposes a context menu for switching between System, Light, and Dark themes.
+
+### Unsaved‑changes guard (`useUnsavedChangesGuard`)
+
+Config Builder integrates a **navigation guard** for unsaved changes:
+
+```ts
+interface UseUnsavedChangesGuardOptions {
+  readonly isDirty: boolean;
+  readonly confirm?: (message: string) => boolean;
+  readonly message?: string;
+  readonly shouldBypassNavigation?: () => boolean;
+}
+```
+
+Behaviour:
+
+* Registers a navigation blocker via `useNavigationBlocker` when `isDirty` is true:
+
+  * If `shouldBypassNavigation()` returns true, navigation is allowed.
+  * Navigations that do not change the pathname are allowed.
+  * Otherwise, calls `confirm(message)` (defaults to `window.confirm`).
+* Adds a `beforeunload` handler while dirty:
+
+  * Shows a native prompt when the user tries to close/refresh the tab.
+* Default prompt:
+
+  > "You have unsaved changes in the config editor. Are you sure you want to leave?"
+
+The workbench receives a `shouldBypassUnsavedGuard` callback from `useWorkbenchWindow` so certain transitions (e.g. closing the window after a successful save) can skip the prompt.
 
 ---
 
-### Config Builder
+## Workspace Settings
 
-The **Config Builder** is a first‑class IDE‑style environment inside ADE Web.
+The **Settings** section holds workspace‑specific configuration. It is tabbed, and the active tab is reflected in the `view` query parameter.
 
-#### Goals
+Code reinforces:
 
-- Make it obvious that a **config is a Python package**.
-- Provide a familiar IDE layout:
-  - Explorer, editor, inspector, console.
-- Support an integrated workflow:
-  - Edit → Build/Validate → Test → Inspect → Activate.
+* The `Settings` route uses `useSearchParams` to:
 
-#### Layout
+  * Interpret `view` as `general`, `members`, or `roles`.
+  * Normalise invalid values back to `general`.
+  * Keep the tab selection in sync with the URL by calling `setSearchParams` with `{ replace: true }`.
+* Tabs lazily mount their content so inactive tabs do not incur unnecessary data fetching.
 
-The Config Builder workbench has four main areas:
+### Workbench return path (Settings ↔ Config Builder / Documents / Jobs)
 
-1. **Explorer (left)**
-   - Shows the config package file tree:
-     - Python modules,
-     - Config files,
-     - Scripts referenced from the manifest,
-     - Assets and helpers.
-   - For draft versions:
-     - Create, rename, and delete files and folders.
-   - Switch between config packages and config versions.
+To keep flows smooth between operational views and config editing, a helper key is used:
 
-2. **Editor (center)**
-   - Multi‑tab code editor with:
-     - Syntax highlighting,
-     - Save shortcuts,
-     - Keyboard navigation.
-   - Only **draft** versions are editable.
-   - Uses optimistic concurrency with ETags (or equivalent) to avoid overwrites.
+```ts
+export function getWorkbenchReturnPathStorageKey(workspaceId: string) {
+  return `ade.ui.workspace.${workspaceId}.workbench.returnPath`;
+}
+```
 
-3. **Inspector (right)**
-   - Shows config and version metadata:
-     - Name, ID, semantic version,
-     - Status (draft/active/inactive),
-     - Created/updated/activated at,
-     - Who created/activated it.
-   - Actions:
-     - Activate draft,
-     - Clone versions (from active/inactive),
-     - Archive/restore (ideal behaviour).
-   - Manifest view:
-     - Column list with key/label/required/enabled/order,
-     - Table transform/validator references.
+When entering the workbench from any workspace section:
 
-4. **Console (bottom)**
-   - Streams:
-     - Build steps and results,
-     - Validation errors,
-     - Test‑run logs and telemetry.
-   - Tabbed (e.g. “Build”, “Test run”, “Validation”).
-   - Open/closed state encoded in the URL.
+* The app can store the originating URL (e.g. filtered Documents view, Jobs query, or Settings tab).
 
-#### View modes & URL state
+When exiting the workbench:
 
-The workbench supports layout modes:
-
-- `editor` – standard view,
-- `split` – editor + console,
-- `zen` – editor‑focused.
-
-Combined with `pane` (`console`/`validation`) and `console` (`open`/`closed`), these settings are persisted in the URL via query parameters, along with the current `file`. This enables:
-
-- Deep linking into a specific file and console state,
-- Stable state across browser refreshes,
-- Shareable Builder URLs.
-
-#### Versions, builds & test runs
-
-From the Config Builder, workspace owners can:
-
-- **Create drafts**:
-  - New blank versions from templates,
-  - Clones of the current active version (for iteration),
-  - Clones of inactive versions (for rollback).
-- **Edit drafts**:
-  - Modify files/scripts/manifest.
-- **Validate & build**:
-  - Trigger a build pipeline:
-    - Install dependencies,
-    - Import config modules,
-    - Gather metadata.
-  - Watch NDJSON events in the console.
-- **Run tests**:
-  - Run draft versions against sample documents:
-    - Optional sheet selection and options (`dry_run`, `validate_only`).
-  - Stream logs and telemetry into the console.
-- **Activate**:
-  - Promote a validated draft to **Active**.
-  - Demote the previous active version to **Inactive**.
-
-#### Navigation guards & hotkeys
-
-- **Navigation blockers**:
-  - When a draft has unsaved changes, Builder screens can register a blocker.
-  - Attempts to navigate away trigger a confirmation prompt (ideal behaviour).
-- **Keyboard shortcuts**:
-  - Platform‑aware key hints (e.g. `⌘S` vs `Ctrl+S`).
-  - Support for chords and sequences for:
-    - Saving,
-    - Toggling console,
-    - Navigating files,
-    - Opening command/search palettes (ideal behaviour).
-
----
-
-### Workspace Settings
-
-The **Workspace Settings** section holds workspace‑specific configuration.
-
-Subsections typically include:
-
-- **General**
-  - Name and slug,
-  - Environment label (Production, Staging, Test),
-  - Workspace ID and other read‑only identifiers for automation.
-- **Authentication & SSO (workspace‑facing)**
-  - Information about which IdP(s) apply,
-  - Whether SSO is required,
-  - Guidance for users.
-- **Safe mode**
-  - Safe mode state and message,
-  - Controls for authorised roles (where allowed).
-  - Changes propagate to the global banner and disable engine‑invoking actions.
-- **Members & roles**
-  - Lists members (name, email, role, last activity),
-  - Supports:
-    - Inviting users by email,
-    - Changing roles,
-    - Removing members.
-  - Uses the central user directory and invitation APIs under the hood.
+* ADE Web can navigate back to that stored path and clear the key, so “back to where I was” feels predictable.
 
 ---
 
 ## Notifications & keyboard shortcuts
 
-### Notifications
+Notifications:
 
-ADE Web uses a shared notifications system:
+* **Toasts** – short‑lived events (saves, minor warnings).
+* **Banners** – persistent messages for safe mode, connectivity, console‑related warnings (e.g. console auto‑closed due to viewport size).
 
-- **Toasts**:
-  - Short‑lived notifications (e.g. “Run started”, “Config activated”).
-  - Can include intent (info, success, warning, danger) and optional actions.
-- **Banners**:
-  - Persistent, cross‑cutting notifications:
-    - Safe mode active,
-    - Backend connectivity issues,
-    - Setup required.
+Workbench‑specific banner scopes are used so messages (e.g. around console collapse or build reuse) can be dismissed or persisted independently.
 
-Notifications can be scoped and de‑duplicated so users are not overwhelmed by repeated messages.
+Keyboard shortcuts (non‑exhaustive):
 
-### Keyboard shortcuts
+* **Global**
 
-ADE Web supports keyboard shortcuts for power users:
+  * `⌘K` / `Ctrl+K` – global search / workspace search.
+  * (Elsewhere in the app: shortcuts for document upload, deletion, etc., where implemented.)
 
-- Platform‑aware hints:
-  - `⌘K` on macOS, `Ctrl+K` on Windows/Linux.
-- Chords and sequences:
-  - Common actions like save, search, and navigate.
-- Respect for text inputs:
-  - Shortcuts are suppressed while typing in fields where appropriate.
+* **Workbench**
 
-A small “shortcut hint” component is used in search boxes and other affordances to gently teach available hotkeys.
+  * `⌘S` / `Ctrl+S` – save active editor tab.
+  * `⌘B` / `Ctrl+B` – build / reuse environment.
+  * `Shift+⌘B` / `Ctrl+Shift+B` – force rebuild (equivalent to holding Shift).
+  * `⌘W` / `Ctrl+W` – close active editor tab.
+  * `⌘Tab` / `Ctrl+Tab` – recent‑tab forward (within workbench).
+  * `Shift+⌘Tab` / `Shift+Ctrl+Tab` – recent‑tab backward.
+  * `⌘PageUp/PageDown` / `Ctrl+PageUp/PageDown` – cycle tabs by visual order.
 
----
-
-## Typical user journeys
-
-### 1. Analyst running an extraction
-
-1. Sign in via SSO or standard login.
-2. Land on **Workspaces**, pick a workspace.
-3. Go to **Documents**.
-4. Upload a spreadsheet or select an existing document.
-5. Click **Run**, choose config/version/options as needed, and confirm.
-6. Watch the run in the **Document Runs Drawer**:
-   - Live logs,
-   - Telemetry,
-   - Status updates.
-7. On success, download outputs from the same drawer.
-
-### 2. Workspace owner rolling out a config change
-
-1. Sign in and choose the workspace.
-2. Open **Config Builder**.
-3. Clone the active config into a **new Draft**.
-4. Edit Python modules, config files, and manifest.
-5. Run **builds/validations** and **test runs** until the draft is stable.
-6. **Activate** the draft:
-   - It becomes the active version,
-   - The previous active version becomes inactive.
-7. Monitor early runs in **Jobs**, and adjust if needed.
-
-### 3. Responding to an incident / rollback
-
-1. Notice failures or anomalies in **Jobs**.
-2. Drill into problematic runs:
-   - Logs,
-   - Telemetry,
-   - Config versions used.
-3. In **Config Builder**, locate a previously good inactive version.
-4. Clone it into a new draft, optionally apply a small fix.
-5. Validate and test it against representative documents.
-6. Activate the fixed draft.
-7. Optionally enable **safe mode** during investigation; disable it once stable.
-
-### 4. Admin creating a new workspace
-
-1. Sign in as a user with `Workspaces.Create` permission.
-2. Go to **Workspaces** and click **Create workspace**.
-3. Fill in:
-   - Name (e.g. “Finance Operations”),
-   - Slug (auto‑generated from name, tweak if needed),
-   - Owner (yourself, or another user if allowed).
-4. Submit the form:
-   - Fix any client or server‑side validation errors.
-5. Land in the new workspace shell and proceed to:
-   - Configure SSO hints,
-   - Invite members,
-   - Set up config packages and safe mode policies.
+Where browser or OS behaviour conflicts, ADE Web is careful to only intercept shortcuts when the editor has focus and the target element is not an input/textarea/content‑editable.
 
 ---
 
 ## Backend expectations (high‑level)
 
-While ADE Web is backend‑agnostic, it suggests a set of contracts for any compatible backend:
+Contracts for:
 
-- **Auth & sessions**
-  - Endpoints for:
-    - Listing auth providers (`force_sso`, provider metadata),
-    - Reading the current session (user, roles, return_to),
-    - Creating/refreshing/destroying sessions,
-    - Exposing first‑run setup status and completing setup.
+* Auth and sessions,
+* Workspaces, users & invitations,
+* Roles & permissions,
+* Documents & runs,
+* Config packages & versions,
+* Safe mode,
+* Security (CSRF, cookies, CORS),
 
-- **Workspaces**
-  - List and create workspaces (with name, slug, owner, default flag, etc.),
-  - Retrieve workspace metadata and permissions,
-  - Manage membership and roles.
+are as described in the earlier conceptual sections.
 
-- **Documents**
-  - Upload, list, and retrieve documents by workspace,
-  - Store type, tags, uploader, timestamps,
-  - Associate runs with documents.
+The workbench‑specific additions imply:
 
-- **Runs / jobs**
-  - Create runs with options (e.g. `dry_run`, `validate_only`, input sheet selection),
-  - Query runs by workspace/document/user,
-  - Provide NDJSON streams for run events, logs, and telemetry,
-  - Provide artifact listings and download endpoints.
+* A **file listing endpoint** that can produce `FileListing`‑like structures with:
 
-- **Config packages & versions**
-  - List configs per workspace,
-  - Manage versions (create/clone/activate/archive),
-  - Provide file and script operations (list/read/write/rename/delete) with ETag support,
-  - Read and patch manifests safely,
-  - Trigger builds and validations,
-  - Trigger test runs against documents.
+  * Paths, names, parents, depth, kind, size, mtime, content_type, etag.
 
-- **Safe mode**
-  - System‑wide safe mode endpoint (status + detail),
-  - Optional workspace‑scoped safe mode for finer control.
+* **File content endpoints**:
 
-- **Users & invitations**
-  - Paginated user directory with search,
-  - Create invitations and track their state.
+  * To read, write, rename, and delete files in a config package version.
+  * To use ETags or similar for optimistic concurrency control.
 
-- **Streaming & telemetry**
-  - NDJSON endpoints where each line is a standalone JSON event:
-    - Run/build lifecycle events,
-    - Structured telemetry envelopes,
-    - Log messages.
+* **Run APIs** that support:
 
-- **Security**
-  - Enforce RBAC and permissions on all operations,
-  - CSRF protection for state‑changing requests (ADE Web can send CSRF tokens),
-  - Strict validation of redirect targets and user input.
+  * Validation‑only runs for a configuration.
+  * Runs bound to a specific input document and optional sheet names.
+  * Streaming NDJSON events for both builds and runs.
 
-As long as these conceptual contracts are honoured, the ADE Web frontend can be re‑used and the backend can be reimplemented or swapped without changing the user experience.
+* **Artifacts & telemetry** endpoints:
+
+  * Listing output files for a run.
+  * Downloading artifacts.
+  * Downloading or streaming telemetry events.
+
+As long as these contracts are honoured, ADE Web can be re‑used with different backend implementations without changing the user experience described here.
+
+---
+
+## Front‑end architecture & tooling
+
+### Entry point (`main.tsx`)
+
+`main.tsx` mounts `<App />` into `#root` inside `React.StrictMode`:
+
+```tsx
+ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
+```
+
+`App` composes:
+
+* `NavProvider` (history & location),
+* `AppProviders` (React Query & devtools),
+* `ScreenSwitch` (top‑level route switch).
+
+### React Query configuration (`AppProviders.tsx`)
+
+Global React Query settings:
+
+```ts
+new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+```
+
+* A single `QueryClient` is created once per app instance using `useState`.
+* `ReactQueryDevtools` is included in development builds (`import.meta.env.DEV`).
+
+### Build tooling (Vite)
+
+`apps/ade-web/vite.config.ts`:
+
+* Uses:
+
+  * `@tailwindcss/vite` – Tailwind integration.
+  * `@vitejs/plugin-react` – React refresh and JSX transform.
+  * `vite-tsconfig-paths` – align TS path aliases with Vite resolve.
+
+Aliases:
+
+* `@app` → `src/app`
+* `@screens` → `src/screens`
+* `@ui` → `src/ui`
+* `@shared` → `src/shared`
+* `@schema` → `src/schema`
+* `@generated-types` → `src/generated-types`
+* `@test` → `src/test`
+
+Dev server:
+
+* Port:
+
+  * `DEV_FRONTEND_PORT` env var, default `8000`.
+* Host:
+
+  * `DEV_FRONTEND_HOST` env var, default `0.0.0.0`.
+* Proxy:
+
+  * `/api` → `http://localhost:${DEV_BACKEND_PORT || 8000}`.
+
+This arrangement allows:
+
+* Frontend and backend running on separate ports during development.
+* Avoiding CORS pain by proxying API calls through the dev server.
+
+### Testing (Vitest)
+
+`apps/ade-web/vitest.config.ts`:
+
+* Module resolution aliases mirror Vite’s (`@app`, `@screens`, etc.).
+* Test config:
+
+  ```ts
+  test: {
+    environment: "jsdom",
+    setupFiles: "./src/test/setup.ts",
+    globals: true,
+    coverage: {
+      provider: "v8",
+    },
+  },
+  esbuild: {
+    jsx: "automatic",
+  },
+  ```
+
+This enables:
+
+* Browser‑like DOM APIs for component tests.
+* A single global setup (e.g. for mocking fetch, setting global config).
+* ESBuild‑powered TS + JSX transform with automatic JSX runtime.
+
+---
+
+## Summary
+
+ADE Web is the operational and configuration console for Automatic Data Extractor:
+
+* **Analysts** use it to upload documents, run extractions, inspect jobs, and download outputs.
+* **Workspace owners / engineers** use it to evolve Python‑based config packages, validate and test changes, and safely roll out new versions.
+* **Admins** use it to manage workspaces, members, roles, SSO hints, and safe mode.
+
+This README captures:
+
+* The **conceptual model** (workspaces, documents, jobs, configs, safe mode, roles),
+* The **navigation and URL‑state conventions** (custom history, search params, deep linking),
+* The **workbench model** for config packages (file tree, tabs, layout, editor theme, unsaved changes, build & run integration),
+* And the **backend contracts** ADE Web expects.
+
+As long as backend implementations respect these concepts and contracts, ADE Web can remain stable, even as internals and infrastructure evolve.
 ```
 
 # apps/ade-web/src/app/App.tsx

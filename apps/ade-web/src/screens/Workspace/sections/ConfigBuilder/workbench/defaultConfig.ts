@@ -72,7 +72,7 @@ export const DEFAULT_FILE_TREE: WorkbenchFileNode = {
 export const DEFAULT_FILE_CONTENT: Record<string, string> = {
   "ade_config/manifest.json": `{
   "name": "membership-normalization",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Normalize membership exports into ADE schema",
   "entry": {
     "module": "ade_config.detectors.membership",
