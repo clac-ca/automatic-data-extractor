@@ -101,8 +101,8 @@ The artifact schema is intentionally:
   - Count validation issues by field/code/severity.
   - See how many tables were processed and from which sheets.
 
-- **Backend‑job‑agnostic**  
-  No first‑class job concept. Backend correlation data (job IDs, config IDs, workspace IDs) lives in telemetry, not in `artifact.json`.
+- **Backend‑run‑agnostic**
+  No first‑class orchestration concept. Backend correlation data (run IDs, config IDs, workspace IDs) lives in telemetry, not in `artifact.json`.
 
 - **Deliberately minimal**  
   Artifact is the stable, human‑readable audit log: run‑level info, compact

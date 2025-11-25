@@ -6,7 +6,7 @@ def test_telemetry_envelope_defaults():
     envelope = TelemetryEnvelope(
         run_id="run-uuid",
         timestamp="2024-01-01T00:00:00Z",
-        metadata={"job_id": "job-123"},
+        metadata={"run_id": "run-123"},
         event=event,
     )
 

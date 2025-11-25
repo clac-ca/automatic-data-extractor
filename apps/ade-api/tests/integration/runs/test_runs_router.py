@@ -22,10 +22,11 @@ from ade_api.features.builds.models import ConfigurationBuild, ConfigurationBuil
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.features.documents.models import Document
 from ade_api.features.documents.storage import DocumentStorage
-from ade_api.features.runs.models import RunStatus
-from ade_api.features.runs.schemas import RunCompletedEvent
-from ade_api.features.runs.service import RunsService
+from ade_api.features.runs.models import Run, RunStatus
+from ade_api.features.runs.schemas import RunCompletedEvent, RunCreateOptions
+from ade_api.features.runs.service import RunExecutionContext, RunsService
 from ade_api.features.system_settings.service import SafeModeService
+from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import Settings, get_settings
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.db.mixins import generate_ulid
@@ -48,6 +49,72 @@ _CONFIG_TEMPLATE = (
     / "config_packages"
     / "default"
 )
+
+
+async def _prepare_service(
+    session,
+    tmp_path: Path,
+) -> tuple[RunsService, RunExecutionContext, Document]:
+    """Create a runnable configuration and document for workspace runs tests."""
+
+    settings = get_settings()
+    workspace = Workspace(name="Workspace", slug=f"ws-{generate_ulid().lower()}")
+    session.add(workspace)
+    await session.flush()
+
+    configuration = Configuration(
+        workspace_id=workspace.id,
+        config_id=generate_ulid(),
+        display_name="Config",
+        status=ConfigurationStatus.ACTIVE,
+        config_version=1,
+        content_digest="digest",
+    )
+    session.add(configuration)
+    await session.flush()
+
+    venv_path = tmp_path / "venvs" / configuration.config_id
+    venv_path.mkdir(parents=True, exist_ok=True)
+    build = ConfigurationBuild(
+        workspace_id=workspace.id,
+        config_id=configuration.config_id,
+        configuration_id=configuration.id,
+        build_id=generate_ulid(),
+        status=ConfigurationBuildStatus.ACTIVE,
+        venv_path=str(venv_path),
+    )
+    session.add(build)
+    await session.flush()
+
+    storage = DocumentStorage(settings.documents_dir)
+    document_id = generate_ulid()
+    stored_uri = storage.make_stored_uri(document_id)
+    source_path = storage.path_for(stored_uri)
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.write_text("name\nAlice", encoding="utf-8")
+
+    document = Document(
+        id=document_id,
+        workspace_id=workspace.id,
+        original_filename="input.csv",
+        content_type="text/csv",
+        byte_size=source_path.stat().st_size,
+        sha256="deadbeef",
+        stored_uri=stored_uri,
+        attributes={},
+        uploaded_by_user_id=None,
+        status="processed",
+        expires_at=utc_now() + timedelta(days=30),
+    )
+    session.add(document)
+    await session.commit()
+
+    service = RunsService(session=session, settings=settings)
+    run, context = await service.prepare_run(
+        config_id=configuration.config_id,
+        options=RunCreateOptions(input_document_id=document.id),
+    )
+    return service, context, document
 
 
 async def _seed_configuration(
@@ -194,7 +261,7 @@ async def _seed_document(
         session.add(document)
         await session.commit()
         await session.refresh(document)
-        return document
+    return document
 
 
 async def _seed_workbook_document(
@@ -581,6 +648,67 @@ async def test_stream_run_honors_input_sheet_override(
     ]
     assert any("selected@example.com" in row for row in flattened)
     assert all("first-sheet@example.com" not in row for row in flattened)
+
+
+@pytest.mark.asyncio()
+async def test_list_workspace_runs_filters_by_status_and_document(
+    session,
+    tmp_path: Path,
+) -> None:
+    service, context, document = await _prepare_service(session, tmp_path)
+    configuration = await session.get(Configuration, context.configuration_id)
+    assert configuration is not None
+
+    run_success = Run(
+        id=generate_ulid(),
+        configuration_id=configuration.id,
+        workspace_id=configuration.workspace_id,
+        config_id=configuration.config_id,
+        config_version_id=str(configuration.config_version),
+        input_document_id=document.id,
+        status=RunStatus.SUCCEEDED,
+        created_at=utc_now(),
+    )
+    run_failed = Run(
+        id=generate_ulid(),
+        configuration_id=configuration.id,
+        workspace_id=configuration.workspace_id,
+        config_id=configuration.config_id,
+        config_version_id=str(configuration.config_version),
+        status=RunStatus.FAILED,
+        created_at=utc_now(),
+    )
+
+    session.add_all([run_success, run_failed])
+    await session.commit()
+
+    page = await service.list_runs(
+        workspace_id=configuration.workspace_id,
+        statuses=None,
+        input_document_id=None,
+        page=1,
+        page_size=10,
+        include_total=True,
+    )
+
+    assert page.total == 3
+    assert {run.id for run in page.items} == {
+        context.run_id,
+        run_success.id,
+        run_failed.id,
+    }
+
+    filtered = await service.list_runs(
+        workspace_id=configuration.workspace_id,
+        statuses=[RunStatus.SUCCEEDED],
+        input_document_id=document.id,
+        page=1,
+        page_size=5,
+        include_total=True,
+    )
+
+    assert filtered.total == 1
+    assert [run.id for run in filtered.items] == [run_success.id]
 
 
 async def test_stream_run_processes_all_worksheets_when_unspecified(

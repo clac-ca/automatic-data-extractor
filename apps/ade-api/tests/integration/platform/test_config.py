@@ -31,7 +31,7 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_DOCUMENTS_DIR",
         "ADE_CONFIGS_DIR",
         "ADE_VENVS_DIR",
-        "ADE_JOBS_DIR",
+        "ADE_RUNS_DIR",
         "ADE_PIP_CACHE_DIR",
         "ADE_STORAGE_UPLOAD_MAX_BYTES",
         "ADE_STORAGE_DOCUMENT_RETENTION_PERIOD",
@@ -97,7 +97,7 @@ def test_settings_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.documents_dir == (expected_root / "documents").resolve()
     assert settings.configs_dir == (expected_root / "config_packages").resolve()
     assert settings.venvs_dir == (expected_root / ".venv").resolve()
-    assert settings.jobs_dir == (expected_root / "jobs").resolve()
+    assert settings.runs_dir == (expected_root / "runs").resolve()
     assert settings.pip_cache_dir == (expected_root / "cache" / "pip").resolve()
 
 
@@ -206,7 +206,7 @@ def test_storage_directories_resolve_relative_env_values(
     monkeypatch.setenv("ADE_DOCUMENTS_DIR", "./store/documents")
     monkeypatch.setenv("ADE_CONFIGS_DIR", "./store/configs")
     monkeypatch.setenv("ADE_VENVS_DIR", "./store/venvs")
-    monkeypatch.setenv("ADE_JOBS_DIR", "./store/jobs")
+    monkeypatch.setenv("ADE_RUNS_DIR", "./store/runs")
     monkeypatch.setenv("ADE_PIP_CACHE_DIR", "./cache/pip")
     reload_settings()
 
@@ -215,8 +215,17 @@ def test_storage_directories_resolve_relative_env_values(
     assert settings.documents_dir == (tmp_path / "store" / "documents").resolve()
     assert settings.configs_dir == (tmp_path / "store" / "configs").resolve()
     assert settings.venvs_dir == (tmp_path / "store" / "venvs").resolve()
-    assert settings.jobs_dir == (tmp_path / "store" / "jobs").resolve()
+    assert settings.runs_dir == (tmp_path / "store" / "runs").resolve()
     assert settings.pip_cache_dir == (tmp_path / "cache" / "pip").resolve()
+
+
+def test_jobs_env_var_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ADE_JOBS_DIR should raise a clear error to avoid mixed storage roots."""
+
+    monkeypatch.setenv("ADE_JOBS_DIR", "/tmp/jobs")
+
+    with pytest.raises(ValidationError, match="ADE_RUNS_DIR"):
+        reload_settings()
 
 
 def test_global_storage_directory_created(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -225,13 +234,13 @@ def test_global_storage_directory_created(tmp_path: Path, monkeypatch: pytest.Mo
     documents_dir = tmp_path / "docs-root"
     configs_dir = tmp_path / "config-root"
     venvs_dir = tmp_path / "venv-root"
-    jobs_dir = tmp_path / "jobs-root"
+    runs_dir = tmp_path / "runs-root"
     pip_cache_dir = tmp_path / "cache-root"
 
     monkeypatch.setenv("ADE_DOCUMENTS_DIR", str(documents_dir))
     monkeypatch.setenv("ADE_CONFIGS_DIR", str(configs_dir))
     monkeypatch.setenv("ADE_VENVS_DIR", str(venvs_dir))
-    monkeypatch.setenv("ADE_JOBS_DIR", str(jobs_dir))
+    monkeypatch.setenv("ADE_RUNS_DIR", str(runs_dir))
     monkeypatch.setenv("ADE_PIP_CACHE_DIR", str(pip_cache_dir))
     reload_settings()
 
@@ -240,7 +249,7 @@ def test_global_storage_directory_created(tmp_path: Path, monkeypatch: pytest.Mo
     assert documents_dir.exists()
     assert configs_dir.exists()
     assert venvs_dir.exists()
-    assert jobs_dir.exists()
+    assert runs_dir.exists()
     assert pip_cache_dir.exists()
 
 
@@ -250,13 +259,13 @@ def test_storage_directory_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyP
     documents_dir = tmp_path / "alt-documents"
     configs_dir = tmp_path / "alt-configs"
     venvs_dir = tmp_path / "alt-venvs"
-    jobs_dir = tmp_path / "alt-jobs"
+    runs_dir = tmp_path / "alt-runs"
     pip_cache_dir = tmp_path / "alt-cache" / "pip"
 
     monkeypatch.setenv("ADE_DOCUMENTS_DIR", str(documents_dir))
     monkeypatch.setenv("ADE_CONFIGS_DIR", str(configs_dir))
     monkeypatch.setenv("ADE_VENVS_DIR", str(venvs_dir))
-    monkeypatch.setenv("ADE_JOBS_DIR", str(jobs_dir))
+    monkeypatch.setenv("ADE_RUNS_DIR", str(runs_dir))
     monkeypatch.setenv("ADE_PIP_CACHE_DIR", str(pip_cache_dir))
     reload_settings()
 
@@ -265,5 +274,5 @@ def test_storage_directory_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert settings.documents_dir == documents_dir.resolve()
     assert settings.configs_dir == configs_dir.resolve()
     assert settings.venvs_dir == venvs_dir.resolve()
-    assert settings.jobs_dir == jobs_dir.resolve()
+    assert settings.runs_dir == runs_dir.resolve()
     assert settings.pip_cache_dir == pip_cache_dir.resolve()

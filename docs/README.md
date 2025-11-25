@@ -5,9 +5,9 @@ We’re publishing the docs incrementally, starting with the **Developer** exper
 
 ## Start here
 
-* **[Developer Docs](developers/README.md)** — how ADE processes spreadsheets, how jobs run, and how to configure behavior with code.
+* **[Developer Docs](developers/README.md)** — how ADE processes spreadsheets, how runs run, and how to configure behavior with code.
 
-* **User guide** *(coming soon)* — frontend walkthrough: uploading files, monitoring jobs, reviewing results.
+* **User guide** *(coming soon)* — frontend walkthrough: uploading files, monitoring runs, reviewing results.
 
 * **Admin guide** *(coming soon)* — installation, configuration, security, and operational runbooks.
 

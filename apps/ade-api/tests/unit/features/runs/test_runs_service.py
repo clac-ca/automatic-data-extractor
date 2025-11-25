@@ -47,7 +47,7 @@ async def _prepare_service(
 
     venv_root = tmp_path / "venvs"
     documents_dir = tmp_path / "documents"
-    jobs_dir = tmp_path / "jobs"
+    runs_dir = tmp_path / "runs"
     venv_dir = venv_root / configuration.config_id
     bin_dir = venv_dir / ("Scripts" if os.name == "nt" else "bin")
     bin_dir.mkdir(parents=True, exist_ok=True)
@@ -60,7 +60,7 @@ async def _prepare_service(
             "venvs_dir": str(venv_root),
             "safe_mode": safe_mode,
             "documents_dir": documents_dir,
-            "jobs_dir": jobs_dir,
+            "runs_dir": runs_dir,
         }
     )
 
@@ -130,34 +130,34 @@ async def test_stream_run_happy_path_yields_engine_events(
         run,
         context: RunExecutionContext,
         options: RunCreateOptions,
-    ) -> AsyncIterator[RunLogEvent | RunCompletedEvent | TelemetryEnvelope]:
-        log = await self._append_log(run.id, "engine output", stream="stdout")
-        yield RunLogEvent(
-            run_id=run.id,
-            created=self._epoch_seconds(log.created_at),
-            stream="stdout",
-            message="engine output",
-        )
-        telemetry = TelemetryEnvelope(
-            run_id=context.run_id,
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            metadata={"job_id": context.job_id or run.id},
-            event=TelemetryEvent(event="pipeline_transition", level="info"),
-        )
-        await self._append_log(run.id, telemetry.model_dump_json(), stream="stdout")
-        yield telemetry
-        completion = await self._complete_run(
-            run,
-            status=RunStatus.SUCCEEDED,
-            exit_code=0,
-        )
-        yield RunCompletedEvent(
-            run_id=completion.id,
-            created=self._epoch_seconds(completion.finished_at),
-            status=self._status_literal(completion.status),
-            exit_code=completion.exit_code,
-            error_message=completion.error_message,
-        )
+        ) -> AsyncIterator[RunLogEvent | RunCompletedEvent | TelemetryEnvelope]:
+            log = await self._append_log(run.id, "engine output", stream="stdout")
+            yield RunLogEvent(
+                run_id=run.id,
+                created=self._epoch_seconds(log.created_at),
+                stream="stdout",
+                message="engine output",
+            )
+            telemetry = TelemetryEnvelope(
+                run_id=context.run_id,
+                timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                metadata={"run_id": context.run_id},
+                event=TelemetryEvent(event="pipeline_transition", level="info"),
+            )
+            await self._append_log(run.id, telemetry.model_dump_json(), stream="stdout")
+            yield telemetry
+            completion = await self._complete_run(
+                run,
+                status=RunStatus.SUCCEEDED,
+                exit_code=0,
+            )
+            yield RunCompletedEvent(
+                run_id=completion.id,
+                created=self._epoch_seconds(completion.finished_at),
+                status=self._status_literal(completion.status),
+                exit_code=completion.exit_code,
+                error_message=completion.error_message,
+            )
 
     monkeypatch.setattr(RunsService, "_execute_engine", fake_execute_engine)
 

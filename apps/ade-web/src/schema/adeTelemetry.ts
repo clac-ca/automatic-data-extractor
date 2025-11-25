@@ -14,7 +14,7 @@ export interface TelemetryEventPayload {
 export interface TelemetryEnvelope {
   readonly schema: typeof ADE_TELEMETRY_EVENT_SCHEMA;
   readonly version: string;
-  readonly job_id: string;
+  readonly run_request_id?: string;
   readonly run_id?: string | null;
   readonly timestamp: string;
   readonly event: TelemetryEventPayload;

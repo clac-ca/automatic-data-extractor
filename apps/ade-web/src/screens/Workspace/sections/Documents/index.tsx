@@ -30,16 +30,17 @@ import { createScopedStorage } from "@shared/storage";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
-import {
-  fetchJob,
-  fetchJobOutputs,
-  fetchJobArtifact,
-  fetchJobTelemetry,
-  type JobOutputListing,
-  type JobRecord,
-  type JobStatus,
-} from "@shared/jobs";
 import { ArtifactSummary, TelemetrySummary } from "@shared/runs/RunInsights";
+import {
+  fetchRun,
+  fetchRunOutputs,
+  fetchRunArtifact,
+  fetchRunTelemetry,
+  runQueryKeys,
+  type RunOutputListing,
+  type RunResource,
+  type RunStatus,
+} from "@shared/runs/api";
 
 import { Alert } from "@ui/Alert";
 import { Select } from "@ui/Select";
@@ -49,7 +50,11 @@ import { Button } from "@ui/Button";
 
 type DocumentStatus = components["schemas"]["DocumentStatus"];
 type DocumentRecord = components["schemas"]["DocumentOut"];
-type JobSubmissionPayload = components["schemas"]["JobSubmissionRequest"];
+type RunSubmissionOptions = components["schemas"]["RunCreateOptions"];
+type RunSubmissionPayload = {
+  readonly configId: string;
+  readonly options: RunSubmissionOptions;
+};
 type DocumentListPage = components["schemas"]["DocumentPage"];
 
 type ListDocumentsQuery = {
@@ -347,7 +352,7 @@ export default function WorkspaceDocumentsRoute() {
     [],
   );
 
-  const renderJobStatus = useCallback((documentItem: DocumentRecord) => <DocumentJobStatus document={documentItem} />, []);
+  const renderRunStatus = useCallback((documentItem: DocumentRecord) => <DocumentRunStatus document={documentItem} />, []);
 
   const handleOpenFilePicker = useCallback(() => {
     fileInputRef.current?.click();
@@ -534,7 +539,7 @@ export default function WorkspaceDocumentsRoute() {
                   onDownloadDocument={handleDownloadDocument}
                   onRunDocument={handleOpenRunDrawer}
                   downloadingId={downloadingId}
-                  renderJobStatus={renderJobStatus}
+                  renderRunStatus={renderRunStatus}
                   safeModeEnabled={safeModeEnabled}
                   safeModeMessage={safeModeDetail}
                   safeModeLoading={safeModeLoading}
@@ -663,17 +668,17 @@ function useDeleteWorkspaceDocuments(workspaceId: string) {
   });
 }
 
-function useSubmitJob(workspaceId: string) {
+function useSubmitRun(workspaceId: string) {
   const queryClient = useQueryClient();
 
-  return useMutation<JobRecord, Error, JobSubmissionPayload>({
-    mutationFn: async (payload) => {
-      const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/jobs", {
-        params: { path: { workspace_id: workspaceId } },
-        body: payload,
+  return useMutation<RunResource, Error, RunSubmissionPayload>({
+    mutationFn: async ({ configId, options }) => {
+      const { data } = await client.POST("/api/v1/configs/{config_id}/runs", {
+        params: { path: { config_id: configId } },
+        body: { stream: false, options },
       });
-      if (!data) throw new Error("Expected job payload.");
-      return data as JobRecord;
+      if (!data) throw new Error("Expected run payload.");
+      return data as RunResource;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
@@ -1051,7 +1056,7 @@ interface DocumentsTableProps {
   readonly onDownloadDocument?: (document: DocumentRecord) => void;
   readonly onRunDocument?: (document: DocumentRecord) => void;
   readonly downloadingId?: string | null;
-  readonly renderJobStatus?: (document: DocumentRecord) => ReactNode;
+  readonly renderRunStatus?: (document: DocumentRecord) => ReactNode;
   readonly safeModeEnabled?: boolean;
   readonly safeModeMessage?: string;
   readonly safeModeLoading?: boolean;
@@ -1069,7 +1074,7 @@ function DocumentsTable({
   onDownloadDocument,
   onRunDocument,
   downloadingId = null,
-  renderJobStatus,
+  renderRunStatus,
   safeModeEnabled = false,
   safeModeMessage,
   safeModeLoading = false,
@@ -1159,7 +1164,7 @@ function DocumentsTable({
                   </span>
                 </td>
                 <td className="px-2 py-2 align-middle">
-                  {renderJobStatus ? renderJobStatus(document) : null}
+                  {renderRunStatus ? renderRunStatus(document) : null}
                 </td>
                 <td className="px-2 py-2 align-middle">
                   <span
@@ -1359,7 +1364,7 @@ interface RunExtractionDrawerProps {
   readonly workspaceId: string;
   readonly documentRecord: DocumentRecord | null;
   readonly onClose: () => void;
-  readonly onRunSuccess?: (job: JobRecord) => void;
+  readonly onRunSuccess?: (run: RunResource) => void;
   readonly onRunError?: (message: string) => void;
   readonly safeModeEnabled?: boolean;
   readonly safeModeMessage?: string;
@@ -1420,7 +1425,7 @@ interface DrawerContentProps {
   readonly workspaceId: string;
   readonly documentRecord: DocumentRecord;
   readonly onClose: () => void;
-  readonly onRunSuccess?: (job: JobRecord) => void;
+  readonly onRunSuccess?: (run: RunResource) => void;
   readonly onRunError?: (message: string) => void;
   readonly safeModeEnabled?: boolean;
   readonly safeModeMessage?: string;
@@ -1443,18 +1448,18 @@ function RunExtractionDrawerContent({
   const configsQuery = useConfigsQuery({ workspaceId });
   const [selectedConfigId, setSelectedConfigId] = useState<string>("");
   const [selectedVersionId, setSelectedVersionId] = useState<string>("");
-  const submitJob = useSubmitJob(workspaceId);
+  const submitRun = useSubmitRun(workspaceId);
   const { preferences, setPreferences } = useDocumentRunPreferences(
     workspaceId,
     documentRecord.id,
   );
-  const [activeJobId, setActiveJobId] = useState<string | null>(
-    documentRecord.last_run?.job_id ?? null,
+  const [activeRunId, setActiveRunId] = useState<string | null>(
+    documentRecord.last_run?.run_id ?? null,
   );
 
   useEffect(() => {
-    setActiveJobId(documentRecord.last_run?.job_id ?? null);
-  }, [documentRecord.id, documentRecord.last_run?.job_id]);
+    setActiveRunId(documentRecord.last_run?.run_id ?? null);
+  }, [documentRecord.id, documentRecord.last_run?.run_id]);
 
   const allConfigs = useMemo(() => configsQuery.data?.items ?? [], [configsQuery.data]);
   const selectableConfigs = useMemo(
@@ -1549,13 +1554,11 @@ function RunExtractionDrawerContent({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const safeModeDetail = safeModeMessage ?? DEFAULT_SAFE_MODE_MESSAGE;
 
-  const jobQuery = useQuery({
-    queryKey: ["job", workspaceId, activeJobId],
+  const runQuery = useQuery({
+    queryKey: activeRunId ? runQueryKeys.detail(activeRunId) : ["run", "none"],
     queryFn: ({ signal }) =>
-      activeJobId
-        ? fetchJob(workspaceId, activeJobId, signal)
-        : Promise.reject(new Error("No job selected")),
-    enabled: Boolean(activeJobId),
+      activeRunId ? fetchRun(activeRunId, signal) : Promise.reject(new Error("No run selected")),
+    enabled: Boolean(activeRunId),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "running" || status === "queued" ? 2000 : false;
@@ -1563,38 +1566,38 @@ function RunExtractionDrawerContent({
   });
 
   const outputsQuery = useQuery({
-    queryKey: ["job-outputs", workspaceId, activeJobId],
+    queryKey: activeRunId ? runQueryKeys.outputs(activeRunId) : ["run-outputs", "none"],
     queryFn: ({ signal }) =>
-      activeJobId
-        ? fetchJobOutputs(workspaceId, activeJobId, signal)
-        : Promise.reject(new Error("No job selected")),
+      activeRunId
+        ? fetchRunOutputs(activeRunId, signal)
+        : Promise.reject(new Error("No run selected")),
     enabled:
-      Boolean(activeJobId) &&
-      (jobQuery.data?.status === "succeeded" || jobQuery.data?.status === "failed"),
+      Boolean(activeRunId) &&
+      (runQuery.data?.status === "succeeded" || runQuery.data?.status === "failed"),
     staleTime: 5_000,
   });
 
   const artifactQuery = useQuery({
-    queryKey: ["job-artifact", workspaceId, activeJobId],
+    queryKey: activeRunId ? runQueryKeys.artifact(activeRunId) : ["run-artifact", "none"],
     queryFn: ({ signal }) =>
-      activeJobId
-        ? fetchJobArtifact(workspaceId, activeJobId, signal)
-        : Promise.reject(new Error("No job selected")),
+      activeRunId
+        ? fetchRunArtifact(activeRunId, signal)
+        : Promise.reject(new Error("No run selected")),
     enabled:
-      Boolean(activeJobId) &&
-      (jobQuery.data?.status === "succeeded" || jobQuery.data?.status === "failed"),
+      Boolean(activeRunId) &&
+      (runQuery.data?.status === "succeeded" || runQuery.data?.status === "failed"),
     staleTime: 5_000,
   });
 
   const telemetryQuery = useQuery({
-    queryKey: ["job-telemetry", workspaceId, activeJobId],
+    queryKey: activeRunId ? runQueryKeys.telemetry(activeRunId) : ["run-telemetry", "none"],
     queryFn: ({ signal }) =>
-      activeJobId
-        ? fetchJobTelemetry(workspaceId, activeJobId, signal)
-        : Promise.reject(new Error("No job selected")),
+      activeRunId
+        ? fetchRunTelemetry(activeRunId, signal)
+        : Promise.reject(new Error("No run selected")),
     enabled:
-      Boolean(activeJobId) &&
-      (jobQuery.data?.status === "succeeded" || jobQuery.data?.status === "failed"),
+      Boolean(activeRunId) &&
+      (runQuery.data?.status === "succeeded" || runQuery.data?.status === "failed"),
     staleTime: 5_000,
   });
 
@@ -1646,13 +1649,13 @@ function RunExtractionDrawerContent({
     );
   }, []);
 
-  const currentJob = jobQuery.data ?? null;
-  const jobStatus = currentJob?.status ?? null;
-  const jobRunning = jobStatus === "running" || jobStatus === "queued";
-  const downloadBase = activeJobId
-    ? `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/jobs/${encodeURIComponent(activeJobId)}`
+  const currentRun = runQuery.data ?? null;
+  const runStatus = currentRun?.status ?? null;
+  const runRunning = runStatus === "running" || runStatus === "queued";
+  const downloadBase = activeRunId
+    ? `/api/v1/runs/${encodeURIComponent(activeRunId)}`
     : null;
-  const outputFiles: JobOutputListing["files"] = outputsQuery.data?.files ?? [];
+  const outputFiles: RunOutputListing["files"] = outputsQuery.data?.files ?? [];
   const artifact = artifactQuery.data ?? null;
   const telemetryEvents = telemetryQuery.data ?? [];
 
@@ -1700,8 +1703,8 @@ function RunExtractionDrawerContent({
 
   const hasConfigurations = selectableConfigs.length > 0;
   const runDisabled =
-    submitJob.isPending ||
-    jobRunning ||
+    submitRun.isPending ||
+    runRunning ||
     safeModeLoading ||
     safeModeEnabled ||
     !hasConfigurations ||
@@ -1721,30 +1724,29 @@ function RunExtractionDrawerContent({
       return;
     }
     setErrorMessage(null);
-    setActiveJobId(null);
+    setActiveRunId(null);
     const sheetList = normalizedSheetSelection;
     const runOptions =
       sheetList.length > 0
         ? { dry_run: false, validate_only: false, input_sheet_names: sheetList }
         : { dry_run: false, validate_only: false };
-    submitJob.mutate(
+    submitRun.mutate(
       {
-        input_document_id: documentRecord.id,
-        config_version_id: selectedVersionId,
-        options: runOptions,
+        configId: selectedConfig.config_id,
+        options: { ...runOptions, input_document_id: documentRecord.id },
       },
       {
-        onSuccess: (job) => {
+        onSuccess: (run) => {
           setPreferences({
             configId: selectedConfig.config_id,
             configVersionId: selectedVersionId,
             sheetNames: sheetList.length ? sheetList : null,
           });
-          onRunSuccess?.(job);
-          setActiveJobId(job.id);
+          onRunSuccess?.(run);
+          setActiveRunId(run.id);
         },
         onError: (error) => {
-          const message = error instanceof Error ? error.message : "Unable to submit extraction job.";
+          const message = error instanceof Error ? error.message : "Unable to submit extraction run.";
           setErrorMessage(message);
           onRunError?.(message);
         },
@@ -1773,9 +1775,9 @@ function RunExtractionDrawerContent({
         <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <h2 id={titleId} className="text-lg font-semibold text-slate-900">Run extraction</h2>
-            <p id={descriptionId} className="text-xs text-slate-500">Prepare and submit a processing job.</p>
+            <p id={descriptionId} className="text-xs text-slate-500">Prepare and submit a processing run.</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={submitJob.isPending}>
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={submitRun.isPending}>
             Close
           </Button>
         </header>
@@ -1814,7 +1816,7 @@ function RunExtractionDrawerContent({
                     setSelectedConfigId(value);
                     setSelectedVersionId("");
                   }}
-                  disabled={submitJob.isPending}
+                  disabled={submitRun.isPending}
                 >
                   <option value="">Select configuration</option>
                   {selectableConfigs.map((config) => (
@@ -1838,7 +1840,7 @@ function RunExtractionDrawerContent({
                     <Select
                       value={selectedVersionId}
                       onChange={(event) => setSelectedVersionId(event.target.value)}
-                      disabled={submitJob.isPending}
+                      disabled={submitRun.isPending}
                     >
                       <option value="">Select version</option>
                       {versionOptions.map((version) => (
@@ -1881,7 +1883,7 @@ function RunExtractionDrawerContent({
                       variant="ghost"
                       size="sm"
                       onClick={() => setSelectedSheets([])}
-                      disabled={submitJob.isPending}
+                      disabled={submitRun.isPending}
                     >
                       Use all worksheets
                     </Button>
@@ -1905,7 +1907,7 @@ function RunExtractionDrawerContent({
                 variant="ghost"
                 size="sm"
                 onClick={() => setSelectedSheets([])}
-                disabled={submitJob.isPending}
+                disabled={submitRun.isPending}
               >
                 Use all worksheets
                   </Button>
@@ -1941,20 +1943,20 @@ function RunExtractionDrawerContent({
             )}
           </section>
 
-          {activeJobId ? (
+          {activeRunId ? (
             <section className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Latest run</p>
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <p className="font-semibold text-slate-800" title={activeJobId}>
-                      Job {activeJobId}
+                    <p className="font-semibold text-slate-800" title={activeRunId}>
+                      Run {activeRunId}
                     </p>
                     <p className="text-xs text-slate-500">
-                      Status: {jobStatus ?? "loading…"}
+                      Status: {runStatus ?? "loading…"}
                     </p>
                   </div>
-                  {jobRunning ? <SpinnerIcon className="h-4 w-4 text-slate-500" /> : null}
+                  {runRunning ? <SpinnerIcon className="h-4 w-4 text-slate-500" /> : null}
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1962,11 +1964,11 @@ function RunExtractionDrawerContent({
                     href={downloadBase ? `${downloadBase}/artifact` : undefined}
                     className={clsx(
                       "inline-flex items-center rounded border px-3 py-1 text-xs font-semibold transition",
-                      downloadBase && !jobRunning
+                      downloadBase && !runRunning
                         ? "border-slate-300 text-slate-700 hover:bg-slate-100"
                         : "cursor-not-allowed border-slate-200 text-slate-400",
                     )}
-                    aria-disabled={jobRunning || !downloadBase}
+                    aria-disabled={runRunning || !downloadBase}
                   >
                     Download artifact
                   </a>
@@ -2038,13 +2040,13 @@ function RunExtractionDrawerContent({
         </div>
 
         <footer className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={submitJob.isPending}>
+          <Button type="button" variant="ghost" onClick={onClose} disabled={submitRun.isPending}>
             Cancel
           </Button>
           <Button
             type="button"
             onClick={handleSubmit}
-            isLoading={submitJob.isPending}
+            isLoading={submitRun.isPending}
             disabled={runDisabled}
             title={runButtonTitle}
           >
@@ -2216,9 +2218,9 @@ function EmptyState({ onUploadClick }: { onUploadClick: () => void }) {
   );
 }
 
-/* ------------------------------ Job status chip ------------------------------ */
+/* ------------------------------ Run status chip ------------------------------ */
 
-function DocumentJobStatus({ document }: { document: DocumentRecord }) {
+function DocumentRunStatus({ document }: { document: DocumentRecord }) {
   const lastRun = document.last_run;
   if (!lastRun) return <span className="text-xs text-slate-400">No runs yet</span>;
 
@@ -2227,10 +2229,10 @@ function DocumentJobStatus({ document }: { document: DocumentRecord }) {
       <span
         className={clsx(
           "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
-          jobStatusBadgeClass(lastRun.status as JobStatus),
+          runStatusBadgeClass(lastRun.status as RunStatus),
         )}
       >
-        {formatJobStatus(lastRun.status as JobStatus)}
+        {formatRunStatus(lastRun.status as RunStatus)}
         {lastRun.run_at ? (
           <span className="ml-1 font-normal text-slate-500">{formatRelativeTime(lastRun.run_at)}</span>
         ) : null}
@@ -2240,7 +2242,7 @@ function DocumentJobStatus({ document }: { document: DocumentRecord }) {
   );
 }
 
-function jobStatusBadgeClass(status: JobStatus) {
+function runStatusBadgeClass(status: RunStatus) {
   switch (status) {
     case "succeeded":
       return "bg-success-100 text-success-700";
@@ -2253,7 +2255,7 @@ function jobStatusBadgeClass(status: JobStatus) {
   }
 }
 
-function formatJobStatus(status: JobStatus) {
+function formatRunStatus(status: RunStatus) {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 

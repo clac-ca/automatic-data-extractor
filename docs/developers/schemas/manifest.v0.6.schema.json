@@ -65,11 +65,11 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "on_job_start":       { "$ref": "#/$defs/HookList" },
+        "on_run_start":       { "$ref": "#/$defs/HookList" },
         "after_detection":    { "$ref": "#/$defs/HookList" },
         "after_transformation": { "$ref": "#/$defs/HookList" },
         "after_validation":   { "$ref": "#/$defs/HookList" },
-        "on_job_end":         { "$ref": "#/$defs/HookList" }
+        "on_run_end":         { "$ref": "#/$defs/HookList" }
       }
     },
 

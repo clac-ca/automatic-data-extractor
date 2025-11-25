@@ -2,7 +2,7 @@
 
 When you press **Build** in the frontend config builder, ADE takes your editable configuration and turns it into a **ready‑to‑run runtime environment**.
 This process—called a **build**—packages your configuration together with the ADE Engine in an isolated Python environment.
-That environment is then reused for every job that runs against that configuration version.
+That environment is then reused for every run that runs against that configuration version.
 
 ---
 
@@ -14,7 +14,7 @@ Each build creates a **virtual environment** (a “venv”)—a private folder c
 2. **The ADE Engine** (`ade_engine`) — the runtime that knows how to process spreadsheets and apply your rules.
 3. **Your Config Package** (`ade_config`) — the detectors, transforms, validators, and hooks that define your logic.
 
-Once built, every job for that configuration runs inside this frozen environment, guaranteeing that results are **reproducible**, **auditable**, and **isolated** from other workspaces.
+Once built, every run for that configuration runs inside this frozen environment, guaranteeing that results are **reproducible**, **auditable**, and **isolated** from other workspaces.
 
 ---
 
@@ -50,7 +50,7 @@ flowchart TD
   C --> D["Install config package (+ dependencies)"]
   D --> E["Verify imports (ade_engine, ade_config)"]
   E --> F["Update database pointer → active build_id & venv_path"]
-  F --> G["Prune old build folders with no running jobs"]
+  F --> G["Prune old build folders with no running runs"]
   G --> H["Return build info"]
 ```
 
@@ -80,10 +80,10 @@ Build metadata is stored in a small SQLite table so the API/UI can check status 
 | `started_at`     | When this build began (only while building)  |
 | `built_at`       | Timestamp when build completed               |
 | `expires_at`     | Optional expiration (if TTL policy enabled)  |
-| `last_used_at`   | Updated each time a job runs with this build |
+| `last_used_at`   | Updated each time a run runs with this build |
 | `error`          | Failure message, if applicable               |
 
-The **DB pointer** (`build_id`, `venv_path`, `status`) is authoritative. Jobs use this pointer.
+The **DB pointer** (`build_id`, `venv_path`, `status`) is authoritative. Runs use this pointer.
 
 ---
 
@@ -114,7 +114,7 @@ Otherwise, ADE reuses the active build. Requests are **idempotent**—you get th
 * **Coalescing:**
 
   * For the **Build** button (interactive UI), if a build is already in progress, `PUT /build` returns `200 OK` with `"status":"building"` so the client can poll `GET /build`.
-  * For **job submission** (server‑side), if a build is in progress, the server **waits briefly** for it to finish (see *Timeouts & Wait Behavior*) to avoid stampedes when many documents arrive at once.
+  * For **run submission** (server‑side), if a build is in progress, the server **waits briefly** for it to finish (see *Timeouts & Wait Behavior*) to avoid stampedes when many documents arrive at once.
 
 * **No half builds:** the active pointer is only updated after imports succeed.
 
@@ -129,10 +129,10 @@ This keeps behavior correct and predictable without introducing filesystem locks
 * A single build is capped by `ADE_BUILD_TIMEOUT_SECONDS`.
 * If exceeded (including crash/kill), the build is marked `failed` and any partial folder is deleted.
 
-**Ensure wait (server‑side jobs):**
+**Ensure wait (server‑side runs):**
 
-* When a job calls `ensure_build()` and finds `status="building"`, the server **waits up to `ADE_BUILD_ENSURE_WAIT_SECONDS`** for the active pointer to flip.
-* If it flips within that window, the job proceeds. Otherwise, the job submission returns a retriable error (e.g., `409 build_in_progress`) and can retry shortly.
+* When a run calls `ensure_build()` and finds `status="building"`, the server **waits up to `ADE_BUILD_ENSURE_WAIT_SECONDS`** for the active pointer to flip.
+* If it flips within that window, the run proceeds. Otherwise, the run submission returns a retriable error (e.g., `409 build_in_progress`) and can retry shortly.
 
 **UI behavior (Build button):**
 
@@ -158,34 +158,34 @@ This self‑healing logic guarantees that a crash during build does not permanen
 
 **On failure:** delete the just‑created `<build_id>/` folder and set `status=failed` with an error message.
 
-**On success:** after switching the pointer, **prune old build folders** that are **not** the active pointer and have **no running jobs**.
+**On success:** after switching the pointer, **prune old build folders** that are **not** the active pointer and have **no running runs**.
 Pruning can happen immediately after activation and/or via a periodic sweep.
 
-**On startup / periodic sweep:** remove any `<build_id>` folders that aren’t the active pointer and aren’t referenced by any job.
+**On startup / periodic sweep:** remove any `<build_id>` folders that aren’t the active pointer and aren’t referenced by any run.
 
 ---
 
-## Jobs and Build Reuse
+## Runs and Build Reuse
 
-Before each job, the backend calls `ensure_build(workspace_id, config_id)`:
+Before each run, the backend calls `ensure_build(workspace_id, config_id)`:
 
 * If a valid active build exists, it returns the **current pointer** (`build_id`, `venv_path`).
 * Otherwise, it builds a new one and then returns the pointer.
 
-Jobs launch using the venv from the pointer:
+Runs launch using the venv from the pointer:
 
 ```bash
 ${ADE_VENVS_DIR}/<workspace_id>/<config_id>/<build_id>/bin/python \
-  -I -B -m ade_engine.worker <job_id>
+  -I -B -m ade_engine.worker <run_id>
 ```
 
 > This work package describes the production worker entry point. The current repo
 > ships a placeholder CLI exposed via `python -m ade_engine`, which prints the
-> installed manifest so you can smoke-test a build until the job service is wired
+> installed manifest so you can smoke-test a build until the run service is wired
 > up.
 
-Jobs never install packages; they always run inside a verified venv.
-The job record stores the `build_id` used, for audit and reproducibility.
+Runs never install packages; they always run inside a verified venv.
+The run record stores the `build_id` used, for audit and reproducibility.
 
 ---
 
@@ -230,7 +230,7 @@ GET /api/v1/builds/{build_id}/logs?after_id=<cursor>&limit=<count>
 
 Returns a paginated list of log entries and the `next_after_id` cursor for subsequent requests.
 
-> **Jobs API (submit):** clients provide `workspace_id` and `config_id`. The server resolves and records `build_id` at submit time. An optional `build_id` override may be supported for debugging.
+> **Runs API (submit):** clients provide `workspace_id` and `config_id`. The server resolves and records `build_id` at submit time. An optional `build_id` override may be supported for debugging.
 
 ---
 
@@ -246,11 +246,11 @@ Returns a paginated list of log entries and the `next_after_id` cursor for subse
 | `ADE_PYTHON_BIN`                | system default         | Python executable to use for `venv` (optional)  |
 | `ADE_BUILD_TIMEOUT_SECONDS`     | `600`                  | Max duration for a single build before failing  |
 | `ADE_BUILD_ENSURE_WAIT_SECONDS` | `30`                   | How long server waits for an in‑progress build  |
-| `ADE_MAX_CONCURRENCY`           | `2`                    | Maximum concurrent builds/jobs                  |
-| `ADE_JOB_TIMEOUT_SECONDS`       | `300`                  | Hard timeout for jobs                           |
-| `ADE_WORKER_CPU_SECONDS`        | `60`                   | CPU limit per job                               |
-| `ADE_WORKER_MEM_MB`             | `512`                  | Memory limit per job                            |
-| `ADE_WORKER_FSIZE_MB`           | `100`                  | Max file size a job may create                  |
+| `ADE_MAX_CONCURRENCY`           | `2`                    | Maximum concurrent builds/runs                  |
+| `ADE_JOB_TIMEOUT_SECONDS`       | `300`                  | Hard timeout for runs                           |
+| `ADE_WORKER_CPU_SECONDS`        | `60`                   | CPU limit per run                               |
+| `ADE_WORKER_MEM_MB`             | `512`                  | Memory limit per run                            |
+| `ADE_WORKER_FSIZE_MB`           | `100`                  | Max file size a run may create                  |
 
 ---
 
@@ -258,8 +258,8 @@ Returns a paginated list of log entries and the `next_after_id` cursor for subse
 
 * **Router** — `POST /workspaces/{workspace_id}/configs/{config_id}/builds` plus status/log polling endpoints under `/builds/{build_id}`.
 * **Service (`ensure_build`)** — checks the DB, computes the fingerprint, applies TTL/force rules, **uses DB `status="building"` to deduplicate concurrent requests** (coalescing), self‑heals stale `building` rows, and triggers the builder if needed.
-* **Builder** — creates `…/<build_id>/`, installs engine + config, verifies imports, **updates the DB pointer on success**, deletes the folder on failure, and triggers pruning of old builds with no running jobs.
-* **Jobs** — call `ensure_build()` then run the worker using the returned `venv_path`. Each job row stores `build_id`.
+* **Builder** — creates `…/<build_id>/`, installs engine + config, verifies imports, **updates the DB pointer on success**, deletes the folder on failure, and triggers pruning of old builds with no running runs.
+* **Runs** — call `ensure_build()` then run the worker using the returned `venv_path`. Each run row stores `build_id`.
 * **Database** — one row per build; a unique constraint guarantees **one active** build per `(workspace_id, config_id)`.
 
 ---
@@ -267,8 +267,8 @@ Returns a paginated list of log entries and the `next_after_id` cursor for subse
 ## Summary
 
 * Keep it simple: **DB‑based dedupe** guarantees **one** build at a time per config—no filesystem locks.
-* **Coalesce** concurrent requests: UI returns `"building"` quickly; jobs wait briefly for the pointer to flip.
+* **Coalesce** concurrent requests: UI returns `"building"` quickly; runs wait briefly for the pointer to flip.
 * **Self‑heal** stale `building` rows after crashes using `started_at + ADE_BUILD_TIMEOUT_SECONDS`.
-* Allow **rebuilds while jobs run**; prune old builds only when unreferenced.
-* Jobs **don’t pass** `build_id`—the server chooses and **records** it for reproducibility.
+* Allow **rebuilds while runs run**; prune old builds only when unreferenced.
+* Runs **don’t pass** `build_id`—the server chooses and **records** it for reproducibility.
 * No renames, no symlinks—just clean pointer updates, timeouts, and simple cleanup.

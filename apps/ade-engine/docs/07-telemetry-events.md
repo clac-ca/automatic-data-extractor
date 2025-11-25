@@ -113,10 +113,10 @@ Modeled as e.g. `TelemetryEnvelope` in `ade_engine.schemas.telemetry`:
 * `metadata: dict[str, Any]`
   Optional subset of `RunContext.metadata` for correlation (artifact does not store these), e.g.:
 
-  * `job_id`
+  * `run_request_id`
   * `config_id`
   * `workspace_id`
-  (These are caller-provided tags; `job_id` refers to a backend job, not an engine concept.)
+  (These are caller-provided tags; identifiers stay opaque to the engine.)
 * `event: TelemetryEvent`
 
 Example envelope (one line in `events.ndjson`):
@@ -128,7 +128,7 @@ Example envelope (one line in `events.ndjson`):
   "run_id": "run-uuid-1234",
   "timestamp": "2024-01-01T12:34:56Z",
   "metadata": {
-    "job_id": "job-abc",
+    "run_request_id": "run-abc",
     "config_id": "config-1.2.3"
   },
   "event": {
@@ -213,7 +213,7 @@ behaves for that engine instance.
 Conceptual fields:
 
 * `correlation_id: str | None`
-  Optional out-of-band correlation ID (e.g., from the worker/job system).
+  Optional out-of-band correlation ID (e.g., from the worker/run scheduler).
 * `min_event_level: str`
   Minimum severity for events to be emitted (e.g. `"info"`).
 * `event_sink_factories: list[Callable[[RunContext], EventSink]]`

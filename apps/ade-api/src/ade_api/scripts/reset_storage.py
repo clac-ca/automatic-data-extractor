@@ -60,7 +60,7 @@ def _gather_storage_targets(settings: Settings) -> list[Path]:
     add(settings.documents_dir)
     add(settings.configs_dir)
     add(settings.venvs_dir)
-    add(settings.jobs_dir)
+    add(settings.runs_dir)
     add(settings.pip_cache_dir)
 
     pip_cache = _normalize(settings.pip_cache_dir)

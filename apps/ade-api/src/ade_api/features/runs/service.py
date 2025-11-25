@@ -7,7 +7,7 @@ import inspect
 import json
 import logging
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +32,7 @@ from ade_api.features.system_settings.service import (
 )
 from ade_api.settings import Settings
 from ade_api.shared.core.time import utc_now
+from ade_api.shared.pagination import Page
 
 from .models import Run, RunLog, RunStatus
 from .repository import RunsRepository
@@ -73,7 +74,7 @@ RunStreamFrame = RunEvent | TelemetryEnvelope
 
 @dataclass(slots=True)
 class RunPathsSnapshot:
-    """Container for job-relative output and log paths."""
+    """Container for run-relative output and log paths."""
 
     artifact_path: str | None = None
     events_path: str | None = None
@@ -94,8 +95,7 @@ class RunExecutionContext:
     config_id: str
     venv_path: str
     build_id: str
-    job_id: str | None = None
-    jobs_dir: str | None = None
+    runs_dir: str | None = None
 
     def as_dict(self) -> dict[str, str]:
         return {
@@ -105,8 +105,7 @@ class RunExecutionContext:
             "config_id": self.config_id,
             "venv_path": self.venv_path,
             "build_id": self.build_id,
-            "job_id": self.job_id or "",
-            "jobs_dir": self.jobs_dir or "",
+            "runs_dir": self.runs_dir or "",
         }
 
     @classmethod
@@ -118,8 +117,7 @@ class RunExecutionContext:
             config_id=payload["config_id"],
             venv_path=payload["venv_path"],
             build_id=payload["build_id"],
-            job_id=payload.get("job_id") or None,
-            jobs_dir=payload.get("jobs_dir") or None,
+            runs_dir=payload.get("runs_dir") or None,
         )
 
 
@@ -173,11 +171,11 @@ class RunsService:
 
         if settings.documents_dir is None:
             raise RuntimeError("ADE_DOCUMENTS_DIR is not configured")
-        if settings.jobs_dir is None:
-            raise RuntimeError("ADE_JOBS_DIR is not configured")
+        if settings.runs_dir is None:
+            raise RuntimeError("ADE_RUNS_DIR is not configured")
 
         self._documents_dir = settings.documents_dir
-        self._jobs_dir = Path(settings.jobs_dir)
+        self._runs_dir = Path(settings.runs_dir)
         self._storage = DocumentStorage(self._documents_dir)
 
     # ---------------------------------------------------------------------
@@ -188,18 +186,18 @@ class RunsService:
         *,
         config_id: str,
         options: RunCreateOptions,
-        job_id: str | None = None,
-        jobs_dir: Path | None = None,
     ) -> tuple[Run, RunExecutionContext]:
         """Create the queued run row and return its execution context."""
 
         configuration = await self._resolve_configuration(config_id)
         input_document_id = options.input_document_id or None
+        document_descriptor: dict[str, Any] | None = None
         if input_document_id:
-            await self._require_document(
+            document = await self._require_document(
                 workspace_id=configuration.workspace_id,
                 document_id=input_document_id,
             )
+            document_descriptor = self._document_descriptor(document)
         build = await self._resolve_active_build(configuration)
 
         selected_sheet_name = options.input_sheet_name
@@ -207,13 +205,19 @@ class RunsService:
             if len(options.input_sheet_names) == 1:
                 selected_sheet_name = options.input_sheet_names[0]
 
+        run_id = self._generate_run_id()
         run = Run(
-            id=self._generate_run_id(),
+            id=run_id,
             configuration_id=configuration.id,
             workspace_id=configuration.workspace_id,
             config_id=configuration.config_id,
+            config_version_id=configuration.config_id,
             status=RunStatus.QUEUED,
+            attempt=1,
+            retry_of_run_id=None,
+            trace_id=run_id,
             input_document_id=input_document_id,
+            input_documents=[document_descriptor] if document_descriptor else [],
             input_sheet_name=selected_sheet_name,
             input_sheet_names=(
                 options.input_sheet_names
@@ -239,8 +243,7 @@ class RunsService:
             config_id=configuration.config_id,
             venv_path=build.venv_path,
             build_id=build.build_id,
-            job_id=job_id,
-            jobs_dir=str(jobs_dir or self._settings.jobs_dir),
+            runs_dir=str(self._runs_dir),
         )
         return run, context
 
@@ -401,25 +404,65 @@ class RunsService:
 
         return await self._runs.get(run_id)
 
+    async def list_runs(
+        self,
+        *,
+        workspace_id: str,
+        statuses: Sequence[RunStatus] | None,
+        input_document_id: str | None,
+        page: int,
+        page_size: int,
+        include_total: bool,
+    ) -> Page[RunResource]:
+        """Return paginated runs for ``workspace_id`` with optional filters."""
+
+        page_result = await self._runs.list_by_workspace(
+            workspace_id=workspace_id,
+            statuses=statuses,
+            input_document_id=input_document_id,
+            page=page,
+            page_size=page_size,
+            include_total=include_total,
+        )
+        resources = [self.to_resource(run) for run in page_result.items]
+        return Page(
+            items=resources,
+            page=page_result.page,
+            page_size=page_result.page_size,
+            has_next=page_result.has_next,
+            has_previous=page_result.has_previous,
+            total=page_result.total,
+        )
+
     def to_resource(self, run: Run) -> RunResource:
         """Convert ``run`` into its API representation."""
         paths = self._finalize_paths(
             summary=None,
-            job_dir=self._job_dir_for_run(run.id),
+            run_dir=self._run_dir_for_run(run.id),
             default_paths=RunPathsSnapshot(output_paths=[], processed_files=[]),
         )
 
         return RunResource(
             id=run.id,
             config_id=run.config_id,
+            config_version_id=run.config_version_id,
+            submitted_by_user_id=run.submitted_by_user_id,
             input_document_id=run.input_document_id,
+            input_documents=run.input_documents or [],
             input_sheet_name=run.input_sheet_name,
             input_sheet_names=run.input_sheet_names,
             status=self._status_literal(run.status),
+            attempt=run.attempt,
+            retry_of_run_id=run.retry_of_run_id,
+            trace_id=run.trace_id,
             created=self._epoch_seconds(run.created_at),
             started=self._epoch_seconds(run.started_at),
             finished=self._epoch_seconds(run.finished_at),
+            canceled=self._epoch_seconds(run.canceled_at),
             exit_code=run.exit_code,
+            artifact_uri=run.artifact_uri,
+            output_uri=run.output_uri,
+            logs_uri=run.logs_uri,
             summary=run.summary,
             error_message=run.error_message,
             artifact_path=paths.artifact_path,
@@ -454,7 +497,7 @@ class RunsService:
         """Return the artifact path for ``run_id`` when available."""
 
         await self._require_run(run_id)
-        logs_dir = self._job_dir_for_run(run_id) / "logs"
+        logs_dir = self._run_dir_for_run(run_id) / "logs"
         artifact_path = logs_dir / "artifact.json"
         if not artifact_path.is_file():
             raise RunArtifactMissingError("Run artifact is unavailable")
@@ -464,7 +507,7 @@ class RunsService:
         """Return the raw log stream path for ``run_id`` when available."""
 
         await self._require_run(run_id)
-        logs_dir = self._job_dir_for_run(run_id) / "logs"
+        logs_dir = self._run_dir_for_run(run_id) / "logs"
         logs_path = logs_dir / "events.ndjson"
         if not logs_path.is_file():
             raise RunLogsFileMissingError("Run log stream is unavailable")
@@ -474,7 +517,7 @@ class RunsService:
         """Return output file tuples for ``run_id``."""
 
         await self._require_run(run_id)
-        output_dir = self._job_dir_for_run(run_id) / "output"
+        output_dir = self._run_dir_for_run(run_id) / "output"
         if not output_dir.exists() or not output_dir.is_dir():
             raise RunOutputMissingError("Run output is unavailable")
 
@@ -498,7 +541,7 @@ class RunsService:
         """Return the absolute path for ``relative_path`` in ``run_id`` outputs."""
 
         await self._require_run(run_id)
-        output_dir = self._job_dir_for_run(run_id) / "output"
+        output_dir = self._run_dir_for_run(run_id) / "output"
         if not output_dir.exists() or not output_dir.is_dir():
             raise RunOutputMissingError("Run output is unavailable")
 
@@ -512,20 +555,20 @@ class RunsService:
             raise RunOutputMissingError("Requested output file not found")
         return candidate
 
-    def job_directory(self, run_id: str) -> Path:
-        """Return the canonical job directory for a given ``run_id``."""
+    def run_directory(self, run_id: str) -> Path:
+        """Return the canonical run directory for a given ``run_id``."""
 
-        return self._job_dir_for_run(run_id)
+        return self._run_dir_for_run(run_id)
 
-    def job_relative_path(self, path: Path) -> str:
-        """Return ``path`` relative to the jobs root, validating traversal."""
+    def run_relative_path(self, path: Path) -> str:
+        """Return ``path`` relative to the runs root, validating traversal."""
 
-        root = self._jobs_dir.resolve()
+        root = self._runs_dir.resolve()
         candidate = path.resolve()
         try:
             return str(candidate.relative_to(root))
         except ValueError:  # pragma: no cover - defensive guard
-            raise RunOutputMissingError("Requested path escapes jobs directory") from None
+            raise RunOutputMissingError("Requested path escapes runs directory") from None
 
     def _relative_if_exists(self, path: str | Path | None) -> str | None:
         if path is None:
@@ -534,7 +577,7 @@ class RunsService:
         if not candidate.exists():
             return None
         try:
-            return self.job_relative_path(candidate)
+            return self.run_relative_path(candidate)
         except RunOutputMissingError:
             return None
 
@@ -548,11 +591,22 @@ class RunsService:
                 paths.append(relative)
         return paths
 
+    @staticmethod
+    def _document_descriptor(document: "Document") -> dict[str, Any]:
+        return {
+            "document_id": document.id,
+            "display_name": document.original_filename,
+            "name": document.original_filename,
+            "original_filename": document.original_filename,
+            "content_type": document.content_type,
+            "byte_size": document.byte_size,
+        }
+
     def _finalize_paths(
         self,
         *,
         summary: dict[str, Any] | None,
-        job_dir: Path,
+        run_dir: Path,
         default_paths: RunPathsSnapshot,
     ) -> RunPathsSnapshot:
         snapshot = RunPathsSnapshot(
@@ -562,7 +616,7 @@ class RunsService:
             processed_files=list(default_paths.processed_files or []),
         )
 
-        logs_dir = job_dir / "logs"
+        logs_dir = run_dir / "logs"
         artifact_candidates = [
             summary.get("artifact_path") if summary else None,
             logs_dir / "artifact.json",
@@ -590,7 +644,7 @@ class RunsService:
             ]
 
         if not snapshot.output_paths:
-            snapshot.output_paths = self._relative_output_paths(job_dir / "output")
+            snapshot.output_paths = self._relative_output_paths(run_dir / "output")
 
         return snapshot
 
@@ -634,13 +688,12 @@ class RunsService:
         context: RunExecutionContext,
         options: RunCreateOptions,
         safe_mode_enabled: bool = False,
-    ) -> AsyncIterator[RunStreamFrame]:
+        ) -> AsyncIterator[RunStreamFrame]:
         python = self._resolve_python(Path(context.venv_path))
         env = self._build_env(Path(context.venv_path), options, context)
-        job_id = context.job_id or run.id
-        jobs_root = Path(context.jobs_dir or self._settings.jobs_dir)
-        job_dir = jobs_root / job_id
-        job_dir.mkdir(parents=True, exist_ok=True)
+        runs_root = Path(context.runs_dir or self._settings.runs_dir)
+        run_dir = runs_root / run.id
+        run_dir.mkdir(parents=True, exist_ok=True)
 
         if not options.input_document_id:
             raise RunInputMissingError("Input document is required for run execution")
@@ -648,13 +701,13 @@ class RunsService:
         staged_input = await self._stage_input_document(
             workspace_id=context.workspace_id,
             document_id=options.input_document_id,
-            job_dir=job_dir,
+            run_dir=run_dir,
         )
 
         command = [str(python), "-m", "ade_engine", "run"]
         command.extend(["--input", str(staged_input)])
-        command.extend(["--output-dir", str(job_dir / "output")])
-        command.extend(["--logs-dir", str(job_dir / "logs")])
+        command.extend(["--output-dir", str(run_dir / "output")])
+        command.extend(["--logs-dir", str(run_dir / "logs")])
 
         sheets = options.input_sheet_names or []
         if options.input_sheet_name:
@@ -664,7 +717,6 @@ class RunsService:
 
         metadata = {
             "run_id": run.id,
-            "job_id": job_id,
             "config_id": run.config_id,
             "workspace_id": run.workspace_id,
             "configuration_id": context.configuration_id,
@@ -675,7 +727,7 @@ class RunsService:
         if safe_mode_enabled:
             command.append("--safe-mode")
 
-        runner = ADEProcessRunner(command=command, job_dir=job_dir, env=env)
+        runner = ADEProcessRunner(command=command, run_dir=run_dir, env=env)
 
         summary: dict[str, Any] | None = None
         paths_snapshot = RunPathsSnapshot(output_paths=[], processed_files=[])
@@ -701,7 +753,7 @@ class RunsService:
 
         paths_snapshot = self._finalize_paths(
             summary=summary,
-            job_dir=job_dir,
+            run_dir=run_dir,
             default_paths=paths_snapshot,
         )
         if summary and summary.get("processed_files"):
@@ -745,7 +797,7 @@ class RunsService:
         *,
         workspace_id: str,
         document_id: str,
-        job_dir: Path,
+        run_dir: Path,
     ) -> Path:
         document = await self._require_document(
             workspace_id=workspace_id,
@@ -756,7 +808,7 @@ class RunsService:
             document=document,
             storage=self._storage,
             session=self._session,
-            job_dir=job_dir,
+            run_dir=run_dir,
         )
 
     async def _resolve_configuration(self, config_id: str) -> Configuration:
@@ -804,6 +856,7 @@ class RunsService:
         if error_message is not None:
             run.error_message = error_message
         run.finished_at = utc_now()
+        run.canceled_at = utc_now() if status is RunStatus.CANCELED else None
         await self._session.commit()
         await self._session.refresh(run)
         return run
@@ -855,13 +908,13 @@ class RunsService:
             env["ADE_RUN_ID"] = context.run_id
         return env
 
-    def _job_dir_for_run(self, run_id: str) -> Path:
-        root = self._jobs_dir.resolve()
-        candidate = (self._jobs_dir / run_id).resolve()
+    def _run_dir_for_run(self, run_id: str) -> Path:
+        root = self._runs_dir.resolve()
+        candidate = (self._runs_dir / run_id).resolve()
         try:
             candidate.relative_to(root)
         except ValueError:  # pragma: no cover - defensive guard
-            raise RunOutputMissingError("Requested path escapes jobs directory") from None
+            raise RunOutputMissingError("Requested path escapes runs directory") from None
         return candidate
 
     @staticmethod

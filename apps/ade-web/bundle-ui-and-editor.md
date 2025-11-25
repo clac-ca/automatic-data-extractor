@@ -104,7 +104,7 @@ Inside a workspace (`/workspaces/:workspaceId/...`) ADE Web uses a reusable **wo
   - “Switch workspace” affordance.
   - Primary sections:
     - Documents
-    - Jobs
+    - Runs
     - Config Builder
     - Settings
   - Collapse/expand state is persisted **per workspace** (so each workspace “remembers” whether you prefer a compact nav).
@@ -113,7 +113,7 @@ Inside a workspace (`/workspaces/:workspaceId/...`) ADE Web uses a reusable **wo
   - Workspace name and optional environment label (e.g. “Production”, “Staging”).
   - Context‑aware **search**:
     - On the **Documents** section, it acts as a document‑scoped search.
-    - Elsewhere, it can search within the workspace (sections, configs, jobs).
+    - Elsewhere, it can search within the workspace (sections, configs, runs).
   - A profile dropdown (user’s display name/email, sign‑out, etc.).
 
 - **Mobile navigation**:
@@ -139,7 +139,7 @@ Certain routes (especially the **Config Builder** workbench) can temporarily hid
 
 A **workspace** is the primary unit of organisation and isolation:
 
-- Owns **documents**, **jobs/runs**, **config packages**, and **membership/roles**.
+- Owns **documents**, **runs/runs**, **config packages**, and **membership/roles**.
 - Has a human‑readable **name** and a stable **slug/ID** that appear in the UI and URLs.
 - Has **settings** (name, slug, environment labels, safe mode, etc.).
 - Is governed by **workspace‑scoped RBAC**.
@@ -165,9 +165,9 @@ Per workspace:
   - **Content type** and **size** (used to show “Excel spreadsheet • 2.3 MB”).
   - **Status**:
     - `uploaded` – file is stored but not yet processed.
-    - `processing` – currently being processed by a job.
-    - `processed` – last job completed successfully.
-    - `failed` – last job ended in error.
+    - `processing` – currently being processed by a run.
+    - `processed` – last run completed successfully.
+    - `failed` – last run ended in error.
     - `archived` – kept for history, not actively used.
   - **Timestamps** (created/uploaded at).
   - **Uploader** (user who uploaded the file).
@@ -179,7 +179,7 @@ Per workspace:
 Documents are treated as **immutable inputs**:
 
 - Re‑uploading a revised file results in a **new document**.
-- Jobs always refer to the original uploaded file by ID.
+- Runs always refer to the original uploaded file by ID.
 
 Multi‑sheet spreadsheets can expose **worksheet metadata**:
 
@@ -189,14 +189,14 @@ Multi‑sheet spreadsheets can expose **worksheet metadata**:
 
 ---
 
-### Runs (jobs)
+### Runs (runs)
 
-A **run** (or **job**) is a single execution of ADE against a set of inputs with a particular config version.
+A **run** (or **run**) is a single execution of ADE against a set of inputs with a particular config version.
 
 Key ideas:
 
-- Jobs are **workspace‑scoped** and usually tied to at least one document.
-- Each job includes:
+- Runs are **workspace‑scoped** and usually tied to at least one document.
+- Each run includes:
   - **Status**: `queued`, `running`, `succeeded`, `failed`, `cancelled`.
   - **Timestamps**:
     - Queued / created,
@@ -225,7 +225,7 @@ For a given document:
   - Preferred subset of sheet names.
 - These preferences are stored in local, workspace‑scoped storage and reapplied the next time you run that document.
 
-The backend exposes **streaming NDJSON APIs** for job events:
+The backend exposes **streaming NDJSON APIs** for run events:
 
 - ADE Web uses these for:
   - Live status updates,
@@ -366,7 +366,7 @@ Permissions govern actions such as:
 - Creating/updating **workspace roles**.
 - Toggling **safe mode**.
 - Editing and activating **config versions**.
-- Running **jobs** and **test runs**.
+- Running **runs** and **test runs**.
 - Viewing **logs** and **telemetry**.
 
 Backend responsibilities:
@@ -410,7 +410,7 @@ Paths are **normalised** to avoid trailing‑slash variants (`/foo/` becomes `/f
 Within `/workspaces/:workspaceId`, the first path segment after the workspace ID selects the section:
 
 - `/documents` – Documents list and document run UI.
-- `/jobs` – Jobs ledger.
+- `/runs` – Runs ledger.
 - `/config-builder` – Config overview and Builder routes:
   - e.g. `/config-builder/:configId` for a specific config,
   - nested routes for the editor workbench.
@@ -1312,7 +1312,7 @@ Code reinforces:
   * Keep the tab selection in sync with the URL by calling `setSearchParams` with `{ replace: true }`.
 * Tabs lazily mount their content so inactive tabs do not incur unnecessary data fetching.
 
-### Workbench return path (Settings ↔ Config Builder / Documents / Jobs)
+### Workbench return path (Settings ↔ Config Builder / Documents / Runs)
 
 To keep flows smooth between operational views and config editing, a helper key is used:
 
@@ -1324,7 +1324,7 @@ export function getWorkbenchReturnPathStorageKey(workspaceId: string) {
 
 When entering the workbench from any workspace section:
 
-* The app can store the originating URL (e.g. filtered Documents view, Jobs query, or Settings tab).
+* The app can store the originating URL (e.g. filtered Documents view, Runs query, or Settings tab).
 
 When exiting the workbench:
 
@@ -1512,13 +1512,13 @@ This enables:
 
 ADE Web is the operational and configuration console for Automatic Data Extractor:
 
-* **Analysts** use it to upload documents, run extractions, inspect jobs, and download outputs.
+* **Analysts** use it to upload documents, run extractions, inspect runs, and download outputs.
 * **Workspace owners / engineers** use it to evolve Python‑based config packages, validate and test changes, and safely roll out new versions.
 * **Admins** use it to manage workspaces, members, roles, SSO hints, and safe mode.
 
 This README captures:
 
-* The **conceptual model** (workspaces, documents, jobs, configs, safe mode, roles),
+* The **conceptual model** (workspaces, documents, runs, configs, safe mode, roles),
 * The **navigation and URL‑state conventions** (custom history, search params, deep linking),
 * The **workbench model** for config packages (file tree, tabs, layout, editor theme, unsaved changes, build & run integration),
 * And the **backend contracts** ADE Web expects.
@@ -3206,10 +3206,10 @@ export type AdeFunctionKind =
   | "column_detector"
   | "column_transform"
   | "column_validator"
-  | "hook_on_job_start"
+  | "hook_on_run_start"
   | "hook_after_mapping"
   | "hook_before_save"
-  | "hook_on_job_end";
+  | "hook_on_run_end";
 
 export interface AdeFunctionSpec {
   kind: AdeFunctionKind;
@@ -3228,7 +3228,7 @@ const rowDetectorSpec: AdeFunctionSpec = {
   signature: [
     "def detect_*(",
     "    *,",
-    "    job,",
+    "    run,",
     "    state,",
     "    row_index: int,",
     "    row_values: list,",
@@ -3240,7 +3240,7 @@ const rowDetectorSpec: AdeFunctionSpec = {
   snippet: `
 def detect_\${1:name}(
     *,
-    job,
+    run,
     state,
     row_index: int,
     row_values: list,
@@ -3251,7 +3251,7 @@ def detect_\${1:name}(
     score = 0.0
     return {"scores": {"\${3:label}": score}}
 `.trim(),
-  parameters: ["job", "state", "row_index", "row_values", "logger"],
+  parameters: ["run", "state", "row_index", "row_values", "logger"],
 };
 
 const columnDetectorSpec: AdeFunctionSpec = {
@@ -3261,7 +3261,7 @@ const columnDetectorSpec: AdeFunctionSpec = {
   signature: [
     "def detect_*(",
     "    *,",
-    "    job,",
+    "    run,",
     "    state,",
     "    field_name: str,",
     "    field_meta: dict,",
@@ -3278,7 +3278,7 @@ const columnDetectorSpec: AdeFunctionSpec = {
   snippet: `
 def detect_\${1:value_shape}(
     *,
-    job,
+    run,
     state,
     field_name: str,
     field_meta: dict,
@@ -3296,7 +3296,7 @@ def detect_\${1:value_shape}(
     return {"scores": {field_name: score}}
 `.trim(),
   parameters: [
-    "job",
+    "run",
     "state",
     "field_name",
     "field_meta",
@@ -3316,7 +3316,7 @@ const columnTransformSpec: AdeFunctionSpec = {
   signature: [
     "def transform(",
     "    *,",
-    "    job,",
+    "    run,",
     "    state,",
     "    row_index: int,",
     "    field_name: str,",
@@ -3330,7 +3330,7 @@ const columnTransformSpec: AdeFunctionSpec = {
   snippet: `
 def transform(
     *,
-    job,
+    run,
     state,
     row_index: int,
     field_name: str,
@@ -3345,7 +3345,7 @@ def transform(
     normalized = value
     return {field_name: normalized}
 `.trim(),
-  parameters: ["job", "state", "row_index", "field_name", "value", "row", "logger"],
+  parameters: ["run", "state", "row_index", "field_name", "value", "row", "logger"],
 };
 
 const columnValidatorSpec: AdeFunctionSpec = {
@@ -3355,7 +3355,7 @@ const columnValidatorSpec: AdeFunctionSpec = {
   signature: [
     "def validate(",
     "    *,",
-    "    job,",
+    "    run,",
     "    state,",
     "    row_index: int,",
     "    field_name: str,",
@@ -3370,7 +3370,7 @@ const columnValidatorSpec: AdeFunctionSpec = {
   snippet: `
 def validate(
     *,
-    job,
+    run,
     state,
     row_index: int,
     field_name: str,
@@ -3392,7 +3392,7 @@ def validate(
     return issues
 `.trim(),
   parameters: [
-    "job",
+    "run",
     "state",
     "row_index",
     "field_name",
@@ -3403,14 +3403,14 @@ def validate(
   ],
 };
 
-const hookOnJobStartSpec: AdeFunctionSpec = {
-  kind: "hook_on_job_start",
-  name: "on_job_start",
-  label: "ADE hook: on_job_start",
+const hookOnRunStartSpec: AdeFunctionSpec = {
+  kind: "hook_on_run_start",
+  name: "on_run_start",
+  label: "ADE hook: on_run_start",
   signature: [
-    "def on_job_start(",
+    "def on_run_start(",
     "    *,",
-    "    job_id: str,",
+    "    run_id: str,",
     "    manifest: dict,",
     "    env: dict | None = None,",
     "    artifact: dict | None = None,",
@@ -3420,21 +3420,21 @@ const hookOnJobStartSpec: AdeFunctionSpec = {
   ].join("\n"),
   doc: "Hook called once before detectors run. Use it for logging or lightweight setup.",
   snippet: `
-def on_job_start(
+def on_run_start(
     *,
-    job_id: str,
+    run_id: str,
     manifest: dict,
     env: dict | None = None,
     artifact: dict | None = None,
     logger=None,
     **_,
 ) -> None:
-    """\${1:Log or hydrate state before the job starts.}"""
+    """\${1:Log or hydrate state before the run starts.}"""
     if logger:
-        logger.info("job_start id=%s", job_id)
+        logger.info("run_start id=%s", run_id)
     return None
 `.trim(),
-  parameters: ["job_id", "manifest", "env", "artifact", "logger"],
+  parameters: ["run_id", "manifest", "env", "artifact", "logger"],
 };
 
 const hookAfterMappingSpec: AdeFunctionSpec = {
@@ -3501,21 +3501,21 @@ def before_save(
   parameters: ["workbook", "artifact", "logger"],
 };
 
-const hookOnJobEndSpec: AdeFunctionSpec = {
-  kind: "hook_on_job_end",
-  name: "on_job_end",
-  label: "ADE hook: on_job_end",
+const hookOnRunEndSpec: AdeFunctionSpec = {
+  kind: "hook_on_run_end",
+  name: "on_run_end",
+  label: "ADE hook: on_run_end",
   signature: [
-    "def on_job_end(",
+    "def on_run_end(",
     "    *,",
     "    artifact: dict | None = None,",
     "    logger=None,",
     "    **_,",
     ") -> None:",
   ].join("\n"),
-  doc: "Hook called once after the job completes. Inspect the artifact for summary metrics.",
+  doc: "Hook called once after the run completes. Inspect the artifact for summary metrics.",
   snippet: `
-def on_job_end(
+def on_run_end(
     *,
     artifact: dict | None = None,
     logger=None,
@@ -3524,7 +3524,7 @@ def on_job_end(
     """\${1:Log a completion summary.}"""
     if logger:
         total_sheets = len((artifact or {}).get("sheets", []))
-        logger.info("job_end: sheets=%s", total_sheets)
+        logger.info("run_end: sheets=%s", total_sheets)
     return None
 `.trim(),
   parameters: ["artifact", "logger"],
@@ -3535,10 +3535,10 @@ export const ADE_FUNCTIONS: AdeFunctionSpec[] = [
   columnDetectorSpec,
   columnTransformSpec,
   columnValidatorSpec,
-  hookOnJobStartSpec,
+  hookOnRunStartSpec,
   hookAfterMappingSpec,
   hookBeforeSaveSpec,
-  hookOnJobEndSpec,
+  hookOnRunEndSpec,
 ];
 
 export type AdeFileScope = "row_detectors" | "column_detectors" | "hooks" | "other";
@@ -3569,10 +3569,10 @@ export function isAdeConfigFile(filePath: string | undefined): boolean {
 }
 
 const hookSpecsByName = new Map<string, AdeFunctionSpec>([
-  [hookOnJobStartSpec.name, hookOnJobStartSpec],
+  [hookOnRunStartSpec.name, hookOnRunStartSpec],
   [hookAfterMappingSpec.name, hookAfterMappingSpec],
   [hookBeforeSaveSpec.name, hookBeforeSaveSpec],
-  [hookOnJobEndSpec.name, hookOnJobEndSpec],
+  [hookOnRunEndSpec.name, hookOnRunEndSpec],
 ]);
 
 export function getHoverSpec(word: string, filePath: string | undefined): AdeFunctionSpec | undefined {

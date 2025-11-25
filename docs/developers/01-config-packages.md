@@ -27,7 +27,7 @@ An ADE **config package** is a small, installable Python project (**`ade_config`
         * **[header.py](#headerpy)**, **[data.py](#datapy)**
       * **[hooks/](#hooks)** — lifecycle touches
 
-        * **[on_job_start.py](#onjobstartpy)**, **[after_mapping.py](#aftermappingpy)**, **[before_save.py](#beforesavepy)**, **[on_job_end.py](#onjobendpy)**
+        * **[on_run_start.py](#onrunstartpy)**, **[after_mapping.py](#aftermappingpy)**, **[before_save.py](#beforesavepy)**, **[on_run_end.py](#onrunendpy)**
       * **[**init**.py](#initpy)** — marks the package
 
 [Back to top](#top)
@@ -75,18 +75,18 @@ Think of an ADE **config package** as a set of tiny functions the engine calls w
 
    Hooks are **completely optional**. They let you extend behavior without touching the engine. The four you’ll use most:
 
-   ### `on_job_start(job)` → return **None**
+   ### `on_run_start(run)` → return **None**
 
    Runs once at the beginning. Use it to log or load small reference data.
 
    ```python
-   # hooks/on_job_start.py
-   def on_job_start(*, job_id: str, manifest: dict, env: dict | None = None, logger=None, **_):
-       if logger: logger.info("job_start id=%s locale=%s", job_id, (env or {}).get("LOCALE", "n/a"))
+   # hooks/on_run_start.py
+   def on_run_start(*, run_id: str, manifest: dict, env: dict | None = None, logger=None, **_):
+       if logger: logger.info("run_start id=%s locale=%s", run_id, (env or {}).get("LOCALE", "n/a"))
        return None
    ```
 
-   See: [`on_job_start.py`](#onjobstartpy)
+   See: [`on_run_start.py`](#onrunstartpy)
 
    ### `after_mapping(table)` → return the **table**
 
@@ -125,19 +125,19 @@ Think of an ADE **config package** as a set of tiny functions the engine calls w
 
    See: [`before_save.py`](#beforesavepy)
 
-   ### `on_job_end(artifact)` → return **None**
+   ### `on_run_end(artifact)` → return **None**
 
    Runs once at the end. Perfect for logging a summary or exporting metrics from the **artifact**.
 
    ```python
-   # hooks/on_job_end.py
-   def on_job_end(*, artifact: dict | None = None, logger=None, **_):
+   # hooks/on_run_end.py
+   def on_run_end(*, artifact: dict | None = None, logger=None, **_):
        total_tables = sum(len(s.get("tables", [])) for s in (artifact or {}).get("sheets", []))
-       if logger: logger.info("job_end: tables=%s", total_tables)
+       if logger: logger.info("run_end: tables=%s", total_tables)
        return None
    ```
 
-   See: [`on_job_end.py`](#onjobendpy)
+   See: [`on_run_end.py`](#onrunendpy)
 
 6. **Everything is auditable.**
 
@@ -189,7 +189,7 @@ All ADE entrypoints are invoked with **keyword arguments only**. Accept a traili
 ```python
 def detect_*(
     *,
-    job,
+    run,
     state,
     row_index: int,
     row_values: list,
@@ -199,11 +199,11 @@ def detect_*(
     ...
 ```
 
-- `job` — metadata for this run (job/workspace/config IDs, sheet info, etc.).
+- `run` — metadata for this run (run/workspace/config IDs, sheet info, etc.).
 - `state` — mutable dict that all detectors/transforms/validators share; great for caching derived info.
 - `row_index` — 1-based row number as streamed from the sheet.
 - `row_values` — raw cell values from that spreadsheet row.
-- `logger` — job-scoped `logging.Logger`.
+- `logger` — run-scoped `logging.Logger`.
 - Return `{"scores": {"header": float}}` or `{"scores": {"data": float}}` depending on what you are voting for.
 
 ### Column detectors (`column_detectors/<field>.py`)
@@ -211,7 +211,7 @@ def detect_*(
 ```python
 def detect_*(
     *,
-    job,
+    run,
     state,
     field_name: str,
     field_meta: dict,
@@ -233,7 +233,7 @@ def detect_*(
 - `column_values` — tuple containing the entire column; only touch if absolutely needed (already materialized once).
 - `table` — detected table object (`{"headers": [...], "rows": [[...], ...]}`) for contextual rules.
 - `column_index` — 1-based index into `table["headers"]`.
-- `job`, `state`, `logger` — same as above.
+- `run`, `state`, `logger` — same as above.
 - Return `{"scores": {field_name: float}}`.
 
 ### Column transforms (`transform()` inside `column_detectors/<field>.py`)
@@ -241,7 +241,7 @@ def detect_*(
 ```python
 def transform(
     *,
-    job,
+    run,
     state,
     row_index: int,
     field_name: str,
@@ -256,14 +256,14 @@ def transform(
 - `value` — current cell value for `field_name`.
 - `row` — mutable dict of canonical fields for the current row; add/update values here.
 - Return a dict of updates (merged into `row`) or `None` to leave things untouched.
-- `job`, `state`, `row_index`, `logger` — same as earlier.
+- `run`, `state`, `row_index`, `logger` — same as earlier.
 
 ### Validators (`validate()` inside `column_detectors/<field>.py`)
 
 ```python
 def validate(
     *,
-    job,
+    run,
     state,
     row_index: int,
     field_name: str,
@@ -280,7 +280,7 @@ def validate(
 - `value` — the current canonical value for `field_name` (after any transforms).
 - `row` — the full canonical row (fields → values) so you can make cross-field checks.
 - Return a list of issue dicts (e.g., `{"row_index": row_index, "code": "required_missing", ...}`) or an empty list if the value is fine.
-- `job`, `state`, `row_index`, `value`, `row`, `logger` — same meanings as above.
+- `run`, `state`, `row_index`, `value`, `row`, `logger` — same meanings as above.
 
 [Back to top](#top)
 
@@ -363,10 +363,10 @@ tags = ["membership","hr","finance"]
 
   // The engine will import these hook modules and call the functions by name
   "hooks": {
-    "on_job_start":  [{ "script": "hooks/on_job_start.py" }],
+    "on_run_start":  [{ "script": "hooks/on_run_start.py" }],
     "after_mapping": [{ "script": "hooks/after_mapping.py" }],
     "before_save":   [{ "script": "hooks/before_save.py" }],
-    "on_job_end":    [{ "script": "hooks/on_job_end.py" }]
+    "on_run_end":    [{ "script": "hooks/on_run_end.py" }]
   },
 
   // Normalized columns (order = output column order)
@@ -917,21 +917,21 @@ def validate(*, row_index: int, field_name: str, value, row: dict, **_) -> list[
 
 <a id="hooks"></a>
 
-### `on_job_start.py`
+### `on_run_start.py`
 
-<a id="onjobstartpy"></a>
+<a id="onrunstartpy"></a>
 
 ```python
 """
-Called once at job start. Log/setup; return None.
+Called once at run start. Log/setup; return None.
 """
 from __future__ import annotations
 from logging import Logger
 
-def on_job_start(*, job_id: str, manifest: dict, env: dict | None = None, artifact: dict | None = None, logger: Logger | None = None, **_) -> None:
+def on_run_start(*, run_id: str, manifest: dict, env: dict | None = None, artifact: dict | None = None, logger: Logger | None = None, **_) -> None:
     env = env or {}
     if logger:
-        logger.info("job_start id=%s locale=%s date_fmt=%s", job_id, env.get("LOCALE","n/a"), env.get("DATE_FMT","n/a"))
+        logger.info("run_start id=%s locale=%s date_fmt=%s", run_id, env.get("LOCALE","n/a"), env.get("DATE_FMT","n/a"))
     return None
 ```
 
@@ -1038,9 +1038,9 @@ def before_save(*, workbook: Workbook, artifact: dict | None = None, logger: Log
 
 ---
 
-### `on_job_end.py`
+### `on_run_end.py`
 
-<a id="onjobendpy"></a>
+<a id="onrunendpy"></a>
 
 ```python
 """
@@ -1050,9 +1050,9 @@ from __future__ import annotations
 from logging import Logger
 from collections import Counter
 
-def on_job_end(*, artifact: dict | None = None, logger: Logger | None = None, **_) -> None:
+def on_run_end(*, artifact: dict | None = None, logger: Logger | None = None, **_) -> None:
     if not artifact:
-        if logger: logger.warning("on_job_end: missing artifact")
+        if logger: logger.warning("on_run_end: missing artifact")
         return None
 
     counts = Counter()
@@ -1064,7 +1064,7 @@ def on_job_end(*, artifact: dict | None = None, logger: Logger | None = None, **
     total = sum(counts.values())
     if logger:
         breakdown = ", ".join(f"{code}={n}" for code, n in sorted(counts.items())) or "none"
-        logger.info("on_job_end: issues_total=%s | %s", total, breakdown)
+        logger.info("on_run_end: issues_total=%s | %s", total, breakdown)
     return None
 ```
 
@@ -1089,7 +1089,7 @@ def on_job_end(*, artifact: dict | None = None, logger: Logger | None = None, **
 * **Row detectors**: `row_detectors/*.py` with `detect_*` → stream rows to find table bounds.
 * **Column detectors**: `column_detectors/<field>.py` with `detect_*` → receive `header`, `column_values_sample`, `column_values`, `table_data`; return a **score for your field**.
 * **Transforms / validators** (optional): run **row‑by‑row after mapping** in the same column file.
-* **Hooks**: `after_mapping(table) → table`, `before_save(workbook) → workbook`, `on_job_start/on_job_end → None`.
+* **Hooks**: `after_mapping(table) → table`, `before_save(workbook) → workbook`, `on_run_start/on_run_end → None`.
 * **Unmatched columns**: appended on the right when enabled in `manifest.json` (using `unmapped_prefix`).
 * **Artifact**: every detection, mapping, transform, and validation is recorded for auditability.
 

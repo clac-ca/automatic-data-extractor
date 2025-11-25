@@ -16,7 +16,7 @@ This document defines the domain concepts that the ADE web app works with and ho
 
 1. Share a single mental model of “things” in ADE Web.
 2. Align user‑facing names, API types, and filesystem terms.
-3. Avoid subtle “job vs run”-style inconsistencies.
+3. Avoid subtle “run vs run”-style inconsistencies.
 4. Make it obvious how to name new screens, hooks, and types.
 
 ---
@@ -54,9 +54,9 @@ Workspace
 | Workspace      | Workspace       | `Workspace`                | `workspaceId`                  | `workspaces/<workspace_id>/…`               |
 | Config package | Config package  | `ConfigPackage`            | `configId`, `workspaceId`      | `config_packages/<config_id>/…`             |
 | Build          | Build           | `Build`                    | `buildId`, `configId`          | `.venv/<config_id>/ade-runtime/build.json`  |
-| Run (job)      | Run             | `Run`                      | `runId` (UI), `jobId` (engine) | `jobs/<job_id>/…`                           |
+| Run (run)      | Run             | `Run`                      | `runId` (UI), `runId` (engine) | `runs/<run_id>/…`                           |
 | Document       | Document        | `Document`                 | `documentId`, `workspaceId`    | `documents/<document_id>.<ext>`             |
-| Artifact       | Artifact        | `Artifact` / `JobArtifact` | `jobId` / `runId`              | `jobs/<job_id>/logs/artifact.json`          |
+| Artifact       | Artifact        | `Artifact` / `RunArtifact` | `runId` / `runId`              | `runs/<run_id>/logs/artifact.json`          |
 | Template       | Config template | `ConfigTemplate`           | `templateId`                   | `templates/config_packages/…`               |
 
 > The exact TS types come from `@schema` (OpenAPI‑generated); in the web app we usually alias those to ergonomic names rather than importing from `@generated-types` directly. 
@@ -68,7 +68,7 @@ Workspace
 **What it represents**
 
 * Top‑level container and isolation boundary.
-* Owns config packages, jobs/runs, documents, artifacts, and runtime state under `./data/workspaces/<workspace_id>/…`. 
+* Owns config packages, runs/runs, documents, artifacts, and runtime state under `./data/workspaces/<workspace_id>/…`. 
 
 **User‑facing naming**
 
@@ -195,12 +195,12 @@ Workspace
 
 ---
 
-### 3.5 Run (job)
+### 3.5 Run (run)
 
 **What it represents**
 
 * A **Run** is a user‑visible execution of a build against one or more documents.
-* The engine/backend call this concept a **job**; the filesystem layout exposes `jobs/<job_id>/input`, `output`, `logs/…`. 
+* The engine/backend call this concept a **run**; the filesystem layout exposes `runs/<run_id>/input`, `output`, `logs/…`. 
 
 **Terminology rule**
 
@@ -209,15 +209,15 @@ Workspace
   * “Run history”, “Run details”, “Start run”
 * In **code & API**:
 
-  * It’s acceptable to use `jobId` to match the engine/job schema.
+  * It’s acceptable to use `runId` to match the engine/run schema.
   * But the overall type should still be `Run` in the frontend.
 
 **Code & API naming**
 
 * IDs:
 
-  * `runId` (frontend field name) — often the same value as `jobId`
-  * `jobId` (backend/engine naming)
+  * `runId` (frontend field name) — often the same value as `runId`
+  * `runId` (backend/engine naming)
   * `workspaceId`, `configId`, `buildId`
 * Typical fields:
 
@@ -231,8 +231,8 @@ Workspace
 
   ```ts
   interface Run {
-    runId: string;   // alias for underlying job_id
-    jobId: string;   // raw engine identifier, if needed
+    runId: string;   // alias for underlying run_id
+    runId: string;   // raw engine identifier, if needed
     status: RunStatus;
     // …
   }
@@ -304,7 +304,7 @@ Workspace
 * The structured result of a run:
 
   * Normalized workbook (`output.xlsx`)
-  * Narrative + metrics in `artifact.json` under `jobs/<job_id>/logs/`. 
+  * Narrative + metrics in `artifact.json` under `runs/<run_id>/logs/`. 
 
 **User‑facing naming**
 
@@ -319,14 +319,14 @@ Workspace
 
 * IDs:
 
-  * `jobId` / `runId`
-* Fields typically follow the artifact schema (see `docs/14-job_artifact_json.md` in the backend docs). 
+  * `runId` / `runId`
+* Fields typically follow the artifact schema (see `docs/14-run_artifact_json.md` in the backend docs). 
 
 **Frontend conventions**
 
 * Types:
 
-  * `Artifact` or `JobArtifact`
+  * `Artifact` or `RunArtifact`
   * Specific views: `ArtifactSheetSummary`, `ArtifactIssue`
 * Components:
 
@@ -357,14 +357,14 @@ Workspace
 
 1. **Prefer domain words over implementation words**
 
-   * Use **Run** instead of **Job** in UI.
+   * Use **Run** instead of **Run** in UI.
    * Use **Config package** instead of “ruleset” or “profile”.
 2. **Mirror backend identifiers but adapt to JS/TS style**
 
-   * Backend JSON / URLs: `workspace_id`, `config_id`, `job_id`. 
+   * Backend JSON / URLs: `workspace_id`, `config_id`, `run_id`. 
    * TypeScript / React:
 
-     * `workspaceId`, `configId`, `jobId` / `runId`.
+     * `workspaceId`, `configId`, `runId` / `runId`.
 3. **Single canonical name per concept**
 
    * Don’t mix “workspace” vs “project”, “run” vs “execution” in the same surface.
@@ -408,7 +408,7 @@ Workspace
   * `buildId`
   * `runId`
   * `documentId`
-  * If you need the raw engine ID: add `jobId` instead of overloading `runId`.
+  * If you need the raw engine ID: add `runId` instead of overloading `runId`.
 
 **Relationship shape examples**
 
@@ -427,7 +427,7 @@ interface BuildRef extends ConfigPackageRef {
 
 interface RunRef extends BuildRef {
   runId: string;   // UI name
-  jobId: string;   // engine name (optional)
+  runId: string;   // engine name (optional)
 }
 ```
 
@@ -513,8 +513,8 @@ End‑to‑end naming for a typical user flow:
 4. They **Upload document(s)** to the workspace (`documentId`).
 5. From the config/build screen they click **Start run**:
 
-   * Web sends a `jobId`‑centric request to the API.
-   * UI shows a **Run** in the run list with `runId` (alias for `jobId`).
+   * Web sends a `runId`‑centric request to the API.
+   * UI shows a **Run** in the run list with `runId` (alias for `runId`).
 6. When the run completes, UI links to the **Artifact**:
 
    * “Download output workbook”
