@@ -453,7 +453,7 @@ Mutations:
 
 * Workspace run ledger (list of all runs in a workspace).
 * Per‑run artifacts, outputs, and log files.
-* Configuration‑initiated runs (e.g. from Config Builder).
+* Configuration‑initiated runs (e.g. from Configuration Builder).
 * Run‑level event streams (NDJSON).
 * Run‑centric API surface: once you have a `runId`, treat it as globally unique and use the global `/runs/{run_id}` detail/asset endpoints. Workspace IDs show up only when listing or creating runs.
 
@@ -726,7 +726,7 @@ Key characteristics:
 
 Used by:
 
-* Config Builder:
+* Configuration Builder:
 
   * `streamBuildLogs(buildId)` → `/api/v1/builds/{build_id}/logs` (build log stream).
 

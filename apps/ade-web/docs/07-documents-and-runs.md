@@ -23,7 +23,7 @@ At a high level:
 - ADE Web exposes:
   - A **Documents** section for managing inputs.
   - A **Runs** section for the workspace‑wide run ledger.
-  - Run entry points from **Documents** and **Config Builder**.
+  - Run entry points from **Documents** and **Configuration Builder**.
 
 ### 1.1 Relationships
 
@@ -279,7 +279,7 @@ Selected sheet names are passed to the run API as `input_sheet_names`.
 A **Run** is one execution of the ADE engine. ADE Web exposes two main perspectives on Runs:
 
 * The **Runs** ledger – workspace‑wide history (`/workspaces/:workspaceId/runs`, REST plural `/runs`).
-* **Configuration‑scoped runs** – initiated from Config Builder against a specific configuration.
+* **Configuration‑scoped runs** – initiated from Configuration Builder against a specific configuration.
 
 ### 5.1 Run data model
 
@@ -343,7 +343,7 @@ Status semantics are the same whether the run came from:
 
 * Documents screen.
 * Runs screen.
-* Config Builder (test runs).
+* Configuration Builder (test runs).
 
 ADE Web never infers status; it shows what the backend reports. Regardless of which endpoint created it (`/workspaces/{workspace_id}/runs` or `/configurations/{configuration_id}/runs`), each run is persisted into the workspace ledger and accessible by `runId` via `/runs/{run_id}`.
 
@@ -409,7 +409,7 @@ Run detail view composes:
 * **Logs/console:**
 
   * Either the run event stream (NDJSON) or a loaded log file.
-  * Rendered similarly to the Config Builder console.
+  * Rendered similarly to the Configuration Builder console.
 
 * **Telemetry summary:**
 
@@ -453,7 +453,7 @@ Users can start new runs from multiple surfaces:
 
 * **Documents** section: “Run extraction” for a specific document.
 * **Runs** section: “New run” (if you support multi‑document runs).
-* **Config Builder**: “Run extraction” against a sample document (configuration‑scoped).
+* **Configuration Builder**: “Run extraction” against a sample document (configuration‑scoped).
 
 ### 7.1 Run options in the UI
 
@@ -515,9 +515,9 @@ From the **Runs** screen:
 
 * A “New run” action could open a similar dialog allowing multiple documents to be selected.
 
-### 7.3 Configuration‑scoped runs (Config Builder)
+### 7.3 Configuration‑scoped runs (Configuration Builder)
 
-Config Builder uses **configuration‑scoped runs** primarily for **validation runs** and **test runs**:
+Configuration Builder uses **configuration‑scoped runs** primarily for **validation runs** and **test runs**:
 
 * `POST /api/v1/configurations/{configuration_id}/runs` with a similar payload.
 * Response provides a `run_id`.
@@ -644,7 +644,7 @@ The Documents and Runs features depend on the following backend endpoints. Detai
 
 ### 9.3 Configuration‑scoped runs
 
-Used by Config Builder:
+Used by Configuration Builder:
 
 * `POST /api/v1/configurations/{configuration_id}/runs`
   Start a configuration‑scoped run.

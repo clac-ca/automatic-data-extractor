@@ -136,7 +136,7 @@ What does **not** belong here:
 
 ## 5. `screens/` – screen/feature slices
 
-**Responsibility:** Implement user‑facing features and screens: auth, workspace directory, workspace shell, and each shell section (Documents, Runs, Config Builder, Settings, Overview). The physical folder is `src/screens/`, imported via the `@features/*` alias.
+**Responsibility:** Implement user‑facing features and screens: auth, workspace directory, workspace shell, and each shell section (Documents, Runs, Configuration Builder, Settings, Overview). The physical folder is `src/screens/`, imported via the `@features/*` alias.
 
 Example structure:
 
@@ -186,7 +186,7 @@ src/screens/
         WorkspaceOverviewScreen.tsx
 ```
 
-Keep section naming 1:1 across the UI: the nav item is **Config Builder**, the route segment is `config-builder`, and the feature folder is `screens/workspace-shell/sections/config-builder`. That folder owns both the configurations list and the workbench editing mode.
+Keep section naming 1:1 across the UI: the nav item is **Configuration Builder**, the route segment is `config-builder`, and the feature folder is `screens/workspace-shell/sections/config-builder`. That folder owns both the configurations list and the workbench editing mode.
 
 What belongs here:
 

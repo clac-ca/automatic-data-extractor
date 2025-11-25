@@ -4,7 +4,7 @@ This document describes the **workspace‑level UI layout** in ADE Web:
 
 - The **Workspace directory** (`/workspaces`) – where users discover and select workspaces.
 - The **Workspace shell** (`/workspaces/:workspaceId/...`) – the frame around a single workspace.
-- The **sections inside a workspace** (Documents, Runs, Configurations / Config Builder, Settings, Overview) and how they plug into the shell.
+- The **sections inside a workspace** (Documents, Runs, Configurations / Configuration Builder, Settings, Overview) and how they plug into the shell.
 - Where **banners**, **Safe mode messaging**, and **notifications** appear.
 
 It focuses on **layout and responsibilities**, not API details or low‑level component props.
@@ -13,7 +13,7 @@ It focuses on **layout and responsibilities**, not API details or low‑level co
 > - [`01-domain-model-and-naming.md`](./01-domain-model-and-naming.md) – definitions of Workspace, Document, Run, Configuration, etc.
 > - [`03-routing-navigation-and-url-state.md`](./03-routing-navigation-and-url-state.md) – route structure and navigation helpers.
 > - [`07-documents-and-runs.md`](./07-documents-and-runs.md) – detailed behaviour of the Documents and Runs sections.
-> - [`08-configurations-and-config-builder.md`](./08-configurations-and-config-builder.md) and [`09-workbench-editor-and-scripting.md`](./09-workbench-editor-and-scripting.md) – Config Builder internals.
+> - [`08-configurations-and-config-builder.md`](./08-configurations-and-config-builder.md) and [`09-workbench-editor-and-scripting.md`](./09-workbench-editor-and-scripting.md) – Configuration Builder internals.
 > - [`10-ui-components-a11y-and-testing.md`](./10-ui-components-a11y-and-testing.md) – UI primitives, accessibility, and keyboard patterns.
 >
 > Instant understanding: section names, routes, and folders stay in lockstep—`/documents`, `/runs`, `/config-builder`, `/settings` map to `screens/workspace-shell/sections/{documents|runs|config-builder|settings}` and route builders in `@shared/nav/routes`. Section filters reuse the canonical query param helpers described in `docs/07`.
@@ -34,7 +34,7 @@ ADE Web has two distinct workspace layers:
    - Routes: `/workspaces/:workspaceId/...`.  
    - Wraps all activity **inside a single workspace**.  
    - Provides a stable frame: top bar, left nav, banners.  
-   - Hosts section screens: Documents, Runs, Configurations (Config Builder), Settings, Overview.
+   - Hosts section screens: Documents, Runs, Configurations (Configuration Builder), Settings, Overview.
 
 The rule:
 
@@ -238,7 +238,7 @@ Typical ordering:
 2. **Section links**
    - Documents.
    - Runs.
-   - Configurations (Config Builder).
+   - Configurations (Configuration Builder).
    - Settings.
    - Overview (if enabled).
 
@@ -345,12 +345,12 @@ Responsibilities:
 Shell integration:
 
 - Top bar `leading` may display “Runs” with time range or filter summary.
-- Top bar `actions` are often empty; run creation usually starts from Documents or Configurations/Config Builder.
+- Top bar `actions` are often empty; run creation usually starts from Documents or Configurations/Configuration Builder.
 - `GlobalSearchField` can search by run id, document name, or initiator depending on configuration.
 
 Detailed behaviour is in [`07-documents-and-runs.md`](./07-documents-and-runs.md).
 
-### 7.3 Config Builder
+### 7.3 Configuration Builder
 
 - **Route:** `/workspaces/:workspaceId/config-builder`  
 - **Screen:** `ConfigBuilderScreen`  
@@ -360,10 +360,10 @@ Responsibilities:
 
 - Show configurations available in the workspace.
 - Provide actions: create/clone/export configurations, activate/deactivate versions.
-- Host the **Config Builder workbench** for editing configuration code and manifest.
+- Host the **Configuration Builder workbench** for editing configuration code and manifest.
 - Manage the “return path” so users can exit the workbench back to where they came from.
 
-Naming stays consistent: the nav label is **Config Builder**, the route segment is `/workspaces/:workspaceId/config-builder`, and the feature folder is `features/workspace-shell/sections/config-builder` (hosting the Config Builder workbench). The section always includes both the configurations list and the workbench editing surface.
+Naming stays consistent: the nav label is **Configuration Builder**, the route segment is `/workspaces/:workspaceId/config-builder`, and the feature folder is `features/workspace-shell/sections/config-builder` (hosting the Configuration Builder workbench). The section always includes both the configurations list and the workbench editing surface.
 
 Shell integration:
 
@@ -457,12 +457,12 @@ The shell ensures toasts sit **above** content and banners in the z‑order but 
 
 Most sections are standard list/detail pages, but some flows use **immersive** layouts that temporarily emphasise content over shell chrome.
 
-### 9.1 Config Builder workbench (immersive mode)
+### 9.1 Configuration Builder workbench (immersive mode)
 
-The Config Builder workbench supports window states (see [`09-workbench-editor-and-scripting.md`](./09-workbench-editor-and-scripting.md)):
+The Configuration Builder workbench supports window states (see [`09-workbench-editor-and-scripting.md`](./09-workbench-editor-and-scripting.md)):
 
 - **Restored**:
-  - Appears embedded in the Config Builder section.
+  - Appears embedded in the Configuration Builder section.
   - Shell (top bar + nav + banners) fully visible.
 
 - **Maximised**:
