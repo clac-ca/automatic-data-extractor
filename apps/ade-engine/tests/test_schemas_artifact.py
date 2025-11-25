@@ -18,7 +18,7 @@ def build_sample_artifact() -> ArtifactV1:
             started_at="2024-01-01T00:00:00Z",
             completed_at="2024-01-01T00:00:05Z",
             outputs=["normalized.xlsx"],
-            engine_version="0.1.0",
+            engine_version="0.2.0",
         ),
         config=ConfigArtifact(schema="ade.manifest/v1", version="1.2.3", name="Config"),
         tables=[
