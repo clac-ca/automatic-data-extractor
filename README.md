@@ -100,7 +100,7 @@ If you want to rebuild by hand:
 
 ```bash
 # Build image directly
-docker build -t ghcr.io/clac-ca/automatic-data-extractor:dev .
+docker build -t ghcr.io/clac-ca/automatic-data-extractor:local .
 
 # Run it
 mkdir -p data
@@ -109,7 +109,7 @@ docker run -d \
   -p 8000:8000 \
   -v "$(pwd)/data:/app/data" \
   --env-file .env \
-  ghcr.io/clac-ca/automatic-data-extractor:dev
+  ghcr.io/clac-ca/automatic-data-extractor:local
 ```
 
 ---
