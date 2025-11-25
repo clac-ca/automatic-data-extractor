@@ -3,7 +3,7 @@
 from ade_engine.core.engine import Engine
 from ade_engine.core.types import EngineInfo, RunRequest, RunResult, RunStatus
 
-__version__ = "0.1.2"
+__version__ = "0.2.0"
 
 
 def run(*args, **kwargs) -> RunResult:
