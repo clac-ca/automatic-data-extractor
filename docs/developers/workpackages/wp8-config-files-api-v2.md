@@ -41,7 +41,7 @@
   - **Items:** Strong `ETag: "<opaque>"`, honor `If-Match` for update/delete/rename; `If-None-Match: *` for create.
 - **Pagination:** `limit` + `page_token`; also emit `Link: <…>; rel="next"`. Body includes `next_token`.
 - **Errors:** `application/problem+json` (RFC 9457). Always include a stable machine `code`.
-- **Security:** Existing Workspace.Configs authorization; reject symlinks, traversal; enforce editable status.
+- **Security:** Existing Workspace.Configurations authorization; reject symlinks, traversal; enforce editable status.
 - **Time formats:** ISO‑8601 UTC (`Z`) in bodies; `Last-Modified` for items.
 - **Directory normalization:** Directory paths end with `/`. Root is `""`.
 
@@ -279,7 +279,7 @@ DELETE /workspaces/{workspace_id}/configurations/{config_id}/files/{path}
 
 **Canonical error `code` set (stable):**
 
-* `precondition_required`, `precondition_failed`, `config_not_editable`,
+* `precondition_required`, `precondition_failed`, `configuration_not_editable`,
 * `file_not_found`, `invalid_path`, `path_not_allowed`,
 * `dest_exists`, `directory_not_empty`,
 * `payload_too_large`, `unsupported_media_type`,
@@ -289,7 +289,7 @@ DELETE /workspaces/{workspace_id}/configurations/{config_id}/files/{path}
 
 ## 6) Validation & Guardrails
 
-* **Editability:** Only `status="draft"` allows writes; others → `409 config_not_editable`.
+* **Editability:** Only `status="draft"` allows writes; others → `409 configuration_not_editable`.
 * **Path hygiene:** POSIX‑relative, UTF‑8, normalized, no leading `/`, no `..`, no symlinks, within editable roots.
 * **Size limits:** code/config ≤ **512 KiB**; `assets/**` ≤ **5 MiB** → `413 payload_too_large`.
 * **MIME types:** `mimetypes.guess_type` fallback to `application/octet-stream`; directories use `inode/directory`.

@@ -87,22 +87,24 @@ async def _execute_run_background(
 
 
 @router.post(
-    "/configs/{config_id}/runs",
+    "/configurations/{configuration_id}/runs",
     response_model=RunResource,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
 )
 async def create_run_endpoint(
     *,
-    config_id: Annotated[str, Path(min_length=1, description="Configuration identifier")],
+    configuration_id: Annotated[str, Path(min_length=1, description="Configuration identifier")],
     payload: RunCreateRequest,
     background_tasks: BackgroundTasks,
     service: RunsService = runs_service_dependency,
 ) -> RunResource | StreamingResponse:
-    """Create a run for ``config_id`` and optionally stream execution events."""
+    """Create a run for ``configuration_id`` and optionally stream execution events."""
 
     try:
-        run, context = await service.prepare_run(config_id=config_id, options=payload.options)
+        run, context = await service.prepare_run(
+            configuration_id=configuration_id, options=payload.options
+        )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunDocumentMissingError as exc:

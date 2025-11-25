@@ -2,7 +2,7 @@
 
 This folder contains deeper “chapters” that expand on the high-level overview
 in `ade_engine/README.md`. Read that first, then use this folder as a reference
-while building or extending the engine and configs.
+while building or extending the engine and configurations.
 
 ## Terminology
 

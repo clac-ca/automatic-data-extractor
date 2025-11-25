@@ -59,18 +59,20 @@ DEFAULT_WEB_DIR = MODULE_DIR / "web"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173"]
 DEFAULT_STORAGE_ROOT = Path("./data")        # resolve later
+DEFAULT_WORKSPACES_DIR = DEFAULT_STORAGE_ROOT / "workspaces"
 DEFAULT_DB_FILENAME = "ade.sqlite"
 DEFAULT_ALEMBIC_INI = DEFAULT_API_ROOT / "alembic.ini"
 DEFAULT_ALEMBIC_MIGRATIONS = DEFAULT_API_ROOT / "migrations"
-DEFAULT_DOCUMENTS_DIR = DEFAULT_STORAGE_ROOT / "documents"
-DEFAULT_CONFIGS_DIR = DEFAULT_STORAGE_ROOT / "config_packages"
-DEFAULT_VENVS_DIR = DEFAULT_STORAGE_ROOT / ".venv"
-DEFAULT_RUNS_DIR = DEFAULT_STORAGE_ROOT / "runs"
+DEFAULT_DOCUMENTS_DIR = DEFAULT_WORKSPACES_DIR
+DEFAULT_CONFIGS_DIR = DEFAULT_WORKSPACES_DIR
+DEFAULT_VENVS_DIR = DEFAULT_WORKSPACES_DIR
+DEFAULT_RUNS_DIR = DEFAULT_WORKSPACES_DIR
 DEFAULT_PIP_CACHE_DIR = DEFAULT_STORAGE_ROOT / "cache" / "pip"
 DEFAULT_SQLITE_PATH = DEFAULT_STORAGE_ROOT / "db" / DEFAULT_DB_FILENAME
 DEFAULT_ENGINE_SPEC = "apps/ade-engine"
 DEFAULT_BUILD_TIMEOUT = timedelta(seconds=600)
 DEFAULT_BUILD_ENSURE_WAIT = timedelta(seconds=30)
+DEFAULT_BUILD_RETENTION = timedelta(days=30)
 
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 100
@@ -267,6 +269,7 @@ class Settings(BaseSettings):
     alembic_migrations_dir: Path = Field(default=DEFAULT_ALEMBIC_MIGRATIONS)
 
     # Storage
+    workspaces_dir: Path = Field(default=DEFAULT_WORKSPACES_DIR)
     documents_dir: Path = Field(default=DEFAULT_DOCUMENTS_DIR)
     configs_dir: Path = Field(default=DEFAULT_CONFIGS_DIR)
     venvs_dir: Path = Field(default=DEFAULT_VENVS_DIR)
@@ -285,7 +288,7 @@ class Settings(BaseSettings):
     build_timeout: timedelta = Field(default=DEFAULT_BUILD_TIMEOUT)
     build_ensure_wait: timedelta = Field(default=DEFAULT_BUILD_ENSURE_WAIT)
     build_ttl: timedelta | None = Field(default=None)
-    build_retention: timedelta | None = Field(default=None)
+    build_retention: timedelta | None = Field(default=DEFAULT_BUILD_RETENTION)
 
     # Database
     database_dsn: str | None = None
@@ -450,12 +453,15 @@ class Settings(BaseSettings):
             self.alembic_migrations_dir, default=DEFAULT_ALEMBIC_MIGRATIONS
         )
 
-        self.documents_dir = _resolve_path(
-            self.documents_dir, default=DEFAULT_DOCUMENTS_DIR
+        self.workspaces_dir = _resolve_path(
+            self.workspaces_dir, default=DEFAULT_WORKSPACES_DIR
         )
-        self.configs_dir = _resolve_path(self.configs_dir, default=DEFAULT_CONFIGS_DIR)
-        self.venvs_dir = _resolve_path(self.venvs_dir, default=DEFAULT_VENVS_DIR)
-        self.runs_dir = _resolve_path(self.runs_dir, default=DEFAULT_RUNS_DIR)
+        self.documents_dir = _resolve_path(
+            self.documents_dir, default=self.workspaces_dir
+        )
+        self.configs_dir = _resolve_path(self.configs_dir, default=self.workspaces_dir)
+        self.venvs_dir = _resolve_path(self.venvs_dir, default=self.workspaces_dir)
+        self.runs_dir = _resolve_path(self.runs_dir, default=self.workspaces_dir)
         self.pip_cache_dir = _resolve_path(
             self.pip_cache_dir, default=DEFAULT_PIP_CACHE_DIR
         )

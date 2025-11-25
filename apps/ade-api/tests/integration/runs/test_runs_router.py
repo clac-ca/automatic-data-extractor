@@ -18,8 +18,9 @@ import pytest
 from httpx import AsyncClient
 import openpyxl
 
-from ade_api.features.builds.models import ConfigurationBuild, ConfigurationBuildStatus
+from ade_api.features.builds.models import BuildStatus
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
+from ade_api.features.configs.storage import compute_config_digest
 from ade_api.features.documents.models import Document
 from ade_api.features.documents.storage import DocumentStorage
 from ade_api.features.runs.models import Run, RunStatus
@@ -28,6 +29,7 @@ from ade_api.features.runs.service import RunExecutionContext, RunsService
 from ade_api.features.system_settings.service import SafeModeService
 from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import Settings, get_settings
+from ade_api.storage_layout import config_venv_path, workspace_config_root, workspace_documents_root
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.db.mixins import generate_ulid
 from ade_api.shared.db.session import get_sessionmaker
@@ -62,31 +64,37 @@ async def _prepare_service(
     session.add(workspace)
     await session.flush()
 
+    configuration_id = generate_ulid()
     configuration = Configuration(
+        id=configuration_id,
         workspace_id=workspace.id,
-        config_id=generate_ulid(),
         display_name="Config",
         status=ConfigurationStatus.ACTIVE,
-        config_version=1,
+        configuration_version=1,
         content_digest="digest",
     )
     session.add(configuration)
     await session.flush()
 
-    venv_path = tmp_path / "venvs" / configuration.config_id
+    build_id = generate_ulid()
+    venv_path = config_venv_path(settings, workspace.id, configuration.id)
     venv_path.mkdir(parents=True, exist_ok=True)
-    build = ConfigurationBuild(
-        workspace_id=workspace.id,
-        config_id=configuration.config_id,
-        configuration_id=configuration.id,
-        build_id=generate_ulid(),
-        status=ConfigurationBuildStatus.ACTIVE,
-        venv_path=str(venv_path),
-    )
-    session.add(build)
+    config_root = workspace_config_root(settings, workspace.id, configuration.id)
+    config_root.mkdir(parents=True, exist_ok=True)
+    (config_root / "pyproject.toml").write_text("[project]\nname='demo'\nversion='0.0.1'\n", encoding="utf-8")
+    digest = compute_config_digest(config_root)
+    configuration.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
+    configuration.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
+    configuration.engine_version = "0.2.0"  # type: ignore[attr-defined]
+    configuration.python_interpreter = settings.python_bin  # type: ignore[attr-defined]
+    configuration.python_version = "3.12.1"  # type: ignore[attr-defined]
+    configuration.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
+    configuration.last_build_id = build_id  # type: ignore[attr-defined]
+    configuration.built_content_digest = digest  # type: ignore[attr-defined]
+    configuration.content_digest = digest
     await session.flush()
 
-    storage = DocumentStorage(settings.documents_dir)
+    storage = DocumentStorage(workspace_documents_root(settings, workspace.id))
     document_id = generate_ulid()
     stored_uri = storage.make_stored_uri(document_id)
     source_path = storage.path_for(stored_uri)
@@ -111,7 +119,7 @@ async def _prepare_service(
 
     service = RunsService(session=session, settings=settings)
     run, context = await service.prepare_run(
-        config_id=configuration.config_id,
+        configuration_id=configuration.id,
         options=RunCreateOptions(input_document_id=document.id),
     )
     return service, context, document
@@ -127,29 +135,35 @@ async def _seed_configuration(
 
     session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:
+        config_id = generate_ulid()
         config = Configuration(
+            id=config_id,
             workspace_id=workspace_id,
-            config_id=generate_ulid(),
             display_name="Test Configuration",
             status=ConfigurationStatus.ACTIVE,
         )
         session.add(config)
         await session.flush()
 
-        venv_path = tmp_path / f"venv-{config.config_id}"
+        build_id = generate_ulid()
+        venv_path = config_venv_path(settings, workspace_id, config.id)
         venv_path.mkdir(parents=True, exist_ok=True)
+        config_root = workspace_config_root(settings, workspace_id, config.id)
+        config_root.mkdir(parents=True, exist_ok=True)
+        (config_root / "pyproject.toml").write_text("[project]\nname='demo'\nversion='0.0.1'\n", encoding="utf-8")
+        digest = compute_config_digest(config_root)
 
-        build = ConfigurationBuild(
-            workspace_id=workspace_id,
-            config_id=config.config_id,
-            configuration_id=config.id,
-            build_id=generate_ulid(),
-            status=ConfigurationBuildStatus.ACTIVE,
-            venv_path=str(venv_path),
-        )
-        session.add(build)
+        config.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
+        config.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
+        config.engine_version = "0.2.0"  # type: ignore[attr-defined]
+        config.python_interpreter = settings.python_bin  # type: ignore[attr-defined]
+        config.python_version = "3.12.1"  # type: ignore[attr-defined]
+        config.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
+        config.last_build_id = build_id  # type: ignore[attr-defined]
+        config.built_content_digest = digest  # type: ignore[attr-defined]
+        config.content_digest = digest
         await session.commit()
-        return config.config_id
+        return config.id
 
 
 def _venv_executable(venv_path: Path, name: str) -> Path:
@@ -179,19 +193,20 @@ async def _seed_real_configuration(
 
     session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:
+        config_id = generate_ulid()
         config = Configuration(
+            id=config_id,
             workspace_id=workspace_id,
-            config_id=generate_ulid(),
             display_name="Real Config",
             status=ConfigurationStatus.ACTIVE,
-            config_version=1,
+            configuration_version=1,
             content_digest="integration-test",
         )
         session.add(config)
         await session.flush()
 
-        venv_root = Path(settings.venvs_dir)
-        venv_path = venv_root / workspace_id / config.config_id / "integration"
+        build_id = generate_ulid()
+        venv_path = config_venv_path(settings, workspace_id, config.id)
         if venv_path.exists():
             shutil.rmtree(venv_path)
         venv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -199,31 +214,24 @@ async def _seed_real_configuration(
 
         pip_exe = _venv_executable(venv_path, "pip")
         _pip_install(pip_exe, _ENGINE_PACKAGE)
-        config_src = tmp_path / f"ade-config-{config.config_id}"
+        config_src = tmp_path / f"ade-config-{config.id}"
         shutil.copytree(_CONFIG_TEMPLATE, config_src, dirs_exist_ok=True)
         _pip_install(pip_exe, config_src)
 
         python_exe = _venv_executable(venv_path, "python")
         now = utc_now()
-        build = ConfigurationBuild(
-            workspace_id=workspace_id,
-            config_id=config.config_id,
-            configuration_id=config.id,
-            build_id=generate_ulid(),
-            status=ConfigurationBuildStatus.ACTIVE,
-            venv_path=str(venv_path),
-            config_version=config.config_version,
-            content_digest=config.content_digest,
-            engine_version="0.2.0",
-            engine_spec=settings.engine_spec,
-            python_version=sys.version.split()[0],
-            python_interpreter=str(python_exe),
-            started_at=now,
-            built_at=now,
-        )
-        session.add(build)
+        config.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
+        config.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
+        config.engine_version = "0.2.0"  # type: ignore[attr-defined]
+        config.python_version = sys.version.split()[0]  # type: ignore[attr-defined]
+        config.python_interpreter = str(python_exe)  # type: ignore[attr-defined]
+        config.last_build_started_at = now  # type: ignore[attr-defined]
+        config.last_build_finished_at = now  # type: ignore[attr-defined]
+        config.built_configuration_version = config.configuration_version  # type: ignore[attr-defined]
+        config.built_content_digest = config.content_digest  # type: ignore[attr-defined]
+        config.last_build_id = build_id  # type: ignore[attr-defined]
         await session.commit()
-        return config.config_id
+        return config.id
 
 
 async def _seed_document(
@@ -239,7 +247,7 @@ async def _seed_document(
         "2,bob@example.com,Bob,Brown\n"
     ).encode("utf-8")
     document_id = generate_ulid()
-    storage = DocumentStorage(Path(settings.documents_dir))
+    storage = DocumentStorage(workspace_documents_root(settings, workspace_id))
     stored_uri = storage.make_stored_uri(document_id)
     target_path = storage.path_for(stored_uri)
     target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -288,7 +296,7 @@ async def _seed_workbook_document(
     xlsx_bytes = buffer.getvalue()
 
     document_id = generate_ulid()
-    storage = DocumentStorage(Path(settings.documents_dir))
+    storage = DocumentStorage(workspace_documents_root(settings, workspace_id))
     stored_uri = storage.make_stored_uri(document_id)
     target_path = storage.path_for(stored_uri)
     target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -348,7 +356,7 @@ async def test_stream_run_safe_mode(
     """Streaming a run in safe mode should emit events and persist state."""
 
     settings = override_app_settings(safe_mode=True)
-    config_id = await _seed_configuration(
+    configuration_id = await _seed_configuration(
         settings=settings,
         workspace_id=seed_identity["workspace_id"],
         tmp_path=tmp_path,
@@ -361,7 +369,7 @@ async def test_stream_run_safe_mode(
     events: list[dict[str, Any]] = []
     async with async_client.stream(
         "POST",
-        f"/api/v1/configs/{config_id}/runs",
+        f"/api/v1/configurations/{configuration_id}/runs",
         headers=headers,
         json={"stream": True},
     ) as response:
@@ -406,7 +414,7 @@ async def test_stream_run_respects_persisted_safe_mode_override(
             enabled=False, detail="Disable safe mode for integration coverage"
         )
 
-    config_id = await _seed_configuration(
+    configuration_id = await _seed_configuration(
         settings=settings,
         workspace_id=seed_identity["workspace_id"],
         tmp_path=tmp_path,
@@ -444,7 +452,7 @@ async def test_stream_run_respects_persisted_safe_mode_override(
     events: list[dict[str, Any]] = []
     async with async_client.stream(
         "POST",
-        f"/api/v1/configs/{config_id}/runs",
+        f"/api/v1/configurations/{configuration_id}/runs",
         headers=headers,
         json={"stream": True},
     ) as response:
@@ -474,7 +482,7 @@ async def test_non_stream_run_executes_in_background(
     """Non-streaming requests should return immediately and finish in the background."""
 
     settings = override_app_settings(safe_mode=True)
-    config_id = await _seed_configuration(
+    configuration_id = await _seed_configuration(
         settings=settings,
         workspace_id=seed_identity["workspace_id"],
         tmp_path=tmp_path,
@@ -485,7 +493,7 @@ async def test_non_stream_run_executes_in_background(
     )
 
     response = await async_client.post(
-        f"/api/v1/configs/{config_id}/runs",
+        f"/api/v1/configurations/{configuration_id}/runs",
         headers=headers,
         json={"stream": False},
     )
@@ -508,7 +516,7 @@ async def test_stream_run_processes_real_documents(
 
     settings = override_app_settings(safe_mode=False)
     workspace_id = seed_identity["workspace_id"]
-    config_id = await _seed_real_configuration(
+    configuration_id = await _seed_real_configuration(
         settings=settings,
         workspace_id=workspace_id,
         tmp_path=tmp_path,
@@ -522,7 +530,7 @@ async def test_stream_run_processes_real_documents(
     events: list[dict[str, Any]] = []
     async with async_client.stream(
         "POST",
-        f"/api/v1/configs/{config_id}/runs",
+        f"/api/v1/configurations/{configuration_id}/runs",
         headers=headers,
         json={"stream": True, "options": {"input_document_id": document.id}},
     ) as response:
@@ -576,7 +584,7 @@ async def test_stream_run_honors_input_sheet_override(
 
     settings = override_app_settings(safe_mode=False)
     workspace_id = seed_identity["workspace_id"]
-    config_id = await _seed_real_configuration(
+    configuration_id = await _seed_real_configuration(
         settings=settings,
         workspace_id=workspace_id,
         tmp_path=tmp_path,
@@ -592,7 +600,7 @@ async def test_stream_run_honors_input_sheet_override(
     events: list[dict[str, Any]] = []
     async with async_client.stream(
         "POST",
-        f"/api/v1/configs/{config_id}/runs",
+        f"/api/v1/configurations/{configuration_id}/runs",
         headers=headers,
         json={
             "stream": True,
@@ -661,20 +669,18 @@ async def test_list_workspace_runs_filters_by_status_and_document(
 
     run_success = Run(
         id=generate_ulid(),
-        configuration_id=configuration.id,
         workspace_id=configuration.workspace_id,
-        config_id=configuration.config_id,
-        config_version_id=str(configuration.config_version),
+        configuration_id=configuration.id,
+        configuration_version_id=str(configuration.configuration_version),
         input_document_id=document.id,
         status=RunStatus.SUCCEEDED,
         created_at=utc_now(),
     )
     run_failed = Run(
         id=generate_ulid(),
-        configuration_id=configuration.id,
         workspace_id=configuration.workspace_id,
-        config_id=configuration.config_id,
-        config_version_id=str(configuration.config_version),
+        configuration_id=configuration.id,
+        configuration_version_id=str(configuration.configuration_version),
         status=RunStatus.FAILED,
         created_at=utc_now(),
     )
@@ -721,7 +727,7 @@ async def test_stream_run_processes_all_worksheets_when_unspecified(
 
     settings = override_app_settings(safe_mode=False)
     workspace_id = seed_identity["workspace_id"]
-    config_id = await _seed_real_configuration(
+    configuration_id = await _seed_real_configuration(
         settings=settings,
         workspace_id=workspace_id,
         tmp_path=tmp_path,
@@ -737,7 +743,7 @@ async def test_stream_run_processes_all_worksheets_when_unspecified(
     events: list[dict[str, Any]] = []
     async with async_client.stream(
         "POST",
-        f"/api/v1/configs/{config_id}/runs",
+        f"/api/v1/configurations/{configuration_id}/runs",
         headers=headers,
         json={
             "stream": True,
@@ -789,7 +795,7 @@ async def test_stream_run_limits_to_requested_sheet_list(
 
     settings = override_app_settings(safe_mode=False)
     workspace_id = seed_identity["workspace_id"]
-    config_id = await _seed_real_configuration(
+    configuration_id = await _seed_real_configuration(
         settings=settings,
         workspace_id=workspace_id,
         tmp_path=tmp_path,
@@ -805,7 +811,7 @@ async def test_stream_run_limits_to_requested_sheet_list(
     events: list[dict[str, Any]] = []
     async with async_client.stream(
         "POST",
-        f"/api/v1/configs/{config_id}/runs",
+        f"/api/v1/configurations/{configuration_id}/runs",
         headers=headers,
         json={
             "stream": True,

@@ -23,7 +23,7 @@ async def test_templates_materialize_and_load(tmp_path: Path, monkeypatch: pytes
 
     await storage.materialize_from_template(
         workspace_id="ws",
-        config_id=f"cfg-{template_id}",
+        configuration_id=f"cfg-{template_id}",
         template_id=template_id,
     )
 

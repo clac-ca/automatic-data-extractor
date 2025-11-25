@@ -15,7 +15,7 @@ from ade_api.features.runs.schemas import (
 def test_run_resource_serialization_uses_aliases() -> None:
     resource = RunResource(
         id="run_123",
-        config_id="cfg_456",
+        configuration_id="cfg_456",
         status="queued",
         created=1_700_000_000,
         started=None,
@@ -29,7 +29,7 @@ def test_run_resource_serialization_uses_aliases() -> None:
     assert payload["input_documents"] == []
     assert payload["output_paths"] == []
     assert payload["processed_files"] == []
-    assert "config_version_id" not in payload
+    assert "configuration_version_id" not in payload
     assert "submitted_by_user_id" not in payload
     assert "retry_of_run_id" not in payload
     assert "trace_id" not in payload

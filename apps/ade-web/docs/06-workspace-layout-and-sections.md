@@ -4,17 +4,19 @@ This document describes the **workspace‑level UI layout** in ADE Web:
 
 - The **Workspace directory** (`/workspaces`) – where users discover and select workspaces.
 - The **Workspace shell** (`/workspaces/:workspaceId/...`) – the frame around a single workspace.
-- The **sections inside a workspace** (Documents, Runs, Config Builder, Settings, Overview) and how they plug into the shell.
-- Where **banners**, **safe mode messaging**, and **notifications** appear.
+- The **sections inside a workspace** (Documents, Runs, Configurations / Config Builder, Settings, Overview) and how they plug into the shell.
+- Where **banners**, **Safe mode messaging**, and **notifications** appear.
 
 It focuses on **layout and responsibilities**, not API details or low‑level component props.
 
 > Related docs:
-> - [`01-domain-model-and-naming.md`](./01-domain-model-and-naming.md) – definitions of Workspace, Document, Run, Config, etc.
+> - [`01-domain-model-and-naming.md`](./01-domain-model-and-naming.md) – definitions of Workspace, Document, Run, Configuration, etc.
 > - [`03-routing-navigation-and-url-state.md`](./03-routing-navigation-and-url-state.md) – route structure and navigation helpers.
 > - [`07-documents-and-runs.md`](./07-documents-and-runs.md) – detailed behaviour of the Documents and Runs sections.
 > - [`08-configurations-and-config-builder.md`](./08-configurations-and-config-builder.md) and [`09-workbench-editor-and-scripting.md`](./09-workbench-editor-and-scripting.md) – Config Builder internals.
 > - [`10-ui-components-a11y-and-testing.md`](./10-ui-components-a11y-and-testing.md) – UI primitives, accessibility, and keyboard patterns.
+>
+> Instant understanding: section names, routes, and folders stay in lockstep—`/documents`, `/runs`, `/config-builder`, `/settings` map to `screens/workspace-shell/sections/{documents|runs|config-builder|settings}` and route builders in `@shared/nav/routes`. Section filters reuse the canonical query param helpers described in `docs/07`.
 
 ---
 
@@ -32,7 +34,7 @@ ADE Web has two distinct workspace layers:
    - Routes: `/workspaces/:workspaceId/...`.  
    - Wraps all activity **inside a single workspace**.  
    - Provides a stable frame: top bar, left nav, banners.  
-   - Hosts section screens: Documents, Runs, Config Builder, Settings, Overview.
+   - Hosts section screens: Documents, Runs, Configurations (Config Builder), Settings, Overview.
 
 The rule:
 
@@ -178,7 +180,7 @@ The Workspace shell renders everything inside a single workspace. It owns the fr
 - Render stable **shell chrome**:
   - Left navigation (section switcher).
   - Workspace‑specific top bar.
-  - Banner strip (safe mode, connectivity).
+  - Banner strip (Safe mode, connectivity).
 - Host **section screens** inside the main content area.
 - Handle shell‑level loading/error states (e.g. workspace not found).
 
@@ -200,12 +202,14 @@ The shell:
 - Renders a **workspace‑level error state** if the workspace cannot be loaded (e.g. 404, permission denied).
 - Then resolves the section based on the first path segment after `:workspaceId`.
 
+If a user visits `/workspaces/:workspaceId` with **no section segment**, the shell immediately redirects to the configured default section (currently **Documents**). The default lives alongside the route helpers (e.g. `shared/nav/routes.ts`) and is consumed by `WorkspaceShellScreen`.
+
 ### 4.3 Layout regions (desktop)
 
 Conceptually, the shell layout on desktop is:
 
 - **Top bar** – `GlobalTopBar` in “workspace” mode.
-- **Banner strip** – cross‑cutting banners (safe mode, connectivity).
+- **Banner strip** – cross‑cutting banners (Safe mode, connectivity).
 - **Body**:
 
   - Left: `WorkspaceNav` (vertical).
@@ -234,7 +238,7 @@ Typical ordering:
 2. **Section links**
    - Documents.
    - Runs.
-   - Config Builder.
+   - Configurations (Config Builder).
    - Settings.
    - Overview (if enabled).
 
@@ -341,7 +345,7 @@ Responsibilities:
 Shell integration:
 
 - Top bar `leading` may display “Runs” with time range or filter summary.
-- Top bar `actions` are often empty; run creation usually starts from Documents or Config Builder.
+- Top bar `actions` are often empty; run creation usually starts from Documents or Configurations/Config Builder.
 - `GlobalSearchField` can search by run id, document name, or initiator depending on configuration.
 
 Detailed behaviour is in [`07-documents-and-runs.md`](./07-documents-and-runs.md).
@@ -358,6 +362,8 @@ Responsibilities:
 - Provide actions: create/clone/export configurations, activate/deactivate versions.
 - Host the **Config Builder workbench** for editing configuration code and manifest.
 - Manage the “return path” so users can exit the workbench back to where they came from.
+
+Naming stays consistent: the nav label is **Config Builder**, the route segment is `/workspaces/:workspaceId/config-builder`, and the feature folder is `features/workspace-shell/sections/config-builder` (hosting the Config Builder workbench). The section always includes both the configurations list and the workbench editing surface.
 
 Shell integration:
 
@@ -379,14 +385,14 @@ Responsibilities:
 
 - Manage workspace metadata (name, slug, environment label).
 - Manage members and workspace‑scoped roles.
-- Expose safe mode controls and other admin settings (subject to permissions).
+- Optionally surface Safe mode **status** with a link to the system‑level Settings screen where it is toggled (requires `System.SafeMode.*`).
 
 Shell integration:
 
 - Often uses `secondaryContent` in the top bar to place tab controls (e.g. General, Members, Roles).
 - Section content is tabbed and controlled by a `view` query parameter.
 
-RBAC and safe mode are described in [`05-auth-session-rbac-and-safe-mode.md`](./05-auth-session-rbac-and-safe-mode.md).
+RBAC and Safe mode are described in [`05-auth-session-rbac-and-safe-mode.md`](./05-auth-session-rbac-and-safe-mode.md).
 
 ### 7.5 Overview (optional)
 
@@ -417,8 +423,8 @@ The shell defines **where** banners and notifications appear so sections behave 
 Immediately beneath `GlobalTopBar` is a **banner strip** reserved for:
 
 - **Safe mode banner**:
-  - Always present when safe mode is enabled.
-  - Contains the human‑readable message from the safe mode endpoint.
+  - Always present when Safe mode is enabled.
+  - Contains the human‑readable message from the Safe mode endpoint.
   - Appears on all workspace sections.
 
 - **Other cross‑cutting banners**:
@@ -470,16 +476,12 @@ The Config Builder workbench supports window states (see [`09-workbench-editor-a
 Layout rules:
 
 - Immersive mode must provide an obvious **“Exit”** control to return to standard layout.
-- Even if banners are visually collapsed, safe mode and other important states should remain one click away.
+- Even if banners are visually collapsed, Safe mode and other important states should remain one click away.
 - Window state is part of presentation; routes remain under `/workspaces/:workspaceId/config-builder`.
 
 ### 9.2 Workspace‑local “Section not found”
 
-If the path segment after `/workspaces/:workspaceId/` does not map to a known section:
-
-- Render a **workspace‑local “Section not found”** state *inside the shell*.
-- Do **not** show the global 404 – the workspace context is valid, only the section is invalid.
-- Provide a clear way back to a valid section (e.g. button: “Go to Documents”).
+The shell deliberately owns the “unknown section” experience. If the path segment after `/workspaces/:workspaceId/` does not map to a known section, `WorkspaceShellScreen` renders its **UnknownSection** state *inside the shell* instead of returning the global 404. This keeps the valid workspace context alive so the user can recover by choosing a known section (e.g. “Documents” or “Runs”) without being kicked back to the directory.
 
 ---
 

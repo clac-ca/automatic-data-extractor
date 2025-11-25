@@ -210,7 +210,7 @@ Parameters to remember:
 * `field_name`, `value`, `row`: the core of the normalization work.
 * `field_config`: the manifest’s field config for this field (e.g., label, required).
 * `logger`: use for notes/events (not `print`).
-* Include `**_` in signatures to allow future parameters without breaking configs.
+* Include `**_` in signatures to allow future parameters without breaking configurations.
 
 ### 4.2 Call order & data flow
 

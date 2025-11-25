@@ -81,7 +81,7 @@ The React SPA at `apps/ade-web/` uses a history-based navigation helper instead 
 
 Navigation helpers live in `@app/nav` (`history.tsx`, `Link.tsx`, `urlState.ts`). Consume `useNavigate`/`useLocation` from there, and render links with `Link`/`NavLink` from the same module.
 
-Everything ADE produces (config_packages, venvs, runs, logs, cache, etc..) is persisted under `./data/...` by default. Override `ADE_DOCUMENTS_DIR`, `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_RUNS_DIR`, or `ADE_PIP_CACHE_DIR` to relocate any storage area.
+Everything ADE produces (config_packages, venvs, runs, logs, cache, etc..) is persisted under `./data/workspaces/<workspace_id>/...` by default. Set `ADE_WORKSPACES_DIR` to move the workspace root, or override `ADE_DOCUMENTS_DIR`, `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, or `ADE_RUNS_DIR` to relocate a specific storage type—ADE always nests the workspace ID under the override.
 
 ```text
 ./data/
@@ -97,7 +97,7 @@ Everything ADE produces (config_packages, venvs, runs, logs, cache, etc..) is pe
 │     │        ├─ hooks/
 │     │        ├─ manifest.json
 │     │        └─ config.env
-│     ├─ .venv/                     # One Python venv per config
+│     ├─ .venv/                     # One Python venv per configuration
 │     │  └─ <config_id>/
 │     │     ├─ bin/python
 │     │     ├─ ade-runtime/

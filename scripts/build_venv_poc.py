@@ -125,7 +125,7 @@ async def run_builder(args: argparse.Namespace) -> None:
     pip_cache_dir.mkdir(parents=True, exist_ok=True)
 
     builder = VirtualEnvironmentBuilder()
-    target_path = (venvs_root / args.workspace / args.config / build_id).resolve()
+    target_path = (venvs_root / args.workspace / ".venv" / args.config / build_id).resolve()
     python_bin = args.python_bin
 
     print(f"[build] workspace={args.workspace} config={args.config} build_id={build_id}")

@@ -3674,7 +3674,7 @@
     "/api/v1/workspaces/{workspace_id}/configurations": {
       "get": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "List configurations for a workspace",
         "operationId": "list_configurations_api_v1_workspaces__workspace_id__configurations_get",
@@ -3770,7 +3770,7 @@
       },
       "post": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "Create a configuration from a template or clone",
         "operationId": "create_configuration_api_v1_workspaces__workspace_id__configurations_post",
@@ -3843,13 +3843,13 @@
         }
       }
     },
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}": {
       "get": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "Retrieve configuration metadata",
-        "operationId": "read_configuration_api_v1_workspaces__workspace_id__configurations__config_id__get",
+        "operationId": "read_configuration_api_v1_workspaces__workspace_id__configurations__configuration_id__get",
         "security": [
           {
             "HTTPBearer": []
@@ -3884,14 +3884,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           }
@@ -3920,13 +3920,13 @@
         }
       }
     },
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/versions": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions": {
       "get": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "List configuration versions (drafts and published)",
-        "operationId": "list_config_versions_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__versions_get",
+        "operationId": "list_configuration_versions_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__versions_get",
         "security": [
           {
             "HTTPBearer": []
@@ -3961,14 +3961,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           }
@@ -3983,7 +3983,7 @@
                   "items": {
                     "$ref": "#/components/schemas/ConfigVersionRecord"
                   },
-                  "title": "Response List Config Versions Endpoint Api V1 Workspaces  Workspace Id  Configurations  Config Id  Versions Get"
+                  "title": "Response List Configuration Versions Endpoint Api V1 Workspaces  Workspace Id  Configurations  Configuration Id  Versions Get"
                 }
               }
             }
@@ -4001,13 +4001,13 @@
         }
       }
     },
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/files": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files": {
       "get": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "List editable files and directories",
-        "operationId": "list_config_files_api_v1_workspaces__workspace_id__configurations__config_id__files_get",
+        "operationId": "list_config_files_api_v1_workspaces__workspace_id__configurations__configuration_id__files_get",
         "security": [
           {
             "HTTPBearer": []
@@ -4042,14 +4042,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           },
@@ -4199,13 +4199,13 @@
         }
       }
     },
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/validate": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/validate": {
       "post": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "Validate the configuration on disk",
-        "operationId": "validate_configuration_api_v1_workspaces__workspace_id__configurations__config_id__validate_post",
+        "operationId": "validate_configuration_api_v1_workspaces__workspace_id__configurations__configuration_id__validate_post",
         "security": [
           {
             "HTTPBearer": []
@@ -4240,14 +4240,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           }
@@ -4276,13 +4276,13 @@
         }
       }
     },
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}": {
       "get": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "Read Config File",
-        "operationId": "read_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__get",
+        "operationId": "read_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__get",
         "security": [
           {
             "HTTPBearer": []
@@ -4317,14 +4317,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           },
@@ -4387,10 +4387,10 @@
       },
       "head": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "Head Config File",
-        "operationId": "head_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__head",
+        "operationId": "head_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__head",
         "security": [
           {
             "HTTPBearer": []
@@ -4425,14 +4425,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           },
@@ -4469,10 +4469,10 @@
       },
       "put": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "Upsert Config File",
-        "operationId": "upsert_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__put",
+        "operationId": "upsert_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__put",
         "security": [
           {
             "HTTPBearer": []
@@ -4507,14 +4507,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           },
@@ -4573,10 +4573,10 @@
       },
       "delete": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "Delete Config File",
-        "operationId": "delete_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__delete",
+        "operationId": "delete_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__delete",
         "security": [
           {
             "HTTPBearer": []
@@ -4611,14 +4611,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           },
@@ -4650,10 +4650,10 @@
       },
       "patch": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "Rename or move a file",
-        "operationId": "rename_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__patch",
+        "operationId": "rename_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__patch",
         "security": [
           {
             "HTTPBearer": []
@@ -4688,14 +4688,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           },
@@ -4743,13 +4743,13 @@
         }
       }
     },
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/activate": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/activate": {
       "post": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "Activate a configuration",
-        "operationId": "activate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__activate_post",
+        "operationId": "activate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__activate_post",
         "security": [
           {
             "HTTPBearer": []
@@ -4784,14 +4784,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           }
@@ -4833,13 +4833,13 @@
         }
       }
     },
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/publish": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish": {
       "post": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "Publish a configuration draft",
-        "operationId": "publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__publish_post",
+        "operationId": "publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__publish_post",
         "security": [
           {
             "HTTPBearer": []
@@ -4874,14 +4874,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           }
@@ -4921,13 +4921,13 @@
         }
       }
     },
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/deactivate": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/deactivate": {
       "post": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "Deactivate a configuration (was 'archive')",
-        "operationId": "deactivate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__deactivate_post",
+        "operationId": "deactivate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__deactivate_post",
         "security": [
           {
             "HTTPBearer": []
@@ -4962,14 +4962,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           }
@@ -4998,13 +4998,13 @@
         }
       }
     },
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/export": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/export": {
       "get": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "Export Config",
-        "operationId": "export_config_api_v1_workspaces__workspace_id__configurations__config_id__export_get",
+        "operationId": "export_config_api_v1_workspaces__workspace_id__configurations__configuration_id__export_get",
         "security": [
           {
             "HTTPBearer": []
@@ -5039,14 +5039,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           },
@@ -5084,13 +5084,13 @@
         }
       }
     },
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/directories/{directory_path}": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}": {
       "post": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "Create Config Directory",
-        "operationId": "create_config_directory_api_v1_workspaces__workspace_id__configurations__config_id__directories__directory_path__post",
+        "operationId": "create_config_directory_api_v1_workspaces__workspace_id__configurations__configuration_id__directories__directory_path__post",
         "security": [
           {
             "HTTPBearer": []
@@ -5125,14 +5125,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           },
@@ -5154,7 +5154,7 @@
                 "schema": {
                   "type": "object",
                   "additionalProperties": true,
-                  "title": "Response Create Config Directory Api V1 Workspaces  Workspace Id  Configurations  Config Id  Directories  Directory Path  Post"
+                  "title": "Response Create Config Directory Api V1 Workspaces  Workspace Id  Configurations  Configuration Id  Directories  Directory Path  Post"
                 }
               }
             }
@@ -5173,10 +5173,10 @@
       },
       "delete": {
         "tags": [
-          "configs"
+          "configurations"
         ],
         "summary": "Delete Config Directory",
-        "operationId": "delete_config_directory_api_v1_workspaces__workspace_id__configurations__config_id__directories__directory_path__delete",
+        "operationId": "delete_config_directory_api_v1_workspaces__workspace_id__configurations__configuration_id__directories__directory_path__delete",
         "security": [
           {
             "HTTPBearer": []
@@ -5211,14 +5211,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           },
@@ -5259,13 +5259,13 @@
         }
       }
     },
-    "/api/v1/workspaces/{workspace_id}/configs/{config_id}/builds": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds": {
       "post": {
         "tags": [
           "builds"
         ],
         "summary": "Create Build Endpoint",
-        "operationId": "create_build_endpoint_api_v1_workspaces__workspace_id__configs__config_id__builds_post",
+        "operationId": "create_build_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__builds_post",
         "security": [
           {
             "HTTPBearer": []
@@ -5300,14 +5300,14 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           }
@@ -5487,14 +5487,14 @@
         }
       }
     },
-    "/api/v1/configs/{config_id}/runs": {
+    "/api/v1/configurations/{configuration_id}/runs": {
       "post": {
         "tags": [
           "runs"
         ],
         "summary": "Create Run Endpoint",
-        "description": "Create a run for ``config_id`` and optionally stream execution events.",
-        "operationId": "create_run_endpoint_api_v1_configs__config_id__runs_post",
+        "description": "Create a run for ``configuration_id`` and optionally stream execution events.",
+        "operationId": "create_run_endpoint_api_v1_configurations__configuration_id__runs_post",
         "security": [
           {
             "HTTPBearer": []
@@ -5508,14 +5508,14 @@
         ],
         "parameters": [
           {
-            "name": "config_id",
+            "name": "configuration_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
               "description": "Configuration identifier",
-              "title": "Config Id"
+              "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           }
@@ -6627,36 +6627,9 @@
             "type": "string",
             "title": "Workspace Id"
           },
-          "config_id": {
-            "type": "string",
-            "title": "Config Id"
-          },
           "configuration_id": {
             "type": "string",
             "title": "Configuration Id"
-          },
-          "configuration_build_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Configuration Build Id"
-          },
-          "build_ref": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Build Ref",
-            "description": "Underlying configuration_builds.build_id value when present"
           },
           "status": {
             "type": "string",
@@ -6737,7 +6710,6 @@
         "required": [
           "id",
           "workspace_id",
-          "config_id",
           "configuration_id",
           "status",
           "created"
@@ -6752,12 +6724,12 @@
             "const": "clone",
             "title": "Type"
           },
-          "config_id": {
+          "configuration_id": {
             "type": "string",
             "maxLength": 26,
             "minLength": 26,
             "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Config Id",
+            "title": "Configuration Id",
             "description": "ULID (26-character string)."
           }
         },
@@ -6765,7 +6737,7 @@
         "type": "object",
         "required": [
           "type",
-          "config_id"
+          "configuration_id"
         ],
         "title": "ConfigSourceClone",
         "description": "Reference to an existing workspace config."
@@ -6815,20 +6787,20 @@
       },
       "ConfigVersionRecord": {
         "properties": {
-          "config_version_id": {
+          "configuration_version_id": {
             "type": "string",
             "maxLength": 26,
             "minLength": 26,
             "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Config Version Id",
+            "title": "Configuration Version Id",
             "description": "ULID (26-character string)."
           },
-          "config_id": {
+          "configuration_id": {
             "type": "string",
             "maxLength": 26,
             "minLength": 26,
             "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Config Id",
+            "title": "Configuration Id",
             "description": "ULID (26-character string)."
           },
           "workspace_id": {
@@ -6902,8 +6874,8 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "config_version_id",
-          "config_id",
+          "configuration_version_id",
+          "configuration_id",
           "workspace_id",
           "status",
           "created_at",
@@ -7028,14 +7000,6 @@
             "title": "Workspace Id",
             "description": "ULID (26-character string)."
           },
-          "config_id": {
-            "type": "string",
-            "maxLength": 26,
-            "minLength": 26,
-            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Config Id",
-            "description": "ULID (26-character string)."
-          },
           "display_name": {
             "type": "string",
             "title": "Display Name"
@@ -7043,9 +7007,9 @@
           "status": {
             "$ref": "#/components/schemas/ConfigurationStatus"
           },
-          "config_version": {
+          "configuration_version": {
             "type": "integer",
-            "title": "Config Version"
+            "title": "Configuration Version"
           },
           "content_digest": {
             "anyOf": [
@@ -7086,10 +7050,9 @@
         "required": [
           "id",
           "workspace_id",
-          "config_id",
           "display_name",
           "status",
-          "config_version",
+          "configuration_version",
           "created_at",
           "updated_at"
         ],
@@ -7125,14 +7088,6 @@
             "title": "Workspace Id",
             "description": "ULID (26-character string)."
           },
-          "config_id": {
-            "type": "string",
-            "maxLength": 26,
-            "minLength": 26,
-            "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Config Id",
-            "description": "ULID (26-character string)."
-          },
           "status": {
             "$ref": "#/components/schemas/ConfigurationStatus"
           },
@@ -7160,7 +7115,6 @@
         "required": [
           "id",
           "workspace_id",
-          "config_id",
           "status",
           "issues"
         ],
@@ -7650,12 +7604,12 @@
             "title": "Workspace Id",
             "description": "ULID (26-character string)."
           },
-          "config_id": {
+          "configuration_id": {
             "type": "string",
             "maxLength": 26,
             "minLength": 26,
             "pattern": "[0-9A-HJKMNP-TV-Z]{26}",
-            "title": "Config Id",
+            "title": "Configuration Id",
             "description": "ULID (26-character string)."
           },
           "status": {
@@ -7723,7 +7677,7 @@
         "type": "object",
         "required": [
           "workspace_id",
-          "config_id",
+          "configuration_id",
           "status",
           "capabilities",
           "root",
@@ -8594,6 +8548,12 @@
             "title": "Validate Only",
             "default": false
           },
+          "force_rebuild": {
+            "type": "boolean",
+            "title": "Force Rebuild",
+            "description": "If true, rebuild the configuration environment before running.",
+            "default": false
+          },
           "input_document_id": {
             "anyOf": [
               {
@@ -8829,11 +8789,11 @@
             "title": "Object",
             "default": "ade.run"
           },
-          "config_id": {
+          "configuration_id": {
             "type": "string",
-            "title": "Config Id"
+            "title": "Configuration Id"
           },
-          "config_version_id": {
+          "configuration_version_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -8842,7 +8802,7 @@
                 "type": "null"
               }
             ],
-            "title": "Config Version Id"
+            "title": "Configuration Version Id"
           },
           "submitted_by_user_id": {
             "anyOf": [
@@ -9086,7 +9046,7 @@
         "type": "object",
         "required": [
           "id",
-          "config_id",
+          "configuration_id",
           "status",
           "created"
         ],

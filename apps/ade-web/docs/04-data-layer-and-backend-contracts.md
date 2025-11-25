@@ -4,7 +4,7 @@ This document explains how `ade-web` talks to the ADE backend:
 
 - the **data layer architecture** (HTTP client, API modules, React Query hooks),
 - how `/api/v1/...` routes are **grouped by domain**,
-- how we model **runs**, workspaces, documents, and configs in the data layer,
+- how we model **Runs**, workspaces, documents, and configurations in the data layer,
 - and how we handle **streaming**, **errors**, and **caching**.
 
 It is the implementation‑level companion to:
@@ -12,7 +12,7 @@ It is the implementation‑level companion to:
 - the domain language in `01-domain-model-and-naming.md`, and
 - the UX overview in the top‑level `README.md`.
 
-All terminology here uses **run** as the primary execution unit. Backend routes that currently use `/runs` are treated as “workspace run ledger” endpoints.
+All terminology here uses **Run** as the primary execution unit. Backend routes expose the REST plural `/runs`; in the UI and types we keep the concept as Run with the ID field `runId`.
 
 ---
 
@@ -72,7 +72,7 @@ The HTTP client is responsible for:
 * Exposing streaming bodies when needed (for NDJSON).
 * Mapping non‑2xx responses to a unified `ApiError`.
 
-It deliberately does **not** know about workspaces, runs, configs, etc.
+It deliberately does **not** know about workspaces, runs, configurations, etc.
 
 ### 2.2 Basic interface
 
@@ -141,6 +141,7 @@ Query keys must be:
 * **Stable** – same inputs → same key.
 * **Descriptive** – easy to inspect in devtools.
 * **Scoped** – from global → workspace → resource.
+* **Canonical** – objects inside keys must be serialised to a stable representation (sort keys + `JSON.stringify` or a dedicated canonicaliser). Avoid fresh inline objects in render bodies; prefer small helpers that always return the same shape for the same params.
 
 Patterns:
 
@@ -158,30 +159,48 @@ Patterns:
 
 * Documents:
 
-  * `['workspace', workspaceId, 'documents', params]`
+  * `['workspace', workspaceId, 'documents', canonicaliseDocumentParams(params)]`
   * `['workspace', workspaceId, 'document', documentId]`
   * `['workspace', workspaceId, 'document', documentId, 'sheets']`
 
 * Runs:
 
-  * `['workspace', workspaceId, 'runs', params]`     // lists from `/runs` endpoints
-  * `['workspace', workspaceId, 'run', runId]`       // detail via `/runs/{run_id}`
-  * `['run', runId]`                                 // detail via `/runs/{run_id}` if used directly
+  * `['workspace', workspaceId, 'runs', canonicaliseRunsFilters(params)]` // lists from `/runs` endpoints
+  * `['run', runId]`                                                     // canonical run detail via `/runs/{run_id}`
+  * `['workspace', workspaceId, 'run', runId]`                           // optional workspace‑scoped variant
   * `['run', runId, 'outputs']`
 
 * Configurations:
 
   * `['workspace', workspaceId, 'configurations']`
-  * `['workspace', workspaceId, 'configuration', configId]`
-  * `['workspace', workspaceId, 'configuration', configId, 'versions']`
-  * `['workspace', workspaceId, 'configuration', configId, 'files']`
+  * `['workspace', workspaceId, 'configuration', configurationId]`
+  * `['workspace', workspaceId, 'configuration', configurationId, 'versions']`
+  * `['workspace', workspaceId, 'configuration', configurationId, 'files']`
 
 * System:
 
   * `['system', 'safe-mode']`
   * `['system', 'health']`
 
-Filters and sort options go into a `params` object that is part of the key.
+Filters and sort options go into a **canonicalised** params payload that is part of the key. A tiny factory keeps this predictable:
+
+```ts
+export const queryKeys = {
+  workspaceRuns: (workspaceId: string, filters: RunsFilters) => [
+    "workspace",
+    workspaceId,
+    "runs",
+    canonicaliseRunsFilters(filters),
+  ],
+  run: (runId: string) => ["run", runId],
+  documents: (workspaceId: string, params: DocumentFilters) => [
+    "workspace",
+    workspaceId,
+    "documents",
+    canonicaliseDocumentParams(params),
+  ],
+};
+```
 
 ### 3.3 Query and mutation hooks
 
@@ -191,7 +210,7 @@ For each domain:
 * Features define **hooks** that wrap those functions in React Query:
 
   * Queries: `useWorkspaceRunsQuery(workspaceId, filters)`, `useDocumentsQuery(workspaceId, filters)`.
-  * Mutations: `useCreateRunMutation(workspaceId)`, `useUploadDocumentMutation(workspaceId)`.
+  * Mutations: `useCreateWorkspaceRunMutation(workspaceId)`, `useUploadDocumentMutation(workspaceId)`.
 
 Hooks live near the screen components that use them (e.g. `features/workspace-shell/runs/useWorkspaceRunsQuery.ts`) and depend on the shared API modules.
 
@@ -203,8 +222,8 @@ Domain API modules live under `src/shared/api/`. Each module owns a set of relat
 
 Naming:
 
-* Modules: `authApi`, `workspacesApi`, `documentsApi`, `runsApi`, `configsApi`, `buildsApi`, `rolesApi`, `systemApi`, `apiKeysApi`.
-* Functions: `<verb><Noun>` (e.g. `listWorkspaceRuns`, `createRun`, `activateConfiguration`).
+* Modules: `authApi`, `permissionsApi`, `rolesApi`, `workspacesApi`, `documentsApi`, `runsApi`, `configurationsApi`, `buildsApi`, `systemApi`, `apiKeysApi`.
+* Functions: `<verb><Noun>` (e.g. `listWorkspaceRuns`, `createWorkspaceRun`, `activateConfiguration`).
 
 Below we describe what each module covers and how it maps to backend routes.
 
@@ -258,13 +277,13 @@ Hooks:
 * `useCurrentUserQuery()`
 * `useLoginMutation()`, `useLogoutMutation()`
 
-### 4.2 Permissions & global roles (`rolesApi`)
+### 4.2 Permissions (`permissionsApi`)
 
 **Responsibilities**
 
-* Global roles.
-* Global role assignments.
-* Permission catalog and effective permissions.
+* Permission catalog.
+* Effective permissions.
+* Permission checks for specific operations.
 
 **Key routes**
 
@@ -273,6 +292,28 @@ Hooks:
   * `GET  /api/v1/permissions`             – permission catalog.
   * `GET  /api/v1/me/permissions`          – effective permissions.
   * `POST /api/v1/me/permissions/check`    – check specific permissions.
+
+**Example functions**
+
+* `listPermissions()`
+* `readEffectivePermissions()`
+* `checkPermissions(request)`
+
+Hooks:
+
+* `useEffectivePermissionsQuery()`
+* `usePermissionCatalogQuery()`
+
+### 4.3 Global roles & assignments (`rolesApi`)
+
+Keep global roles distinct from permissions for searchability and parity with workspace‑scoped role handling.
+
+**Responsibilities**
+
+* Global roles.
+* Global role assignments.
+
+**Key routes**
 
 * Global roles:
 
@@ -290,9 +331,6 @@ Hooks:
 
 **Example functions**
 
-* `listPermissions()`
-* `readEffectivePermissions()`
-* `checkPermissions(request)`
 * `listGlobalRoles()`
 * `createGlobalRole(payload)`
 * `readGlobalRole(roleId)`
@@ -304,11 +342,9 @@ Hooks:
 
 Hooks:
 
-* `useEffectivePermissionsQuery()`
-* `usePermissionCatalogQuery()`
-* Admin screens: `useGlobalRolesQuery()`, `useGlobalRoleAssignmentsQuery()`
+* `useGlobalRolesQuery()`, `useGlobalRoleAssignmentsQuery()`
 
-### 4.3 Workspaces & membership (`workspacesApi`)
+### 4.4 Workspaces & membership (`workspacesApi`)
 
 **Responsibilities**
 
@@ -374,7 +410,7 @@ Hooks:
 * `useWorkspaceMembersQuery(workspaceId)`
 * `useWorkspaceRolesQuery(workspaceId)`
 
-### 4.4 Documents (`documentsApi`)
+### 4.5 Documents (`documentsApi`)
 
 **Responsibilities**
 
@@ -411,41 +447,38 @@ Mutations:
 * `useUploadDocumentMutation(workspaceId)`
 * `useDeleteDocumentMutation(workspaceId)`
 
-### 4.5 Runs (`runsApi`)
+### 4.6 Runs (`runsApi`)
 
 **Responsibilities**
 
 * Workspace run ledger (list of all runs in a workspace).
 * Per‑run artifacts, outputs, and log files.
-* Config‑initiated runs (e.g. from Config Builder).
-* Run‑level streaming logs.
+* Configuration‑initiated runs (e.g. from Config Builder).
+* Run‑level event streams (NDJSON).
+* Run‑centric API surface: once you have a `runId`, treat it as globally unique and use the global `/runs/{run_id}` detail/asset endpoints. Workspace IDs show up only when listing or creating runs.
 
-There are two groups of endpoints:
-
-* Workspace‑scoped ledger endpoints, currently under `/runs` in the API.
-* Global run endpoints, under `/runs`.
-
-In the frontend we treat both as variants of the same **Run** domain concept.
+Backend routes use the REST plural `/runs`; both workspace run ledger endpoints and configuration/global run endpoints represent the same **Run** concept in the frontend.
 
 **Key routes: workspace run ledger (under `/runs`)**
 
 * `GET  /api/v1/workspaces/{workspace_id}/runs` – list runs for workspace.
 * `POST /api/v1/workspaces/{workspace_id}/runs` – submit new run.
-* `GET  /api/v1/workspaces/{workspace_id}/runs/{run_id}` – read run summary.
-* `GET  /api/v1/workspaces/{workspace_id}/runs/{run_id}/artifact` – download artifact.
-* `GET  /api/v1/workspaces/{workspace_id}/runs/{run_id}/logs` – download logs file.
-* `GET  /api/v1/workspaces/{workspace_id}/runs/{run_id}/outputs` – list outputs.
-* `GET  /api/v1/workspaces/{workspace_id}/runs/{run_id}/outputs/{output_path}` – download output.
+* `GET  /api/v1/workspaces/{workspace_id}/runs/{run_id}` – optional workspace‑scoped detail if tenancy enforcement requires it.
 
-**Key routes: config‑scoped & global run endpoints**
+Use these ledger endpoints for listing and creating runs; fetch detail, outputs, and logs from the global endpoints once a `runId` exists.
 
-* `POST /api/v1/configs/{config_id}/runs` – start a run for a given config.
-* `GET  /api/v1/runs/{run_id}` – read run detail.
+**Key routes: run detail & assets (global preferred)**
+
+* `GET  /api/v1/runs/{run_id}` – read run detail (canonical).
 * `GET  /api/v1/runs/{run_id}/artifact` – download artifact.
 * `GET  /api/v1/runs/{run_id}/logfile` – download logs file.
-* `GET  /api/v1/runs/{run_id}/logs` – stream logs (NDJSON).
+* `GET  /api/v1/runs/{run_id}/logs` – stream the run NDJSON event stream.
 * `GET  /api/v1/runs/{run_id}/outputs` – list outputs.
 * `GET  /api/v1/runs/{run_id}/outputs/{output_path}` – download output.
+
+**Key routes: configuration‑scoped triggers**
+
+* `POST /api/v1/configurations/{configuration_id}/runs` – start a run for a given configuration.
 
 **Example functions**
 
@@ -453,34 +486,34 @@ Workspace‑level:
 
 * `listWorkspaceRuns(workspaceId, params)`
 * `createWorkspaceRun(workspaceId, payload)`
-* `readWorkspaceRun(workspaceId, runId)`           // wraps `/runs/{run_id}`
-* `listWorkspaceRunOutputs(workspaceId, runId)`
-* `downloadWorkspaceRunOutput(workspaceId, runId, outputPath)`
-* `downloadWorkspaceRunArtifact(workspaceId, runId)`
-* `downloadWorkspaceRunLogFile(workspaceId, runId)`
+* `readWorkspaceRun(workspaceId, runId)`           // optional when backend enforces workspace scopes
 
-Config/global‑level:
+Run‑centric (canonical):
 
-* `createConfigRun(configId, payload)`             // wraps `/configs/{config_id}/runs`
-* `readRun(runId)`                                 // wraps `/runs/{run_id}`
+* `readRun(runId)`
 * `listRunOutputs(runId)`
 * `downloadRunOutput(runId, outputPath)`
 * `downloadRunArtifact(runId)`
 * `downloadRunLogFile(runId)`
-* `streamRunLogs(runId)`                           // wraps `/runs/{run_id}/logs`
+* `streamRunLogs(runId)`                           // run event stream (NDJSON)
+
+Configuration triggers:
+
+* `createConfigurationRun(configurationId, payload)`      // wraps `/configurations/{configuration_id}/runs`
 
 Hooks:
 
 * `useWorkspaceRunsQuery(workspaceId, filters)`
-* `useRunQuery(runId)` (or `useWorkspaceRunQuery(workspaceId, runId)` depending on which endpoint you use)
+* `useRunQuery(runId)`                          // preferred detail hook; runId assumed globally unique
+* Optional: `useWorkspaceRunQuery(workspaceId, runId)` when a workspace‑scoped detail endpoint is required
 * `useCreateWorkspaceRunMutation(workspaceId)`
-* `useCreateConfigRunMutation(configId)`
+* `useCreateConfigurationRunMutation(configurationId)`
 
 Streaming hook:
 
-* `useRunLogsStream(runId)` for the live run console.
+* `useRunLogsStream(runId)` for the live run event stream and console.
 
-### 4.6 Configurations & builds (`configsApi`, `buildsApi`)
+### 4.7 Configurations & builds (`configurationsApi`, `buildsApi`)
 
 **Responsibilities**
 
@@ -492,27 +525,27 @@ Streaming hook:
 
 * `GET  /api/v1/workspaces/{workspace_id}/configurations`
 * `POST /api/v1/workspaces/{workspace_id}/configurations`
-* `GET  /api/v1/workspaces/{workspace_id}/configurations/{config_id}`
-* `GET  /api/v1/workspaces/{workspace_id}/configurations/{config_id}/versions`
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/activate`
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/deactivate`
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/publish`
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/validate`
-* `GET  /api/v1/workspaces/{workspace_id}/configurations/{config_id}/export`
+* `GET  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}`
+* `GET  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions`
+* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/activate`
+* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/deactivate`
+* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish`
+* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/validate`
+* `GET  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/export`
 
-**Key routes: config files**
+**Key routes: configuration files**
 
-* `GET    /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files`
-* `GET    /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}`
-* `PUT    /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}`
-* `PATCH  /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}`
-* `DELETE /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}`
-* `POST   /api/v1/workspaces/{workspace_id}/configurations/{config_id}/directories/{directory_path}`
-* `DELETE /api/v1/workspaces/{workspace_id}/configurations/{config_id}/directories/{directory_path}`
+* `GET    /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files`
+* `GET    /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}`
+* `PUT    /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}`
+* `PATCH  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}`
+* `DELETE /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}`
+* `POST   /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}`
+* `DELETE /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}`
 
 **Key routes: builds**
 
-* `POST /api/v1/workspaces/{workspace_id}/configs/{config_id}/builds`
+* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds`
 * `GET  /api/v1/builds/{build_id}`
 * `GET  /api/v1/builds/{build_id}/logs` – stream build logs (NDJSON).
 
@@ -522,40 +555,40 @@ Configurations:
 
 * `listConfigurations(workspaceId)`
 * `createConfiguration(workspaceId, payload)`
-* `readConfiguration(workspaceId, configId)`
-* `listConfigVersions(workspaceId, configId)`
-* `activateConfiguration(workspaceId, configId)`
-* `deactivateConfiguration(workspaceId, configId)`
-* `publishConfiguration(workspaceId, configId)`
-* `validateConfiguration(workspaceId, configId, payload)`
-* `exportConfiguration(workspaceId, configId)`
+* `readConfiguration(workspaceId, configurationId)`
+* `listConfigurationVersions(workspaceId, configurationId)`
+* `activateConfiguration(workspaceId, configurationId)`
+* `deactivateConfiguration(workspaceId, configurationId)`
+* `publishConfiguration(workspaceId, configurationId)`
+* `validateConfiguration(workspaceId, configurationId, payload)`
+* `exportConfiguration(workspaceId, configurationId)`
 
 Config files:
 
-* `listConfigFiles(workspaceId, configId)`
-* `readConfigFile(workspaceId, configId, filePath)`
-* `upsertConfigFile(workspaceId, configId, filePath, content, options?)`  // includes ETag preconditions.
-* `renameConfigFile(workspaceId, configId, filePath, newPath)`
-* `deleteConfigFile(workspaceId, configId, filePath)`
-* `createConfigDirectory(workspaceId, configId, dirPath)`
-* `deleteConfigDirectory(workspaceId, configId, dirPath)`
+* `listConfigurationFiles(workspaceId, configurationId)`
+* `readConfigurationFile(workspaceId, configurationId, filePath)`
+* `upsertConfigurationFile(workspaceId, configurationId, filePath, content, options?)`  // includes ETag preconditions.
+* `renameConfigurationFile(workspaceId, configurationId, filePath, newPath)`
+* `deleteConfigurationFile(workspaceId, configurationId, filePath)`
+* `createConfigDirectory(workspaceId, configurationId, dirPath)`
+* `deleteConfigDirectory(workspaceId, configurationId, dirPath)`
 
 Builds:
 
-* `createBuild(workspaceId, configId, options)`  // returns `buildId`.
+* `createBuild(workspaceId, configurationId, options)`  // returns `buildId`.
 * `readBuild(buildId)`
 * `streamBuildLogs(buildId)`
 
 Hooks:
 
 * `useConfigurationsQuery(workspaceId)`
-* `useConfigurationQuery(workspaceId, configId)`
-* `useConfigVersionsQuery(workspaceId, configId)`
-* `useConfigFilesQuery(workspaceId, configId)`
-* `useCreateBuildMutation(workspaceId, configId)`
+* `useConfigurationQuery(workspaceId, configurationId)`
+* `useConfigurationVersionsQuery(workspaceId, configurationId)`
+* `useConfigurationFilesQuery(workspaceId, configurationId)`
+* `useCreateBuildMutation(workspaceId, configurationId)`
 * `useBuildLogsStream(buildId)`
 
-### 4.7 System & safe mode (`systemApi`)
+### 4.8 System & Safe mode (`systemApi`)
 
 **Responsibilities**
 
@@ -579,7 +612,7 @@ Hooks:
 * `useSafeModeQuery()`
 * `useUpdateSafeModeMutation()`
 
-### 4.8 Users & API keys (`usersApi`, `apiKeysApi`)
+### 4.9 Users & API keys (`usersApi`, `apiKeysApi`)
 
 **Responsibilities**
 
@@ -647,6 +680,13 @@ API modules are responsible for mapping:
 function toRunSummary(apiRun: ApiRun): RunSummary { /* ... */ }
 ```
 
+Standard mappers in `schema/` keep snake_case out of features:
+
+* `fromApiRun(apiRun: ApiRun): Run` – translates `run_id` → `runId` and normalises timestamps/status.
+* `fromApiConfiguration(apiConfig: ApiConfiguration): Configuration` – translates `configuration_id` → `configurationId` and applies any presentation helpers.
+
+Do this translation once so screens and hooks only ever see camelCase IDs.
+
 This gives us:
 
 * A stable surface for screens, even if backend fields change.
@@ -682,17 +722,17 @@ Key characteristics:
 * Accepts an `AbortSignal` so callers can terminate the stream.
 * Parses each line as JSON; lines that fail to parse are either ignored or reported via an error callback.
 
-### 6.2 Run and build logs
+### 6.2 Run and build streams
 
 Used by:
 
 * Config Builder:
 
-  * `streamBuildLogs(buildId)` → `/api/v1/builds/{build_id}/logs`.
+  * `streamBuildLogs(buildId)` → `/api/v1/builds/{build_id}/logs` (build log stream).
 
 * Run consoles:
 
-  * `streamRunLogs(runId)` → `/api/v1/runs/{run_id}/logs`.
+  * `streamRunLogs(runId)` → `/api/v1/runs/{run_id}/logs` (run event stream).
 
 Event format is determined by the backend. We expect at minimum:
 
@@ -784,6 +824,11 @@ To keep the data layer predictable:
   * No `any` for responses; map to domain models.
   * Backend changes should be reflected in `schema/` and, where needed, in mapping functions.
 
+* **Stable query keys**
+
+  * Params in keys are canonicalised (sorted keys + stable `JSON.stringify` or dedicated helper).
+  * Use small `queryKeys` factories to avoid ad‑hoc objects created in render bodies.
+
 * **No direct `fetch`**
 
   * Only the HTTP client talks to `fetch` / XHR.
@@ -792,6 +837,7 @@ To keep the data layer predictable:
 * **Run‑centric terminology**
 
   * All execution units are “runs” in frontend types, hooks, and screens.
+  * Once you have a `runId`, use the global `/runs/{run_id}` endpoints for detail, logs, and outputs; workspace IDs are only needed to list or create runs.
   * API module mapping handles backend field names like `run_id` → `runId`.
 
 * **Backend‑agnostic**

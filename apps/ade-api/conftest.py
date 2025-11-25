@@ -52,17 +52,15 @@ def _configure_database(
     """Apply Alembic migrations against the ephemeral test database."""
 
     data_dir = tmp_path_factory.mktemp("api-app-data")
-    documents_dir = data_dir / "documents"
-    configs_dir = data_dir / "config_packages"
-    venvs_dir = data_dir / ".venv"
-    runs_dir = data_dir / "runs"
+    workspaces_dir = data_dir / "workspaces"
     pip_cache_dir = data_dir / "cache" / "pip"
 
     os.environ["ADE_DATABASE_DSN"] = _database_url
-    os.environ["ADE_DOCUMENTS_DIR"] = str(documents_dir)
-    os.environ["ADE_CONFIGS_DIR"] = str(configs_dir)
-    os.environ["ADE_VENVS_DIR"] = str(venvs_dir)
-    os.environ["ADE_RUNS_DIR"] = str(runs_dir)
+    os.environ["ADE_WORKSPACES_DIR"] = str(workspaces_dir)
+    os.environ["ADE_DOCUMENTS_DIR"] = str(workspaces_dir)
+    os.environ["ADE_CONFIGS_DIR"] = str(workspaces_dir)
+    os.environ["ADE_VENVS_DIR"] = str(workspaces_dir)
+    os.environ["ADE_RUNS_DIR"] = str(workspaces_dir)
     os.environ["ADE_PIP_CACHE_DIR"] = str(pip_cache_dir)
     # Ensure tests run with OIDC disabled regardless of local .env values.
     os.environ["ADE_OIDC_ENABLED"] = "false"
@@ -89,9 +87,11 @@ def _configure_database(
     reload_settings()
     for env_var in (
         "ADE_DATABASE_DSN",
+        "ADE_WORKSPACES_DIR",
         "ADE_DOCUMENTS_DIR",
         "ADE_CONFIGS_DIR",
         "ADE_VENVS_DIR",
+        "ADE_RUNS_DIR",
         "ADE_PIP_CACHE_DIR",
         "ADE_OIDC_ENABLED",
         "ADE_SAFE_MODE",

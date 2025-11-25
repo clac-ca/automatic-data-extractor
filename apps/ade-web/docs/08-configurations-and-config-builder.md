@@ -6,17 +6,20 @@ This document explains how **configurations** work in ADE Web and how the
 It focuses on:
 
 - The **Configuration** domain model and version lifecycle.
-- The **Config Builder** workspace section  
+- The **Configurations** workspace section (Config Builder)  
   (`/workspaces/:workspaceId/config-builder`).
 - How configuration metadata (including the manifest) flows between frontend and
   backend.
-- How builds, validations, and test runs are represented in the UI.
-- How we enter and exit the **Config Builder workbench** (the editor surface
+- How environment builds, validation runs, and test runs are represented in the
+  UI.
+- How we enter and exit the **Config Builder workbench** (the editing surface
   described in `09-workbench-editor-and-scripting.md`).
 
 Definitions for terms like *Configuration*, *Config version*, *Draft*, *Active*,
 *Inactive*, and *Run* are established in
 `01-domain-model-and-naming.md`. This doc assumes that vocabulary.
+
+Naming: the **Config Builder** is the workspace section that lists configurations and launches editing. The **Config Builder workbench** is the dedicated window for editing a single configuration version. Use “Config Builder workbench” on first mention and “workbench” afterwards; use “editor” only for the Monaco instance inside that window.
 
 ---
 
@@ -24,21 +27,21 @@ Definitions for terms like *Configuration*, *Config version*, *Draft*, *Active*,
 
 From ADE Web’s perspective:
 
-- A **Configuration** is a *workspace‑scoped* unit that represents a **config
+- A **Configuration** is a *workspace‑scoped* unit backed by a **configuration
   package** (Python package + manifest + supporting files).
 - Each Configuration has **multiple versions** over time (drafts and immutable
   snapshots).
-- The **Config Builder** section is where users:
+- The **Configurations** section (home of the Config Builder) is where users:
   - View and manage configurations for a workspace.
   - Inspect version history and status.
   - Open a specific configuration version in the **workbench** to edit code,
-    run builds, run validation, and perform test runs.
+    build the environment, run validation runs, and perform test runs.
 
 Backend implementations may have more nuanced state machines, but ADE Web
 presents a **simple, stable model**:
 
 - Configuration (high‑level object)
-- Config version (Draft / Active / Inactive)
+- Configuration version (Draft / Active / Inactive)
 
 Runs themselves are described in `07-documents-and-runs.md`. This doc focuses
 on how configurations feed into those runs.
@@ -73,8 +76,8 @@ interface ConfigurationSummary {
   name: string;
   description?: string | null;
 
-  // Active config version, if any
-  activeVersion?: ConfigVersionSummary | null;
+  // Active configuration version, if any
+  activeVersion?: ConfigurationVersionSummary | null;
 
   // Aggregated metadata
   totalVersions: number;
@@ -86,9 +89,9 @@ interface ConfigurationSummary {
 Wire types may include additional backend‑specific fields; this is the
 frontend’s mental model.
 
-### 2.2 Config versions
+### 2.2 Configuration versions
 
-Each Configuration has many **config versions**. A config version is treated as
+Each Configuration has many **configuration versions**. A configuration version is treated as
 an immutable snapshot.
 
 Key properties:
@@ -100,7 +103,7 @@ Key properties:
 * **Lifecycle**
 
   * `status: "draft" | "active" | "inactive"`.
-* **Build & validation**
+* **Environment & validation health**
 
   * `lastBuildStatus?: "ok" | "error" | "pending" | "unknown"`.
   * `lastBuildAt?: string | null`.
@@ -115,12 +118,12 @@ Key properties:
 Example conceptual interface:
 
 ```ts
-type ConfigVersionStatus = "draft" | "active" | "inactive";
+type ConfigurationVersionStatus = "draft" | "active" | "inactive";
 
-interface ConfigVersionSummary {
+interface ConfigurationVersionSummary {
   id: string;
   label: string;
-  status: ConfigVersionStatus;
+  status: ConfigurationVersionStatus;
 
   createdAt: string;
   createdBy: string;
@@ -133,7 +136,7 @@ interface ConfigVersionSummary {
 }
 ```
 
-Runs record the **config version id** they used, so historical runs are always
+Runs record the **configuration version id** they used, so historical runs are always
 traceable to the code that produced them.
 
 ---
@@ -142,12 +145,12 @@ traceable to the code that produced them.
 
 ### 3.1 Lifecycle states
 
-At the ADE Web level, every config version is presented as one of:
+At the ADE Web level, every configuration version is presented as one of:
 
 * **Draft**
 
   * Editable.
-  * Used for development, builds, validation, and test runs.
+  * Used for development, environment builds, validation runs, and test runs.
 * **Active**
 
   * Exactly **one** active version per Configuration.
@@ -204,9 +207,9 @@ on top of this model and should be described separately if introduced.
 
 ---
 
-## 4. Config Builder section architecture
+## 4. Configurations section architecture (Config Builder)
 
-The Config Builder is the workspace‑local section at:
+The Configurations section (home of the Config Builder) is the workspace‑local section at:
 
 ```text
 /workspaces/:workspaceId/config-builder
@@ -217,7 +220,7 @@ It has two main responsibilities:
 1. **Configuration list / overview**
    Show all configurations in the workspace, with high‑level status.
 2. **Workbench launcher**
-   Provide clear entry points into the editor for a particular Configuration +
+   Provide clear entry points into the workbench for a particular Configuration +
    version.
 
 High‑level behaviour:
@@ -260,12 +263,12 @@ Empty states:
 
 Per Configuration, we surface:
 
-* **Open editor**
+* **Open in workbench**
 
   * Opens the workbench on a reasonable starting version (see §5.3).
 * **View versions**
 
-  * Opens a panel or detail view listing all config versions.
+  * Opens a panel or detail view listing all configuration versions.
 * **Create draft**
 
   * Create a new draft version from:
@@ -277,16 +280,16 @@ Per Configuration, we surface:
   * Create a new Configuration, seeded from this one.
 * **Export**
 
-  * Download an export of the config package.
+  * Download an export of the backing configuration package.
 * **Activate / Deactivate**
 
   * Promote a draft to Active or deactivate the currently active version.
 
 All of these actions are permission‑gated and safe‑mode‑aware.
 
-### 5.3 Which version opens in the editor?
+### 5.3 Which version opens in the workbench?
 
-When a user clicks **Open editor**:
+When a user clicks **Open in workbench**:
 
 * If there is at least one **draft**:
 
@@ -330,8 +333,8 @@ Allowed actions depend on status:
 * **Draft**
 
   * Open in workbench (for code editing).
-  * Trigger build / validation (usually via workbench controls).
-  * Activate (if permitted and safe mode is off).
+  * Trigger environment build / validation run (usually via workbench controls).
+  * Activate (if permitted and Safe mode is off).
   * Delete (if supported by backend and no runs depend on it).
 
 * **Active**
@@ -355,7 +358,9 @@ Backends might expose states like `published`, `deprecated`, `archived`, etc.
 We centralise a normalisation function, e.g.:
 
 ```ts
-function normalizeConfigVersionStatus(raw: BackendVersionStatus): ConfigVersionStatus;
+function normalizeConfigurationVersionStatus(
+  raw: BackendVersionStatus,
+): ConfigurationVersionStatus;
 ```
 
 All views (Config list, versions drawer, workbench chrome) use this normalised
@@ -365,7 +370,7 @@ status, so the UI can evolve independently of backend nomenclature.
 
 ## 7. Manifest and schema integration
 
-Each config version exposes a **manifest** (`manifest.json`) describing:
+Each configuration version exposes a **manifest** (`manifest.json`) describing:
 
 * Output tables and their schemas.
 * Column metadata (keys, labels, ordinals, required/enabled).
@@ -373,12 +378,12 @@ Each config version exposes a **manifest** (`manifest.json`) describing:
 
 ### 7.1 Discovering the manifest
 
-The manifest is treated as just another file in the config file tree:
+The manifest is treated as just another file in the configuration file tree:
 
 * Backend file listing includes `manifest.json`.
 * The workbench’s file loading APIs fetch it like any other file.
 
-The details of file listing and editor integration are described in
+The details of file listing and workbench integration are described in
 `09-workbench-editor-and-scripting.md`. This section describes **how we use**
 manifest data at the Config Builder level.
 
@@ -427,18 +432,25 @@ This makes the Config Builder resilient to backend schema evolution.
 
 ---
 
-## 8. Builds, validations, and test runs
+## 8. Builds, validation runs, and test runs
 
-Config Builder is where users interact with three related operations:
+Config Builder exposes one build action and two run modes. The names are
+intentional to avoid “is this a build or a run?” confusion:
 
-1. **Build** – prepare or rebuild the config environment.
-2. **Validate** – run validations against the configuration without processing
-   documents.
-3. **Test run** – execute ADE on a sample document using a specific config
-   version, with logs streamed into the workbench.
+1. **Build** – prepare or rebuild the configuration **environment** (reusing it
+   when possible). This is a `Build` entity and uses `/builds` endpoints.
+2. **Validation run** – execute validators only to check configuration
+   correctness (no full extraction). Implemented as a `Run` with
+   `RunOptions.validateOnly: true` and usually `mode: "validation"`.
+3. **Test run** – execute ADE on a sample document with the chosen configuration
+   version, streaming logs into the workbench. Often sets `mode: "test"` and
+   may use `dryRun: true`.
 
-The **workbench chrome** exposes buttons and keyboard shortcuts for each; this
-section describes the conceptual behaviour.
+Run creation uses the canonical `RunOptions` shape
+(`dryRun`/`validateOnly`/`inputSheetNames`/`mode`) in camelCase and converts
+those to backend snake_case fields (`dry_run`, `validate_only`,
+`input_sheet_names`). The **workbench chrome** exposes buttons and keyboard
+shortcuts for each action.
 
 ### 8.1 Build
 
@@ -457,7 +469,7 @@ Behaviour:
 * Frontend calls a build endpoint, for example:
 
   ```http
-  POST /api/v1/workspaces/{workspace_id}/configs/{config_id}/builds
+  POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds
   ```
 
 * Backend returns a `build_id`.
@@ -472,31 +484,33 @@ Behaviour:
 
 * Final build status updates:
 
-  * `ConfigVersionSummary.lastBuildStatus` / `lastBuildAt`.
+  * `ConfigurationVersionSummary.lastBuildStatus` / `lastBuildAt`.
   * Configuration list and versions view.
 
-### 8.2 Validate configuration
+### 8.2 Validation runs
 
 Goal:
 
-> Check that the configuration on disk is consistent, without running a full
+> Check that the configuration on disk is consistent without running a full
 > extraction.
 
 Behaviour:
 
-* Triggered via a “Run validation” action in workbench controls.
+* Triggered via a “Validation run” action in workbench controls.
 
 * Frontend calls something like:
 
   ```http
-  POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/validate
+  POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/validate
   ```
 
-* Backend may stream logs; ADE Web:
+* Backend may stream logs; ADE Web treats this as a `Run`:
 
   * Writes textual logs to the console.
   * Populates the **Validation** panel with structured issues (severity,
     location, message).
+  * Sends run options with `validate_only: true` (and optionally `mode:
+    "validation"` in UI state).
 
 * `lastValidationStatus` / `lastValidationAt` are updated for the version.
 
@@ -522,8 +536,9 @@ Behaviour:
 3. Frontend creates a run via the backend’s run creation endpoint:
 
    * This may be a configuration‑scoped route (e.g.
-     `/configs/{config_id}/runs`) or a workspace‑scoped route that accepts
-     `config_version_id`.
+     `/configurations/{configuration_id}/runs`) or a workspace‑scoped route that accepts
+     `config_version_id`. Payload uses `RunOptions` (camelCase → snake_case) and
+     can set `mode: "test"` for clarity.
 
 4. Workbench subscribes to the run’s event/log stream:
 
@@ -542,17 +557,17 @@ Behaviour:
 
 ## 9. Safe mode and permissions
 
-Config Builder is tightly integrated with **safe mode** and **RBAC** (see
+Config Builder is tightly integrated with **Safe mode** and **RBAC** (see
 `05-auth-session-rbac-and-safe-mode.md`).
 
 ### 9.1 Safe mode
 
-When safe mode is **enabled**:
+When Safe mode is **enabled**:
 
 * The following actions are **blocked**:
 
-  * Build environment.
-  * Validate configuration.
+  * Environment builds.
+  * Validation runs (configuration validation).
   * Test runs (“Run extraction”).
   * Activate/publish configuration versions.
 
@@ -564,28 +579,28 @@ When safe mode is **enabled**:
 
 UI behaviour:
 
-* The workspace shell shows a **safe mode banner** with the backend‑provided
+* The workspace shell shows a **Safe mode banner** with the backend‑provided
   `detail` message.
 * Buttons for blocked actions are disabled and show a tooltip, e.g.:
 
   > “Safe mode is enabled: <detail>”
 
 Config Builder does **not** attempt to perform these actions and then interpret
-errors; it reads safe mode state and proactively disables them.
+ errors; it reads Safe mode state and proactively disables them.
 
 ### 9.2 Permissions
 
 Configuration operations are governed by workspace permissions, for example:
 
-* `Workspace.Configs.Read`
-* `Workspace.Configs.ReadWrite`
-* `Workspace.Configs.Activate`
+* `Workspace.Configurations.Read`
+* `Workspace.Configurations.ReadWrite`
+* `Workspace.Configurations.Activate`
 
 Patterns:
 
 * **View list / versions** → `Read`.
 * **Create / clone configuration** → `ReadWrite`.
-* **Edit files / build / validate / test run** → `ReadWrite` and safe mode off.
+* **Edit files / build / validate / test run** → `ReadWrite` and Safe mode off.
 * **Activate / deactivate version** → `Activate`.
 
 Helpers in `shared/permissions` are used to:
@@ -608,23 +623,23 @@ Under a workspace:
 GET  /api/v1/workspaces/{workspace_id}/configurations
 POST /api/v1/workspaces/{workspace_id}/configurations
 
-GET  /api/v1/workspaces/{workspace_id}/configurations/{config_id}
-GET  /api/v1/workspaces/{workspace_id}/configurations/{config_id}/export
+GET  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}
+GET  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/export
 ```
 
 * `GET /configurations` → list configurations for the workspace.
 * `POST /configurations` → create new configuration (optionally from a template
   or existing configuration).
-* `GET /configurations/{config_id}` → configuration detail.
-* `GET /configurations/{config_id}/export` → export package.
+* `GET /configurations/{configuration_id}` → configuration detail.
+* `GET /configurations/{configuration_id}/export` → export the backing configuration package.
 
 ### 10.2 Version lifecycle
 
 ```http
-GET  /api/v1/workspaces/{workspace_id}/configurations/{config_id}/versions
-POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/publish
-POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/activate
-POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/deactivate
+GET  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions
+POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish
+POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/activate
+POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/deactivate
 ```
 
 * `GET /versions` → list all versions for a Configuration.
@@ -636,7 +651,7 @@ Frontend responsibilities:
 
 * Treat these endpoints as **actions** (no hand‑built state machine).
 * Refresh Configuration + versions after each call.
-* Apply `normalizeConfigVersionStatus` to map backend state into
+* Apply `normalizeConfigurationVersionStatus` to map backend state into
   `draft/active/inactive`.
 
 ### 10.3 Files, manifest, and directories
@@ -644,14 +659,14 @@ Frontend responsibilities:
 File and directory operations:
 
 ```http
-GET    /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files
-GET    /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}
-PUT    /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}
-PATCH  /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}
-DELETE /api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}
+GET    /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files
+GET    /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}
+PUT    /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}
+PATCH  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}
+DELETE /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}
 
-POST   /api/v1/workspaces/{workspace_id}/configurations/{config_id}/directories/{directory_path}
-DELETE /api/v1/workspaces/{workspace_id}/configurations/{config_id}/directories/{directory_path}
+POST   /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}
+DELETE /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}
 ```
 
 These underpin:
@@ -668,7 +683,7 @@ is introduced.
 Build endpoints:
 
 ```http
-POST /api/v1/workspaces/{workspace_id}/configs/{config_id}/builds
+POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds
 GET  /api/v1/builds/{build_id}
 GET  /api/v1/builds/{build_id}/logs   # NDJSON stream
 ```
@@ -676,7 +691,7 @@ GET  /api/v1/builds/{build_id}/logs   # NDJSON stream
 Validation endpoint:
 
 ```http
-POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/validate
+POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/validate
 ```
 
 Frontend wraps these in domain‑specific hooks, e.g.:
@@ -696,14 +711,14 @@ This section ties everything together in concrete scenarios.
 
 ### 11.1 Create and roll out a new configuration
 
-1. User opens **Config Builder** (`/workspaces/:workspaceId/config-builder`).
+1. User opens the **Configurations** section / Config Builder (`/workspaces/:workspaceId/config-builder`).
 2. Clicks **Create configuration**.
 3. Fills in name and optional template.
 4. Frontend calls `POST /configurations`.
 5. Backend returns a Configuration with an initial **draft** version.
 6. UI opens the workbench on that draft.
-7. User edits files, runs **build** and **validation**, and performs **test runs**
-   against sample documents.
+7. User edits files, runs an environment **build**, performs a **validation
+   run**, and executes **test runs** against sample documents.
 8. When ready, user clicks **Activate** on the draft version.
 9. The new version becomes **Active**; it becomes the default for new runs
    using this Configuration.
@@ -714,8 +729,8 @@ This section ties everything together in concrete scenarios.
 2. In the versions view, user **clones** the current active version → new
    **draft**.
 3. Workbench opens on the draft.
-4. User makes changes, builds, validates, and test‑runs against sample
-   documents.
+4. User makes changes, builds the environment, runs **validation runs**, and
+   test‑runs against sample documents.
 5. When satisfied, user **activates** this draft.
 6. The previously active version becomes **Inactive**.
 7. The next runs referencing this Configuration use the new active version,

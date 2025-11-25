@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from collections.abc import AsyncIterator
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -10,8 +10,9 @@ import pytest
 
 from ade_engine.schemas import TelemetryEnvelope, TelemetryEvent
 
-from ade_api.features.builds.models import ConfigurationBuild, ConfigurationBuildStatus
+from ade_api.features.builds.models import BuildStatus
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
+from ade_api.features.configs.storage import compute_config_digest
 from ade_api.features.documents.models import Document, DocumentSource, DocumentStatus
 from ade_api.features.documents.storage import DocumentStorage
 from ade_api.features.runs.models import RunStatus
@@ -20,6 +21,7 @@ from ade_api.features.runs.service import RunExecutionContext, RunsService
 from ade_api.features.workspaces.models import Workspace
 from ade_api.features.system_settings.service import SafeModeService
 from ade_api.settings import Settings
+from ade_api.storage_layout import config_venv_path, workspace_config_root, workspace_documents_root
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.db.mixins import generate_ulid
 
@@ -34,38 +36,44 @@ async def _prepare_service(
     session.add(workspace)
     await session.flush()
 
+    configuration_id = generate_ulid()
     configuration = Configuration(
+        id=configuration_id,
         workspace_id=workspace.id,
-        config_id=generate_ulid(),
         display_name="Config",
         status=ConfigurationStatus.ACTIVE,
-        config_version=1,
+        configuration_version=1,
         content_digest="digest",
     )
     session.add(configuration)
     await session.flush()
 
-    venv_root = tmp_path / "venvs"
-    documents_dir = tmp_path / "documents"
-    runs_dir = tmp_path / "runs"
-    venv_dir = venv_root / configuration.config_id
-    bin_dir = venv_dir / ("Scripts" if os.name == "nt" else "bin")
-    bin_dir.mkdir(parents=True, exist_ok=True)
-    python_name = "python.exe" if os.name == "nt" else "python"
-    (bin_dir / python_name).write_text("", encoding="utf-8")
+    workspaces_dir = tmp_path / "workspaces"
+    documents_dir = workspaces_dir
+    runs_dir = workspaces_dir
 
     base_settings = Settings()
     settings = base_settings.model_copy(
         update={
-            "venvs_dir": str(venv_root),
+            "workspaces_dir": workspaces_dir,
             "safe_mode": safe_mode,
             "documents_dir": documents_dir,
             "runs_dir": runs_dir,
         }
     )
 
+    venv_dir = config_venv_path(settings, workspace.id, configuration.id)
+    bin_dir = venv_dir / ("Scripts" if os.name == "nt" else "bin")
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    python_name = "python.exe" if os.name == "nt" else "python"
+    (bin_dir / python_name).write_text("", encoding="utf-8")
+    config_root = workspace_config_root(settings, workspace.id, configuration.id)
+    config_root.mkdir(parents=True, exist_ok=True)
+    (config_root / "pyproject.toml").write_text("[project]\nname='demo'\nversion='0.0.1'\n", encoding="utf-8")
+    digest = compute_config_digest(config_root)
+
     document_id = generate_ulid()
-    storage = DocumentStorage(settings.documents_dir)
+    storage = DocumentStorage(workspace_documents_root(settings, workspace.id))
     stored_uri = storage.make_stored_uri(document_id)
     source_path = storage.path_for(stored_uri)
     source_path.parent.mkdir(parents=True, exist_ok=True)
@@ -85,21 +93,14 @@ async def _prepare_service(
     )
     session.add(document)
 
-    build = ConfigurationBuild(
-        workspace_id=workspace.id,
-        config_id=configuration.config_id,
-        configuration_id=configuration.id,
-        build_id=generate_ulid(),
-        status=ConfigurationBuildStatus.ACTIVE,
-        venv_path=str(venv_dir),
-        config_version=configuration.config_version,
-        content_digest=configuration.content_digest,
-        engine_spec=settings.engine_spec,
-        engine_version="0.2.0",
-        python_interpreter=settings.python_bin,
-        built_at=utc_now(),
-    )
-    session.add(build)
+    configuration.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
+    configuration.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
+    configuration.engine_version = "0.2.0"  # type: ignore[attr-defined]
+    configuration.python_interpreter = settings.python_bin  # type: ignore[attr-defined]
+    configuration.python_version = "3.12.1"  # type: ignore[attr-defined]
+    configuration.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
+    configuration.built_content_digest = digest  # type: ignore[attr-defined]
+    configuration.content_digest = digest
     await session.commit()
 
     safe_mode_service = SafeModeService(session=session, settings=settings)
@@ -109,7 +110,7 @@ async def _prepare_service(
         safe_mode_service=safe_mode_service,
     )
     run, context = await service.prepare_run(
-        config_id=configuration.config_id,
+        configuration_id=configuration.id,
         options=RunCreateOptions(input_document_id=document.id),
     )
     return service, context, document
@@ -240,6 +241,32 @@ async def test_stream_run_handles_cancelled_execution(
     run = await service.get_run(context.run_id)
     assert run is not None
     assert run.status is RunStatus.CANCELED
+
+
+@pytest.mark.asyncio()
+async def test_force_rebuild_triggers_rebuild(
+    session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, context, document = await _prepare_service(session, tmp_path)
+
+    rebuild_called = False
+
+    async def fake_rebuild(self, *, configuration, config_root, venv_path, digest):  # type: ignore[no-untyped-def]
+        nonlocal rebuild_called
+        rebuild_called = True
+        configuration.build_status = BuildStatus.ACTIVE  # type: ignore[assignment]
+        configuration.built_content_digest = digest  # type: ignore[attr-defined]
+        configuration.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
+
+    monkeypatch.setattr(RunsService, "_rebuild_configuration_env", fake_rebuild)
+
+    options = RunCreateOptions(input_document_id=document.id, force_rebuild=True)
+    run, _ = await service.prepare_run(configuration_id=context.configuration_id, options=options)
+
+    assert rebuild_called is True
+    assert run.build_id is not None
     assert run.error_message == "Run execution cancelled"
 
 

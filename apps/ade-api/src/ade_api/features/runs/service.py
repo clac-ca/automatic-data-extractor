@@ -17,11 +17,12 @@ from uuid import uuid4
 from ade_engine.schemas import TelemetryEnvelope
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.features.builds.models import ConfigurationBuild, ConfigurationBuildStatus
-from ade_api.features.builds.repository import ConfigurationBuildsRepository
+from ade_api.features.builds.builder import BuilderArtifactsEvent, BuilderEvent, VirtualEnvironmentBuilder
+from ade_api.features.builds.models import BuildStatus
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.features.configs.repository import ConfigurationsRepository
+from ade_api.features.configs.storage import compute_config_digest
 from ade_api.features.documents.repository import DocumentsRepository
 from ade_api.features.documents.staging import stage_document_input
 from ade_api.features.documents.storage import DocumentStorage
@@ -31,6 +32,12 @@ from ade_api.features.system_settings.service import (
     SafeModeService,
 )
 from ade_api.settings import Settings
+from ade_api.storage_layout import (
+    config_venv_path,
+    workspace_config_root,
+    workspace_documents_root,
+    workspace_run_root,
+)
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.pagination import Page
 
@@ -92,7 +99,6 @@ class RunExecutionContext:
     run_id: str
     configuration_id: str
     workspace_id: str
-    config_id: str
     venv_path: str
     build_id: str
     runs_dir: str | None = None
@@ -102,7 +108,6 @@ class RunExecutionContext:
             "run_id": self.run_id,
             "configuration_id": self.configuration_id,
             "workspace_id": self.workspace_id,
-            "config_id": self.config_id,
             "venv_path": self.venv_path,
             "build_id": self.build_id,
             "runs_dir": self.runs_dir or "",
@@ -114,7 +119,6 @@ class RunExecutionContext:
             run_id=payload["run_id"],
             configuration_id=payload["configuration_id"],
             workspace_id=payload["workspace_id"],
-            config_id=payload["config_id"],
             venv_path=payload["venv_path"],
             build_id=payload["build_id"],
             runs_dir=payload.get("runs_dir") or None,
@@ -163,20 +167,18 @@ class RunsService:
         self._session = session
         self._settings = settings
         self._configs = ConfigurationsRepository(session)
-        self._builds = ConfigurationBuildsRepository(session)
         self._runs = RunsRepository(session)
         self._supervisor = supervisor or RunSupervisor()
         self._documents = DocumentsRepository(session)
         self._safe_mode_service = safe_mode_service
+        self._builder = VirtualEnvironmentBuilder()
 
         if settings.documents_dir is None:
             raise RuntimeError("ADE_DOCUMENTS_DIR is not configured")
         if settings.runs_dir is None:
             raise RuntimeError("ADE_RUNS_DIR is not configured")
 
-        self._documents_dir = settings.documents_dir
         self._runs_dir = Path(settings.runs_dir)
-        self._storage = DocumentStorage(self._documents_dir)
 
     # ---------------------------------------------------------------------
     # Run lifecycle helpers
@@ -184,12 +186,12 @@ class RunsService:
     async def prepare_run(
         self,
         *,
-        config_id: str,
+        configuration_id: str,
         options: RunCreateOptions,
     ) -> tuple[Run, RunExecutionContext]:
         """Create the queued run row and return its execution context."""
 
-        configuration = await self._resolve_configuration(config_id)
+        configuration = await self._resolve_configuration(configuration_id)
         input_document_id = options.input_document_id or None
         document_descriptor: dict[str, Any] | None = None
         if input_document_id:
@@ -198,7 +200,9 @@ class RunsService:
                 document_id=input_document_id,
             )
             document_descriptor = self._document_descriptor(document)
-        build = await self._resolve_active_build(configuration)
+        venv_path, build_id = await self._ensure_config_env_ready(
+            configuration, force_rebuild=options.force_rebuild
+        )
 
         selected_sheet_name = options.input_sheet_name
         if not selected_sheet_name and options.input_sheet_names:
@@ -208,10 +212,11 @@ class RunsService:
         run_id = self._generate_run_id()
         run = Run(
             id=run_id,
-            configuration_id=configuration.id,
             workspace_id=configuration.workspace_id,
-            config_id=configuration.config_id,
-            config_version_id=configuration.config_id,
+            configuration_id=configuration.id,
+            configuration_version_id=str(configuration.configuration_version)
+            if configuration.configuration_version is not None
+            else None,
             status=RunStatus.QUEUED,
             attempt=1,
             retry_of_run_id=None,
@@ -223,27 +228,24 @@ class RunsService:
                 options.input_sheet_names
                 or ([selected_sheet_name] if selected_sheet_name else None)
             ),
+            build_id=build_id,
         )
         self._session.add(run)
+        configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
         await self._session.flush()
 
-        await self._builds.update_last_used(
-            workspace_id=configuration.workspace_id,
-            config_id=configuration.config_id,
-            build_id=build.build_id,
-            last_used_at=utc_now(),
-        )
         await self._session.commit()
         await self._session.refresh(run)
 
+        runs_root = workspace_run_root(self._settings, configuration.workspace_id)
+        venv_path = config_venv_path(self._settings, configuration.workspace_id, configuration.id)
         context = RunExecutionContext(
             run_id=run.id,
-            configuration_id=configuration.id,
             workspace_id=configuration.workspace_id,
-            config_id=configuration.config_id,
-            venv_path=build.venv_path,
-            build_id=build.build_id,
-            runs_dir=str(self._runs_dir),
+            configuration_id=configuration.id,
+            venv_path=str(venv_path),
+            build_id=build_id or "",
+            runs_dir=str(runs_root),
         )
         return run, context
 
@@ -271,7 +273,7 @@ class RunsService:
             run_id=run.id,
             created=self._epoch_seconds(run.created_at),
             status=self._status_literal(run.status),
-            config_id=run.config_id,
+            configuration_id=run.configuration_id,
         )
 
         run = await self._transition_status(run, RunStatus.RUNNING)
@@ -438,14 +440,14 @@ class RunsService:
         """Convert ``run`` into its API representation."""
         paths = self._finalize_paths(
             summary=None,
-            run_dir=self._run_dir_for_run(run.id),
+            run_dir=self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id),
             default_paths=RunPathsSnapshot(output_paths=[], processed_files=[]),
         )
 
         return RunResource(
             id=run.id,
-            config_id=run.config_id,
-            config_version_id=run.config_version_id,
+            configuration_id=run.configuration_id,
+            configuration_version_id=run.configuration_version_id,
             submitted_by_user_id=run.submitted_by_user_id,
             input_document_id=run.input_document_id,
             input_documents=run.input_documents or [],
@@ -496,8 +498,8 @@ class RunsService:
     async def get_artifact_path(self, *, run_id: str) -> Path:
         """Return the artifact path for ``run_id`` when available."""
 
-        await self._require_run(run_id)
-        logs_dir = self._run_dir_for_run(run_id) / "logs"
+        run = await self._require_run(run_id)
+        logs_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id) / "logs"
         artifact_path = logs_dir / "artifact.json"
         if not artifact_path.is_file():
             raise RunArtifactMissingError("Run artifact is unavailable")
@@ -506,8 +508,8 @@ class RunsService:
     async def get_logs_file_path(self, *, run_id: str) -> Path:
         """Return the raw log stream path for ``run_id`` when available."""
 
-        await self._require_run(run_id)
-        logs_dir = self._run_dir_for_run(run_id) / "logs"
+        run = await self._require_run(run_id)
+        logs_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id) / "logs"
         logs_path = logs_dir / "events.ndjson"
         if not logs_path.is_file():
             raise RunLogsFileMissingError("Run log stream is unavailable")
@@ -516,8 +518,8 @@ class RunsService:
     async def list_output_files(self, *, run_id: str) -> list[tuple[str, int]]:
         """Return output file tuples for ``run_id``."""
 
-        await self._require_run(run_id)
-        output_dir = self._run_dir_for_run(run_id) / "output"
+        run = await self._require_run(run_id)
+        output_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id) / "output"
         if not output_dir.exists() or not output_dir.is_dir():
             raise RunOutputMissingError("Run output is unavailable")
 
@@ -540,8 +542,8 @@ class RunsService:
     ) -> Path:
         """Return the absolute path for ``relative_path`` in ``run_id`` outputs."""
 
-        await self._require_run(run_id)
-        output_dir = self._run_dir_for_run(run_id) / "output"
+        run = await self._require_run(run_id)
+        output_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id) / "output"
         if not output_dir.exists() or not output_dir.is_dir():
             raise RunOutputMissingError("Run output is unavailable")
 
@@ -555,10 +557,10 @@ class RunsService:
             raise RunOutputMissingError("Requested output file not found")
         return candidate
 
-    def run_directory(self, run_id: str) -> Path:
+    def run_directory(self, *, workspace_id: str, run_id: str) -> Path:
         """Return the canonical run directory for a given ``run_id``."""
 
-        return self._run_dir_for_run(run_id)
+        return self._run_dir_for_run(workspace_id=workspace_id, run_id=run_id)
 
     def run_relative_path(self, path: Path) -> str:
         """Return ``path`` relative to the runs root, validating traversal."""
@@ -691,7 +693,11 @@ class RunsService:
         ) -> AsyncIterator[RunStreamFrame]:
         python = self._resolve_python(Path(context.venv_path))
         env = self._build_env(Path(context.venv_path), options, context)
-        runs_root = Path(context.runs_dir or self._settings.runs_dir)
+        runs_root = (
+            Path(context.runs_dir)
+            if context.runs_dir
+            else workspace_run_root(self._settings, context.workspace_id)
+        )
         run_dir = runs_root / run.id
         run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -717,7 +723,7 @@ class RunsService:
 
         metadata = {
             "run_id": run.id,
-            "config_id": run.config_id,
+            "configuration_id": run.configuration_id,
             "workspace_id": run.workspace_id,
             "configuration_id": context.configuration_id,
         }
@@ -792,6 +798,10 @@ class RunsService:
             raise RunDocumentMissingError(f"Document {document_id} not found")
         return document
 
+    def _storage_for(self, workspace_id: str) -> DocumentStorage:
+        base = workspace_documents_root(self._settings, workspace_id)
+        return DocumentStorage(base)
+
     async def _stage_input_document(
         self,
         *,
@@ -803,34 +813,98 @@ class RunsService:
             workspace_id=workspace_id,
             document_id=document_id,
         )
+        storage = self._storage_for(workspace_id)
 
         return await stage_document_input(
             document=document,
-            storage=self._storage,
+            storage=storage,
             session=self._session,
             run_dir=run_dir,
         )
 
-    async def _resolve_configuration(self, config_id: str) -> Configuration:
-        configuration = await self._configs.get_by_config_id(config_id)
+    async def _resolve_configuration(self, configuration_id: str) -> Configuration:
+        configuration = await self._configs.get_by_id(configuration_id)
         if configuration is None:
-            raise ConfigurationNotFoundError(config_id)
+            raise ConfigurationNotFoundError(configuration_id)
         if configuration.status == ConfigurationStatus.INACTIVE:
             logger.warning(
-                "Launching run for inactive configuration", extra={"config_id": config_id}
+                "Launching run for inactive configuration",
+                extra={"configuration_id": configuration_id},
             )
         return configuration
 
-    async def _resolve_active_build(self, configuration: Configuration) -> ConfigurationBuild:
-        build = await self._builds.get_active(
-            workspace_id=configuration.workspace_id,
-            config_id=configuration.config_id,
+    async def _ensure_config_env_ready(
+        self, configuration: Configuration, *, force_rebuild: bool = False
+    ) -> tuple[Path, str | None]:
+        config_root = workspace_config_root(
+            self._settings, configuration.workspace_id, configuration.id
         )
-        if build is None or build.status is not ConfigurationBuildStatus.ACTIVE:
-            raise RunEnvironmentNotReadyError(
-                f"Configuration {configuration.config_id} does not have an active build"
+        venv_path = config_venv_path(self._settings, configuration.workspace_id, configuration.id)
+        digest = compute_config_digest(config_root)
+        dirty = (
+            not venv_path.exists()
+            or configuration.build_status is not BuildStatus.ACTIVE
+            or configuration.built_content_digest != digest
+            or force_rebuild
+        )
+        if dirty:
+            await self._rebuild_configuration_env(
+                configuration=configuration,
+                config_root=config_root,
+                venv_path=venv_path,
+                digest=digest,
             )
-        return build
+        return venv_path, configuration.last_build_id
+
+    async def _rebuild_configuration_env(
+        self,
+        *,
+        configuration: Configuration,
+        config_root: Path,
+        venv_path: Path,
+        digest: str,
+    ) -> None:
+        build_id = f"build_{uuid4().hex}"
+        configuration.build_status = BuildStatus.BUILDING  # type: ignore[assignment]
+        configuration.last_build_started_at = utc_now()  # type: ignore[attr-defined]
+        configuration.last_build_error = None  # type: ignore[attr-defined]
+        configuration.last_build_id = build_id  # type: ignore[attr-defined]
+        await self._session.flush()
+
+        artifacts: BuilderArtifactsEvent | None = None
+        async for event in self._builder.build_stream(
+            build_id=build_id,
+            workspace_id=configuration.workspace_id,
+            configuration_id=configuration.id,
+            target_path=venv_path,
+            config_path=config_root,
+            engine_spec=self._settings.engine_spec,
+            pip_cache_dir=Path(self._settings.pip_cache_dir) if self._settings.pip_cache_dir else None,
+            python_bin=self._settings.python_bin,
+            timeout=float(self._settings.build_timeout.total_seconds()),
+        ):
+            if isinstance(event, BuilderArtifactsEvent):
+                artifacts = event
+
+        if artifacts is None:
+            raise RunEnvironmentNotReadyError(
+                f"Build for configuration {configuration.id} did not return metadata"
+            )
+
+        now = utc_now()
+        configuration.build_status = BuildStatus.ACTIVE  # type: ignore[assignment]
+        configuration.engine_spec = self._settings.engine_spec  # type: ignore[attr-defined]
+        configuration.engine_version = artifacts.artifacts.engine_version  # type: ignore[attr-defined]
+        configuration.python_version = artifacts.artifacts.python_version  # type: ignore[attr-defined]
+        configuration.python_interpreter = str(
+            venv_path / ("Scripts" if os.name == "nt" else "bin") / ("python.exe" if os.name == "nt" else "python")
+        )  # type: ignore[attr-defined]
+        configuration.content_digest = digest
+        configuration.built_content_digest = digest  # type: ignore[attr-defined]
+        configuration.built_configuration_version = configuration.configuration_version  # type: ignore[attr-defined]
+        configuration.last_build_finished_at = now  # type: ignore[attr-defined]
+        configuration.last_build_error = None  # type: ignore[attr-defined]
+        await self._session.flush()
 
     async def _transition_status(self, run: Run, status: RunStatus) -> Run:
         if status is RunStatus.RUNNING:
@@ -908,9 +982,9 @@ class RunsService:
             env["ADE_RUN_ID"] = context.run_id
         return env
 
-    def _run_dir_for_run(self, run_id: str) -> Path:
-        root = self._runs_dir.resolve()
-        candidate = (self._runs_dir / run_id).resolve()
+    def _run_dir_for_run(self, *, workspace_id: str, run_id: str) -> Path:
+        root = workspace_run_root(self._settings, workspace_id).resolve()
+        candidate = (root / run_id).resolve()
         try:
             candidate.relative_to(root)
         except ValueError:  # pragma: no cover - defensive guard
