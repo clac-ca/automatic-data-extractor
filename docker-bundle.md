@@ -604,7 +604,7 @@ ADE is configured via environment variables; defaults work for local dev.
 | `ADE_SAFE_MODE`           | `false`                  | Skip engine execution while runs API returns safe-mode    |
 | `ADE_MAX_CONCURRENCY`     | `2`                      | Backend dispatcher parallelism                            |
 | `ADE_QUEUE_SIZE`          | `10`                     | Back-pressure threshold before HTTP 429                   |
-| `ADE_JOB_TIMEOUT_SECONDS` | `300`                    | Wall-clock timeout per worker                             |
+| `ADE_RUN_TIMEOUT_SECONDS` | `300`                    | Wall-clock timeout per worker                             |
 | `ADE_WORKER_CPU_SECONDS`  | `60`                     | Best-effort CPU limit per run (POSIX rlimit)              |
 | `ADE_WORKER_MEM_MB`       | `512`                    | Best-effort address-space ceiling per run (POSIX rlimit)  |
 | `ADE_WORKER_FSIZE_MB`     | `100`                    | Best-effort max file size a run may create (POSIX rlimit) |

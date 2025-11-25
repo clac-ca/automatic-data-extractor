@@ -442,9 +442,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _finalize(self) -> Settings:
-        if os.environ.get("ADE_JOBS_DIR"):
-            raise ValueError("Use ADE_RUNS_DIR instead of ADE_JOBS_DIR")
-
         self.api_root = _resolve_path(self.api_root, default=DEFAULT_API_ROOT)
         self.web_dir = _resolve_path(self.web_dir, default=DEFAULT_WEB_DIR)
         self.alembic_ini_path = _resolve_path(

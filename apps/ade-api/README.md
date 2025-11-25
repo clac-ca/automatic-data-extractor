@@ -28,4 +28,4 @@ POST /api/v1/workspaces/{workspace_id}/configs
 }
 ```
 
-The backend copies the requested template into `./data/workspaces/{workspace_id}/config_packages/{config_id}/`, ready for editing and activation. After activation, job runs will build a virtual environment for the template and execute the engine with the manifest and detectors bundled in that directory. Use the **sandbox** template for a quick start on new environments; switch to **default** when you need the fuller set of detectors demonstrated in the engine docs.
+The backend copies the requested template into `./data/workspaces/{workspace_id}/config_packages/{config_id}/`, ready for editing and activation. After activation, runs will build a virtual environment for the template and execute the engine with the manifest and detectors bundled in that directory. Use the **sandbox** template for a quick start on new environments; switch to **default** when you need the fuller set of detectors demonstrated in the engine docs.

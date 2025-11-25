@@ -247,7 +247,7 @@ Returns a paginated list of log entries and the `next_after_id` cursor for subse
 | `ADE_BUILD_TIMEOUT_SECONDS`     | `600`                  | Max duration for a single build before failing  |
 | `ADE_BUILD_ENSURE_WAIT_SECONDS` | `30`                   | How long server waits for an in‑progress build  |
 | `ADE_MAX_CONCURRENCY`           | `2`                    | Maximum concurrent builds/runs                  |
-| `ADE_JOB_TIMEOUT_SECONDS`       | `300`                  | Hard timeout for runs                           |
+| `ADE_RUN_TIMEOUT_SECONDS`       | `300`                  | Hard timeout for runs                           |
 | `ADE_WORKER_CPU_SECONDS`        | `60`                   | CPU limit per run                               |
 | `ADE_WORKER_MEM_MB`             | `512`                  | Memory limit per run                            |
 | `ADE_WORKER_FSIZE_MB`           | `100`                  | Max file size a run may create                  |
