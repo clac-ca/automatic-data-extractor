@@ -39,8 +39,8 @@ Everything ADE produces at runtime (documents, jobs, venvs, caches, etc.) goes u
 
 ### 2.1 Prerequisites
 
-* Docker
-* Docker Compose (often included in recent Docker Desktop installs)
+* [Docker](https://docs.docker.com/get-docker/)
+* [Docker Compose](https://docs.docker.com/compose/install/) (often included in recent Docker Desktop installs)
 
 ### 2.2 Run ADE with Docker Compose
 

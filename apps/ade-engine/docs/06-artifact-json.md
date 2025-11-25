@@ -156,7 +156,7 @@ Run‑level info and outcome:
   "outputs": [
     "normalized.xlsx"
   ],
-  "engine_version": "0.1.0",
+  "engine_version": "0.2.0",
   "error": null
 }
 ```
