@@ -1,11 +1,9 @@
 services:
   ade:
+    image: ghcr.io/clac-ca/automatic-data-extractor:local
     build:
       context: .
       dockerfile: ./Dockerfile
-
-    # Optional: set an explicit image name for the built image
-    # image: ghcr.io/clac-ca/automatic-data-extractor:dev
 
     env_file:
       - .env
