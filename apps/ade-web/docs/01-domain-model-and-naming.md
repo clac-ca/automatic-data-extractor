@@ -21,7 +21,7 @@ Keep these names and IDs aligned across UI copy, types, routes, and folders:
 - API modules: `workspacesApi`, `configurationsApi`, `documentsApi`, `runsApi`, `buildsApi`
 - Storage prefix: `ade.ui.workspace.<workspaceId>…`
 
-**Config Builder naming rule:** the nav label is **Config Builder**, the route segment is `/config-builder`, and the screen/folder lives at `features/workspace-shell/sections/config-builder`. Keep all three in sync.
+**Configuration Builder naming rule:** the nav label is **Configuration Builder**, the route segment is `/config-builder`, and the screen/folder lives at `features/workspace-shell/sections/config-builder`. Keep all three in sync.
 
 If this table and the folder structure always agree, onboarding stays trivial for new contributors and agents.
 

@@ -4,7 +4,7 @@ ADE Web is the browser‑based front‑end for the **Automatic Data Extractor (A
 
 It serves two main personas:
 
-- **Workspace owners / engineers** – design and evolve **Configurations** (backed by Python configuration packages / `ade_config` projects) that describe how documents are processed; manage Safe mode; and administer workspaces, SSO, roles, and members.
+- **Workspace owners / engineers** – design and evolve **Configurations** (backed by Python configuration packages / `ade_config` projects) that describe how documents are processed; manage Safe mode; and administer workspaces, SSO, roles, and members using the **Configuration Builder** workbench.
 - **End users / analysts / operators** – upload documents, run extractions, monitor progress, inspect logs and telemetry, and download structured outputs.
 
 This document describes **what** ADE Web does and the behaviour it expects from any compatible backend. It is intentionally **backend‑agnostic** and should be treated as the product‑level specification for ADE Web and its contracts with the backend.
@@ -26,7 +26,7 @@ This document describes **what** ADE Web does and the behaviour it expects from 
 ADE Web has two major layers:
 
 1. **Workspace directory** – where users discover and create workspaces.
-2. **Workspace shell** – where users operate inside a specific workspace.
+2. **Workspace shell** – where users operate inside a specific workspace (Documents, Runs, **Configuration Builder**, Settings).
 
 Both layers share common patterns:
 
@@ -80,7 +80,7 @@ Inside a workspace, ADE Web uses a reusable **workspace shell**:
   - Primary sections:
     - Documents
     - Runs
-    - Configurations (Config Builder)
+    - Configurations (Configuration Builder)
     - Settings
   - Collapse/expand state is persisted **per workspace** (each workspace remembers nav compactness).
 
@@ -104,7 +104,7 @@ Inside a workspace, ADE Web uses a reusable **workspace shell**:
   - Toasts for success/error messages.
   - Banners for cross‑cutting issues like Safe mode, connectivity, or workbench layout warnings.
 
-Certain routes (especially the **Config Builder** workbench) can temporarily hide parts of the shell in favour of the immersive workbench layout.
+Certain routes (especially the **Configuration Builder** workbench) can temporarily hide parts of the shell in favour of the immersive workbench layout.
 
 ---
 
@@ -160,7 +160,7 @@ Multi‑sheet spreadsheets can expose **worksheet metadata**:
 
 - ADE Web calls a document‑sheets endpoint to learn about sheets:
   - `name`, index, and whether a sheet is “active”.
-- Run dialogs (including the Config Builder **Run extraction** dialog) can offer sheet‑level selection.
+- Run dialogs (including the Configuration Builder **Test** dialog) can offer sheet‑level selection.
 
 ---
 
@@ -228,7 +228,7 @@ The backend exposes **streaming NDJSON APIs** for run events:
   - Logs,
   - Telemetry summaries (rows processed, warnings, etc.).
 - The same streams can be replayed to show historical run details.
-- The Config Builder workbench reuses this to show build/run events inside its **Console**.
+- The Configuration Builder workbench reuses this to show build/run events inside its **Console**.
 
 ---
 
@@ -267,7 +267,7 @@ Backends may add internal states (e.g. “published”, “archived”), but ADE
 Typical flows:
 
 1. Clone the **active** version (or a known‑good inactive one) into a new **draft**.
-2. Edit code, configuration files, and manifest in the Config Builder.
+2. Edit code, configuration files, and manifest in the Configuration Builder.
 3. Build the environment, run **validation runs**, and perform **test runs**
    against sample documents.
 4. When satisfied, **activate** the draft:
@@ -299,7 +299,7 @@ Table‑level options:
 ADE Web:
 
 - Parses the manifest into a structured model.
-- Surfaces it in the Config Builder for:
+- Surfaces it in the Configuration Builder for:
   - Reordering columns,
   - Toggling enabled/required flags,
   - Linking transform/validator scripts.
@@ -404,8 +404,8 @@ Inside `/workspaces/:workspaceId`, the first path segment after the workspace ID
 
 - `/documents` – Documents list and document run UI.
 - `/runs` – Runs ledger (workspace‑wide run history).
-- `/config-builder` – Config Builder (config list + workbench).
-- Config Builder naming stays locked to the route: nav label is **Config Builder**, route segment is `/config-builder`, and the feature folder is `features/workspace-shell/sections/config-builder`.
+- `/config-builder` – Configuration Builder (configurations list + workbench).
+- Configuration Builder naming stays locked to the route: nav label is **Configuration Builder**, route segment is `/config-builder`, and the feature folder is `features/workspace-shell/sections/config-builder`.
 - `/settings` – Workspace settings (tabs controlled by `view` query param).
 - `/overview` – Optional overview/summary surface.
 
@@ -479,7 +479,7 @@ Because `new URL(to, window.location.origin)` assumes a root‑served SPA, if AD
 
 Typical usage:
 
-* Editors (especially Config Builder) use blockers to guard against losing unsaved changes.
+* Editors (especially Configuration Builder) use blockers to guard against losing unsaved changes.
 * Blockers usually:
 
   * Allow navigation if the pathname is unchanged (query/hash only).
@@ -569,9 +569,9 @@ For non‑trivial query state (documents filters, run filters), use typed helper
 
 ---
 
-## Config Builder – workbench model
+## Configuration Builder – workbench model
 
-The **Configurations** section (Config Builder) lists configurations and launches the **Config Builder workbench**—the dedicated editing window for a single configuration version, backed by a file tree from the backend and a tabbed Monaco editor. In docs, use “Config Builder workbench” on first mention and “workbench” afterwards; reserve “editor” for the Monaco instance inside the window.
+The **Configurations** section (Configuration Builder) lists configurations and launches the **Configuration Builder workbench**—the dedicated editing window for a single configuration version, backed by a file tree from the backend and a tabbed Monaco editor. In docs, use “Configuration Builder workbench” on first mention and “workbench” afterwards; reserve “editor” for the Monaco instance inside the window.
 
 ### Workbench window states
 
@@ -928,43 +928,17 @@ interface ConsolePanelPreferences {
   * Otherwise uses a default pixel height converted into a fraction of container height.
 * The workbench may override initial open/closed state from persisted value if the URL query explicitly sets console state.
 
-### Build & run pipeline
+### Environment readiness & run pipeline
 
-The **workbench chrome** includes a **Build environment** split button (implemented via `SplitButton`):
+The workbench no longer exposes a dedicated “Build environment” control. Environment readiness is handled automatically when starting a run:
 
-* Default click:
+* **Validation run:** “Validation run” starts a run with `RunOptions.validateOnly: true` (backend receives `validate_only`). Console streams results; issues populate the **Validation** tab on completion.
+* **Test run:** The **Test** split button opens the run dialog. The primary action reuses the existing environment; the dropdown option **Force build and test** sets `force_rebuild: true` so the backend rebuilds the venv inline before running.
+* Environment reuse vs. rebuild is therefore controlled per run, not via a separate build button or keyboard shortcut.
 
-  * Starts `streamBuild(workspaceId, configurationId, { force, wait }, signal)`.
-  * Prints build events into the **Console**.
-  * Detects and highlights environment reuse (e.g. “Environment reused; nothing to rebuild.”).
-* Menu options:
+### Running tests from the workbench
 
-  * “Build / reuse environment” – normal behaviour.
-  * “Force rebuild now” – run a full rebuild immediately.
-  * “Force rebuild after current build” – queue a forced rebuild.
-* Keyboard shortcuts:
-
-  * `⌘B` / `Ctrl+B` – default build.
-  * `⇧⌘B` / `Ctrl+Shift+B` – force rebuild.
-
-**Validation run:**
-
-* “Validation run” action starts a run with `RunOptions.validateOnly: true`
-  (UI may also set `mode: "validation"`; backend receives `validate_only`).
-* While validation is running:
-
-  * Status is `running`; results are streamed into the console.
-* On completion:
-
-  * Issues are mapped into the **Validation** tab as structured messages.
-  * `lastRunAt` is updated.
-* On error:
-
-  * Status becomes `error` with a human‑readable message.
-
-### Running extraction from the workbench
-
-The **Run extraction** button opens a modal **Run extraction dialog**:
+The **Test** split button opens a modal run dialog:
 
 * Fetches recent documents for the workspace (e.g. top 50 by `-created_at`).
 * Lets the user select:
@@ -983,9 +957,8 @@ The **Run extraction** button opens a modal **Run extraction dialog**:
   * Calls `startRunStream` with:
 
     * `input_document_id`,
-    * Optional `input_sheet_names`.
-    * `RunOptions` in camelCase (converted to `dry_run` / `validate_only` /
-      `input_sheet_names`), typically with `mode: "test"` for clarity.
+    * Optional `input_sheet_names`,
+    * `force_rebuild` when “Force build and test” was chosen.
   * Closes the dialog and streams output into the console.
 
 On run completion:
@@ -1004,7 +977,7 @@ On run completion:
 
 ## Workbench URL state
 
-Config Builder’s layout and file selection are encoded in query parameters.
+Configuration Builder’s layout and file selection are encoded in query parameters.
 
 Types:
 
@@ -1108,7 +1081,7 @@ interface WorkbenchUrlState {
 
 ### Other notable search params
 
-Outside Config Builder, some important query parameters:
+Outside the Configuration Builder, some important query parameters:
 
 * **Documents**
 
@@ -1186,15 +1159,15 @@ High‑level behaviours of the main workspace sections:
     * Telemetry summaries,
     * Output artifacts.
 
-* **Config Builder**
+* **Configuration Builder**
 
-  * Config list:
+  * Configurations list:
 
     * Shows configurations, IDs, status, active version.
-    * “Open in workbench” opens the Config Builder workbench for a given configuration.
+    * “Open in workbench” opens the Configuration Builder workbench for a given configuration.
   * Workbench:
 
-    * Dedicated Config Builder workbench window as described above.
+    * Dedicated Configuration Builder workbench window as described above.
 
 * **Settings**
 
@@ -1226,8 +1199,6 @@ Keyboard shortcuts (non‑exhaustive):
 * **Workbench**
 
   * `⌘S` / `Ctrl+S` – save active editor file.
-  * `⌘B` / `Ctrl+B` – build/reuse environment.
-  * `⇧⌘B` / `Ctrl+Shift+B` – force rebuild.
   * `⌘W` / `Ctrl+W` – close active editor tab.
   * `⌘Tab` / `Ctrl+Tab` – recent‑tab forward (within workbench).
   * `⇧⌘Tab` / `Shift+Ctrl+Tab` – recent‑tab backward.
@@ -1294,7 +1265,7 @@ At a high level, the backend must provide:
     * Artifact download (combined outputs, typically zip).
     * Telemetry download.
 
-* **Configurations & Config Builder**
+* **Configurations & Configuration Builder**
 
   * List configurations per workspace (with ID, display name, status, active version).
   * Read single configuration by ID.
@@ -1311,11 +1282,10 @@ At a high level, the backend must provide:
 
     * Accepts current configuration snapshot.
     * Returns structured validation issues for display in the Validation tab.
-  * Build endpoint:
+  * Run endpoints:
 
-    * NDJSON streaming (`streamBuild`) with `force` and `wait` options.
-    * Emits a final `build.completed` event with `status`, `summary`, `error_message`.
-    * Implements environment reuse detection so ADE Web can hint whether a rebuild actually happened.
+    * NDJSON streaming (`streamRun`) with support for `validate_only`, `input_document_id`, `input_sheet_names`, and `force_rebuild` (to rebuild the environment inline).
+    * Emits run lifecycle events and summaries; ADE Web shows run and telemetry downloads.
 
 * **Safe mode**
 
@@ -1476,7 +1446,7 @@ Key building blocks:
     * `isLoading` prop shows an inline spinner and disables the button.
   * `SplitButton`:
 
-    * Primary action + secondary menu toggle, used for Build environment control.
+    * Primary action + secondary menu toggle, used for the Configuration Builder **Test** control (primary “Test”, menu “Force build and test”).
     * Exposes click handlers for primary action and menu opening, plus an optional context‑menu hook.
 
 * **Forms**
@@ -1552,7 +1522,7 @@ Key building blocks:
     * Lazy‑loads Monaco editor via `React.Suspense`.
     * Exposes a `CodeEditorHandle` (focus + revealLine).
     * Accepts `language`, `path`, `theme`, `readOnly`, and `onSaveShortcut`.
-    * Used primarily in the Config Builder workbench.
+    * Used primarily in the Configuration Builder workbench.
 
 These components ensure consistent layout, accessibility, and styling across ADE Web while keeping the app’s structure relatively simple.
 
@@ -1563,14 +1533,14 @@ These components ensure consistent layout, accessibility, and styling across ADE
 ADE Web is the operational and configuration console for Automatic Data Extractor:
 
 * **Analysts** use it to upload documents, run extractions, inspect runs, and download outputs.
-* **Workspace owners / engineers** use it to evolve workspace **Configurations** (backed by Python configuration packages), validate and test changes, and safely roll out new versions using the Config Builder workbench.
+* **Workspace owners / engineers** use it to evolve workspace **Configurations** (backed by Python configuration packages), validate and test changes, and safely roll out new versions using the Configuration Builder workbench.
 * **Admins** use it to manage workspaces, members, roles, SSO hints, and Safe mode.
 
 This README captures:
 
 * The **conceptual model** (workspaces, documents, runs, configurations, Safe mode, roles),
 * The **navigation and URL‑state conventions** (custom history, SPA links, search params, deep linking),
-* The **Config Builder workbench model** (file tree, tabs, ADE script helpers, console, validation, inspector, theme, window states),
+* The **Configuration Builder workbench model** (file tree, tabs, ADE script helpers, console, validation, inspector, theme, window states),
 * The **backend contracts** ADE Web expects,
 * And the **front‑end architecture & UI components** that support the user experience.
 

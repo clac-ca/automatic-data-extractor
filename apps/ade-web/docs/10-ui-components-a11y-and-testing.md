@@ -129,10 +129,10 @@ Example:
 
 #### `SplitButton`
 
-Primary action plus a small dropdown of related actions. The canonical example is the Config Builder **Build environment** control.
+Primary action plus a small dropdown of related actions. The canonical example is the Configuration Builder **Test** control (primary “Test”, menu “Force build and test”).
 
-* Left segment: calls `onPrimaryClick` (e.g. “Build / reuse environment”).
-* Right segment: opens a dropdown (often backed by `ContextMenu`) with secondary options (e.g. “Force rebuild now”).
+* Left segment: calls `onPrimaryClick` (e.g. “Test” with environment reuse).
+* Right segment: opens a dropdown (often backed by `ContextMenu`) with secondary options (e.g. “Force build and test”).
 
 Guidelines:
 
@@ -357,7 +357,7 @@ The field itself remains generic; feature code decides:
 
 #### `CodeEditor`
 
-A thin wrapper for Monaco, used by the Config Builder workbench.
+A thin wrapper for Monaco, used by the Configuration Builder workbench.
 
 Responsibilities:
 
@@ -469,11 +469,11 @@ Rules:
   * Textareas.
   * Content‑editable regions.
 
-* If a screen does not support a shortcut (e.g. `⌘U` on the Config Builder), the handler must no‑op.
+* If a screen does not support a shortcut (e.g. `⌘U` on the Configuration Builder), the handler must no‑op.
 
 ### 5.2 Workbench shortcuts
 
-Scoped to the Config Builder workbench:
+Scoped to the Configuration Builder workbench:
 
 * `⌘S` / `Ctrl+S` – Save active file in `CodeEditor`.
 * `⌘B` / `Ctrl+B` – Build / reuse environment.

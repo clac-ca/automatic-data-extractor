@@ -551,7 +551,7 @@ Examples:
 
   * The Documents screen (“Run extraction”),
   * The Runs ledger (“New run”, if present),
-  * The Config Builder workbench (“Run extraction” within the editor).
+  * The Configuration Builder workbench (“Run extraction” within the editor).
 
 * Starting a **build** of a configuration environment.
 
@@ -577,7 +577,7 @@ When Safe mode is on:
 * Render a **persistent banner** inside the workspace shell:
 
   * Located just below the global top bar, above section content.
-  * Present in all workspace sections (Runs, Documents, Config Builder, Settings, etc.).
+  * Present in all workspace sections (Runs, Documents, Configuration Builder, Settings, etc.).
 
 * Recommended copy:
 

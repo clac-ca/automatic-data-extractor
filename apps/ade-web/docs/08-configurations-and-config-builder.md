@@ -1,25 +1,25 @@
-# 08 – Configurations and Config Builder
+# 08 – Configurations and Configuration Builder
 
 This document explains how **configurations** work in ADE Web and how the
-**Config Builder** section is structured.
+**Configuration Builder** section is structured.
 
 It focuses on:
 
 - The **Configuration** domain model and version lifecycle.
-- The **Configurations** workspace section (Config Builder)  
+- The **Configurations** workspace section (Configuration Builder)  
   (`/workspaces/:workspaceId/config-builder`).
 - How configuration metadata (including the manifest) flows between frontend and
   backend.
 - How environment builds, validation runs, and test runs are represented in the
   UI.
-- How we enter and exit the **Config Builder workbench** (the editing surface
+- How we enter and exit the **Configuration Builder workbench** (the editing surface
   described in `09-workbench-editor-and-scripting.md`).
 
 Definitions for terms like *Configuration*, *Config version*, *Draft*, *Active*,
 *Inactive*, and *Run* are established in
 `01-domain-model-and-naming.md`. This doc assumes that vocabulary.
 
-Naming: the **Config Builder** is the workspace section that lists configurations and launches editing. The **Config Builder workbench** is the dedicated window for editing a single configuration version. Use “Config Builder workbench” on first mention and “workbench” afterwards; use “editor” only for the Monaco instance inside that window.
+Naming: the **Configuration Builder** is the workspace section that lists configurations and launches editing. The **Configuration Builder workbench** is the dedicated window for editing a single configuration version. Use “Configuration Builder workbench” on first mention and “workbench” afterwards; use “editor” only for the Monaco instance inside that window.
 
 ---
 
@@ -31,7 +31,7 @@ From ADE Web’s perspective:
   package** (Python package + manifest + supporting files).
 - Each Configuration has **multiple versions** over time (drafts and immutable
   snapshots).
-- The **Configurations** section (home of the Config Builder) is where users:
+- The **Configurations** section (home of the Configuration Builder) is where users:
   - View and manage configurations for a workspace.
   - Inspect version history and status.
   - Open a specific configuration version in the **workbench** to edit code,
@@ -52,7 +52,7 @@ on how configurations feed into those runs.
 
 ### 2.1 Configuration
 
-A **Configuration** is the primary row in the Config Builder list.
+A **Configuration** is the primary row in the Configuration Builder list.
 
 Conceptually:
 
@@ -199,7 +199,7 @@ A few important invariants:
 
   * From the **Documents** screen, the UI selects a Configuration + version
     (typically the active version of the chosen Configuration).
-  * From the **Config Builder workbench**, the run is tied to the version that
+  * From the **Configuration Builder workbench**, the run is tied to the version that
     workbench is editing (often a draft), unless explicitly overridden.
 
 Any workspace‑level “default configuration for new runs” is an additional layer
@@ -207,9 +207,9 @@ on top of this model and should be described separately if introduced.
 
 ---
 
-## 4. Configurations section architecture (Config Builder)
+## 4. Configurations section architecture (Configuration Builder)
 
-The Configurations section (home of the Config Builder) is the workspace‑local section at:
+The Configurations section (home of the Configuration Builder) is the workspace‑local section at:
 
 ```text
 /workspaces/:workspaceId/config-builder
@@ -385,7 +385,7 @@ The manifest is treated as just another file in the configuration file tree:
 
 The details of file listing and workbench integration are described in
 `09-workbench-editor-and-scripting.md`. This section describes **how we use**
-manifest data at the Config Builder level.
+manifest data at the Configuration Builder level.
 
 ### 7.2 Manifest‑driven UI
 
@@ -428,66 +428,22 @@ Manifest updates must be conservative:
 
 * Unknown keys and sections must be preserved.
 
-This makes the Config Builder resilient to backend schema evolution.
+This makes the Configuration Builder resilient to backend schema evolution.
 
 ---
 
-## 8. Builds, validation runs, and test runs
+## 8. Validation and test runs (environment auto-build)
 
-Config Builder exposes one build action and two run modes. The names are
-intentional to avoid “is this a build or a run?” confusion:
+Configuration Builder assumes **one environment per configuration**, rebuilt **automatically** when needed. There is no standalone “Build environment” control or shortcut; environment readiness is handled during run startup.
 
-1. **Build** – prepare or rebuild the configuration **environment** (reusing it
-   when possible). This is a `Build` entity and uses `/builds` endpoints.
-2. **Validation run** – execute validators only to check configuration
-   correctness (no full extraction). Implemented as a `Run` with
-   `RunOptions.validateOnly: true` and usually `mode: "validation"`.
-3. **Test run** – execute ADE on a sample document with the chosen configuration
-   version, streaming logs into the workbench. Often sets `mode: "test"` and
-   may use `dryRun: true`.
+Two run modes are exposed:
 
-Run creation uses the canonical `RunOptions` shape
-(`dryRun`/`validateOnly`/`inputSheetNames`/`mode`) in camelCase and converts
-those to backend snake_case fields (`dry_run`, `validate_only`,
-`input_sheet_names`). The **workbench chrome** exposes buttons and keyboard
-shortcuts for each action.
+1. **Validation run** – execute validators only to check configuration correctness (no full extraction). Implemented as a `Run` with `RunOptions.validateOnly: true` and usually `mode: "validation"`.
+2. **Test run** – execute ADE on a sample document with the chosen configuration version, streaming logs into the workbench. Often sets `mode: "test"` and may use `dryRun: true`.
 
-### 8.1 Build
+Run creation uses the canonical `RunOptions` shape (`dryRun`/`validateOnly`/`inputSheetNames`/`mode`) in camelCase and converts those to backend snake_case fields (`dry_run`, `validate_only`, `input_sheet_names`). When the user picks **Force build and test** in the Test split button, the frontend also sends `force_rebuild: true`; otherwise the backend decides whether to reuse or rebuild based on dirtiness.
 
-Goal:
-
-> Ensure the environment for this configuration version is ready and in sync
-> with the latest files.
-
-Behaviour:
-
-* User triggers a build via the workbench:
-
-  * Button (e.g. “Build environment”).
-  * Shortcuts (`⌘B` / `Ctrl+B`, or `⇧⌘B` / `Ctrl+Shift+B` for force rebuild).
-
-* Frontend calls a build endpoint, for example:
-
-  ```http
-  POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds
-  ```
-
-* Backend returns a `build_id`.
-
-* Workbench subscribes to:
-
-  ```http
-  GET /api/v1/builds/{build_id}/logs
-  ```
-
-  as an NDJSON stream.
-
-* Final build status updates:
-
-  * `ConfigurationVersionSummary.lastBuildStatus` / `lastBuildAt`.
-  * Configuration list and versions view.
-
-### 8.2 Validation runs
+### 8.1 Validation runs
 
 Goal:
 
@@ -514,10 +470,10 @@ Behaviour:
 
 * `lastValidationStatus` / `lastValidationAt` are updated for the version.
 
-In Config Builder overview, these statuses can be summarised as simple badges
-(“Build OK”, “Validation failed”, etc.).
+In Configuration Builder overview, these statuses can be summarised as simple badges
+(“Validation OK”, “Validation failed”, etc.).
 
-### 8.3 Test runs (run extraction from builder)
+### 8.2 Test runs (run extraction from builder)
 
 Goal:
 
@@ -526,9 +482,9 @@ Goal:
 
 Behaviour:
 
-1. User clicks **Run extraction** in the workbench.
+1. User clicks the **Test** split button in the workbench (primary) or selects **Force build and test** from its dropdown.
 
-2. A **Run extraction dialog** appears where they:
+2. A **Test run dialog** appears where they:
 
    * Choose a document (e.g. from recent workspace documents).
    * Optionally limit worksheets (for spreadsheets).
@@ -537,8 +493,9 @@ Behaviour:
 
    * This may be a configuration‑scoped route (e.g.
      `/configurations/{configuration_id}/runs`) or a workspace‑scoped route that accepts
-     `config_version_id`. Payload uses `RunOptions` (camelCase → snake_case) and
-     can set `mode: "test"` for clarity.
+     `config_version_id`. Payload uses `RunOptions` (camelCase → snake_case), can set
+     `mode: "test"` for clarity, and includes `force_rebuild: true` only when the dropdown
+     option was chosen; otherwise the backend can reuse or auto‑rebuild if dirty.
 
 4. Workbench subscribes to the run’s event/log stream:
 
@@ -557,7 +514,7 @@ Behaviour:
 
 ## 9. Safe mode and permissions
 
-Config Builder is tightly integrated with **Safe mode** and **RBAC** (see
+Configuration Builder is tightly integrated with **Safe mode** and **RBAC** (see
 `05-auth-session-rbac-and-safe-mode.md`).
 
 ### 9.1 Safe mode
@@ -585,7 +542,7 @@ UI behaviour:
 
   > “Safe mode is enabled: <detail>”
 
-Config Builder does **not** attempt to perform these actions and then interpret
+Configuration Builder does **not** attempt to perform these actions and then interpret
  errors; it reads Safe mode state and proactively disables them.
 
 ### 9.2 Permissions
@@ -711,7 +668,7 @@ This section ties everything together in concrete scenarios.
 
 ### 11.1 Create and roll out a new configuration
 
-1. User opens the **Configurations** section / Config Builder (`/workspaces/:workspaceId/config-builder`).
+1. User opens the **Configurations** section / Configuration Builder (`/workspaces/:workspaceId/config-builder`).
 2. Clicks **Create configuration**.
 3. Fills in name and optional template.
 4. Frontend calls `POST /configurations`.
@@ -725,7 +682,7 @@ This section ties everything together in concrete scenarios.
 
 ### 11.2 Evolve an existing configuration safely
 
-1. From the Config Builder list, user selects an existing Configuration.
+1. From the Configuration Builder list, user selects an existing Configuration.
 2. In the versions view, user **clones** the current active version → new
    **draft**.
 3. Workbench opens on the draft.
@@ -759,6 +716,6 @@ This section ties everything together in concrete scenarios.
 ---
 
 This document provides the architectural and UX model for **Configurations** and
-the **Config Builder** in ADE Web: how configurations and their versions are
+the **Configuration Builder** in ADE Web: how configurations and their versions are
 structured, how users interact with them, how they map to backend APIs, and how
 they feed into runs across the rest of the app.

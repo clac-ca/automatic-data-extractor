@@ -1,6 +1,6 @@
 # 09 – Workbench editor and scripting
 
-The **Config Builder workbench** is the dedicated editing window used to edit ADE configuration packages and run environment builds, validation runs, and test runs directly from the browser. Use “workbench” for the whole window and “editor” only for the Monaco instance.
+The **Configuration Builder workbench** is the dedicated editing window used to edit ADE configuration packages and run environment builds, validation runs, and test runs directly from the browser. Use “workbench” for the whole window and “editor” only for the Monaco instance.
 
 This document covers the internal architecture of the workbench in `ade-web`:
 
@@ -39,7 +39,7 @@ A workbench session is always scoped to a **single configuration in a single wor
 
 Typical entry:
 
-- User clicks “Open in workbench” (UI label may read “Open editor”) from the Config Builder screen.
+- User clicks “Open in workbench” (UI label may read “Open editor”) from the Configuration Builder screen.
 - Current URL is captured as the **return path** and stored under:
 
   ```text
@@ -51,7 +51,7 @@ On exit:
 * The workbench close action:
 
   * Checks for unsaved changes (see §2.3).
-  * If allowed, navigates back to the stored return path (if any), otherwise falls back to the Config Builder screen.
+  * If allowed, navigates back to the stored return path (if any), otherwise falls back to the Configuration Builder screen.
   * Clears the stored return path.
 
 ### 1.2 Window states
@@ -60,7 +60,7 @@ The workbench supports three window states:
 
 * **Restored**
 
-  * Embedded inside the Config Builder section.
+  * Embedded inside the Configuration Builder section.
   * Workspace shell (top bar, left nav) is visible and interactive.
 
 * **Maximized**
@@ -72,7 +72,7 @@ The workbench supports three window states:
 * **Docked (minimized)**
 
   * Workbench UI is hidden.
-  * A “docked workbench” affordance in the Config Builder screen re‑opens it.
+  * A “docked workbench” affordance in the Configuration Builder screen re‑opens it.
 
 Conceptually:
 
@@ -603,44 +603,17 @@ The **URL** determines shareable state; local storage retains a user’s persona
 
 ---
 
-## 7. Build and run streams
+## 7. Run streams and environment readiness
 
-The workbench console and validation views consume streaming events from the backend.
+The workbench console and validation views consume streaming events from the backend. Environment readiness is handled at run start—there is no separate build stream/button. The run payload may include `force_rebuild: true` when the user picks **Force build and test**.
 
-### 7.1 Build streams
+### 7.1 Run streams (validation and test modes)
 
-The **Build environment** button starts a build and streams events into the console.
-
-Conceptually:
-
-```ts
-streamBuild(workspaceId, configurationId, options, signal);
-```
-
-* Uses NDJSON to deliver events (status updates, log lines).
-* Normal behaviour:
-
-  * “Build / reuse environment” reuses container when possible.
-  * “Force rebuild now” triggers a full rebuild.
-  * “Force rebuild after current build” queues a rebuild.
-
-The console:
-
-* Renders events in arrival order.
-* On completion, shows a **build summary** with status and any backend‑provided message.
-
-Keyboard shortcuts (wired in workbench chrome):
-
-* ⌘B / Ctrl+B → default build behaviour.
-* ⇧⌘B / Ctrl+Shift+B → force rebuild.
-
-### 7.2 Run streams (validation and test modes)
-
-The **Run extraction** button in the workbench:
+The **Test** split button in the workbench:
 
 * Opens a dialog that lets the user choose a document and optionally sheet names.
 * On confirm, starts a run (using the current configuration) with `RunOptions`
-  (camelCase → snake_case) and streams events into the console.
+  (camelCase → snake_case) and streams events into the console; when forced, the request includes `force_rebuild: true`.
 
 Validation runs:
 

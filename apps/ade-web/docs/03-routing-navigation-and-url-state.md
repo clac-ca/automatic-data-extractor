@@ -29,7 +29,7 @@ We follow a few rules:
 1. The **location bar is authoritative**. A reload should land you back on the same screen with the same view state.
 2. All navigation goes through **`NavProvider`** (`useNavigate` / `Link` / `NavLink`), not raw `history.pushState`.
 3. **Query parameters** are the standard way to represent view‑level state that should survive refresh and be shareable.
-4. Navigation blockers are **opt‑in and local** to the features that need them (e.g. the Config Builder workbench).
+4. Navigation blockers are **opt‑in and local** to the features that need them (e.g. the Configuration Builder workbench).
 
 ### Canonical sources and names
 
@@ -74,7 +74,7 @@ export function App() {
 * **`ScreenSwitch`**
   Looks at `location.pathname` and chooses the top‑level screen. It is the **only place** that maps raw paths to top‑level React components.
 
-Everything below `ScreenSwitch` (workspaces, documents, runs, Config Builder) uses URL‑encoded view state and query parameters.
+Everything below `ScreenSwitch` (workspaces, documents, runs, Configuration Builder) uses URL‑encoded view state and query parameters.
 
 ---
 
@@ -132,13 +132,13 @@ Inside `/workspaces/:workspaceId`, the next path segment selects the section:
 | ---------------- | -------------------------------- | ----------------------------- |
 | `documents`      | `/workspaces/123/documents`      | Documents list & run triggers |
 | `runs`           | `/workspaces/123/runs`           | Runs ledger (workspace run history) |
-| `config-builder` | `/workspaces/123/config-builder` | Config Builder (configurations list + workbench) |
+| `config-builder` | `/workspaces/123/config-builder` | Configuration Builder (configurations list + workbench) |
 | `settings`       | `/workspaces/123/settings`       | Workspace settings            |
 | `overview`*      | `/workspaces/123/overview`       | Overview/summary (optional)   |
 
 * The `overview` section is optional; if not present, the shell can redirect to a default (e.g. Documents).
 
-Naming stays 1:1: the nav item reads **“Config Builder”**, the route segment is `config-builder`, and the feature folder is `features/workspace-shell/sections/config-builder`. The Config Builder section always includes both the configurations list and the workbench editing mode.
+Naming stays 1:1: the nav item reads **“Configuration Builder”**, the route segment is `config-builder`, and the feature folder is `features/workspace-shell/sections/config-builder`. The Configuration Builder section always includes both the configurations list and the workbench editing mode.
 
 If the workspace ID is valid but the section segment is unknown, the shell should render a **workspace‑local “Section not found”** state, not the global 404. This lets the user switch to another section without leaving the workspace.
 
@@ -278,7 +278,7 @@ Conceptual API:
 useNavigationBlocker(blocker: NavigationBlocker, when: boolean);
 ```
 
-Example pattern for the Config Builder editor:
+Example pattern for the Configuration Builder editor:
 
 ```ts
 const { pathname } = useLocation();
@@ -389,7 +389,7 @@ Examples:
 
 * Documents filters and sort order.
 * Which settings tab is selected.
-* Config Builder layout (editor vs split vs zen, which pane is open).
+* Configuration Builder layout (editor vs split vs zen, which pane is open).
 
 Plain local component state is fine for **purely ephemeral** UI (e.g. whether a dropdown is open). If a user might:
 
@@ -582,7 +582,7 @@ On `/workspaces/:workspaceId/runs`:
 
 These names should be stable so that links from other parts of the UI (e.g. “View runs for this configuration”) can construct correct URLs.
 
-### 7.5 Config Builder (summary)
+### 7.5 Configuration Builder (summary)
 
 On `/workspaces/:workspaceId/config-builder` with an active workbench:
 
@@ -602,7 +602,7 @@ On `/workspaces/:workspaceId/config-builder` with an active workbench:
 
   * ID/path of the active file in the workbench.
 
-The Config Builder URL state is documented in detail in `09-workbench-editor-and-scripting.md`. The important rule here: we only write **non‑default** values back into the URL to keep it tidy.
+The Configuration Builder URL state is documented in detail in `09-workbench-editor-and-scripting.md`. The important rule here: we only write **non‑default** values back into the URL to keep it tidy.
 
 ---
 
