@@ -24,7 +24,7 @@ workspace responsibilities. Every step relies on the unified RBAC endpoints in
 1. Review the permission registry to decide which workspace capabilities the
    editor should own. The registry enumerates every key, label, and description so
    you can choose combinations such as `Workspace.Documents.ReadWrite` and
-   `Workspace.Jobs.ReadWrite`.【F:apps/ade-api/src/ade_api/features/roles/registry.py†L1-L132】
+   `Workspace.Runs.ReadWrite`.【F:apps/ade-api/src/ade_api/features/roles/registry.py†L1-L132】
 2. Create a workspace-scoped role by posting to
    `POST /api/v1/workspaces/{workspace_id}/roles` with a unique slug (for example
    `workspace-editor`) and the selected permission keys. The router enforces that

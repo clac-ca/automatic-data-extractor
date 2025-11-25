@@ -250,7 +250,7 @@ Key variables (defaults assume `WORKDIR=/app` inside the container):
 | `ADE_SAFE_MODE`           | `false`                  | If `true`, skips engine execution          |
 | `ADE_MAX_CONCURRENCY`     | `2`                      | Backend worker concurrency                 |
 | `ADE_QUEUE_SIZE`          | `10`                     | Queue length before HTTP 429 backpressure  |
-| `ADE_JOB_TIMEOUT_SECONDS` | `300`                    | Wall‑clock timeout per run                 |
+| `ADE_RUN_TIMEOUT_SECONDS` | `300`                    | Wall‑clock timeout per run                 |
 | `ADE_WORKER_CPU_SECONDS`  | `60`                     | Best‑effort CPU limit per run              |
 | `ADE_WORKER_MEM_MB`       | `512`                    | Best‑effort memory limit per run (MB)      |
 | `ADE_WORKER_FSIZE_MB`     | `100`                    | Best‑effort max file size a run may create |

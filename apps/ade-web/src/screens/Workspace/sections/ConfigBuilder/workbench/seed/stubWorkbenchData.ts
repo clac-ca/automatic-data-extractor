@@ -115,7 +115,7 @@ def build_pipeline():
 
 
 def test_membership_happy_path(snapshot: ConfigTest):
-    result = snapshot.run_job("membership", input_path="./fixtures/membership.csv")
+    result = snapshot.run_run("membership", input_path="./fixtures/membership.csv")
     assert result.errors == []
 `,
 };

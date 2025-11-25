@@ -4416,7 +4416,7 @@ import { Button } from "@ui/Button";
 import { Select } from "@ui/Select";
 import { PageState } from "@ui/PageState";
 
-const JOB_STATUS_LABELS: Record<RunStatus, string> = {
+const RUN_STATUS_LABELS: Record<RunStatus, string> = {
   succeeded: "Succeeded",
   failed: "Failed",
   running: "Running",
@@ -4424,7 +4424,7 @@ const JOB_STATUS_LABELS: Record<RunStatus, string> = {
   cancelled: "Cancelled",
 };
 
-const JOB_STATUS_CLASSES: Record<RunStatus, string> = {
+const RUN_STATUS_CLASSES: Record<RunStatus, string> = {
   succeeded: "bg-success-100 text-success-700",
   failed: "bg-rose-100 text-rose-700",
   running: "bg-brand-50 text-brand-700",
@@ -4446,7 +4446,7 @@ const SORT_OPTIONS = [
   { value: "duration_desc", label: "Longest duration" },
 ] as const;
 
-const JOBS_PAGE_SIZE = 100;
+const RUNS_PAGE_SIZE = 100;
 
 export default function WorkspaceRunsRoute() {
   const { workspace } = useWorkspaceContext();
@@ -4466,13 +4466,13 @@ export default function WorkspaceRunsRoute() {
         workspace.id,
         {
           status: singleStatusForQuery,
-          limit: JOBS_PAGE_SIZE,
+          limit: RUNS_PAGE_SIZE,
           offset: pageParam,
         },
         signal,
       ),
     getNextPageParam: (lastPage, pages) =>
-      lastPage.length === JOBS_PAGE_SIZE ? pages.length * JOBS_PAGE_SIZE : undefined,
+      lastPage.length === RUNS_PAGE_SIZE ? pages.length * RUNS_PAGE_SIZE : undefined,
     enabled: Boolean(workspace.id),
     staleTime: 30_000,
   });
@@ -4707,10 +4707,10 @@ export default function WorkspaceRunsRoute() {
                           <span
                             className={clsx(
                               "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
-                              JOB_STATUS_CLASSES[status] ?? "bg-slate-200 text-slate-700",
+                              RUN_STATUS_CLASSES[status] ?? "bg-slate-200 text-slate-700",
                             )}
                           >
-                            {JOB_STATUS_LABELS[status] ?? status}
+                            {RUN_STATUS_LABELS[status] ?? status}
                           </span>
                         </td>
                       </tr>
@@ -4747,7 +4747,7 @@ function StatusPillBar({
 }) {
   return (
     <div className="flex flex-wrap gap-1.5">
-      {(Object.keys(JOB_STATUS_LABELS) as RunStatus[]).map((status) => {
+      {(Object.keys(RUN_STATUS_LABELS) as RunStatus[]).map((status) => {
         const active = selected.has(status);
         return (
           <button
@@ -4761,7 +4761,7 @@ function StatusPillBar({
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900",
             )}
           >
-            {JOB_STATUS_LABELS[status]}
+            {RUN_STATUS_LABELS[status]}
           </button>
         );
       })}

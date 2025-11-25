@@ -50,7 +50,7 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_FAILED_LOGIN_LOCK_DURATION",
         "ADE_MAX_CONCURRENCY",
         "ADE_QUEUE_SIZE",
-        "ADE_JOB_TIMEOUT_SECONDS",
+        "ADE_RUN_TIMEOUT_SECONDS",
         "ADE_WORKER_CPU_SECONDS",
         "ADE_WORKER_MEM_MB",
         "ADE_WORKER_FSIZE_MB",
@@ -217,15 +217,6 @@ def test_storage_directories_resolve_relative_env_values(
     assert settings.venvs_dir == (tmp_path / "store" / "venvs").resolve()
     assert settings.runs_dir == (tmp_path / "store" / "runs").resolve()
     assert settings.pip_cache_dir == (tmp_path / "cache" / "pip").resolve()
-
-
-def test_jobs_env_var_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
-    """ADE_JOBS_DIR should raise a clear error to avoid mixed storage roots."""
-
-    monkeypatch.setenv("ADE_JOBS_DIR", "/tmp/jobs")
-
-    with pytest.raises(ValidationError, match="ADE_RUNS_DIR"):
-        reload_settings()
 
 
 def test_global_storage_directory_created(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

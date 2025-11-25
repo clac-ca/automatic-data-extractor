@@ -273,21 +273,21 @@ data/
 - [x] Update lifecycle iteration in `ade_api/shared/core/lifecycles.py` from `jobs_dir` to `runs_dir`.
 
 ### Backend code
-- [ ] Delete `apps/ade-api/src/ade_api/features/jobs/` (models, schemas, repository, service, router, tests).
-- [ ] Rename runs service references from `jobs_dir`/`job_id` helpers (`RunExecutionContext`, `_execute_engine`, `_job_dir_for_run`, `job_relative_path`) to runs naming.
-- [ ] Update storage root/error messaging from “ADE_JOBS_DIR is not configured” to “ADE_RUNS_DIR”.
-- [ ] Add runs migration for any job-only fields and drop jobs migrations (`0006_jobs_config_fk` etc.) and table/enum.
-- [ ] Remove jobs unit tests and update runs tests for run-only storage paths.
-- [ ] Remove `get_jobs_service` and router registration wiring.
+- [x] Delete `apps/ade-api/src/ade_api/features/jobs/` (models, schemas, repository, service, router, tests).
+- [x] Rename runs service references from `jobs_dir`/`job_id` helpers (`RunExecutionContext`, `_execute_engine`, `_job_dir_for_run`, `job_relative_path`) to runs naming.
+- [x] Update storage root/error messaging from “ADE_JOBS_DIR is not configured” to “ADE_RUNS_DIR”.
+- [x] Add runs migration for any job-only fields and drop jobs migrations (`0006_jobs_config_fk` etc.) and table/enum.
+- [x] Remove jobs unit tests and update runs tests for run-only storage paths.
+- [x] Remove `get_jobs_service` and router registration wiring.
 
 ### Frontend
-- [ ] Remove `apps/ade-web/src/shared/jobs.ts` and switch consumers to runs APIs.
-- [ ] Replace Jobs navigation/sections with Runs in `apps/ade-web/src/screens/Workspace/index.tsx` and `components/workspace-navigation.tsx`.
-- [ ] Swap Documents screen jobs POST/queries (`useDocumentJobsQuery`, query keys `job*`) to runs APIs/keys.
-- [ ] Add runs history screen or repoint existing Jobs screen to runs endpoints and copy.
-- [ ] Regenerate `openapi.d.ts` after backend removal to drop `/jobs` routes and Job* schemas.
-- [ ] Update UI copy (Runs screen strings, CSV filenames, placeholders) and hook docs to “run”.
-- [ ] Update tests/mocks referencing Jobs section (`resolveWorkspaceSection.test.tsx`).
+- [x] Remove `apps/ade-web/src/shared/jobs.ts` and switch consumers to runs APIs.
+- [x] Replace Jobs navigation/sections with Runs in `apps/ade-web/src/screens/Workspace/index.tsx` and `components/workspace-navigation.tsx`.
+- [x] Swap Documents screen jobs POST/queries (`useDocumentJobsQuery`, query keys `job*`) to runs APIs/keys.
+- [x] Add runs history screen or repoint existing Jobs screen to runs endpoints and copy.
+- [x] Regenerate `openapi.d.ts` after backend removal to drop `/jobs` routes and Job* schemas.
+- [x] Update UI copy (Runs screen strings, CSV filenames, placeholders) and hook docs to “run”.
+- [x] Update tests/mocks referencing Jobs section (`resolveWorkspaceSection.test.tsx`).
 
 ## 9. Frontend migration plan (jobs → runs-only)
 
@@ -326,7 +326,7 @@ data/
 - Docs in `apps/ade-web/docs` and bundled markdowns (`README.md`, bundle-*.md, ade-web-docs-bundle.md, docs/01-domain-model...`, `03-routing`, `04-data-layer`, `06-workspace-layout`, `07-documents-jobs-and-runs`, etc.) → rewrite to runs-only.
 
 ### Repo docs (outside frontend)
-- [ ] Rewrite or retire job-focused docs (`docs/README.md`, `docs/developers/README.md`, `docs/templates/api-reference-template.md`, `docs/reference/glossary.md`, `docs/reference/api-guide.md`, `docs/reference/runs_frontend_integration.md`, `docs/developers/02-build-venv.md`, `docs/admin-guide/permission_catalog.md`, `docs/developers/schemas/*`, `docs/developers/workpackages/wp5/wp6/wp7/wp9/wp10/wp11`, `docs/developers/design-decisions/dd-0002/dd-0003`, `docs/developers/01-config-packages.md`, `docs/templates/*`) to runs-only language.
+- [x] Rewrite or retire job-focused docs (`docs/README.md`, `docs/developers/README.md`, `docs/templates/api-reference-template.md`, `docs/reference/glossary.md`, `docs/reference/api-guide.md`, `docs/reference/runs_frontend_integration.md`, `docs/developers/02-build-venv.md`, `docs/admin-guide/permission_catalog.md`, `docs/developers/schemas/*`, `docs/developers/workpackages/wp5/wp6/wp7/wp9/wp10/wp11`, `docs/developers/design-decisions/dd-0002/dd-0003`, `docs/developers/01-config-packages.md`, `docs/templates/*`) to runs-only language.
 - [x] Update engine docs (`apps/ade-engine/docs/01-engine-runtime.md`) to reference runs metadata/paths.
 
 ### Storage layout

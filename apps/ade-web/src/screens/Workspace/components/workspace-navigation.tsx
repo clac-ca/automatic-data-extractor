@@ -31,7 +31,7 @@ const DocumentsIcon = createIcon(
   "M7 3h7l7 7v11a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM14 3v5a1 1 0 0 0 1 1h5",
 );
 
-const JobsIcon = createIcon(
+const RunsIcon = createIcon(
   "M5 6h14M5 12h14M5 18h8M7 4v4M12 10v4M15 16v4",
 );
 
@@ -67,7 +67,7 @@ const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
     id: "runs",
     path: "runs",
     label: "Runs",
-    icon: JobsIcon,
+    icon: RunsIcon,
   },
   {
     id: "config-builder",
