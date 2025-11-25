@@ -55,14 +55,14 @@ def _configure_database(
     documents_dir = data_dir / "documents"
     configs_dir = data_dir / "config_packages"
     venvs_dir = data_dir / ".venv"
-    jobs_dir = data_dir / "jobs"
+    runs_dir = data_dir / "runs"
     pip_cache_dir = data_dir / "cache" / "pip"
 
     os.environ["ADE_DATABASE_DSN"] = _database_url
     os.environ["ADE_DOCUMENTS_DIR"] = str(documents_dir)
     os.environ["ADE_CONFIGS_DIR"] = str(configs_dir)
     os.environ["ADE_VENVS_DIR"] = str(venvs_dir)
-    os.environ["ADE_JOBS_DIR"] = str(jobs_dir)
+    os.environ["ADE_RUNS_DIR"] = str(runs_dir)
     os.environ["ADE_PIP_CACHE_DIR"] = str(pip_cache_dir)
     # Ensure tests run with OIDC disabled regardless of local .env values.
     os.environ["ADE_OIDC_ENABLED"] = "false"
@@ -92,7 +92,6 @@ def _configure_database(
         "ADE_DOCUMENTS_DIR",
         "ADE_CONFIGS_DIR",
         "ADE_VENVS_DIR",
-        "ADE_JOBS_DIR",
         "ADE_PIP_CACHE_DIR",
         "ADE_OIDC_ENABLED",
         "ADE_SAFE_MODE",

@@ -3,10 +3,10 @@ export type AdeFunctionKind =
   | "column_detector"
   | "column_transform"
   | "column_validator"
-  | "hook_on_job_start"
+  | "hook_on_run_start"
   | "hook_after_mapping"
   | "hook_before_save"
-  | "hook_on_job_end";
+  | "hook_on_run_end";
 
 export interface AdeFunctionSpec {
   kind: AdeFunctionKind;
@@ -25,7 +25,7 @@ const rowDetectorSpec: AdeFunctionSpec = {
   signature: [
     "def detect_*(",
     "    *,",
-    "    job,",
+    "    run,",
     "    state,",
     "    row_index: int,",
     "    row_values: list,",
@@ -37,7 +37,7 @@ const rowDetectorSpec: AdeFunctionSpec = {
   snippet: `
 def detect_\${1:name}(
     *,
-    job,
+    run,
     state,
     row_index: int,
     row_values: list,
@@ -48,7 +48,7 @@ def detect_\${1:name}(
     score = 0.0
     return {"scores": {"\${3:label}": score}}
 `.trim(),
-  parameters: ["job", "state", "row_index", "row_values", "logger"],
+  parameters: ["run", "state", "row_index", "row_values", "logger"],
 };
 
 const columnDetectorSpec: AdeFunctionSpec = {
@@ -58,7 +58,7 @@ const columnDetectorSpec: AdeFunctionSpec = {
   signature: [
     "def detect_*(",
     "    *,",
-    "    job,",
+    "    run,",
     "    state,",
     "    field_name: str,",
     "    field_meta: dict,",
@@ -75,7 +75,7 @@ const columnDetectorSpec: AdeFunctionSpec = {
   snippet: `
 def detect_\${1:value_shape}(
     *,
-    job,
+    run,
     state,
     field_name: str,
     field_meta: dict,
@@ -93,7 +93,7 @@ def detect_\${1:value_shape}(
     return {"scores": {field_name: score}}
 `.trim(),
   parameters: [
-    "job",
+    "run",
     "state",
     "field_name",
     "field_meta",
@@ -113,7 +113,7 @@ const columnTransformSpec: AdeFunctionSpec = {
   signature: [
     "def transform(",
     "    *,",
-    "    job,",
+    "    run,",
     "    state,",
     "    row_index: int,",
     "    field_name: str,",
@@ -127,7 +127,7 @@ const columnTransformSpec: AdeFunctionSpec = {
   snippet: `
 def transform(
     *,
-    job,
+    run,
     state,
     row_index: int,
     field_name: str,
@@ -142,7 +142,7 @@ def transform(
     normalized = value
     return {field_name: normalized}
 `.trim(),
-  parameters: ["job", "state", "row_index", "field_name", "value", "row", "logger"],
+  parameters: ["run", "state", "row_index", "field_name", "value", "row", "logger"],
 };
 
 const columnValidatorSpec: AdeFunctionSpec = {
@@ -152,7 +152,7 @@ const columnValidatorSpec: AdeFunctionSpec = {
   signature: [
     "def validate(",
     "    *,",
-    "    job,",
+    "    run,",
     "    state,",
     "    row_index: int,",
     "    field_name: str,",
@@ -167,7 +167,7 @@ const columnValidatorSpec: AdeFunctionSpec = {
   snippet: `
 def validate(
     *,
-    job,
+    run,
     state,
     row_index: int,
     field_name: str,
@@ -189,7 +189,7 @@ def validate(
     return issues
 `.trim(),
   parameters: [
-    "job",
+    "run",
     "state",
     "row_index",
     "field_name",
@@ -200,14 +200,14 @@ def validate(
   ],
 };
 
-const hookOnJobStartSpec: AdeFunctionSpec = {
-  kind: "hook_on_job_start",
-  name: "on_job_start",
-  label: "ADE hook: on_job_start",
+const hookOnRunStartSpec: AdeFunctionSpec = {
+  kind: "hook_on_run_start",
+  name: "on_run_start",
+  label: "ADE hook: on_run_start",
   signature: [
-    "def on_job_start(",
+    "def on_run_start(",
     "    *,",
-    "    job_id: str,",
+    "    run_id: str,",
     "    manifest: dict,",
     "    env: dict | None = None,",
     "    artifact: dict | None = None,",
@@ -217,21 +217,21 @@ const hookOnJobStartSpec: AdeFunctionSpec = {
   ].join("\n"),
   doc: "Hook called once before detectors run. Use it for logging or lightweight setup.",
   snippet: `
-def on_job_start(
+def on_run_start(
     *,
-    job_id: str,
+    run_id: str,
     manifest: dict,
     env: dict | None = None,
     artifact: dict | None = None,
     logger=None,
     **_,
 ) -> None:
-    """\${1:Log or hydrate state before the job starts.}"""
+    """\${1:Log or hydrate state before the run starts.}"""
     if logger:
-        logger.info("job_start id=%s", job_id)
+        logger.info("run_start id=%s", run_id)
     return None
 `.trim(),
-  parameters: ["job_id", "manifest", "env", "artifact", "logger"],
+  parameters: ["run_id", "manifest", "env", "artifact", "logger"],
 };
 
 const hookAfterMappingSpec: AdeFunctionSpec = {
@@ -298,21 +298,21 @@ def before_save(
   parameters: ["workbook", "artifact", "logger"],
 };
 
-const hookOnJobEndSpec: AdeFunctionSpec = {
-  kind: "hook_on_job_end",
-  name: "on_job_end",
-  label: "ADE hook: on_job_end",
+const hookOnRunEndSpec: AdeFunctionSpec = {
+  kind: "hook_on_run_end",
+  name: "on_run_end",
+  label: "ADE hook: on_run_end",
   signature: [
-    "def on_job_end(",
+    "def on_run_end(",
     "    *,",
     "    artifact: dict | None = None,",
     "    logger=None,",
     "    **_,",
     ") -> None:",
   ].join("\n"),
-  doc: "Hook called once after the job completes. Inspect the artifact for summary metrics.",
+  doc: "Hook called once after the run completes. Inspect the artifact for summary metrics.",
   snippet: `
-def on_job_end(
+def on_run_end(
     *,
     artifact: dict | None = None,
     logger=None,
@@ -321,7 +321,7 @@ def on_job_end(
     """\${1:Log a completion summary.}"""
     if logger:
         total_sheets = len((artifact or {}).get("sheets", []))
-        logger.info("job_end: sheets=%s", total_sheets)
+        logger.info("run_end: sheets=%s", total_sheets)
     return None
 `.trim(),
   parameters: ["artifact", "logger"],
@@ -332,10 +332,10 @@ export const ADE_FUNCTIONS: AdeFunctionSpec[] = [
   columnDetectorSpec,
   columnTransformSpec,
   columnValidatorSpec,
-  hookOnJobStartSpec,
+  hookOnRunStartSpec,
   hookAfterMappingSpec,
   hookBeforeSaveSpec,
-  hookOnJobEndSpec,
+  hookOnRunEndSpec,
 ];
 
 export type AdeFileScope = "row_detectors" | "column_detectors" | "hooks" | "other";
@@ -366,10 +366,10 @@ export function isAdeConfigFile(filePath: string | undefined): boolean {
 }
 
 const hookSpecsByName = new Map<string, AdeFunctionSpec>([
-  [hookOnJobStartSpec.name, hookOnJobStartSpec],
+  [hookOnRunStartSpec.name, hookOnRunStartSpec],
   [hookAfterMappingSpec.name, hookAfterMappingSpec],
   [hookBeforeSaveSpec.name, hookBeforeSaveSpec],
-  [hookOnJobEndSpec.name, hookOnJobEndSpec],
+  [hookOnRunEndSpec.name, hookOnRunEndSpec],
 ]);
 
 export function getHoverSpec(word: string, filePath: string | undefined): AdeFunctionSpec | undefined {

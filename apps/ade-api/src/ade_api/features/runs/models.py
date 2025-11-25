@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
@@ -39,8 +40,12 @@ class Run(Base):
         String(26), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
     config_id: Mapped[str] = mapped_column(String(26), nullable=False)
+    config_version_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
     input_document_id: Mapped[str | None] = mapped_column(
         String(26), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
+    )
+    input_documents: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON, nullable=True
     )
     input_sheet_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     input_sheet_names: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
@@ -57,12 +62,22 @@ class Run(Base):
         default=RunStatus.QUEUED,
     )
     exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    retry_of_run_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    submitted_by_user_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    artifact_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    output_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    logs_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -79,6 +94,9 @@ class Run(Base):
         Index("runs_workspace_idx", "workspace_id"),
         Index("runs_status_idx", "status"),
         Index("runs_input_document_idx", "input_document_id"),
+        Index("runs_config_version_idx", "config_version_id"),
+        Index("runs_workspace_created_idx", "workspace_id", "created_at"),
+        Index("runs_retry_of_idx", "retry_of_run_id"),
     )
 
 

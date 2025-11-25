@@ -98,7 +98,7 @@ describe("describeRunEvent", () => {
     const event: TelemetryEnvelope = {
       schema: "ade.telemetry/run-event.v1",
       version: "1.0.0",
-      job_id: "job_1",
+      run_request_id: "run_request_1",
       run_id: "run_123",
       timestamp: new Date().toISOString(),
       event: {

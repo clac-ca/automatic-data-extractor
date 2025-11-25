@@ -87,7 +87,7 @@ ADE_ENV=development
 from ade_engine import ConfigContext
 
 def build_header(context: ConfigContext) -> dict[str, str]:
-    """Return metadata for ADE jobs."""
+    """Return metadata for ADE runs."""
     return {
         "workspace": context.workspace_id,
         "generated_at": context.generated_at.isoformat(),
@@ -118,7 +118,7 @@ def build_pipeline():
 
 
 def test_membership_happy_path(snapshot: ConfigTest):
-    result = snapshot.run_job("membership", input_path="./fixtures/membership.csv")
+    result = snapshot.run_run("membership", input_path="./fixtures/membership.csv")
     assert result.errors == []
 `,
 };

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field
 
 from ade_api.shared.core.ids import ULIDStr
 from ade_api.shared.core.schema import BaseSchema
+from ade_api.shared.pagination import Page, PageParams
 
 RunObjectType = Literal["ade.run"]
 RunEventObjectType = Literal["ade.run.event"]
@@ -25,6 +26,8 @@ __all__ = [
     "RunCreateRequest",
     "RunCreatedEvent",
     "RunCompletedEvent",
+    "RunFilters",
+    "RunPage",
     "RunEvent",
     "RunEventBase",
     "RunLogEntry",
@@ -67,9 +70,15 @@ class RunResource(BaseSchema):
     id: str
     object: RunObjectType = Field(default="ade.run", alias="object")
     config_id: str
+    config_version_id: str | None = None
+    submitted_by_user_id: str | None = None
     input_document_id: str | None = Field(
         default=None,
         description="Document ULID staged for this run when provided.",
+    )
+    input_documents: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Descriptors for all input documents staged for the run.",
     )
     input_sheet_name: str | None = Field(
         default=None,
@@ -81,18 +90,44 @@ class RunResource(BaseSchema):
         description="Worksheets requested for ingestion when provided.",
     )
     status: RunStatusLiteral
+    attempt: int = 1
+    retry_of_run_id: str | None = None
+    trace_id: str | None = None
 
     created: int
     started: int | None = None
     finished: int | None = None
+    canceled: int | None = None
 
     exit_code: int | None = None
     output_paths: list[str] = Field(default_factory=list)
     processed_files: list[str] = Field(default_factory=list)
+    artifact_uri: str | None = None
+    output_uri: str | None = None
+    logs_uri: str | None = None
     artifact_path: str | None = None
     events_path: str | None = None
     summary: str | None = None
     error_message: str | None = None
+
+
+class RunFilters(BaseSchema):
+    """Query parameters for filtering workspace-scoped run listings."""
+
+    status: list[RunStatusLiteral] | None = Field(
+        default=None,
+        description="Optional run statuses to include (filters out others).",
+    )
+    input_document_id: ULIDStr | None = Field(
+        default=None,
+        description="Limit runs to those started for the given document.",
+    )
+
+
+class RunPage(Page[RunResource]):
+    """Paginated collection of ``RunResource`` items."""
+
+    items: list[RunResource]
 
 
 class RunEventBase(BaseSchema):

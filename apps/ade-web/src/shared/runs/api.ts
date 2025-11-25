@@ -2,14 +2,15 @@ import { post } from "@shared/api";
 import { client } from "@shared/api/client";
 import { parseNdjsonStream } from "@shared/api/ndjson";
 
-import type { ArtifactV1 } from "@schema";
+import type { ArtifactV1, components } from "@schema";
 import type { TelemetryEnvelope } from "@schema/adeTelemetry";
-
-import type { components } from "@schema";
 
 import type { RunStreamEvent } from "./types";
 
+export type RunResource = components["schemas"]["RunResource"];
+export type RunStatus = RunResource["status"];
 export type RunOutputListing = components["schemas"]["RunOutputListing"];
+export type RunCreateOptions = components["schemas"]["RunCreateOptions"];
 
 export interface RunStreamOptions {
   readonly dry_run?: boolean;
@@ -97,3 +98,23 @@ export async function fetchRunTelemetry(
     })
     .filter((value): value is TelemetryEnvelope => Boolean(value));
 }
+
+export async function fetchRun(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<RunResource> {
+  const { data } = await client.GET("/api/v1/runs/{run_id}", {
+    params: { path: { run_id: runId } },
+    signal,
+  });
+
+  if (!data) throw new Error("Run not found");
+  return data as RunResource;
+}
+
+export const runQueryKeys = {
+  detail: (runId: string) => ["run", runId] as const,
+  outputs: (runId: string) => ["run-outputs", runId] as const,
+  artifact: (runId: string) => ["run-artifact", runId] as const,
+  telemetry: (runId: string) => ["run-telemetry", runId] as const,
+};

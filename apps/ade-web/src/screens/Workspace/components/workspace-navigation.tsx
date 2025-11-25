@@ -31,7 +31,7 @@ const DocumentsIcon = createIcon(
   "M7 3h7l7 7v11a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM14 3v5a1 1 0 0 0 1 1h5",
 );
 
-const JobsIcon = createIcon(
+const RunsIcon = createIcon(
   "M5 6h14M5 12h14M5 18h8M7 4v4M12 10v4M15 16v4",
 );
 
@@ -47,7 +47,7 @@ export const DirectoryIcon = createIcon(
   "M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1v-8.5Z",
 );
 
-type WorkspaceSectionId = "documents" | "jobs" | "config-builder" | "settings";
+type WorkspaceSectionId = "documents" | "runs" | "config-builder" | "settings";
 
 interface WorkspaceSectionDescriptor {
   readonly id: WorkspaceSectionId;
@@ -64,10 +64,10 @@ const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
     icon: DocumentsIcon,
   },
   {
-    id: "jobs",
-    path: "jobs",
-    label: "Jobs",
-    icon: JobsIcon,
+    id: "runs",
+    path: "runs",
+    label: "Runs",
+    icon: RunsIcon,
   },
   {
     id: "config-builder",

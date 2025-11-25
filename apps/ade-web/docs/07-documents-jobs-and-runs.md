@@ -11,7 +11,7 @@ It is written for frontend engineers and backend integrators. For canonical term
 
 > **Terminology note**  
 > In this document we use **run** as the primary term for engine executions.  
-> Some backend endpoints still use `/jobs` in their path; treat those as *run APIs* with legacy naming.
+> Some backend endpoints still use `/runs` in their path; treat those as *run APIs* with legacy naming.
 
 ---
 
@@ -252,7 +252,7 @@ Selected sheet names are passed to the run API as `input_sheet_names`.
 
 A **run** is one execution of the ADE engine. ADE Web exposes two main perspectives on runs:
 
-* The **Runs** ledger – workspace‑wide history (`/workspaces/:workspaceId/runs`, API currently `/jobs`).
+* The **Runs** ledger – workspace‑wide history (`/workspaces/:workspaceId/runs`, API currently `/runs`).
 * **Config‑scoped runs** – initiated from Config Builder against a specific configuration.
 
 ### 5.1 Run data model
@@ -321,7 +321,7 @@ ADE Web never infers status; it shows what the backend reports.
 
 Conceptually: **Runs** is the workspace‑wide ledger of engine activity.
 
-**Route:** `/workspaces/:workspaceId/runs` (UI; underlying backend routes currently use `/jobs`)
+**Route:** `/workspaces/:workspaceId/runs` (UI; underlying backend routes currently use `/runs`)
 **Responsibilities:**
 
 1. Show all runs in a workspace.
@@ -335,7 +335,7 @@ Hook:
 ```ts
 const filters = parseRunFilters(searchParams);
 const runsQuery = useRunsQuery(workspaceId, filters);
-// internally calls GET /api/v1/workspaces/{workspace_id}/jobs
+// internally calls GET /api/v1/workspaces/{workspace_id}/runs
 ```
 
 Typical filters encoded in the URL:
@@ -388,11 +388,11 @@ Run detail view composes:
 
 Data sources:
 
-* `useRunQuery(workspaceId, runId)` → `GET /jobs/{job_id}` or `/runs/{run_id}`.
-* `useRunOutputsQuery(workspaceId, runId)` → `/jobs/{job_id}/outputs` or `/runs/{run_id}/outputs`.
+* `useRunQuery(workspaceId, runId)` → `GET /runs/{run_id}` or `/runs/{run_id}`.
+* `useRunOutputsQuery(workspaceId, runId)` → `/runs/{run_id}/outputs` or `/runs/{run_id}/outputs`.
 * `useRunLogsStream(workspaceId, runId)`:
 
-  * Connects to `/jobs/{job_id}/logs` or `/runs/{run_id}/logs`.
+  * Connects to `/runs/{run_id}/logs` or `/runs/{run_id}/logs`.
   * Parses NDJSON events.
   * Updates console output incrementally.
 
@@ -448,7 +448,7 @@ From the **Documents** screen:
 
 3. On submit:
 
-   * ADE Web calls `POST /api/v1/workspaces/{workspace_id}/jobs` (legacy path for workspace runs).
+   * ADE Web calls `POST /api/v1/workspaces/{workspace_id}/runs` (legacy path for workspace runs).
    * Payload includes:
 
      * `input_document_ids: [documentId]`
@@ -575,27 +575,27 @@ The Documents and Runs features depend on the following backend endpoints. Detai
 
 ### 9.2 Workspace runs (ledger)
 
-*Backend naming currently uses `/jobs`; conceptually these are runs.*
+*Backend naming currently uses `/runs`; conceptually these are runs.*
 
-* `GET /api/v1/workspaces/{workspace_id}/jobs`
+* `GET /api/v1/workspaces/{workspace_id}/runs`
   List runs for the workspace (filters by status, configuration, initiator, date).
 
-* `POST /api/v1/workspaces/{workspace_id}/jobs`
+* `POST /api/v1/workspaces/{workspace_id}/runs`
   Start a new workspace run (used by Documents / Runs).
 
-* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}`
+* `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}`
   Run detail.
 
-* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/artifact`
+* `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/artifact`
   Download combined outputs.
 
-* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs`
+* `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/outputs`
   List individual output files.
 
-* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/outputs/{output_path}`
+* `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/outputs/{output_path}`
   Download a single output.
 
-* `GET /api/v1/workspaces/{workspace_id}/jobs/{job_id}/logs`
+* `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/logs`
   Run logs (ideally NDJSON stream, but can be a file).
 
 ### 9.3 Config‑scoped runs

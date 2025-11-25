@@ -4,8 +4,8 @@ This document describes the command‑line interface to the ADE engine and how
 the ADE backend invokes it inside a virtual environment.
 
 It assumes you’ve read `ade_engine/README.md` and understand that the engine
-is **path‑based and backend‑job‑agnostic**: it sees source/output/log paths and opaque
-metadata for telemetry correlation, not job IDs or queues in its own models.
+is **path‑based and backend-run-agnostic**: it sees source/output/log paths and opaque
+metadata for telemetry correlation, not run queues or orchestration state in its own models.
 
 ## Terminology
 
@@ -79,8 +79,8 @@ Exactly one of these must be provided:
   One or more explicit source files:
 
   ```bash
-  --input /data/jobs/123/input/input.xlsx
-  --input /data/jobs/123/input/other.xlsx
+  --input /data/runs/123/input/input.xlsx
+  --input /data/runs/123/input/other.xlsx
   ```
 
   → `RunRequest.input_files = [Path(...), Path(...)]`
@@ -89,7 +89,7 @@ Exactly one of these must be provided:
   Directory to scan for source spreadsheets (`.csv`, `.xlsx`):
 
   ```bash
-  --input-dir /data/jobs/123/input
+  --input-dir /data/runs/123/input
   ```
 
   → `RunRequest.input_dir = Path(...)`
@@ -157,13 +157,13 @@ from the `config_package` using `importlib.resources`.
   For injecting simple tags into `RunRequest.metadata`:
 
   ```bash
-  --metadata job_id=abc123 \
+  --metadata run_id=abc123 \
   --metadata config_id=config-01
   ```
 
   The engine treats metadata as opaque; it mirrors it into
   `RunContext.metadata` and telemetry envelopes (not into `artifact.json`). How those
-  keys relate back to “jobs” is entirely a backend concern.
+  keys relate back to runs is entirely a backend concern.
 
 ---
 
@@ -194,9 +194,9 @@ For a normal run, the CLI prints a single JSON object to stdout. Conceptually:
   "run": {
     "id": "run-uuid",
     "status": "succeeded",
-    "output_paths": ["/data/jobs/123/output/normalized.xlsx"],
-    "artifact_path": "/data/jobs/123/logs/artifact.json",
-    "events_path": "/data/jobs/123/logs/events.ndjson",
+    "output_paths": ["/data/runs/123/output/normalized.xlsx"],
+    "artifact_path": "/data/runs/123/logs/artifact.json",
+    "events_path": "/data/runs/123/logs/events.ndjson",
     "processed_files": ["input.xlsx"],
     "error": null
   }
@@ -243,26 +243,26 @@ A typical end‑to‑end flow:
 1. **API request** arrives:
    “Run config `<config_id>` on uploaded document `<document_id>`.”
 
-2. **Backend resolves job/task** to a venv and per-run paths:
+2. **Backend resolves the run request** to a venv and per-run paths:
 
    * Ensure a venv exists for `<config_id>/<build_id>` with:
 
      * `ade_engine` installed.
      * the appropriate `ade_config` version installed.
-   * Create a backend job directory (with a per-run working area):
+  * Create a backend run directory (with a per-run working area):
 
-     ```text
-     /data/jobs/<job_id>/
-       input/
-         input.xlsx
-       output/
-       logs/
-     ```
+    ```text
+    /data/runs/<run_id>/
+      input/
+        input.xlsx
+      output/
+      logs/
+    ```
 
 3. **Backend schedules worker** (thread/process/container) with:
 
    * venv location,
-   * backend job directory paths (input/output/logs for this run),
+  * backend run directory paths (input/output/logs for this run),
    * config identifier.
 
 4. **Worker activates venv** and invokes the engine, either:
@@ -271,11 +271,11 @@ A typical end‑to‑end flow:
 
      ```bash
      /path/to/.venv/<config_id>/<build_id>/bin/python -m ade_engine \
-       --input /data/jobs/<job_id>/input/input.xlsx \
-       --output-dir /data/jobs/<job_id>/output \
-       --logs-dir /data/jobs/<job_id>/logs \
+       --input /data/runs/<run_id>/input/input.xlsx \
+       --output-dir /data/runs/<run_id>/output \
+       --logs-dir /data/runs/<run_id>/logs \
        --config-package ade_config \
-       --metadata job_id=<job_id> \
+       --metadata run_id=<run_id> \
        --metadata config_id=<config_id>
      ```
 
@@ -287,11 +287,11 @@ A typical end‑to‑end flow:
 
      result = run(
          config_package="ade_config",
-         input_files=[Path(f"/data/jobs/{job_id}/input/input.xlsx")],
-         output_dir=Path(f"/data/jobs/{job_id}/output"),
-         logs_dir=Path(f"/data/jobs/{job_id}/logs"),
-         metadata={"job_id": job_id, "config_id": config_id},
-     )
+        input_files=[Path(f"/data/runs/{run_id}/input/input.xlsx")],
+        output_dir=Path(f"/data/runs/{run_id}/output"),
+        logs_dir=Path(f"/data/runs/{run_id}/logs"),
+        metadata={"run_id": run_id, "config_id": config_id},
+    )
      ```
 
 5. **Worker updates backend state**:
@@ -307,8 +307,8 @@ A typical end‑to‑end flow:
 
 Importantly, the engine:
 
-* Never needs to know `job_id` or `workspace_id` semantics.
-* Treats those values as opaque metadata.
+* Never needs to know queue semantics or workspace tenancy beyond the opaque metadata provided.
+* Treats run/workspace/config identifiers purely as metadata.
 
 ### 6.2 Python API vs CLI
 
@@ -316,7 +316,7 @@ Both are first‑class and interchangeable:
 
 * **CLI**:
 
-  * Natural fit for process‑oriented workers or containerized jobs.
+  * Natural fit for process‑oriented workers or containerized run executors.
   * Clear separation of concerns: worker = shell command runner.
 
 * **Python API**:

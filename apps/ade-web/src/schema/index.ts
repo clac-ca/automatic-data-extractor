@@ -16,4 +16,7 @@ export type SessionEnvelope = GeneratedComponents["schemas"]["SessionEnvelope"];
 export type SetupStatus = GeneratedComponents["schemas"]["SetupStatus"];
 export type SetupRequest = GeneratedComponents["schemas"]["SetupRequest"];
 export type UserProfile = GeneratedComponents["schemas"]["UserProfile"];
+export type RunResource = GeneratedComponents["schemas"]["RunResource"];
+export type RunStatus = RunResource["status"];
+export type RunCreateOptions = GeneratedComponents["schemas"]["RunCreateOptions"];
 export type { ArtifactV1 } from "./adeArtifact";

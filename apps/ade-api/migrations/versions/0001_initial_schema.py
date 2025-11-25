@@ -25,13 +25,24 @@ PRINCIPALTYPE = sa.Enum(
     length=20,
 )
 
-JOBSTATUS = sa.Enum(
+RUNSTATUS = sa.Enum(
     "queued",
     "running",
     "succeeded",
     "failed",
-    "cancelled",
-    name="jobstatus",
+    "canceled",
+    name="run_status",
+    native_enum=False,
+    length=20,
+)
+
+BUILDSTATUS = sa.Enum(
+    "queued",
+    "building",
+    "active",
+    "failed",
+    "canceled",
+    name="api_build_status",
     native_enum=False,
     length=20,
 )
@@ -39,6 +50,9 @@ JOBSTATUS = sa.Enum(
 
 def upgrade() -> None:
     bind = op.get_bind()
+
+    RUNSTATUS.create(bind, checkfirst=True)
+    BUILDSTATUS.create(bind, checkfirst=True)
 
     _create_users()
     _create_user_credentials()
@@ -59,7 +73,10 @@ def upgrade() -> None:
     _create_workspace_config_states()
     _create_configurations()
     _create_configuration_builds()
-    _create_jobs()
+    _create_runs()
+    _create_run_logs()
+    _create_builds()
+    _create_build_logs()
 
 
 def downgrade() -> None:  # pragma: no cover - intentionally not implemented
@@ -698,45 +715,42 @@ def _create_configuration_builds() -> None:
     )
 
 
-def _create_jobs() -> None:
+def _create_runs() -> None:
     op.create_table(
-        "jobs",
-        sa.Column("id", sa.String(length=26), primary_key=True),
+        "runs",
+        sa.Column("id", sa.String(length=40), primary_key=True),
+        sa.Column("configuration_id", sa.String(length=26), nullable=False),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
         sa.Column("config_id", sa.String(length=26), nullable=False),
-        sa.Column("config_version_id", sa.String(length=26), nullable=False),
-        sa.Column("submitted_by_user_id", sa.String(length=26), nullable=True),
-        sa.Column("status", JOBSTATUS, nullable=False, server_default=sa.text("'queued'")),
+        sa.Column("config_version_id", sa.String(length=26), nullable=True),
+        sa.Column("status", RUNSTATUS, nullable=False, server_default="queued"),
+        sa.Column("exit_code", sa.Integer(), nullable=True),
         sa.Column("attempt", sa.Integer(), nullable=False, server_default=sa.text("1")),
-        sa.Column("retry_of_job_id", sa.String(length=26), nullable=True),
-        sa.Column("input_hash", sa.String(length=128), nullable=True),
-        sa.Column("input_documents", sa.JSON(), nullable=False),
+        sa.Column("retry_of_run_id", sa.String(length=40), nullable=True),
+        sa.Column("input_document_id", sa.String(length=26), nullable=True),
+        sa.Column("input_sheet_name", sa.String(length=64), nullable=True),
+        sa.Column("input_sheet_names", sa.JSON(), nullable=True),
+        sa.Column("input_documents", sa.JSON(), nullable=True),
         sa.Column("trace_id", sa.String(length=64), nullable=True),
         sa.Column("artifact_uri", sa.String(length=512), nullable=True),
         sa.Column("output_uri", sa.String(length=512), nullable=True),
-        sa.Column("queued_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("last_heartbeat", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("logs_uri", sa.String(length=512), nullable=True),
-        sa.Column("run_request_uri", sa.String(length=512), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("canceled_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("summary", sa.Text(), nullable=True),
+        sa.Column("error_message", sa.Text(), nullable=True),
+        sa.Column("submitted_by_user_id", sa.String(length=26), nullable=True),
         sa.ForeignKeyConstraint(
-            ["workspace_id"],
-            ["workspaces.id"],
+            ["configuration_id"],
+            ["configurations.id"],
             ondelete="CASCADE",
         ),
+        sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
-            ["config_id"],
-            ["configs.id"],
-            ondelete="SET NULL",
-        ),
-        sa.ForeignKeyConstraint(
-            ["config_version_id"],
-            ["config_versions.id"],
+            ["input_document_id"],
+            ["documents.id"],
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
@@ -745,36 +759,92 @@ def _create_jobs() -> None:
             ondelete="SET NULL",
         ),
     )
-    op.create_index("jobs_workspace_idx", "jobs", ["workspace_id", "created_at"], unique=False)
+    op.create_index("runs_config_idx", "runs", ["config_id"], unique=False)
+    op.create_index("runs_workspace_idx", "runs", ["workspace_id"], unique=False)
+    op.create_index("runs_status_idx", "runs", ["status"], unique=False)
     op.create_index(
-        "jobs_config_version_idx",
-        "jobs",
-        ["config_version_id"],
+        "runs_input_document_idx",
+        "runs",
+        ["input_document_id"],
         unique=False,
     )
+    op.create_index("runs_config_version_idx", "runs", ["config_version_id"], unique=False)
     op.create_index(
-        "jobs_input_idx",
-        "jobs",
-        ["workspace_id", "config_version_id", "input_hash"],
+        "runs_workspace_created_idx",
+        "runs",
+        ["workspace_id", "created_at"],
         unique=False,
     )
-    op.create_index(
-        "jobs_status_queued_idx",
-        "jobs",
-        ["status", "queued_at"],
-        unique=False,
+    op.create_index("runs_retry_of_idx", "runs", ["retry_of_run_id"], unique=False)
+
+
+def _create_run_logs() -> None:
+    op.create_table(
+        "run_logs",
+        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+        sa.Column("run_id", sa.String(length=40), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column("stream", sa.String(length=20), nullable=False, server_default="stdout"),
+        sa.Column("message", sa.Text(), nullable=False),
+        sa.ForeignKeyConstraint(["run_id"], ["runs.id"], ondelete="CASCADE"),
     )
-    op.create_index(
-        "jobs_retry_of_idx",
-        "jobs",
-        ["retry_of_job_id"],
-        unique=False,
+    op.create_index("run_logs_run_id_idx", "run_logs", ["run_id"], unique=False)
+    op.create_index("run_logs_stream_idx", "run_logs", ["stream"], unique=False)
+
+
+def _create_builds() -> None:
+    op.create_table(
+        "builds",
+        sa.Column("id", sa.String(length=40), primary_key=True),
+        sa.Column("workspace_id", sa.String(length=26), nullable=False),
+        sa.Column("config_id", sa.String(length=26), nullable=False),
+        sa.Column("configuration_id", sa.String(length=26), nullable=False),
+        sa.Column("configuration_build_id", sa.String(length=26), nullable=True),
+        sa.Column("build_ref", sa.String(length=26), nullable=True),
+        sa.Column("status", BUILDSTATUS, nullable=False, server_default="queued"),
+        sa.Column("exit_code", sa.Integer(), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("summary", sa.Text(), nullable=True),
+        sa.Column("error_message", sa.Text(), nullable=True),
+        sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["configuration_id"],
+            ["configurations.id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["configuration_build_id"],
+            ["configuration_builds.id"],
+            ondelete="SET NULL",
+        ),
     )
-    op.create_index(
-        "jobs_input_unique_idx",
-        "jobs",
-        ["workspace_id", "config_version_id", "input_hash"],
-        unique=True,
-        sqlite_where=sa.text("retry_of_job_id IS NULL"),
-        postgresql_where=sa.text("retry_of_job_id IS NULL"),
+    op.create_index("builds_workspace_idx", "builds", ["workspace_id"], unique=False)
+    op.create_index("builds_config_idx", "builds", ["config_id"], unique=False)
+    op.create_index("builds_status_idx", "builds", ["status"], unique=False)
+    op.create_index("builds_build_ref_idx", "builds", ["build_ref"], unique=False)
+
+
+def _create_build_logs() -> None:
+    op.create_table(
+        "build_logs",
+        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+        sa.Column("build_id", sa.String(length=40), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column("stream", sa.String(length=20), nullable=False, server_default="stdout"),
+        sa.Column("message", sa.Text(), nullable=False),
+        sa.ForeignKeyConstraint(["build_id"], ["builds.id"], ondelete="CASCADE"),
     )
+    op.create_index("build_logs_build_id_idx", "build_logs", ["build_id"], unique=False)
+    op.create_index("build_logs_stream_idx", "build_logs", ["stream"], unique=False)

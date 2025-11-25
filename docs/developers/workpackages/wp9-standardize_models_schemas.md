@@ -40,8 +40,8 @@ We’re turning our API and domain layer into a **contract‑first system**: eve
 
 ## Scope
 
-* **Models**: users, workspaces/memberships, RBAC, documents, configurations, builds, API keys, system settings, (jobs: remove or formalize).
-* **Schemas**: auth, users, workspaces, roles, documents, configurations & file tree, builds, health, jobs placeholder.
+* **Models**: users, workspaces/memberships, RBAC, documents, configurations, builds, API keys, system settings, (runs: remove or formalize).
+* **Schemas**: auth, users, workspaces, roles, documents, configurations & file tree, builds, health, runs placeholder.
 
 ---
 
@@ -80,7 +80,7 @@ We’re turning our API and domain layer into a **contract‑first system**: eve
 * **Health**: `HealthComponentStatus`, `HealthCheckResponse` (leave as is or lift to enums). 
 * **Configurations + Files**: `ConfigurationCreate`, `ConfigurationRecord`, `ConfigurationValidateResponse`, `ConfigurationActivateRequest`, `File*` DTOs → `ConfigurationOut`, `ConfigurationValidateOut`, and tightened `FileEntry/FileListing` as above. Keep discriminated `ConfigSource`. 
 * **Builds**: `BuildRecord`, `BuildEnsureRequest/Response` → `BuildOut`, `BuildEnsureOut`; replace `venv_path`. 
-* **Jobs**: `JobPlaceholder` → remove or formalize `JobOut` minimally. 
+* **Runs**: `RunPlaceholder` → remove or formalize `RunOut` minimally. 
 
 ---
 
@@ -129,9 +129,9 @@ We’re turning our API and domain layer into a **contract‑first system**: eve
 
 * Switch ORM `Workspace.settings` to `MutableDict` to match expected in‑place schema updates; this aligns with `Document.attributes` & `SystemSetting.value`.
 
-11. **Jobs**
+11. **Runs**
 
-* Remove placeholder schemas/models or formalize a minimal `JobOut` and `Job` enum.
+* Remove placeholder schemas/models or formalize a minimal `RunOut` and `Run` enum.
 
 12. **Exports & docs**
 

@@ -26,7 +26,7 @@ It assumes:
 | Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
 
 These docs stick to that vocabulary to avoid synonyms like “input file” or
-mixing “field”/“column”. Backend notions (job/workspace/tenant) only appear as
+mixing “field”/“column”. Backend notions (run/workspace/tenant) only appear as
 opaque metadata if the caller supplies them.
 
 ---
@@ -36,14 +36,14 @@ opaque metadata if the caller supplies them.
 A single engine run is:
 
 > A pure, path‑based function that takes **config + source files** and produces
-> a **normalized workbook + artifact + telemetry**, with no knowledge of backend jobs.
+> a **normalized workbook + artifact + telemetry**, with no knowledge of backend run orchestration.
 
 From inside the venv, the engine:
 
 - Accepts a **config package** to use (`config_package`, optional `manifest_path`).
 - Accepts **sources** (`input_files` or `input_dir`, optional `input_sheets` for source sheets).
 - Accepts where to put **outputs** (`output_dir`, `logs_dir` for the output workbook and logs).
-- Accepts opaque **metadata** from the caller (e.g., backend job IDs) purely for telemetry correlation.
+- Accepts opaque **metadata** from the caller (e.g., backend run IDs) purely for telemetry correlation.
 
 It emits:
 
@@ -54,7 +54,7 @@ It emits:
 
 The engine **does not**:
 
-- Know about backend job queues, tenants, workspaces, or job IDs.
+- Know about backend run queues, tenants, workspaces, or run IDs.
 - Own virtual environment creation, scaling, or scheduling.
 - Enforce OS‑level limits (CPU, memory, time). That’s handled by the backend.
 
@@ -78,7 +78,7 @@ result = engine.run(
         input_files=[Path("input.xlsx")],
         output_dir=Path("output"),
         logs_dir=Path("logs"),
-        metadata={"job_id": "123"},  # opaque metadata; engine treats it as tags
+        metadata={"run_id": "123"},  # opaque metadata; engine treats it as tags
     )
 )
 
@@ -165,7 +165,7 @@ Most runtime complexity is expressed via a few core types in `types.py`.
 * **Metadata**
 
   * `metadata: Mapping[str, Any] | None`
-    Opaque caller metadata for telemetry correlation (e.g., `{"job_id": "...", "config_id": "..."}`).
+    Opaque caller metadata for telemetry correlation (e.g., `{"run_id": "...", "config_id": "..."}`).
 
 Invariants:
 
@@ -221,7 +221,7 @@ These decisions are made once, up front, and never mutated mid‑run.
   Wrapper around the loaded manifest (Pydantic model + convenience helpers).
 
 * `metadata: dict[str, Any]`
-  Copy of `RunRequest.metadata`. The engine treats this as an opaque dict for telemetry correlation (e.g., a backend `job_id` if provided).
+  Copy of `RunRequest.metadata`. The engine treats this as an opaque dict for telemetry correlation (e.g., a backend run request ID if provided).
 
 * `started_at: datetime` / `completed_at: datetime | None`
   Timestamps for run lifecycle.
@@ -492,7 +492,7 @@ The **goal** is that a failed run is still debuggable by looking at
 
 ## 6. Interaction with virtual environments and ADE backend
 
-The runtime is intentionally simple and **backend‑job‑agnostic**. The typical backend
+The runtime is intentionally simple and **backend‑run‑agnostic**. The typical backend
 integration looks like this:
 
 1. ADE backend decides which config version to use.
@@ -502,10 +502,10 @@ integration looks like this:
    * `ade_engine`,
    * that specific `ade_config` version.
 
-3. Backend prepares a per‑run working directory (often under a job folder), e.g.:
+3. Backend prepares a per‑run working directory (under the runs directory), e.g.:
 
    ```text
-   /data/jobs/<job_id>/
+   /data/runs/<run_id>/
      input/
        input.xlsx
      output/
@@ -522,10 +522,10 @@ integration looks like this:
 
    result = run(
        config_package="ade_config",
-       input_files=[Path(f"/data/jobs/{job_id}/input/input.xlsx")],
-       output_dir=Path(f"/data/jobs/{job_id}/output"),
-       logs_dir=Path(f"/data/jobs/{job_id}/logs"),
-       metadata={"job_id": job_id, "config_id": config_id},
+       input_files=[Path(f"/data/runs/{run_id}/input/input.xlsx")],
+       output_dir=Path(f"/data/runs/{run_id}/output"),
+       logs_dir=Path(f"/data/runs/{run_id}/logs"),
+       metadata={"run_id": run_id, "config_id": config_id},
    )
    ```
 
@@ -533,19 +533,19 @@ integration looks like this:
 
    ```bash
    python -m ade_engine \
-     --input "/data/jobs/${job_id}/input/input.xlsx" \
-     --output-dir "/data/jobs/${job_id}/output" \
-     --logs-dir "/data/jobs/${job_id}/logs" \
+     --input "/data/runs/${run_id}/input/input.xlsx" \
+     --output-dir "/data/runs/${run_id}/output" \
+     --logs-dir "/data/runs/${run_id}/logs" \
      --config-package ade_config
    ```
 
 5. Backend:
 
    * Stores references to `result.output_paths`, `artifact.json`, and
-     `events.ndjson` in its own job/task record.
+     `events.ndjson` in its own run record.
    * Uses `artifact.json` and `events.ndjson` for reporting and UI.
 
-The engine never needs to know what `job_id` means; it just sees file paths and
+The engine never needs to know what a queue or correlation ID means; it just sees file paths and
 optional metadata for the run.
 
 ---

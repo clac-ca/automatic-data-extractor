@@ -25,8 +25,18 @@ def test_run_resource_serialization_uses_aliases() -> None:
 
     payload = resource.model_dump()
     assert payload["object"] == "ade.run"
+    assert payload["attempt"] == 1
+    assert payload["input_documents"] == []
     assert payload["output_paths"] == []
     assert payload["processed_files"] == []
+    assert "config_version_id" not in payload
+    assert "submitted_by_user_id" not in payload
+    assert "retry_of_run_id" not in payload
+    assert "trace_id" not in payload
+    assert "canceled" not in payload
+    assert "artifact_uri" not in payload
+    assert "output_uri" not in payload
+    assert "logs_uri" not in payload
     assert "artifact_path" not in payload
     assert "events_path" not in payload
     assert "summary" not in payload

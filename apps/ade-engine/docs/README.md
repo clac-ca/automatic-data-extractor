@@ -19,7 +19,7 @@ while building or extending the engine and configs.
 | Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
 
 These docs stick to that vocabulary to avoid synonyms like “input file” or
-mixing “field”/“column”. Backend notions (job/workspace/tenant) only appear as
+mixing “field”/“column”. Backend notions (run/workspace/tenant) only appear as
 opaque metadata if the caller supplies them.
 
 ### Package layout (flattened, layered by convention)

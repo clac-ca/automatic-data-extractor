@@ -42,7 +42,7 @@ We’re removing “naming tax” across the stack. Today some tables use `user_
 | `workspace_config_states` | `workspace_id`                        | **PK** `id` (new); **UNIQUE(workspace_id)**; FKs: `workspace_id → workspaces.id`, `config_id → configs.id`, `config_version_id → config_versions.id`.                 |
 | `configurations`          | `(workspace_id, config_id)`           | **PK** `id` (new); **UNIQUE(workspace_id, config_id)**; FK `workspace_id → workspaces.id`.                                                                            |
 | `configuration_builds`    | `(workspace_id, config_id, build_id)` | **PK** `id` (new); add `configuration_id` (FK → `configurations.id`); keep other columns; translate partial uniques for status to use `configuration_id`.             |
-| `jobs`                    | `job_id`                              | **PK** `id`; FKs: `workspace_id → workspaces.id`, `config_id → configs.id`, `config_version_id → config_versions.id`, `submitted_by_user_id → users.id`.              |
+| `runs`                    | `run_id`                              | **PK** `id`; FKs: `workspace_id → workspaces.id`, `config_id → configs.id`, `config_version_id → config_versions.id`, `submitted_by_user_id → users.id`.              |
 
 ---
 
@@ -60,7 +60,7 @@ Because no instances exist, **edit `0001_initial_schema` directly**:
 
 > The pattern is: (a) rename owner PK columns to `id` where possible, (b) where natural/composite PKs exist, introduce `id` as the PK and add/adjust uniques, (c) change FKs to reference `<table>.id`, and (d) update any index/constraint names if you maintain naming conventions.
 
-* **Users, Workspaces, API Keys, Roles, Principals, Credentials, Identities, Memberships, Documents, Jobs**
+* **Users, Workspaces, API Keys, Roles, Principals, Credentials, Identities, Memberships, Documents, Runs**
   Change the PK column in `op.create_table()` to `sa.Column("id", sa.String(26), primary_key=True)` and adjust downstream FKs in callers to reference `.id`. (Examples: `user_id` references → `["users.id"]`; `workspace_id` references → `["workspaces.id"]`; `roles.role_id` → `roles.id`, etc.)
 
 * **Permissions**
@@ -94,7 +94,7 @@ Because no instances exist, **edit `0001_initial_schema` directly**:
 
 ### 4) (Optional but strongly recommended) API schema alignment
 
-* Top‑level `*Out` DTOs (Users, Workspaces, Roles, Principals, Documents, API Keys, Configs, Config Versions, Configurations, Builds, Jobs) expose **`id`**.
+* Top‑level `*Out` DTOs (Users, Workspaces, Roles, Principals, Documents, API Keys, Configs, Config Versions, Configurations, Builds, Runs) expose **`id`**.
 * Relationship fields remain explicit `<resource>_id` (e.g., `workspace_id`, `user_id`, `document_id`, `configuration_id`).
 * Remove permanent aliasing like `document_id ⇄ id` in schemas—no need for dual names now.
 

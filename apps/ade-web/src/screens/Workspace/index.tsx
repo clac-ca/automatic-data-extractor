@@ -26,7 +26,7 @@ import { NotificationsProvider } from "@shared/notifications";
 import WorkspaceOverviewRoute from "@screens/Workspace/sections/Overview";
 import WorkspaceDocumentsRoute from "@screens/Workspace/sections/Documents";
 import DocumentDetailRoute from "@screens/Workspace/sections/Documents/components/DocumentDetail";
-import WorkspaceJobsRoute from "@screens/Workspace/sections/Jobs";
+import WorkspaceRunsRoute from "@screens/Workspace/sections/Runs";
 import WorkspaceConfigsIndexRoute from "@screens/Workspace/sections/ConfigBuilder";
 import WorkspaceConfigRoute from "@screens/Workspace/sections/ConfigBuilder/detail";
 import ConfigEditorWorkbenchRoute from "@screens/Workspace/sections/ConfigBuilder/workbench";
@@ -512,8 +512,8 @@ export function resolveWorkspaceSection(
         element: <DocumentDetailRoute params={{ documentId: decodeURIComponent(second) }} />,
       };
     }
-    case "jobs":
-      return { kind: "content", key: "jobs", element: <WorkspaceJobsRoute /> };
+    case "runs":
+      return { kind: "content", key: "runs", element: <WorkspaceRunsRoute /> };
     case "config-builder": {
       if (!second) {
         return { kind: "content", key: "config-builder", element: <WorkspaceConfigsIndexRoute /> };

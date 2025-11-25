@@ -31,7 +31,7 @@ def build_run_context(tmp_path: Path) -> RunContext:
     )
     return RunContext(
         run_id="run-456",
-        metadata={"job_id": "job-1", "config_id": "cfg-1"},
+        metadata={"run_id": "run-1", "config_id": "cfg-1"},
         manifest=None,
         paths=paths,
         started_at=datetime(2024, 1, 1, 12, 0, 0),

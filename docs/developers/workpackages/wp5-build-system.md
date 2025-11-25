@@ -6,7 +6,7 @@ Track per-configuration virtual environments in SQL, build them deterministicall
 ## Scope
 * Create `configuration_builds` table to persist build metadata.
 * Manage virtual environments under `${ADE_VENVS_DIR}/{workspace}/{config}/{build_id}/`.
-* Provide an `ensure_build()` service used by both API endpoints and job submission.
+* Provide an `ensure_build()` service used by both API endpoints and run submission.
 * Implement REST endpoints to inspect, trigger, or delete builds.
 
 ## Database
@@ -40,7 +40,7 @@ Environment variables to honor (with defaults from the build guide):
 2. Rebuild when: no active row, digest/version mismatch, engine/python version change, TTL expired, or `force=True`.
 3. Deduplicate by inserting/updating a `status="building"` row (unique constraint guarantees one builder).
 4. If a build is already running:
-   * Jobs path waits up to `ADE_BUILD_ENSURE_WAIT_SECONDS` for it to finish, otherwise returns `409 build_in_progress`.
+   * Runs path waits up to `ADE_BUILD_ENSURE_WAIT_SECONDS` for it to finish, otherwise returns `409 build_in_progress`.
    * UI path returns `200 {"status":"building"}` immediately.
 5. Heal stale builders (`now - started_at > timeout`): mark failed, delete partial folder.
 6. New builds:
@@ -49,17 +49,17 @@ Environment variables to honor (with defaults from the build guide):
    * Verify imports: `python -I -B -c "import ade_engine, ade_config"`.
    * On success: flip previous active row to `inactive`, mark new row `active`.
    * On failure: delete folder, set row to `failed` with error.
-7. After success/failure, prune inactive/failed builds older than `ADE_BUILD_RETENTION_DAYS` and not referenced by queued/running jobs.
+7. After success/failure, prune inactive/failed builds older than `ADE_BUILD_RETENTION_DAYS` and not referenced by queued/running runs.
 
 ## API
 * `GET /workspaces/{workspace}/configurations/{config}/build` → current pointer or `404`.
 * `PUT /workspaces/{workspace}/configurations/{config}/build` Body `{ "force": false }`
   * Returns pointer, `"status":"building"`, or `409 build_in_progress` depending on caller behavior.
 * `DELETE /workspaces/{workspace}/configurations/{config}/build`
-  * Removes the active build if no jobs reference it; otherwise `409`.
+  * Removes the active build if no runs reference it; otherwise `409`.
 
 ## Acceptance
 * Multiple build requests coalesce into a single actual build per config.
 * Crash mid-build is healed automatically on the next ensure.
-* Rebuild can occur while jobs still reference the previous `build_id`; new jobs switch after pointer flip.
+* Rebuild can occur while runs still reference the previous `build_id`; new runs switch after pointer flip.
 * Old build folders are pruned safely once unreferenced.

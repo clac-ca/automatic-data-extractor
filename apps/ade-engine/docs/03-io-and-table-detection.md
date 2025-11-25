@@ -49,7 +49,7 @@ The IO + extract layer has three core responsibilities:
 
 Design constraints:
 
-- **Run-scoped, not backend-job aware** — everything is path‑based.
+- **Run-scoped, not backend-orchestration aware** — everything is path‑based.
 - **Streaming‑friendly** — large workbooks should not require large amounts
   of memory.
 - **Config‑driven** — row detectors are provided by `ade_config`, not hard‑coded.
