@@ -56,6 +56,7 @@ type RunMode = "normal" | "validation" | "test";
 interface RunOptions {
   dryRun?: boolean;
   validateOnly?: boolean;
+  forceRebuild?: boolean; // force environment rebuild before executing
   inputSheetNames?: string[];
   mode?: RunMode; // view-model convenience derived from the flags above
 }
@@ -63,7 +64,7 @@ interface RunOptions {
 
 - **Validation run** – a run with `validateOnly: true` (and often `mode: "validation"`) that checks configuration correctness without full extraction.
 - **Test run** – a run against a sample document, typically with `mode: "test"` and optionally `dryRun: true`.
-- Backend payloads use snake_case equivalents: `dry_run`, `validate_only`, `input_sheet_names`. The `mode` helper is UI‑only.
+- Backend payloads use snake_case equivalents: `dry_run`, `validate_only`, `force_rebuild`, `input_sheet_names`. The `mode` helper is UI‑only.
 
 ---
 
@@ -313,6 +314,7 @@ type RunMode = "normal" | "validation" | "test";
 export interface RunOptions {
   dryRun?: boolean;
   validateOnly?: boolean;
+  forceRebuild?: boolean; // Force environment rebuild before executing
   inputSheetNames?: string[];
   mode?: RunMode; // View-model convenience; API payload uses snake_case flags
 }
