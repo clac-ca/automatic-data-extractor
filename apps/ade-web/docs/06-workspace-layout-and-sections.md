@@ -340,7 +340,7 @@ Responsibilities:
 - Provide links to:
   - Run detail view.
   - Logs and telemetry (via NDJSON streams).
-  - Output artifacts and individual output files.
+  - Output files and telemetry.
 
 Shell integration:
 

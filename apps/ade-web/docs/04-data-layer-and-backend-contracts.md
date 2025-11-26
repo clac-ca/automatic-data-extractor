@@ -478,7 +478,7 @@ Mutations:
 **Responsibilities**
 
 * Workspace run ledger (all runs in a workspace).
-* Per-run artifacts, outputs, and log files.
+* Per-run outputs and log files.
 * Config-triggered runs (e.g. from the Configuration Builder).
 * Run NDJSON event streams.
 * A **run-centric** API once you have a `runId`.
@@ -499,7 +499,7 @@ The backend uses `/runs` for all execution units. On the frontend, a Run is glob
 #### Canonical run detail & assets (global)
 
 * `GET  /api/v1/runs/{run_id}` – canonical run detail.
-* `GET  /api/v1/runs/{run_id}/artifact` – download artifact.
+* `GET  /api/v1/runs/{run_id}/logfile` – download telemetry log.
 * `GET  /api/v1/runs/{run_id}/logfile` – download log file.
 * `GET  /api/v1/runs/{run_id}/logs` – NDJSON event stream.
 * `GET  /api/v1/runs/{run_id}/outputs` – list outputs.
