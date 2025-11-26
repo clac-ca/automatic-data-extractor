@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path as FilePath
 from typing import Annotated, Any, Literal
 
-from ade_engine.schemas import AdeEvent, RunSummaryV1
+from ade_engine.schemas import RunSummaryV1
 from fastapi import (
     APIRouter,
     BackgroundTasks,

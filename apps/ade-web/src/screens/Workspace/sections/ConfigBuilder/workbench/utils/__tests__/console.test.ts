@@ -6,7 +6,7 @@ import { describeBuildEvent, describeRunEvent, formatConsoleTimestamp } from "..
 
 describe("formatConsoleTimestamp", () => {
   it("formats epoch seconds", () => {
-    const label = formatConsoleTimestamp(1_700_000_000_000);
+    const label = formatConsoleTimestamp("2024-01-01T00:00:00Z");
     expect(label).toMatch(/\d{1,2}:\d{2}:\d{2}/);
   });
 

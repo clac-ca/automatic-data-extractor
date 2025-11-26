@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Literal
 
+from ade_engine.schemas import AdeEvent
+from ade_engine.schemas import ArtifactV1 as RunDiagnosticsV1
 from pydantic import Field, model_validator
 
-from ade_engine.schemas import AdeEvent, ArtifactV1 as RunDiagnosticsV1
 from ade_api.shared.core.ids import ULIDStr
 from ade_api.shared.core.schema import BaseSchema
 from ade_api.shared.pagination import Page
@@ -67,7 +68,7 @@ class RunCreateOptions(BaseSchema):
     )
 
     @model_validator(mode="after")
-    def _normalize_document_ids(self) -> "RunCreateOptions":
+    def _normalize_document_ids(self) -> RunCreateOptions:
         if self.document_ids and not self.input_document_id:
             self.input_document_id = self.document_ids[0]
         elif self.input_document_id and not self.document_ids:

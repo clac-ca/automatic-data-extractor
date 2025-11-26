@@ -9,13 +9,9 @@ const TIME_OPTIONS: Intl.DateTimeFormatOptions = {
   second: "2-digit",
 };
 
-export function formatConsoleTimestamp(value: number | Date | string): string {
-  const date =
-    value instanceof Date
-      ? value
-      : typeof value === "number"
-        ? new Date(value)
-        : new Date(value);
+export function formatConsoleTimestamp(value: string | Date): string {
+  const iso = value instanceof Date ? value.toISOString() : value;
+  const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
     return "";
   }
