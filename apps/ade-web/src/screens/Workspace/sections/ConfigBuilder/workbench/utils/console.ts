@@ -10,7 +10,12 @@ const TIME_OPTIONS: Intl.DateTimeFormatOptions = {
 };
 
 export function formatConsoleTimestamp(value: number | Date | string): string {
-  const date = typeof value === "number" ? new Date(value * 1000) : new Date(value);
+  const date =
+    value instanceof Date
+      ? value
+      : typeof value === "number"
+        ? new Date(value)
+        : new Date(value);
   if (Number.isNaN(date.getTime())) {
     return "";
   }
