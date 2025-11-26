@@ -51,8 +51,8 @@ import { Alert } from "@ui/Alert";
 
 const EXPLORER_LIMITS = { min: 200, max: 420 } as const;
 const INSPECTOR_LIMITS = { min: 260, max: 420 } as const;
-const OUTPUT_LIMITS = { min: 140, max: 420 } as const;
 const MIN_EDITOR_HEIGHT = 320;
+const MIN_EDITOR_HEIGHT_WITH_CONSOLE = 120;
 const MIN_CONSOLE_HEIGHT = 140;
 const DEFAULT_CONSOLE_HEIGHT = 220;
 const MAX_CONSOLE_LINES = 400;
@@ -519,12 +519,14 @@ export function Workbench({
     return () => observer.disconnect();
   }, [paneAreaEl]);
 
+  const editorMinHeight = outputCollapsed ? MIN_EDITOR_HEIGHT : MIN_EDITOR_HEIGHT_WITH_CONSOLE;
   const consoleLimits = useMemo(() => {
     const container = Math.max(0, layoutSize.height);
-    const maxPx = Math.min(OUTPUT_LIMITS.max, Math.max(0, container - MIN_EDITOR_HEIGHT - OUTPUT_HANDLE_THICKNESS));
+    const availableHeight = Math.max(0, container - editorMinHeight - OUTPUT_HANDLE_THICKNESS);
+    const maxPx = availableHeight;
     const minPx = Math.min(MIN_CONSOLE_HEIGHT, maxPx);
     return { container, minPx, maxPx };
-  }, [layoutSize.height]);
+  }, [layoutSize.height, editorMinHeight]);
 
   const clampConsoleHeight = useCallback(
     (height: number, limits = consoleLimits) => clamp(height, limits.minPx, limits.maxPx),
@@ -698,8 +700,8 @@ export function Workbench({
       : 0;
   const editorHeight =
     paneHeight > 0
-      ? Math.max(MIN_EDITOR_HEIGHT, paneHeight - OUTPUT_HANDLE_THICKNESS - consoleHeight)
-      : MIN_EDITOR_HEIGHT;
+      ? Math.max(editorMinHeight, paneHeight - OUTPUT_HANDLE_THICKNESS - consoleHeight)
+      : editorMinHeight;
 
   useEffect(() => {
     const activeId = files.activeTabId;
@@ -1313,14 +1315,14 @@ export function Workbench({
               editorTheme={editorTheme.resolvedTheme}
               menuAppearance={menuAppearance}
               canSaveFiles={canSaveFiles}
-              minHeight={MIN_EDITOR_HEIGHT}
+              minHeight={editorMinHeight}
             />
           ) : (
             <div
                 className="grid min-h-0 min-w-0 flex-1"
                 style={{
                 height: paneHeight > 0 ? `${paneHeight}px` : undefined,
-                gridTemplateRows: `${Math.max(MIN_EDITOR_HEIGHT, editorHeight)}px ${OUTPUT_HANDLE_THICKNESS}px ${Math.max(
+                gridTemplateRows: `${Math.max(editorMinHeight, editorHeight)}px ${OUTPUT_HANDLE_THICKNESS}px ${Math.max(
                   0,
                   consoleHeight,
                 )}px`,
@@ -1347,7 +1349,7 @@ export function Workbench({
                 editorTheme={editorTheme.resolvedTheme}
                 menuAppearance={menuAppearance}
                 canSaveFiles={canSaveFiles}
-                minHeight={MIN_EDITOR_HEIGHT}
+                minHeight={editorMinHeight}
               />
               <PanelResizeHandle
                 orientation="horizontal"

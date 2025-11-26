@@ -1005,8 +1005,6 @@ class RunsService:
         run_dir = runs_root / run.id
         run_dir.mkdir(parents=True, exist_ok=True)
 
-        mode_literal = "validate" if options.validate_only else "execute"
-
         if not options.input_document_id:
             raise RunInputMissingError("Input document is required for run execution")
 
@@ -1050,18 +1048,8 @@ class RunsService:
         # Stream frames from the engine process: either StdoutFrame or AdeEvent.
         async for frame in runner.stream():
             if isinstance(frame, StdoutFrame):
-                log = await self._append_log(run.id, frame.message, stream=frame.stream)
                 summary = self._parse_summary(frame.message, default=summary)
-                yield self._ade_event(
-                    run=run,
-                    type_="run.console",
-                    payload={
-                        "stream": frame.stream,
-                        "level": "warning" if frame.stream == "stderr" else "info",
-                        "message": frame.message,
-                        "created": self._epoch_seconds(log.created_at),
-                    },
-                )
+                await self._append_log(run.id, frame.message, stream=frame.stream)
                 continue
 
             # Engine AdeEvents flow through unchanged.
@@ -1093,23 +1081,6 @@ class RunsService:
             exit_code=return_code,
             summary=summary_json,
             error_message=error_message,
-        )
-        yield self._ade_event(
-            run=completion,
-            type_="run.completed",
-            payload={
-                "status": self._status_literal(completion.status),
-                "mode": mode_literal,
-                "execution": {
-                    "exit_code": completion.exit_code,
-                    "duration_ms": self._duration_ms(completion),
-                },
-                "events_path": paths_snapshot.events_path,
-                "output_paths": paths_snapshot.output_paths,
-                "processed_files": paths_snapshot.processed_files,
-                "error": {"message": completion.error_message} if completion.error_message else None,
-                "run_summary": summary_model.model_dump(mode="json") if summary_model else None,
-            },
         )
 
     async def _stream_validate_only_run(
@@ -1232,17 +1203,7 @@ class RunsService:
                 generator=generator,
             ):
                 if isinstance(event, StdoutFrame):
-                    log = await self._append_log(run.id, event.message, stream=event.stream)
-                    yield self._ade_event(
-                        run=run,
-                        type_="run.console",
-                        payload={
-                            "stream": event.stream,
-                            "level": "warning" if event.stream == "stderr" else "info",
-                            "message": event.message,
-                            "created": self._epoch_seconds(log.created_at),
-                        },
-                    )
+                    await self._append_log(run.id, event.message, stream=event.stream)
                     continue
                 yield event
         except asyncio.CancelledError:

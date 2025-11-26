@@ -174,10 +174,9 @@ async def test_stream_run_happy_path_yields_engine_events(
         events.append(event)
 
     assert events[0].type == "run.queued"
-    assert events[1].type == "run.started"
-    assert events[2].type == "run.console"
-    assert events[3].type == "run.phase.started"
-    assert events[4].type == "run.completed"
+    assert events[1].type == "run.console"
+    assert events[2].type == "run.phase.started"
+    assert events[3].type == "run.completed"
 
     run = await service.get_run(context.run_id)
     assert run is not None

@@ -32,6 +32,10 @@ export function isAdeEvent(event: unknown): event is AdeEvent {
 
 export function eventTimestamp(event: AdeEvent): number {
   const value = event.created_at;
-  const ts = typeof value === "number" ? value * 1000 : Date.parse(String(value));
-  return Number.isFinite(ts) ? ts : Date.now();
+  if (typeof value === "number") {
+    // Accept either seconds or milliseconds; normalize to milliseconds.
+    return value > 1_000_000_000_000 ? value : value * 1000;
+  }
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : Date.now();
 }
