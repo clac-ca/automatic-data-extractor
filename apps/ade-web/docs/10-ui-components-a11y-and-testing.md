@@ -476,8 +476,6 @@ Rules:
 Scoped to the Configuration Builder workbench:
 
 * `⌘S` / `Ctrl+S` – Save active file in `CodeEditor`.
-* `⌘B` / `Ctrl+B` – Build / reuse environment.
-* `⇧⌘B` / `Ctrl+Shift+B` – Force rebuild.
 * `⌘W` / `Ctrl+W` – Close active editor tab.
 * `⌘Tab` / `Ctrl+Tab` – Switch to most recently used tab (forward).
 * `⇧⌘Tab` / `Shift+Ctrl+Tab` – Switch MRU backward.
@@ -488,6 +486,8 @@ Guidelines:
 * Implemented in the workbench container, not in `CodeEditor` or tab components directly.
 * Use `preventDefault()` only when a shortcut is actually handled.
 * Shortcuts should be disabled while modal dialogs in the workbench are open, unless they are explicitly designed to work there.
+
+There is intentionally **no** dedicated “build environment” shortcut; environment rebuild happens when runs start (and can be forced via the workbench Test split button).
 
 ---
 

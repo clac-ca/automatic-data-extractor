@@ -10,8 +10,8 @@ It focuses on:
   (`/workspaces/:workspaceId/config-builder`).
 - How configuration metadata (including the manifest) flows between frontend and
   backend.
-- How environment builds, validation runs, and test runs are represented in the
-  UI.
+- How environment readiness (auto builds), validation runs, and test runs are
+  represented in the UI.
 - How we enter and exit the **Configuration Builder workbench** (the editing surface
   described in `09-workbench-editor-and-scripting.md`).
 
@@ -35,7 +35,7 @@ From ADE Web’s perspective:
   - View and manage configurations for a workspace.
   - Inspect version history and status.
   - Open a specific configuration version in the **workbench** to edit code,
-    build the environment, run validation runs, and perform test runs.
+    ensure the environment is ready (auto rebuild when needed), run validation runs, and perform test runs.
 
 Backend implementations may have more nuanced state machines, but ADE Web
 presents a **simple, stable model**:
@@ -150,7 +150,7 @@ At the ADE Web level, every configuration version is presented as one of:
 * **Draft**
 
   * Editable.
-  * Used for development, environment builds, validation runs, and test runs.
+  * Used for development, validation runs, and test runs; environment rebuild happens automatically when those runs start.
 * **Active**
 
   * Exactly **one** active version per Configuration.
@@ -333,7 +333,7 @@ Allowed actions depend on status:
 * **Draft**
 
   * Open in workbench (for code editing).
-  * Trigger environment build / validation run (usually via workbench controls).
+  * Start validation/test runs (environment rebuild is handled automatically when those runs start; the workbench “Force build and test” option sets `force_rebuild`).
   * Activate (if permitted and Safe mode is off).
   * Delete (if supported by backend and no runs depend on it).
 
@@ -441,7 +441,7 @@ Two run modes are exposed:
 1. **Validation run** – execute validators only to check configuration correctness (no full extraction). Implemented as a `Run` with `RunOptions.validateOnly: true` and usually `mode: "validation"`.
 2. **Test run** – execute ADE on a sample document with the chosen configuration version, streaming logs into the workbench. Often sets `mode: "test"` and may use `dryRun: true`.
 
-Run creation uses the canonical `RunOptions` shape (`dryRun`/`validateOnly`/`inputSheetNames`/`mode`) in camelCase and converts those to backend snake_case fields (`dry_run`, `validate_only`, `input_sheet_names`). When the user picks **Force build and test** in the Test split button, the frontend also sends `force_rebuild: true`; otherwise the backend decides whether to reuse or rebuild based on dirtiness.
+Run creation uses the canonical `RunOptions` shape (see `07-documents-and-runs.md`) in camelCase and converts those to backend snake_case fields (`dry_run`, `validate_only`, `force_rebuild`, `input_sheet_names`). When the user picks **Force build and test** in the Test split button, the frontend also sends `force_rebuild: true` (`RunOptions.forceRebuild`); otherwise the backend auto‑rebuilds when the environment is missing, stale, or built from outdated content and reuses it when clean.
 
 ### 8.1 Validation runs
 
@@ -523,7 +523,7 @@ When Safe mode is **enabled**:
 
 * The following actions are **blocked**:
 
-  * Environment builds.
+  * Environment rebuilds (including auto-builds triggered at run start).
   * Validation runs (configuration validation).
   * Test runs (“Run extraction”).
   * Activate/publish configuration versions.
@@ -557,7 +557,7 @@ Patterns:
 
 * **View list / versions** → `Read`.
 * **Create / clone configuration** → `ReadWrite`.
-* **Edit files / build / validate / test run** → `ReadWrite` and Safe mode off.
+* **Edit files / rebuild (via run start) / validate / test run** → `ReadWrite` and Safe mode off.
 * **Activate / deactivate version** → `Activate`.
 
 Helpers in `shared/permissions` are used to:
@@ -637,7 +637,7 @@ is introduced.
 
 ### 10.4 Build and validate
 
-Build endpoints:
+Build endpoints (kept for admin/backfill and specialised flows; normal workbench/test flows rely on run creation with auto rebuilds and `force_rebuild`):
 
 ```http
 POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds
@@ -657,6 +657,8 @@ Frontend wraps these in domain‑specific hooks, e.g.:
 * `useConfigBuildLogsStream`
 * `useValidateConfiguration`
 
+Day‑to‑day workbench usage typically skips the build hooks and instead starts a run with `force_rebuild` when a rebuild is required; the backend also rebuilds automatically when environments are missing or stale.
+
 Streaming details and React Query integration are described in
 `04-data-layer-and-backend-contracts.md` and `09-workbench-editor-and-scripting.md`.
 
@@ -674,8 +676,7 @@ This section ties everything together in concrete scenarios.
 4. Frontend calls `POST /configurations`.
 5. Backend returns a Configuration with an initial **draft** version.
 6. UI opens the workbench on that draft.
-7. User edits files, runs an environment **build**, performs a **validation
-   run**, and executes **test runs** against sample documents.
+7. User edits files, runs **validation** and **test** flows against sample documents; environment rebuild happens automatically at run start (use **Force build and test** if a rebuild is needed explicitly).
 8. When ready, user clicks **Activate** on the draft version.
 9. The new version becomes **Active**; it becomes the default for new runs
    using this Configuration.
@@ -686,8 +687,7 @@ This section ties everything together in concrete scenarios.
 2. In the versions view, user **clones** the current active version → new
    **draft**.
 3. Workbench opens on the draft.
-4. User makes changes, builds the environment, runs **validation runs**, and
-   test‑runs against sample documents.
+4. User makes changes, runs **validation runs**, and test‑runs against sample documents. Environment rebuild is handled automatically on run start; the **Force build and test** option can request a rebuild explicitly.
 5. When satisfied, user **activates** this draft.
 6. The previously active version becomes **Inactive**.
 7. The next runs referencing this Configuration use the new active version,
