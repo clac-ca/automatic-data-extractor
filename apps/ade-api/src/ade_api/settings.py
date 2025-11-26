@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 from urllib.parse import urlparse
 
-from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
+from pydantic import Field, PrivateAttr, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import DotEnvSettingsSource, EnvSettingsSource
 
@@ -211,6 +211,15 @@ class Settings(BaseSettings):
         env_ignore_empty=True,
     )
 
+    _explicit_init_fields: set[str] = PrivateAttr(default_factory=set)
+
+    def __init__(self, **data: Any):
+        explicit = set(data.keys())
+        super().__init__(**data)
+        object.__setattr__(self, "_explicit_init_fields", explicit)
+        if "workspaces_dir" in explicit:
+            self._apply_workspaces_override(explicit)
+
     @classmethod
     def settings_customise_sources(
         cls,
@@ -243,6 +252,18 @@ class Settings(BaseSettings):
             env_parse_enums=getattr(dotenv_settings, "env_parse_enums", None),
         )
         return (init_settings, env_source, dotenv_source, file_secret_settings)
+
+    def _apply_workspaces_override(self, explicit_fields: set[str]) -> None:
+        """Align dependent storage roots when workspaces_dir is provided explicitly."""
+
+        if "documents_dir" not in explicit_fields:
+            self.documents_dir = self.workspaces_dir
+        if "configs_dir" not in explicit_fields:
+            self.configs_dir = self.workspaces_dir
+        if "venvs_dir" not in explicit_fields:
+            self.venvs_dir = self.workspaces_dir
+        if "runs_dir" not in explicit_fields:
+            self.runs_dir = self.workspaces_dir
 
     # Core
     debug: bool = False
@@ -453,9 +474,31 @@ class Settings(BaseSettings):
             self.alembic_migrations_dir, default=DEFAULT_ALEMBIC_MIGRATIONS
         )
 
+        workspaces_explicit = "workspaces_dir" in self._explicit_init_fields
+        documents_explicit = "documents_dir" in self._explicit_init_fields
+        configs_explicit = "configs_dir" in self._explicit_init_fields
+        venvs_explicit = "venvs_dir" in self._explicit_init_fields
+        runs_explicit = "runs_dir" in self._explicit_init_fields
+
         self.workspaces_dir = _resolve_path(
             self.workspaces_dir, default=DEFAULT_WORKSPACES_DIR
         )
+        if workspaces_explicit and not documents_explicit:
+            self.documents_dir = self.workspaces_dir
+        elif "documents_dir" not in self.model_fields_set:
+            self.documents_dir = self.workspaces_dir
+        if workspaces_explicit and not configs_explicit:
+            self.configs_dir = self.workspaces_dir
+        elif "configs_dir" not in self.model_fields_set:
+            self.configs_dir = self.workspaces_dir
+        if workspaces_explicit and not venvs_explicit:
+            self.venvs_dir = self.workspaces_dir
+        elif "venvs_dir" not in self.model_fields_set:
+            self.venvs_dir = self.workspaces_dir
+        if workspaces_explicit and not runs_explicit:
+            self.runs_dir = self.workspaces_dir
+        elif "runs_dir" not in self.model_fields_set:
+            self.runs_dir = self.workspaces_dir
         self.documents_dir = _resolve_path(
             self.documents_dir, default=self.workspaces_dir
         )

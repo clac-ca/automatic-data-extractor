@@ -113,7 +113,10 @@ def build_run_summary(
             if isinstance(field_name, str):
                 mapped_fields.add(field_name)
                 if isinstance(score, (int, float)):
-                    mapped_scores[field_name] = max(mapped_scores.get(field_name, float("-inf")), float(score))
+                    mapped_scores[field_name] = max(
+                        mapped_scores.get(field_name, float("-inf")),
+                        float(score),
+                    )
 
         validation = table.get("validation") or {}
         total = validation.get("total")
@@ -242,16 +245,22 @@ def build_run_summary(
             }
         )
 
+    completion_error_dict = completion_error if isinstance(completion_error, dict) else {}
+    engine_version = None
+    if started_event:
+        extras = started_event.model_extra or {}  # type: ignore[union-attr]
+        engine_version = extras.get("engine_version")
+
     summary_run = {
         "id": run_id,
         "workspace_id": workspace_id,
         "configuration_id": configuration_id,
         "configuration_version": configuration_version,
         "status": summary_run_status,
-        "failure_code": completion_error.get("code") if isinstance(completion_error, dict) else None,
-        "failure_stage": completion_error.get("stage") if isinstance(completion_error, dict) else None,
-        "failure_message": completion_error.get("message") if isinstance(completion_error, dict) else None,
-        "engine_version": (started_event.model_extra or {}).get("engine_version") if started_event else None,  # type: ignore[union-attr]
+        "failure_code": completion_error_dict.get("code"),
+        "failure_stage": completion_error_dict.get("stage"),
+        "failure_message": completion_error_dict.get("message"),
+        "engine_version": engine_version,
         "config_version": manifest.version if manifest else None,  # type: ignore[union-attr]
         "env_reason": env_reason,
         "env_reused": env_reused,

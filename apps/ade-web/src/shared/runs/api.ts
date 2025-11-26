@@ -109,7 +109,7 @@ export async function fetchRunSummary(runId: string, signal?: AbortSignal): Prom
   }
 
   const run = await fetchRun(runId, signal);
-  const summary = (run as any)?.summary;
+  const summary = (run as { summary?: RunSummaryV1 | string | null })?.summary;
   if (!summary) return null;
   if (typeof summary === "string") {
     try {

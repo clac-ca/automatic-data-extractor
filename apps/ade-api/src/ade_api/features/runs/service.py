@@ -314,11 +314,13 @@ class RunsService:
         )
 
         run = await self._transition_status(run, RunStatus.RUNNING)
-        yield self._ade_event(
-            run=run,
-            type_="run.started",
-            payload={"status": "in_progress", "mode": mode_literal},
-        )
+        safe_mode = await self._safe_mode_status()
+        if options.validate_only or safe_mode.enabled:
+            yield self._ade_event(
+                run=run,
+                type_="run.started",
+                payload={"status": "in_progress", "mode": mode_literal},
+            )
 
         # Emit a one-time console banner describing the mode, if applicable.
         mode_message = self._format_mode_message(options)
@@ -345,7 +347,6 @@ class RunsService:
             return
 
         # Safe mode short circuit: log, synthesize a summary, and exit.
-        safe_mode = await self._safe_mode_status()
         if safe_mode.enabled:
             async for event in self._stream_safe_mode_skip(
                 run=run,
@@ -501,6 +502,8 @@ class RunsService:
         summary_payload = self._deserialize_run_summary(run.summary)
         summary_run = summary_payload.get("run") if isinstance(summary_payload, dict) else {}
         summary_core = summary_payload.get("core") if isinstance(summary_payload, dict) else {}
+        summary_run_dict = summary_run if isinstance(summary_run, dict) else {}
+        summary_core_dict = summary_core if isinstance(summary_core, dict) else {}
 
         paths = self._finalize_paths(
             summary=summary_payload if isinstance(summary_payload, dict) else None,
@@ -536,14 +539,10 @@ class RunsService:
         duration_seconds = (
             (finished_at - started_at).total_seconds()
             if started_at and finished_at
-            else summary_run.get("duration_seconds")
-            if isinstance(summary_run, dict)
-            else None
+            else summary_run_dict.get("duration_seconds")
         )
 
-        failure_message = None
-        if isinstance(summary_run, dict):
-            failure_message = summary_run.get("failure_message")
+        failure_message = summary_run_dict.get("failure_message")
         if run.error_message:
             failure_message = run.error_message
 
@@ -553,13 +552,13 @@ class RunsService:
             configuration_id=run.configuration_id,
             configuration_version=run.configuration_version_id,
             status=self._status_literal(run.status),
-            failure_code=summary_run.get("failure_code") if isinstance(summary_run, dict) else None,
-            failure_stage=summary_run.get("failure_stage") if isinstance(summary_run, dict) else None,
+            failure_code=summary_run_dict.get("failure_code"),
+            failure_stage=summary_run_dict.get("failure_stage"),
             failure_message=failure_message,
-            engine_version=summary_run.get("engine_version") if isinstance(summary_run, dict) else None,
-            config_version=summary_run.get("config_version") if isinstance(summary_run, dict) else None,
-            env_reason=summary_run.get("env_reason") if isinstance(summary_run, dict) else None,
-            env_reused=summary_run.get("env_reused") if isinstance(summary_run, dict) else None,
+            engine_version=summary_run_dict.get("engine_version"),
+            config_version=summary_run_dict.get("config_version"),
+            env_reason=summary_run_dict.get("env_reason"),
+            env_reused=summary_run_dict.get("env_reused"),
             created_at=self._ensure_utc(run.created_at) or utc_now(),
             started_at=started_at,
             completed_at=finished_at,
@@ -568,8 +567,8 @@ class RunsService:
             input=RunInput(
                 document_ids=document_ids,
                 input_sheet_names=sheet_names,
-                input_file_count=summary_core.get("input_file_count") if isinstance(summary_core, dict) else None,
-                input_sheet_count=summary_core.get("input_sheet_count") if isinstance(summary_core, dict) else None,
+                input_file_count=summary_core_dict.get("input_file_count"),
+                input_sheet_count=summary_core_dict.get("input_sheet_count"),
             ),
             output=RunOutput(
                 has_outputs=bool(output_files),
@@ -1075,7 +1074,7 @@ class RunsService:
         )
         summary_json = self._serialize_summary(summary_model)
 
-        completion = await self._complete_run(
+        await self._complete_run(
             run,
             status=status,
             exit_code=return_code,

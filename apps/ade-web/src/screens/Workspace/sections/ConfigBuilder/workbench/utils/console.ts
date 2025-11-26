@@ -136,7 +136,14 @@ function formatConsole(event: RunStreamEvent, timestamp: string): WorkbenchConso
 function formatBuildCompletion(event: RunStreamEvent, timestamp: string): WorkbenchConsoleLine {
   const status = (event.status as string | undefined) ?? (event.env?.status as string | undefined);
   const summary = (event.summary as string | undefined)?.trim();
-  const exitCode = typeof event.exit_code === "number" ? event.exit_code : (event.execution as any)?.exit_code;
+  const executionExitCode =
+    typeof event.execution === "object" &&
+    event.execution !== null &&
+    "exit_code" in event.execution &&
+    typeof event.execution.exit_code === "number"
+      ? event.execution.exit_code
+      : undefined;
+  const exitCode = typeof event.exit_code === "number" ? event.exit_code : executionExitCode;
   if (status === "active") {
     return {
       level: "success",
