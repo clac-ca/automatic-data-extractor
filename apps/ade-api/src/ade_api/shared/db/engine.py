@@ -11,7 +11,7 @@ from alembic.config import Config
 from sqlalchemy import event
 from sqlalchemy.engine import URL, Connection, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
-from sqlalchemy.pool import NullPool, StaticPool
+from sqlalchemy.pool import StaticPool
 
 from ade_api.settings import Settings, get_settings
 
@@ -64,10 +64,9 @@ def _create_engine(settings: Settings) -> AsyncEngine:
 
     if url.get_backend_name() == "sqlite":
         connect_args["check_same_thread"] = False
-        if is_sqlite_memory_url(url):
-            engine_kwargs["poolclass"] = StaticPool
-        else:
-            engine_kwargs["poolclass"] = NullPool
+        connect_args["timeout"] = settings.database_pool_timeout
+        engine_kwargs["poolclass"] = StaticPool
+        if not is_sqlite_memory_url(url):
             ensure_sqlite_database_directory(url)
     else:
         engine_kwargs["pool_size"] = settings.database_pool_size
@@ -89,6 +88,8 @@ def _create_engine(settings: Settings) -> AsyncEngine:
             cursor = dbapi_connection.cursor()
             try:
                 cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.execute("PRAGMA busy_timeout=30000")
+                cursor.execute("PRAGMA journal_mode=WAL")
             finally:
                 cursor.close()
 

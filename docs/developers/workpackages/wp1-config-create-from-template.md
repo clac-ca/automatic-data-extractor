@@ -130,7 +130,7 @@ POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/validate
 
 If issues are found (e.g., malformed `manifest.json`), return them in `issues` and omit `content_digest` from the payload. Build callers are expected to stop when issues are present and try again after fixes. A future WP can persist results or add status fields when the workflow needs historical data.
 
-Error: `409 config_not_editable` if state ≠ `draft`.
+Error: `409 configuration_not_editable` if state ≠ `draft`.
 
 ---
 

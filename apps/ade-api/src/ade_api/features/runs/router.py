@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import mimetypes
 from collections.abc import AsyncIterator
-from typing import Annotated, Any
+from pathlib import Path as FilePath
+from typing import Annotated, Any, Literal
 
-from ade_engine.schemas import TelemetryEnvelope
+from ade_engine.schemas import RunSummaryV1
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -31,18 +33,19 @@ from ade_api.shared.pagination import PageParams
 
 from .models import RunStatus
 from .schemas import (
-    RunFilters,
     RunCreateOptions,
     RunCreateRequest,
+    RunDiagnosticsV1,
+    RunEventsPage,
+    RunFilters,
     RunLogsResponse,
     RunOutputFile,
     RunOutputListing,
-    RunResource,
     RunPage,
+    RunResource,
 )
 from .service import (
     DEFAULT_STREAM_LIMIT,
-    RunArtifactMissingError,
     RunDocumentMissingError,
     RunEnvironmentNotReadyError,
     RunExecutionContext,
@@ -63,9 +66,7 @@ logger = logging.getLogger(__name__)
 
 
 def _event_bytes(event: RunStreamFrame) -> bytes:
-    if isinstance(event, TelemetryEnvelope):
-        return event.model_dump_json().encode("utf-8") + b"\n"
-    return event.json_bytes() + b"\n"
+    return event.model_dump_json().encode("utf-8") + b"\n"
 
 
 async def _execute_run_background(
@@ -87,22 +88,24 @@ async def _execute_run_background(
 
 
 @router.post(
-    "/configs/{config_id}/runs",
+    "/configurations/{configuration_id}/runs",
     response_model=RunResource,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
 )
 async def create_run_endpoint(
     *,
-    config_id: Annotated[str, Path(min_length=1, description="Configuration identifier")],
+    configuration_id: Annotated[str, Path(min_length=1, description="Configuration identifier")],
     payload: RunCreateRequest,
     background_tasks: BackgroundTasks,
     service: RunsService = runs_service_dependency,
 ) -> RunResource | StreamingResponse:
-    """Create a run for ``config_id`` and optionally stream execution events."""
+    """Create a run for ``configuration_id`` and optionally stream execution events."""
 
     try:
-        run, context = await service.prepare_run(config_id=config_id, options=payload.options)
+        run, context = await service.prepare_run(
+            configuration_id=configuration_id, options=payload.options
+        )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunDocumentMissingError as exc:
@@ -168,6 +171,64 @@ async def get_run_endpoint(
     return service.to_resource(run)
 
 
+@router.get(
+    "/runs/{run_id}/summary",
+    response_model=RunSummaryV1,
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Run summary not found"}},
+)
+async def get_run_summary_endpoint(
+    run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
+    service: RunsService = runs_service_dependency,
+) -> RunSummaryV1:
+    try:
+        summary = await service.get_run_summary(run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    if summary is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run summary is unavailable")
+    return summary
+
+
+@router.get(
+    "/runs/{run_id}/events",
+    response_model=RunEventsPage,
+    response_model_exclude_none=True,
+)
+async def get_run_events_endpoint(
+    run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
+    format: Literal["json", "ndjson"] = Query(default="json"),
+    cursor: str | None = Query(default=None, description="Opaque cursor from previous page"),
+    limit: int = Query(default=DEFAULT_STREAM_LIMIT, ge=1, le=DEFAULT_STREAM_LIMIT),
+    service: RunsService = runs_service_dependency,
+) -> RunEventsPage | StreamingResponse:
+    try:
+        cursor_value = int(cursor) if cursor is not None else None
+    except ValueError as exc:  # pragma: no cover - defensive
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid cursor") from exc
+
+    try:
+        events, next_cursor = await service.get_run_events(
+            run_id=run_id,
+            cursor=cursor_value,
+            limit=limit,
+        )
+    except RunNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    if format == "ndjson":
+        async def event_stream() -> AsyncIterator[bytes]:
+            for event in events:
+                yield _event_bytes(event)
+
+        return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+
+    return RunEventsPage(
+        items=events,
+        next_cursor=str(next_cursor) if next_cursor is not None else None,
+    )
+
+
 @router.get("/runs/{run_id}/logs", response_model=RunLogsResponse)
 async def get_run_logs_endpoint(
     run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
@@ -179,22 +240,6 @@ async def get_run_logs_endpoint(
     if run is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
     return await service.get_logs(run_id=run_id, after_id=after_id, limit=limit)
-
-
-@router.get(
-    "/runs/{run_id}/artifact",
-    response_class=FileResponse,
-    responses={status.HTTP_404_NOT_FOUND: {"description": "Artifact unavailable"}},
-)
-async def download_run_artifact_endpoint(
-    run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
-    service: RunsService = runs_service_dependency,
-):
-    try:
-        path = await service.get_artifact_path(run_id=run_id)
-    except (RunNotFoundError, RunArtifactMissingError) as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return FileResponse(path=path, media_type="application/json", filename=path.name)
 
 
 @router.get(
@@ -231,8 +276,37 @@ async def list_run_outputs_endpoint(
     except (RunNotFoundError, RunOutputMissingError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    entries = [RunOutputFile(path=path, byte_size=size) for path, size in files]
+    entries: list[RunOutputFile] = []
+    for relative_path, size in files:
+        name = FilePath(relative_path).name
+        content_type, _ = mimetypes.guess_type(name)
+        normalized_path = FilePath(relative_path).as_posix()
+        download_url = f"/api/v1/runs/{run_id}/outputs/{normalized_path}"
+        entries.append(
+            RunOutputFile(
+                name=name,
+                kind="normalized_workbook" if name.endswith((".xlsx", ".xlsm")) else None,
+                content_type=content_type,
+                byte_size=size,
+                download_url=download_url,
+            )
+        )
     return RunOutputListing(files=entries)
+
+
+@router.get(
+    "/runs/{run_id}/diagnostics",
+    response_model=RunDiagnosticsV1,
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Diagnostics not available"}},
+)
+async def get_run_diagnostics_endpoint(
+    run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
+    service: RunsService = runs_service_dependency,
+) -> RunDiagnosticsV1:
+    try:
+        return await service.get_run_diagnostics(run_id=run_id)
+    except (RunNotFoundError, RunOutputMissingError) as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.get(

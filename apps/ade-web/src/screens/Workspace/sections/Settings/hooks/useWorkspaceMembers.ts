@@ -10,7 +10,7 @@ import {
   type WorkspaceMemberPage,
   type WorkspaceMemberRolesUpdatePayload,
   type WorkspaceMemberCreatePayload,
-} from "@screens/Workspace/api/workspaces-api";
+} from "@features/Workspace/api/workspaces-api";
 import type { components } from "@schema";
 
 const MEMBERS_PAGE_SIZE = 200;

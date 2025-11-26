@@ -10,7 +10,7 @@
     "baseUrl": "./src",
     "paths": {
       "@app/*": ["app/*"],
-      "@screens/*": ["screens/*"],
+      "@features/*": ["screens/*"],
       "@shared/*": ["shared/*"],
       "@schema/*": ["schema/*"],
       "@generated-types/*": ["generated-types/*"],

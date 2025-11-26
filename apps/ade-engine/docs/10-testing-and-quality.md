@@ -31,7 +31,7 @@ Our testing strategy is built around a few simple ideas:
 
 - **Deterministic behavior**  
   Given the same `ade_config`, manifest, and source files, the engine should
-  produce the **same** normalized workbook, `artifact.json`, and
+  produce the **same** normalized workbook and
   `events.ndjson`.
 
 - **Separation of concerns**  
@@ -39,13 +39,13 @@ Our testing strategy is built around a few simple ideas:
   - IO and table detection,
   - column mapping,
   - normalization and validation,
-  - artifact and telemetry,
+- telemetry (events.ndjson),
   - high‑level `Engine.run`.
 
 - **Stable contracts**  
   The shapes and semantics of:
   - `RunRequest` / `RunResult`,
-  - `artifact.json`,
+- `events.ndjson`,
   - `events.ndjson`,
   - script entrypoints in `ade_config`
   
@@ -161,7 +161,7 @@ This factory should:
 * Ensure the temp directory is importable as `ade_config` (e.g., via `sys.path`
   manipulation).
 
-This makes it easy for multiple tests to spin up isolated configs with
+This makes it easy for multiple tests to spin up isolated configurations with
 different behaviors.
 
 ### 3.2 Sample inputs
@@ -413,7 +413,7 @@ Mapping behavior is central to the product; we want to avoid silent changes.
 
 Recommended approach:
 
-* For selected configs and inputs:
+* For selected configurations and inputs:
 
   * Take a **snapshot** of:
 
@@ -549,4 +549,4 @@ same change.
 
 With this testing layer in place, you should be able to evolve the engine
 confidently: small unit changes are caught early, and contract tests guard the
-interfaces that ADE API, configs, and other systems rely on.
+interfaces that ADE API, configurations, and other systems rely on.

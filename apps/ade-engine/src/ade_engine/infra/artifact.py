@@ -87,7 +87,7 @@ class FileArtifactSink:
                 engine_version=engine_version,
             ),
             config=ConfigArtifact(
-                schema=manifest.model.schema,
+                schema_id=manifest.model.schema_id,
                 version=manifest.model.version,
                 name=manifest.model.name,
             ),

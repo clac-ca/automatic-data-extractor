@@ -25,7 +25,7 @@ Constraints:
 
 ## Settings
 Environment variables to honor (with defaults from the build guide):
-* `ADE_VENVS_DIR` (default `./data/.venv`)
+* `ADE_VENVS_DIR` (default `./data/workspaces`)
 * `ADE_PIP_CACHE_DIR` (`./data/cache/pip`)
 * `ADE_ENGINE_SPEC` (`apps/ade-engine/`)
 * `ADE_PYTHON_BIN` (optional override)

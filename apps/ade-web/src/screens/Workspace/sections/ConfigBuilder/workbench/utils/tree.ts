@@ -1,4 +1,4 @@
-import type { FileListing } from "@shared/configs/types";
+import type { FileListing } from "@shared/configurations/types";
 
 import type { WorkbenchFileNode } from "../types";
 

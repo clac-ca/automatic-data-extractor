@@ -343,7 +343,7 @@ Keep short inline status notes as you go.
 
 - [x] Update `apps/ade-api` run orchestration to invoke the new engine CLI/`Engine.run` API, wiring artifact/events paths into run records. (CLI args + run summary wired)
 - [x] Extend `apps/ade-api` schemas and responses to surface `artifact.json` and telemetry event locations returned by the engine.
-- [x] Teach `apps/ade-api` build/venv flow to bundle the new end-to-end config fixtures or equivalent sample configs for sandbox runs. *(Added a sandbox template mirroring the engine E2E fixtures for quick smoke tests.)*
+- [x] Teach `apps/ade-api` build/venv flow to bundle the new end-to-end configuration fixtures or equivalent sample configurations for sandbox runs. *(Added a sandbox template mirroring the engine E2E fixtures for quick smoke tests.)*
 - [x] Update `apps/ade-web` screens to display run artifacts and telemetry summaries, including mapped/unmapped columns and validation issues.
 - [x] Add frontend API bindings for any new backend fields (artifact/events paths) and render download links in the run detail UI.
 - [x] Document the available config templates (default + sandbox) and provide a sandbox quickstart in the backend docs/README once the UI surfaces them.
@@ -378,7 +378,7 @@ The result should:
   * runtime API (`Engine`, `run()`, `RunRequest`, `RunResult`, `RunStatus`, `RunPhase`, errors),
   * artifact (`artifact.json`) and telemetry (`events.ndjson`) schemas,
   * script APIs in `ade_config` (detectors, transforms, validators, hooks).
-* Be covered by unit + integration tests as described in `10-testing-and-quality.md`, with deterministic behavior for given configs and inputs.
+* Be covered by unit + integration tests as described in `10-testing-and-quality.md`, with deterministic behavior for given configurations and inputs.
 
 ---
 

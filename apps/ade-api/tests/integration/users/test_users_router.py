@@ -9,7 +9,6 @@ from httpx import AsyncClient
 
 from tests.utils import login
 
-
 pytestmark = pytest.mark.asyncio
 
 

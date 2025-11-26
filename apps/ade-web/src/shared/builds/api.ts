@@ -14,7 +14,7 @@ export async function* streamBuild(
   options: BuildStreamOptions = {},
   signal?: AbortSignal,
 ): AsyncGenerator<BuildEvent> {
-  const path = `/workspaces/${encodeURIComponent(workspaceId)}/configs/${encodeURIComponent(configId)}/builds`;
+  const path = `/workspaces/${encodeURIComponent(workspaceId)}/configurations/${encodeURIComponent(configId)}/builds`;
   const response = await post<Response>(
     path,
     { stream: true, options },

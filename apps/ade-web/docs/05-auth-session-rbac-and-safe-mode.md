@@ -5,7 +5,7 @@ ADE Web relies on the backend for:
 - **Authentication** (setup, login, logout, SSO),
 - The current **session** (who is the signed‑in user),
 - **Roles & permissions** (RBAC),
-- A global **safe mode** kill switch that blocks new runs.
+- A global **Safe mode** kill switch that blocks new runs.
 
 This document describes how the frontend models these concepts and how they are used to shape the UI.
 
@@ -18,9 +18,9 @@ For domain terminology (Workspace, Document, Run, Configuration, etc.), see
 
 **Goals**
 
-- One clear, consistent mental model for auth, session, RBAC, and safe mode.
+- One clear, consistent mental model for auth, session, RBAC, and Safe mode.
 - Make it obvious where to fetch identity and permissions, and how to check them.
-- Ensure safe mode behaviour is consistent everywhere runs can be started.
+- Ensure Safe mode behaviour is consistent everywhere runs can be started.
 - Keep the frontend thin: permission decisions are made on the backend; the UI only consumes them.
 
 **Non‑goals**
@@ -116,7 +116,8 @@ export interface SafeModeStatus {
 * Drives:
 
   * A persistent banner inside the workspace shell.
-  * Disabling all **run‑invoking** actions (starting new runs, config builds, validations, activations that trigger runs).
+* Disabling all **run‑invoking** actions (starting new runs, configuration builds, validations, activations that trigger runs).
+* Status is **system‑wide**; the toggle lives on a system‑level Settings screen that only appears for users with `System.SafeMode.*`.
 
 ---
 
@@ -249,7 +250,7 @@ On app startup and after any login/logout, ADE Web fetches the session:
 `useSessionQuery()`:
 
 * Wraps the React Query call.
-* Treats 401/403 as “no active session”.
+* Treats `401` as “no active session”; `403` is propagated so screens can render a permissions experience (see §4.4).
 
 Behaviour:
 
@@ -287,6 +288,13 @@ The UI uses:
 
 * Session + membership summaries for top‑level decisions (what workspaces to show).
 * Workspace‑specific endpoints for detailed management screens.
+
+### 4.4 HTTP status semantics
+
+Frontends treat auth‑related status codes consistently:
+
+* `401` → **not logged in**. Redirect to `/login` (preserving a safe `redirectTo` where appropriate).
+* `403` → **logged in but not allowed**. Keep the user on the current screen and surface a permissions experience (hide or disable actions with explanatory copy).
 
 ---
 
@@ -348,7 +356,7 @@ Roles are defined and assigned via the API; the frontend treats them as named bu
   * `DELETE /api/v1/workspaces/{workspace_id}/members/{membership_id}`
   * `PUT /api/v1/workspaces/{workspace_id}/members/{membership_id}/roles`
 
-The **Roles** and **Members** panels in Settings are thin UIs over these endpoints. The core run/document/config flows should not depend on the specifics of role assignment; they only consume effective permission keys.
+The **Roles** and **Members** panels in Settings are thin UIs over these endpoints. The core run/document/configuration flows should not depend on the specifics of role assignment; they only consume effective permission keys.
 
 ### 5.3 Effective permissions query
 
@@ -376,7 +384,7 @@ Implementation:
 
 In many cases the global set is sufficient:
 
-* Global actions like creating workspaces or toggling safe mode are gated by global permissions.
+* Global actions like creating workspaces or toggling Safe mode are gated by global permissions.
 * Workspace actions can either use `workspaces[workspaceId]` or derive workspace permissions from membership if the backend does not include them in `/me/permissions`.
 
 ### 5.4 Permission helpers and usage
@@ -413,6 +421,18 @@ export function useWorkspacePermissions(workspaceId: string) {
 export function useCanInWorkspace(workspaceId: string, permission: string) {
   const { permissions } = useWorkspacePermissions(workspaceId);
   return hasPermission(permissions, permission);
+}
+```
+
+Wrap raw permission keys in **domain helpers** to keep feature code declarative:
+
+```ts
+export function useCanStartRuns(workspaceId: string) {
+  return useCanInWorkspace(workspaceId, "Workspace.Runs.Run");
+}
+
+export function useCanManageConfigurations(workspaceId: string) {
+  return useCanInWorkspace(workspaceId, "Workspace.Configurations.ReadWrite");
 }
 ```
 
@@ -466,13 +486,13 @@ We use a simple policy:
 Disabled actions should always have a tooltip explaining **why**:
 
 * “You don’t have permission to start runs in this workspace.”
-* “Only system administrators can toggle safe mode.”
+* “Only system administrators can toggle Safe mode.”
 
 ---
 
 ## 6. Safe mode
 
-Safe mode is a global switch that stops new engine work from executing. ADE Web must:
+Safe mode is a system‑wide switch that stops new engine work from executing (workspace overrides are optional). ADE Web must:
 
 * Reflect its current status to the user.
 * Proactively block all run‑invoking actions at the UI layer.
@@ -519,11 +539,11 @@ Implementation details:
 
 * Wraps `GET /api/v1/system/safe-mode` in a React Query query.
 * Uses a `staleTime` on the order of tens of seconds (exact value configurable).
-* Allows manual refetch (e.g. after toggling safe mode).
+* Allows manual refetch (e.g. after toggling Safe mode).
 
-### 6.3 What safe mode blocks
+### 6.3 What Safe mode blocks
 
-When `enabled === true`, ADE Web must block **starting new runs** and any other action that causes the engine to execute.
+When Safe mode is enabled (`enabled === true`), ADE Web must block **starting new runs** and any other action that causes the engine to execute.
 
 Examples:
 
@@ -531,11 +551,11 @@ Examples:
 
   * The Documents screen (“Run extraction”),
   * The Runs ledger (“New run”, if present),
-  * The Config Builder workbench (“Run extraction” within the editor).
+  * The Configuration Builder workbench (“Run extraction” within the editor).
 
 * Starting a **build** of a configuration environment.
 
-* Starting **validate‑only** runs (validation of configs or manifests).
+* Starting **validate‑only** runs (validation of configurations or manifests).
 
 * Activating/publishing configurations if that triggers background engine work.
 
@@ -546,18 +566,18 @@ UI behaviour:
   * Be disabled (not clickable),
   * Show a tooltip like:
 
-    > “Disabled while safe mode is enabled: Maintenance window – new runs are temporarily disabled.”
+    > “Disabled while Safe mode is enabled: Maintenance window – new runs are temporarily disabled.”
 
 The backend may still reject blocked operations; the UI’s run is to make the state obvious and avoid a confusing “click → no‑op” experience.
 
 ### 6.4 Safe mode banner
 
-When safe mode is on:
+When Safe mode is on:
 
 * Render a **persistent banner** inside the workspace shell:
 
   * Located just below the global top bar, above section content.
-  * Present in all workspace sections (Runs, Documents, Config Builder, Settings, etc.).
+  * Present in all workspace sections (Runs, Documents, Configuration Builder, Settings, etc.).
 
 * Recommended copy:
 
@@ -573,11 +593,11 @@ When safe mode is on:
 
 The banner should be informational only; it does not itself contain primary actions.
 
-### 6.5 Toggling safe mode
+### 6.5 Toggling Safe mode
 
-Toggling safe mode is an administrative action.
+Toggling Safe mode is an administrative action performed on a **system‑level Settings screen** (not per‑workspace). The screen is visible only to users with `System.SafeMode.Read`/`System.SafeMode.ReadWrite`.
 
-UI pattern (e.g. in a System/Settings screen):
+UI pattern:
 
 * Show current state (`enabled` / `disabled`) and editable `detail` field.
 
@@ -592,11 +612,11 @@ UI pattern (e.g. in a System/Settings screen):
   2. UI calls `PUT /api/v1/system/safe-mode`.
   3. On success:
 
-     * Refetch safe mode status.
+     * Refetch Safe mode status.
      * Show a success toast (“Safe mode enabled”/“Safe mode disabled”).
   4. On 403:
 
-     * Show an inline error `Alert` (“You do not have permission to change safe mode.”).
+     * Show an inline error `Alert` (“You do not have permission to change Safe mode.”).
 
 ---
 
@@ -645,7 +665,7 @@ We **do** store:
 under namespaced keys like:
 
 * `ade.ui.workspace.<workspaceId>.nav.collapsed`
-* `ade.ui.workspace.<workspaceId>.config.<configId>.console`
+* `ade.ui.workspace.<workspaceId>.configuration.<configurationId>.console`
 * `ade.ui.workspace.<workspaceId>.document.<documentId>.run-preferences`
 
 All such values are:
@@ -682,10 +702,10 @@ When adding a feature that touches auth, permissions, or runs:
    * Use `hasPermission` / `useCanInWorkspace` instead of checking raw strings in multiple places.
    * Prefer a small domain helper (e.g. `canStartRuns(workspaceId)`).
 
-3. **Respect safe mode**
+3. **Respect Safe mode**
 
-   * If the feature starts or schedules new runs or builds, disable it when `SafeModeStatus.enabled === true`.
-   * Add an explanatory tooltip mentioning safe mode.
+  * If the feature starts or schedules new runs or builds, disable it when `SafeModeStatus.enabled === true`.
+  * Add an explanatory tooltip mentioning Safe mode.
 
 4. **Handle unauthenticated users**
 
@@ -697,4 +717,4 @@ When adding a feature that touches auth, permissions, or runs:
    * Hide admin‑only sections entirely if the user lacks the relevant read permissions.
    * Disable rather than hide when the existence of the feature is already obvious from the context.
 
-With these patterns, auth, RBAC, and safe mode remain predictable and easy to extend as ADE evolves.
+With these patterns, auth, RBAC, and Safe mode remain predictable and easy to extend as ADE evolves.

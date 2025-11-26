@@ -9,8 +9,8 @@ import { Input } from "@ui/Input";
 import { PageState } from "@ui/PageState";
 import { Select } from "@ui/Select";
 
-import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
-import { useConfigsQuery, useCreateConfigMutation } from "@shared/configs";
+import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
+import { useConfigurationsQuery, useCreateConfigurationMutation } from "@shared/configurations";
 import { createScopedStorage } from "@shared/storage";
 
 const TEMPLATE_OPTIONS = [{ value: "default", label: "Default template" }] as const;
@@ -27,17 +27,19 @@ export default function WorkspaceConfigsIndexRoute() {
   const { workspace } = useWorkspaceContext();
   const navigate = useNavigate();
   const storage = useMemo(() => createScopedStorage(buildStorageKey(workspace.id)), [workspace.id]);
-  const configsQuery = useConfigsQuery({ workspaceId: workspace.id });
-  const createConfig = useCreateConfigMutation(workspace.id);
+  const configurationsQuery = useConfigurationsQuery({ workspaceId: workspace.id });
+  const createConfig = useCreateConfigurationMutation(workspace.id);
 
   const [displayName, setDisplayName] = useState(() => `${workspace.name} Config`);
   const [templateId, setTemplateId] = useState<string>(TEMPLATE_OPTIONS[0]?.value ?? "default");
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  const configs = useMemo(
+  const configurations = useMemo(
     () =>
-      (configsQuery.data?.items ?? []).filter((config) => !("deleted_at" in config && (config as { deleted_at?: string | null }).deleted_at)),
-    [configsQuery.data],
+      (configurationsQuery.data?.items ?? []).filter(
+        (config) => !("deleted_at" in config && (config as { deleted_at?: string | null }).deleted_at),
+      ),
+    [configurationsQuery.data],
   );
   const lastSelection = useMemo(() => storage.get<LastSelection>(), [storage]);
 
@@ -66,8 +68,8 @@ export default function WorkspaceConfigsIndexRoute() {
       },
       {
         onSuccess(record) {
-          storage.set<LastSelection>({ configId: record.config_id });
-          navigate(buildConfigDetailPath(workspace.id, record.config_id));
+          storage.set<LastSelection>({ configId: record.id });
+          navigate(buildConfigDetailPath(workspace.id, record.id));
         },
       },
     );
@@ -76,15 +78,15 @@ export default function WorkspaceConfigsIndexRoute() {
   const creationError = validationError ?? (createConfig.error instanceof Error ? createConfig.error.message : null);
   const canSubmit = displayName.trim().length > 0 && !createConfig.isPending;
 
-  if (configsQuery.isLoading) {
+  if (configurationsQuery.isLoading) {
     return <PageState variant="loading" title="Loading configurations" description="Fetching workspace configurations…" />;
   }
 
-  if (configsQuery.isError) {
+  if (configurationsQuery.isError) {
     return <PageState variant="error" title="Unable to load configurations" description="Try refreshing the page." />;
   }
 
-  if (configs.length === 0) {
+  if (configurations.length === 0) {
     return (
       <PageState
         className="mx-auto w-full max-w-xl"
@@ -141,28 +143,28 @@ export default function WorkspaceConfigsIndexRoute() {
           ) : null}
         </header>
         <div className="divide-y divide-slate-200 rounded-xl border border-slate-200">
-          {configs.map((config) => (
-            <article key={config.config_id} className="grid gap-3 p-4 md:grid-cols-[minmax(0,2fr),auto] md:items-center">
+          {configurations.map((config) => (
+            <article key={config.id} className="grid gap-3 p-4 md:grid-cols-[minmax(0,2fr),auto] md:items-center">
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-lg font-semibold text-slate-900">{config.display_name}</h2>
                   <StatusPill status={config.status} />
-                  {lastSelection?.configId === config.config_id ? (
+                  {lastSelection?.configId === config.id ? (
                     <span className="text-xs font-medium uppercase tracking-wide text-brand-600">Last opened</span>
                   ) : null}
                 </div>
                 <p className="text-sm text-slate-500">
                   Updated {new Date(config.updated_at).toLocaleString()} · Active version{" "}
                   {("active_version" in config ? (config as { active_version?: number | null }).active_version : null) ??
-                    config.config_version ??
+                    config.configuration_version ??
                     "—"}
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
-                <Button size="sm" variant="secondary" onClick={() => handleOpenConfig(config.config_id)}>
+                <Button size="sm" variant="secondary" onClick={() => handleOpenConfig(config.id)}>
                   View details
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => handleOpenEditor(config.config_id)}>
+                <Button size="sm" variant="ghost" onClick={() => handleOpenEditor(config.id)}>
                   Open editor
                 </Button>
               </div>

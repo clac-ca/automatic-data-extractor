@@ -23,7 +23,7 @@ async def test_session_dependency_commits_and_populates_context(
 ):
     """The session dependency should attach to the request and commit writes."""
 
-    route_path = "/__tests__/configs"
+    route_path = "/__tests__/configurations"
     workspace_id = seed_identity["workspace_id"]
 
     if not any(route.path == route_path for route in app.router.routes):
@@ -36,56 +36,59 @@ async def test_session_dependency_commits_and_populates_context(
             assert isinstance(session, AsyncSession)
             assert request.state.db_session is session
 
-            config_id = generate_ulid()
+            configuration_id = generate_ulid()
             now_iso = datetime.now(UTC).isoformat()
             payload = {
-                "id": config_id,
+                "id": configuration_id,
                 "workspace_id": workspace_id,
-                "slug": "session-config",
-                "title": "Session Config",
-                "description": None,
+                "display_name": "Session Configuration",
+                "status": "draft",
+                "configuration_version": 0,
+                "content_digest": None,
+                "activated_at": None,
                 "created_at": now_iso,
                 "updated_at": now_iso,
-                "deleted_at": None,
             }
             await session.execute(
                 text(
                     """
-                    INSERT INTO configs (
+                    INSERT INTO configurations (
                         id,
                         workspace_id,
-                        slug,
-                        title,
+                        display_name,
+                        status,
+                        configuration_version,
+                        content_digest,
+                        activated_at,
                         created_at,
-                        updated_at,
-                        description,
-                        deleted_at
+                        updated_at
                     ) VALUES (
                         :id,
                         :workspace_id,
-                        :slug,
-                        :title,
+                        :display_name,
+                        :status,
+                        :configuration_version,
+                        :content_digest,
+                        :activated_at,
                         :created_at,
-                        :updated_at,
-                        :description,
-                        :deleted_at
+                        :updated_at
                     )
                     """
                 ),
                 payload,
             )
-            return {"session_attached": True, "config_id": config_id}
+            return {"session_attached": True, "configuration_id": configuration_id}
 
     response = await async_client.post(route_path)
     response.raise_for_status()
     data = response.json()
-    config_id = data["config_id"]
+    configuration_id = data["configuration_id"]
     assert data["session_attached"] is True
 
     engine = get_engine()
     async with engine.connect() as connection:
         result = await connection.execute(
-            text("SELECT COUNT(1) FROM configs WHERE id = :config_id"),
-            {"config_id": config_id},
+            text("SELECT COUNT(1) FROM configurations WHERE id = :configuration_id"),
+            {"configuration_id": configuration_id},
         )
         assert result.scalar_one() == 1

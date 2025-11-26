@@ -30,11 +30,11 @@ class ConfigSourceClone(BaseSchema):
     """Reference to an existing workspace config."""
 
     type: Literal["clone"]
-    config_id: ULIDStr
+    configuration_id: ULIDStr
 
-    @field_validator("config_id", mode="before")
+    @field_validator("configuration_id", mode="before")
     @classmethod
-    def _clean_config_id(cls, value: str) -> str:
+    def _clean_configuration_id(cls, value: str) -> str:
         return value.strip()
 
 
@@ -61,10 +61,9 @@ class ConfigurationRecord(BaseSchema):
 
     id: ULIDStr
     workspace_id: ULIDStr
-    config_id: ULIDStr
     display_name: str
     status: ConfigurationStatus
-    config_version: int
+    configuration_version: int
     content_digest: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -74,8 +73,8 @@ class ConfigurationRecord(BaseSchema):
 class ConfigVersionRecord(BaseSchema):
     """Serialized configuration version metadata."""
 
-    config_version_id: ULIDStr
-    config_id: ULIDStr
+    configuration_version_id: ULIDStr
+    configuration_id: ULIDStr
     workspace_id: ULIDStr
     status: ConfigurationStatus
     semver: str | None = None
@@ -102,7 +101,6 @@ class ConfigurationValidateResponse(BaseSchema):
 
     id: ULIDStr
     workspace_id: ULIDStr
-    config_id: ULIDStr
     status: ConfigurationStatus
     content_digest: str | None = None
     issues: list[ConfigValidationIssue]
@@ -158,7 +156,7 @@ class FileEntry(BaseSchema):
 
 class FileListing(BaseSchema):
     workspace_id: ULIDStr
-    config_id: ULIDStr
+    configuration_id: ULIDStr
     status: ConfigurationStatus
     capabilities: FileCapabilities
     root: str

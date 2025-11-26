@@ -7,8 +7,8 @@ from collections.abc import Iterable
 
 from fastapi.routing import APIRoute
 
-from ade_api.shared.dependency import require_csrf
 from ade_api.main import create_app
+from ade_api.shared.dependency import require_csrf
 
 app = create_app()
 

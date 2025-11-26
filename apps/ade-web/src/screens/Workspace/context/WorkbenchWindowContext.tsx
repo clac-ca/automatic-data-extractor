@@ -4,9 +4,9 @@ import clsx from "clsx";
 
 import { useLocation, useNavigate } from "@app/nav/history";
 
-import { Workbench } from "@screens/Workspace/sections/ConfigBuilder/workbench/Workbench";
-import type { WorkbenchDataSeed } from "@screens/Workspace/sections/ConfigBuilder/workbench/types";
-import { getWorkbenchReturnPathStorageKey } from "@screens/Workspace/sections/ConfigBuilder/workbench/state/workbenchWindowState";
+import { Workbench } from "@features/Workspace/sections/ConfigBuilder/workbench/Workbench";
+import type { WorkbenchDataSeed } from "@features/Workspace/sections/ConfigBuilder/workbench/types";
+import { getWorkbenchReturnPathStorageKey } from "@features/Workspace/sections/ConfigBuilder/workbench/state/workbenchWindowState";
 
 import { createScopedStorage } from "@shared/storage";
 import {

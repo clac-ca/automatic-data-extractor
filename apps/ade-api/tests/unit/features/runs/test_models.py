@@ -17,12 +17,13 @@ async def _create_configuration(session: AsyncSession) -> tuple[Workspace, Confi
     session.add(workspace)
     await session.flush()
 
+    configuration_id = generate_ulid()
     configuration = Configuration(
+        id=configuration_id,
         workspace_id=workspace.id,
-        config_id=generate_ulid(),
         display_name="Config",  # minimal metadata for FK relations
         status=ConfigurationStatus.ACTIVE,
-        config_version=1,
+        configuration_version=1,
         content_digest="digest",
     )
     session.add(configuration)
@@ -36,9 +37,8 @@ async def test_run_defaults_and_log_cascade(session: AsyncSession) -> None:
 
     run = Run(
         id="run_test",
-        configuration_id=configuration.id,
         workspace_id=workspace.id,
-        config_id=configuration.config_id,
+        configuration_id=configuration.id,
     )
     session.add(run)
     await session.commit()
@@ -49,7 +49,7 @@ async def test_run_defaults_and_log_cascade(session: AsyncSession) -> None:
     assert run.attempt == 1
     assert run.retry_of_run_id is None
     assert run.trace_id is None
-    assert run.config_version_id is None
+    assert run.configuration_version_id is None
     assert run.input_documents is None
     assert isinstance(run.created_at, datetime)
     assert run.started_at is None

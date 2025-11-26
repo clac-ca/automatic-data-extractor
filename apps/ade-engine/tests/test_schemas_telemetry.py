@@ -1,29 +1,34 @@
-from ade_engine.schemas.telemetry import TelemetryEnvelope, TelemetryEvent
+from datetime import datetime, timezone
+
+from ade_engine.schemas.telemetry import AdeEvent
 
 
 def test_telemetry_envelope_defaults():
-    event = TelemetryEvent(event="run_started", level="info", payload={"source_files": 1})
-    envelope = TelemetryEnvelope(
+    envelope = AdeEvent(
+        type="run.started",
+        created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
         run_id="run-uuid",
-        timestamp="2024-01-01T00:00:00Z",
-        metadata={"run_id": "run-123"},
-        event=event,
+        workspace_id="ws-1",
+        configuration_id="cfg-1",
+        engine_version="0.2.0",
     )
 
-    assert envelope.schema == "ade.telemetry/run-event.v1"
+    assert envelope.schema == "ade.event/v1"
     assert envelope.version == "1.0.0"
-    assert envelope.event.level == "info"
-    assert envelope.event.payload["source_files"] == 1
+    assert envelope.model_extra["engine_version"] == "0.2.0"
+    assert envelope.workspace_id == "ws-1"
+    assert envelope.configuration_id == "cfg-1"
 
 
 def test_telemetry_serialization_round_trip():
-    event = TelemetryEvent(event="pipeline_transition", level="debug", payload={"phase": "extracting"})
-    envelope = TelemetryEnvelope(
+    envelope = AdeEvent(
+        type="run.phase.started",
+        created_at=datetime(2024, 1, 1, 0, 0, 1, tzinfo=timezone.utc),
         run_id="run-uuid",
-        timestamp="2024-01-01T00:00:01Z",
-        event=event,
+        phase="extracting",
+        level="debug",
     )
 
     data = envelope.model_dump()
-    assert data["event"]["event"] == "pipeline_transition"
-    assert data["metadata"] == {}
+    assert data["type"] == "run.phase.started"
+    assert data["phase"] == "extracting"

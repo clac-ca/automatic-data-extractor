@@ -7,9 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from ade_api.settings import Settings
 from ade_api.main import create_app
-
+from ade_api.settings import Settings
 
 pytestmark = pytest.mark.asyncio
 
@@ -17,12 +16,13 @@ pytestmark = pytest.mark.asyncio
 async def test_app_startup_bootstraps_database(tmp_path: Path) -> None:
     database_path = tmp_path / "data" / "db" / "api.sqlite"
     data_dir = tmp_path / "data"
-    documents_dir = data_dir / "documents"
+    workspaces_dir = data_dir / "workspaces"
 
     settings = Settings.model_validate(
         {
             "database_dsn": f"sqlite+aiosqlite:///{database_path}",
-            "documents_dir": str(documents_dir),
+            "workspaces_dir": str(workspaces_dir),
+            "documents_dir": str(workspaces_dir),
         }
     )
 

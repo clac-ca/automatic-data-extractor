@@ -11,7 +11,7 @@ import typer
 from ade_tools.commands import common
 
 
-def run_lint(scope: str) -> None:
+def run_lint(scope: str, fix: bool = False) -> None:
     common.refresh_paths()
     scope_normalized = (scope or "all").lower()
     valid = {"backend", "frontend", "all"}
@@ -27,7 +27,11 @@ def run_lint(scope: str) -> None:
             "ruff",
             "Install backend dev dependencies (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
         )
-        common.run([sys.executable, "-m", "ruff", "check", "src/ade_api"], cwd=common.BACKEND_DIR)
+        ruff_cmd = [sys.executable, "-m", "ruff", "check"]
+        if fix:
+            ruff_cmd.append("--fix")
+        ruff_cmd.append("src/ade_api")
+        common.run(ruff_cmd, cwd=common.BACKEND_DIR)
         mypy_bin = shutil.which("mypy")
         if mypy_bin:
             # mypy rejects package paths that include characters outside [a-zA-Z0-9_],
@@ -52,15 +56,18 @@ def run_lint(scope: str) -> None:
     if run_frontend and common.FRONTEND_DIR.exists() and "lint" in pkg.get("scripts", {}):
         npm_bin = common.npm_path()
         common.ensure_node_modules()
-        common.run([npm_bin, "run", "lint"], cwd=common.FRONTEND_DIR)
+        lint_cmd = [npm_bin, "run", "lint"]
+        if fix:
+            lint_cmd.extend(["--", "--fix"])
+        common.run(lint_cmd, cwd=common.FRONTEND_DIR)
 
     typer.echo("✅ lint complete")
 
 
-def lint_command(scope: str = "all") -> None:
-    """Run backend ruff/mypy and frontend eslint; scope with --scope backend|frontend|all."""
+def lint_command(scope: str = "all", fix: bool = False) -> None:
+    """Run backend ruff/mypy and frontend eslint; scope with --scope backend|frontend|all (use --fix to auto-apply)."""
 
-    run_lint(scope)
+    run_lint(scope, fix)
 
 
 def register(app: typer.Typer) -> None:
@@ -72,5 +79,10 @@ def register(app: typer.Typer) -> None:
             "-s",
             help="Which linters to run: backend, frontend, or all.",
         ),
+        fix: bool = typer.Option(
+            False,
+            "--fix",
+            help="Auto-apply lint fixes where supported (ruff/eslint).",
+        ),
     ) -> None:
-        lint_command(scope)
+        lint_command(scope, fix)

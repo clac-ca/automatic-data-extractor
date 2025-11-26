@@ -13,8 +13,7 @@ from openpyxl import Workbook
 from ade_engine.core.errors import ConfigError
 from ade_engine.config.manifest_context import ManifestContext
 from ade_engine.core.types import MappedTable, NormalizedTable, RawTable, RunContext, RunResult
-from ade_engine.infra.artifact import ArtifactSink
-from ade_engine.infra.telemetry import EventSink, PipelineLogger
+from ade_engine.infra.telemetry import PipelineLogger
 
 
 class HookStage(str, Enum):
@@ -34,8 +33,6 @@ class HookContext:
     run: RunContext
     state: dict[str, Any]
     manifest: ManifestContext
-    artifact: ArtifactSink
-    events: EventSink | None
     tables: list[RawTable | MappedTable | NormalizedTable] | None
     workbook: Workbook | None
     result: RunResult | None

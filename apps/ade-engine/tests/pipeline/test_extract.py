@@ -69,8 +69,6 @@ def _make_run_context(tmp_path: Path, run_request: RunRequest, manifest: object)
         input_dir=run_request.input_dir or tmp_path,
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
-        artifact_path=tmp_path / "artifact.json",
-        events_path=tmp_path / "events.ndjson",
     )
     return RunContext(
         run_id="run-1",

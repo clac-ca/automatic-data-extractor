@@ -2,10 +2,8 @@ import { post } from "@shared/api";
 import { client } from "@shared/api/client";
 import { parseNdjsonStream } from "@shared/api/ndjson";
 
-import type { ArtifactV1, components } from "@schema";
-import type { TelemetryEnvelope } from "@schema/adeTelemetry";
-
-import type { RunStreamEvent } from "./types";
+import type { RunSummaryV1, components } from "@schema";
+import type { AdeEvent as RunStreamEvent } from "./types";
 
 export type RunResource = components["schemas"]["RunResource"];
 export type RunStatus = RunResource["status"];
@@ -15,6 +13,7 @@ export type RunCreateOptions = components["schemas"]["RunCreateOptions"];
 export interface RunStreamOptions {
   readonly dry_run?: boolean;
   readonly validate_only?: boolean;
+   readonly force_rebuild?: boolean;
   readonly input_document_id?: string;
   readonly input_sheet_name?: string;
   readonly input_sheet_names?: readonly string[];
@@ -25,7 +24,7 @@ export async function* streamRun(
   options: RunStreamOptions = {},
   signal?: AbortSignal,
 ): AsyncGenerator<RunStreamEvent> {
-  const path = `/configs/${encodeURIComponent(configId)}/runs`;
+  const path = `/configurations/${encodeURIComponent(configId)}/runs`;
   const response = await post<Response>(
     path,
     { stream: true, options },
@@ -55,26 +54,10 @@ export async function fetchRunOutputs(
   return data as RunOutputListing;
 }
 
-export async function fetchRunArtifact(
-  runId: string,
-  signal?: AbortSignal,
-): Promise<ArtifactV1> {
-  const response = await fetch(`/api/v1/runs/${encodeURIComponent(runId)}/artifact`, {
-    headers: { Accept: "application/json" },
-    signal,
-  });
-
-  if (!response.ok) {
-    throw new Error("Run artifact unavailable");
-  }
-
-  return (await response.json()) as ArtifactV1;
-}
-
 export async function fetchRunTelemetry(
   runId: string,
   signal?: AbortSignal,
-): Promise<TelemetryEnvelope[]> {
+): Promise<RunStreamEvent[]> {
   const response = await fetch(`/api/v1/runs/${encodeURIComponent(runId)}/logfile`, {
     headers: { Accept: "application/x-ndjson" },
     signal,
@@ -90,13 +73,13 @@ export async function fetchRunTelemetry(
     .filter(Boolean)
     .map((line) => {
       try {
-        return JSON.parse(line) as TelemetryEnvelope;
+        return JSON.parse(line) as RunStreamEvent;
       } catch (error) {
         console.warn("Skipping invalid telemetry line", { error, line });
         return null;
       }
     })
-    .filter((value): value is TelemetryEnvelope => Boolean(value));
+    .filter((value): value is RunStreamEvent => Boolean(value));
 }
 
 export async function fetchRun(
@@ -112,9 +95,36 @@ export async function fetchRun(
   return data as RunResource;
 }
 
+export async function fetchRunSummary(runId: string, signal?: AbortSignal): Promise<RunSummaryV1 | null> {
+  // Prefer the dedicated summary endpoint; fall back to embedded summaries when present.
+  try {
+    const { data } = await client.GET("/api/v1/runs/{run_id}/summary", {
+      params: { path: { run_id: runId } },
+      signal,
+    });
+    if (data) return data as RunSummaryV1;
+  } catch (error) {
+    // If the backend is older or the endpoint is unavailable, continue to fallback parsing.
+    console.warn("Falling back to embedded run summary", error);
+  }
+
+  const run = await fetchRun(runId, signal);
+  const summary = (run as { summary?: RunSummaryV1 | string | null })?.summary;
+  if (!summary) return null;
+  if (typeof summary === "string") {
+    try {
+      return JSON.parse(summary) as RunSummaryV1;
+    } catch (error) {
+      console.warn("Unable to parse run summary", { error });
+      return null;
+    }
+  }
+  return summary as RunSummaryV1;
+}
+
 export const runQueryKeys = {
   detail: (runId: string) => ["run", runId] as const,
   outputs: (runId: string) => ["run-outputs", runId] as const,
-  artifact: (runId: string) => ["run-artifact", runId] as const,
   telemetry: (runId: string) => ["run-telemetry", runId] as const,
+  summary: (runId: string) => ["run-summary", runId] as const,
 };

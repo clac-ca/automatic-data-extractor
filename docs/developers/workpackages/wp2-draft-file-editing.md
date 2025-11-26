@@ -40,7 +40,7 @@ Base prefix:
 
 ## Behavior & guardrails (consistent across routes)
 
-* **Editability:** only `status='draft'` is writable. Writes in `active`/`inactive` → `409 Conflict` (`code: "config_not_editable"`). Reads are allowed in any state.
+* **Editability:** only `status='draft'` is writable. Writes in `active`/`inactive` → `409 Conflict` (`code: "configuration_not_editable"`). Reads are allowed in any state.
 * **Root:** `${ADE_CONFIGS_DIR}/{workspace_id}/config_packages/{config_id}/`
 * **Editable set (include):** `src/ade_config/**`, `manifest.json`, `pyproject.toml` (optional), `config.env` (optional), `assets/**`
 * **Exclude:** `.git/`, `__pycache__/`, `*.pyc`, `.DS_Store`, `.venv/`, `venv/`, `env/`, `node_modules/`, `.idea/`, `.vscode/`, `dist/`, `build/`
@@ -170,7 +170,7 @@ Content-Type: application/octet-stream
 { "path":"…", "size":3201, "mtime":"2025-11-10T14:36:52Z", "etag":"\"sha256:BEEF…\"" }
 ```
 
-**Errors:** `428 precondition_required`, `412 precondition_failed`, `409 config_not_editable`, `403 path_not_allowed`, `400 invalid_path`, `413 payload_too_large`.
+**Errors:** `428 precondition_required`, `412 precondition_failed`, `409 configuration_not_editable`, `403 path_not_allowed`, `400 invalid_path`, `413 payload_too_large`.
 
 > **Rename**: do `PUT` new path (create) then `DELETE` old path; no separate move API required.
 
@@ -283,7 +283,7 @@ ZIP contains only the **editable set** (same include/exclude rules), preserving 
 * **200 OK**, **201 Created**, **204 No Content**
 * **304 Not Modified** (GET file with `If-None-Match`)
 * **400 invalid_path**, **403 path_not_allowed**, **404 not_found**
-* **409 config_not_editable**
+* **409 configuration_not_editable**
 * **412 precondition_failed** (ETag mismatch)
 * **413 payload_too_large**
 * **428 precondition_required** (missing `If‑Match` / `If‑None‑Match`)

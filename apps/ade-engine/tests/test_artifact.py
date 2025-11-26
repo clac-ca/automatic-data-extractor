@@ -67,9 +67,8 @@ def build_run_context(tmp_path: Path) -> RunContext:
         input_dir=tmp_path / "input",
         output_dir=tmp_path / "output",
         logs_dir=tmp_path / "logs",
-        artifact_path=tmp_path / "logs" / "artifact.json",
-        events_path=tmp_path / "logs" / "events.ndjson",
     )
+    paths.logs_dir.mkdir(parents=True, exist_ok=True)
     return RunContext(
         run_id="run-123",
         metadata={"run_id": "run-1"},
@@ -137,7 +136,8 @@ def test_file_artifact_sink_records_tables_and_success(tmp_path: Path) -> None:
     manifest = build_manifest()
     table = build_normalized_table(tmp_path)
 
-    sink = FileArtifactSink(artifact_path=run.paths.artifact_path)
+    artifact_path = run.paths.logs_dir / "artifact.json"
+    sink = FileArtifactSink(artifact_path=artifact_path)
     sink.start(run, manifest)
     sink.record_table(table)
     run.completed_at = run.started_at + timedelta(seconds=5)
@@ -145,7 +145,7 @@ def test_file_artifact_sink_records_tables_and_success(tmp_path: Path) -> None:
     sink.note("Completed mapping", level="info", details={"tables": 1})
     sink.flush()
 
-    artifact = json.loads(run.paths.artifact_path.read_text())
+    artifact = json.loads(artifact_path.read_text())
     assert artifact["schema"] == "ade.artifact/v1"
     assert artifact["run"]["status"] == RunStatus.SUCCEEDED
     assert artifact["run"]["outputs"] == ["normalized.xlsx"]
@@ -160,7 +160,8 @@ def test_file_artifact_sink_records_failure(tmp_path: Path) -> None:
     run = build_run_context(tmp_path)
     manifest = build_manifest()
 
-    sink = FileArtifactSink(artifact_path=run.paths.artifact_path)
+    artifact_path = run.paths.logs_dir / "artifact.json"
+    sink = FileArtifactSink(artifact_path=artifact_path)
     sink.start(run, manifest)
     sink.mark_failure(
         RunError(code=RunErrorCode.INPUT_ERROR, stage=RunPhase.EXTRACTING, message="Missing file"),
@@ -168,7 +169,7 @@ def test_file_artifact_sink_records_failure(tmp_path: Path) -> None:
     )
     sink.flush()
 
-    artifact = json.loads(run.paths.artifact_path.read_text())
+    artifact = json.loads(artifact_path.read_text())
     assert artifact["run"]["status"] == RunStatus.FAILED
     assert artifact["run"]["error"]["code"] == RunErrorCode.INPUT_ERROR
     assert artifact["run"]["error"]["stage"] == RunPhase.EXTRACTING

@@ -39,8 +39,8 @@ class Run(Base):
     workspace_id: Mapped[str] = mapped_column(
         String(26), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
-    config_id: Mapped[str] = mapped_column(String(26), nullable=False)
-    config_version_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
+    configuration_version_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
+    build_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     input_document_id: Mapped[str | None] = mapped_column(
         String(26), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
     )
@@ -90,11 +90,11 @@ class Run(Base):
     )
 
     __table_args__ = (
-        Index("runs_config_idx", "config_id"),
+        Index("runs_configuration_idx", "configuration_id"),
         Index("runs_workspace_idx", "workspace_id"),
         Index("runs_status_idx", "status"),
         Index("runs_input_document_idx", "input_document_id"),
-        Index("runs_config_version_idx", "config_version_id"),
+        Index("runs_configuration_version_idx", "configuration_version_id"),
         Index("runs_workspace_created_idx", "workspace_id", "created_at"),
         Index("runs_retry_of_idx", "retry_of_run_id"),
     )

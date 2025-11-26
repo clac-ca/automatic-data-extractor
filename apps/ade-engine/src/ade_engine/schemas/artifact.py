@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from ade_engine.core.types import RunErrorCode, RunPhase, RunStatus
 
@@ -36,11 +36,11 @@ class RunArtifact(BaseModel):
 class ConfigArtifact(BaseModel):
     """Config metadata captured in the artifact."""
 
-    schema: str
+    schema_id: str = Field(alias="schema", validation_alias=AliasChoices("schema", "schema_id"))
     version: str
     name: str | None = None
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
 class ScoreContribution(BaseModel):
@@ -110,11 +110,15 @@ class ArtifactNote(BaseModel):
 class ArtifactV1(BaseModel):
     """Top-level artifact schema (v1)."""
 
-    schema: str = Field(default="ade.artifact/v1")
+    schema_id: str = Field(
+        default="ade.run_diagnostics/v1",
+        alias="schema",
+        validation_alias=AliasChoices("schema", "schema_id"),
+    )
     version: str = Field(default="1.0.0")
     run: RunArtifact
     config: ConfigArtifact
     tables: list[TableArtifact] = Field(default_factory=list)
     notes: list[ArtifactNote] = Field(default_factory=list)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)

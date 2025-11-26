@@ -5,9 +5,9 @@ import { useNavigate } from "@app/nav/history";
 import { Button } from "@ui/Button";
 import { PageState } from "@ui/PageState";
 
-import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
+import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
 
-import { useConfigsQuery } from "@shared/configs";
+import { useConfigurationsQuery } from "@shared/configurations";
 
 interface WorkspaceConfigRouteProps {
   readonly params?: { readonly configId?: string };
@@ -18,11 +18,11 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
   const navigate = useNavigate();
   const configId = params?.configId;
 
-  const configsQuery = useConfigsQuery({ workspaceId: workspace.id });
+  const configurationsQuery = useConfigurationsQuery({ workspaceId: workspace.id });
 
   const config = useMemo(
-    () => configsQuery.data?.items.find((item) => item.config_id === configId),
-    [configsQuery.data, configId],
+    () => configurationsQuery.data?.items.find((item) => item.id === configId),
+    [configurationsQuery.data, configId],
   );
 
   if (!configId) {
@@ -35,7 +35,7 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
     );
   }
 
-  if (configsQuery.isLoading) {
+  if (configurationsQuery.isLoading) {
     return (
       <PageState
         variant="loading"
@@ -66,7 +66,7 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
           <Button
             variant="secondary"
             onClick={() =>
-              navigate(`/workspaces/${workspace.id}/config-builder/${encodeURIComponent(config.config_id)}/editor`)
+              navigate(`/workspaces/${workspace.id}/config-builder/${encodeURIComponent(config.id)}/editor`)
             }
           >
             Open editor
@@ -75,7 +75,7 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
         <dl className="grid gap-4 md:grid-cols-2">
           <div>
             <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Config ID</dt>
-            <dd className="text-sm text-slate-700">{config.config_id}</dd>
+            <dd className="text-sm text-slate-700">{config.id}</dd>
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Status</dt>
@@ -89,7 +89,7 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
             <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Active version</dt>
             <dd className="text-sm text-slate-700">
               {("active_version" in config ? (config as { active_version?: number | null }).active_version : null) ??
-                config.config_version ??
+                config.configuration_version ??
                 "—"}
             </dd>
           </div>

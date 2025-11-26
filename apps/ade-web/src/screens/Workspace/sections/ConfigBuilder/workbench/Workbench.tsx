@@ -24,33 +24,30 @@ import { useEditorThemePreference } from "./state/useEditorThemePreference";
 import type { EditorThemePreference } from "./state/useEditorThemePreference";
 import type { WorkbenchConsoleLine, WorkbenchDataSeed, WorkbenchValidationState } from "./types";
 import { clamp, trackPointerDrag } from "./utils/drag";
-import { createWorkbenchTreeFromListing } from "./utils/tree";
+import { createWorkbenchTreeFromListing, findFileNode } from "./utils/tree";
 
 import { ContextMenu, type ContextMenuItem } from "@ui/ContextMenu";
 import { SplitButton } from "@ui/SplitButton";
 import { PageState } from "@ui/PageState";
 
-import { useConfigFilesQuery, useSaveConfigFileMutation } from "@shared/configs/hooks/useConfigFiles";
-import { configsKeys } from "@shared/configs/keys";
-import { readConfigFileJson } from "@shared/configs/api";
-import type { FileReadJson } from "@shared/configs/types";
-import { useValidateConfigurationMutation } from "@shared/configs/hooks/useValidateConfiguration";
+import {
+  useConfigurationFilesQuery,
+  useSaveConfigurationFileMutation,
+  useDeleteConfigurationFileMutation,
+} from "@shared/configurations/hooks/useConfigurationFiles";
+import { configurationKeys } from "@shared/configurations/keys";
+import { readConfigurationFileJson } from "@shared/configurations/api";
+import type { FileReadJson } from "@shared/configurations/types";
+import { useValidateConfigurationMutation } from "@shared/configurations/hooks/useValidateConfiguration";
 import { createScopedStorage } from "@shared/storage";
 import type { ConfigBuilderConsole } from "@app/nav/urlState";
 import { ApiError } from "@shared/api";
-import { streamBuild } from "@shared/builds/api";
-import {
-  fetchRunArtifact,
-  fetchRunOutputs,
-  fetchRunTelemetry,
-  streamRun,
-  type RunStreamOptions,
-} from "@shared/runs/api";
-import { isTelemetryEnvelope, type RunStatus } from "@shared/runs/types";
+import { fetchRunOutputs, fetchRunSummary, fetchRunTelemetry, streamRun, type RunStreamOptions } from "@shared/runs/api";
+import type { RunStatus } from "@shared/runs/types";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
 import { client } from "@shared/api/client";
-import { describeBuildEvent, describeRunEvent, formatConsoleTimestamp } from "./utils/console";
+import { describeRunEvent, formatConsoleTimestamp } from "./utils/console";
 import { useNotifications, type NotificationIntent } from "@shared/notifications";
 import { Select } from "@ui/Select";
 import { Button } from "@ui/Button";
@@ -58,8 +55,8 @@ import { Alert } from "@ui/Alert";
 
 const EXPLORER_LIMITS = { min: 200, max: 420 } as const;
 const INSPECTOR_LIMITS = { min: 260, max: 420 } as const;
-const OUTPUT_LIMITS = { min: 140, max: 420 } as const;
 const MIN_EDITOR_HEIGHT = 320;
+const MIN_EDITOR_HEIGHT_WITH_CONSOLE = 120;
 const MIN_CONSOLE_HEIGHT = 140;
 const DEFAULT_CONSOLE_HEIGHT = 220;
 const MAX_CONSOLE_LINES = 400;
@@ -68,11 +65,11 @@ const ACTIVITY_BAR_WIDTH = 56; // w-14
 const CONSOLE_COLLAPSE_MESSAGE =
   "Console closed to keep the editor readable on this screen size. Resize the window or collapse other panes to reopen it.";
 const buildTabStorageKey = (workspaceId: string, configId: string) =>
-  `ade.ui.workspace.${workspaceId}.config.${configId}.tabs`;
+  `ade.ui.workspace.${workspaceId}.configuration.${configId}.tabs`;
 const buildConsoleStorageKey = (workspaceId: string, configId: string) =>
-  `ade.ui.workspace.${workspaceId}.config.${configId}.console`;
+  `ade.ui.workspace.${workspaceId}.configuration.${configId}.console`;
 const buildEditorThemeStorageKey = (workspaceId: string, configId: string) =>
-  `ade.ui.workspace.${workspaceId}.config.${configId}.editor-theme`;
+  `ade.ui.workspace.${workspaceId}.configuration.${configId}.editor-theme`;
 
 const THEME_MENU_OPTIONS: Array<{ value: EditorThemePreference; label: string }> = [
   { value: "system", label: "System" },
@@ -98,12 +95,6 @@ type SideBounds = {
   readonly maxPx: number;
   readonly minFrac: number;
   readonly maxFrac: number;
-};
-
-type BuildTriggerOptions = {
-  readonly force?: boolean;
-  readonly wait?: boolean;
-  readonly source?: "button" | "menu" | "shortcut";
 };
 
 type WorkbenchWindowState = "restored" | "maximized";
@@ -154,7 +145,7 @@ export function Workbench({
   } = useWorkbenchUrlState();
 
   const usingSeed = Boolean(seed);
-  const filesQuery = useConfigFilesQuery({
+  const filesQuery = useConfigurationFilesQuery({
     workspaceId,
     configId,
     depth: "infinity",
@@ -194,20 +185,11 @@ export function Workbench({
 
   const consoleStreamRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
-  type ActiveStream =
-    | {
-        readonly kind: "build";
-        readonly startedAt: string;
-        readonly metadata?: {
-          readonly force?: boolean;
-          readonly wait?: boolean;
-        };
-      }
-    | {
-        readonly kind: "run";
-        readonly startedAt: string;
-        readonly metadata?: RunStreamMetadata;
-      };
+  type ActiveStream = {
+    readonly kind: "run";
+    readonly startedAt: string;
+    readonly metadata?: RunStreamMetadata;
+  };
   const [activeStream, setActiveStream] = useState<ActiveStream | null>(null);
 
   const [latestRun, setLatestRun] = useState<WorkbenchRunSummary | null>(null);
@@ -219,7 +201,7 @@ export function Workbench({
         return;
       }
       const timestamp = formatConsoleTimestamp(new Date());
-      setConsoleLines([{ level: "info", message, timestamp }]);
+      setConsoleLines([{ level: "info", message, timestamp, origin: "run" }]);
     },
     [setConsoleLines],
   );
@@ -284,15 +266,18 @@ export function Workbench({
   const [paneAreaEl, setPaneAreaEl] = useState<HTMLDivElement | null>(null);
   const [activityView, setActivityView] = useState<ActivityBarView>("explorer");
   const [settingsMenu, setSettingsMenu] = useState<{ x: number; y: number } | null>(null);
-  const [buildMenu, setBuildMenu] = useState<{ x: number; y: number } | null>(null);
-  const [forceNextBuild, setForceNextBuild] = useState(false);
-  const [forceModifierActive, setForceModifierActive] = useState(false);
+  const [testMenu, setTestMenu] = useState<{ x: number; y: number } | null>(null);
+  const [forceRun, setForceRun] = useState(false);
   const [isResizingConsole, setIsResizingConsole] = useState(false);
+  const [isCreatingFile, setIsCreatingFile] = useState(false);
+  const [pendingOpenFileId, setPendingOpenFileId] = useState<string | null>(null);
+  const [deletingFilePath, setDeletingFilePath] = useState<string | null>(null);
   const { notifyBanner, dismissScope } = useNotifications();
   const consoleBannerScope = useMemo(
     () => `workbench-console:${workspaceId}:${configId}`,
     [workspaceId, configId],
   );
+  const deleteConfigFile = useDeleteConfigurationFileMutation(workspaceId, configId);
   const showConsoleBanner = useCallback(
     (message: string, options?: { intent?: NotificationIntent; duration?: number | null }) => {
       notifyBanner({
@@ -316,7 +301,7 @@ export function Workbench({
         return;
       }
       const message = describeError(error);
-      appendConsoleLine({ level: "error", message, timestamp: formatConsoleTimestamp(new Date()) });
+      appendConsoleLine({ level: "error", message, timestamp: formatConsoleTimestamp(new Date()), origin: "run" });
       showConsoleBanner(message, { intent: "danger", duration: null });
     },
     [appendConsoleLine, showConsoleBanner],
@@ -327,10 +312,6 @@ export function Workbench({
   const handleCloseWorkbench = useCallback(() => {
     onCloseWorkbench();
   }, [onCloseWorkbench]);
-  const openBuildMenu = useCallback((position: { x: number; y: number }) => {
-    setBuildMenu(position);
-  }, []);
-  const closeBuildMenu = useCallback(() => setBuildMenu(null), []);
   const showExplorerPane = !explorer.collapsed;
 
   const loadFile = useCallback(
@@ -339,8 +320,8 @@ export function Workbench({
         return { content: seed.content[path] ?? "", etag: null };
       }
       const payload = await queryClient.fetchQuery({
-        queryKey: configsKeys.file(workspaceId, configId, path),
-        queryFn: ({ signal }) => readConfigFileJson(workspaceId, configId, path, signal),
+        queryKey: configurationKeys.file(workspaceId, configId, path),
+        queryFn: ({ signal }) => readConfigurationFileJson(workspaceId, configId, path, signal),
       });
       if (!payload) {
         throw new Error("File could not be loaded.");
@@ -356,15 +337,15 @@ export function Workbench({
     loadFile,
     persistence: tabPersistence ?? undefined,
   });
-  const saveConfigFile = useSaveConfigFileMutation(workspaceId, configId);
+  const saveConfigFile = useSaveConfigurationFileMutation(workspaceId, configId);
   const reloadFileFromServer = useCallback(
     async (fileId: string) => {
       if (usingSeed) {
         return null;
       }
       const payload = await queryClient.fetchQuery({
-        queryKey: configsKeys.file(workspaceId, configId, fileId),
-        queryFn: ({ signal }) => readConfigFileJson(workspaceId, configId, fileId, signal),
+        queryKey: configurationKeys.file(workspaceId, configId, fileId),
+        queryFn: ({ signal }) => readConfigurationFileJson(workspaceId, configId, fileId, signal),
       });
       const content = decodeFileContent(payload);
       files.replaceTabContent(fileId, {
@@ -402,9 +383,6 @@ export function Workbench({
     }
   }, [isMaximized, onMaximizeWindow, onRestoreWindow]);
 
-  const handleToggleForceNextBuild = useCallback(() => {
-    setForceNextBuild((current) => !current);
-  }, []);
   const outputCollapsed = consoleState !== "open";
   const dirtyTabs = useMemo(
     () => files.tabs.filter((tab) => tab.status === "ready" && tab.content !== tab.initialContent),
@@ -549,12 +527,14 @@ export function Workbench({
     return () => observer.disconnect();
   }, [paneAreaEl]);
 
+  const editorMinHeight = outputCollapsed ? MIN_EDITOR_HEIGHT : MIN_EDITOR_HEIGHT_WITH_CONSOLE;
   const consoleLimits = useMemo(() => {
     const container = Math.max(0, layoutSize.height);
-    const maxPx = Math.min(OUTPUT_LIMITS.max, Math.max(0, container - MIN_EDITOR_HEIGHT - OUTPUT_HANDLE_THICKNESS));
+    const availableHeight = Math.max(0, container - editorMinHeight - OUTPUT_HANDLE_THICKNESS);
+    const maxPx = availableHeight;
     const minPx = Math.min(MIN_CONSOLE_HEIGHT, maxPx);
     return { container, minPx, maxPx };
-  }, [layoutSize.height]);
+  }, [layoutSize.height, editorMinHeight]);
 
   const clampConsoleHeight = useCallback(
     (height: number, limits = consoleLimits) => clamp(height, limits.minPx, limits.maxPx),
@@ -577,24 +557,6 @@ export function Workbench({
       setConsoleFraction(resolveInitialConsoleFraction());
     }
   }, [consoleFraction, consoleLimits.container, resolveInitialConsoleFraction]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const updateModifierState = (event: KeyboardEvent) => {
-      setForceModifierActive(event.shiftKey || event.altKey);
-    };
-    const resetModifiers = () => setForceModifierActive(false);
-    window.addEventListener("keydown", updateModifierState);
-    window.addEventListener("keyup", updateModifierState);
-    window.addEventListener("blur", resetModifiers);
-    return () => {
-      window.removeEventListener("keydown", updateModifierState);
-      window.removeEventListener("keyup", updateModifierState);
-      window.removeEventListener("blur", resetModifiers);
-    };
-  }, []);
 
   const openConsole = useCallback(() => {
     if (consoleLimits.container > 0 && consoleLimits.maxPx < MIN_CONSOLE_HEIGHT) {
@@ -746,8 +708,8 @@ export function Workbench({
       : 0;
   const editorHeight =
     paneHeight > 0
-      ? Math.max(MIN_EDITOR_HEIGHT, paneHeight - OUTPUT_HANDLE_THICKNESS - consoleHeight)
-      : MIN_EDITOR_HEIGHT;
+      ? Math.max(editorMinHeight, paneHeight - OUTPUT_HANDLE_THICKNESS - consoleHeight)
+      : editorMinHeight;
 
   useEffect(() => {
     const activeId = files.activeTabId;
@@ -758,8 +720,21 @@ export function Workbench({
     setFileId(activeId);
   }, [files.activeTabId, setFileId]);
 
+  useEffect(() => {
+    if (!pendingOpenFileId || !tree) {
+      return;
+    }
+    if (!findFileNode(tree, pendingOpenFileId)) {
+      return;
+    }
+    files.openFile(pendingOpenFileId);
+    setFileId(pendingOpenFileId);
+    setPendingOpenFileId(null);
+  }, [pendingOpenFileId, tree, files, setFileId]);
+
   const startRunStream = useCallback(
-    (options: RunStreamOptions, metadata: RunStreamMetadata) => {
+    (options: RunStreamOptions, metadata: RunStreamMetadata, forceRebuild = false) => {
+      const effectiveOptions = forceRebuild ? { ...options, force_rebuild: true } : options;
       if (
         usingSeed ||
         !tree ||
@@ -778,7 +753,7 @@ export function Workbench({
 
       const startedAt = new Date();
       const startedIso = startedAt.toISOString();
-      setPane("console");
+      setPane("terminal");
       resetConsole(
         metadata.mode === "validation"
           ? "Starting ADE run (validate-only)…"
@@ -803,53 +778,80 @@ export function Workbench({
       void (async () => {
         let currentRunId: string | null = null;
         try {
-          for await (const event of streamRun(configId, options, controller.signal)) {
+          for await (const event of streamRun(configId, effectiveOptions, controller.signal)) {
             appendConsoleLine(describeRunEvent(event));
             if (!isMountedRef.current) {
               return;
             }
-            if (isTelemetryEnvelope(event)) {
-              continue;
+            const type = event.type;
+            if (!type?.startsWith("run.")) continue;
+            if (type === "run.queued") {
+              currentRunId = event.run_id ?? (event.id as string | undefined) ?? null;
             }
-            if (event.type === "run.created") {
-              currentRunId = event.run_id;
-            }
-            if (event.type === "run.completed") {
+            if (type === "run.completed") {
+              const runStatus = (event.status as RunStatus | undefined) ?? "succeeded";
+              const errorMessage =
+                (event.error?.message as string | undefined)?.trim() ||
+                "ADE run failed.";
               const notice =
-                event.status === "succeeded"
+                runStatus === "succeeded"
                   ? "ADE run completed successfully."
-                  : event.status === "canceled"
+                  : runStatus === "canceled"
                     ? "ADE run canceled."
-                    : event.error_message?.trim() || "ADE run failed.";
+                    : errorMessage;
               const intent: NotificationIntent =
-                event.status === "succeeded"
+                runStatus === "succeeded"
                   ? "success"
-                  : event.status === "canceled"
+                  : runStatus === "canceled"
                     ? "info"
                     : "danger";
               showConsoleBanner(notice, { intent });
 
               if (metadata.mode === "extraction" && currentRunId) {
+                const completedAt = new Date();
+                const completedIso = completedAt.toISOString();
+                const durationMs = Math.max(0, completedAt.getTime() - startedAt.getTime());
                 const downloadBase = `/api/v1/runs/${encodeURIComponent(currentRunId)}`;
                 setLatestRun({
                   runId: currentRunId,
-                  status: event.status as RunStatus,
+                  status: runStatus,
                   downloadBase,
                   documentName: metadata.documentName,
                   sheetNames: metadata.sheetNames ?? [],
                   outputs: [],
                   outputsLoaded: false,
-                  artifact: null,
-                  artifactLoaded: false,
-                  artifactError: null,
+                  summary: null,
+                  summaryLoaded: false,
+                  summaryError: null,
                   telemetry: null,
                   telemetryLoaded: false,
                   telemetryError: null,
                   error: null,
+                  startedAt: startedIso,
+                  completedAt: completedIso,
+                  durationMs,
+                });
+                appendConsoleLine({
+                  level: runStatus === "succeeded" ? "success" : runStatus === "canceled" ? "warning" : "error",
+                  message:
+                    durationMs > 0
+                      ? `Run ${runStatus} in ${formatRunDurationLabel(durationMs)}. Open Run summary for details.`
+                      : `Run ${runStatus}. Open Run summary for details.`,
+                  timestamp: formatConsoleTimestamp(completedAt),
+                  origin: "run",
                 });
                 try {
                   const listing = await fetchRunOutputs(currentRunId);
-                  const files = Array.isArray(listing.files) ? listing.files : [];
+                  const outputFiles = Array.isArray(listing.files) ? listing.files : [];
+                  const files = outputFiles.map((file) => {
+                    const path = (file as { path?: string }).path;
+                    return {
+                      name: file.name ?? path ?? "output",
+                      path,
+                      byte_size: file.byte_size ?? 0,
+                      download_url: file.download_url ?? undefined,
+                    };
+                  });
                   setLatestRun((prev) =>
                     prev && prev.runId === currentRunId
                       ? { ...prev, outputs: files, outputsLoaded: true }
@@ -866,18 +868,17 @@ export function Workbench({
                 }
 
                 try {
-                  const artifact = await fetchRunArtifact(currentRunId);
+                  const summary = await fetchRunSummary(currentRunId);
                   setLatestRun((prev) =>
                     prev && prev.runId === currentRunId
-                      ? { ...prev, artifact, artifactLoaded: true }
+                      ? { ...prev, summary, summaryLoaded: true }
                       : prev,
                   );
                 } catch (error) {
-                  const message =
-                    error instanceof Error ? error.message : "Unable to load run artifact.";
+                  const message = error instanceof Error ? error.message : "Unable to load run summary.";
                   setLatestRun((prev) =>
                     prev && prev.runId === currentRunId
-                      ? { ...prev, artifactLoaded: true, artifactError: message }
+                      ? { ...prev, summaryLoaded: true, summaryError: message }
                       : prev,
                   );
                 }
@@ -940,7 +941,7 @@ export function Workbench({
   );
 
   const handleRunValidation = useCallback(() => {
-    const startedIso = startRunStream({ validate_only: true }, { mode: "validation" });
+    const startedIso = startRunStream({ validate_only: true }, { mode: "validation" }, false);
     if (!startedIso) {
       return;
     }
@@ -988,167 +989,15 @@ export function Workbench({
           documentName: selection.documentName,
           sheetNames: worksheetList,
         },
+        forceRun,
       );
       if (started) {
         setRunDialogOpen(false);
+        setForceRun(false);
       }
     },
-    [startRunStream],
+    [startRunStream, setRunDialogOpen, setForceRun, forceRun],
   );
-
-  const triggerBuild = useCallback(
-    (options?: BuildTriggerOptions) => {
-      closeBuildMenu();
-      if (
-        usingSeed ||
-        !tree ||
-        filesQuery.isLoading ||
-        filesQuery.isError ||
-        activeStream !== null
-      ) {
-        return;
-      }
-      if (!openConsole()) {
-        return;
-      }
-
-      const resolvedForce = typeof options?.force === "boolean" ? options.force : forceModifierActive;
-      const resolvedWait = Boolean(options?.wait);
-
-      const startedIso = new Date().toISOString();
-      setPane("console");
-      resetConsole(resolvedForce ? "Force rebuilding environment…" : "Starting configuration build…");
-
-      const nowTimestamp = formatConsoleTimestamp(new Date());
-      if (resolvedForce) {
-        appendConsoleLine({
-          level: "warning",
-          message: "Force rebuild requested. ADE will recreate the environment from scratch.",
-          timestamp: nowTimestamp,
-        });
-      } else if (resolvedWait) {
-        appendConsoleLine({
-          level: "info",
-          message: "Waiting for any running build to finish before starting.",
-          timestamp: nowTimestamp,
-        });
-      }
-
-      const controller = new AbortController();
-      consoleStreamRef.current?.abort();
-      consoleStreamRef.current = controller;
-      setActiveStream({
-        kind: "build",
-        startedAt: startedIso,
-        metadata: { force: resolvedForce, wait: resolvedWait },
-      });
-
-      void (async () => {
-        try {
-          for await (const event of streamBuild(
-            workspaceId,
-            configId,
-            { force: resolvedForce, wait: resolvedWait },
-            controller.signal,
-          )) {
-            appendConsoleLine(describeBuildEvent(event));
-            if (!isMountedRef.current) {
-              return;
-            }
-            if (event.type === "build.completed") {
-              const summary = event.summary?.trim();
-              if (summary && /reused/i.test(summary)) {
-                appendConsoleLine({
-                  level: "info",
-                  message: "Environment reused. Hold Shift or open the build menu to force a rebuild.",
-                  timestamp: formatConsoleTimestamp(new Date()),
-                });
-                showConsoleBanner(
-                  "Environment already up to date. Hold Shift or use the menu to force rebuild.",
-                  { intent: "info" },
-                );
-              } else {
-                const notice =
-                  event.status === "active"
-                    ? summary || "Build completed successfully."
-                    : event.status === "canceled"
-                      ? "Build canceled."
-                      : event.error_message?.trim() || "Build failed.";
-                const intent: NotificationIntent =
-                  event.status === "active"
-                    ? "success"
-                    : event.status === "canceled"
-                      ? "info"
-                      : "danger";
-                showConsoleBanner(notice, { intent });
-              }
-            }
-          }
-        } catch (error) {
-          if (error instanceof DOMException && error.name === "AbortError") {
-            return;
-          }
-          pushConsoleError(error);
-        } finally {
-          if (consoleStreamRef.current === controller) {
-            consoleStreamRef.current = null;
-          }
-          if (isMountedRef.current) {
-            setActiveStream(null);
-          }
-        }
-      })();
-    },
-    [
-      usingSeed,
-      tree,
-      filesQuery.isLoading,
-      filesQuery.isError,
-      activeStream,
-      closeBuildMenu,
-      openConsole,
-      forceModifierActive,
-      setPane,
-      resetConsole,
-      appendConsoleLine,
-      consoleStreamRef,
-      setActiveStream,
-      workspaceId,
-      configId,
-      pushConsoleError,
-      showConsoleBanner,
-    ],
-  );
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const handler = (event: KeyboardEvent) => {
-      const usesPrimary = isMacPlatform ? event.metaKey : event.ctrlKey;
-      if (!usesPrimary || event.altKey) {
-        return;
-      }
-      if (event.key.toLowerCase() !== "b") {
-        return;
-      }
-      const target = event.target as HTMLElement | null;
-      if (target) {
-        const tag = target.tagName;
-        if (
-          tag === "INPUT" ||
-          tag === "TEXTAREA" ||
-          (target as HTMLElement).isContentEditable
-        ) {
-          return;
-        }
-      }
-      event.preventDefault();
-      triggerBuild({ force: event.shiftKey, source: "shortcut" });
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [triggerBuild, isMacPlatform]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1179,9 +1028,8 @@ export function Workbench({
     return () => window.removeEventListener("keydown", handler);
   }, [isMacPlatform, canSaveFiles, handleSaveActiveTab]);
 
-  const runStreamMetadata = activeStream?.kind === "run" ? activeStream.metadata : undefined;
-  const isStreamingRun = activeStream?.kind === "run";
-  const isStreamingBuild = activeStream?.kind === "build";
+  const runStreamMetadata = activeStream?.metadata;
+  const isStreamingRun = activeStream !== null;
   const isStreamingAny = activeStream !== null;
 
   const isStreamingExtraction = isStreamingRun && runStreamMetadata?.mode === "extraction";
@@ -1201,10 +1049,8 @@ export function Workbench({
   const isRunningExtraction = isStreamingExtraction;
   const canRunExtraction =
     !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !isStreamingAny;
-
-  const isBuildingEnvironment = isStreamingBuild;
-  const canBuildEnvironment =
-    !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !isStreamingAny;
+  const canCreateFiles = !usingSeed && !filesQuery.isLoading && !filesQuery.isError;
+  const canDeleteFiles = canCreateFiles && !deleteConfigFile.isPending;
 
   const handleSelectActivityView = useCallback((view: ActivityBarView) => {
     setActivityView(view);
@@ -1229,6 +1075,18 @@ export function Workbench({
     }
   }, [outputCollapsed, openConsole, closeConsole]);
 
+  const handleClearConsole = useCallback(() => {
+    setConsoleLines([]);
+  }, []);
+
+  const handleShowRunSummary = useCallback(() => {
+    if (!latestRun) {
+      return;
+    }
+    openConsole();
+    setPane("runSummary");
+  }, [latestRun, openConsole, setPane]);
+
   const handleToggleExplorer = useCallback(() => {
     setExplorer((prev) => ({ ...prev, collapsed: !prev.collapsed }));
   }, []);
@@ -1240,6 +1098,90 @@ export function Workbench({
   const handleToggleInspectorVisibility = useCallback(() => {
     setInspector((prev) => ({ ...prev, collapsed: !prev.collapsed }));
   }, []);
+
+  const handleCreateFile = useCallback(
+    async (folderPath: string, fileName: string) => {
+      const trimmed = fileName.trim();
+      if (!trimmed) {
+        throw new Error("Enter a file name.");
+      }
+      if (trimmed.includes("..")) {
+        throw new Error("File name cannot include '..'.");
+      }
+      if (!canCreateFiles) {
+        throw new Error("Files are still loading.");
+      }
+      const normalizedFolder = folderPath.replace(/\/+$/, "");
+      const sanitizedName = trimmed.replace(/^\/+/, "").replace(/\/+/g, "/");
+      const candidatePath = normalizedFolder ? `${normalizedFolder}/${sanitizedName}` : sanitizedName;
+      const normalizedPath = candidatePath.replace(/\/+/g, "/");
+      if (!normalizedPath || normalizedPath.endsWith("/")) {
+        throw new Error("Enter a valid file name.");
+      }
+      if (tree && findFileNode(tree, normalizedPath)) {
+        throw new Error("A file or folder with that name already exists.");
+      }
+      setIsCreatingFile(true);
+      try {
+        await saveConfigFile.mutateAsync({
+          path: normalizedPath,
+          content: "",
+          parents: true,
+          create: true,
+        });
+        setPendingOpenFileId(normalizedPath);
+        await filesQuery.refetch();
+        showConsoleBanner(`Created ${normalizedPath}`, { intent: "success", duration: 4000 });
+      } catch (error) {
+        pushConsoleError(error);
+        throw error instanceof Error ? error : new Error("Unable to create file.");
+      } finally {
+        setIsCreatingFile(false);
+      }
+    },
+    [canCreateFiles, tree, saveConfigFile, filesQuery, showConsoleBanner, pushConsoleError],
+  );
+
+  const handleDeleteFile = useCallback(
+    async (filePath: string) => {
+      if (!canDeleteFiles) {
+        throw new Error("Files are still loading.");
+      }
+      const target = tree ? findFileNode(tree, filePath) : null;
+      if (!tree || !target) {
+        throw new Error("File not found in workspace.");
+      }
+      const confirmDelete =
+        typeof window !== "undefined"
+          ? window.confirm(`Delete ${filePath}? This cannot be undone.`)
+          : true;
+      if (!confirmDelete) {
+        return;
+      }
+      setIsCreatingFile(false);
+      setDeletingFilePath(filePath);
+      try {
+        await deleteConfigFile.mutateAsync({ path: filePath, etag: target.metadata?.etag });
+        files.closeTab(filePath);
+        setPendingOpenFileId((prev) => (prev === filePath ? null : prev));
+        await filesQuery.refetch();
+        showConsoleBanner(`Deleted ${filePath}`, { intent: "info", duration: 4000 });
+      } catch (error) {
+        const message =
+          error instanceof ApiError && error.status === 428
+            ? "Delete blocked: missing latest file version. Reload the explorer and try again."
+            : error instanceof Error
+              ? error.message
+              : "Unable to delete file.";
+        pushConsoleError(message);
+        throw new Error(message);
+      }
+      finally {
+        setDeletingFilePath((prev) => (prev === filePath ? null : prev));
+      }
+    },
+    [canDeleteFiles, tree, deleteConfigFile, files, filesQuery, showConsoleBanner, pushConsoleError, setDeletingFilePath],
+  );
 
   const settingsMenuItems = useMemo<ContextMenuItem[]>(() => {
     const blankIcon = <span className="inline-block h-4 w-4 opacity-0" />;
@@ -1292,33 +1234,31 @@ export function Workbench({
 
   const workspaceLabel = formatWorkspaceLabel(workspaceId);
   const saveShortcutLabel = isMacPlatform ? "⌘S" : "Ctrl+S";
-  const buildShortcutLabel = isMacPlatform ? "⌘B" : "Ctrl+B";
-  const forceShortcutLabel = isMacPlatform ? "⇧⌘B" : "Ctrl+Shift+B";
-  const buildMenuItems = useMemo<ContextMenuItem[]>(() => {
-    const disabled = !canBuildEnvironment;
+  const testMenuItems = useMemo<ContextMenuItem[]>(() => {
+    const disabled = !canRunExtraction;
     return [
       {
-        id: "build-default",
-        label: "Build / reuse environment",
-        shortcut: buildShortcutLabel,
+        id: "test-default",
+        label: "Test",
         disabled,
-        onSelect: () => triggerBuild(),
+        onSelect: () => {
+          setForceRun(false);
+          setRunDialogOpen(true);
+          setTestMenu(null);
+        },
       },
       {
-        id: "build-force",
-        label: "Force rebuild now",
-        shortcut: forceShortcutLabel,
+        id: "test-force",
+        label: "Force build and test",
         disabled,
-        onSelect: () => triggerBuild({ force: true }),
-      },
-      {
-        id: "build-force-wait",
-        label: "Force rebuild after current build",
-        disabled,
-        onSelect: () => triggerBuild({ force: true, wait: true }),
+        onSelect: () => {
+          setForceRun(true);
+          setRunDialogOpen(true);
+          setTestMenu(null);
+        },
       },
     ];
-  }, [buildShortcutLabel, forceShortcutLabel, canBuildEnvironment, triggerBuild]);
+  }, [canRunExtraction, setForceRun, setRunDialogOpen, setTestMenu]);
 
   if (!seed && filesQuery.isLoading) {
     return (
@@ -1373,45 +1313,36 @@ export function Workbench({
       {isMaximized ? <div className="fixed inset-0 z-40 bg-slate-900/60" /> : null}
       <div className={windowFrameClass}>
         <WorkbenchChrome
-        configName={configName}
-        workspaceLabel={workspaceLabel}
-        validationLabel={validationLabel}
-        canSaveFiles={canSaveFiles}
-        isSavingFiles={isSavingTabs}
-        onSaveFile={handleSaveActiveTab}
-        saveShortcutLabel={saveShortcutLabel}
-        canBuildEnvironment={canBuildEnvironment}
-        isBuildingEnvironment={isBuildingEnvironment}
-        onBuildEnvironment={triggerBuild}
-        onOpenBuildMenu={openBuildMenu}
-        forceModifierActive={forceModifierActive}
-        buildShortcutLabel={buildShortcutLabel}
-        forceShortcutLabel={forceShortcutLabel}
-        canRunValidation={canRunValidation}
-        isRunningValidation={isRunningValidation}
-        onRunValidation={handleRunValidation}
-        canRunExtraction={canRunExtraction}
-        isRunningExtraction={isRunningExtraction}
-        onRunExtraction={() => {
-          if (!canRunExtraction) {
-            return;
-          }
-          setRunDialogOpen(true);
-        }}
-        explorerVisible={showExplorerPane}
-        onToggleExplorer={handleToggleExplorer}
-        consoleOpen={!outputCollapsed}
-        onToggleConsole={handleToggleOutput}
-        inspectorCollapsed={inspector.collapsed}
-        onToggleInspector={handleToggleInspectorVisibility}
-        appearance={menuAppearance}
-        forceNextBuild={forceNextBuild}
-        onToggleForceNextBuild={handleToggleForceNextBuild}
-        windowState={windowState}
-        onMinimizeWindow={handleMinimizeWindow}
-        onToggleMaximize={handleToggleMaximize}
-        onCloseWindow={handleCloseWorkbench}
-      />
+          configName={configName}
+          workspaceLabel={workspaceLabel}
+          validationLabel={validationLabel}
+          canSaveFiles={canSaveFiles}
+          isSavingFiles={isSavingTabs}
+          onSaveFile={handleSaveActiveTab}
+          saveShortcutLabel={saveShortcutLabel}
+          onOpenTestMenu={(position) => setTestMenu(position)}
+          canRunValidation={canRunValidation}
+          isRunningValidation={isRunningValidation}
+          onRunValidation={handleRunValidation}
+          canRunExtraction={canRunExtraction}
+          isRunningExtraction={isRunningExtraction}
+          onRunExtraction={(force) => {
+            if (!canRunExtraction) return;
+            setForceRun(force);
+            setRunDialogOpen(true);
+          }}
+          explorerVisible={showExplorerPane}
+          onToggleExplorer={handleToggleExplorer}
+          consoleOpen={!outputCollapsed}
+          onToggleConsole={handleToggleOutput}
+          inspectorCollapsed={inspector.collapsed}
+          onToggleInspector={handleToggleInspectorVisibility}
+          appearance={menuAppearance}
+          windowState={windowState}
+          onMinimizeWindow={handleMinimizeWindow}
+          onToggleMaximize={handleToggleMaximize}
+          onCloseWindow={handleCloseWorkbench}
+        />
         <div ref={setPaneAreaEl} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           <ActivityBar
             activeView={activityView}
@@ -1433,6 +1364,12 @@ export function Workbench({
                       setFileId(fileId);
                     }}
                     theme={menuAppearance}
+                    canCreateFile={canCreateFiles}
+                    isCreatingFile={isCreatingFile}
+                    onCreateFile={handleCreateFile}
+                    canDeleteFile={canDeleteFiles}
+                    deletingFilePath={deletingFilePath}
+                    onDeleteFile={handleDeleteFile}
                     onCloseFile={files.closeTab}
                     onCloseOtherFiles={files.closeOtherTabs}
                     onCloseTabsToRight={files.closeTabsToRight}
@@ -1488,14 +1425,14 @@ export function Workbench({
               editorTheme={editorTheme.resolvedTheme}
               menuAppearance={menuAppearance}
               canSaveFiles={canSaveFiles}
-              minHeight={MIN_EDITOR_HEIGHT}
+              minHeight={editorMinHeight}
             />
           ) : (
             <div
                 className="grid min-h-0 min-w-0 flex-1"
                 style={{
                 height: paneHeight > 0 ? `${paneHeight}px` : undefined,
-                gridTemplateRows: `${Math.max(MIN_EDITOR_HEIGHT, editorHeight)}px ${OUTPUT_HANDLE_THICKNESS}px ${Math.max(
+                gridTemplateRows: `${Math.max(editorMinHeight, editorHeight)}px ${OUTPUT_HANDLE_THICKNESS}px ${Math.max(
                   0,
                   consoleHeight,
                 )}px`,
@@ -1522,7 +1459,7 @@ export function Workbench({
                 editorTheme={editorTheme.resolvedTheme}
                 menuAppearance={menuAppearance}
                 canSaveFiles={canSaveFiles}
-                minHeight={MIN_EDITOR_HEIGHT}
+                minHeight={editorMinHeight}
               />
               <PanelResizeHandle
                 orientation="horizontal"
@@ -1553,6 +1490,8 @@ export function Workbench({
                 activePane={pane}
                 onPaneChange={setPane}
                 latestRun={latestRun}
+                onShowRunDetails={handleShowRunSummary}
+                onClearConsole={handleClearConsole}
               />
             </div>
           )}
@@ -1588,15 +1527,18 @@ export function Workbench({
         <RunExtractionDialog
           open={runDialogOpen}
           workspaceId={workspaceId}
-          onClose={() => setRunDialogOpen(false)}
+          onClose={() => {
+            setRunDialogOpen(false);
+            setForceRun(false);
+          }}
           onRun={handleRunExtraction}
         />
       ) : null}
       <ContextMenu
-        open={Boolean(buildMenu)}
-        position={buildMenu}
-        onClose={closeBuildMenu}
-        items={buildMenuItems}
+        open={Boolean(testMenu)}
+        position={testMenu}
+        onClose={() => setTestMenu(null)}
+        items={testMenuItems}
         appearance={menuAppearance}
       />
       <ContextMenu
@@ -1644,14 +1586,7 @@ function WorkbenchChrome({
   isSavingFiles,
   onSaveFile,
   saveShortcutLabel,
-  canBuildEnvironment,
-  isBuildingEnvironment,
-  onBuildEnvironment,
-  onOpenBuildMenu,
-  forceNextBuild,
-  forceModifierActive,
-  buildShortcutLabel,
-  forceShortcutLabel,
+  onOpenTestMenu,
   canRunValidation,
   isRunningValidation,
   onRunValidation,
@@ -1665,7 +1600,6 @@ function WorkbenchChrome({
   inspectorCollapsed,
   onToggleInspector,
   appearance,
-  onToggleForceNextBuild,
   windowState,
   onMinimizeWindow,
   onToggleMaximize,
@@ -1678,20 +1612,13 @@ function WorkbenchChrome({
   readonly isSavingFiles: boolean;
   readonly onSaveFile: () => void;
   readonly saveShortcutLabel: string;
-  readonly canBuildEnvironment: boolean;
-  readonly isBuildingEnvironment: boolean;
-  readonly onBuildEnvironment: (options?: BuildTriggerOptions) => void;
-  readonly onOpenBuildMenu: (position: { x: number; y: number }) => void;
-  readonly forceNextBuild: boolean;
-  readonly forceModifierActive: boolean;
-  readonly buildShortcutLabel: string;
-  readonly forceShortcutLabel: string;
+  readonly onOpenTestMenu: (position: { x: number; y: number }) => void;
   readonly canRunValidation: boolean;
   readonly isRunningValidation: boolean;
   readonly onRunValidation: () => void;
   readonly canRunExtraction: boolean;
   readonly isRunningExtraction: boolean;
-  readonly onRunExtraction: () => void;
+  readonly onRunExtraction: (force: boolean) => void;
   readonly explorerVisible: boolean;
   readonly onToggleExplorer: () => void;
   readonly consoleOpen: boolean;
@@ -1699,7 +1626,6 @@ function WorkbenchChrome({
   readonly inspectorCollapsed: boolean;
   readonly onToggleInspector: () => void;
   readonly appearance: "light" | "dark";
-  readonly onToggleForceNextBuild: () => void;
   readonly windowState: WorkbenchWindowState;
   readonly onMinimizeWindow: () => void;
   readonly onToggleMaximize: () => void;
@@ -1710,9 +1636,6 @@ function WorkbenchChrome({
     ? "border-white/10 bg-[#151821] text-white"
     : "border-slate-200 bg-white text-slate-900";
   const metaTextClass = dark ? "text-white/60" : "text-slate-500";
-  const buildButtonClass = dark
-    ? "bg-white/10 text-white hover:bg-white/20 disabled:bg-white/10 disabled:text-white/40"
-    : "bg-slate-100 text-slate-900 hover:bg-slate-200 disabled:bg-slate-50 disabled:text-slate-400";
   const saveButtonClass = dark
     ? "bg-emerald-400/20 text-emerald-50 hover:bg-emerald-400/30 disabled:bg-white/10 disabled:text-white/30"
     : "bg-emerald-500 text-white hover:bg-emerald-400 disabled:bg-slate-200 disabled:text-slate-500";
@@ -1720,15 +1643,6 @@ function WorkbenchChrome({
     ? "bg-brand-500 text-white hover:bg-brand-400 disabled:bg-white/20 disabled:text-white/40"
     : "bg-brand-600 text-white hover:bg-brand-500 disabled:bg-slate-200 disabled:text-slate-500";
   const isMaximized = windowState === "maximized";
-  const forceIntentActive = forceNextBuild || forceModifierActive;
-  const buildButtonLabel = isBuildingEnvironment
-    ? "Building…"
-    : forceIntentActive
-      ? "Force rebuild"
-      : "Build environment";
-  const buildButtonTitle = forceIntentActive
-    ? `Force rebuild (Shift+Click · ${forceShortcutLabel})`
-    : `Build environment (${buildShortcutLabel})`;
 
   return (
     <div className={clsx("flex items-center justify-between border-b px-4 py-2", surfaceClass)}>
@@ -1761,34 +1675,6 @@ function WorkbenchChrome({
           {isSavingFiles ? <SpinnerIcon /> : <SaveIcon />}
           {isSavingFiles ? "Saving…" : "Save"}
         </button>
-        <SplitButton
-          label={buildButtonLabel}
-          icon={isBuildingEnvironment ? <SpinnerIcon /> : <BuildIcon />}
-          disabled={!canBuildEnvironment}
-          isLoading={isBuildingEnvironment}
-          highlight={forceIntentActive && !isBuildingEnvironment}
-          title={buildButtonTitle}
-          primaryClassName={clsx(
-            buildButtonClass,
-            "rounded-r-none focus-visible:ring-offset-0",
-          )}
-          menuClassName={clsx(
-            buildButtonClass,
-            "rounded-l-none px-2",
-            dark ? "border-white/20" : "border-slate-300",
-          )}
-          menuAriaLabel="Open build options"
-          onPrimaryClick={(event) =>
-            onBuildEnvironment({
-              force: event.shiftKey || event.altKey || forceModifierActive,
-            })
-          }
-          onOpenMenu={(position) => onOpenBuildMenu({ x: position.x, y: position.y })}
-          onContextMenu={(event) => {
-            event.preventDefault();
-            onOpenBuildMenu({ x: event.clientX, y: event.clientY });
-          }}
-        />
         <button
           type="button"
           onClick={onRunValidation}
@@ -1801,24 +1687,28 @@ function WorkbenchChrome({
           {isRunningValidation ? <SpinnerIcon /> : <RunIcon />}
           {isRunningValidation ? "Running…" : "Run validation"}
         </button>
-        <button
-          type="button"
-          onClick={onRunExtraction}
+        <SplitButton
+          label={isRunningExtraction ? "Running…" : "Test run"}
+          icon={isRunningExtraction ? <SpinnerIcon /> : <RunIcon />}
           disabled={!canRunExtraction}
-          className={clsx(
-            "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
+          isLoading={isRunningExtraction}
+          title="Run test run"
+          primaryClassName={clsx(
             runButtonClass,
+            "rounded-r-none focus-visible:ring-offset-0",
           )}
-        >
-          {isRunningExtraction ? <SpinnerIcon /> : <RunIcon />}
-          {isRunningExtraction ? "Running…" : "Run extraction"}
-        </button>
-        <ChromeIconButton
-          ariaLabel={forceNextBuild ? "Force rebuild enabled for next run" : "Force next rebuild"}
-          onClick={onToggleForceNextBuild}
-          appearance={appearance}
-          active={forceNextBuild}
-          icon={<BuildIcon />}
+          menuClassName={clsx(
+            runButtonClass,
+            "rounded-l-none px-2",
+            dark ? "border-white/20" : "border-slate-300",
+          )}
+          menuAriaLabel="Open test options"
+          onPrimaryClick={() => onRunExtraction(false)}
+          onOpenMenu={(position) => onOpenTestMenu(position)}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            onOpenTestMenu({ x: event.clientX, y: event.clientY });
+          }}
         />
         <div className="flex items-center gap-1">
           <ChromeIconButton
@@ -1965,7 +1855,7 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Select a document</h2>
             <p className="text-sm text-slate-500">
-              Choose a workspace document and optional worksheet before running the extractor.
+              Choose a workspace document and optional worksheet before running a test.
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -2084,20 +1974,19 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
             Cancel
           </Button>
           <Button
-              onClick={() => {
-                if (!selectedDocument) {
-                  return;
-                }
-                onRun({
-                  documentId: selectedDocument.id,
-                  documentName: selectedDocument.name,
-                  sheetNames:
-                    normalizedSheetSelection.length > 0 ? normalizedSheetSelection : undefined,
-                });
-              }}
-              disabled={runDisabled}
-            >
-              Run extraction
+            onClick={() => {
+              if (!selectedDocument) {
+                return;
+              }
+              onRun({
+                documentId: selectedDocument.id,
+                documentName: selectedDocument.name,
+                sheetNames: normalizedSheetSelection.length > 0 ? normalizedSheetSelection : undefined,
+              });
+            }}
+            disabled={runDisabled}
+          >
+            Start test run
           </Button>
         </footer>
       </div>
@@ -2159,6 +2048,31 @@ function ChromeIconButton({
       {icon}
     </button>
   );
+}
+
+function describeSheetSelection(sheetNames?: readonly string[] | null): string | null {
+  if (!sheetNames) {
+    return null;
+  }
+  if (sheetNames.length === 0) {
+    return "All worksheets";
+  }
+  return sheetNames.join(", ");
+}
+
+function formatRunDurationLabel(durationMs?: number | null): string | null {
+  if (durationMs == null || !Number.isFinite(durationMs) || durationMs < 0) {
+    return null;
+  }
+  if (durationMs < 1000) {
+    return `${Math.round(durationMs)} ms`;
+  }
+  if (durationMs < 60_000) {
+    return `${(durationMs / 1000).toFixed(1)} s`;
+  }
+  const minutes = Math.floor(durationMs / 60_000);
+  const seconds = Math.round((durationMs % 60_000) / 1000);
+  return `${minutes}m ${seconds}s`;
 }
 
 function WorkbenchBadgeIcon() {
@@ -2248,18 +2162,6 @@ function SpinnerIcon() {
     <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
       <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="2" opacity="0.35" />
       <path d="M20 12a8 8 0 0 0-8-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function BuildIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path
-        d="M11 2.5a2.5 2.5 0 0 0-2.62 3.04L4 9.92 6.08 12l4.58-4.38A2.5 2.5 0 0 0 13.5 5 2.5 2.5 0 0 0 11 2.5Z"
-        fill="currentColor"
-      />
-      <path d="M4 10l2 2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   );
 }

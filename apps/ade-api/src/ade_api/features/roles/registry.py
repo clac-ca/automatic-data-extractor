@@ -151,16 +151,22 @@ PERMISSIONS: tuple[PermissionDefinition, ...] = (
         description="Upload, update, delete, or restore workspace documents.",
     ),
     _definition(
-        key="Workspace.Configs.Read",
+        key="Workspace.Configurations.Read",
         scope=ScopeType.WORKSPACE,
-        label="Read configs",
-        description="View workspace config packages and version history.",
+        label="Read configurations",
+        description=(
+            "View workspace configurations (backed by configuration packages) "
+            "and version history."
+        ),
     ),
     _definition(
-        key="Workspace.Configs.ReadWrite",
+        key="Workspace.Configurations.ReadWrite",
         scope=ScopeType.WORKSPACE,
-        label="Manage configs",
-        description="Create, update, archive, or restore workspace config packages.",
+        label="Manage configurations",
+        description=(
+            "Create, update, archive, or restore workspace configurations "
+            "and their backing configuration packages."
+        ),
     ),
     _definition(
         key="Workspace.Runs.Read",
@@ -225,8 +231,8 @@ SYSTEM_ROLES: tuple[SystemRoleDefinition, ...] = (
             "Workspace.Members.ReadWrite",
             "Workspace.Documents.Read",
             "Workspace.Documents.ReadWrite",
-            "Workspace.Configs.Read",
-            "Workspace.Configs.ReadWrite",
+            "Workspace.Configurations.Read",
+            "Workspace.Configurations.ReadWrite",
             "Workspace.Runs.Read",
             "Workspace.Runs.ReadWrite",
             "Workspace.Roles.Read",
@@ -242,7 +248,7 @@ SYSTEM_ROLES: tuple[SystemRoleDefinition, ...] = (
             "Workspace.Read",
             "Workspace.Documents.Read",
             "Workspace.Documents.ReadWrite",
-            "Workspace.Configs.Read",
+            "Workspace.Configurations.Read",
             "Workspace.Runs.Read",
             "Workspace.Runs.ReadWrite",
         ),

@@ -10,7 +10,6 @@ from ade_engine.config.loader import load_config_runtime
 from ade_engine.core.errors import HookError
 from ade_engine.core.hooks import run_hooks
 from ade_engine.core.types import RawTable, RunContext, RunPaths, RunResult, RunStatus
-from ade_engine.infra.artifact import FileArtifactSink
 from ade_engine.infra.telemetry import PipelineLogger
 
 
@@ -35,13 +34,11 @@ def _bootstrap_package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return pkg_dir
 
 
-def _run_context(runtime, tmp_path: Path) -> tuple[RunContext, FileArtifactSink, PipelineLogger]:
+def _run_context(runtime, tmp_path: Path) -> tuple[RunContext, PipelineLogger]:
     paths = RunPaths(
         input_dir=tmp_path / "input",
         output_dir=tmp_path / "output",
         logs_dir=tmp_path / "logs",
-        artifact_path=tmp_path / "artifact.json",
-        events_path=tmp_path / "events.ndjson",
     )
     paths.input_dir.mkdir()
     paths.output_dir.mkdir()
@@ -54,10 +51,8 @@ def _run_context(runtime, tmp_path: Path) -> tuple[RunContext, FileArtifactSink,
         paths=paths,
         started_at=datetime.utcnow(),
     )
-    artifact_sink = FileArtifactSink(artifact_path=paths.artifact_path)
-    artifact_sink.start(run, runtime.manifest)
-    logger = PipelineLogger(run=run, artifact_sink=artifact_sink)
-    return run, artifact_sink, logger
+    logger = PipelineLogger(run=run)
+    return run, logger
 
 
 def test_hooks_execute_in_order_and_allow_mutation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -106,7 +101,7 @@ def run(*, tables, run, logger, **_):
     )
 
     runtime = load_config_runtime(package="ade_config", manifest_path=manifest_path)
-    run, artifact_sink, logger = _run_context(runtime, tmp_path)
+    run, logger = _run_context(runtime, tmp_path)
 
     tables = [
         RawTable(
@@ -126,14 +121,12 @@ def run(*, tables, run, logger, **_):
         registry=runtime.hooks,
         run=run,
         manifest=runtime.manifest,
-        artifact=artifact_sink,
         logger=logger,
         tables=tables,
     )
 
     assert run.state["order"] == ["first", "second"]
     assert tables[0].header_row == ["col1", "extra"]
-    assert len(artifact_sink._artifact.notes) == 2
 
 
 def test_hook_failure_raises_hookerror(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -173,15 +166,14 @@ def run(context):
     )
 
     runtime = load_config_runtime(package="ade_config", manifest_path=manifest_path)
-    run, artifact_sink, logger = _run_context(runtime, tmp_path)
+    run, logger = _run_context(runtime, tmp_path)
 
     result = RunResult(
         status=RunStatus.SUCCEEDED,
         error=None,
         run_id=run.run_id,
         output_paths=(),
-        artifact_path=run.paths.artifact_path,
-        events_path=run.paths.events_path,
+        logs_dir=run.paths.logs_dir,
         processed_files=(),
     )
 
@@ -191,7 +183,6 @@ def run(context):
             registry=runtime.hooks,
             run=run,
             manifest=runtime.manifest,
-            artifact=artifact_sink,
             logger=logger,
             result=result,
         )

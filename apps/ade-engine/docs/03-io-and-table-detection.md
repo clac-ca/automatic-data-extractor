@@ -391,8 +391,10 @@ even before mapping/normalization.
 `PipelineLogger` is available during extraction and may emit events like:
 
 * `pipeline_transition` with phase `"EXTRACTING"`.
-* `file_discovered` and `file_processed` for each file.
-* `table_detected` for each `RawTable` built.
+* `table_completed` for each table once it is fully mapped/validated.
+* `note` for human-readable breadcrumbs.
+* Custom `logger.event(...)` payloads from configs if you want finer-grained
+  signals (e.g. per-row validation issues).
 
 These events are written to `events.ndjson` and can be consumed by the ADE
 backend for realtime progress indicators or metrics.

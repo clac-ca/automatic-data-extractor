@@ -134,6 +134,12 @@ def ensure_node_modules(frontend_dir: Path | None = None) -> None:
 
 def uvicorn_path() -> str:
     """Return the uvicorn executable in the current environment."""
+    import sys
+
+    # Prefer the uvicorn alongside the current Python (virtualenv/bin/uvicorn).
+    candidate = Path(sys.executable).with_name("uvicorn")
+    if candidate.exists():
+        return str(candidate)
 
     return require_command(
         "uvicorn",

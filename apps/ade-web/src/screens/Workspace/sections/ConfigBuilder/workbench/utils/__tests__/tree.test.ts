@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import { createWorkbenchTreeFromListing } from "../tree";
 
-import type { FileListing } from "@shared/configs/types";
+import type { FileListing } from "@shared/configurations/types";
 
 const ISO = "2024-01-01T00:00:00.000Z";
 
 function createListing(): FileListing {
   return {
     workspace_id: "workspace-1",
-    config_id: "config-1",
+    configuration_id: "config-1",
     status: "active" as FileListing["status"],
     capabilities: { editable: true, can_create: true, can_delete: true, can_rename: true },
     root: "ade_config",

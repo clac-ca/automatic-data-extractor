@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Tuple
+from typing import Any
 
 from httpx import AsyncClient
 
@@ -16,7 +16,7 @@ async def login(
     *,
     email: str,
     password: str,
-) -> Tuple[str, dict[str, Any]]:
+) -> tuple[str, dict[str, Any]]:
     """Authenticate ``email``/``password`` returning (session_cookie, payload)."""
 
     response = await client.post(

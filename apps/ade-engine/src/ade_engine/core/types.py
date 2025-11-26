@@ -77,8 +77,6 @@ class RunPaths:
     input_dir: Path
     output_dir: Path
     logs_dir: Path
-    artifact_path: Path
-    events_path: Path
 
 
 @dataclass
@@ -111,8 +109,7 @@ class RunResult:
     error: RunError | None
     run_id: str
     output_paths: tuple[Path, ...]
-    artifact_path: Path
-    events_path: Path
+    logs_dir: Path
     processed_files: tuple[str, ...]
 
 

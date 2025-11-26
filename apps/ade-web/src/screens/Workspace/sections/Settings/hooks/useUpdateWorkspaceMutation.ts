@@ -7,7 +7,7 @@ import {
   type WorkspaceProfile,
   type WorkspaceUpdatePayload,
   WORKSPACE_LIST_DEFAULT_PARAMS,
-} from "@screens/Workspace/api/workspaces-api";
+} from "@features/Workspace/api/workspaces-api";
 
 export function useUpdateWorkspaceMutation(workspaceId: string) {
   const queryClient = useQueryClient();

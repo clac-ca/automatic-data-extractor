@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
+import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
 import { useUpdateWorkspaceMutation } from "./hooks/useUpdateWorkspaceMutation";
 import { Alert } from "@ui/Alert";
 import { Button } from "@ui/Button";

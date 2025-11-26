@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from ade_engine.schemas import TelemetryEnvelope
+from ade_engine.schemas import AdeEvent
 from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class StdoutFrame:
     stream: Literal["stdout", "stderr"] = "stdout"
 
 
-RunnerFrame = StdoutFrame | TelemetryEnvelope
+RunnerFrame = StdoutFrame | AdeEvent
 
 
 class ADEProcessRunner:
@@ -46,7 +46,7 @@ class ADEProcessRunner:
         self.returncode: int | None = None
 
     async def stream(self) -> AsyncIterator[RunnerFrame]:
-        """Yield stdout lines and telemetry envelopes as they are produced."""
+        """Yield stdout lines and ADE events as they are produced."""
 
         process = await asyncio.create_subprocess_exec(
             *self._command,
@@ -102,7 +102,7 @@ class ADEProcessRunner:
                     if not line:
                         continue
                     try:
-                        envelope = TelemetryEnvelope.model_validate_json(line)
+                        envelope = AdeEvent.model_validate_json(line)
                     except ValidationError as exc:
                         logger.warning(
                             "Invalid telemetry payload",

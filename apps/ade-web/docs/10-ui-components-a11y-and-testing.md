@@ -83,6 +83,9 @@ All `src/ui` components follow a few design rules:
 * **Tailwind for styling**
   Styling is implemented with Tailwind classes. Shared class helpers are fine where they improve reuse.
 
+* **Theme‑agnostic**
+  Components derive colours from Tailwind theme tokens rather than hard‑coding values so a light/dark app‑wide theme remains possible without refactors.
+
 * **Predictable APIs**
 
   * Components are PascalCase (`Button`, `GlobalTopBar`).
@@ -126,10 +129,10 @@ Example:
 
 #### `SplitButton`
 
-Primary action plus a small dropdown of related actions. The canonical example is the Config Builder **Build environment** control.
+Primary action plus a small dropdown of related actions. The canonical example is the Configuration Builder **Test** control (primary “Test”, menu “Force build and test”).
 
-* Left segment: calls `onPrimaryClick` (e.g. “Build / reuse environment”).
-* Right segment: opens a dropdown (often backed by `ContextMenu`) with secondary options (e.g. “Force rebuild now”).
+* Left segment: calls `onPrimaryClick` (e.g. “Test” with environment reuse).
+* Right segment: opens a dropdown (often backed by `ContextMenu`) with secondary options (e.g. “Force build and test”).
 
 Guidelines:
 
@@ -354,7 +357,7 @@ The field itself remains generic; feature code decides:
 
 #### `CodeEditor`
 
-A thin wrapper for Monaco, used by the Config Builder workbench.
+A thin wrapper for Monaco, used by the Configuration Builder workbench.
 
 Responsibilities:
 
@@ -438,6 +441,10 @@ For each widget:
   * Enter/Space selects.
   * Esc cancels.
 
+### 4.4 Automated a11y checks
+
+We treat automated accessibility tooling (e.g. axe) as a source of truth where practical. Violations reported in tests are expected to fail the suite until resolved or explicitly justified.
+
 Shortcuts (below) build on top of these primitives.
 
 ---
@@ -462,15 +469,13 @@ Rules:
   * Textareas.
   * Content‑editable regions.
 
-* If a screen does not support a shortcut (e.g. `⌘U` on the Config Builder), the handler must no‑op.
+* If a screen does not support a shortcut (e.g. `⌘U` on the Configuration Builder), the handler must no‑op.
 
 ### 5.2 Workbench shortcuts
 
-Scoped to the Config Builder workbench:
+Scoped to the Configuration Builder workbench:
 
 * `⌘S` / `Ctrl+S` – Save active file in `CodeEditor`.
-* `⌘B` / `Ctrl+B` – Build / reuse environment.
-* `⇧⌘B` / `Ctrl+Shift+B` – Force rebuild.
 * `⌘W` / `Ctrl+W` – Close active editor tab.
 * `⌘Tab` / `Ctrl+Tab` – Switch to most recently used tab (forward).
 * `⇧⌘Tab` / `Shift+Ctrl+Tab` – Switch MRU backward.
@@ -481,6 +486,8 @@ Guidelines:
 * Implemented in the workbench container, not in `CodeEditor` or tab components directly.
 * Use `preventDefault()` only when a shortcut is actually handled.
 * Shortcuts should be disabled while modal dialogs in the workbench are open, unless they are explicitly designed to work there.
+
+There is intentionally **no** dedicated “build environment” shortcut; environment rebuild happens when runs start (and can be forced via the workbench Test split button).
 
 ---
 
@@ -548,14 +555,14 @@ Examples:
 
 * `ade.ui.workspace.<workspaceId>.nav.collapsed`
 * `ade.ui.workspace.<workspaceId>.workbench.returnPath`
-* `ade.ui.workspace.<workspaceId>.config.<configId>.tabs`
-* `ade.ui.workspace.<workspaceId>.config.<configId>.console`
-* `ade.ui.workspace.<workspaceId>.config.<configId>.editor-theme`
+* `ade.ui.workspace.<workspaceId>.configuration.<configurationId>.tabs`
+* `ade.ui.workspace.<workspaceId>.configuration.<configurationId>.console`
+* `ade.ui.workspace.<workspaceId>.configuration.<configurationId>.editor-theme`
 * `ade.ui.workspace.<workspaceId>.document.<documentId>.run-preferences`
 
 Rules:
 
-* Keys are **per user**, **per workspace**, and optionally **per config** or **per document**.
+* Keys are **per user**, **per workspace**, and optionally **per configuration** or **per document**.
 * Only non‑sensitive data is stored; clearing storage should never break server state.
 * No tokens, secrets, or PII beyond IDs that are already visible in the UI.
 
@@ -574,23 +581,23 @@ Current preferences include:
 
 * **Workbench open tabs**
 
-  * Suffix: `config.<configId>.tabs`.
+  * Suffix: `configuration.<configurationId>.tabs`.
   * Value: `PersistedWorkbenchTabs` (open tab IDs, active ID, MRU list).
 
 * **Workbench console state**
 
-  * Suffix: `config.<configId>.console`.
+  * Suffix: `configuration.<configurationId>.console`.
   * Value: `ConsolePanelPreferences` (open/closed + height fraction).
 
 * **Editor theme preference**
 
-  * Suffix: `config.<configId>.editor-theme`.
+  * Suffix: `configuration.<configurationId>.editor-theme`.
   * Value: `"system" | "light" | "dark"`.
 
 * **Per‑document run preferences**
 
   * Suffix: `document.<documentId>.run-preferences`.
-  * Value: last used config, config version, sheet selections, optional run flags.
+  * Value: last used configuration, configuration version, sheet selections, optional run flags.
 
 ### 7.3 Access patterns
 
@@ -686,7 +693,7 @@ Test the storage helpers and features that rely on them:
 
 * Storage helpers:
 
-  * Correct key computation given workspace/config/document IDs.
+  * Correct key computation given workspace/configuration/document IDs.
   * Graceful handling of missing/malformed data.
 
 * Workbench:
@@ -719,5 +726,9 @@ To keep the UI layer maintainable:
 
     * Update this document.
     * If behaviour affects workbench or layout, update the relevant docs (`06`, `09`).
+
+### 8.6 Selecting elements in tests
+
+Prefer semantic queries in React Testing Library (`getByRole`, `getByLabelText`, visible text) so tests match user behaviour. Use `data-testid` only when no suitable semantic selector exists, and declare them in `src/ui` components to keep selectors stable for feature tests.
 
 This keeps the UI layer small, predictable, and easy for both humans and AI agents to understand and extend.

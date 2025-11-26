@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ade_engine.config.manifest_context import ManifestContext
@@ -13,12 +13,11 @@ from ade_engine.core.types import (
     RawTable,
     RunContext,
     RunPaths,
-    RunStatus,
     UnmappedColumn,
 )
-from ade_engine.infra.artifact import FileArtifactSink
 from ade_engine.infra.telemetry import FileEventSink, PipelineLogger
 from ade_engine.schemas.manifest import ColumnsConfig, FieldConfig, HookCollection, ManifestV1, WriterConfig
+from ade_engine.schemas.telemetry import AdeEvent
 
 
 def build_run_context(tmp_path: Path) -> RunContext:
@@ -26,15 +25,14 @@ def build_run_context(tmp_path: Path) -> RunContext:
         input_dir=tmp_path / "input",
         output_dir=tmp_path / "output",
         logs_dir=tmp_path / "logs",
-        artifact_path=tmp_path / "logs" / "artifact.json",
-        events_path=tmp_path / "logs" / "events.ndjson",
     )
+    paths.logs_dir.mkdir(parents=True, exist_ok=True)
     return RunContext(
         run_id="run-456",
         metadata={"run_id": "run-1", "config_id": "cfg-1"},
         manifest=None,
         paths=paths,
-        started_at=datetime(2024, 1, 1, 12, 0, 0),
+        started_at=datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
     )
 
 
@@ -95,20 +93,36 @@ def build_table(tmp_path: Path) -> NormalizedTable:
 
 def test_file_event_sink_writes_ndjson(tmp_path: Path) -> None:
     run = build_run_context(tmp_path)
-    sink = FileEventSink(path=run.paths.events_path, min_level="info")
+    path = run.paths.logs_dir / "events.ndjson"
+    sink = FileEventSink(path=path, min_level="info")
 
-    sink.log("run_started", run=run, level="info", phase="initialization")
-    sink.log("debug_event", run=run, level="debug", detail=True)
-    sink.log("pipeline_transition", run=run, level="warning", phase="mapping")
+    info_event = AdeEvent(
+        type="run.console",
+        created_at=datetime.now(timezone.utc),
+        run_id=run.run_id,
+        stream="stdout",
+        level="info",
+        message="started",
+    )
+    debug_event = AdeEvent(
+        type="run.console",
+        created_at=datetime.now(timezone.utc),
+        run_id=run.run_id,
+        stream="stdout",
+        level="debug",
+        message="verbose",
+    )
 
-    lines = run.paths.events_path.read_text().strip().split("\n")
-    assert len(lines) == 2
+    sink.emit(info_event)
+    sink.emit(debug_event)
+
+    lines = path.read_text().strip().split("\n")
+    assert len(lines) == 1
 
     first = json.loads(lines[0])
-    assert first["schema"] == "ade.telemetry/run-event.v1"
-    assert first["run_id"] == "run-456"
-    assert first["event"]["event"] == "run_started"
-    assert first["metadata"] == run.metadata
+    assert first["schema"] == "ade.event/v1"
+    assert first["run_id"] == run.run_id
+    assert first["message"] == "started"
 
 
 def test_pipeline_logger_records_notes_and_tables(tmp_path: Path) -> None:
@@ -116,22 +130,22 @@ def test_pipeline_logger_records_notes_and_tables(tmp_path: Path) -> None:
     manifest = build_manifest()
     table = build_table(tmp_path)
 
-    artifact_sink = FileArtifactSink(artifact_path=run.paths.artifact_path)
-    artifact_sink.start(run, manifest)
-    event_sink = FileEventSink(path=run.paths.events_path)
+    event_sink = FileEventSink(path=run.paths.logs_dir / "events.ndjson")
+    logger = PipelineLogger(run=run, event_sink=event_sink)
 
-    logger = PipelineLogger(run=run, artifact_sink=artifact_sink, event_sink=event_sink)
     logger.note("Started run", level="info")
-    logger.transition("mapping", file_count=1)
+    logger.pipeline_phase("mapping", file_count=1)
     logger.record_table(table)
-    artifact_sink.mark_success([run.paths.output_dir / "normalized.xlsx"])
-    artifact_sink.flush()
 
-    artifact = json.loads(run.paths.artifact_path.read_text())
-    events = run.paths.events_path.read_text().strip().split("\n")
+    events = [json.loads(line) for line in (run.paths.logs_dir / "events.ndjson").read_text().strip().split("\n")]
 
-    assert artifact["notes"][0]["message"] == "Started run"
-    assert artifact["tables"][0]["source_file"].endswith("data.xlsx")
-    assert len(events) == 3
-    assert json.loads(events[1])["event"]["event"] == "pipeline_transition"
-    assert json.loads(events[2])["event"]["event"] == "table_completed"
+    assert events[0]["type"] == "run.console"
+    assert events[0]["message"] == "Started run"
+    assert events[1]["type"] == "run.phase.started"
+    assert events[1]["phase"] == "mapping"
+
+    table_event = events[2]
+    assert table_event["type"] == "run.table.summary"
+    assert table_event["row_count"] == 2
+    assert table_event["validation"]["total"] == 0
+    assert table_event["mapped_fields"][0]["field"] == "id"

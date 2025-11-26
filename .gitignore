@@ -37,6 +37,8 @@ apps/web/dist/
 apps/web/build/
 apps/web/coverage/
 apps/web/.eslintcache
+apps/ade-web/.generated/
+apps/ade-engine/.generated/
 
 # --- ADE runtime data (by default under ./data) ---
 # Persisted workspaces, jobs, logs, caches, etc. DO NOT COMMIT.

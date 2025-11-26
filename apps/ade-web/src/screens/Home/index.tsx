@@ -2,9 +2,9 @@ import { useEffect } from "react";
 
 import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
-import { useWorkspacesQuery, type WorkspaceProfile } from "@screens/Workspace/api/workspaces-api";
-import { readPreferredWorkspaceId } from "@screens/Workspace/state/workspace-preferences";
-import { getDefaultWorkspacePath } from "@screens/Workspace";
+import { useWorkspacesQuery, type WorkspaceProfile } from "@features/Workspace/api/workspaces-api";
+import { readPreferredWorkspaceId } from "@features/Workspace/state/workspace-preferences";
+import { getDefaultWorkspacePath } from "@features/Workspace";
 import { Button } from "@ui/Button";
 import { PageState } from "@ui/PageState";
 import { useLocation, useNavigate } from "@app/nav/history";

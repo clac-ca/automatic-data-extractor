@@ -4,21 +4,22 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
 
+from ade_api.features.builds import service as builds_service_module
 from ade_api.features.builds.builder import (
     BuildArtifacts,
-    BuildStep,
     BuilderArtifactsEvent,
     BuilderEvent,
     BuilderLogEvent,
     BuilderStepEvent,
+    BuildStep,
 )
-from ade_api.features.builds import service as builds_service_module
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.settings import Settings
 from ade_api.shared.db.mixins import generate_ulid
@@ -41,7 +42,7 @@ class StubBuilder:
         *,
         build_id: str,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
         target_path: Path,
         config_path: Path,
         engine_spec: str,
@@ -67,19 +68,19 @@ async def _seed_configuration(*, settings: Settings, workspace_id: str) -> str:
 
     session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:
+        configuration_id = generate_ulid()
         configuration = Configuration(
+            id=configuration_id,
             workspace_id=workspace_id,
-            config_id=generate_ulid(),
             display_name="Test Configuration",
             status=ConfigurationStatus.ACTIVE,
-            config_version=1,
+            configuration_version=1,
             content_digest="test-digest",
         )
         session.add(configuration)
         await session.commit()
-        config_id = configuration.config_id
 
-    config_root = settings.configs_dir / workspace_id / "config_packages" / config_id
+    config_root = settings.configs_dir / workspace_id / "config_packages" / configuration_id
     (config_root / "src" / "ade_config").mkdir(parents=True, exist_ok=True)
     (config_root / "pyproject.toml").write_text(
         """
@@ -90,7 +91,7 @@ version = "0.2.0"
         encoding="utf-8",
     )
     (config_root / "src" / "ade_config" / "manifest.json").write_text("{}", encoding="utf-8")
-    return config_id
+    return configuration_id
 
 
 async def _auth_headers(
@@ -114,7 +115,7 @@ async def test_stream_build_emits_events_and_logs(
     """Streaming build requests should emit NDJSON events and persist build state."""
 
     settings = override_app_settings()
-    config_id = await _seed_configuration(
+    configuration_id = await _seed_configuration(
         settings=settings,
         workspace_id=seed_identity["workspace_id"],
     )
@@ -140,7 +141,7 @@ async def test_stream_build_emits_events_and_logs(
     events: list[dict[str, Any]] = []
     async with async_client.stream(
         "POST",
-        f"/api/v1/workspaces/{workspace_id}/configs/{config_id}/builds",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
         headers=headers,
         json={"stream": True},
     ) as response:
@@ -197,7 +198,7 @@ async def test_background_build_executes_to_completion(
     """Non-streaming build requests should run in a background task and finish."""
 
     settings = override_app_settings()
-    config_id = await _seed_configuration(
+    configuration_id = await _seed_configuration(
         settings=settings,
         workspace_id=seed_identity["workspace_id"],
     )
@@ -220,7 +221,7 @@ async def test_background_build_executes_to_completion(
 
     workspace_id = seed_identity["workspace_id"]
     response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configs/{config_id}/builds",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
         headers=headers,
         json={"stream": False},
     )

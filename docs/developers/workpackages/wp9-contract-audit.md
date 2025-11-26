@@ -110,7 +110,7 @@ Single `RunPlaceholder(BaseModel)` with `id: str`. Needs real DTO or removal.
 | `Document.source` | Same as above with `DocumentSource`. | Single value `manual_upload`. | Same as above; future expansion easier. |
 | `RBAC scope_type` | SQLAlchemy `Enum` objects (`ScopeTypeEnum`, `PrincipalTypeEnum`) without Python Enum types surfaced at schema layer. | `global`, `workspace` for scope; `user` for principal. | Introduce `ScopeType(str, Enum)` / `PrincipalType(str, Enum)` used across ORM + schemas. | Align `PermissionRead`, `Role*`, `RoleAssignment*`. |
 | `Document/File depth` | `Literal["0","1","infinity"]` in `FileListing.depth`. | Hardcoded union. | Keep as `Literal` or convert to Enum if we need `Depth`. Must align request + response. |
-| `ProblemDetail.code` | In configs router only; string codes like `config_not_found`. | `_problem` helper. | Normalize via shared `ProblemCode` enum or curated registry referenced by `ProblemDetail`. | Need table of codes. |
+| `ProblemDetail.code` | In configs router only; string codes like `configuration_not_found`. | `_problem` helper. | Normalize via shared `ProblemCode` enum or curated registry referenced by `ProblemDetail`. | Need table of codes. |
 
 ---
 

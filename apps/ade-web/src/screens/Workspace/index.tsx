@@ -7,15 +7,15 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
-import { useWorkspacesQuery, workspacesKeys, WORKSPACE_LIST_DEFAULT_PARAMS, type WorkspaceProfile } from "@screens/Workspace/api/workspaces-api";
-import { WorkspaceProvider } from "@screens/Workspace/context/WorkspaceContext";
-import { WorkbenchWindowProvider, useWorkbenchWindow } from "@screens/Workspace/context/WorkbenchWindowContext";
+import { useWorkspacesQuery, workspacesKeys, WORKSPACE_LIST_DEFAULT_PARAMS, type WorkspaceProfile } from "@features/Workspace/api/workspaces-api";
+import { WorkspaceProvider } from "@features/Workspace/context/WorkspaceContext";
+import { WorkbenchWindowProvider, useWorkbenchWindow } from "@features/Workspace/context/WorkbenchWindowContext";
 import { createScopedStorage } from "@shared/storage";
-import { writePreferredWorkspace } from "@screens/Workspace/state/workspace-preferences";
+import { writePreferredWorkspace } from "@features/Workspace/state/workspace-preferences";
 import { GlobalTopBar } from "@app/shell/GlobalTopBar";
 import { ProfileDropdown } from "@app/shell/ProfileDropdown";
-import { WorkspaceNav, WorkspaceNavList } from "@screens/Workspace/components/WorkspaceNav";
-import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@screens/Workspace/components/workspace-navigation";
+import { WorkspaceNav, WorkspaceNavList } from "@features/Workspace/components/WorkspaceNav";
+import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@features/Workspace/components/workspace-navigation";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import { Alert } from "@ui/Alert";
 import { PageState } from "@ui/PageState";
@@ -23,14 +23,14 @@ import { useShortcutHint } from "@shared/hooks/useShortcutHint";
 import type { GlobalSearchSuggestion } from "@app/shell/GlobalTopBar";
 import { NotificationsProvider } from "@shared/notifications";
 
-import WorkspaceOverviewRoute from "@screens/Workspace/sections/Overview";
-import WorkspaceDocumentsRoute from "@screens/Workspace/sections/Documents";
-import DocumentDetailRoute from "@screens/Workspace/sections/Documents/components/DocumentDetail";
-import WorkspaceRunsRoute from "@screens/Workspace/sections/Runs";
-import WorkspaceConfigsIndexRoute from "@screens/Workspace/sections/ConfigBuilder";
-import WorkspaceConfigRoute from "@screens/Workspace/sections/ConfigBuilder/detail";
-import ConfigEditorWorkbenchRoute from "@screens/Workspace/sections/ConfigBuilder/workbench";
-import WorkspaceSettingsRoute from "@screens/Workspace/sections/Settings";
+import WorkspaceOverviewRoute from "@features/Workspace/sections/Overview";
+import WorkspaceDocumentsRoute from "@features/Workspace/sections/Documents";
+import DocumentDetailRoute from "@features/Workspace/sections/Documents/components/DocumentDetail";
+import WorkspaceRunsRoute from "@features/Workspace/sections/Runs";
+import WorkspaceConfigsIndexRoute from "@features/Workspace/sections/ConfigBuilder";
+import WorkspaceConfigRoute from "@features/Workspace/sections/ConfigBuilder/detail";
+import ConfigEditorWorkbenchRoute from "@features/Workspace/sections/ConfigBuilder/workbench";
+import WorkspaceSettingsRoute from "@features/Workspace/sections/Settings";
 
 type WorkspaceSectionRender =
   | { readonly kind: "redirect"; readonly to: string }

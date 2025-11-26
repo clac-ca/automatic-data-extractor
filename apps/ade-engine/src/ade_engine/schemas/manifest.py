@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class FieldConfig(BaseModel):
@@ -52,7 +52,10 @@ class WriterConfig(BaseModel):
 class ManifestV1(BaseModel):
     """Top-level manifest model."""
 
-    schema: str
+    schema_id: str = Field(
+        alias="schema",
+        validation_alias=AliasChoices("schema", "schema_id"),
+    )
     version: str
     name: str | None = None
     description: str | None = None
@@ -62,4 +65,4 @@ class ManifestV1(BaseModel):
     writer: WriterConfig
     extra: dict[str, Any] | None = Field(default=None, description="Reserved for future extensions")
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)

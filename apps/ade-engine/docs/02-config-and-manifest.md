@@ -416,7 +416,7 @@ From this point on, **all config behavior** is driven by:
 
 ## 8. Versioning
 
-Two fields in the manifest control how configs evolve over time:
+Two fields in the manifest control how configurations evolve over time:
 
 * `schema` (e.g. `"ade.manifest/v1"`):
 
@@ -433,7 +433,7 @@ Guidelines:
 * Changing or removing manifest fields, or changing script signatures, should:
 
   * bump either `schema` or `script_api_version`, and
-  * be treated as a breaking change for existing configs.
+  * be treated as a breaking change for existing configurations.
 
 The ADE backend is responsible for:
 

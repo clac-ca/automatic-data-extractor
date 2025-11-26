@@ -16,25 +16,25 @@ import clsx from "clsx";
 import { useSearchParams } from "@app/nav/urlState";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
+import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
 import { useSession } from "@shared/auth/context/SessionContext";
 import {
   findActiveVersion,
   findLatestInactiveVersion,
-  useConfigVersionsQuery,
-  useConfigsQuery,
-} from "@shared/configs";
+  useConfigurationVersionsQuery,
+  useConfigurationsQuery,
+} from "@shared/configurations";
 import { client } from "@shared/api/client";
 import { useFlattenedPages } from "@shared/api/pagination";
 import { createScopedStorage } from "@shared/storage";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
-import { ArtifactSummary, TelemetrySummary } from "@shared/runs/RunInsights";
+import { RunSummaryView, TelemetrySummary } from "@shared/runs/RunInsights";
 import {
   fetchRun,
   fetchRunOutputs,
-  fetchRunArtifact,
+  fetchRunSummary,
   fetchRunTelemetry,
   runQueryKeys,
   type RunOutputListing,
@@ -673,8 +673,8 @@ function useSubmitRun(workspaceId: string) {
 
   return useMutation<RunResource, Error, RunSubmissionPayload>({
     mutationFn: async ({ configId, options }) => {
-      const { data } = await client.POST("/api/v1/configs/{config_id}/runs", {
-        params: { path: { config_id: configId } },
+      const { data } = await client.POST("/api/v1/configurations/{configuration_id}/runs", {
+        params: { path: { configuration_id: configId } },
         body: { stream: false, options },
       });
       if (!data) throw new Error("Expected run payload.");
@@ -1445,7 +1445,7 @@ function RunExtractionDrawerContent({
   const dialogRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
-  const configsQuery = useConfigsQuery({ workspaceId });
+  const configurationsQuery = useConfigurationsQuery({ workspaceId });
   const [selectedConfigId, setSelectedConfigId] = useState<string>("");
   const [selectedVersionId, setSelectedVersionId] = useState<string>("");
   const submitRun = useSubmitRun(workspaceId);
@@ -1461,7 +1461,7 @@ function RunExtractionDrawerContent({
     setActiveRunId(documentRecord.last_run?.run_id ?? null);
   }, [documentRecord.id, documentRecord.last_run?.run_id]);
 
-  const allConfigs = useMemo(() => configsQuery.data?.items ?? [], [configsQuery.data]);
+  const allConfigs = useMemo(() => configurationsQuery.data?.items ?? [], [configurationsQuery.data]);
   const selectableConfigs = useMemo(
     () =>
       allConfigs.filter(
@@ -1472,19 +1472,19 @@ function RunExtractionDrawerContent({
 
   const preferredConfigId = useMemo(() => {
     if (preferences.configId) {
-      const match = selectableConfigs.find((config) => config.config_id === preferences.configId);
+      const match = selectableConfigs.find((config) => config.id === preferences.configId);
       if (match) {
-        return match.config_id;
+        return match.id;
       }
     }
-    return selectableConfigs[0]?.config_id ?? "";
+    return selectableConfigs[0]?.id ?? "";
   }, [preferences.configId, selectableConfigs]);
 
   useEffect(() => {
     setSelectedConfigId(preferredConfigId);
   }, [preferredConfigId]);
 
-  const versionsQuery = useConfigVersionsQuery({
+  const versionsQuery = useConfigurationVersionsQuery({
     workspaceId,
     configId: selectedConfigId,
     enabled: Boolean(selectedConfigId),
@@ -1494,11 +1494,11 @@ function RunExtractionDrawerContent({
     [versionsQuery.data],
   );
   const selectedConfig = useMemo(
-    () => selectableConfigs.find((config) => config.config_id === selectedConfigId) ?? null,
+    () => selectableConfigs.find((config) => config.id === selectedConfigId) ?? null,
     [selectableConfigs, selectedConfigId],
   );
   const selectedVersion = useMemo(
-    () => versionOptions.find((version) => version.config_version_id === selectedVersionId) ?? null,
+    () => versionOptions.find((version) => version.configuration_version_id === selectedVersionId) ?? null,
     [versionOptions, selectedVersionId],
   );
   const activeVersion = useMemo(() => findActiveVersion(versionOptions), [versionOptions]);
@@ -1510,15 +1510,15 @@ function RunExtractionDrawerContent({
     if (!selectedConfigId) return "";
     if (preferences.configId === selectedConfigId && preferences.configVersionId) {
       const preferred = versionOptions.find(
-        (version) => version.config_version_id === preferences.configVersionId,
+        (version) => version.configuration_version_id === preferences.configVersionId,
       );
       if (preferred) {
-        return preferred.config_version_id;
+        return preferred.configuration_version_id;
       }
     }
-    if (activeVersion) return activeVersion.config_version_id;
-    if (latestDraftVersion) return latestDraftVersion.config_version_id;
-    return versionOptions[0]?.config_version_id ?? "";
+    if (activeVersion) return activeVersion.configuration_version_id;
+    if (latestDraftVersion) return latestDraftVersion.configuration_version_id;
+    return versionOptions[0]?.configuration_version_id ?? "";
   }, [
     activeVersion,
     latestDraftVersion,
@@ -1577,12 +1577,10 @@ function RunExtractionDrawerContent({
     staleTime: 5_000,
   });
 
-  const artifactQuery = useQuery({
-    queryKey: activeRunId ? runQueryKeys.artifact(activeRunId) : ["run-artifact", "none"],
+  const summaryQuery = useQuery({
+    queryKey: activeRunId ? runQueryKeys.summary(activeRunId) : ["run-summary", "none"],
     queryFn: ({ signal }) =>
-      activeRunId
-        ? fetchRunArtifact(activeRunId, signal)
-        : Promise.reject(new Error("No run selected")),
+      activeRunId ? fetchRunSummary(activeRunId, signal) : Promise.reject(new Error("No run selected")),
     enabled:
       Boolean(activeRunId) &&
       (runQuery.data?.status === "succeeded" || runQuery.data?.status === "failed"),
@@ -1637,7 +1635,7 @@ function RunExtractionDrawerContent({
       return;
     }
     setPreferences({
-      configId: selectedConfig.config_id,
+      configId: selectedConfig.id,
       configVersionId: selectedVersionId,
       sheetNames: normalizedSheetSelection.length ? normalizedSheetSelection : null,
     });
@@ -1656,7 +1654,7 @@ function RunExtractionDrawerContent({
     ? `/api/v1/runs/${encodeURIComponent(activeRunId)}`
     : null;
   const outputFiles: RunOutputListing["files"] = outputsQuery.data?.files ?? [];
-  const artifact = artifactQuery.data ?? null;
+  const summary = summaryQuery.data ?? null;
   const telemetryEvents = telemetryQuery.data ?? [];
 
   useEffect(() => {
@@ -1732,13 +1730,13 @@ function RunExtractionDrawerContent({
         : { dry_run: false, validate_only: false };
     submitRun.mutate(
       {
-        configId: selectedConfig.config_id,
+        configId: selectedConfig.id,
         options: { ...runOptions, input_document_id: documentRecord.id },
       },
       {
         onSuccess: (run) => {
           setPreferences({
-            configId: selectedConfig.config_id,
+            configId: selectedConfig.id,
             configVersionId: selectedVersionId,
             sheetNames: sheetList.length ? sheetList : null,
           });
@@ -1798,14 +1796,14 @@ function RunExtractionDrawerContent({
 
           <section className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Configuration</p>
-            {configsQuery.isLoading ? (
+            {configurationsQuery.isLoading ? (
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
                 Loading configurations…
               </div>
-            ) : configsQuery.isError ? (
+            ) : configurationsQuery.isError ? (
               <Alert tone="danger">
                 Unable to load configurations.{" "}
-                {configsQuery.error instanceof Error ? configsQuery.error.message : "Try again later."}
+                {configurationsQuery.error instanceof Error ? configurationsQuery.error.message : "Try again later."}
               </Alert>
             ) : hasConfigurations ? (
               <div className="space-y-2">
@@ -1820,7 +1818,7 @@ function RunExtractionDrawerContent({
                 >
                   <option value="">Select configuration</option>
                   {selectableConfigs.map((config) => (
-                    <option key={config.config_id} value={config.config_id}>
+                    <option key={config.id} value={config.id}>
                       {formatConfigLabel(config)}
                     </option>
                   ))}
@@ -1844,7 +1842,7 @@ function RunExtractionDrawerContent({
                     >
                       <option value="">Select version</option>
                       {versionOptions.map((version) => (
-                        <option key={version.config_version_id} value={version.config_version_id}>
+                        <option key={version.configuration_version_id} value={version.configuration_version_id}>
                           {formatVersionLabel(version)}
                         </option>
                       ))}
@@ -1961,18 +1959,6 @@ function RunExtractionDrawerContent({
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   <a
-                    href={downloadBase ? `${downloadBase}/artifact` : undefined}
-                    className={clsx(
-                      "inline-flex items-center rounded border px-3 py-1 text-xs font-semibold transition",
-                      downloadBase && !runRunning
-                        ? "border-slate-300 text-slate-700 hover:bg-slate-100"
-                        : "cursor-not-allowed border-slate-200 text-slate-400",
-                    )}
-                    aria-disabled={runRunning || !downloadBase}
-                  >
-                    Download artifact
-                  </a>
-                  <a
                     href={downloadBase ? `${downloadBase}/logs` : undefined}
                     className={clsx(
                       "inline-flex items-center rounded border px-3 py-1 text-xs font-semibold transition",
@@ -1990,33 +1976,47 @@ function RunExtractionDrawerContent({
                     <p className="text-xs text-slate-500">Loading outputs…</p>
                   ) : outputFiles.length > 0 ? (
                     <ul className="mt-1 space-y-1 text-xs text-slate-700">
-                      {outputFiles.map((file) => (
-                        <li key={file.path} className="flex items-center justify-between gap-2 break-all rounded border border-slate-100 px-2 py-1">
-                          <a
-                            href={downloadBase ? `${downloadBase}/outputs/${file.path.split("/").map(encodeURIComponent).join("/")}` : undefined}
-                            className="text-emerald-700 hover:underline"
-                            aria-disabled={!downloadBase}
+                      {outputFiles.map((file) => {
+                        const path = (file as { path?: string }).path ?? file.name;
+                        const size = typeof file.byte_size === "number" ? file.byte_size : 0;
+                        const href =
+                          file.download_url ??
+                          (downloadBase
+                            ? `${downloadBase}/outputs/${path.split("/").map(encodeURIComponent).join("/")}`
+                            : undefined);
+                        return (
+                          <li
+                            key={path}
+                            className="flex items-center justify-between gap-2 break-all rounded border border-slate-100 px-2 py-1"
                           >
-                            {file.path}
-                          </a>
-                          <span className="text-[11px] text-slate-500">{file.byte_size.toLocaleString()} bytes</span>
-                        </li>
-                      ))}
+                            <a
+                              href={href}
+                              className="text-emerald-700 hover:underline"
+                              aria-disabled={!href}
+                            >
+                              {file.name}
+                            </a>
+                            <span className="text-[11px] text-slate-500">
+                              {size.toLocaleString()} bytes
+                            </span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   ) : (
                     <p className="text-xs text-slate-500">Outputs will appear here after the run completes.</p>
                   )}
                 </div>
                 <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
-                  <p className="text-xs font-semibold text-slate-700">Artifact summary</p>
-                  {artifactQuery.isLoading ? (
-                    <p className="text-xs text-slate-500">Loading artifact…</p>
-                  ) : artifactQuery.isError ? (
-                    <p className="text-xs text-rose-600">Unable to load artifact.</p>
-                  ) : artifact ? (
-                    <ArtifactSummary artifact={artifact} />
+                  <p className="text-xs font-semibold text-slate-700">Run summary</p>
+                  {summaryQuery.isLoading ? (
+                    <p className="text-xs text-slate-500">Loading summary…</p>
+                  ) : summaryQuery.isError ? (
+                    <p className="text-xs text-rose-600">Unable to load run summary.</p>
+                  ) : summary ? (
+                    <RunSummaryView summary={summary} />
                   ) : (
-                    <p className="text-xs text-slate-500">Artifact not available.</p>
+                    <p className="text-xs text-slate-500">Summary not available.</p>
                   )}
                 </div>
                 <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">

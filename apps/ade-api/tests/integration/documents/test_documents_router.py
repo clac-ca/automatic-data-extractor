@@ -2,22 +2,21 @@
 
 from __future__ import annotations
 
-import json
-
 import io
+import json
 
 import pytest
 from fastapi import UploadFile
 from httpx import AsyncClient
 
-from ade_api.settings import get_settings
-from ade_api.shared.db.session import get_sessionmaker
+from ade_api.features.documents.exceptions import DocumentFileMissingError
 from ade_api.features.documents.models import Document
 from ade_api.features.documents.service import DocumentsService
-from ade_api.features.documents.exceptions import DocumentFileMissingError
 from ade_api.features.users.models import User
+from ade_api.settings import get_settings
+from ade_api.shared.db.session import get_sessionmaker
+from ade_api.storage_layout import workspace_documents_root
 from tests.utils import login
-
 
 pytestmark = pytest.mark.asyncio
 
@@ -166,7 +165,7 @@ async def test_delete_document_marks_deleted(
         stored_uri = row.stored_uri
 
     settings = get_settings()
-    stored_path = settings.documents_dir / stored_uri
+    stored_path = workspace_documents_root(settings, seed_identity["workspace_id"]) / stored_uri
     assert not stored_path.exists()
 
 
@@ -198,7 +197,7 @@ async def test_download_missing_file_returns_404(
         stored_uri = row.stored_uri
 
     settings = get_settings()
-    stored_path = settings.documents_dir / stored_uri
+    stored_path = workspace_documents_root(settings, seed_identity["workspace_id"]) / stored_uri
     assert stored_path.exists()
     stored_path.unlink()
 
@@ -333,7 +332,7 @@ async def test_stream_document_handles_missing_file_mid_stream(
 
         stored_row = await session.get(Document, record.id)
         assert stored_row is not None
-        stored_path = settings.documents_dir / stored_row.stored_uri
+        stored_path = workspace_documents_root(settings, workspace_id) / stored_row.stored_uri
         stored_path.unlink()
 
         with pytest.raises(DocumentFileMissingError):

@@ -673,7 +673,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -681,7 +681,7 @@ export type paths = {
             cookie?: never;
         };
         /** Retrieve configuration metadata */
-        get: operations["read_configuration_api_v1_workspaces__workspace_id__configurations__config_id__get"];
+        get: operations["read_configuration_api_v1_workspaces__workspace_id__configurations__configuration_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -690,7 +690,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/versions": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions": {
         parameters: {
             query?: never;
             header?: never;
@@ -698,7 +698,7 @@ export type paths = {
             cookie?: never;
         };
         /** List configuration versions (drafts and published) */
-        get: operations["list_config_versions_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__versions_get"];
+        get: operations["list_configuration_versions_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__versions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -707,7 +707,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/files": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files": {
         parameters: {
             query?: never;
             header?: never;
@@ -715,7 +715,7 @@ export type paths = {
             cookie?: never;
         };
         /** List editable files and directories */
-        get: operations["list_config_files_api_v1_workspaces__workspace_id__configurations__config_id__files_get"];
+        get: operations["list_config_files_api_v1_workspaces__workspace_id__configurations__configuration_id__files_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -724,7 +724,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/validate": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/validate": {
         parameters: {
             query?: never;
             header?: never;
@@ -734,14 +734,14 @@ export type paths = {
         get?: never;
         put?: never;
         /** Validate the configuration on disk */
-        post: operations["validate_configuration_api_v1_workspaces__workspace_id__configurations__config_id__validate_post"];
+        post: operations["validate_configuration_api_v1_workspaces__workspace_id__configurations__configuration_id__validate_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/files/{file_path}": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}": {
         parameters: {
             query?: never;
             header?: never;
@@ -749,20 +749,20 @@ export type paths = {
             cookie?: never;
         };
         /** Read Config File */
-        get: operations["read_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__get"];
+        get: operations["read_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__get"];
         /** Upsert Config File */
-        put: operations["upsert_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__put"];
+        put: operations["upsert_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__put"];
         post?: never;
         /** Delete Config File */
-        delete: operations["delete_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__delete"];
+        delete: operations["delete_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__delete"];
         options?: never;
         /** Head Config File */
-        head: operations["head_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__head"];
+        head: operations["head_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__head"];
         /** Rename or move a file */
-        patch: operations["rename_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__patch"];
+        patch: operations["rename_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__patch"];
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/activate": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/activate": {
         parameters: {
             query?: never;
             header?: never;
@@ -772,14 +772,14 @@ export type paths = {
         get?: never;
         put?: never;
         /** Activate a configuration */
-        post: operations["activate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__activate_post"];
+        post: operations["activate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__activate_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/publish": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish": {
         parameters: {
             query?: never;
             header?: never;
@@ -789,14 +789,14 @@ export type paths = {
         get?: never;
         put?: never;
         /** Publish a configuration draft */
-        post: operations["publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__publish_post"];
+        post: operations["publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__publish_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/deactivate": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/deactivate": {
         parameters: {
             query?: never;
             header?: never;
@@ -806,14 +806,14 @@ export type paths = {
         get?: never;
         put?: never;
         /** Deactivate a configuration (was 'archive') */
-        post: operations["deactivate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__deactivate_post"];
+        post: operations["deactivate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__deactivate_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/export": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/export": {
         parameters: {
             query?: never;
             header?: never;
@@ -821,7 +821,7 @@ export type paths = {
             cookie?: never;
         };
         /** Export Config */
-        get: operations["export_config_api_v1_workspaces__workspace_id__configurations__config_id__export_get"];
+        get: operations["export_config_api_v1_workspaces__workspace_id__configurations__configuration_id__export_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -830,7 +830,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{config_id}/directories/{directory_path}": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}": {
         parameters: {
             query?: never;
             header?: never;
@@ -840,15 +840,15 @@ export type paths = {
         get?: never;
         put?: never;
         /** Create Config Directory */
-        post: operations["create_config_directory_api_v1_workspaces__workspace_id__configurations__config_id__directories__directory_path__post"];
+        post: operations["create_config_directory_api_v1_workspaces__workspace_id__configurations__configuration_id__directories__directory_path__post"];
         /** Delete Config Directory */
-        delete: operations["delete_config_directory_api_v1_workspaces__workspace_id__configurations__config_id__directories__directory_path__delete"];
+        delete: operations["delete_config_directory_api_v1_workspaces__workspace_id__configurations__configuration_id__directories__directory_path__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configs/{config_id}/builds": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds": {
         parameters: {
             query?: never;
             header?: never;
@@ -858,7 +858,7 @@ export type paths = {
         get?: never;
         put?: never;
         /** Create Build Endpoint */
-        post: operations["create_build_endpoint_api_v1_workspaces__workspace_id__configs__config_id__builds_post"];
+        post: operations["create_build_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__builds_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -899,7 +899,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/configs/{config_id}/runs": {
+    "/api/v1/configurations/{configuration_id}/runs": {
         parameters: {
             query?: never;
             header?: never;
@@ -910,9 +910,26 @@ export type paths = {
         put?: never;
         /**
          * Create Run Endpoint
-         * @description Create a run for ``config_id`` and optionally stream execution events.
+         * @description Create a run for ``configuration_id`` and optionally stream execution events.
          */
-        post: operations["create_run_endpoint_api_v1_configs__config_id__runs_post"];
+        post: operations["create_run_endpoint_api_v1_configurations__configuration_id__runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workspace Runs Endpoint */
+        get: operations["list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -936,6 +953,40 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Summary Endpoint */
+        get: operations["get_run_summary_endpoint_api_v1_runs__run_id__summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Events Endpoint */
+        get: operations["get_run_events_endpoint_api_v1_runs__run_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/logs": {
         parameters: {
             query?: never;
@@ -945,23 +996,6 @@ export type paths = {
         };
         /** Get Run Logs Endpoint */
         get: operations["get_run_logs_endpoint_api_v1_runs__run_id__logs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/runs/{run_id}/artifact": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Download Run Artifact Endpoint */
-        get: operations["download_run_artifact_endpoint_api_v1_runs__run_id__artifact_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -996,6 +1030,23 @@ export type paths = {
         };
         /** List Run Outputs Endpoint */
         get: operations["list_run_outputs_endpoint_api_v1_runs__run_id__outputs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Diagnostics Endpoint */
+        get: operations["get_run_diagnostics_endpoint_api_v1_runs__run_id__diagnostics_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1148,6 +1199,114 @@ export type components = {
             revoked_at?: string | null;
         };
         /**
+         * AdeEvent
+         * @description ADE event envelope used for engine telemetry, runs, and builds.
+         *
+         *     This schema intentionally mirrors the ``ade.event/v1`` envelope described in
+         *     the event model docs. Additional event-specific fields are allowed and kept
+         *     flat at the top level.
+         */
+        AdeEvent: {
+            /** Type */
+            type: string;
+            /**
+             * Object
+             * @default ade.event
+             * @constant
+             */
+            object: "ade.event";
+            /**
+             * Schema
+             * @default ade.event/v1
+             * @constant
+             */
+            schema: "ade.event/v1";
+            /**
+             * Version
+             * @default 1.0.0
+             */
+            version: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Sequence */
+            sequence?: number | null;
+            /** Workspace Id */
+            workspace_id?: string | null;
+            /** Configuration Id */
+            configuration_id?: string | null;
+            /** Job Id */
+            job_id?: string | null;
+            /** Run Id */
+            run_id?: string | null;
+            /** Build Id */
+            build_id?: string | null;
+            /** Source */
+            source?: string | null;
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            } | null;
+            /** Error */
+            error?: {
+                [key: string]: unknown;
+            } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ArtifactError
+         * @description Error details recorded when a run fails.
+         */
+        ArtifactError: {
+            /** Code */
+            code: components["schemas"]["RunErrorCode"] | string;
+            stage?: components["schemas"]["RunPhase"] | null;
+            /** Message */
+            message: string;
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ArtifactNote */
+        ArtifactNote: {
+            /** Timestamp */
+            timestamp: string;
+            /** Level */
+            level: string;
+            /** Message */
+            message: string;
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * ArtifactV1
+         * @description Top-level artifact schema (v1).
+         */
+        ArtifactV1: {
+            /**
+             * Schema
+             * @default ade.run_diagnostics/v1
+             */
+            schema: string;
+            /**
+             * Version
+             * @default 1.0.0
+             */
+            version: string;
+            run: components["schemas"]["RunArtifact"];
+            config: components["schemas"]["ConfigArtifact"];
+            /** Tables */
+            tables?: components["schemas"]["TableArtifact"][];
+            /** Notes */
+            notes?: components["schemas"]["ArtifactNote"][];
+        };
+        /**
          * AuthProvider
          * @description Representation of an interactive authentication provider.
          */
@@ -1250,17 +1409,8 @@ export type components = {
             object: "ade.build";
             /** Workspace Id */
             workspace_id: string;
-            /** Config Id */
-            config_id: string;
             /** Configuration Id */
             configuration_id: string;
-            /** Configuration Build Id */
-            configuration_build_id?: string | null;
-            /**
-             * Build Ref
-             * @description Underlying configuration_builds.build_id value when present
-             */
-            build_ref?: string | null;
             /**
              * Status
              * @enum {string}
@@ -1289,6 +1439,18 @@ export type components = {
             error_message?: string | null;
         };
         /**
+         * ConfigArtifact
+         * @description Config metadata captured in the artifact.
+         */
+        ConfigArtifact: {
+            /** Schema */
+            schema: string;
+            /** Version */
+            version: string;
+            /** Name */
+            name?: string | null;
+        };
+        /**
          * ConfigSourceClone
          * @description Reference to an existing workspace config.
          */
@@ -1299,10 +1461,10 @@ export type components = {
              */
             type: "clone";
             /**
-             * Config Id
+             * Configuration Id
              * @description ULID (26-character string).
              */
-            config_id: string;
+            configuration_id: string;
         };
         /**
          * ConfigSourceTemplate
@@ -1333,15 +1495,15 @@ export type components = {
          */
         ConfigVersionRecord: {
             /**
-             * Config Version Id
+             * Configuration Version Id
              * @description ULID (26-character string).
              */
-            config_version_id: string;
+            configuration_version_id: string;
             /**
-             * Config Id
+             * Configuration Id
              * @description ULID (26-character string).
              */
-            config_id: string;
+            configuration_id: string;
             /**
              * Workspace Id
              * @description ULID (26-character string).
@@ -1421,16 +1583,11 @@ export type components = {
              * @description ULID (26-character string).
              */
             workspace_id: string;
-            /**
-             * Config Id
-             * @description ULID (26-character string).
-             */
-            config_id: string;
             /** Display Name */
             display_name: string;
             status: components["schemas"]["ConfigurationStatus"];
-            /** Config Version */
-            config_version: number;
+            /** Configuration Version */
+            configuration_version: number;
             /** Content Digest */
             content_digest?: string | null;
             /**
@@ -1467,11 +1624,6 @@ export type components = {
              * @description ULID (26-character string).
              */
             workspace_id: string;
-            /**
-             * Config Id
-             * @description ULID (26-character string).
-             */
-            config_id: string;
             status: components["schemas"]["ConfigurationStatus"];
             /** Content Digest */
             content_digest?: string | null;
@@ -1502,7 +1654,7 @@ export type components = {
              * @description Latest run identifier when the execution was streamed directly.
              */
             run_id?: string | null;
-            status: components["schemas"]["RunStatus"];
+            status: components["schemas"]["ade_api__features__runs__models__RunStatus"];
             /**
              * Run At
              * @description Timestamp for the latest run event (completion/start).
@@ -1686,10 +1838,10 @@ export type components = {
              */
             workspace_id: string;
             /**
-             * Config Id
+             * Configuration Id
              * @description ULID (26-character string).
              */
-            config_id: string;
+            configuration_id: string;
             status: components["schemas"]["ConfigurationStatus"];
             capabilities: components["schemas"]["FileCapabilities"];
             /** Root */
@@ -1843,6 +1995,19 @@ export type components = {
              * Format: password
              */
             password: string;
+        };
+        /** MappedColumn */
+        MappedColumn: {
+            /** Field */
+            field: string;
+            /** Header */
+            header: string;
+            /** Source Column Index */
+            source_column_index: number;
+            /** Score */
+            score: number;
+            /** Contributions */
+            contributions?: components["schemas"]["ScoreContribution"][];
         };
         /**
          * PermissionCheckRequest
@@ -2062,6 +2227,24 @@ export type components = {
             permissions?: string[];
         };
         /**
+         * RunArtifact
+         * @description Run-level information in the artifact.
+         */
+        RunArtifact: {
+            /** Id */
+            id: string;
+            status: components["schemas"]["ade_engine__core__types__RunStatus"];
+            /** Started At */
+            started_at: string;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Outputs */
+            outputs?: string[];
+            /** Engine Version */
+            engine_version: string;
+            error?: components["schemas"]["ArtifactError"] | null;
+        };
+        /**
          * RunCreateOptions
          * @description Optional execution toggles for ADE runs.
          */
@@ -2076,7 +2259,21 @@ export type components = {
              * @default false
              */
             validate_only: boolean;
-            /** Input Document Id */
+            /**
+             * Force Rebuild
+             * @description If true, rebuild the configuration environment before running.
+             * @default false
+             */
+            force_rebuild: boolean;
+            /**
+             * Document Ids
+             * @description Preferred document identifiers to stage as inputs (first is used today).
+             */
+            document_ids?: string[] | null;
+            /**
+             * Input Document Id
+             * @description Deprecated: single document identifier to ingest.
+             */
             input_document_id?: string | null;
             /**
              * Input Sheet Name
@@ -2088,6 +2285,13 @@ export type components = {
              * @description Explicit worksheets to ingest; defaults to all when omitted.
              */
             input_sheet_names?: string[] | null;
+            /**
+             * Metadata
+             * @description Opaque metadata to propagate with run telemetry.
+             */
+            metadata?: {
+                [key: string]: string;
+            } | null;
         };
         /**
          * RunCreateRequest
@@ -2100,6 +2304,56 @@ export type components = {
              */
             stream: boolean;
             options?: components["schemas"]["RunCreateOptions"];
+        };
+        /**
+         * RunErrorCode
+         * @description Categorization for failures surfaced to callers.
+         * @enum {string}
+         */
+        RunErrorCode: "config_error" | "input_error" | "hook_error" | "pipeline_error" | "unknown_error";
+        /**
+         * RunEventsPage
+         * @description Paginated ADE events for a run.
+         */
+        RunEventsPage: {
+            /** Items */
+            items: components["schemas"]["AdeEvent"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * RunInput
+         * @description Input metadata captured for a run.
+         */
+        RunInput: {
+            /** Document Ids */
+            document_ids?: string[];
+            /** Input Sheet Names */
+            input_sheet_names?: string[];
+            /** Input File Count */
+            input_file_count?: number | null;
+            /** Input Sheet Count */
+            input_sheet_count?: number | null;
+        };
+        /**
+         * RunLinks
+         * @description Hypermedia links for run-related resources.
+         */
+        RunLinks: {
+            /** Self */
+            self: string;
+            /** Summary */
+            summary: string;
+            /** Events */
+            events: string;
+            /** Logs */
+            logs: string;
+            /** Logfile */
+            logfile: string;
+            /** Outputs */
+            outputs: string;
+            /** Diagnostics */
+            diagnostics: string;
         };
         /**
          * RunLogEntry
@@ -2137,14 +2391,38 @@ export type components = {
             next_after_id?: number | null;
         };
         /**
+         * RunOutput
+         * @description Output metadata captured for a run.
+         */
+        RunOutput: {
+            /**
+             * Has Outputs
+             * @default false
+             */
+            has_outputs: boolean;
+            /**
+             * Output Count
+             * @default 0
+             */
+            output_count: number;
+            /** Processed Files */
+            processed_files?: string[];
+        };
+        /**
          * RunOutputFile
          * @description Single file emitted by a streaming run output directory.
          */
         RunOutputFile: {
-            /** Path */
-            path: string;
+            /** Name */
+            name: string;
+            /** Kind */
+            kind?: string | null;
+            /** Content Type */
+            content_type?: string | null;
             /** Byte Size */
             byte_size: number;
+            /** Download Url */
+            download_url?: string | null;
         };
         /**
          * RunOutputListing
@@ -2154,6 +2432,30 @@ export type components = {
             /** Files */
             files?: components["schemas"]["RunOutputFile"][];
         };
+        /**
+         * RunPage
+         * @description Paginated collection of ``RunResource`` items.
+         */
+        RunPage: {
+            /** Items */
+            items: components["schemas"]["RunResource"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Total */
+            total?: number | null;
+        };
+        /**
+         * RunPhase
+         * @description Pipeline phases used for telemetry and error mapping.
+         * @enum {string}
+         */
+        RunPhase: "initialization" | "load_config" | "extracting" | "mapping" | "normalizing" | "writing_output" | "hooks" | "completed" | "failed";
         /**
          * RunResource
          * @description API representation of a persisted ADE run.
@@ -2167,83 +2469,233 @@ export type components = {
              * @constant
              */
             object: "ade.run";
-            /** Config Id */
-            config_id: string;
-            /** Config Version Id */
-            config_version_id?: string | null;
-            /** Submitted By User Id */
-            submitted_by_user_id?: string | null;
-            /**
-             * Input Document Id
-             * @description Document ULID staged for this run when provided.
-             */
-            input_document_id?: string | null;
-            /**
-             * Input Documents
-             * @description Descriptors for all input documents staged for the run.
-             */
-            input_documents?: {
-                [key: string]: unknown;
-            }[];
-            /**
-             * Input Sheet Name
-             * @description Worksheet name used when ingesting XLSX inputs.
-             */
-            input_sheet_name?: string | null;
-            /**
-             * Input Sheet Names
-             * @description Worksheets requested for ingestion when provided.
-             */
-            input_sheet_names?: string[] | null;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Configuration Id */
+            configuration_id: string;
+            /** Configuration Version */
+            configuration_version?: string | null;
             /**
              * Status
              * @enum {string}
              */
             status: "queued" | "running" | "succeeded" | "failed" | "canceled";
+            /** Failure Code */
+            failure_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Failure Message */
+            failure_message?: string | null;
+            /** Engine Version */
+            engine_version?: string | null;
+            /** Config Version */
+            config_version?: string | null;
+            /** Env Reason */
+            env_reason?: string | null;
+            /** Env Reused */
+            env_reused?: boolean | null;
             /**
-             * Attempt
-             * @default 1
+             * Created At
+             * Format: date-time
              */
-            attempt: number;
-            /** Retry Of Run Id */
-            retry_of_run_id?: string | null;
-            /** Trace Id */
-            trace_id?: string | null;
-            /** Created */
-            created: number;
-            /** Started */
-            started?: number | null;
-            /** Finished */
-            finished?: number | null;
-            /** Canceled */
-            canceled?: number | null;
+            created_at: string;
+            /** Started At */
+            started_at?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Duration Seconds */
+            duration_seconds?: number | null;
             /** Exit Code */
             exit_code?: number | null;
-            /** Output Paths */
-            output_paths?: string[];
-            /** Processed Files */
-            processed_files?: string[];
-            /** Artifact Uri */
-            artifact_uri?: string | null;
-            /** Output Uri */
-            output_uri?: string | null;
-            /** Logs Uri */
-            logs_uri?: string | null;
-            /** Artifact Path */
-            artifact_path?: string | null;
-            /** Events Path */
-            events_path?: string | null;
-            /** Summary */
-            summary?: string | null;
-            /** Error Message */
-            error_message?: string | null;
+            input?: components["schemas"]["RunInput"];
+            output?: components["schemas"]["RunOutput"];
+            links: components["schemas"]["RunLinks"];
         };
         /**
-         * RunStatus
-         * @description Lifecycle states for ADE runs.
-         * @enum {string}
+         * RunSummaryBreakdowns
+         * @description Nested breakdowns for files and fields.
          */
-        RunStatus: "queued" | "running" | "succeeded" | "failed" | "canceled";
+        RunSummaryBreakdowns: {
+            /** By File */
+            by_file?: components["schemas"]["RunSummaryByFile"][];
+            /** By Field */
+            by_field?: components["schemas"]["RunSummaryByField"][];
+        };
+        /**
+         * RunSummaryByField
+         * @description Breakdown metrics scoped to a canonical field.
+         */
+        RunSummaryByField: {
+            /** Field */
+            field: string;
+            /** Label */
+            label?: string | null;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /**
+             * Mapped
+             * @default false
+             */
+            mapped: boolean;
+            /** Max Score */
+            max_score?: number | null;
+            /**
+             * Validation Issue Count Total
+             * @default 0
+             */
+            validation_issue_count_total: number;
+            /** Issue Counts By Severity */
+            issue_counts_by_severity?: {
+                [key: string]: number;
+            };
+            /** Issue Counts By Code */
+            issue_counts_by_code?: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * RunSummaryByFile
+         * @description Breakdown metrics scoped to a single source file.
+         */
+        RunSummaryByFile: {
+            /** Source File */
+            source_file: string;
+            /** Table Count */
+            table_count: number;
+            /** Row Count */
+            row_count?: number | null;
+            /** Validation Issue Count Total */
+            validation_issue_count_total: number;
+            /** Issue Counts By Severity */
+            issue_counts_by_severity?: {
+                [key: string]: number;
+            };
+            /** Issue Counts By Code */
+            issue_counts_by_code?: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * RunSummaryCore
+         * @description Flat, aggregate run metrics.
+         */
+        RunSummaryCore: {
+            /**
+             * Input File Count
+             * @default 0
+             */
+            input_file_count: number;
+            /**
+             * Input Sheet Count
+             * @default 0
+             */
+            input_sheet_count: number;
+            /**
+             * Table Count
+             * @default 0
+             */
+            table_count: number;
+            /** Row Count */
+            row_count?: number | null;
+            /**
+             * Canonical Field Count
+             * @default 0
+             */
+            canonical_field_count: number;
+            /**
+             * Required Field Count
+             * @default 0
+             */
+            required_field_count: number;
+            /**
+             * Mapped Field Count
+             * @default 0
+             */
+            mapped_field_count: number;
+            /**
+             * Unmapped Column Count
+             * @default 0
+             */
+            unmapped_column_count: number;
+            /**
+             * Validation Issue Count Total
+             * @default 0
+             */
+            validation_issue_count_total: number;
+            /** Issue Counts By Severity */
+            issue_counts_by_severity?: {
+                [key: string]: number;
+            };
+            /** Issue Counts By Code */
+            issue_counts_by_code?: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * RunSummaryRun
+         * @description Identity and lifecycle info for a run summary.
+         */
+        RunSummaryRun: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id?: string | null;
+            /** Configuration Id */
+            configuration_id?: string | null;
+            /** Configuration Version */
+            configuration_version?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "succeeded" | "failed" | "canceled";
+            /** Failure Code */
+            failure_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Failure Message */
+            failure_message?: string | null;
+            /** Engine Version */
+            engine_version?: string | null;
+            /** Config Version */
+            config_version?: string | null;
+            /** Env Reason */
+            env_reason?: string | null;
+            /** Env Reused */
+            env_reused?: boolean | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Duration Seconds */
+            duration_seconds?: number | null;
+        };
+        /**
+         * RunSummaryV1
+         * @description Top-level run summary schema (v1).
+         */
+        RunSummaryV1: {
+            /**
+             * Schema
+             * @default ade.run_summary/v1
+             * @constant
+             */
+            schema: "ade.run_summary/v1";
+            /**
+             * Version
+             * @default 1.0.0
+             */
+            version: string;
+            run: components["schemas"]["RunSummaryRun"];
+            core: components["schemas"]["RunSummaryCore"];
+            breakdowns: components["schemas"]["RunSummaryBreakdowns"];
+        };
         /**
          * SafeModeStatus
          * @description Represents the current safe mode state.
@@ -2282,6 +2734,13 @@ export type components = {
          * @enum {string}
          */
         ScopeType: "global" | "workspace";
+        /** ScoreContribution */
+        ScoreContribution: {
+            /** Detector */
+            detector: string;
+            /** Delta */
+            delta: number;
+        };
         /**
          * SessionEnvelope
          * @description Envelope returned when a session is established or refreshed.
@@ -2324,6 +2783,38 @@ export type components = {
              * @default false
              */
             force_sso: boolean;
+        };
+        /** TableArtifact */
+        TableArtifact: {
+            /** Source File */
+            source_file: string;
+            /** Source Sheet */
+            source_sheet?: string | null;
+            /** Table Index */
+            table_index: number;
+            header: components["schemas"]["TableHeader"];
+            /** Mapped Columns */
+            mapped_columns?: components["schemas"]["MappedColumn"][];
+            /** Unmapped Columns */
+            unmapped_columns?: components["schemas"]["UnmappedColumn"][];
+            /** Validation Issues */
+            validation_issues?: components["schemas"]["ValidationIssue"][];
+        };
+        /** TableHeader */
+        TableHeader: {
+            /** Row Index */
+            row_index: number;
+            /** Cells */
+            cells: string[];
+        };
+        /** UnmappedColumn */
+        UnmappedColumn: {
+            /** Header */
+            header: string;
+            /** Source Column Index */
+            source_column_index: number;
+            /** Output Header */
+            output_header: string;
         };
         /**
          * UploaderOut
@@ -2432,6 +2923,23 @@ export type components = {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** ValidationIssue */
+        ValidationIssue: {
+            /** Row Index */
+            row_index: number;
+            /** Field */
+            field: string;
+            /** Code */
+            code: string;
+            /** Severity */
+            severity: string;
+            /** Message */
+            message?: string | null;
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * WorkspaceCreate
@@ -2577,6 +3085,18 @@ export type components = {
                 [key: string]: unknown;
             } | null;
         };
+        /**
+         * RunStatus
+         * @description Lifecycle states for ADE runs.
+         * @enum {string}
+         */
+        ade_api__features__runs__models__RunStatus: "queued" | "running" | "succeeded" | "failed" | "canceled";
+        /**
+         * RunStatus
+         * @description Overall run outcome.
+         * @enum {string}
+         */
+        ade_engine__core__types__RunStatus: "running" | "succeeded" | "failed";
     };
     responses: never;
     parameters: never;
@@ -5136,7 +5656,7 @@ export interface operations {
             };
         };
     };
-    read_configuration_api_v1_workspaces__workspace_id__configurations__config_id__get: {
+    read_configuration_api_v1_workspaces__workspace_id__configurations__configuration_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5144,7 +5664,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
             };
             cookie?: never;
         };
@@ -5170,7 +5690,7 @@ export interface operations {
             };
         };
     };
-    list_config_versions_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__versions_get: {
+    list_configuration_versions_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__versions_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5178,7 +5698,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
             };
             cookie?: never;
         };
@@ -5204,7 +5724,7 @@ export interface operations {
             };
         };
     };
-    list_config_files_api_v1_workspaces__workspace_id__configurations__config_id__files_get: {
+    list_config_files_api_v1_workspaces__workspace_id__configurations__configuration_id__files_get: {
         parameters: {
             query?: {
                 prefix?: string;
@@ -5221,7 +5741,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
             };
             cookie?: never;
         };
@@ -5247,7 +5767,7 @@ export interface operations {
             };
         };
     };
-    validate_configuration_api_v1_workspaces__workspace_id__configurations__config_id__validate_post: {
+    validate_configuration_api_v1_workspaces__workspace_id__configurations__configuration_id__validate_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -5255,7 +5775,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
             };
             cookie?: never;
         };
@@ -5281,7 +5801,7 @@ export interface operations {
             };
         };
     };
-    read_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__get: {
+    read_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__get: {
         parameters: {
             query?: {
                 format?: string | null;
@@ -5291,7 +5811,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
                 file_path: string;
             };
             cookie?: never;
@@ -5335,7 +5855,7 @@ export interface operations {
             };
         };
     };
-    upsert_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__put: {
+    upsert_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__put: {
         parameters: {
             query?: {
                 parents?: boolean;
@@ -5345,7 +5865,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
                 file_path: string;
             };
             cookie?: never;
@@ -5381,7 +5901,7 @@ export interface operations {
             };
         };
     };
-    delete_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__delete: {
+    delete_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -5389,7 +5909,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
                 file_path: string;
             };
             cookie?: never;
@@ -5414,7 +5934,7 @@ export interface operations {
             };
         };
     };
-    head_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__head: {
+    head_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__head: {
         parameters: {
             query?: never;
             header?: never;
@@ -5422,7 +5942,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
                 file_path: string;
             };
             cookie?: never;
@@ -5449,7 +5969,7 @@ export interface operations {
             };
         };
     };
-    rename_config_file_api_v1_workspaces__workspace_id__configurations__config_id__files__file_path__patch: {
+    rename_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -5457,7 +5977,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
                 file_path: string;
             };
             cookie?: never;
@@ -5488,7 +6008,7 @@ export interface operations {
             };
         };
     };
-    activate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__activate_post: {
+    activate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__activate_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -5496,7 +6016,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
             };
             cookie?: never;
         };
@@ -5526,7 +6046,7 @@ export interface operations {
             };
         };
     };
-    publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__publish_post: {
+    publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__publish_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -5534,7 +6054,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
             };
             cookie?: never;
         };
@@ -5564,7 +6084,7 @@ export interface operations {
             };
         };
     };
-    deactivate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__config_id__deactivate_post: {
+    deactivate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__deactivate_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -5572,7 +6092,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
             };
             cookie?: never;
         };
@@ -5598,7 +6118,7 @@ export interface operations {
             };
         };
     };
-    export_config_api_v1_workspaces__workspace_id__configurations__config_id__export_get: {
+    export_config_api_v1_workspaces__workspace_id__configurations__configuration_id__export_get: {
         parameters: {
             query?: {
                 format?: string;
@@ -5608,7 +6128,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
             };
             cookie?: never;
         };
@@ -5635,7 +6155,7 @@ export interface operations {
             };
         };
     };
-    create_config_directory_api_v1_workspaces__workspace_id__configurations__config_id__directories__directory_path__post: {
+    create_config_directory_api_v1_workspaces__workspace_id__configurations__configuration_id__directories__directory_path__post: {
         parameters: {
             query?: never;
             header?: never;
@@ -5643,7 +6163,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
                 directory_path: string;
             };
             cookie?: never;
@@ -5672,7 +6192,7 @@ export interface operations {
             };
         };
     };
-    delete_config_directory_api_v1_workspaces__workspace_id__configurations__config_id__directories__directory_path__delete: {
+    delete_config_directory_api_v1_workspaces__workspace_id__configurations__configuration_id__directories__directory_path__delete: {
         parameters: {
             query?: {
                 recursive?: boolean;
@@ -5682,7 +6202,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
                 directory_path: string;
             };
             cookie?: never;
@@ -5707,7 +6227,7 @@ export interface operations {
             };
         };
     };
-    create_build_endpoint_api_v1_workspaces__workspace_id__configs__config_id__builds_post: {
+    create_build_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__builds_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -5715,7 +6235,7 @@ export interface operations {
                 /** @description Workspace identifier */
                 workspace_id: string;
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
             };
             cookie?: never;
         };
@@ -5812,13 +6332,13 @@ export interface operations {
             };
         };
     };
-    create_run_endpoint_api_v1_configs__config_id__runs_post: {
+    create_run_endpoint_api_v1_configurations__configuration_id__runs_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Configuration identifier */
-                config_id: string;
+                configuration_id: string;
             };
             cookie?: never;
         };
@@ -5835,6 +6355,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunResource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
+                input_document_id?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": ("queued" | "running" | "succeeded" | "failed" | "canceled")[] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunPage"];
                 };
             };
             /** @description Validation Error */
@@ -5880,6 +6441,82 @@ export interface operations {
             };
         };
     };
+    get_run_summary_endpoint_api_v1_runs__run_id__summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunSummaryV1"];
+                };
+            };
+            /** @description Run summary not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_events_endpoint_api_v1_runs__run_id__events_get: {
+        parameters: {
+            query?: {
+                format?: "json" | "ndjson";
+                /** @description Opaque cursor from previous page */
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunEventsPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_run_logs_endpoint_api_v1_runs__run_id__logs_get: {
         parameters: {
             query?: {
@@ -5903,43 +6540,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RunLogsResponse"];
                 };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_run_artifact_endpoint_api_v1_runs__run_id__artifact_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Run identifier */
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Artifact unavailable */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -6011,6 +6611,45 @@ export interface operations {
                 };
             };
             /** @description Outputs unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_diagnostics_endpoint_api_v1_runs__run_id__diagnostics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactV1"];
+                };
+            };
+            /** @description Diagnostics not available */
             404: {
                 headers: {
                     [name: string]: unknown;

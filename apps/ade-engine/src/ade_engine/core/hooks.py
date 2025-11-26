@@ -11,8 +11,7 @@ from ade_engine.config.hook_registry import HookContext, HookRegistry, HookStage
 from ade_engine.config.manifest_context import ManifestContext
 from ade_engine.core.errors import HookError
 from ade_engine.core.types import MappedTable, NormalizedTable, RawTable, RunContext, RunResult
-from ade_engine.infra.artifact import ArtifactSink
-from ade_engine.infra.telemetry import EventSink, PipelineLogger
+from ade_engine.infra.telemetry import PipelineLogger
 
 HookTables = list[RawTable | MappedTable | NormalizedTable] | None
 
@@ -23,8 +22,6 @@ def _build_kwargs(context: HookContext) -> dict[str, Any]:
         "run": context.run,
         "state": context.state,
         "manifest": context.manifest,
-        "artifact": context.artifact,
-        "events": context.events,
         "tables": context.tables,
         "workbook": context.workbook,
         "result": context.result,
@@ -64,9 +61,7 @@ def run_hooks(
     *,
     run: RunContext,
     manifest: ManifestContext,
-    artifact: ArtifactSink,
     logger: PipelineLogger,
-    events: EventSink | None = None,
     tables: HookTables = None,
     workbook: Workbook | None = None,
     result: RunResult | None = None,
@@ -81,8 +76,6 @@ def run_hooks(
         run=run,
         state=run.state,
         manifest=manifest,
-        artifact=artifact,
-        events=events,
         tables=tables,
         workbook=workbook,
         result=result,
@@ -97,4 +90,3 @@ def run_hooks(
             module = hook.__module__
             name = getattr(hook, "__name__", "<callable>")
             raise HookError(f"Hook '{module}.{name}' failed during {stage.value}") from exc
-

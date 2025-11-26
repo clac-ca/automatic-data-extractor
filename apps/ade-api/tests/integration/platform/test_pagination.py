@@ -5,10 +5,10 @@ import uuid
 import pytest
 from sqlalchemy import select
 
+from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import get_settings
 from ade_api.shared.db.engine import ensure_database_ready
 from ade_api.shared.db.session import get_sessionmaker
-from ade_api.features.workspaces.models import Workspace
 from ade_api.shared.pagination import paginate_sql
 
 pytestmark = pytest.mark.asyncio

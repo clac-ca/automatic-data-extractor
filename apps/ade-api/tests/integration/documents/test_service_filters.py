@@ -78,19 +78,19 @@ async def _build_documents_fixture(session):
     return workspace, uploader, colleague, processed, uploaded
 
 
-async def _ensure_config_version(session, workspace_id: str) -> tuple[str, str, str]:
+async def _ensure_configuration_version(session, workspace_id: str) -> tuple[str, str]:
     """Create minimal configuration row to satisfy run foreign keys."""
 
     configuration = Configuration(
         workspace_id=workspace_id,
         display_name="Test Config",
         status=ConfigurationStatus.ACTIVE,
-        config_version=1,
+        configuration_version=1,
     )
     session.add(configuration)
     await session.flush()
 
-    return configuration.id, configuration.config_id, str(configuration.config_version)
+    return configuration.id, str(configuration.configuration_version)
 
 
 async def test_list_documents_applies_filters_and_sorting() -> None:
@@ -221,15 +221,14 @@ async def test_list_documents_includes_last_run_summary() -> None:
         )
 
         now = datetime.now(tz=UTC)
-        configuration_id, config_id, config_version_id = await _ensure_config_version(
+        configuration_id, configuration_version_id = await _ensure_configuration_version(
             session, str(workspace.id)
         )
         run = Run(
             id=generate_ulid(),
             workspace_id=str(workspace.id),
             configuration_id=configuration_id,
-            config_id=config_id,
-            config_version_id=config_version_id,
+            configuration_version_id=configuration_version_id,
             submitted_by_user_id=uploader.id,
             status=RunStatus.FAILED,
             attempt=1,
