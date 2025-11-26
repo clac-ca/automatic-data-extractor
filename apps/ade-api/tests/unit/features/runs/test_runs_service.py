@@ -16,7 +16,7 @@ from ade_api.features.configs.storage import compute_config_digest
 from ade_api.features.documents.models import Document, DocumentSource, DocumentStatus
 from ade_api.features.documents.storage import DocumentStorage
 from ade_api.features.runs.models import RunStatus
-from ade_api.features.runs.schemas import RunCompletedEvent, RunCreateOptions, RunLogEvent
+from ade_api.features.runs.schemas import RunCreateOptions
 from ade_api.features.runs.service import RunExecutionContext, RunsService
 from ade_api.features.system_settings.service import SafeModeService
 from ade_api.features.workspaces.models import Workspace
