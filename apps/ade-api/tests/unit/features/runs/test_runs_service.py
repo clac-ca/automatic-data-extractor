@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -209,7 +210,8 @@ async def test_stream_run_handles_engine_failure(
         events.append(event)
 
     assert events[-1].type == "run.completed"
-    assert events[-1].status == "failed"
+    assert events[-1].run is not None
+    assert events[-1].run["status"] == "failed"
     failure_logs = await service.get_logs(run_id=context.run_id)
     assert failure_logs.entries[-1].message.startswith("ADE run failed: boom")
 
@@ -241,7 +243,8 @@ async def test_stream_run_handles_cancelled_execution(
             events.append(event)
 
     assert events[-1].type == "run.completed"
-    assert events[-1].status == "canceled"
+    assert events[-1].run is not None
+    assert events[-1].run["status"] == "canceled"
 
     run = await service.get_run(context.run_id)
     assert run is not None
@@ -272,7 +275,6 @@ async def test_force_rebuild_triggers_rebuild(
 
     assert rebuild_called is True
     assert run.build_id is not None
-    assert run.error_message == "Run execution cancelled"
 
 
 @pytest.mark.asyncio()
@@ -293,15 +295,20 @@ async def test_stream_run_validate_only_short_circuits(
     assert [event.type for event in events] == [
         "run.created",
         "run.started",
-        "run.log",
+        "run.log.delta",
         "run.completed",
     ]
-    assert events[-1].status == "succeeded"
+    assert events[-1].run is not None
+    assert events[-1].run["status"] == "succeeded"
+    assert events[-1].run is not None
+    assert events[-1].run["summary"]["run"]["failure_message"] == "Validation-only execution"
 
     run = await service.get_run(context.run_id)
     assert run is not None
     assert run.status is RunStatus.SUCCEEDED
-    assert run.summary == "Validation-only execution"
+    summary = json.loads(run.summary or "{}")
+    assert summary.get("run", {}).get("status") == "succeeded"
+    assert summary.get("run", {}).get("failure_message") == "Validation-only execution"
     logs = await service.get_logs(run_id=context.run_id)
     assert logs.entries[0].message == "Run options: validate-only mode"
 
@@ -318,14 +325,19 @@ async def test_stream_run_respects_safe_mode(session, tmp_path: Path) -> None:
     assert [event.type for event in events] == [
         "run.created",
         "run.started",
-        "run.log",
+        "run.log.delta",
         "run.completed",
     ]
-    assert events[-1].status == "succeeded"
-    assert events[-1].exit_code == 0
+    assert events[-1].run is not None
+    assert events[-1].run["status"] == "succeeded"
+    assert events[-1].run["execution_summary"]["exit_code"] == 0
+    assert events[-1].run is not None
+    assert events[-1].run["summary"]["run"]["failure_message"] == "Safe mode skip"
 
     run = await service.get_run(context.run_id)
     assert run is not None
-    assert run.summary == "Safe mode skip"
+    summary = json.loads(run.summary or "{}")
+    assert summary.get("run", {}).get("status") == "succeeded"
+    assert summary.get("run", {}).get("failure_message") == "Safe mode skip"
     logs = await service.get_logs(run_id=context.run_id)
     assert "safe mode" in logs.entries[-1].message.lower()

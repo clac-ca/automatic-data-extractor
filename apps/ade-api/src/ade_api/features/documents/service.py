@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import unicodedata
 from collections.abc import AsyncIterator, Mapping, Sequence
@@ -319,11 +320,26 @@ class DocumentsService:
             status_value = (
                 RunStatus.CANCELED if run.status == RunStatus.CANCELED else run.status
             )
+            summary_payload = None
+            if run.summary:
+                try:
+                    parsed = json.loads(run.summary)
+                    summary_payload = parsed if isinstance(parsed, dict) else None
+                except json.JSONDecodeError:
+                    summary_payload = None
+            message = run.error_message
+            if summary_payload:
+                run_block = summary_payload.get("run", {})
+                message = (
+                    run_block.get("failure_message")
+                    or message
+                    or run_block.get("status")
+                )
             latest[doc_id] = DocumentLastRun(
                 run_id=run.id,
                 status=status_value,
                 run_at=timestamp,
-                message=run.summary or run.error_message,
+                message=message,
             )
         return latest
 
