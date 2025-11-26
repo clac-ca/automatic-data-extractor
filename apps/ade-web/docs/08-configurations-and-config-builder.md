@@ -504,7 +504,7 @@ Behaviour:
 
      * Run ID and status.
      * Document name.
-     * Output artifact links (if provided).
+     * Output file links and telemetry.
 
 5. The run also appears in the global **Runs** history view (see
    `07-documents-and-runs.md`), which may still be backed by `/runs` endpoints

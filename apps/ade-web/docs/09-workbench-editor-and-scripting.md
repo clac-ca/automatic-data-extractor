@@ -248,7 +248,7 @@ The bottom panel can be toggled and resized. It has two logical tabs:
     * Run ID.
     * Document and sheet names used.
     * Basic metrics (rows processed, warnings, errors).
-    * Links to artifacts, telemetry, and logs.
+    * Links to telemetry and logs.
 
 * **Validation**
 

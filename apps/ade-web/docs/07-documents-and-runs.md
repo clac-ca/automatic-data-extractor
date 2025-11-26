@@ -376,7 +376,7 @@ export interface RunOptions {
 A more detailed `RunDetail` type extends this with:
 
 * Full list of input documents.
-* Links to outputs (artifact and individual files).
+* Links to outputs (files) and telemetry.
 * Optional telemetry summary.
 * Log / console linkage.
 
@@ -482,7 +482,7 @@ The Run detail view composes several sections:
 
 * **Outputs**
 
-  * Link to combined artifact download.
+  * Link to telemetry download.
   * Table of individual output files.
 
 Data hooks:
@@ -748,8 +748,8 @@ The Documents and Runs features rely on the following backend endpoints. Detaile
 * `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}`
   Workspace‑scoped run detail.
 
-* `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/artifact`
-  Download combined outputs.
+* `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/logfile`
+  Download telemetry log.
 
 * `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/outputs`
   List individual output files for a run.
@@ -770,8 +770,8 @@ Used primarily by Configuration Builder:
 * `GET /api/v1/runs/{run_id}`
   Global run detail.
 
-* `GET /api/v1/runs/{run_id}/artifact` (if implemented)
-  Download combined outputs.
+* `GET /api/v1/runs/{run_id}/logfile`
+  Download telemetry log.
 
 * `GET /api/v1/runs/{run_id}/outputs`
   List individual output files.
@@ -802,7 +802,7 @@ When **Safe mode is enabled**:
 
   * Listing documents and runs.
   * Viewing run details.
-  * Downloading artifacts, outputs, and logs.
+* Downloading outputs and logs.
 
 UI behaviour:
 

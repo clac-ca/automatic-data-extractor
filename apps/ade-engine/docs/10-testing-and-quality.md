@@ -31,7 +31,7 @@ Our testing strategy is built around a few simple ideas:
 
 - **Deterministic behavior**  
   Given the same `ade_config`, manifest, and source files, the engine should
-  produce the **same** normalized workbook, `artifact.json`, and
+  produce the **same** normalized workbook and
   `events.ndjson`.
 
 - **Separation of concerns**  
@@ -39,13 +39,13 @@ Our testing strategy is built around a few simple ideas:
   - IO and table detection,
   - column mapping,
   - normalization and validation,
-  - artifact and telemetry,
+- telemetry (events.ndjson),
   - high‑level `Engine.run`.
 
 - **Stable contracts**  
   The shapes and semantics of:
   - `RunRequest` / `RunResult`,
-  - `artifact.json`,
+- `events.ndjson`,
   - `events.ndjson`,
   - script entrypoints in `ade_config`
   
