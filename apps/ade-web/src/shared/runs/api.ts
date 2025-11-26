@@ -96,8 +96,20 @@ export async function fetchRun(
 }
 
 export async function fetchRunSummary(runId: string, signal?: AbortSignal): Promise<RunSummaryV1 | null> {
+  // Prefer the dedicated summary endpoint; fall back to embedded summaries when present.
+  try {
+    const { data } = await client.GET("/api/v1/runs/{run_id}/summary", {
+      params: { path: { run_id: runId } },
+      signal,
+    });
+    if (data) return data as RunSummaryV1;
+  } catch (error) {
+    // If the backend is older or the endpoint is unavailable, continue to fallback parsing.
+    console.warn("Falling back to embedded run summary", error);
+  }
+
   const run = await fetchRun(runId, signal);
-  const summary = run.summary;
+  const summary = (run as any)?.summary;
   if (!summary) return null;
   if (typeof summary === "string") {
     try {

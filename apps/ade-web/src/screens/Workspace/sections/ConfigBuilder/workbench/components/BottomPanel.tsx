@@ -13,7 +13,12 @@ export interface WorkbenchRunSummary {
   readonly runId: string;
   readonly status: RunStatus;
   readonly downloadBase: string;
-  readonly outputs: ReadonlyArray<{ path: string; byte_size: number }>;
+  readonly outputs: ReadonlyArray<{
+    name: string;
+    path?: string;
+    byte_size: number;
+    download_url?: string | null;
+  }>;
   readonly outputsLoaded: boolean;
   readonly summary?: RunSummaryV1 | null;
   readonly summaryLoaded: boolean;
@@ -399,20 +404,25 @@ function RunOutputsCard({ summary }: { readonly summary: WorkbenchRunSummary }) 
         <p className="mt-2 text-sm text-slate-500">Loading outputs…</p>
       ) : summary.outputs.length > 0 ? (
         <ul className="mt-2 space-y-1 text-sm text-slate-800">
-          {summary.outputs.map((file) => (
-            <li
-              key={file.path}
-              className="flex items-center justify-between gap-2 break-all rounded border border-slate-100 px-2 py-1"
-            >
-              <a
-                href={`${summary.downloadBase}/outputs/${file.path.split("/").map(encodeURIComponent).join("/")}`}
-                className="text-brand-600 hover:underline"
+          {summary.outputs.map((file) => {
+            const encodedPath =
+              file.path?.split("/").map(encodeURIComponent).join("/") ??
+              file.name.split("/").map(encodeURIComponent).join("/");
+            const href = file.download_url
+              ? file.download_url
+              : `${summary.downloadBase}/outputs/${encodedPath}`;
+            return (
+              <li
+                key={file.path ?? file.name}
+                className="flex items-center justify-between gap-2 break-all rounded border border-slate-100 px-2 py-1"
               >
-                {file.path}
-              </a>
-              <span className="text-[11px] text-slate-500">{file.byte_size.toLocaleString()} bytes</span>
-            </li>
-          ))}
+                <a href={href} className="text-brand-600 hover:underline">
+                  {file.name || file.path}
+                </a>
+                <span className="text-[11px] text-slate-500">{file.byte_size.toLocaleString()} bytes</span>
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="mt-2 text-sm text-slate-500">No output files were generated.</p>

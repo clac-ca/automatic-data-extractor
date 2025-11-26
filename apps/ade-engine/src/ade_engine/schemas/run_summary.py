@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 RunStatusLiteral = Literal["succeeded", "failed", "canceled"]
 
@@ -98,11 +98,15 @@ class RunSummaryBreakdowns(BaseModel):
 class RunSummaryV1(BaseModel):
     """Top-level run summary schema (v1)."""
 
-    schema: Literal["ade.run_summary/v1"] = "ade.run_summary/v1"
+    schema_id: Literal["ade.run_summary/v1"] = Field(
+        default="ade.run_summary/v1",
+        alias="schema",
+        validation_alias=AliasChoices("schema", "schema_id"),
+    )
     version: str = "1.0.0"
 
     run: RunSummaryRun
     core: RunSummaryCore
     breakdowns: RunSummaryBreakdowns
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)

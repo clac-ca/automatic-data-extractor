@@ -178,7 +178,11 @@ def build_run_summary(
     )
 
     completion_payload = completed_event.model_extra or {} if completed_event else {}
-    completion_error = completion_payload.get("error") if isinstance(completion_payload, dict) else None
+    completion_error = (
+        completed_event.error
+        if completed_event and completed_event.error is not None
+        else completion_payload.get("error") if isinstance(completion_payload, dict) else None
+    )
     status_literal = None
     if isinstance(completion_payload, dict):
         status_literal = (

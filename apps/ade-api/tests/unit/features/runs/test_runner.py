@@ -45,6 +45,6 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
     assert stdout_frames, "expected stdout frames"
     telemetry = next(frame for frame in frames if not isinstance(frame, StdoutFrame))
     assert isinstance(telemetry, AdeEvent)
-    assert telemetry.schema == ADE_EVENT_SCHEMA
+    assert telemetry.schema_id == ADE_EVENT_SCHEMA
     assert telemetry.type == "run.phase.started"
     assert telemetry.model_extra["phase"] == "mapping"

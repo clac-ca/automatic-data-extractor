@@ -68,6 +68,10 @@ def execute_pipeline(
     for table in normalized_tables:
         pipeline_logger.record_table(table)
 
+    # Run-level validation summary (useful for validation-only mode and analytics).
+    all_issues = [issue for table in normalized_tables for issue in table.validation_issues]
+    pipeline_logger.validation_summary(all_issues)
+
     pipeline_logger.pipeline_phase("writing_output")
     output_path = write_workbook(
         ctx=run,
