@@ -472,14 +472,12 @@ This provides a human/audit-friendly record of data quality for each run.
 
 `PipelineLogger` may also emit telemetry events during normalization, e.g.:
 
-* `validation_issue`:
-
-  * For each issue (or batch) with:
-
-    * `field`, `code`, `row_index`, `severity`, plus file/sheet info.
-* `normalization_stats`:
-
-  * Summary counts of rows processed, issues per severity, etc.
+* `table_completed` (emitted by the engine for each table; includes
+  `validation_issue_count`).
+* `pipeline_transition` updates at phase boundaries.
+* Config- or hook-authored events via `logger.event(...)` (optional), such as
+  `validation_issue` or `normalization_stats` if you want per-issue streaming or
+  custom metrics.
 
 The exact event set is flexible, but the pattern is:
 
