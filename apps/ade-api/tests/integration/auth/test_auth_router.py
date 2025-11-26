@@ -10,14 +10,14 @@ import pytest
 from httpx import AsyncClient
 from pydantic import SecretStr
 
-from ade_api.settings import get_settings, reload_settings
-from ade_api.shared.db.session import get_sessionmaker
 from ade_api.features.auth.service import (
     SSO_STATE_COOKIE,
     AuthService,
     OIDCProviderMetadata,
 )
 from ade_api.features.users.repository import UsersRepository
+from ade_api.settings import get_settings, reload_settings
+from ade_api.shared.db.session import get_sessionmaker
 
 _settings = get_settings()
 CSRF_COOKIE = _settings.session_csrf_cookie_name

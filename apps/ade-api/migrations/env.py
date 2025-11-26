@@ -10,9 +10,9 @@ from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
+from ade_api.settings import get_settings
 from ade_api.shared.db import metadata
 from ade_api.shared.db.engine import render_sync_url
-from ade_api.settings import get_settings
 
 config = context.config
 

@@ -14,7 +14,10 @@ from ade_api.features.builds.builder import (
 pytestmark = pytest.mark.asyncio
 
 
-async def test_builder_installs_dependencies(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+async def test_builder_installs_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     """Pip installs should include dependencies for engine and config packages."""
 
     builder = VirtualEnvironmentBuilder()

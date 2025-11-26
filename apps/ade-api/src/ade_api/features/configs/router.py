@@ -85,6 +85,24 @@ PUBLISH_BODY = Body(
 )
 
 
+WorkspaceIdPath = Annotated[
+    str,
+    Path(
+        ...,
+        min_length=1,
+        description="Workspace identifier",
+    ),
+]
+ConfigurationIdPath = Annotated[
+    str,
+    Path(
+        ...,
+        min_length=1,
+        description="Configuration identifier",
+    ),
+]
+
+
 def _problem(
     code: str,
     status_code: int,
@@ -149,7 +167,7 @@ def _parse_range_header(header_value: str, total_size: int) -> tuple[int, int]:
     summary="List configurations for a workspace",
 )
 async def list_configurations(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
+    workspace_id: WorkspaceIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     page: Annotated[PageParams, Depends()],
     _actor: Annotated[
@@ -178,8 +196,8 @@ async def list_configurations(
     summary="Retrieve configuration metadata",
 )
 async def read_configuration(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
@@ -208,8 +226,8 @@ async def read_configuration(
     response_model_exclude_none=False,
 )
 async def list_configuration_versions_endpoint(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
@@ -236,8 +254,8 @@ async def list_configuration_versions_endpoint(
     summary="List editable files and directories",
 )
 async def list_config_files(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
     request: Request,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
@@ -305,7 +323,7 @@ async def list_config_files(
     response_model_exclude_none=True,
 )
 async def create_configuration(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
+    workspace_id: WorkspaceIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
@@ -351,8 +369,8 @@ async def create_configuration(
     response_model_exclude_none=True,
 )
 async def validate_configuration(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
@@ -395,8 +413,8 @@ async def validate_configuration(
     },
 )
 async def read_config_file(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
     file_path: str,
     request: Request,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
@@ -497,8 +515,8 @@ async def read_config_file(
     responses={status.HTTP_200_OK: {"model": None}},
 )
 async def head_config_file(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
     file_path: str,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
@@ -548,8 +566,8 @@ async def head_config_file(
     response_model_exclude_none=True,
 )
 async def activate_configuration_endpoint(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
@@ -594,8 +612,8 @@ async def activate_configuration_endpoint(
     response_model_exclude_none=True,
 )
 async def publish_configuration_endpoint(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
@@ -639,8 +657,8 @@ async def publish_configuration_endpoint(
     response_model_exclude_none=True,
 )
 async def deactivate_configuration_endpoint(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
@@ -667,8 +685,8 @@ async def deactivate_configuration_endpoint(
     },
 )
 async def export_config(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
@@ -705,8 +723,8 @@ async def export_config(
     },
 )
 async def upsert_config_file(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
     file_path: str,
     request: Request,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
@@ -783,8 +801,8 @@ async def upsert_config_file(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_config_file(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
     file_path: str,
     request: Request,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
@@ -833,8 +851,8 @@ async def delete_config_file(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_config_directory(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
     directory_path: str,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
@@ -870,8 +888,8 @@ async def create_config_directory(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_config_directory(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
     directory_path: str,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
@@ -912,8 +930,8 @@ async def delete_config_directory(
     summary="Rename or move a file",
 )
 async def rename_config_file(
-    workspace_id: Annotated[str, Path(..., min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, Path(..., min_length=1, description="Configuration identifier")],
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
     file_path: str,
     payload: FileRenameRequest,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],

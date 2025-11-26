@@ -78,8 +78,14 @@ async def _execute_build_background(
 )
 async def create_build_endpoint(
     *,
-    workspace_id: Annotated[str, PathParam(min_length=1, description="Workspace identifier")],
-    configuration_id: Annotated[str, PathParam(min_length=1, description="Configuration identifier")],
+    workspace_id: Annotated[
+        str,
+        PathParam(min_length=1, description="Workspace identifier"),
+    ],
+    configuration_id: Annotated[
+        str,
+        PathParam(min_length=1, description="Configuration identifier"),
+    ],
     payload: BuildCreateRequest,
     background_tasks: BackgroundTasks,
     _actor: Annotated[

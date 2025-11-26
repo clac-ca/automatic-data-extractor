@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
 import os
-from datetime import datetime, timezone
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-
 from ade_engine.schemas import TelemetryEnvelope, TelemetryEvent
 
 from ade_api.features.builds.models import BuildStatus
@@ -18,12 +17,12 @@ from ade_api.features.documents.storage import DocumentStorage
 from ade_api.features.runs.models import RunStatus
 from ade_api.features.runs.schemas import RunCompletedEvent, RunCreateOptions, RunLogEvent
 from ade_api.features.runs.service import RunExecutionContext, RunsService
-from ade_api.features.workspaces.models import Workspace
 from ade_api.features.system_settings.service import SafeModeService
+from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import Settings
-from ade_api.storage_layout import config_venv_path, workspace_config_root, workspace_documents_root
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.db.mixins import generate_ulid
+from ade_api.storage_layout import config_venv_path, workspace_config_root, workspace_documents_root
 
 
 async def _prepare_service(
@@ -69,7 +68,10 @@ async def _prepare_service(
     (bin_dir / python_name).write_text("", encoding="utf-8")
     config_root = workspace_config_root(settings, workspace.id, configuration.id)
     config_root.mkdir(parents=True, exist_ok=True)
-    (config_root / "pyproject.toml").write_text("[project]\nname='demo'\nversion='0.0.1'\n", encoding="utf-8")
+    (config_root / "pyproject.toml").write_text(
+        "[project]\nname='demo'\nversion='0.0.1'\n",
+        encoding="utf-8",
+    )
     digest = compute_config_digest(config_root)
 
     document_id = generate_ulid()
@@ -141,7 +143,7 @@ async def test_stream_run_happy_path_yields_engine_events(
             )
             telemetry = TelemetryEnvelope(
                 run_id=context.run_id,
-                timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 metadata={"run_id": context.run_id},
                 event=TelemetryEvent(event="pipeline_transition", level="info"),
             )

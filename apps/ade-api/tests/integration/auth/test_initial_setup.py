@@ -9,9 +9,8 @@ from sqlalchemy import select, text
 from ade_api.features.roles.models import Role, ScopeType
 from ade_api.features.roles.service import assign_global_role
 from ade_api.settings import get_settings
-from ade_api.shared.db.session import get_sessionmaker
 from ade_api.shared.db.mixins import generate_ulid
-
+from ade_api.shared.db.session import get_sessionmaker
 
 pytestmark = pytest.mark.asyncio
 _settings = get_settings()
@@ -92,7 +91,16 @@ async def test_initial_setup_rejected_when_admin_exists(
         user = await session.execute(
             text(
                 """
-                INSERT INTO users (id, email, email_canonical, is_active, is_service_account, failed_login_count, created_at, updated_at)
+                INSERT INTO users (
+                    id,
+                    email,
+                    email_canonical,
+                    is_active,
+                    is_service_account,
+                    failed_login_count,
+                    created_at,
+                    updated_at
+                )
                 VALUES (:id, :email, :email, 1, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 RETURNING id
                 """

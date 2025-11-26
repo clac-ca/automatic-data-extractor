@@ -8,14 +8,12 @@ from fastapi.security import SecurityScopes
 from httpx import AsyncClient
 from starlette.requests import Request
 
-from ade_api.settings import get_settings
-from ade_api.shared.db.session import get_sessionmaker
-from ade_api.shared.dependency import require_csrf
 from ade_api.features.auth.service import AuthenticatedIdentity
-from ade_api.shared.dependency import require_global, require_workspace
 from ade_api.features.roles.service import ensure_user_principal
 from ade_api.features.users.models import User
-
+from ade_api.settings import get_settings
+from ade_api.shared.db.session import get_sessionmaker
+from ade_api.shared.dependency import require_csrf, require_global, require_workspace
 
 pytestmark = pytest.mark.asyncio
 SESSION_COOKIE = get_settings().session_cookie_name

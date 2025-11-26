@@ -5,10 +5,10 @@ from urllib.parse import parse_qsl, urlparse
 import pytest
 from fastapi import HTTPException
 
-from ade_api.settings import reload_settings
-from ade_api.shared.db.session import get_sessionmaker
 from ade_api.features.auth.service import AuthService, OIDCProviderMetadata
 from ade_api.features.roles.service import sync_permission_registry
+from ade_api.settings import reload_settings
+from ade_api.shared.db.session import get_sessionmaker
 
 
 @pytest.mark.asyncio()

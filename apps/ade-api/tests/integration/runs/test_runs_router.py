@@ -9,14 +9,14 @@ import os
 import shutil
 import subprocess
 import sys
-from io import BytesIO
 from datetime import timedelta
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
+import openpyxl
 import pytest
 from httpx import AsyncClient
-import openpyxl
 
 from ade_api.features.builds.models import BuildStatus
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
@@ -29,10 +29,10 @@ from ade_api.features.runs.service import RunExecutionContext, RunsService
 from ade_api.features.system_settings.service import SafeModeService
 from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import Settings, get_settings
-from ade_api.storage_layout import config_venv_path, workspace_config_root, workspace_documents_root
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.db.mixins import generate_ulid
 from ade_api.shared.db.session import get_sessionmaker
+from ade_api.storage_layout import config_venv_path, workspace_config_root, workspace_documents_root
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -81,7 +81,10 @@ async def _prepare_service(
     venv_path.mkdir(parents=True, exist_ok=True)
     config_root = workspace_config_root(settings, workspace.id, configuration.id)
     config_root.mkdir(parents=True, exist_ok=True)
-    (config_root / "pyproject.toml").write_text("[project]\nname='demo'\nversion='0.0.1'\n", encoding="utf-8")
+    (config_root / "pyproject.toml").write_text(
+        "[project]\nname='demo'\nversion='0.0.1'\n",
+        encoding="utf-8",
+    )
     digest = compute_config_digest(config_root)
     configuration.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
     configuration.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
@@ -150,7 +153,10 @@ async def _seed_configuration(
         venv_path.mkdir(parents=True, exist_ok=True)
         config_root = workspace_config_root(settings, workspace_id, config.id)
         config_root.mkdir(parents=True, exist_ok=True)
-        (config_root / "pyproject.toml").write_text("[project]\nname='demo'\nversion='0.0.1'\n", encoding="utf-8")
+        (config_root / "pyproject.toml").write_text(
+            "[project]\nname='demo'\nversion='0.0.1'\n",
+            encoding="utf-8",
+        )
         digest = compute_config_digest(config_root)
 
         config.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
@@ -242,10 +248,10 @@ async def _seed_document(
     """Persist a CSV document and return its metadata row."""
 
     csv_bytes = (
-        "member_id,email,first_name,last_name\n"
-        "1,alice@example.com,Alice,Anderson\n"
-        "2,bob@example.com,Bob,Brown\n"
-    ).encode("utf-8")
+        b"member_id,email,first_name,last_name\n"
+        b"1,alice@example.com,Alice,Anderson\n"
+        b"2,bob@example.com,Bob,Brown\n"
+    )
     document_id = generate_ulid()
     storage = DocumentStorage(workspace_documents_root(settings, workspace_id))
     stored_uri = storage.make_stored_uri(document_id)

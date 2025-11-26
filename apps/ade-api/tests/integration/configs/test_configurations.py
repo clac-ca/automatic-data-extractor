@@ -9,7 +9,6 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
-
 from sqlalchemy import select
 
 from ade_api.features.configs.models import Configuration

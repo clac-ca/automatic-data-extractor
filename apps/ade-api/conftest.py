@@ -5,22 +5,18 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
 from alembic import command
 from alembic.config import Config
-from fastapi import FastAPI
 from asgi_lifespan import LifespanManager
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
-from ade_api.settings import Settings, get_settings, reload_settings
-from ade_api.shared.db.engine import ensure_database_ready, render_sync_url, reset_database_state
-from ade_api.shared.db.session import get_sessionmaker
 from ade_api.features.auth.security import hash_password
 from ade_api.features.roles.models import Role, ScopeType
 from ade_api.features.roles.service import (
@@ -31,9 +27,12 @@ from ade_api.features.roles.service import (
 )
 from ade_api.features.users.models import User, UserCredential
 from ade_api.features.workspaces.models import Workspace, WorkspaceMembership
-from ade_api.shared.core.lifecycles import ensure_runtime_dirs
-from ade_api.shared.dependency import configure_auth_dependencies
 from ade_api.main import create_app
+from ade_api.settings import Settings, get_settings, reload_settings
+from ade_api.shared.core.lifecycles import ensure_runtime_dirs
+from ade_api.shared.db.engine import ensure_database_ready, render_sync_url, reset_database_state
+from ade_api.shared.db.session import get_sessionmaker
+from ade_api.shared.dependency import configure_auth_dependencies
 
 
 @pytest.fixture(scope="session")

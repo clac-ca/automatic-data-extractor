@@ -67,7 +67,11 @@ def _serialize_configuration_version(configuration: Configuration) -> ConfigVers
         configuration_id=configuration.id,
         workspace_id=configuration.workspace_id,
         status=configuration.status,
-        semver=str(configuration.configuration_version) if configuration.configuration_version else None,
+        semver=(
+            str(configuration.configuration_version)
+            if configuration.configuration_version
+            else None
+        ),
         content_digest=configuration.content_digest,
         created_at=configuration.created_at,
         updated_at=configuration.updated_at,
@@ -196,7 +200,9 @@ class ConfigurationsService:
             raise ConfigValidationFailedError(issues)
 
         if configuration.status is ConfigurationStatus.DRAFT:
-            configuration.configuration_version = max(configuration.configuration_version or 0, 0) + 1
+            configuration.configuration_version = (
+                max(configuration.configuration_version or 0, 0) + 1
+            )
             configuration.content_digest = digest
         elif configuration.status in {
             ConfigurationStatus.PUBLISHED,

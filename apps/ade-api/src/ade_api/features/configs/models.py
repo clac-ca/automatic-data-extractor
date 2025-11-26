@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -65,8 +65,14 @@ class Configuration(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     python_interpreter: Mapped[str | None] = mapped_column(String(255), nullable=True)
     built_configuration_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     built_content_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    last_build_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_build_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_build_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_build_finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     last_build_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_build_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

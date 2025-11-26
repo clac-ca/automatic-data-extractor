@@ -1,28 +1,26 @@
-import asyncio
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import AsyncIterator, Callable
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ade_api.features.builds.builder import (
     BuildArtifacts,
-    BuildStep,
     BuilderArtifactsEvent,
     BuilderEvent,
     BuilderLogEvent,
     BuilderStepEvent,
+    BuildStep,
 )
 from ade_api.features.builds.models import BuildStatus
 from ade_api.features.builds.schemas import BuildCreateOptions
-from ade_api.features.builds.service import BuildExecutionContext, BuildsService
+from ade_api.features.builds.service import BuildsService
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.features.configs.storage import ConfigStorage
 from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import Settings
-from ade_api.storage_layout import config_venv_path
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.db import Base
 from ade_api.shared.db.mixins import generate_ulid
@@ -73,7 +71,12 @@ async def session() -> AsyncSession:
 
 
 @pytest.fixture()
-def service_factory(tmp_path: Path) -> Callable[[AsyncSession, FakeBuilder | None, Callable[[], datetime]], BuildsService]:
+def service_factory(
+    tmp_path: Path,
+) -> Callable[
+    [AsyncSession, FakeBuilder | None, Callable[[], datetime]],
+    BuildsService,
+]:
     def _factory(
         session: AsyncSession,
         builder: FakeBuilder | None = None,
@@ -138,7 +141,11 @@ async def _create_configuration(
     return workspace, configuration
 
 
-async def test_prepare_build_reuses_active(session: AsyncSession, tmp_path: Path, service_factory) -> None:
+async def test_prepare_build_reuses_active(
+    session: AsyncSession,
+    tmp_path: Path,
+    service_factory,
+) -> None:
     workspace, configuration = await _create_configuration(session)
     builder = FakeBuilder(events=[])
     service = service_factory(session, builder=builder)
@@ -168,7 +175,11 @@ async def test_prepare_build_reuses_active(session: AsyncSession, tmp_path: Path
 
 
 @pytest.mark.asyncio()
-async def test_stream_build_success(session: AsyncSession, tmp_path: Path, service_factory) -> None:
+async def test_stream_build_success(
+    session: AsyncSession,
+    tmp_path: Path,
+    service_factory,
+) -> None:
     workspace, configuration = await _create_configuration(session)
     builder = FakeBuilder(
         events=[
@@ -192,7 +203,10 @@ async def test_stream_build_success(session: AsyncSession, tmp_path: Path, servi
         options=BuildCreateOptions(force=True, wait=False),
     )
     events = []
-    async for event in service.stream_build(context=context, options=BuildCreateOptions(force=True, wait=False)):
+    async for event in service.stream_build(
+        context=context,
+        options=BuildCreateOptions(force=True, wait=False),
+    ):
         events.append(event)
 
     refreshed = await service.get_build(build.id)
