@@ -13,7 +13,6 @@ from ade_engine.core.types import (
     RawTable,
     RunContext,
     RunPaths,
-    RunStatus,
     UnmappedColumn,
 )
 from ade_engine.infra.artifact import FileArtifactSink

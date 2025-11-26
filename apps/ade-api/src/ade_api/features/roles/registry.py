@@ -154,13 +154,19 @@ PERMISSIONS: tuple[PermissionDefinition, ...] = (
         key="Workspace.Configurations.Read",
         scope=ScopeType.WORKSPACE,
         label="Read configurations",
-        description="View workspace configurations (backed by configuration packages) and version history.",
+        description=(
+            "View workspace configurations (backed by configuration packages) "
+            "and version history."
+        ),
     ),
     _definition(
         key="Workspace.Configurations.ReadWrite",
         scope=ScopeType.WORKSPACE,
         label="Manage configurations",
-        description="Create, update, archive, or restore workspace configurations and their backing configuration packages.",
+        description=(
+            "Create, update, archive, or restore workspace configurations "
+            "and their backing configuration packages."
+        ),
     ),
     _definition(
         key="Workspace.Runs.Read",

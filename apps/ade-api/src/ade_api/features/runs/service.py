@@ -17,7 +17,10 @@ from uuid import uuid4
 from ade_engine.schemas import TelemetryEnvelope
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.features.builds.builder import BuilderArtifactsEvent, BuilderEvent, VirtualEnvironmentBuilder
+from ade_api.features.builds.builder import (
+    BuilderArtifactsEvent,
+    VirtualEnvironmentBuilder,
+)
 from ade_api.features.builds.models import BuildStatus
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
@@ -32,14 +35,14 @@ from ade_api.features.system_settings.service import (
     SafeModeService,
 )
 from ade_api.settings import Settings
+from ade_api.shared.core.time import utc_now
+from ade_api.shared.pagination import Page
 from ade_api.storage_layout import (
     config_venv_path,
     workspace_config_root,
     workspace_documents_root,
     workspace_run_root,
 )
-from ade_api.shared.core.time import utc_now
-from ade_api.shared.pagination import Page
 
 from .models import Run, RunLog, RunStatus
 from .repository import RunsRepository
@@ -725,7 +728,7 @@ class RunsService:
             "run_id": run.id,
             "configuration_id": run.configuration_id,
             "workspace_id": run.workspace_id,
-            "configuration_id": context.configuration_id,
+            "context_configuration_id": context.configuration_id,
         }
         for key, value in metadata.items():
             command.extend(["--metadata", f"{key}={value}"])
@@ -879,7 +882,11 @@ class RunsService:
             target_path=venv_path,
             config_path=config_root,
             engine_spec=self._settings.engine_spec,
-            pip_cache_dir=Path(self._settings.pip_cache_dir) if self._settings.pip_cache_dir else None,
+            pip_cache_dir=(
+                Path(self._settings.pip_cache_dir)
+                if self._settings.pip_cache_dir
+                else None
+            ),
             python_bin=self._settings.python_bin,
             timeout=float(self._settings.build_timeout.total_seconds()),
         ):
@@ -896,9 +903,12 @@ class RunsService:
         configuration.engine_spec = self._settings.engine_spec  # type: ignore[attr-defined]
         configuration.engine_version = artifacts.artifacts.engine_version  # type: ignore[attr-defined]
         configuration.python_version = artifacts.artifacts.python_version  # type: ignore[attr-defined]
-        configuration.python_interpreter = str(
-            venv_path / ("Scripts" if os.name == "nt" else "bin") / ("python.exe" if os.name == "nt" else "python")
-        )  # type: ignore[attr-defined]
+        python_bin = (
+            venv_path
+            / ("Scripts" if os.name == "nt" else "bin")
+            / ("python.exe" if os.name == "nt" else "python")
+        )
+        configuration.python_interpreter = str(python_bin)  # type: ignore[attr-defined]
         configuration.content_digest = digest
         configuration.built_content_digest = digest  # type: ignore[attr-defined]
         configuration.built_configuration_version = configuration.configuration_version  # type: ignore[attr-defined]

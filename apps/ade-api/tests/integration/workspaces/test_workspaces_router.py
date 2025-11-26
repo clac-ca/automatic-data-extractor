@@ -9,8 +9,6 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from ade_api.settings import get_settings
-from ade_api.shared.db.session import get_sessionmaker
 from ade_api.features.roles.models import (
     Permission,
     Principal,
@@ -21,6 +19,8 @@ from ade_api.features.roles.models import (
 )
 from ade_api.features.roles.service import assign_global_role
 from ade_api.features.workspaces.models import WorkspaceMembership
+from ade_api.settings import get_settings
+from ade_api.shared.db.session import get_sessionmaker
 
 pytestmark = pytest.mark.asyncio
 SESSION_COOKIE = get_settings().session_cookie_name

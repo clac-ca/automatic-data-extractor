@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from ade_engine.schemas import ADE_TELEMETRY_EVENT_SCHEMA
 
 from ade_api.features.runs.runner import ADEProcessRunner, StdoutFrame
@@ -27,7 +26,11 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
         "    'run_id': 'run-1',\n"
         "    'timestamp': '2024-01-01T00:00:00Z',\n"
         "    'metadata': {'run_id': 'run-1'},\n"
-        "    'event': {'event': 'pipeline_transition', 'level': 'info', 'payload': {'phase': 'mapping'}},\n"
+        "    'event': {\n"
+        "        'event': 'pipeline_transition',\n"
+        "        'level': 'info',\n"
+        "        'payload': {'phase': 'mapping'},\n"
+        "    },\n"
         "}\n"
         "time.sleep(0.05)\n"
         "events.write_text(json.dumps(payload) + '\\n', encoding='utf-8')\n",

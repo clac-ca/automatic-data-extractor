@@ -2,23 +2,21 @@
 
 from __future__ import annotations
 
-import json
-
 import io
+import json
 
 import pytest
 from fastapi import UploadFile
 from httpx import AsyncClient
 
-from ade_api.settings import get_settings
-from ade_api.storage_layout import workspace_documents_root
-from ade_api.shared.db.session import get_sessionmaker
+from ade_api.features.documents.exceptions import DocumentFileMissingError
 from ade_api.features.documents.models import Document
 from ade_api.features.documents.service import DocumentsService
-from ade_api.features.documents.exceptions import DocumentFileMissingError
 from ade_api.features.users.models import User
+from ade_api.settings import get_settings
+from ade_api.shared.db.session import get_sessionmaker
+from ade_api.storage_layout import workspace_documents_root
 from tests.utils import login
-
 
 pytestmark = pytest.mark.asyncio
 

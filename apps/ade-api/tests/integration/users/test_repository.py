@@ -6,10 +6,9 @@ from uuid import uuid4
 
 import pytest
 
-from ade_api.shared.db.session import get_sessionmaker
 from ade_api.features.users.models import UserCredential
 from ade_api.features.users.repository import UsersRepository
-
+from ade_api.shared.db.session import get_sessionmaker
 
 pytestmark = pytest.mark.asyncio
 

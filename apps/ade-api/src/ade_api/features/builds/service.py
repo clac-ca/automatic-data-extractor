@@ -17,8 +17,8 @@ from ade_api.features.configs.models import Configuration
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage
 from ade_api.settings import Settings
-from ade_api.storage_layout import config_venv_path
 from ade_api.shared.core.time import utc_now
+from ade_api.storage_layout import config_venv_path
 
 from .builder import (
     BuildArtifacts,
@@ -194,7 +194,10 @@ class BuildsService:
 
         if configuration.build_status is BuildStatus.BUILDING:
             if options.wait:
-                await self._wait_for_build(workspace_id=workspace_id, configuration_id=configuration_id)
+                await self._wait_for_build(
+                    workspace_id=workspace_id,
+                    configuration_id=configuration_id,
+                )
                 return await self.prepare_build(
                     workspace_id=workspace_id,
                     configuration_id=configuration_id,
@@ -486,7 +489,6 @@ class BuildsService:
         configuration.engine_spec = engine_spec  # type: ignore[attr-defined]
         configuration.engine_version = engine_version_hint  # type: ignore[attr-defined]
         configuration.python_interpreter = python_interpreter  # type: ignore[attr-defined]
-        configuration.last_build_id = build.id  # type: ignore[attr-defined]
 
         build = Build(
             id=self._generate_build_id(),
@@ -496,6 +498,7 @@ class BuildsService:
             created_at=self._now(),
         )
         await self._builds.add(build)
+        configuration.last_build_id = build.id  # type: ignore[attr-defined]
 
         context = BuildExecutionContext(
             build_id=build.id,

@@ -25,10 +25,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "apps" / "ade-api" / "src"))
 sys.path.insert(0, str(REPO_ROOT))
 
-from ade_api.features.builds.builder import VirtualEnvironmentBuilder
-from ade_api.features.builds.exceptions import BuildExecutionError
-from ade_api.settings import DEFAULT_PIP_CACHE_DIR, DEFAULT_VENVS_DIR
-
 TEMPLATE_CONFIG = (
     REPO_ROOT / "apps" / "ade-api" / "src" / "ade_api" / "templates" / "config_packages" / "default"
 )
@@ -111,6 +107,9 @@ def _resolve_path(arg_value: Path | None, *, env_name: str, default: Path) -> Pa
 
 
 async def run_builder(args: argparse.Namespace) -> None:
+    from ade_api.features.builds.builder import VirtualEnvironmentBuilder
+    from ade_api.settings import DEFAULT_PIP_CACHE_DIR, DEFAULT_VENVS_DIR
+
     build_id = args.build_id or f"poc-{uuid4().hex[:8]}"
     config_path = args.config_path.resolve()
     if not config_path.exists():
@@ -158,6 +157,8 @@ async def run_builder(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    from ade_api.features.builds.exceptions import BuildExecutionError
+
     args = parse_args()
     try:
         asyncio.run(run_builder(args))

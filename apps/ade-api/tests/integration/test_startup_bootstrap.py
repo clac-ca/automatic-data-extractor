@@ -7,9 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from ade_api.settings import Settings
 from ade_api.main import create_app
-
+from ade_api.settings import Settings
 
 pytestmark = pytest.mark.asyncio
 

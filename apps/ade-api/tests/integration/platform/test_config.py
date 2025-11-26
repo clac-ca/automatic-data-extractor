@@ -104,7 +104,10 @@ def test_settings_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.pip_cache_dir == (expected_root / "cache" / "pip").resolve()
 
 
-def test_workspaces_dir_propagates_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_workspaces_dir_propagates_defaults(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """workspaces_dir should become the default root for workspace-owned storage."""
 
     monkeypatch.chdir(tmp_path)

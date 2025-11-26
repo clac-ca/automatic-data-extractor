@@ -207,7 +207,9 @@ class VirtualEnvironmentBuilder:
         except Exception as exc:  # pragma: no cover - defensive cleanup
             await self._remove_target(target_path)
             message = (
-                f"Failed to build venv for workspace={workspace_id} configuration={configuration_id}: {exc}"
+                "Failed to build venv "
+                f"for workspace={workspace_id} "
+                f"configuration={configuration_id}: {exc}"
             )
             raise BuildExecutionError(message, build_id=build_id) from exc
 

@@ -4,21 +4,22 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
 
+from ade_api.features.builds import service as builds_service_module
 from ade_api.features.builds.builder import (
     BuildArtifacts,
-    BuildStep,
     BuilderArtifactsEvent,
     BuilderEvent,
     BuilderLogEvent,
     BuilderStepEvent,
+    BuildStep,
 )
-from ade_api.features.builds import service as builds_service_module
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.settings import Settings
 from ade_api.shared.db.mixins import generate_ulid
