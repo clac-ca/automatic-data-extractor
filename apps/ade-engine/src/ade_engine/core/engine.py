@@ -85,6 +85,7 @@ class Engine:
             pipeline_logger.event(
                 "started",
                 level=None,
+                status="in_progress",
                 engine_version=self.engine_info.version,
             )
 
@@ -149,8 +150,8 @@ class Engine:
             try:
                 if 'event_sink' in locals() and event_sink:
                     pipeline_logger._emit(  # pylint: disable=protected-access
-                        "completed",
-                        run_payload={
+                        "run.completed",
+                        payload={
                             "status": "failed",
                             "error": {
                                 "code": error.code,

@@ -386,7 +386,7 @@ async def test_stream_run_safe_mode(
             events.append(json.loads(line))
 
     assert events, "expected streaming events"
-    assert events[0]["type"] == "run.created"
+    assert events[0]["type"] == "run.queued"
     assert events[-1]["type"] == "run.completed"
 
     run_id = events[0]["run_id"]
@@ -546,7 +546,7 @@ async def test_stream_run_processes_real_documents(
                 continue
             events.append(json.loads(line))
 
-    assert events and events[0]["type"] == "run.created"
+    assert events and events[0]["type"] == "run.queued"
     assert events[-1]["type"] == "run.completed"
     assert events[-1]["status"] == "succeeded"
     run_id = events[0]["run_id"]
@@ -622,7 +622,7 @@ async def test_stream_run_honors_input_sheet_override(
                 continue
             events.append(json.loads(line))
 
-    assert events and events[0]["type"] == "run.created"
+    assert events and events[0]["type"] == "run.queued"
     assert events[-1]["type"] == "run.completed"
     assert events[-1]["status"] == "succeeded"
     run_id = events[0]["run_id"]
@@ -764,7 +764,7 @@ async def test_stream_run_processes_all_worksheets_when_unspecified(
                 continue
             events.append(json.loads(line))
 
-    assert events and events[0]["type"] == "run.created"
+    assert events and events[0]["type"] == "run.queued"
     assert events[-1]["type"] == "run.completed"
     assert events[-1]["status"] == "succeeded"
     run_id = events[0]["run_id"]
@@ -833,7 +833,7 @@ async def test_stream_run_limits_to_requested_sheet_list(
                 continue
             events.append(json.loads(line))
 
-    assert events and events[0]["type"] == "run.created"
+    assert events and events[0]["type"] == "run.queued"
     assert events[-1]["type"] == "run.completed"
     assert events[-1]["status"] == "succeeded"
     run_id = events[0]["run_id"]

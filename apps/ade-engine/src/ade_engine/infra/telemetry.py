@@ -20,10 +20,14 @@ def _now() -> datetime:
 def _event_level(event: AdeEvent) -> str:
     """Best-effort level extraction for filtering."""
 
-    if event.run and "level" in event.run:
-        return str(event.run.get("level"))
-    if event.log and "level" in event.log:
-        return str(event.log.get("level"))
+    extras = getattr(event, "model_extra", {}) or {}
+    level = extras.get("level")
+    if isinstance(level, str):
+        return level
+    # Fall back to stderr implying warning when stream is present
+    stream = extras.get("stream")
+    if stream == "stderr":
+        return "warning"
     return "info"
 
 
@@ -32,34 +36,16 @@ def _context_ids(run: RunContext) -> tuple[str | None, str | None]:
     return meta.get("workspace_id"), meta.get("configuration_id")
 
 
-def _make_event(
-    *,
-    run: RunContext,
-    type_: str,
-    run_payload: dict[str, Any] | None = None,
-    build_payload: dict[str, Any] | None = None,
-    env_payload: dict[str, Any] | None = None,
-    validation_payload: dict[str, Any] | None = None,
-    execution_payload: dict[str, Any] | None = None,
-    output_delta: dict[str, Any] | None = None,
-    log_payload: dict[str, Any] | None = None,
-    error_payload: dict[str, Any] | None = None,
-) -> AdeEvent:
+def _make_event(*, run: RunContext, type_: str, payload: dict[str, Any] | None = None) -> AdeEvent:
     workspace_id, configuration_id = _context_ids(run)
+    payload = payload or {}
     return AdeEvent(
         type=type_,
         created_at=_now(),
         workspace_id=workspace_id,
         configuration_id=configuration_id,
         run_id=run.run_id,
-        run=run_payload,
-        build=build_payload,
-        env=env_payload,
-        validation=validation_payload,
-        execution=execution_payload,
-        output_delta=output_delta,
-        log=log_payload,
-        error=error_payload,
+        **payload,
     )
 
 
@@ -120,38 +106,27 @@ class PipelineLogger:
     run: RunContext
     event_sink: EventSink | None = None
 
-    def _emit(self, type_suffix: str, *, run_payload: dict[str, Any] | None = None, build_payload: dict[str, Any] | None = None, env_payload: dict[str, Any] | None = None, validation_payload: dict[str, Any] | None = None, execution_payload: dict[str, Any] | None = None, output_delta: dict[str, Any] | None = None, log_payload: dict[str, Any] | None = None, error_payload: dict[str, Any] | None = None) -> None:
+    def _emit(self, type_: str, *, payload: dict[str, Any] | None = None) -> None:
         if not self.event_sink:
             return
 
-        event = _make_event(
-            run=self.run,
-            type_=f"run.{type_suffix}",
-            run_payload=run_payload,
-            build_payload=build_payload,
-            env_payload=env_payload,
-            validation_payload=validation_payload,
-            execution_payload=execution_payload,
-            output_delta=output_delta,
-            log_payload=log_payload,
-            error_payload=error_payload,
-        )
+        event = _make_event(run=self.run, type_=type_, payload=payload or {})
         self.event_sink.emit(event)
 
-    def note(self, message: str, *, level: str = "info", **details: Any) -> None:
-        run_payload = {"message": message, "level": level}
+    def note(self, message: str, *, level: str = "info", stream: str = "stdout", **details: Any) -> None:
+        payload: dict[str, Any] = {"message": message, "level": level, "stream": stream}
         if details:
-            run_payload["details"] = details
-        self._emit("note", run_payload=run_payload)
+            payload["details"] = details
+        self._emit("run.console", payload=payload)
 
     def event(self, type_suffix: str, *, level: str | None = "info", **payload: Any) -> None:
-        run_payload = dict(payload)
+        event_payload = dict(payload)
         if level is not None:
-            run_payload["level"] = level
-        self._emit(type_suffix, run_payload=run_payload or None)
+            event_payload["level"] = level
+        self._emit(f"run.{type_suffix}", payload=event_payload or None)
 
     def pipeline_phase(self, phase: str, **payload: Any) -> None:
-        self._emit("pipeline.progress", run_payload={"phase": phase, **payload})
+        self._emit("run.phase.started", payload={"phase": phase, **payload})
 
     def record_table(self, table: NormalizedTable) -> None:
         raw = table.mapped.raw
@@ -175,25 +150,30 @@ class PipelineLogger:
             }
             for column in table.mapped.column_map.unmapped_columns
         ]
+        column_count = len(table.mapped.column_map.mapped_columns) + len(table.mapped.column_map.unmapped_columns)
         self._emit(
-            "table.summary",
-            output_delta={
-                "kind": "table_summary",
-                "table": {
-                    "source_file": str(raw.source_file),
-                    "source_sheet": raw.source_sheet,
-                    "table_index": raw.table_index,
-                    "row_count": len(table.rows),
-                    "mapped_fields": mapped_fields,
-                    "unmapped_column_count": len(table.mapped.column_map.unmapped_columns),
-                    "unmapped_columns": unmapped_columns,
-                    "validation": validation,
+            "run.table.summary",
+            payload={
+                "table_id": f"tbl_{raw.table_index}",
+                "source_file": str(raw.source_file),
+                "source_sheet": raw.source_sheet,
+                "table_index": raw.table_index,
+                "row_count": len(table.rows),
+                "column_count": column_count,
+                "mapped_fields": mapped_fields,
+                "unmapped_column_count": len(table.mapped.column_map.unmapped_columns),
+                "unmapped_columns": unmapped_columns,
+                "validation": validation,
+                "details": {
+                    "header_row": raw.header_row_index,
+                    "first_data_row": raw.first_data_row_index,
+                    "last_data_row": raw.last_data_row_index,
                 },
             },
         )
 
     def validation_issue(self, **payload: Any) -> None:
-        self._emit("validation.issue.delta", validation_payload=payload)
+        self._emit("run.validation.issue", payload=payload)
 
 
 def _aggregate_validation(issues: list[Any]) -> dict[str, Any]:

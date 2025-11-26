@@ -64,7 +64,8 @@ export function TelemetrySummary({ events }: { events: AdeEvent[] }) {
   }
 
   const levelCounts = events.reduce<Record<string, number>>((acc, event) => {
-    const level = (event.run?.level as string | undefined) ?? (event.log?.level as string | undefined) ?? "info";
+    const streamLevel = (event.stream as string | undefined) === "stderr" ? "warning" : undefined;
+    const level = (event.level as string | undefined) ?? streamLevel ?? "info";
     acc[level] = (acc[level] ?? 0) + 1;
     return acc;
   }, {});
@@ -107,7 +108,8 @@ function formatTimestamp(timestamp: string | number): string {
 }
 
 function levelFor(event: AdeEvent): string {
-  return (event.run?.level as string | undefined) ?? (event.log?.level as string | undefined) ?? "info";
+  const streamLevel = (event.stream as string | undefined) === "stderr" ? "warning" : undefined;
+  return (event.level as string | undefined) ?? streamLevel ?? "info";
 }
 
 function Metric({

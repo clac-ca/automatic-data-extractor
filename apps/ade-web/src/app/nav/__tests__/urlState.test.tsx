@@ -102,7 +102,7 @@ describe("Config Builder search helpers", () => {
     expect(snapshot.file).toBe("/src/app.ts");
     expect(snapshot.view).toBe("split");
     expect(snapshot.console).toBe("open");
-    expect(snapshot.pane).toBe("validation");
+    expect(snapshot.pane).toBe("problems");
     expect(snapshot.tab).toBe(DEFAULT_CONFIG_BUILDER_SEARCH.tab);
     expect(snapshot.present).toEqual({
       tab: false,
@@ -116,7 +116,12 @@ describe("Config Builder search helpers", () => {
   it("maps legacy pane names to the new set", () => {
     const snapshot = readConfigBuilderSearch("pane=problems");
 
-    expect(snapshot.pane).toBe("validation");
+    expect(snapshot.pane).toBe("problems");
+  });
+
+  it("maps legacy console pane names to terminal and summary aliases", () => {
+    expect(readConfigBuilderSearch("pane=console").pane).toBe("terminal");
+    expect(readConfigBuilderSearch("pane=run-summary").pane).toBe("runSummary");
   });
 
   it("supports legacy path parameters", () => {
@@ -130,12 +135,12 @@ describe("Config Builder search helpers", () => {
     const base = new URLSearchParams("file=/one.ts&console=open&pane=console");
     const next = mergeConfigBuilderSearch(base, {
       file: undefined,
-      pane: "validation",
+      pane: "problems",
       view: "zen",
     });
 
     expect(next.get("console")).toBe("open");
-    expect(next.get("pane")).toBe("validation");
+    expect(next.get("pane")).toBe("problems");
     expect(next.get("view")).toBe("zen");
     expect(next.has("file")).toBe(false);
 

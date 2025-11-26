@@ -162,8 +162,8 @@ from the `config_package` using `importlib.resources`.
   ```
 
   The engine treats metadata as opaque; it mirrors it into
-  `RunContext.metadata` and telemetry envelopes (not into `artifact.json`). How those
-  keys relate back to runs is entirely a backend concern.
+  `RunContext.metadata` and telemetry envelopes. How those keys relate back to
+  runs is entirely a backend concern.
 
 ---
 
@@ -195,7 +195,7 @@ For a normal run, the CLI prints a single JSON object to stdout. Conceptually:
     "id": "run-uuid",
     "status": "succeeded",
     "output_paths": ["/data/runs/123/output/normalized.xlsx"],
-    "artifact_path": "/data/runs/123/logs/artifact.json",
+    "logs_dir": "/data/runs/123/logs",
     "events_path": "/data/runs/123/logs/events.ndjson",
     "processed_files": ["input.xlsx"],
     "error": null
@@ -207,13 +207,13 @@ Fields mirror `RunResult`:
 
 * `status`: `"succeeded"` or `"failed"`.
 * `output_paths`: list of output workbook paths (usually 1).
-* `artifact_path`: path to `artifact.json`.
-* `events_path`: path to `events.ndjson`.
+* `logs_dir`: path to the logs directory for the run.
+* `events_path`: convenience path to `events.ndjson` (within `logs_dir`).
 * `processed_files`: basenames of source files the engine actually read.
 * `error`: `null` on success, or a human‑readable error summary on failure.
 
 The ADE backend should **not parse internal error messages** for control flow;
-it should rely on `status` and the presence of the log files. Error messages
+it should rely on `status` and the presence of the event log. Error messages
 are for logs and operator visibility.
 
 ### 5.2 Exit codes
@@ -300,10 +300,10 @@ A typical end‑to‑end flow:
    * Persist:
 
      * output workbook path(s),
-     * `artifact.json` and `events.ndjson` paths,
+     * `events.ndjson` path (under `logs_dir`),
      * status (`succeeded` / `failed`).
-   * Optionally parse `artifact.json` and `events.ndjson` to drive UI and
-     reporting.
+   * Optionally parse `events.ndjson` to drive UI and reporting; build a run
+     summary (`ade.run_summary/v1`) from events.
 
 Importantly, the engine:
 
@@ -344,8 +344,7 @@ python -m ade_engine \
 Then inspect:
 
 * `examples/output/` — normalized workbook(s).
-* `examples/logs/artifact.json` — mapping, validation, and run details (no backend metadata).
-* `examples/logs/events.ndjson` — telemetry stream.
+* `examples/logs/events.ndjson` — telemetry stream (run + table summaries).
 
 ### 7.2 Python from a REPL or test
 
@@ -365,8 +364,8 @@ result = run(
 print(result.status, result.output_paths)
 ```
 
-Both workflows use the same engine and produce the same artifact/telemetry
-structure; only the calling mechanism differs.
+Both workflows use the same engine and produce the same outputs/telemetry; only
+the calling mechanism differs.
 
 ---
 

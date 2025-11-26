@@ -95,9 +95,44 @@ ade bundle apps/ade-web/README.md \
   --out "${generated_dir}/ade-web-src-config-builder-detail.md" \
   --no-clip --no-show
 
-# Configuration Builder workbench (core + components + state)
+# Configuration Builder workbench — chrome/root (overall layout + types)
 ade bundle apps/ade-web/README.md \
-  --dir apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench \
+  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/Workbench.tsx \
+  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/index.tsx \
+  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/types.ts \
+  --out "${generated_dir}/ade-web-src-config-builder-workbench-chrome.md" \
+  --no-clip --no-show
+
+# Configuration Builder workbench — editor/explorer/inspector surface
+ade bundle apps/ade-web/README.md \
+  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/components/EditorArea.tsx \
+  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/components/Explorer.tsx \
+  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/components/Inspector.tsx \
+  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/components/PanelResizeHandle.tsx \
+  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/components/ActivityBar.tsx \
+  --out "${generated_dir}/ade-web-src-config-builder-workbench-editor.md" \
+  --no-clip --no-show
+
+# Configuration Builder workbench — console/bottom panel
+ade bundle apps/ade-web/README.md \
+  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/components/BottomPanel.tsx \
+  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/utils/console.ts \
+  --out "${generated_dir}/ade-web-src-config-builder-workbench-console.md" \
+  --no-clip --no-show
+
+# Configuration Builder workbench — state/hooks
+ade bundle apps/ade-web/README.md \
+  --dir apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/state \
   --ext ts --ext tsx --ext md \
-  --out "${generated_dir}/ade-web-src-config-builder-workbench.md" \
+  --out "${generated_dir}/ade-web-src-config-builder-workbench-state.md" \
+  --no-clip --no-show
+
+# Configuration Builder workbench — utilities, defaults, seed data
+ade bundle apps/ade-web/README.md \
+  --dir apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/utils \
+  --dir apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/seed \
+  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/defaultConfig.ts \
+  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/components/PanelResizeHandle.tsx \
+  --ext ts --ext tsx --ext md \
+  --out "${generated_dir}/ade-web-src-config-builder-workbench-support.md" \
   --no-clip --no-show

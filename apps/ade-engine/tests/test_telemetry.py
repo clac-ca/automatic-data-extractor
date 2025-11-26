@@ -97,16 +97,20 @@ def test_file_event_sink_writes_ndjson(tmp_path: Path) -> None:
     sink = FileEventSink(path=path, min_level="info")
 
     info_event = AdeEvent(
-        type="run.note",
+        type="run.console",
         created_at=datetime.now(timezone.utc),
         run_id=run.run_id,
-        run={"level": "info", "message": "started"},
+        stream="stdout",
+        level="info",
+        message="started",
     )
     debug_event = AdeEvent(
-        type="run.note",
+        type="run.console",
         created_at=datetime.now(timezone.utc),
         run_id=run.run_id,
-        run={"level": "debug", "message": "verbose"},
+        stream="stdout",
+        level="debug",
+        message="verbose",
     )
 
     sink.emit(info_event)
@@ -118,7 +122,7 @@ def test_file_event_sink_writes_ndjson(tmp_path: Path) -> None:
     first = json.loads(lines[0])
     assert first["schema"] == "ade.event/v1"
     assert first["run_id"] == run.run_id
-    assert first["run"]["message"] == "started"
+    assert first["message"] == "started"
 
 
 def test_pipeline_logger_records_notes_and_tables(tmp_path: Path) -> None:
@@ -135,13 +139,13 @@ def test_pipeline_logger_records_notes_and_tables(tmp_path: Path) -> None:
 
     events = [json.loads(line) for line in (run.paths.logs_dir / "events.ndjson").read_text().strip().split("\n")]
 
-    assert events[0]["type"] == "run.note"
-    assert events[0]["run"]["message"] == "Started run"
-    assert events[1]["type"] == "run.pipeline.progress"
-    assert events[1]["run"]["phase"] == "mapping"
+    assert events[0]["type"] == "run.console"
+    assert events[0]["message"] == "Started run"
+    assert events[1]["type"] == "run.phase.started"
+    assert events[1]["phase"] == "mapping"
 
     table_event = events[2]
     assert table_event["type"] == "run.table.summary"
-    assert table_event["output_delta"]["table"]["row_count"] == 2
-    assert table_event["output_delta"]["table"]["validation"]["total"] == 0
-    assert table_event["output_delta"]["table"]["mapped_fields"][0]["field"] == "id"
+    assert table_event["row_count"] == 2
+    assert table_event["validation"]["total"] == 0
+    assert table_event["mapped_fields"][0]["field"] == "id"

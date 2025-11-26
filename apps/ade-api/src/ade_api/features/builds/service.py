@@ -234,15 +234,10 @@ class BuildsService:
         yield self._ade_event(
             build=build,
             type_="build.created",
-            build_payload={"status": self._status_literal(build.status)},
-        )
-        yield self._ade_event(
-            build=build,
-            type_="build.plan",
-            env_payload={
-                "should_build": context.should_run,
-                "force": bool(options.force),
+            payload={
+                "status": "queued",
                 "reason": reason,
+                "should_build": context.should_run,
                 "engine_spec": context.engine_spec,
                 "engine_version_hint": context.engine_version_hint,
                 "python_bin": context.python_bin,
@@ -259,15 +254,11 @@ class BuildsService:
             yield self._ade_event(
                 build=build,
                 type_="build.completed",
-                build_payload={
-                    "status": self._status_literal(build.status),
-                    "exit_code": build.exit_code,
+                payload={
+                    "status": "active",
                     "summary": build.summary,
-                },
-                env_payload={
-                    "should_build": False,
-                    "force": bool(options.force),
-                    "reason": "reuse_ok",
+                    "exit_code": build.exit_code,
+                    "env": {"reason": "reuse_ok", "should_build": False, "force": bool(options.force)},
                 },
             )
             return
@@ -275,10 +266,10 @@ class BuildsService:
         build = await self._transition_status(build, BuildStatus.BUILDING)
         yield self._ade_event(
             build=build,
-            type_="build.progress",
-            build_payload={
-                "phase": BuildStep.CREATE_VENV.value,
-                "message": "Starting build",
+            type_="build.started",
+            payload={
+                "status": "building",
+                "reason": reason,
             },
         )
 
@@ -300,8 +291,8 @@ class BuildsService:
                 if isinstance(event, BuilderStepEvent):
                     yield self._ade_event(
                         build=build,
-                        type_="build.progress",
-                        build_payload={
+                        type_="build.phase.started",
+                        payload={
                             "phase": event.step.value,
                             "message": event.message,
                         },
@@ -314,9 +305,10 @@ class BuildsService:
                     )
                     yield self._ade_event(
                         build=build,
-                        type_="build.log.delta",
-                        log_payload={
+                        type_="build.console",
+                        payload={
                             "stream": event.stream,
+                            "level": "warning" if event.stream == "stderr" else "info",
                             "message": event.message,
                             "created": self._epoch_seconds(log.created_at),
                         },
@@ -333,11 +325,11 @@ class BuildsService:
             yield self._ade_event(
                 build=build,
                 type_="build.completed",
-                build_payload={
+                payload={
                     "status": self._status_literal(build.status),
                     "exit_code": build.exit_code,
                     "summary": build.summary,
-                    "error_message": build.error_message,
+                    "error": {"message": build.error_message} if build.error_message else None,
                 },
             )
             return
@@ -352,11 +344,11 @@ class BuildsService:
             yield self._ade_event(
                 build=build,
                 type_="build.completed",
-                build_payload={
+                payload={
                     "status": self._status_literal(build.status),
                     "exit_code": build.exit_code,
                     "summary": build.summary,
-                    "error_message": build.error_message,
+                    "error": {"message": build.error_message} if build.error_message else None,
                 },
             )
             return
@@ -366,16 +358,20 @@ class BuildsService:
             context=context,
             artifacts=artifacts,
         )
+        duration_ms = None
+        if build.started_at and build.finished_at:
+            duration_ms = int((build.finished_at - build.started_at).total_seconds() * 1000)
         yield self._ade_event(
             build=build,
             type_="build.completed",
-            build_payload={
+            payload={
                 "status": self._status_literal(build.status),
                 "exit_code": build.exit_code,
                 "summary": build.summary,
-                "error_message": build.error_message,
+                "duration_ms": duration_ms,
+                "error": {"message": build.error_message} if build.error_message else None,
+                "env": {"reason": reason},
             },
-            env_payload={"reason": reason},
         )
 
     async def run_to_completion(
@@ -445,10 +441,7 @@ class BuildsService:
         *,
         build: Build,
         type_: str,
-        build_payload: dict[str, Any] | None = None,
-        env_payload: dict[str, Any] | None = None,
-        log_payload: dict[str, Any] | None = None,
-        error_payload: dict[str, Any] | None = None,
+        payload: dict[str, Any] | None = None,
     ) -> AdeEvent:
         return AdeEvent(
             type=type_,
@@ -457,14 +450,7 @@ class BuildsService:
             configuration_id=build.configuration_id,
             run_id=None,
             build_id=build.id,
-            run=None,
-            build=build_payload,
-            env=env_payload,
-            validation=None,
-            execution=None,
-            output_delta=None,
-            log=log_payload,
-            error=error_payload,
+            **(payload or {}),
         )
 
     # ------------------------------------------------------------------

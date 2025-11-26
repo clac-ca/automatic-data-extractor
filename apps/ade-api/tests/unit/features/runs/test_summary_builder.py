@@ -24,40 +24,36 @@ def _success_events(run_id: str = "run_1") -> list[AdeEvent]:
             type="run.started",
             created_at=_dt(0),
             run_id=run_id,
-            run={"status": "running", "engine_version": "0.2.0"},
+            status="running",
+            engine_version="0.2.0",
         ),
         AdeEvent(
             type="run.table.summary",
             created_at=_dt(1),
             run_id=run_id,
-            output_delta={
-                "kind": "table_summary",
-                "table": {
-                    "source_file": "input.xlsx",
-                    "source_sheet": "Sheet1",
-                    "table_index": 0,
-                    "row_count": 10,
-                    "mapped_fields": [
-                        {"field": "member_id", "score": 1.0, "is_required": True, "is_satisfied": True},
-                        {"field": "email", "score": 0.82, "is_required": True, "is_satisfied": False},
-                    ],
-                    "unmapped_column_count": 1,
-                    "validation": {
-                        "total": 3,
-                        "by_severity": {"error": 2, "warning": 1},
-                        "by_code": {"missing": 1, "invalid": 1, "empty": 1},
-                        "by_field": {
-                            "email": {
-                                "total": 2,
-                                "by_severity": {"error": 2},
-                                "by_code": {"missing": 1, "invalid": 1},
-                            },
-                            "member_id": {
-                                "total": 1,
-                                "by_severity": {"warning": 1},
-                                "by_code": {"empty": 1},
-                            },
-                        },
+            source_file="input.xlsx",
+            source_sheet="Sheet1",
+            table_index=0,
+            row_count=10,
+            mapped_fields=[
+                {"field": "member_id", "score": 1.0, "is_required": True, "is_satisfied": True},
+                {"field": "email", "score": 0.82, "is_required": True, "is_satisfied": False},
+            ],
+            unmapped_column_count=1,
+            validation={
+                "total": 3,
+                "by_severity": {"error": 2, "warning": 1},
+                "by_code": {"missing": 1, "invalid": 1, "empty": 1},
+                "by_field": {
+                    "email": {
+                        "total": 2,
+                        "by_severity": {"error": 2},
+                        "by_code": {"missing": 1, "invalid": 1},
+                    },
+                    "member_id": {
+                        "total": 1,
+                        "by_severity": {"warning": 1},
+                        "by_code": {"empty": 1},
                     },
                 },
             },
@@ -66,26 +62,21 @@ def _success_events(run_id: str = "run_1") -> list[AdeEvent]:
             type="run.table.summary",
             created_at=_dt(2),
             run_id=run_id,
-            output_delta={
-                "kind": "table_summary",
-                "table": {
-                    "source_file": "input.xlsx",
-                    "source_sheet": "Sheet1",
-                    "table_index": 1,
-                    "row_count": 5,
-                    "mapped_fields": [
-                        {"field": "member_id", "score": 0.91, "is_required": True, "is_satisfied": True},
-                    ],
-                    "unmapped_column_count": 0,
-                    "validation": {"total": 0, "by_severity": {}, "by_code": {}, "by_field": {}},
-                },
-            },
+            source_file="input.xlsx",
+            source_sheet="Sheet1",
+            table_index=1,
+            row_count=5,
+            mapped_fields=[
+                {"field": "member_id", "score": 0.91, "is_required": True, "is_satisfied": True},
+            ],
+            unmapped_column_count=0,
+            validation={"total": 0, "by_severity": {}, "by_code": {}, "by_field": {}},
         ),
         AdeEvent(
             type="run.completed",
             created_at=_dt(3),
             run_id=run_id,
-            run={"status": "succeeded"},
+            status="succeeded",
         ),
     ]
 
@@ -96,13 +87,15 @@ def _failure_events(run_id: str = "run_2") -> list[AdeEvent]:
             type="run.started",
             created_at=_dt(0),
             run_id=run_id,
-            run={"status": "running", "engine_version": "0.2.0"},
+            status="running",
+            engine_version="0.2.0",
         ),
         AdeEvent(
             type="run.completed",
             created_at=_dt(1),
             run_id=run_id,
-            run={"status": "failed", "error": {"code": "pipeline_error", "message": "boom"}},
+            status="failed",
+            error={"code": "pipeline_error", "message": "boom"},
         ),
     ]
 
@@ -134,7 +127,7 @@ def test_build_run_summary_happy_path():
 
 def test_build_run_summary_missing_row_counts_sets_none():
     events = _success_events()
-    events[1].output_delta["table"].pop("row_count", None)  # type: ignore[index]
+    events[1].model_extra.pop("row_count", None)
 
     summary = build_run_summary(
         events=events,

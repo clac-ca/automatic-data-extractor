@@ -19,21 +19,19 @@ class AdeEvent(BaseModel):
     version: str = "1.0.0"
     created_at: datetime
 
+    sequence: int | None = None
+
     workspace_id: str | None = None
     configuration_id: str | None = None
+    job_id: str | None = None
     run_id: str | None = None
     build_id: str | None = None
+    source: str | None = None
+    details: dict[str, Any] | None = None
 
-    run: dict[str, Any] | None = None
-    build: dict[str, Any] | None = None
-    env: dict[str, Any] | None = None
-    validation: dict[str, Any] | None = None
-    execution: dict[str, Any] | None = None
-    output_delta: dict[str, Any] | None = None
-    log: dict[str, Any] | None = None
     error: dict[str, Any] | None = None
 
-    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
 
 
 # Legacy exports (kept for import compatibility; prefer AdeEvent)
