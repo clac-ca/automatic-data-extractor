@@ -39,7 +39,7 @@ import { createScopedStorage } from "@shared/storage";
 import type { ConfigBuilderConsole } from "@app/nav/urlState";
 import { ApiError } from "@shared/api";
 import { fetchRunOutputs, fetchRunSummary, fetchRunTelemetry, streamRun, type RunStreamOptions } from "@shared/runs/api";
-import type { RunStatus, AdeEvent as RunStreamEvent } from "@shared/runs/types";
+import type { RunStatus } from "@shared/runs/types";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
 import { client } from "@shared/api/client";
@@ -731,7 +731,7 @@ export function Workbench({
 
       const startedAt = new Date();
       const startedIso = startedAt.toISOString();
-      setPane("console");
+      setPane("terminal");
       resetConsole(
         metadata.mode === "validation"
           ? "Starting ADE run (validate-only)…"
@@ -762,13 +762,12 @@ export function Workbench({
               return;
             }
             if (!event.type.startsWith("run.")) continue;
-            if (event.type === "run.created") {
-              currentRunId = event.run_id ?? (event.run?.id as string | undefined) ?? null;
+            if (event.type === "run.queued") {
+              currentRunId = event.run_id ?? (event.id as string | undefined) ?? null;
             }
             if (event.type === "run.completed") {
-              const runStatus = (event.run?.status as RunStatus | undefined) ?? "succeeded";
+              const runStatus = (event.status as RunStatus | undefined) ?? "succeeded";
               const errorMessage =
-                (event.run?.error_message as string | undefined)?.trim() ||
                 (event.error?.message as string | undefined)?.trim() ||
                 "ADE run failed.";
               const notice =
@@ -786,6 +785,9 @@ export function Workbench({
               showConsoleBanner(notice, { intent });
 
               if (metadata.mode === "extraction" && currentRunId) {
+                const completedAt = new Date();
+                const completedIso = completedAt.toISOString();
+                const durationMs = Math.max(0, completedAt.getTime() - startedAt.getTime());
                 const downloadBase = `/api/v1/runs/${encodeURIComponent(currentRunId)}`;
                 setLatestRun({
                   runId: currentRunId,
@@ -802,6 +804,17 @@ export function Workbench({
                   telemetryLoaded: false,
                   telemetryError: null,
                   error: null,
+                  startedAt: startedIso,
+                  completedAt: completedIso,
+                  durationMs,
+                });
+                appendConsoleLine({
+                  level: runStatus === "succeeded" ? "success" : runStatus === "canceled" ? "warning" : "error",
+                  message:
+                    durationMs > 0
+                      ? `Run ${runStatus} in ${formatRunDurationLabel(durationMs)}. Open Run summary for details.`
+                      : `Run ${runStatus}. Open Run summary for details.`,
+                  timestamp: formatConsoleTimestamp(completedAt),
                 });
                 try {
                   const listing = await fetchRunOutputs(currentRunId);
@@ -1027,6 +1040,14 @@ export function Workbench({
     }
   }, [outputCollapsed, openConsole, closeConsole]);
 
+  const handleShowRunSummary = useCallback(() => {
+    if (!latestRun) {
+      return;
+    }
+    openConsole();
+    setPane("runSummary");
+  }, [latestRun, openConsole, setPane]);
+
   const handleToggleExplorer = useCallback(() => {
     setExplorer((prev) => ({ ...prev, collapsed: !prev.collapsed }));
   }, []);
@@ -1172,6 +1193,8 @@ export function Workbench({
         configName={configName}
         workspaceLabel={workspaceLabel}
         validationLabel={validationLabel}
+        latestRun={latestRun}
+        onShowRunSummary={handleShowRunSummary}
         canSaveFiles={canSaveFiles}
         isSavingFiles={isSavingTabs}
         onSaveFile={handleSaveActiveTab}
@@ -1400,6 +1423,50 @@ export function Workbench({
   );
 }
 
+function RunStatusPill({
+  summary,
+  appearance,
+  onClick,
+}: {
+  readonly summary: WorkbenchRunSummary;
+  readonly appearance: "light" | "dark";
+  readonly onClick?: () => void;
+}) {
+  const durationLabel = formatRunDurationLabel(summary.durationMs);
+  const sheetLabel = describeSheetSelection(summary.sheetNames);
+  const docLabel = summary.documentName ?? "Document not recorded";
+  const statusText = describeRunStatus(summary.status);
+  const surfaceClass =
+    appearance === "dark"
+      ? "border-white/15 bg-white/5 text-white hover:border-white/25 hover:bg-white/10 focus-visible:ring-white/40"
+      : "border-slate-200 bg-slate-100 text-slate-800 hover:border-slate-300 hover:bg-white focus-visible:ring-slate-400/40";
+  const metaTextClass = appearance === "dark" ? "text-white/70" : "text-slate-500";
+  const actionClass = appearance === "dark" ? "text-brand-200" : "text-brand-700";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        "flex max-w-sm flex-col items-start gap-1 rounded-md border px-3 py-2 text-left text-[13px] shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
+        surfaceClass,
+      )}
+      title="View the latest run summary"
+    >
+      <span className="flex items-center gap-2 text-xs font-semibold">
+        <RunStatusDot status={summary.status} />
+        <span className="leading-none">Last run: {statusText}</span>
+        {durationLabel ? <span className={clsx("font-normal", metaTextClass)}>· {durationLabel}</span> : null}
+      </span>
+      <span className={clsx("line-clamp-1 text-[12px]", metaTextClass)}>
+        {docLabel}
+        {sheetLabel ? ` · ${sheetLabel}` : ""}
+      </span>
+      <span className={clsx("text-[11px] font-semibold", actionClass)}>View summary</span>
+    </button>
+  );
+}
+
 interface SidePanelPlaceholderProps {
   readonly width: number;
   readonly view: ActivityBarView;
@@ -1430,6 +1497,8 @@ function WorkbenchChrome({
   configName,
   workspaceLabel,
   validationLabel,
+  latestRun,
+  onShowRunSummary,
   canSaveFiles,
   isSavingFiles,
   onSaveFile,
@@ -1456,6 +1525,8 @@ function WorkbenchChrome({
   readonly configName: string;
   readonly workspaceLabel: string;
   readonly validationLabel?: string;
+  readonly latestRun?: WorkbenchRunSummary | null;
+  readonly onShowRunSummary?: () => void;
   readonly canSaveFiles: boolean;
   readonly isSavingFiles: boolean;
   readonly onSaveFile: () => void;
@@ -1509,6 +1580,9 @@ function WorkbenchChrome({
         </div>
       </div>
       <div className="flex items-center gap-3">
+        {latestRun ? (
+          <RunStatusPill summary={latestRun} appearance={appearance} onClick={onShowRunSummary} />
+        ) : null}
         {validationLabel ? <span className={clsx("text-xs", metaTextClass)}>{validationLabel}</span> : null}
         <button
           type="button"
@@ -1896,6 +1970,61 @@ function ChromeIconButton({
       {icon}
     </button>
   );
+}
+
+function RunStatusDot({ status }: { readonly status: RunStatus }) {
+  const tone =
+    status === "succeeded"
+      ? "bg-emerald-500"
+      : status === "running" || status === "queued" || status === "active"
+        ? "bg-amber-400"
+        : status === "canceled"
+          ? "bg-slate-400"
+          : "bg-rose-500";
+  return <span className={clsx("inline-block h-2.5 w-2.5 rounded-full", tone)} aria-hidden />;
+}
+
+function describeSheetSelection(sheetNames?: readonly string[] | null): string | null {
+  if (!sheetNames) {
+    return null;
+  }
+  if (sheetNames.length === 0) {
+    return "All worksheets";
+  }
+  return sheetNames.join(", ");
+}
+
+function describeRunStatus(status: RunStatus): string {
+  switch (status) {
+    case "succeeded":
+      return "Succeeded";
+    case "failed":
+      return "Failed";
+    case "canceled":
+      return "Canceled";
+    case "queued":
+      return "Queued";
+    case "running":
+    case "active":
+      return "Running";
+    default:
+      return status;
+  }
+}
+
+function formatRunDurationLabel(durationMs?: number | null): string | null {
+  if (durationMs == null || !Number.isFinite(durationMs) || durationMs < 0) {
+    return null;
+  }
+  if (durationMs < 1000) {
+    return `${Math.round(durationMs)} ms`;
+  }
+  if (durationMs < 60_000) {
+    return `${(durationMs / 1000).toFixed(1)} s`;
+  }
+  const minutes = Math.floor(durationMs / 60_000);
+  const seconds = Math.round((durationMs % 60_000) / 1000);
+  return `${minutes}m ${seconds}s`;
 }
 
 function WorkbenchBadgeIcon() {

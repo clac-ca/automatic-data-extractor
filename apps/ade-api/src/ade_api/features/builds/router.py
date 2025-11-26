@@ -133,14 +133,16 @@ async def create_build_endpoint(
         except BuildNotFoundError:
             return
         except BuildExecutionError as exc:
-            error_event = {
-                "object": "ade.build.event",
-                "type": "build.log",
-                "build_id": build.id,
-                "created": int(utc_now().timestamp()),
-                "stream": "stderr",
-                "message": str(exc),
-            }
+            error_event = AdeEvent(
+                type="build.console",
+                created_at=utc_now(),
+                build_id=build.id,
+                workspace_id=build.workspace_id,
+                configuration_id=build.configuration_id,
+                stream="stderr",
+                level="error",
+                message=str(exc),
+            )
             yield _event_bytes(error_event)
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")

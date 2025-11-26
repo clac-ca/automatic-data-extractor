@@ -736,7 +736,7 @@ Used by:
 
 * Run consoles:
 
-  * `streamRunLogs(runId)` → `/api/v1/runs/{run_id}/logs` (run event stream; emits `run.created`, `run.started`, `run.pipeline.progress`, `run.table.summary`, `run.log.delta`, `run.completed`, etc.).
+  * `streamRunLogs(runId)` → `/api/v1/runs/{run_id}/logs` (run event stream; emits `run.queued`, `run.started`, `run.phase.started`, `run.table.summary`, `run.console`, `run.completed`, etc.).
 
 Because environments are rebuilt automatically when runs start (or when `force_rebuild` is set), the build stream is primarily for explicit `/builds` flows or debugging; typical workbench/test runs rely solely on the run stream.
 
@@ -749,7 +749,7 @@ Event format:
 
 UI code in the workbench or run detail screen:
 
-* Appends log lines to a console buffer (`run.log.delta` / `build.log.delta`).
+* Appends log lines to a console buffer (`run.console` / `build.console`).
 * Updates derived status/progress when progress/terminal events arrive.
 
 ### 6.3 Cancellation and errors

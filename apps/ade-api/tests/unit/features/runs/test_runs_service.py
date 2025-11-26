@@ -138,17 +138,18 @@ async def test_stream_run_happy_path_yields_engine_events(
             log = await self._append_log(run.id, "engine output", stream="stdout")
             yield self._ade_event(
                 run=run,
-                type_="run.log.delta",
-                log_payload={
+                type_="run.console",
+                payload={
                     "stream": "stdout",
+                    "level": "info",
                     "message": "engine output",
                     "created": self._epoch_seconds(log.created_at),
                 },
             )
             telemetry = self._ade_event(
                 run=run,
-                type_="run.pipeline.progress",
-                run_payload={"phase": "extracting"},
+                type_="run.phase.started",
+                payload={"phase": "extracting"},
             )
             await self._append_log(run.id, telemetry.model_dump_json(), stream="stdout")
             yield telemetry
@@ -160,9 +161,9 @@ async def test_stream_run_happy_path_yields_engine_events(
             yield self._ade_event(
                 run=completion,
                 type_="run.completed",
-                run_payload={
-                    "status": self._status_literal(completion.status),
-                    "execution_summary": {"exit_code": completion.exit_code},
+                payload={
+                    "status": "succeeded",
+                    "execution": {"exit_code": completion.exit_code},
                 },
             )
 
@@ -172,10 +173,10 @@ async def test_stream_run_happy_path_yields_engine_events(
     async for event in service.stream_run(context=context, options=run_options):
         events.append(event)
 
-    assert events[0].type == "run.created"
+    assert events[0].type == "run.queued"
     assert events[1].type == "run.started"
-    assert events[2].type == "run.log.delta"
-    assert events[3].type == "run.pipeline.progress"
+    assert events[2].type == "run.console"
+    assert events[3].type == "run.phase.started"
     assert events[4].type == "run.completed"
 
     run = await service.get_run(context.run_id)
@@ -185,7 +186,7 @@ async def test_stream_run_happy_path_yields_engine_events(
     messages = [entry.message for entry in logs.entries]
     assert messages[0] == "engine output"
     telemetry = AdeEvent.model_validate_json(messages[1])
-    assert telemetry.type == "run.pipeline.progress"
+    assert telemetry.type == "run.phase.started"
     assert logs.next_after_id is None
 
 
@@ -210,8 +211,7 @@ async def test_stream_run_handles_engine_failure(
         events.append(event)
 
     assert events[-1].type == "run.completed"
-    assert events[-1].run is not None
-    assert events[-1].run["status"] == "failed"
+    assert events[-1].model_extra.get("status") == "failed"
     failure_logs = await service.get_logs(run_id=context.run_id)
     assert failure_logs.entries[-1].message.startswith("ADE run failed: boom")
 
@@ -243,8 +243,7 @@ async def test_stream_run_handles_cancelled_execution(
             events.append(event)
 
     assert events[-1].type == "run.completed"
-    assert events[-1].run is not None
-    assert events[-1].run["status"] == "canceled"
+    assert events[-1].model_extra.get("status") == "canceled"
 
     run = await service.get_run(context.run_id)
     assert run is not None
@@ -293,15 +292,13 @@ async def test_stream_run_validate_only_short_circuits(
         events.append(event)
 
     assert [event.type for event in events] == [
-        "run.created",
+        "run.queued",
         "run.started",
-        "run.log.delta",
+        "run.console",
         "run.completed",
     ]
-    assert events[-1].run is not None
-    assert events[-1].run["status"] == "succeeded"
-    assert events[-1].run is not None
-    assert events[-1].run["summary"]["run"]["failure_message"] == "Validation-only execution"
+    assert events[-1].model_extra.get("status") == "succeeded"
+    assert events[-1].model_extra.get("run_summary", {}).get("run", {}).get("failure_message") == "Validation-only execution"
 
     run = await service.get_run(context.run_id)
     assert run is not None
@@ -323,16 +320,14 @@ async def test_stream_run_respects_safe_mode(session, tmp_path: Path) -> None:
         events.append(event)
 
     assert [event.type for event in events] == [
-        "run.created",
+        "run.queued",
         "run.started",
-        "run.log.delta",
+        "run.console",
         "run.completed",
     ]
-    assert events[-1].run is not None
-    assert events[-1].run["status"] == "succeeded"
-    assert events[-1].run["execution_summary"]["exit_code"] == 0
-    assert events[-1].run is not None
-    assert events[-1].run["summary"]["run"]["failure_message"] == "Safe mode skip"
+    assert events[-1].model_extra.get("status") == "succeeded"
+    assert (events[-1].model_extra.get("execution") or {}).get("exit_code") == 0
+    assert events[-1].model_extra.get("run_summary", {}).get("run", {}).get("failure_message") == "Safe mode skip"
 
     run = await service.get_run(context.run_id)
     assert run is not None

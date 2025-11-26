@@ -2,7 +2,7 @@
 
 <a id="top"></a>
 
-An ADE **config package** is a small, installable Python project (**`ade_config`**) that teaches the engine how to read messy spreadsheets and write a clean, consistent workbook. You write straightforward Python functions; the engine streams the spreadsheet once to find the real table bounds, **materializes each table** (it’s small), calls your functions, and records each decision in an **artifact** (audit trail).
+An ADE **config package** is a small, installable Python project (**`ade_config`**) that teaches the engine how to read messy spreadsheets and write a clean, consistent workbook. You write straightforward Python functions; the engine streams the spreadsheet once to find the real table bounds, **materializes each table** (it’s small), calls your functions, and emits telemetry (`events.ndjson`) that captures each decision.
 
 ## Clickable config package example
 
@@ -125,15 +125,15 @@ Think of an ADE **config package** as a set of tiny functions the engine calls w
 
    See: [`before_save.py`](#beforesavepy)
 
-   ### `on_run_end(artifact)` → return **None**
+   ### `on_run_end(...)` → return **None**
 
-   Runs once at the end. Perfect for logging a summary or exporting metrics from the **artifact**.
+   Runs once at the end. Perfect for logging a summary or exporting metrics via telemetry.
 
    ```python
    # hooks/on_run_end.py
-   def on_run_end(*, artifact: dict | None = None, logger=None, **_):
-       total_tables = sum(len(s.get("tables", [])) for s in (artifact or {}).get("sheets", []))
-       if logger: logger.info("run_end: tables=%s", total_tables)
+   def on_run_end(*, tables=None, logger=None, **_):
+       total_tables = len(tables or [])
+       if logger: logger.note("run_end", tables=total_tables)
        return None
    ```
 
@@ -141,7 +141,7 @@ Think of an ADE **config package** as a set of tiny functions the engine calls w
 
 6. **Everything is auditable.**
 
-   Every detector score, mapping choice, transform delta, and validation issue is recorded in the **artifact** so you can explain any result.
+   Every detector score, mapping choice, transform delta, and validation issue is recorded in the telemetry stream (`events.ndjson`) so you can explain any result.
 
 ---
 
@@ -574,7 +574,7 @@ def detect_not_header_like(*, row_values: list, **_) -> dict:
 * `column_values_sample: list` — stratified sample of column values (size from manifest).
 * `column_values: list | None` — the full column list (shared, zero‑copy).
 * `table_data: dict` — the whole table (`{"headers": [...], "rows": [[...], ...]}`).
-* Plus `manifest`, `env`, `artifact`, `logger`, `column_index` (1‑based), etc.
+* Plus `manifest`, `env`, `logger`, `column_index` (1‑based), etc.
 
 **Return shape:** `{"scores": {field_name: float}}`
 
@@ -928,7 +928,7 @@ Called once at run start. Log/setup; return None.
 from __future__ import annotations
 from logging import Logger
 
-def on_run_start(*, run_id: str, manifest: dict, env: dict | None = None, artifact: dict | None = None, logger: Logger | None = None, **_) -> None:
+def on_run_start(*, run_id: str, manifest: dict, env: dict | None = None, logger: Logger | None = None, **_) -> None:
     env = env or {}
     if logger:
         logger.info("run_start id=%s locale=%s date_fmt=%s", run_id, env.get("LOCALE","n/a"), env.get("DATE_FMT","n/a"))
@@ -1003,19 +1003,11 @@ from openpyxl.workbook import Workbook  # type: ignore
 from openpyxl.utils import get_column_letter  # type: ignore
 from openpyxl.worksheet.table import Table, TableStyleInfo  # type: ignore
 
-def before_save(*, workbook: Workbook, artifact: dict | None = None, logger: Logger | None = None, **_) -> Workbook:
+def before_save(*, workbook: Workbook, logger: Logger | None = None, **_) -> Workbook:
     ws = workbook.active
     if ws.title != "Normalized":
         ws.title = "Normalized"
     ws.freeze_panes = "A2"
-
-    # Minimal Summary from artifact (structure may vary)
-    total_rows = sum(len(t.get("rows", [])) for s in (artifact or {}).get("sheets", []) for t in s.get("tables", []))
-    total_issues = sum(len(t.get("validation", {}).get("issues", [])) for s in (artifact or {}).get("sheets", []) for t in s.get("tables", []))
-    summary = workbook.create_sheet("Summary")
-    summary.append(["Metric", "Value"])
-    summary.append(["Total rows", total_rows])
-    summary.append(["Total issues", total_issues])
 
     # Optional: Excel "structured table" styling + autosize
     if ws.max_row and ws.max_column:
@@ -1030,7 +1022,7 @@ def before_save(*, workbook: Workbook, artifact: dict | None = None, logger: Log
             ws.column_dimensions[letter].width = min(60, max(10, width))
 
     if logger:
-        logger.info("before_save: sheet normalized, summary added, styling applied")
+        logger.info("before_save: sheet normalized, styling applied")
     return workbook
 ```
 
@@ -1048,23 +1040,10 @@ Summarize results via logs; return None.
 """
 from __future__ import annotations
 from logging import Logger
-from collections import Counter
-
-def on_run_end(*, artifact: dict | None = None, logger: Logger | None = None, **_) -> None:
-    if not artifact:
-        if logger: logger.warning("on_run_end: missing artifact")
-        return None
-
-    counts = Counter()
-    for s in artifact.get("sheets", []):
-        for t in s.get("tables", []):
-            for issue in t.get("validation", {}).get("issues", []):
-                counts[issue.get("code","other")] += 1
-
-    total = sum(counts.values())
+def on_run_end(*, tables=None, logger: Logger | None = None, **_) -> None:
+    total_tables = len(tables or [])
     if logger:
-        breakdown = ", ".join(f"{code}={n}" for code, n in sorted(counts.items())) or "none"
-        logger.info("on_run_end: issues_total=%s | %s", total, breakdown)
+        logger.info("on_run_end: tables=%s", total_tables)
     return None
 ```
 

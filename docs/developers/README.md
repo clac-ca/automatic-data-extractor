@@ -84,7 +84,6 @@ Everything ADE produces (config_packages, venvs, runs, logs, cache, etc.) is per
 │     │     ├─ input/               # Uploaded files
 │     │     ├─ output/              # Generated output files
 │     │     └─ logs/
-│     │        ├─ artifact.json     # human/audit-readable narrative
 │     │        └─ events.ndjson     # append-only timeline
 │     └─ documents/
 │        └─ <document_id>.<ext>     # optional shared document store
@@ -114,7 +113,7 @@ flowchart TD
         A1 --> A2 --> A3 --> A4 --> A5
     end
     J1 --> A1
-    A5 --> R1["Results: output.xlsx + logs/artifact.json"]
+    A5 --> R1["Results: output.xlsx + logs/events.ndjson"]
 
     %% Run B
     S2 -->|reuse frozen venv| J2["Step 3: Run run B"]
@@ -124,7 +123,7 @@ flowchart TD
         B3 --> B4["4) Validate (optional)"] --> B5["5) Generate outputs"]
     end
     J2 --> B1
-    B5 --> R2["Results: output.xlsx + logs/artifact.json"]
+    B5 --> R2["Results: output.xlsx + logs/events.ndjson"]
 
     %% Run C
     S2 -->|reuse frozen venv| J3["Step 3: Run run C"]
@@ -134,7 +133,7 @@ flowchart TD
         C3 --> C4["4) Validate (optional)"] --> C5["5) Generate outputs"]
     end
     J3 --> C1
-    C5 --> R3["Results: output.xlsx + logs/artifact.json"]
+    C5 --> R3["Results: output.xlsx + logs/events.ndjson"]
 ```
 
 ## Step 1: Config — Define the Rules
@@ -163,12 +162,13 @@ Hooks give you precise control over the pipeline without changing the core engin
 
 | Hook                   | Runs                           | Typical use                                                                      |
 | ---------------------- | ------------------------------ | -------------------------------------------------------------------------------- |
-| **`on_run_start.py`**  | Before any files are processed | Initialize shared state, load reference data, or record metadata in the artifact |
+| **`on_run_start.py`**  | Before any files are processed | Initialize shared state, load reference data, or emit metadata via logger        |
 | **`after_mapping.py`** | After columns are mapped       | Adjust mappings, reorder fields, or correct mislabeled headers                   |
 | **`before_save.py`**   | Just before output is written  | Add summary tabs, rename sheets, or tweak formatting                             |
 | **`on_run_end.py`**    | After the run completes        | Clean up temporary resources or emit final notes                                 |
 
-Each hook receives structured context objects (e.g., `run`, `table`, `book`) and can safely write observations to the audit artifact using `note()`.
+Each hook receives structured context objects (e.g., `run`, `table`, `book`)
+and can emit telemetry/notes using `context.logger.note(...)`.
 
 ### Example Config Package Layout
 
@@ -184,7 +184,7 @@ Each hook receives structured context objects (e.g., `run`, `table`, `book`) and
 │     │  ├─ header.py                                     # Heuristics that vote for “this row looks like a header row”
 │     │  └─ data.py                                       # Heuristics that vote for “this row looks like a data row”
 │     ├─ hooks/                                           # Optional lifecycle hooks that run around run stages
-│     │  ├─ on_run_start.py                               # def run(*, run, **_): initialize tiny policy/state; note() to artifact
+│     │  ├─ on_run_start.py                               # def run(*, run, **_): initialize tiny policy/state; note() via logger
 │     │  ├─ after_mapping.py                              # def after_mapping(*, run, table, **_): correct mapping/order/labels
 │     │  ├─ before_save.py                                # def before_save(*, run, book, **_): rename tab, add sheets, widths
 │     │  └─ on_run_end.py                                 # def run(*, run, **_)
@@ -234,7 +234,6 @@ runs/<run_id>/
   output/
     output.xlsx       # final structured workbook
   logs/
-    artifact.json     # full audit trail and rule explanations
     events.ndjson     # timeline of the run
 ```
 
@@ -300,11 +299,11 @@ If a build fails, re‑run the build action and check `packages.txt` to see the 
 data/.venv/<config_id>/bin/python -I -B -c "import ade_engine, ade_config; print('ok')"
 ```
 
-If mapping results look unexpected, open `artifact.json`; it records the winning scores and the rules that contributed to each decision. Performance issues usually trace back to heavy work in detectors; prefer sampling in detectors, move heavier cleanup into transforms, and keep validators light. Because every configuration has its own environment, installs are isolated; if you suspect a dependency clash, run `pip check` in the venv to diagnose.
+If mapping results look unexpected, inspect `events.ndjson` (look for `run.table.summary` events); they record mapping scores, unmapped columns, and validation breakdowns. Performance issues usually trace back to heavy work in detectors; prefer sampling in detectors, move heavier cleanup into transforms, and keep validators light. Because every configuration has its own environment, installs are isolated; if you suspect a dependency clash, run `pip check` in the venv to diagnose.
 
 ## Where to go next
 
 1. **[Config Packages](./01-config-packages.md)** — what a config is, Script API v1, detectors, transforms, validators, hooks.
 2. **[Run Orchestration](./02-run-orchestration.md)** — queue, workers, resource limits, atomic writes.
-3. **[Artifact Reference](./14-run_artifact_json.md)** — the per‑run audit trail (schema and examples).
+3. **Run telemetry** — the per‑run event log (`events.ndjson`) and derived run summaries (`ade.run_summary/v1`).
 4. **[Glossary](./12-glossary.md)** — common terms and system vocabulary.

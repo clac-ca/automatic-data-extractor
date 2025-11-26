@@ -2,20 +2,21 @@ export type AdeEvent = {
   readonly object: "ade.event";
   readonly schema?: string;
   readonly version?: string;
-  readonly type: string; // e.g. run.created, run.log.delta, build.completed
+  readonly type: string; // e.g. run.queued, run.console, build.completed
   readonly created_at: string;
+  readonly sequence?: number | null;
   readonly workspace_id?: string | null;
   readonly configuration_id?: string | null;
+  readonly job_id?: string | null;
   readonly run_id?: string | null;
   readonly build_id?: string | null;
-  readonly run?: Record<string, unknown> | null;
-  readonly build?: Record<string, unknown> | null;
+  readonly source?: string | null;
+  readonly details?: Record<string, unknown> | null;
   readonly env?: Record<string, unknown> | null;
-  readonly validation?: Record<string, unknown> | null;
   readonly execution?: Record<string, unknown> | null;
-  readonly output_delta?: Record<string, unknown> | null;
-  readonly log?: { stream?: string; message?: string; [key: string]: unknown } | null;
+  readonly run_summary?: Record<string, unknown> | null;
   readonly error?: Record<string, unknown> | null;
+  readonly [key: string]: unknown;
 };
 
 export type RunStreamEvent = AdeEvent;

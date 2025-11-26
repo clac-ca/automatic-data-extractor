@@ -26,8 +26,8 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
         "    'run_id': 'run-1',\n"
         "    'created_at': '2024-01-01T00:00:00Z',\n"
         "    'object': 'ade.event',\n"
-        "    'run': {'phase': 'mapping'},\n"
-        "    'type': 'run.pipeline.progress',\n"
+        "    'phase': 'mapping',\n"
+        "    'type': 'run.phase.started',\n"
         "}\n"
         "time.sleep(0.05)\n"
         "events.write_text(json.dumps(payload) + '\\n', encoding='utf-8')\n",
@@ -46,5 +46,5 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
     telemetry = next(frame for frame in frames if not isinstance(frame, StdoutFrame))
     assert isinstance(telemetry, AdeEvent)
     assert telemetry.schema == ADE_EVENT_SCHEMA
-    assert telemetry.type == "run.pipeline.progress"
-    assert telemetry.run["phase"] == "mapping"
+    assert telemetry.type == "run.phase.started"
+    assert telemetry.model_extra["phase"] == "mapping"

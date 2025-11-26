@@ -63,6 +63,7 @@ def build_run_summary(
     completed_event: AdeEvent | None = None
 
     for event in events_list:
+        payload = event.model_extra or {}
         if event.type == "run.started":
             started_event = started_event or event
         elif event.type == "run.completed":
@@ -71,7 +72,7 @@ def build_run_summary(
         if event.type != "run.table.summary":
             continue
 
-        table = (event.output_delta or {}).get("table") if event.output_delta else None
+        table = payload
         if not isinstance(table, dict):
             continue
 
@@ -101,13 +102,18 @@ def build_run_summary(
 
         mapped_fields_payload = table.get("mapped_fields") or []
         for mapped in mapped_fields_payload:
-            field_name = mapped.get("field")
-            if not isinstance(field_name, str):
+            if isinstance(mapped, str):
+                field_name = mapped
+                score = None
+            elif isinstance(mapped, dict):
+                field_name = mapped.get("field")
+                score = mapped.get("score")
+            else:
                 continue
-            mapped_fields.add(field_name)
-            score = mapped.get("score")
-            if isinstance(score, (int, float)):
-                mapped_scores[field_name] = max(mapped_scores.get(field_name, float("-inf")), float(score))
+            if isinstance(field_name, str):
+                mapped_fields.add(field_name)
+                if isinstance(score, (int, float)):
+                    mapped_scores[field_name] = max(mapped_scores.get(field_name, float("-inf")), float(score))
 
         validation = table.get("validation") or {}
         total = validation.get("total")
@@ -171,7 +177,7 @@ def build_run_summary(
         else None
     )
 
-    completion_payload = completed_event.run if completed_event else {}
+    completion_payload = completed_event.model_extra or {} if completed_event else {}
     completion_error = completion_payload.get("error") if isinstance(completion_payload, dict) else None
     status_literal = None
     if isinstance(completion_payload, dict):
@@ -241,9 +247,7 @@ def build_run_summary(
         "failure_code": completion_error.get("code") if isinstance(completion_error, dict) else None,
         "failure_stage": completion_error.get("stage") if isinstance(completion_error, dict) else None,
         "failure_message": completion_error.get("message") if isinstance(completion_error, dict) else None,
-        "engine_version": started_event.run.get("engine_version")  # type: ignore[union-attr]
-        if started_event and isinstance(started_event.run, dict)
-        else None,
+        "engine_version": (started_event.model_extra or {}).get("engine_version") if started_event else None,  # type: ignore[union-attr]
         "config_version": manifest.version if manifest else None,  # type: ignore[union-attr]
         "env_reason": env_reason,
         "env_reused": env_reused,

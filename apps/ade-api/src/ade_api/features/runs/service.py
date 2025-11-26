@@ -268,11 +268,13 @@ class RunsService:
         """Iterate through run events while executing the engine."""
 
         run = await self._require_run(context.run_id)
+        mode_literal = "validate" if options.validate_only else "execute"
         yield self._ade_event(
             run=run,
-            type_="run.created",
-            run_payload={
-                "status": self._status_literal(run.status),
+            type_="run.queued",
+            payload={
+                "status": "queued",
+                "mode": mode_literal,
                 "options": options.model_dump(),
             },
         )
@@ -281,7 +283,7 @@ class RunsService:
         yield self._ade_event(
             run=run,
             type_="run.started",
-            run_payload={"status": self._status_literal(run.status)},
+            payload={"status": "in_progress", "mode": mode_literal},
         )
 
         mode_message = self._format_mode_message(options)
@@ -289,8 +291,13 @@ class RunsService:
             log = await self._append_log(run.id, mode_message, stream="stdout")
             yield self._ade_event(
                 run=run,
-                type_="run.log.delta",
-                log_payload={"stream": "stdout", "message": mode_message, "created": self._epoch_seconds(log.created_at)},
+                type_="run.console",
+                payload={
+                    "stream": "stdout",
+                    "level": "info",
+                    "message": mode_message,
+                    "created": self._epoch_seconds(log.created_at),
+                },
             )
 
         if options.validate_only:
@@ -309,14 +316,14 @@ class RunsService:
             yield self._ade_event(
                 run=completion,
                 type_="run.completed",
-                run_payload={
-                    "status": self._status_literal(completion.status),
-                    "mode": "validation",
-                    "execution_summary": {
+                payload={
+                    "status": "succeeded",
+                    "mode": "validate",
+                    "execution": {
                         "exit_code": completion.exit_code,
-                        "duration_ms": None,
+                        "duration_ms": self._duration_ms(completion),
                     },
-                    "summary": placeholder_summary.model_dump(mode="json"),
+                    "run_summary": placeholder_summary.model_dump(mode="json"),
                 },
             )
             return
@@ -343,19 +350,25 @@ class RunsService:
             )
             yield self._ade_event(
                 run=run,
-                type_="run.log.delta",
-                log_payload={"stream": "stdout", "message": message, "created": self._epoch_seconds(log.created_at)},
+                type_="run.console",
+                payload={
+                    "stream": "stdout",
+                    "level": "info",
+                    "message": message,
+                    "created": self._epoch_seconds(log.created_at),
+                },
             )
             yield self._ade_event(
                 run=completion,
                 type_="run.completed",
-                run_payload={
-                    "status": self._status_literal(completion.status),
-                    "execution_summary": {
+                payload={
+                    "status": "succeeded",
+                    "mode": mode_literal,
+                    "execution": {
                         "exit_code": completion.exit_code,
-                        "duration_ms": None,
+                        "duration_ms": self._duration_ms(completion),
                     },
-                    "summary": placeholder_summary.model_dump(mode="json"),
+                    "run_summary": placeholder_summary.model_dump(mode="json"),
                 },
             )
             return
@@ -383,9 +396,10 @@ class RunsService:
                     log = await self._append_log(run.id, event.message, stream=event.stream)
                     yield self._ade_event(
                         run=run,
-                        type_="run.log.delta",
-                        log_payload={
+                        type_="run.console",
+                        payload={
                             "stream": event.stream,
+                            "level": "warning" if event.stream == "stderr" else "info",
                             "message": event.message,
                             "created": self._epoch_seconds(log.created_at),
                         },
@@ -409,11 +423,15 @@ class RunsService:
             yield self._ade_event(
                 run=completion,
                 type_="run.completed",
-                run_payload={
-                    "status": self._status_literal(completion.status),
-                    "execution_summary": {"exit_code": completion.exit_code},
-                    "error_message": completion.error_message,
-                    "summary": placeholder_summary.model_dump(mode="json"),
+                payload={
+                    "status": "canceled",
+                    "mode": mode_literal,
+                    "execution": {
+                        "exit_code": completion.exit_code,
+                        "duration_ms": self._duration_ms(completion),
+                    },
+                    "error": {"message": completion.error_message},
+                    "run_summary": placeholder_summary.model_dump(mode="json"),
                 },
             )
             raise
@@ -439,9 +457,10 @@ class RunsService:
             )
             yield self._ade_event(
                 run=run,
-                type_="run.log.delta",
-                log_payload={
+                type_="run.console",
+                payload={
                     "stream": "stderr",
+                    "level": "error",
                     "message": log.message,
                     "created": self._epoch_seconds(log.created_at),
                 },
@@ -449,11 +468,15 @@ class RunsService:
             yield self._ade_event(
                 run=completion,
                 type_="run.completed",
-                run_payload={
-                    "status": self._status_literal(completion.status),
-                    "execution_summary": {"exit_code": completion.exit_code},
-                    "error_message": completion.error_message,
-                    "summary": placeholder_summary.model_dump(mode="json"),
+                payload={
+                    "status": "failed",
+                    "mode": mode_literal,
+                    "execution": {
+                        "exit_code": completion.exit_code,
+                        "duration_ms": self._duration_ms(completion),
+                    },
+                    "error": {"message": completion.error_message},
+                    "run_summary": placeholder_summary.model_dump(mode="json"),
                 },
             )
             return
@@ -535,14 +558,7 @@ class RunsService:
         *,
         run: Run,
         type_: str,
-        run_payload: dict[str, Any] | None = None,
-        build_payload: dict[str, Any] | None = None,
-        env_payload: dict[str, Any] | None = None,
-        validation_payload: dict[str, Any] | None = None,
-        execution_payload: dict[str, Any] | None = None,
-        output_delta: dict[str, Any] | None = None,
-        log_payload: dict[str, Any] | None = None,
-        error_payload: dict[str, Any] | None = None,
+        payload: dict[str, Any] | None = None,
     ) -> AdeEvent:
         return AdeEvent(
             type=type_,
@@ -551,14 +567,7 @@ class RunsService:
             configuration_id=run.configuration_id,
             run_id=run.id,
             build_id=None,
-            run=run_payload,
-            build=build_payload,
-            env=env_payload,
-            validation=validation_payload,
-            execution=execution_payload,
-            output_delta=output_delta,
-            log=log_payload,
-            error=error_payload,
+            **(payload or {}),
         )
 
     async def get_logs(
@@ -921,6 +930,8 @@ class RunsService:
         run_dir = runs_root / run.id
         run_dir.mkdir(parents=True, exist_ok=True)
 
+        mode_literal = "validate" if options.validate_only else "execute"
+
         if not options.input_document_id:
             raise RunInputMissingError("Input document is required for run execution")
 
@@ -964,9 +975,10 @@ class RunsService:
                 summary = self._parse_summary(frame.message, default=summary)
                 yield self._ade_event(
                     run=run,
-                    type_="run.log.delta",
-                    log_payload={
+                    type_="run.console",
+                    payload={
                         "stream": frame.stream,
+                        "level": "warning" if frame.stream == "stderr" else "info",
                         "message": frame.message,
                         "created": self._epoch_seconds(log.created_at),
                     },
@@ -1004,14 +1016,18 @@ class RunsService:
         yield self._ade_event(
             run=completion,
             type_="run.completed",
-                run_payload={
-                    "status": self._status_literal(completion.status),
-                    "execution_summary": {"exit_code": completion.exit_code},
-                    "events_path": paths_snapshot.events_path,
-                    "output_paths": paths_snapshot.output_paths,
-                    "processed_files": paths_snapshot.processed_files,
-                    "error_message": completion.error_message,
-                "summary": summary_model.model_dump(mode="json") if summary_model else None,
+            payload={
+                "status": self._status_literal(completion.status),
+                "mode": mode_literal,
+                "execution": {
+                    "exit_code": completion.exit_code,
+                    "duration_ms": self._duration_ms(completion),
+                },
+                "events_path": paths_snapshot.events_path,
+                "output_paths": paths_snapshot.output_paths,
+                "processed_files": paths_snapshot.processed_files,
+                "error": {"message": completion.error_message} if completion.error_message else None,
+                "run_summary": summary_model.model_dump(mode="json") if summary_model else None,
             },
         )
 
@@ -1241,6 +1257,12 @@ class RunsService:
         if dt is None:
             return None
         return int(dt.timestamp())
+
+    @staticmethod
+    def _duration_ms(run: Run) -> int | None:
+        if run.started_at and run.finished_at:
+            return int((run.finished_at - run.started_at).total_seconds() * 1000)
+        return None
 
     @staticmethod
     def _status_literal(status: RunStatus) -> RunStatusLiteral:
