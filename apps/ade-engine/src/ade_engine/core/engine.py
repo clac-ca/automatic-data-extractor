@@ -14,7 +14,6 @@ from ade_engine.core.errors import InputError, error_to_run_error
 from ade_engine.core.hooks import run_hooks
 from ade_engine.core.pipeline.pipeline_runner import execute_pipeline
 from ade_engine.core.types import EngineInfo, RunContext, RunError, RunPaths, RunPhase, RunRequest, RunResult, RunStatus
-from ade_engine.infra.artifact import FileArtifactSink
 from ade_engine.infra.telemetry import PipelineLogger, TelemetryConfig
 
 
@@ -41,12 +40,9 @@ def _resolve_paths(request: RunRequest) -> tuple[RunRequest, Path, Path, Path]:
     return normalized, input_dir, output_dir, logs_dir
 
 
-def _build_paths(input_dir: Path, output_dir: Path, logs_dir: Path) -> tuple[Path, Path]:
+def _ensure_dirs(output_dir: Path, logs_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
-    artifact_path = logs_dir / "artifact.json"
-    events_path = logs_dir / "events.ndjson"
-    return artifact_path, events_path
 
 
 class Engine:
@@ -63,7 +59,7 @@ class Engine:
 
         try:
             normalized_request, input_dir, output_dir, logs_dir = _resolve_paths(req)
-            artifact_path, events_path = _build_paths(input_dir, output_dir, logs_dir)
+            _ensure_dirs(output_dir, logs_dir)
 
             run_ctx = RunContext(
                 run_id=str(uuid4()),
@@ -73,8 +69,6 @@ class Engine:
                     input_dir=input_dir,
                     output_dir=output_dir,
                     logs_dir=logs_dir,
-                    artifact_path=artifact_path,
-                    events_path=events_path,
                 ),
                 started_at=datetime.now(timezone.utc),
             )
@@ -85,11 +79,9 @@ class Engine:
             )
             run_ctx.manifest = runtime.manifest
 
-            artifact_sink = FileArtifactSink(artifact_path=artifact_path)
             event_sink = self.telemetry.build_sink(run_ctx) if self.telemetry else None
-            pipeline_logger = PipelineLogger(run=run_ctx, artifact_sink=artifact_sink, event_sink=event_sink)
+            pipeline_logger = PipelineLogger(run=run_ctx, event_sink=event_sink)
 
-            artifact_sink.start(run_ctx, runtime.manifest)
             pipeline_logger.event(
                 "started",
                 level=None,
@@ -102,8 +94,6 @@ class Engine:
                 runtime.hooks,
                 run=run_ctx,
                 manifest=runtime.manifest,
-                artifact=artifact_sink,
-                events=event_sink,
                 tables=None,
                 workbook=None,
                 result=None,
@@ -120,22 +110,21 @@ class Engine:
             )
 
             phase = RunPhase.COMPLETED
-            artifact_sink.mark_success(output_paths)
             pipeline_logger.event(
                 "completed",
                 level=None,
-                engine_status="succeeded",
+                status="succeeded",
                 output_paths=[str(path) for path in output_paths],
                 processed_files=processed_files,
             )
 
+            run_ctx.completed_at = datetime.now(timezone.utc)
             provisional = RunResult(
                 status=RunStatus.SUCCEEDED,
                 error=None,
                 run_id=run_ctx.run_id,
                 output_paths=output_paths,
-                artifact_path=artifact_path,
-                events_path=events_path,
+                logs_dir=logs_dir,
                 processed_files=processed_files,
             )
 
@@ -145,15 +134,12 @@ class Engine:
                 runtime.hooks,
                 run=run_ctx,
                 manifest=runtime.manifest,
-                artifact=artifact_sink,
-                events=event_sink,
                 tables=normalized_tables,
                 workbook=None,
                 result=provisional,
                 logger=pipeline_logger,
             )
 
-            artifact_sink.flush()
             return provisional
 
         except Exception as exc:  # pragma: no cover - exercised via tests
@@ -161,17 +147,11 @@ class Engine:
             self.logger.exception("Run failed", exc_info=exc)
 
             try:
-                artifact_sink.mark_failure(error)  # type: ignore[name-defined]
-                artifact_sink.flush()  # type: ignore[name-defined]
-            except Exception:
-                pass
-
-            try:
                 if 'event_sink' in locals() and event_sink:
                     pipeline_logger._emit(  # pylint: disable=protected-access
                         "completed",
                         run_payload={
-                            "engine_status": "failed",
+                            "status": "failed",
                             "error": {
                                 "code": error.code,
                                 "stage": error.stage.value if error.stage else None,
@@ -182,13 +162,15 @@ class Engine:
             except Exception:
                 pass
 
+            if "run_ctx" in locals():
+                run_ctx.completed_at = datetime.now(timezone.utc)  # type: ignore[assignment]
+
             return RunResult(
                 status=RunStatus.FAILED,
                 error=error,
                 run_id=locals().get("run_ctx", RunContext(run_id="", metadata={}, manifest=None, paths=None, started_at=datetime.now(timezone.utc))).run_id,  # type: ignore[arg-type]
                 output_paths=(),
-                artifact_path=locals().get("artifact_path", Path("artifact.json")),
-                events_path=locals().get("events_path", Path("events.ndjson")),
+                logs_dir=logs_dir if 'logs_dir' in locals() else Path("logs"),
                 processed_files=(),
             )
 

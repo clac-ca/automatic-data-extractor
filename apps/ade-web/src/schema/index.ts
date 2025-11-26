@@ -19,4 +19,4 @@ export type UserProfile = GeneratedComponents["schemas"]["UserProfile"];
 export type RunResource = GeneratedComponents["schemas"]["RunResource"];
 export type RunStatus = RunResource["status"];
 export type RunCreateOptions = GeneratedComponents["schemas"]["RunCreateOptions"];
-export type { ArtifactV1 } from "./adeArtifact";
+export type { RunSummaryV1 } from "./runSummary";

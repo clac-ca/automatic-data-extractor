@@ -1,12 +1,12 @@
 import type { ConfigBuilderPane } from "@app/nav/urlState";
-import type { ArtifactV1 } from "@schema";
+import type { RunSummaryV1 } from "@schema";
 import type { AdeEvent, RunStatus } from "@shared/runs/types";
 import clsx from "clsx";
 
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 
 import type { WorkbenchConsoleLine, WorkbenchValidationState } from "../types";
-import { ArtifactSummary, TelemetrySummary } from "@shared/runs/RunInsights";
+import { RunSummaryView, TelemetrySummary } from "@shared/runs/RunInsights";
 
 export interface WorkbenchRunSummary {
   readonly runId: string;
@@ -14,9 +14,9 @@ export interface WorkbenchRunSummary {
   readonly downloadBase: string;
   readonly outputs: ReadonlyArray<{ path: string; byte_size: number }>;
   readonly outputsLoaded: boolean;
-  readonly artifact?: ArtifactV1 | null;
-  readonly artifactLoaded: boolean;
-  readonly artifactError?: string | null;
+  readonly summary?: RunSummaryV1 | null;
+  readonly summaryLoaded: boolean;
+  readonly summaryError?: string | null;
   readonly telemetry?: readonly AdeEvent[] | null;
   readonly telemetryLoaded: boolean;
   readonly telemetryError?: string | null;
@@ -151,12 +151,6 @@ function RunSummaryCard({ summary }: { summary: WorkbenchRunSummary }) {
         </div>
         <div className="flex flex-wrap gap-2">
           <a
-            href={`${summary.downloadBase}/artifact`}
-            className="inline-flex items-center rounded border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-100 hover:bg-slate-800"
-          >
-            Download artifact
-          </a>
-          <a
             href={`${summary.downloadBase}/logfile`}
             className="inline-flex items-center rounded border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-100 hover:bg-slate-800"
           >
@@ -189,15 +183,15 @@ function RunSummaryCard({ summary }: { summary: WorkbenchRunSummary }) {
         )}
       </div>
       <div className="mt-3 rounded-md border border-white/10 bg-slate-950/70 px-3 py-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Artifact summary</p>
-        {summary.artifactError ? (
-          <p className="text-xs text-rose-300">{summary.artifactError}</p>
-        ) : !summary.artifactLoaded ? (
-          <p className="text-xs text-slate-400">Loading artifact…</p>
-        ) : summary.artifact ? (
-          <ArtifactSummary artifact={summary.artifact} />
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Run summary</p>
+        {summary.summaryError ? (
+          <p className="text-xs text-rose-300">{summary.summaryError}</p>
+        ) : !summary.summaryLoaded ? (
+          <p className="text-xs text-slate-400">Loading summary…</p>
+        ) : summary.summary ? (
+          <RunSummaryView summary={summary.summary} />
         ) : (
-          <p className="text-xs text-slate-400">Artifact not available.</p>
+          <p className="text-xs text-slate-400">Summary not available.</p>
         )}
       </div>
       <div className="mt-3 rounded-md border border-white/10 bg-slate-950/70 px-3 py-2">

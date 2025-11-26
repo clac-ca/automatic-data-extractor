@@ -49,8 +49,8 @@ def run_command(
         "status": result.status.value,
         "run_id": result.run_id,
         "output_paths": [str(path) for path in result.output_paths],
-        "artifact_path": str(result.artifact_path),
-        "events_path": str(result.events_path),
+        "logs_dir": str(result.logs_dir),
+        "events_path": str(Path(result.logs_dir) / "events.ndjson"),
         "processed_files": list(result.processed_files),
     }
     if result.error:

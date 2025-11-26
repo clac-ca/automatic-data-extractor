@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 from openpyxl import load_workbook
 
 from ade_engine import Engine, RunRequest, RunStatus, run
-from ade_engine.schemas.artifact import ArtifactV1
-from ade_engine.schemas.telemetry import TelemetryEnvelope
+from ade_engine.schemas.telemetry import AdeEvent
 from tests.fixtures.config_factories import clear_config_import, make_minimal_config
 from tests.fixtures.sample_inputs import sample_csv, sample_large_csv, sample_xlsx_multi_sheet, sample_xlsx_single_sheet
 
@@ -19,8 +17,8 @@ def _cleanup_imports() -> None:
     clear_config_import()
 
 
-def _parse_events(path: Path) -> list[TelemetryEnvelope]:
-    return [TelemetryEnvelope.model_validate_json(line) for line in path.read_text().splitlines() if line]
+def _parse_events(path: Path) -> list[AdeEvent]:
+    return [AdeEvent.model_validate_json(line) for line in path.read_text().splitlines() if line]
 
 
 def test_engine_run_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -46,13 +44,13 @@ def test_engine_run_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     finally:
         workbook.close()
 
-    artifact = ArtifactV1.model_validate_json(Path(result.artifact_path).read_text())
-    assert artifact.run.status == "succeeded"
-    assert artifact.tables
+    events_path = Path(result.logs_dir) / "events.ndjson"
+    events = _parse_events(events_path)
 
-    events = _parse_events(Path(result.events_path))
-    names = [env.event.event for env in events]
-    assert "run_started" in names and "run_completed" in names
+    assert any(evt.type == "run.completed" and (evt.run or {}).get("status") == "succeeded" for evt in events)
+    table_event = next(evt for evt in events if evt.type == "run.table.summary")
+    table = table_event.output_delta["table"]  # type: ignore[index]
+    assert table["row_count"] == 2
 
 
 def test_engine_run_hook_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -69,8 +67,10 @@ def test_engine_run_hook_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
     assert result.status is RunStatus.FAILED
     assert result.error is not None
-    artifact = json.loads(Path(result.artifact_path).read_text())
-    assert artifact["run"]["status"] == "failed"
+    events_path = Path(result.logs_dir) / "events.ndjson"
+    events = _parse_events(events_path)
+    completion = next(evt for evt in events if evt.type == "run.completed")
+    assert completion.run and completion.run.get("status") == "failed"
 
 
 def test_engine_mapping_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -84,27 +84,22 @@ def test_engine_mapping_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         logs_dir=tmp_path / "logs",
     )
 
-    artifact = ArtifactV1.model_validate_json(Path(result.artifact_path).read_text())
-    table = artifact.tables[0]
+    events_path = Path(result.logs_dir) / "events.ndjson"
+    events = _parse_events(events_path)
+    table_event = next(evt for evt in events if evt.type == "run.table.summary")
+    table = table_event.output_delta["table"]  # type: ignore[index]
 
-    mapping_snapshot = [
-        {"field": col.field, "header": col.header, "score": col.score, "source_column_index": col.source_column_index}
-        for col in table.mapped_columns
+    mapped_fields = [
+        {key: field.get(key) for key in ("field", "header", "score", "source_column_index")}
+        for field in table["mapped_fields"]
     ]
-    unmapped_snapshot = [
-        {
-            "header": col.header,
-            "source_column_index": col.source_column_index,
-            "output_header": col.output_header,
-        }
-        for col in table.unmapped_columns
-    ]
+    unmapped_columns = table["unmapped_columns"]
 
-    assert mapping_snapshot == [
+    assert mapped_fields == [
         {"field": "member_id", "header": "member_id", "score": 1.0, "source_column_index": 0},
         {"field": "value", "header": "value", "score": 1.0, "source_column_index": 1},
     ]
-    assert unmapped_snapshot == [
+    assert unmapped_columns == [
         {"header": "note", "source_column_index": 2, "output_header": "raw_3"},
         {"header": "surplus", "source_column_index": 3, "output_header": "raw_4"},
     ]

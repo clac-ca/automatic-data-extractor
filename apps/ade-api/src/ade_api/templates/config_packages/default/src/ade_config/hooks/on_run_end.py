@@ -13,7 +13,7 @@ def run(ctx: Any) -> None:
     Emit a simple run summary.
 
     This uses the PipelineLogger (ctx.logger) so the message shows up in
-    both artifact notes and telemetry events.
+    telemetry events.
     """
     logger = getattr(ctx, "logger", None)
     run = getattr(ctx, "run", None)
@@ -25,7 +25,6 @@ def run(ctx: Any) -> None:
     run_id = getattr(run, "run_id", None)
     status = getattr(result, "status", None)
     output_paths = getattr(result, "output_paths", ()) or ()
-    artifact_path = getattr(result, "artifact_path", None)
 
     logger.note(
         "Run finished",
@@ -33,5 +32,4 @@ def run(ctx: Any) -> None:
         run_id=run_id,
         status=status,
         outputs=[str(p) for p in output_paths],
-        artifact=str(artifact_path) if artifact_path is not None else None,
     )

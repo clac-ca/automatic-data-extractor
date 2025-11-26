@@ -62,4 +62,5 @@ def test_cli_run_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     assert result.returncode == 0
     payload = json.loads(result.stdout)
     assert payload["status"] == "succeeded"
-    assert Path(payload["artifact_path"]).exists()
+    assert Path(payload["logs_dir"]).exists()
+    assert Path(payload["events_path"]).exists()

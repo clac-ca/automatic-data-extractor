@@ -119,8 +119,6 @@ def write_workbook(
         cfg.hooks,
         run=ctx,
         manifest=cfg.manifest,
-        artifact=pipeline_logger.artifact_sink,
-        events=pipeline_logger.event_sink,
         tables=sorted_tables,
         workbook=workbook,
         result=None,
