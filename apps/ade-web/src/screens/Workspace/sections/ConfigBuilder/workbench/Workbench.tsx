@@ -45,7 +45,7 @@ import {
   streamRun,
   type RunStreamOptions,
 } from "@shared/runs/api";
-import { isTelemetryEnvelope, type RunStatus } from "@shared/runs/types";
+import type { RunStatus, AdeEvent as RunStreamEvent } from "@shared/runs/types";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
 import { client } from "@shared/api/client";
@@ -767,23 +767,26 @@ export function Workbench({
             if (!isMountedRef.current) {
               return;
             }
-            if (isTelemetryEnvelope(event)) {
-              continue;
-            }
+            if (!event.type.startsWith("run.")) continue;
             if (event.type === "run.created") {
-              currentRunId = event.run_id;
+              currentRunId = event.run_id ?? (event.run?.id as string | undefined) ?? null;
             }
             if (event.type === "run.completed") {
+              const runStatus = (event.run?.status as RunStatus | undefined) ?? "succeeded";
+              const errorMessage =
+                (event.run?.error_message as string | undefined)?.trim() ||
+                (event.error?.message as string | undefined)?.trim() ||
+                "ADE run failed.";
               const notice =
-                event.status === "succeeded"
+                runStatus === "succeeded"
                   ? "ADE run completed successfully."
-                  : event.status === "canceled"
+                  : runStatus === "canceled"
                     ? "ADE run canceled."
-                    : event.error_message?.trim() || "ADE run failed.";
+                    : errorMessage;
               const intent: NotificationIntent =
-                event.status === "succeeded"
+                runStatus === "succeeded"
                   ? "success"
-                  : event.status === "canceled"
+                  : runStatus === "canceled"
                     ? "info"
                     : "danger";
               showConsoleBanner(notice, { intent });
@@ -792,7 +795,7 @@ export function Workbench({
                 const downloadBase = `/api/v1/runs/${encodeURIComponent(currentRunId)}`;
                 setLatestRun({
                   runId: currentRunId,
-                  status: event.status as RunStatus,
+                  status: runStatus,
                   downloadBase,
                   documentName: metadata.documentName,
                   sheetNames: metadata.sheetNames ?? [],

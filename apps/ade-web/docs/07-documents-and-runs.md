@@ -427,7 +427,7 @@ Data sources:
 * `useRunLogsStream(runId)`:
 
   * Connects to `/runs/{run_id}/logs`.
-  * Parses NDJSON events.
+  * Parses NDJSON **ADE events** (`ade.event/v1`, e.g. `run.created`, `run.pipeline.progress`, `run.log.delta`, `run.table.summary`, `run.completed`).
   * Updates console output incrementally.
 
 If a backend exposes workspace‑scoped detail endpoints, a `useWorkspaceRunQuery(workspaceId, runId)` variant can be added alongside the global hook; the global `useRunQuery(runId)` remains canonical.

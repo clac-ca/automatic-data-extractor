@@ -3,9 +3,7 @@ import { client } from "@shared/api/client";
 import { parseNdjsonStream } from "@shared/api/ndjson";
 
 import type { ArtifactV1, components } from "@schema";
-import type { TelemetryEnvelope } from "@schema/adeTelemetry";
-
-import type { RunStreamEvent } from "./types";
+import type { AdeEvent as RunStreamEvent } from "./types";
 
 export type RunResource = components["schemas"]["RunResource"];
 export type RunStatus = RunResource["status"];
@@ -75,7 +73,7 @@ export async function fetchRunArtifact(
 export async function fetchRunTelemetry(
   runId: string,
   signal?: AbortSignal,
-): Promise<TelemetryEnvelope[]> {
+): Promise<RunStreamEvent[]> {
   const response = await fetch(`/api/v1/runs/${encodeURIComponent(runId)}/logfile`, {
     headers: { Accept: "application/x-ndjson" },
     signal,
@@ -91,13 +89,13 @@ export async function fetchRunTelemetry(
     .filter(Boolean)
     .map((line) => {
       try {
-        return JSON.parse(line) as TelemetryEnvelope;
+        return JSON.parse(line) as RunStreamEvent;
       } catch (error) {
         console.warn("Skipping invalid telemetry line", { error, line });
         return null;
       }
     })
-    .filter((value): value is TelemetryEnvelope => Boolean(value));
+    .filter((value): value is RunStreamEvent => Boolean(value));
 }
 
 export async function fetchRun(

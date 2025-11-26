@@ -696,9 +696,11 @@ This gives us:
 
 ---
 
-## 6. Streaming NDJSON logs
+## 6. Streaming NDJSON events
 
-Some endpoints stream logs/events as NDJSON. We treat these as **event streams**, not as “queries”.
+Run/build streams emit **ADE events** using the unified `ade.event/v1` envelope
+(`type`, `created_at`, context IDs, plus namespaced payloads). We treat these as
+event streams, not as snapshot queries.
 
 ### 6.1 Streaming abstraction
 
@@ -730,24 +732,25 @@ Used by:
 
 * Configuration Builder:
 
-  * `streamBuildLogs(buildId)` → `/api/v1/builds/{build_id}/logs` (build log stream).
+  * `streamBuildLogs(buildId)` → `/api/v1/builds/{build_id}/logs` (build event stream; emits `build.created/plan/progress/log.delta/completed`).
 
 * Run consoles:
 
-  * `streamRunLogs(runId)` → `/api/v1/runs/{run_id}/logs` (run event stream).
+  * `streamRunLogs(runId)` → `/api/v1/runs/{run_id}/logs` (run event stream; emits `run.created`, `run.started`, `run.pipeline.progress`, `run.table.summary`, `run.log.delta`, `run.completed`, etc.).
 
 Because environments are rebuilt automatically when runs start (or when `force_rebuild` is set), the build stream is primarily for explicit `/builds` flows or debugging; typical workbench/test runs rely solely on the run stream.
 
-Event format is determined by the backend. We expect at minimum:
+Event format:
 
-* A `type` field (e.g. `"log"`, `"status"`, `"summary"`).
-* A `timestamp`.
-* Either a `message` or structured `data`.
+* `object: "ade.event"`, `schema: "ade.event/v1"`, `type: "run.*" | "build.*"`.
+* `created_at` timestamp.
+* Context (`workspace_id`, `configuration_id`, `run_id` or `build_id`).
+* Payload under `run`, `build`, `env`, `log`, `output_delta`, etc.
 
 UI code in the workbench or run detail screen:
 
-* Appends log lines to a console buffer.
-* Updates derived status (e.g. completed, failed) when a terminal event arrives.
+* Appends log lines to a console buffer (`run.log.delta` / `build.log.delta`).
+* Updates derived status/progress when progress/terminal events arrive.
 
 ### 6.3 Cancellation and errors
 

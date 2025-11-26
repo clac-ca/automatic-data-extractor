@@ -1,5 +1,5 @@
 import type { ArtifactV1 } from "@schema";
-import type { TelemetryEnvelope } from "@schema/adeTelemetry";
+import type { AdeEvent } from "@shared/runs/types";
 
 export function ArtifactSummary({ artifact }: { artifact: ArtifactV1 }) {
   if (!artifact.tables.length) {
@@ -89,13 +89,13 @@ export function ArtifactSummary({ artifact }: { artifact: ArtifactV1 }) {
   );
 }
 
-export function TelemetrySummary({ events }: { events: TelemetryEnvelope[] }) {
+export function TelemetrySummary({ events }: { events: AdeEvent[] }) {
   if (!events.length) {
     return <p className="text-xs text-slate-500">No telemetry events captured.</p>;
   }
 
   const levelCounts = events.reduce<Record<string, number>>((acc, event) => {
-    const level = event.event.level ?? "info";
+    const level = (event.run?.level as string | undefined) ?? (event.log?.level as string | undefined) ?? "info";
     acc[level] = (acc[level] ?? 0) + 1;
     return acc;
   }, {});
@@ -116,14 +116,14 @@ export function TelemetrySummary({ events }: { events: TelemetryEnvelope[] }) {
       <ul className="space-y-1">
         {recentEvents.map((event) => (
           <li
-            key={`${event.timestamp}-${event.event.event}`}
+            key={`${event.created_at}-${event.type}`}
             className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-800"
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-semibold">{event.event.event}</span>
-              <span className="text-[11px] text-slate-500">{formatTimestamp(event.timestamp)}</span>
+              <span className="font-semibold">{event.type}</span>
+              <span className="text-[11px] text-slate-500">{formatTimestamp(event.created_at)}</span>
             </div>
-            <p className="text-[11px] text-slate-600">Level: {event.event.level}</p>
+            <p className="text-[11px] text-slate-600">Level: {levelFor(event)}</p>
           </li>
         ))}
       </ul>
@@ -131,8 +131,12 @@ export function TelemetrySummary({ events }: { events: TelemetryEnvelope[] }) {
   );
 }
 
-function formatTimestamp(timestamp: string): string {
+function formatTimestamp(timestamp: string | number): string {
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return timestamp;
   return date.toLocaleString();
+}
+
+function levelFor(event: AdeEvent): string {
+  return (event.run?.level as string | undefined) ?? (event.log?.level as string | undefined) ?? "info";
 }

@@ -11,6 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, S
 from fastapi import Path as PathParam
 from fastapi.responses import StreamingResponse
 
+from ade_engine.schemas import AdeEvent
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.db.session import get_sessionmaker
@@ -30,6 +31,8 @@ builds_service_dependency = Depends(get_builds_service)
 
 
 def _event_bytes(event: Any) -> bytes:
+    if isinstance(event, AdeEvent):
+        return event.model_dump_json().encode("utf-8") + b"\n"
     if hasattr(event, "json_bytes"):
         return event.json_bytes() + b"\n"
     return json.dumps(event).encode("utf-8") + b"\n"

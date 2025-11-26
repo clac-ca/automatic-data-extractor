@@ -57,9 +57,9 @@ Recommended reading order (mirrors the pipeline flow):
    and how it is used by ADE API for reporting.
 
 7. [`07-telemetry-events.md`](./07-telemetry-events.md)  
-   The telemetry event system, event envelopes, sinks, and the NDJSON log.
-   See `11-ade-event-model.md` for the unified ADE event envelope shared with
-   the backend and build/run streaming design.
+   Engine telemetry event system (`ade.event/v1`), event envelopes, sinks, and
+   the NDJSON log. See `11-ade-event-model.md` for the unified ADE event
+   envelope shared with the backend and build/run streaming design.
 
 8. [`08-hooks-and-extensibility.md`](./08-hooks-and-extensibility.md)  
    Hook stages, how hooks are registered, and patterns for extending behavior
@@ -70,12 +70,16 @@ Recommended reading order (mirrors the pipeline flow):
    engine inside virtual environments.
 
 10. [`10-testing-and-quality.md`](./10-testing-and-quality.md)  
-    Testing strategy, fixtures, regression checks, and change‑management
+    Testing strategy, fixtures, regression checks, and change-management
     guidelines.
 
 11. [`11-ade-event-model.md`](./11-ade-event-model.md)  
     Unified ADE event envelope, build/run streaming shape, env planning, and
     persistence guidance.
+
+12. [`12-run-summary-and-reporting.md`](./12-run-summary-and-reporting.md)  
+    Run summary schema (`ade.run_summary/v1`), how it’s computed from artifacts
+    and events, and how to persist/report it.
 
 Each document assumes you are familiar with the concepts introduced in
 `ade_engine/README.md` and in the preceding chapters.

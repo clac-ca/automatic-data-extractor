@@ -6,7 +6,7 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
-from ade_engine.schemas import TelemetryEnvelope
+from ade_engine.schemas import AdeEvent
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -63,9 +63,7 @@ logger = logging.getLogger(__name__)
 
 
 def _event_bytes(event: RunStreamFrame) -> bytes:
-    if isinstance(event, TelemetryEnvelope):
-        return event.model_dump_json().encode("utf-8") + b"\n"
-    return event.json_bytes() + b"\n"
+    return event.model_dump_json().encode("utf-8") + b"\n"
 
 
 async def _execute_run_background(

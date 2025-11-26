@@ -1,7 +1,6 @@
-import type { BuildEvent, BuildCompletedEvent, BuildLogEvent, BuildStepEvent } from "@shared/builds/types";
-import { isTelemetryEnvelope } from "@shared/runs/types";
-import type { RunCompletedEvent, RunLogEvent, RunStreamEvent } from "@shared/runs/types";
-import type { TelemetryEnvelope } from "@schema/adeTelemetry";
+import type { BuildStatus } from "@shared/builds/types";
+import { eventTimestamp, isAdeEvent } from "@shared/runs/types";
+import type { AdeEvent as RunStreamEvent } from "@shared/runs/types";
 
 import type { WorkbenchConsoleLine } from "../types";
 
@@ -11,25 +10,41 @@ const TIME_OPTIONS: Intl.DateTimeFormatOptions = {
   second: "2-digit",
 };
 
-export function formatConsoleTimestamp(value: number | Date): string {
-  const date = typeof value === "number" ? new Date(value * 1000) : value;
+export function formatConsoleTimestamp(value: number | Date | string): string {
+  const date = typeof value === "number" ? new Date(value * 1000) : new Date(value);
   if (Number.isNaN(date.getTime())) {
     return "";
   }
   return date.toLocaleTimeString([], TIME_OPTIONS);
 }
 
-export function describeBuildEvent(event: BuildEvent): WorkbenchConsoleLine {
+export function describeBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine {
+  if (!isAdeEvent(event)) {
+    return { level: "info", message: JSON.stringify(event), timestamp: "" };
+  }
+  if (!event.type.startsWith("build.")) {
+    return { level: "info", message: JSON.stringify(event), timestamp: formatConsoleTimestamp(eventTimestamp(event)) };
+  }
+  const ts = formatConsoleTimestamp(eventTimestamp(event));
   switch (event.type) {
     case "build.created":
       return {
         level: "info",
-        message: `Build ${event.build_id} created (status: ${event.status}).`,
-        timestamp: formatConsoleTimestamp(event.created),
+        message: `Build ${event.build_id ?? ""} created (status: ${buildStatus(event) ?? "queued"}).`,
+        timestamp: ts,
       };
-    case "build.step":
-      return formatBuildStep(event);
-    case "build.log":
+    case "build.plan": {
+      const reason = event.env?.reason ?? event.env?.plan_reason;
+      const shouldBuild = event.env?.should_build === true;
+      return {
+        level: "info",
+        message: shouldBuild ? `Planned rebuild (${reason ?? "pending"})` : `Env reuse (${reason ?? "reuse"})`,
+        timestamp: ts,
+      };
+    }
+    case "build.progress":
+      return formatBuildProgress(event);
+    case "build.log.delta":
       return formatBuildLog(event);
     case "build.completed":
       return formatBuildCompletion(event);
@@ -37,112 +52,134 @@ export function describeBuildEvent(event: BuildEvent): WorkbenchConsoleLine {
       return {
         level: "info",
         message: JSON.stringify(event),
-        timestamp: formatConsoleTimestamp(event.created),
+        timestamp: ts,
       };
   }
 }
 
 export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
-  if (isTelemetryEnvelope(event)) {
-    return formatTelemetry(event);
+  if (!isAdeEvent(event)) {
+    return { level: "info", message: JSON.stringify(event), timestamp: "" };
   }
-  switch (event.type) {
+  const ts = formatConsoleTimestamp(eventTimestamp(event));
+  const { type } = event;
+  if (!type.startsWith("run.")) {
+    return { level: "info", message: JSON.stringify(event), timestamp: ts };
+  }
+
+  switch (type) {
     case "run.created":
       return {
         level: "info",
-        message: `Run ${event.run_id} created (status: ${event.status}).`,
-        timestamp: formatConsoleTimestamp(event.created),
+        message: `Run ${event.run_id ?? ""} created.`,
+        timestamp: ts,
       };
     case "run.started":
       return {
         level: "info",
         message: "Run started.",
-        timestamp: formatConsoleTimestamp(event.created),
+        timestamp: ts,
       };
-    case "run.log":
-      return formatRunLog(event);
-    case "run.completed":
-      return formatRunCompletion(event);
-    default: {
-      const neverEvent: never = event;
+    case "run.pipeline.progress": {
+      const phase = event.run?.phase ?? "progress";
       return {
         level: "info",
-        message: JSON.stringify(neverEvent),
-        timestamp: "",
+        message: `Phase: ${phase}`,
+        timestamp: ts,
       };
     }
-  }
-}
-
-function formatTelemetry(event: TelemetryEnvelope): WorkbenchConsoleLine {
-  const { event: payload, timestamp } = event;
-  const { event: name, level, ...rest } = payload;
-  const normalizedLevel = telemetryToConsoleLevel(level);
-  const extras = Object.keys(rest).length > 0 ? ` ${JSON.stringify(rest)}` : "";
-  return {
-    level: normalizedLevel,
-    message: extras ? `Telemetry: ${name}${extras}` : `Telemetry: ${name}`,
-    timestamp: formatConsoleTimestamp(new Date(timestamp)),
-  };
-}
-
-function telemetryToConsoleLevel(level: TelemetryEnvelope["event"]["level"]): WorkbenchConsoleLine["level"] {
-  switch (level) {
-    case "warning":
-      return "warning";
-    case "error":
-    case "critical":
-      return "error";
+    case "run.table.summary": {
+      const table = event.output_delta?.table as Record<string, unknown> | undefined;
+      const name = table?.source_sheet ?? table?.source_file ?? "table";
+      return {
+        level: "info",
+        message: `Table completed (${name})`,
+        timestamp: ts,
+      };
+    }
+    case "run.validation.issue.delta": {
+      const sev = (event.validation?.severity as string) ?? "info";
+      return {
+        level: sev === "error" ? "error" : sev === "warning" ? "warning" : "info",
+        message: `Validation issue${event.validation?.code ? `: ${event.validation.code}` : ""}`,
+        timestamp: ts,
+      };
+    }
+    case "run.log.delta":
+      return formatRunLog(event);
+    case "run.note":
+      return {
+        level: ((event.run?.level as string) ?? "info") as WorkbenchConsoleLine["level"],
+        message: String(event.run?.message ?? "Note"),
+        timestamp: ts,
+      };
+    case "run.completed": {
+      const status = (event.run?.status as string) ?? (event.run?.engine_status as string) ?? "completed";
+      const exit = event.run?.execution_summary?.exit_code as number | undefined;
+      const level = status === "failed" ? "error" : status === "canceled" ? "warning" : "success";
+      const exitPart = typeof exit === "number" ? ` (exit code ${exit})` : "";
+      return {
+        level,
+        message: `Run ${status}${exitPart}.`,
+        timestamp: ts,
+      };
+    }
     default:
-      return "info";
+      return {
+        level: "info",
+        message: JSON.stringify(event),
+        timestamp: ts,
+      };
   }
 }
 
-function formatBuildStep(event: BuildStepEvent): WorkbenchConsoleLine {
-  const friendly = buildStepDescriptions[event.step] ?? event.step.replaceAll("_", " ");
-  const message = event.message?.trim() ? event.message : friendly;
+function buildStatus(event: RunStreamEvent): BuildStatus | undefined {
+  const buildPayload = event.build;
+  const envPayload = event.env;
+  return (buildPayload?.status as BuildStatus | undefined) ?? (envPayload?.status as BuildStatus | undefined);
+}
+
+function formatBuildProgress(event: RunStreamEvent): WorkbenchConsoleLine {
+  const phase = (event.build?.phase as string) ?? "building";
+  const message = event.build?.message as string | undefined;
   return {
     level: "info",
-    message,
-    timestamp: formatConsoleTimestamp(event.created),
+    message: message?.trim() ? message : phase.replaceAll("_", " "),
+    timestamp: formatConsoleTimestamp(eventTimestamp(event)),
   };
 }
 
-const buildStepDescriptions: Record<BuildStepEvent["step"], string> = {
-  create_venv: "Creating virtual environment…",
-  upgrade_pip: "Upgrading pip inside the build environment…",
-  install_engine: "Installing ade_engine package…",
-  install_config: "Installing configuration package…",
-  verify_imports: "Verifying ADE imports…",
-  collect_metadata: "Collecting build metadata…",
-};
-
-function formatBuildLog(event: BuildLogEvent): WorkbenchConsoleLine {
+function formatBuildLog(event: RunStreamEvent): WorkbenchConsoleLine {
+  const log = event.log ?? {};
   return {
-    level: event.stream === "stderr" ? "warning" : "info",
-    message: event.message,
-    timestamp: formatConsoleTimestamp(event.created),
+    level: log.stream === "stderr" ? "warning" : "info",
+    message: String(log.message ?? ""),
+    timestamp: formatConsoleTimestamp(eventTimestamp(event)),
   };
 }
 
-function formatBuildCompletion(event: BuildCompletedEvent): WorkbenchConsoleLine {
-  const timestamp = formatConsoleTimestamp(event.created);
-  if (event.status === "active") {
+function formatBuildCompletion(event: RunStreamEvent): WorkbenchConsoleLine {
+  const timestamp = formatConsoleTimestamp(eventTimestamp(event));
+  const status = buildStatus(event);
+  if (status === "active") {
     return {
       level: "success",
-      message: event.summary?.trim() || "Build completed successfully.",
+      message: (event.build?.summary as string | undefined)?.trim() || "Build completed successfully.",
       timestamp,
     };
   }
-  if (event.status === "canceled") {
+  if (status === "canceled") {
     return {
       level: "warning",
       message: "Build was canceled before completion.",
       timestamp,
     };
   }
-  const error = event.error_message?.trim() || "Build failed.";
-  const exit = typeof event.exit_code === "number" ? ` (exit code ${event.exit_code})` : "";
+  const error =
+    (event.build?.error_message as string | undefined)?.trim() ||
+    (event.error?.message as string | undefined)?.trim() ||
+    "Build failed.";
+  const exit = typeof event.build?.exit_code === "number" ? ` (exit code ${event.build.exit_code})` : "";
   return {
     level: "error",
     message: `${error}${exit}`,
@@ -150,36 +187,11 @@ function formatBuildCompletion(event: BuildCompletedEvent): WorkbenchConsoleLine
   };
 }
 
-function formatRunLog(event: RunLogEvent): WorkbenchConsoleLine {
+function formatRunLog(event: RunStreamEvent): WorkbenchConsoleLine {
+  const log = event.log ?? {};
   return {
-    level: event.stream === "stderr" ? "warning" : "info",
-    message: event.message,
-    timestamp: formatConsoleTimestamp(event.created),
-  };
-}
-
-function formatRunCompletion(event: RunCompletedEvent): WorkbenchConsoleLine {
-  const timestamp = formatConsoleTimestamp(event.created);
-  if (event.status === "succeeded") {
-    const exit = typeof event.exit_code === "number" ? ` (exit code ${event.exit_code})` : "";
-    return {
-      level: "success",
-      message: `Run completed successfully${exit}.`,
-      timestamp,
-    };
-  }
-  if (event.status === "canceled") {
-    return {
-      level: "warning",
-      message: "Run was canceled before completion.",
-      timestamp,
-    };
-  }
-  const error = event.error_message?.trim() || "Run failed.";
-  const exit = typeof event.exit_code === "number" ? ` (exit code ${event.exit_code})` : "";
-  return {
-    level: "error",
-    message: `${error}${exit}`,
-    timestamp,
+    level: log.stream === "stderr" ? "warning" : "info",
+    message: String(log.message ?? ""),
+    timestamp: formatConsoleTimestamp(eventTimestamp(event)),
   };
 }

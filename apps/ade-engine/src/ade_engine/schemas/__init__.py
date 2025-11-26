@@ -1,9 +1,10 @@
 from ade_engine.schemas.artifact import ArtifactV1
 from ade_engine.schemas.manifest import ManifestV1
-from ade_engine.schemas.telemetry import ADE_TELEMETRY_EVENT_SCHEMA, TelemetryEnvelope, TelemetryEvent
+from ade_engine.schemas.telemetry import ADE_EVENT_SCHEMA, AdeEvent, TelemetryEnvelope, TelemetryEvent
 
 __all__ = [
-    "ADE_TELEMETRY_EVENT_SCHEMA",
+    "ADE_EVENT_SCHEMA",
+    "AdeEvent",
     "ArtifactV1",
     "ManifestV1",
     "TelemetryEnvelope",

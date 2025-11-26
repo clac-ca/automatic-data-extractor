@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from ade_engine.schemas import TelemetryEnvelope, TelemetryEvent
+from ade_engine.schemas import AdeEvent
 
 from ade_api.features.builds.models import BuildStatus
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
@@ -133,19 +133,21 @@ async def test_stream_run_happy_path_yields_engine_events(
         run,
         context: RunExecutionContext,
         options: RunCreateOptions,
-        ) -> AsyncIterator[RunLogEvent | RunCompletedEvent | TelemetryEnvelope]:
+        ) -> AsyncIterator[AdeEvent]:
             log = await self._append_log(run.id, "engine output", stream="stdout")
-            yield RunLogEvent(
-                run_id=run.id,
-                created=self._epoch_seconds(log.created_at),
-                stream="stdout",
-                message="engine output",
+            yield self._ade_event(
+                run=run,
+                type_="run.log.delta",
+                log_payload={
+                    "stream": "stdout",
+                    "message": "engine output",
+                    "created": self._epoch_seconds(log.created_at),
+                },
             )
-            telemetry = TelemetryEnvelope(
-                run_id=context.run_id,
-                timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-                metadata={"run_id": context.run_id},
-                event=TelemetryEvent(event="pipeline_transition", level="info"),
+            telemetry = self._ade_event(
+                run=run,
+                type_="run.pipeline.progress",
+                run_payload={"phase": "extracting"},
             )
             await self._append_log(run.id, telemetry.model_dump_json(), stream="stdout")
             yield telemetry
@@ -154,12 +156,13 @@ async def test_stream_run_happy_path_yields_engine_events(
                 status=RunStatus.SUCCEEDED,
                 exit_code=0,
             )
-            yield RunCompletedEvent(
-                run_id=completion.id,
-                created=self._epoch_seconds(completion.finished_at),
-                status=self._status_literal(completion.status),
-                exit_code=completion.exit_code,
-                error_message=completion.error_message,
+            yield self._ade_event(
+                run=completion,
+                type_="run.completed",
+                run_payload={
+                    "status": self._status_literal(completion.status),
+                    "execution_summary": {"exit_code": completion.exit_code},
+                },
             )
 
     monkeypatch.setattr(RunsService, "_execute_engine", fake_execute_engine)
@@ -170,8 +173,8 @@ async def test_stream_run_happy_path_yields_engine_events(
 
     assert events[0].type == "run.created"
     assert events[1].type == "run.started"
-    assert isinstance(events[2], RunLogEvent)
-    assert isinstance(events[3], TelemetryEnvelope)
+    assert events[2].type == "run.log.delta"
+    assert events[3].type == "run.pipeline.progress"
     assert events[4].type == "run.completed"
 
     run = await service.get_run(context.run_id)
@@ -180,8 +183,8 @@ async def test_stream_run_happy_path_yields_engine_events(
     logs = await service.get_logs(run_id=context.run_id)
     messages = [entry.message for entry in logs.entries]
     assert messages[0] == "engine output"
-    telemetry = TelemetryEnvelope.model_validate_json(messages[1])
-    assert telemetry.event.event == "pipeline_transition"
+    telemetry = AdeEvent.model_validate_json(messages[1])
+    assert telemetry.type == "run.pipeline.progress"
     assert logs.next_after_id is None
 
 

@@ -8,45 +8,82 @@ from typing import Any, Callable, Iterable, Protocol
 
 from ade_engine.infra.artifact import ArtifactSink
 from ade_engine.core.types import NormalizedTable, RunContext
-from ade_engine.schemas.telemetry import TelemetryEnvelope, TelemetryEvent
-
+from ade_engine.schemas.telemetry import AdeEvent
 
 _LEVEL_ORDER = {"debug": 0, "info": 1, "warning": 2, "error": 3, "critical": 4}
 
 
-def _timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _event_level(event: AdeEvent) -> str:
+    """Best-effort level extraction for filtering."""
+
+    if event.run and "level" in event.run:
+        return str(event.run.get("level"))
+    if event.log and "level" in event.log:
+        return str(event.log.get("level"))
+    return "info"
+
+
+def _context_ids(run: RunContext) -> tuple[str | None, str | None]:
+    meta = run.metadata or {}
+    return meta.get("workspace_id"), meta.get("configuration_id")
+
+
+def _make_event(
+    *,
+    run: RunContext,
+    type_: str,
+    run_payload: dict[str, Any] | None = None,
+    build_payload: dict[str, Any] | None = None,
+    env_payload: dict[str, Any] | None = None,
+    validation_payload: dict[str, Any] | None = None,
+    execution_payload: dict[str, Any] | None = None,
+    output_delta: dict[str, Any] | None = None,
+    log_payload: dict[str, Any] | None = None,
+    error_payload: dict[str, Any] | None = None,
+) -> AdeEvent:
+    workspace_id, configuration_id = _context_ids(run)
+    return AdeEvent(
+        type=type_,
+        created_at=_now(),
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
+        run_id=run.run_id,
+        run=run_payload,
+        build=build_payload,
+        env=env_payload,
+        validation=validation_payload,
+        execution=execution_payload,
+        output_delta=output_delta,
+        log=log_payload,
+        error=error_payload,
+    )
 
 
 class EventSink(Protocol):
-    """Protocol for telemetry event emission."""
+    """Protocol for ADE event emission."""
 
-    def log(self, event: str, *, run: RunContext, level: str = "info", **payload: Any) -> None: ...
+    def emit(self, event: AdeEvent) -> None: ...
 
 
 @dataclass
 class FileEventSink:
-    """Append-only NDJSON writer for telemetry events."""
+    """Append-only NDJSON writer for ADE events."""
 
     path: Path
     min_level: str = "info"
 
-    def _should_log(self, level: str) -> bool:
+    def emit(self, event: AdeEvent) -> None:
+        level = _event_level(event)
         level_key = level.lower()
-        return _LEVEL_ORDER.get(level_key, 0) >= _LEVEL_ORDER.get(self.min_level, 0)
-
-    def log(self, event: str, *, run: RunContext, level: str = "info", **payload: Any) -> None:
-        if not self._should_log(level):
+        if _LEVEL_ORDER.get(level_key, 0) < _LEVEL_ORDER.get(self.min_level, 0):
             return
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        envelope = TelemetryEnvelope(
-            run_id=run.run_id,
-            timestamp=_timestamp(),
-            metadata=dict(run.metadata) if run.metadata else {},
-            event=TelemetryEvent(event=event, level=level, payload=payload),
-        )
-        line = json.dumps(envelope.model_dump(mode="json"), ensure_ascii=False)
+        line = json.dumps(event.model_dump(mode="json"), ensure_ascii=False)
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(line + "\n")
 
@@ -57,9 +94,9 @@ class DispatchEventSink:
 
     sinks: Iterable[EventSink]
 
-    def log(self, event: str, *, run: RunContext, level: str = "info", **payload: Any) -> None:
+    def emit(self, event: AdeEvent) -> None:
         for sink in self.sinks:
-            sink.log(event, run=run, level=level, **payload)
+            sink.emit(event)
 
 
 @dataclass
@@ -78,34 +115,77 @@ class TelemetryConfig:
 
 @dataclass
 class PipelineLogger:
-    """Unified facade for artifact notes and telemetry events."""
+    """Unified facade for artifact notes and ADE events."""
 
     run: RunContext
     artifact_sink: ArtifactSink
     event_sink: EventSink | None = None
 
+    def _emit(
+        self,
+        type_suffix: str,
+        *,
+        run_payload: dict[str, Any] | None = None,
+        build_payload: dict[str, Any] | None = None,
+        env_payload: dict[str, Any] | None = None,
+        validation_payload: dict[str, Any] | None = None,
+        execution_payload: dict[str, Any] | None = None,
+        output_delta: dict[str, Any] | None = None,
+        log_payload: dict[str, Any] | None = None,
+        error_payload: dict[str, Any] | None = None,
+    ) -> None:
+        if not self.event_sink:
+            return
+
+        event = _make_event(
+            run=self.run,
+            type_=f"run.{type_suffix}",
+            run_payload=run_payload,
+            build_payload=build_payload,
+            env_payload=env_payload,
+            validation_payload=validation_payload,
+            execution_payload=execution_payload,
+            output_delta=output_delta,
+            log_payload=log_payload,
+            error_payload=error_payload,
+        )
+        self.event_sink.emit(event)
+
     def note(self, message: str, *, level: str = "info", **details: Any) -> None:
         self.artifact_sink.note(message, level=level, details=details or None)
-        if self.event_sink:
-            self.event_sink.log("note", run=self.run, level=level, message=message, **details)
+        run_payload = {"message": message, "level": level}
+        if details:
+            run_payload["details"] = details
+        self._emit("note", run_payload=run_payload)
 
-    def event(self, name: str, *, level: str = "info", **payload: Any) -> None:
-        if self.event_sink:
-            self.event_sink.log(name, run=self.run, level=level, **payload)
+    def event(self, type_suffix: str, *, level: str | None = "info", **payload: Any) -> None:
+        run_payload = dict(payload)
+        if level is not None:
+            run_payload["level"] = level
+        self._emit(type_suffix, run_payload=run_payload or None)
 
-    def transition(self, phase: str, **payload: Any) -> None:
-        self.event("pipeline_transition", level="info", phase=phase, **payload)
+    def pipeline_phase(self, phase: str, **payload: Any) -> None:
+        self._emit("pipeline.progress", run_payload={"phase": phase, **payload})
 
     def record_table(self, table: NormalizedTable) -> None:
         self.artifact_sink.record_table(table)
-        if self.event_sink:
-            raw = table.mapped.raw
-            self.event_sink.log(
-                "table_completed",
-                run=self.run,
-                level="info",
-                source_file=str(raw.source_file),
-                source_sheet=raw.source_sheet,
-                table_index=raw.table_index,
-                validation_issue_count=len(table.validation_issues),
-            )
+        raw = table.mapped.raw
+        self._emit(
+            "table.summary",
+            output_delta={
+                "kind": "table_summary",
+                "table": {
+                    "source_file": str(raw.source_file),
+                    "source_sheet": raw.source_sheet,
+                    "table_index": raw.table_index,
+                    "row_count": len(table.rows),
+                    "validation_issue_counts": {
+                        "error": len([i for i in table.validation_issues if i.severity == "error"]),
+                        "warning": len([i for i in table.validation_issues if i.severity == "warning"]),
+                    },
+                },
+            },
+        )
+
+    def validation_issue(self, **payload: Any) -> None:
+        self._emit("validation.issue.delta", validation_payload=payload)

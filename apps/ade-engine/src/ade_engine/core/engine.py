@@ -90,8 +90,11 @@ class Engine:
             pipeline_logger = PipelineLogger(run=run_ctx, artifact_sink=artifact_sink, event_sink=event_sink)
 
             artifact_sink.start(run_ctx, runtime.manifest)
-            if event_sink:
-                event_sink.log("run_started", run=run_ctx, level="info")
+            pipeline_logger.event(
+                "started",
+                level=None,
+                engine_version=self.engine_info.version,
+            )
 
             phase = RunPhase.HOOKS
             run_hooks(
@@ -118,14 +121,13 @@ class Engine:
 
             phase = RunPhase.COMPLETED
             artifact_sink.mark_success(output_paths)
-            if event_sink:
-                event_sink.log(
-                    "run_completed",
-                    run=run_ctx,
-                    level="info",
-                    output_paths=[str(path) for path in output_paths],
-                    processed_files=processed_files,
-                )
+            pipeline_logger.event(
+                "completed",
+                level=None,
+                engine_status="succeeded",
+                output_paths=[str(path) for path in output_paths],
+                processed_files=processed_files,
+            )
 
             provisional = RunResult(
                 status=RunStatus.SUCCEEDED,
@@ -166,13 +168,16 @@ class Engine:
 
             try:
                 if 'event_sink' in locals() and event_sink:
-                    event_sink.log(
-                        "run_failed",
-                        run=run_ctx,  # type: ignore[name-defined]
-                        level="error",
-                        error_code=error.code,
-                        error_stage=error.stage.value if error.stage else None,
-                        message=error.message,
+                    pipeline_logger._emit(  # pylint: disable=protected-access
+                        "completed",
+                        run_payload={
+                            "engine_status": "failed",
+                            "error": {
+                                "code": error.code,
+                                "stage": error.stage.value if error.stage else None,
+                                "message": error.message,
+                            },
+                        },
                     )
             except Exception:
                 pass

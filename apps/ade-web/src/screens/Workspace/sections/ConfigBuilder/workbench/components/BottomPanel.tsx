@@ -1,7 +1,6 @@
 import type { ConfigBuilderPane } from "@app/nav/urlState";
 import type { ArtifactV1 } from "@schema";
-import type { TelemetryEnvelope } from "@schema/adeTelemetry";
-import type { RunStatus } from "@shared/runs/types";
+import type { AdeEvent, RunStatus } from "@shared/runs/types";
 import clsx from "clsx";
 
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
@@ -18,7 +17,7 @@ export interface WorkbenchRunSummary {
   readonly artifact?: ArtifactV1 | null;
   readonly artifactLoaded: boolean;
   readonly artifactError?: string | null;
-  readonly telemetry?: readonly TelemetryEnvelope[] | null;
+  readonly telemetry?: readonly AdeEvent[] | null;
   readonly telemetryLoaded: boolean;
   readonly telemetryError?: string | null;
   readonly documentName?: string;
