@@ -111,7 +111,7 @@ class RunResource(BaseSchema):
     logs_uri: str | None = None
     artifact_path: str | None = None
     events_path: str | None = None
-    summary: str | None = None
+    summary: dict[str, Any] | None = None
     error_message: str | None = None
 
 
@@ -176,6 +176,7 @@ class RunCompletedEvent(RunEventBase):
     events_path: str | None = None
     output_paths: list[str] = Field(default_factory=list)
     processed_files: list[str] = Field(default_factory=list)
+    summary: dict[str, Any] | None = None
 
 
 RunEvent = RunCreatedEvent | RunStartedEvent | RunLogEvent | RunCompletedEvent

@@ -34,7 +34,7 @@ def execute_pipeline(
 
     logger = logger or logging.getLogger(__name__)
 
-    pipeline_logger.transition("extracting")
+    pipeline_logger.pipeline_phase("extracting")
     raw_tables = extract_raw_tables(request=request, run=run, runtime=runtime, logger=logger)
     run_hooks(
         HookStage.ON_AFTER_EXTRACT,
@@ -49,7 +49,7 @@ def execute_pipeline(
         logger=pipeline_logger,
     )
 
-    pipeline_logger.transition("mapping")
+    pipeline_logger.pipeline_phase("mapping")
     mapped_tables = map_raw_tables(tables=raw_tables, runtime=runtime, run=run, logger=logger)
     run_hooks(
         HookStage.ON_AFTER_MAPPING,
@@ -64,7 +64,7 @@ def execute_pipeline(
         logger=pipeline_logger,
     )
 
-    pipeline_logger.transition("normalizing")
+    pipeline_logger.pipeline_phase("normalizing")
     normalized_tables = [
         normalize_table(ctx=run, cfg=runtime, mapped=mapped, logger=logger)
         for mapped in mapped_tables
@@ -72,7 +72,7 @@ def execute_pipeline(
     for table in normalized_tables:
         pipeline_logger.record_table(table)
 
-    pipeline_logger.transition("writing_output")
+    pipeline_logger.pipeline_phase("writing_output")
     output_path = write_workbook(
         ctx=run,
         cfg=runtime,

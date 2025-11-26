@@ -9,12 +9,13 @@ import logging
 import os
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from ade_engine.schemas import AdeEvent
+from ade_engine.schemas import AdeEvent, ManifestV1, RunSummaryV1
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.features.builds.builder import (
@@ -59,6 +60,7 @@ from .schemas import (
     RunStartedEvent,
     RunStatusLiteral,
 )
+from .summary_builder import build_run_summary_from_paths
 from .supervisor import RunSupervisor
 
 __all__ = [
@@ -298,11 +300,17 @@ class RunsService:
             )
 
         if options.validate_only:
+            placeholder_summary = await self._build_placeholder_summary(
+                run=run,
+                status=RunStatus.SUCCEEDED,
+                message="Validation-only execution",
+            )
+            summary_json = self._serialize_summary(placeholder_summary)
             completion = await self._complete_run(
                 run,
                 status=RunStatus.SUCCEEDED,
                 exit_code=0,
-                summary="Validation-only execution",
+                summary=summary_json,
             )
             yield self._ade_event(
                 run=completion,
@@ -314,7 +322,7 @@ class RunsService:
                         "exit_code": completion.exit_code,
                         "duration_ms": None,
                     },
-                    "summary": "Validation-only execution",
+                    "summary": placeholder_summary.model_dump(mode="json"),
                 },
             )
             return
@@ -327,11 +335,17 @@ class RunsService:
                 message,
                 stream="stdout",
             )
+            placeholder_summary = await self._build_placeholder_summary(
+                run=run,
+                status=RunStatus.SUCCEEDED,
+                message="Safe mode skip",
+            )
+            summary_json = self._serialize_summary(placeholder_summary)
             completion = await self._complete_run(
                 run,
                 status=RunStatus.SUCCEEDED,
                 exit_code=0,
-                summary="Safe mode skip",
+                summary=summary_json,
             )
             yield self._ade_event(
                 run=run,
@@ -343,7 +357,11 @@ class RunsService:
                 type_="run.completed",
                 run_payload={
                     "status": self._status_literal(completion.status),
-                    "summary": "Safe mode skip",
+                    "execution_summary": {
+                        "exit_code": completion.exit_code,
+                        "duration_ms": None,
+                    },
+                    "summary": placeholder_summary.model_dump(mode="json"),
                 },
             )
             return
@@ -381,11 +399,17 @@ class RunsService:
                     continue
                 yield event
         except asyncio.CancelledError:
+            placeholder_summary = await self._build_placeholder_summary(
+                run=run,
+                status=RunStatus.CANCELED,
+                message="Run execution cancelled",
+            )
+            summary_json = self._serialize_summary(placeholder_summary)
             completion = await self._complete_run(
                 run,
                 status=RunStatus.CANCELED,
                 exit_code=None,
-                summary="Run cancelled",
+                summary=summary_json,
                 error_message="Run execution cancelled",
             )
             yield self._ade_event(
@@ -395,6 +419,7 @@ class RunsService:
                     "status": self._status_literal(completion.status),
                     "execution_summary": {"exit_code": completion.exit_code},
                     "error_message": completion.error_message,
+                    "summary": placeholder_summary.model_dump(mode="json"),
                 },
             )
             raise
@@ -405,10 +430,17 @@ class RunsService:
                 f"ADE run failed: {exc}",
                 stream="stderr",
             )
+            placeholder_summary = await self._build_placeholder_summary(
+                run=run,
+                status=RunStatus.FAILED,
+                message=str(exc),
+            )
+            summary_json = self._serialize_summary(placeholder_summary)
             completion = await self._complete_run(
                 run,
                 status=RunStatus.FAILED,
                 exit_code=None,
+                summary=summary_json,
                 error_message=str(exc),
             )
             yield self._ade_event(
@@ -427,6 +459,7 @@ class RunsService:
                     "status": self._status_literal(completion.status),
                     "execution_summary": {"exit_code": completion.exit_code},
                     "error_message": completion.error_message,
+                    "summary": placeholder_summary.model_dump(mode="json"),
                 },
             )
             return
@@ -473,6 +506,7 @@ class RunsService:
             run_dir=self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id),
             default_paths=RunPathsSnapshot(output_paths=[], processed_files=[]),
         )
+        summary_payload = self._deserialize_run_summary(run.summary)
 
         return RunResource(
             id=run.id,
@@ -495,7 +529,7 @@ class RunsService:
             artifact_uri=run.artifact_uri,
             output_uri=run.output_uri,
             logs_uri=run.logs_uri,
-            summary=run.summary,
+            summary=summary_payload,
             error_message=run.error_message,
             artifact_path=paths.artifact_path,
             events_path=paths.events_path,
@@ -720,6 +754,28 @@ class RunsService:
         return candidate if isinstance(candidate, dict) else default
 
     @staticmethod
+    def _deserialize_run_summary(summary: str | None) -> dict[str, Any] | None:
+        if summary is None:
+            return None
+        try:
+            candidate = json.loads(summary)
+        except json.JSONDecodeError:
+            return None
+        return candidate if isinstance(candidate, dict) else None
+
+    @staticmethod
+    def _serialize_summary(summary: RunSummaryV1 | None) -> str | None:
+        return summary.model_dump_json() if summary else None
+
+    @staticmethod
+    def _ensure_utc(dt: datetime | None) -> datetime | None:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+
+    @staticmethod
     def _resolve_completion(
         summary: dict[str, Any] | None, return_code: int
     ) -> tuple[RunStatus, str | None]:
@@ -740,6 +796,140 @@ class RunsService:
                 error_message = None
 
         return status, error_message
+
+    def _manifest_path(self, workspace_id: str, configuration_id: str) -> Path:
+        return workspace_config_root(
+            self._settings,
+            workspace_id,
+            configuration_id,
+        ) / "src" / "ade_config" / "manifest.json"
+
+    def _load_manifest(self, workspace_id: str, configuration_id: str) -> ManifestV1 | None:
+        path = self._manifest_path(workspace_id, configuration_id)
+        if not path.exists():
+            return None
+        try:
+            return ManifestV1.model_validate_json(path.read_text(encoding="utf-8"))
+        except (ValidationError, OSError, ValueError):
+            logger.warning(
+                "Unable to parse manifest for summary construction",
+                extra={"workspace_id": workspace_id, "configuration_id": configuration_id},
+            )
+            return None
+
+    async def _build_run_summary_for_completion(
+        self,
+        *,
+        run: Run,
+        paths: RunPathsSnapshot,
+    ) -> RunSummaryV1 | None:
+        if not paths.artifact_path:
+            return None
+
+        artifact_path = (self._runs_dir / paths.artifact_path).resolve()
+        if not artifact_path.exists():
+            return None
+
+        events_path = (self._runs_dir / paths.events_path).resolve() if paths.events_path else None
+        manifest_path = self._manifest_path(run.workspace_id, run.configuration_id)
+
+        try:
+            return await asyncio.to_thread(
+                build_run_summary_from_paths,
+                artifact_path=artifact_path,
+                events_path=events_path if events_path and events_path.exists() else None,
+                manifest_path=manifest_path if manifest_path.exists() else None,
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                configuration_version=run.configuration_version_id,
+                run_id=run.id,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to build run summary",
+                extra={"run_id": run.id, "artifact_path": str(artifact_path)},
+                exc_info=True,
+            )
+            return None
+
+    async def _build_placeholder_summary(
+        self,
+        *,
+        run: Run,
+        status: RunStatus,
+        message: str | None = None,
+    ) -> RunSummaryV1:
+        manifest = await asyncio.to_thread(
+            self._load_manifest,
+            run.workspace_id,
+            run.configuration_id,
+        )
+        started = self._ensure_utc(run.started_at) or utc_now()
+        completed = self._ensure_utc(run.finished_at) or utc_now()
+        status_literal = (
+            "succeeded"
+            if status is RunStatus.SUCCEEDED
+            else "canceled"
+            if status is RunStatus.CANCELED
+            else "failed"
+        )
+        by_field = []
+        if manifest:
+            for field_name in manifest.columns.order:
+                field_cfg = manifest.columns.fields.get(field_name)
+                if field_cfg is None:
+                    continue
+                by_field.append(
+                    {
+                        "field": field_name,
+                        "label": field_cfg.label,
+                        "required": field_cfg.required,
+                        "mapped": False,
+                        "max_score": None,
+                        "validation_issue_count_total": 0,
+                        "issue_counts_by_severity": {},
+                        "issue_counts_by_code": {},
+                    }
+                )
+
+        return RunSummaryV1(
+            run={
+                "id": run.id,
+                "workspace_id": run.workspace_id,
+                "configuration_id": run.configuration_id,
+                "configuration_version": run.configuration_version_id,
+                "status": status_literal,
+                "failure_code": "canceled" if status is RunStatus.CANCELED else None,
+                "failure_stage": None,
+                "failure_message": message,
+                "engine_version": getattr(run, "engine_version", None),
+                "config_version": manifest.version if manifest else None,  # type: ignore[union-attr]
+                "env_reason": None,
+                "env_reused": None,
+                "started_at": started,
+                "completed_at": completed,
+                "duration_seconds": (completed - started).total_seconds() if completed else None,
+            },
+            core={
+                "input_file_count": 0,
+                "input_sheet_count": 0,
+                "table_count": 0,
+                "row_count": 0,
+                "canonical_field_count": len(manifest.columns.fields) if manifest else 0,  # type: ignore[union-attr]
+                "required_field_count": (
+                    len([f for f in manifest.columns.fields.values() if f.required]) if manifest else 0  # type: ignore[union-attr]
+                ),
+                "mapped_field_count": 0,
+                "unmapped_column_count": 0,
+                "validation_issue_count_total": 0,
+                "issue_counts_by_severity": {},
+                "issue_counts_by_code": {},
+            },
+            breakdowns={
+                "by_file": [],
+                "by_field": by_field,
+            },
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -829,10 +1019,17 @@ class RunsService:
         if summary and summary.get("processed_files"):
             paths_snapshot.processed_files = list(summary.get("processed_files", []))
 
+        summary_model = await self._build_run_summary_for_completion(
+            run=run,
+            paths=paths_snapshot,
+        )
+        summary_json = self._serialize_summary(summary_model)
+
         completion = await self._complete_run(
             run,
             status=status,
             exit_code=return_code,
+            summary=summary_json,
             error_message=error_message,
         )
         yield self._ade_event(
@@ -846,6 +1043,7 @@ class RunsService:
                 "output_paths": paths_snapshot.output_paths,
                 "processed_files": paths_snapshot.processed_files,
                 "error_message": completion.error_message,
+                "summary": summary_model.model_dump(mode="json") if summary_model else None,
             },
         )
 
@@ -920,6 +1118,8 @@ class RunsService:
                 venv_path=venv_path,
                 digest=digest,
             )
+            if configuration.last_build_id is None:  # defensive for patched rebuilds
+                configuration.last_build_id = f"build_{uuid4().hex}"  # type: ignore[attr-defined]
         return venv_path, configuration.last_build_id
 
     async def _rebuild_configuration_env(
