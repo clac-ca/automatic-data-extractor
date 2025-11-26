@@ -24,7 +24,7 @@ from ade_api.features.configs.storage import compute_config_digest
 from ade_api.features.documents.models import Document
 from ade_api.features.documents.storage import DocumentStorage
 from ade_api.features.runs.models import Run, RunStatus
-from ade_api.features.runs.schemas import RunCompletedEvent, RunCreateOptions
+from ade_api.features.runs.schemas import RunCreateOptions
 from ade_api.features.runs.service import RunExecutionContext, RunsService
 from ade_api.features.system_settings.service import SafeModeService
 from ade_api.features.workspaces.models import Workspace
@@ -34,6 +34,7 @@ from ade_api.shared.db.mixins import generate_ulid
 from ade_api.shared.db.session import get_sessionmaker
 from ade_api.storage_layout import config_venv_path, workspace_config_root, workspace_documents_root
 from tests.utils import login
+from ade_engine.schemas import AdeEvent
 
 pytestmark = pytest.mark.asyncio
 
@@ -445,12 +446,13 @@ async def test_stream_run_respects_persisted_safe_mode_override(
             exit_code=0,
             summary="Safe mode override respected",
         )
-        yield RunCompletedEvent(
+        yield AdeEvent(
+            type="run.completed",
+            created_at=completion.finished_at or utc_now(),
             run_id=completion.id,
-            created=self._epoch_seconds(completion.finished_at),
             status=self._status_literal(completion.status),
-            exit_code=completion.exit_code,
-            error_message=completion.error_message,
+            execution={"exit_code": completion.exit_code},
+            error={"message": completion.error_message} if completion.error_message else None,
         )
 
     monkeypatch.setattr(RunsService, "_execute_engine", fake_execute_engine)

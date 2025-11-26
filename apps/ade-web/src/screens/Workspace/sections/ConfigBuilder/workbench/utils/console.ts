@@ -61,8 +61,8 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
     return { level: "info", message: JSON.stringify(event), timestamp: "", origin: "raw" };
   }
   const ts = formatConsoleTimestamp(eventTimestamp(event));
-  const { type } = event;
-  if (!type.startsWith("run.")) {
+  const type = event.type;
+  if (!type?.startsWith("run.")) {
     return { level: "info", message: JSON.stringify(event), timestamp: ts, origin: "run" };
   }
 

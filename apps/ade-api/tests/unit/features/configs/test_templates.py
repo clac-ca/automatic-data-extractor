@@ -45,6 +45,6 @@ async def test_templates_materialize_and_load(
     runtime = load_config_runtime("ade_config", manifest_path=manifest_path)
     manifest = runtime.manifest.model
 
-    assert manifest.schema == "ade.manifest/v1"
+    assert manifest.schema_id == "ade.manifest/v1"
     assert manifest.columns.order
     assert runtime.columns

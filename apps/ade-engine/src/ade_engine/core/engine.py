@@ -80,8 +80,16 @@ class Engine:
             run_ctx.manifest = runtime.manifest
 
             event_sink = self.telemetry.build_sink(run_ctx) if self.telemetry else None
-            pipeline_logger = PipelineLogger(run=run_ctx, event_sink=event_sink)
+            pipeline_logger = PipelineLogger(
+                run=run_ctx,
+                event_sink=event_sink,
+                source="engine",
+                emitter=self.engine_info.name,
+                emitter_version=self.engine_info.version,
+                correlation_id=self.telemetry.correlation_id if self.telemetry else None,
+            )
 
+            # Engine-level run.started event (API may later wrap with additional context).
             pipeline_logger.event(
                 "started",
                 level=None,
@@ -111,12 +119,14 @@ class Engine:
             )
 
             phase = RunPhase.COMPLETED
+            events_path = str(logs_dir / "events.ndjson")
             pipeline_logger.event(
                 "completed",
                 level=None,
                 status="succeeded",
                 output_paths=[str(path) for path in output_paths],
                 processed_files=processed_files,
+                events_path=events_path,
             )
 
             run_ctx.completed_at = datetime.now(timezone.utc)
@@ -148,19 +158,20 @@ class Engine:
             self.logger.exception("Run failed", exc_info=exc)
 
             try:
-                if 'event_sink' in locals() and event_sink:
-                    pipeline_logger._emit(  # pylint: disable=protected-access
-                        "run.completed",
-                        payload={
-                            "status": "failed",
-                            "error": {
-                                "code": error.code,
-                                "stage": error.stage.value if error.stage else None,
-                                "message": error.message,
-                            },
+                if "pipeline_logger" in locals():
+                    payload: dict[str, Any] = {
+                        "status": "failed",
+                        "error": {
+                            "code": error.code,
+                            "stage": error.stage.value if error.stage else None,
+                            "message": error.message,
                         },
-                    )
+                    }
+                    if "logs_dir" in locals():
+                        payload["events_path"] = str(Path(logs_dir) / "events.ndjson")  # type: ignore[arg-type]
+                    pipeline_logger.event("completed", level=None, **payload)  # type: ignore[arg-type]
             except Exception:
+                # Telemetry failures should never mask the underlying error.
                 pass
 
             if "run_ctx" in locals():
@@ -169,9 +180,20 @@ class Engine:
             return RunResult(
                 status=RunStatus.FAILED,
                 error=error,
-                run_id=locals().get("run_ctx", RunContext(run_id="", metadata={}, manifest=None, paths=None, started_at=datetime.now(timezone.utc))).run_id,  # type: ignore[arg-type]
+                run_id=locals()
+                .get(
+                    "run_ctx",
+                    RunContext(
+                        run_id="",
+                        metadata={},
+                        manifest=None,
+                        paths=None,  # type: ignore[arg-type]
+                        started_at=datetime.now(timezone.utc),
+                    ),
+                )
+                .run_id,
                 output_paths=(),
-                logs_dir=logs_dir if 'logs_dir' in locals() else Path("logs"),
+                logs_dir=logs_dir if "logs_dir" in locals() else Path("logs"),
                 processed_files=(),
             )
 

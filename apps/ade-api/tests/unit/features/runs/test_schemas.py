@@ -1,66 +1,48 @@
 from __future__ import annotations
 
-import json
+from datetime import datetime, timezone
 
 from ade_api.features.runs.schemas import (
-    RunCompletedEvent,
     RunCreateOptions,
     RunCreateRequest,
-    RunLogEvent,
+    RunEventsPage,
+    RunLinks,
     RunLogsResponse,
+    RunOutputFile,
+    RunOutputListing,
     RunResource,
 )
+
+
+def _ts(seconds: int) -> datetime:
+    return datetime.fromtimestamp(seconds, tz=timezone.utc)
 
 
 def test_run_resource_serialization_uses_aliases() -> None:
     resource = RunResource(
         id="run_123",
+        workspace_id="ws_1",
         configuration_id="cfg_456",
         status="queued",
-        created=1_700_000_000,
-        started=None,
-        finished=None,
-        exit_code=None,
+        created_at=_ts(1_700_000_000),
+        links=RunLinks(
+            self="/api/v1/runs/run_123",
+            summary="/api/v1/runs/run_123/summary",
+            events="/api/v1/runs/run_123/events",
+            logs="/api/v1/runs/run_123/logs",
+            logfile="/api/v1/runs/run_123/logfile",
+            outputs="/api/v1/runs/run_123/outputs",
+            diagnostics="/api/v1/runs/run_123/diagnostics",
+        ),
     )
 
     payload = resource.model_dump()
     assert payload["object"] == "ade.run"
-    assert payload["attempt"] == 1
-    assert payload["input_documents"] == []
-    assert payload["output_paths"] == []
-    assert payload["processed_files"] == []
-    assert "configuration_version_id" not in payload
-    assert "submitted_by_user_id" not in payload
-    assert "retry_of_run_id" not in payload
-    assert "trace_id" not in payload
-    assert "canceled" not in payload
-    assert "artifact_uri" not in payload
-    assert "output_uri" not in payload
-    assert "logs_uri" not in payload
-    assert "artifact_path" not in payload
-    assert "events_path" not in payload
-    assert "summary" not in payload
     assert payload["status"] == "queued"
-
-
-def test_run_log_event_json_bytes_round_trip() -> None:
-    event = RunLogEvent(
-        run_id="run_123",
-        created=1_700_000_100,
-        type="run.log",
-        stream="stderr",
-        message="line",
-    )
-
-    decoded = json.loads(event.json_bytes())
-    assert decoded == {
-        "object": "ade.run.event",
-        "run_id": "run_123",
-        "created": 1_700_000_100,
-        "type": "run.log",
-        "stream": "stderr",
-        "message": "line",
-    }
+    assert payload["input"]["document_ids"] == []
+    assert payload["output"]["output_count"] == 0
+    assert payload["links"]["summary"].endswith("/summary")
+    assert "failure_message" not in payload
 
 
 def test_run_logs_response_tracks_pagination_marker() -> None:
@@ -81,17 +63,24 @@ def test_run_create_request_defaults_to_no_stream() -> None:
     assert isinstance(request.options, RunCreateOptions)
 
 
-def test_run_completed_event_supports_optional_fields() -> None:
-    event = RunCompletedEvent(
-        run_id="run_123",
-        created=1,
-        status="succeeded",
-        exit_code=0,
-        error_message=None,
-    )
+def test_run_events_page_serializes_cursor() -> None:
+    page = RunEventsPage(items=[], next_cursor="9")
+    payload = page.model_dump()
+    assert payload["next_cursor"] == "9"
 
-    payload = event.model_dump()
-    assert payload["status"] == "succeeded"
-    assert payload["output_paths"] == []
-    assert "artifact_path" not in payload
-    assert "error_message" not in payload
+
+def test_run_output_listing_shapes_entries() -> None:
+    listing = RunOutputListing(
+        files=[
+            RunOutputFile(
+                name="normalized.xlsx",
+                kind="normalized_workbook",
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                byte_size=512,
+                download_url="/api/v1/runs/run_123/outputs/normalized.xlsx",
+            )
+        ]
+    )
+    payload = listing.model_dump()
+    assert payload["files"][0]["name"] == "normalized.xlsx"
+    assert payload["files"][0]["download_url"].endswith("normalized.xlsx")

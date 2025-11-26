@@ -761,11 +761,12 @@ export function Workbench({
             if (!isMountedRef.current) {
               return;
             }
-            if (!event.type.startsWith("run.")) continue;
-            if (event.type === "run.queued") {
+            const type = event.type;
+            if (!type?.startsWith("run.")) continue;
+            if (type === "run.queued") {
               currentRunId = event.run_id ?? (event.id as string | undefined) ?? null;
             }
-            if (event.type === "run.completed") {
+            if (type === "run.completed") {
               const runStatus = (event.status as RunStatus | undefined) ?? "succeeded";
               const errorMessage =
                 (event.error?.message as string | undefined)?.trim() ||
@@ -819,7 +820,16 @@ export function Workbench({
                 });
                 try {
                   const listing = await fetchRunOutputs(currentRunId);
-                  const files = Array.isArray(listing.files) ? listing.files : [];
+                  const files = (Array.isArray(listing.files) ? listing.files : []).map((file) => {
+                    const name = (file as any).name ?? (file as any).path ?? "output";
+                    const path = (file as any).path ?? (file as any).name;
+                    return {
+                      name,
+                      path,
+                      byte_size: (file as any).byte_size ?? 0,
+                      download_url: (file as any).download_url ?? undefined,
+                    };
+                  });
                   setLatestRun((prev) =>
                     prev && prev.runId === currentRunId
                       ? { ...prev, outputs: files, outputsLoaded: true }

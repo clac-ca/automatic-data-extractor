@@ -1976,18 +1976,32 @@ function RunExtractionDrawerContent({
                     <p className="text-xs text-slate-500">Loading outputs…</p>
                   ) : outputFiles.length > 0 ? (
                     <ul className="mt-1 space-y-1 text-xs text-slate-700">
-                      {outputFiles.map((file) => (
-                        <li key={file.path} className="flex items-center justify-between gap-2 break-all rounded border border-slate-100 px-2 py-1">
-                          <a
-                            href={downloadBase ? `${downloadBase}/outputs/${file.path.split("/").map(encodeURIComponent).join("/")}` : undefined}
-                            className="text-emerald-700 hover:underline"
-                            aria-disabled={!downloadBase}
+                      {outputFiles.map((file) => {
+                        const name = (file as any).name ?? file.path ?? "output";
+                        const path = (file as any).path ?? name;
+                        const href =
+                          (file as any).download_url ??
+                          (downloadBase
+                            ? `${downloadBase}/outputs/${path.split("/").map(encodeURIComponent).join("/")}`
+                            : undefined);
+                        return (
+                          <li
+                            key={path}
+                            className="flex items-center justify-between gap-2 break-all rounded border border-slate-100 px-2 py-1"
                           >
-                            {file.path}
-                          </a>
-                          <span className="text-[11px] text-slate-500">{file.byte_size.toLocaleString()} bytes</span>
-                        </li>
-                      ))}
+                            <a
+                              href={href}
+                              className="text-emerald-700 hover:underline"
+                              aria-disabled={!href}
+                            >
+                              {name}
+                            </a>
+                            <span className="text-[11px] text-slate-500">
+                              {(file as any).byte_size?.toLocaleString() ?? "0"} bytes
+                            </span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   ) : (
                     <p className="text-xs text-slate-500">Outputs will appear here after the run completes.</p>

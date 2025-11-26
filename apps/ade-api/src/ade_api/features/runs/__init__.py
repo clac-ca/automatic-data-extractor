@@ -4,7 +4,7 @@ from .models import Run, RunLog, RunStatus
 from .schemas import (
     RunCreateOptions,
     RunCreateRequest,
-    RunEvent,
+    RunEventsPage,
     RunLogEntry,
     RunLogsResponse,
     RunResource,
@@ -17,7 +17,7 @@ __all__ = [
     "RunStatus",
     "RunCreateOptions",
     "RunCreateRequest",
-    "RunEvent",
+    "RunEventsPage",
     "RunLogEntry",
     "RunLogsResponse",
     "RunResource",
