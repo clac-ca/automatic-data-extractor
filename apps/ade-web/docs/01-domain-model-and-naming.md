@@ -4,7 +4,7 @@ This doc is the **source of truth for names** in ADE Web.
 
 It defines:
 
-* What the core entities are (workspace, configuration, build, run, document, artifact, …)
+* What the core entities are (workspace, configuration, build, run, document, outputs/telemetry, …)
 * What we call them in:
 
   * UI text
@@ -30,7 +30,6 @@ When you add or touch code, copy, or routes, keep these aligned:
 * **Build** – UI: *Build* – field: `buildId`
 * **Run** – UI: *Run* – field: `runId`
 * **Document** – UI: *Document* – field: `documentId`
-* **Artifact** – UI: *Artifact* – TS type `RunArtifact` (or `Artifact`), always tied to a `runId`
 * **Config template** – UI: *Config template* – TS type `ConfigTemplate` – field: `templateId`
 
 **Routes**
@@ -100,7 +99,7 @@ At a high level:
    Each Configuration is backed by an installable **configuration package** (`ade_config`).
 3. Each Configuration can be **built** into a Python environment (virtualenv) — a **Build**.
 4. Users upload **Documents** (Excel/CSV) to the workspace.
-5. Users start **Runs** that execute a particular **Build** against one or more **Documents**, producing **Artifacts** (e.g. `output.xlsx`, `artifact.json`).
+5. Users start **Runs** that execute a particular **Build** against one or more **Documents**, producing normalized outputs (`output.xlsx`) and telemetry (`events.ndjson`).
 
 Conceptually:
 
@@ -110,7 +109,7 @@ Workspace
  │    ├─ Builds (frozen Python environments for that configuration)
  │    │    └─ Runs
  │    │         ├─ Input documents
- │    │         └─ Artifacts (output.xlsx, artifact.json)
+ │    │         └─ Outputs (output.xlsx) + telemetry (events.ndjson)
  └─ Shared documents
 ```
 
@@ -131,7 +130,6 @@ The rest of this doc just pins down the **canonical names** for each box in this
 | Build                 | Build           | `Build`                    | `buildId`, `configurationId`     | `.venv/<configuration_id>/ade-runtime/build.json`      |
 | Run                   | Run             | `Run`                      | `runId`                          | `runs/<run_id>/…`                                      |
 | Document              | Document        | `Document`                 | `documentId`, `workspaceId`      | `documents/<document_id>.<ext>`                        |
-| Artifact              | Artifact        | `RunArtifact` / `Artifact` | `runId`                          | `runs/<run_id>/logs/artifact.json`                     |
 | Config template       | Config template | `ConfigTemplate`           | `templateId`                     | `templates/config_packages/…` (backend repo structure) |
 
 > OpenAPI-generated types live under `@schema`. In app code we alias them to clean domain names instead of using the raw generated names everywhere.
@@ -145,7 +143,7 @@ The rest of this doc just pins down the **canonical names** for each box in this
 **What it is**
 
 * Top-level container and isolation boundary.
-* Owns configurations, runs, documents, artifacts, and runtime state, typically under
+* Owns configurations, runs, documents, and runtime state, typically under
   `./data/workspaces/<workspace_id>/…`.
 
 **User-facing naming**
@@ -209,7 +207,7 @@ Examples:
 **Important rule**
 
 * In UI copy and React components, always say **Configuration**.
-* When you need to talk about the Python-level artifact, call it the **backing configuration package**.
+* When you need to talk about the Python-level package, call it the **backing configuration package**.
 * Do **not** introduce a separate “Config Package” entity in the UI.
 
 **User-facing naming**
@@ -370,7 +368,7 @@ Typical fields:
 * Inputs / outputs:
 
   * `inputDocuments: Document[]` or similar
-  * Artifact metadata (paths to `output.xlsx`, `artifact.json`)
+  * Output metadata (paths to `output.xlsx`, `events.ndjson`)
 
 **Frontend conventions**
 
@@ -445,53 +443,7 @@ Examples:
 
 ---
 
-### 4.7 Artifact
-
-**What it is**
-
-* The **structured result** of a Run.
-* Usually includes:
-
-  * Normalized workbook (`output.xlsx`)
-  * Narrative / metrics / issues in `artifact.json` under `runs/<run_id>/logs/`
-
-**User-facing naming**
-
-* Singular: **Artifact**
-* Plural: **Artifacts**
-* Example copy:
-
-  * “Download artifact”
-  * “Artifact summary”
-
-**Code & API naming**
-
-* Typically keyed by `runId`.
-* Fields follow the artifact schema (see backend docs such as `run_artifact_json.md`).
-
-**Frontend conventions**
-
-```ts
-import type { RunArtifact } from "@schema";
-
-type Artifact = RunArtifact;
-```
-
-Examples:
-
-* Specific view types:
-
-  * `ArtifactSheetSummary`
-  * `ArtifactIssue`
-* Components:
-
-  * `<ArtifactSummary />`
-  * `<ArtifactIssuesPanel />`
-  * `<DownloadArtifactButton />`
-
----
-
-### 4.8 Config template
+### 4.7 Config template
 
 **What it is**
 
@@ -721,9 +673,9 @@ Putting it all together for a typical user interaction:
    * UI: “Run history”
    * Type: `Run` with `runId`, `status`, `inputDocuments`, …
 
-7. When the run completes, the UI surfaces the **Artifact**.
+7. When the run completes, the UI surfaces **Outputs and telemetry**.
 
-   * UI: “Download artifact”, “View artifact details”
-   * Code: `Artifact` / `RunArtifact`, keyed by `runId`.
+   * UI: “Download output”, “View telemetry”
+   * Code: output paths + telemetry log (`events.ndjson`) keyed by `runId`.
 
 If you can tell, for every step, **what the entity is, what we call it in the UI, and which ID field it uses**, you’re using this doc correctly.

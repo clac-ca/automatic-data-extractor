@@ -1009,7 +1009,6 @@ def on_run_start(
     run_id: str,
     manifest: dict,
     env: dict | None = None,
-    artifact: dict | None = None,
     logger=None,
     **_,
 ) -> None:
@@ -1028,7 +1027,6 @@ def after_mapping(
 def before_save(
     *,
     workbook,
-    artifact: dict | None = None,
     logger=None,
     **_,
 ):
@@ -1036,7 +1034,7 @@ def before_save(
 
 def on_run_end(
     *,
-    artifact: dict | None = None,
+    tables=None,
     logger=None,
     **_,
 ) -> None:
@@ -1046,7 +1044,7 @@ def on_run_end(
 Helpers explain:
 
 * **When** each hook fires in the run lifecycle.
-* **What** `manifest`, `env`, `artifact`, `table`, and `workbook` look like at that moment.
+* **What** `manifest`, `env`, `table`, and `workbook` look like at that moment.
 * How return values are interpreted (e.g. whether a hook is allowed to mutate or replace a structure).
 
 Typical UX:
