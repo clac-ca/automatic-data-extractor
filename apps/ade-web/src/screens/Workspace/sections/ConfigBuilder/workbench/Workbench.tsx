@@ -24,13 +24,17 @@ import { useEditorThemePreference } from "./state/useEditorThemePreference";
 import type { EditorThemePreference } from "./state/useEditorThemePreference";
 import type { WorkbenchConsoleLine, WorkbenchDataSeed, WorkbenchValidationState } from "./types";
 import { clamp, trackPointerDrag } from "./utils/drag";
-import { createWorkbenchTreeFromListing } from "./utils/tree";
+import { createWorkbenchTreeFromListing, findFileNode } from "./utils/tree";
 
 import { ContextMenu, type ContextMenuItem } from "@ui/ContextMenu";
 import { SplitButton } from "@ui/SplitButton";
 import { PageState } from "@ui/PageState";
 
-import { useConfigurationFilesQuery, useSaveConfigurationFileMutation } from "@shared/configurations/hooks/useConfigurationFiles";
+import {
+  useConfigurationFilesQuery,
+  useSaveConfigurationFileMutation,
+  useDeleteConfigurationFileMutation,
+} from "@shared/configurations/hooks/useConfigurationFiles";
 import { configurationKeys } from "@shared/configurations/keys";
 import { readConfigurationFileJson } from "@shared/configurations/api";
 import type { FileReadJson } from "@shared/configurations/types";
@@ -265,11 +269,15 @@ export function Workbench({
   const [testMenu, setTestMenu] = useState<{ x: number; y: number } | null>(null);
   const [forceRun, setForceRun] = useState(false);
   const [isResizingConsole, setIsResizingConsole] = useState(false);
+  const [isCreatingFile, setIsCreatingFile] = useState(false);
+  const [pendingOpenFileId, setPendingOpenFileId] = useState<string | null>(null);
+  const [deletingFilePath, setDeletingFilePath] = useState<string | null>(null);
   const { notifyBanner, dismissScope } = useNotifications();
   const consoleBannerScope = useMemo(
     () => `workbench-console:${workspaceId}:${configId}`,
     [workspaceId, configId],
   );
+  const deleteConfigFile = useDeleteConfigurationFileMutation(workspaceId, configId);
   const showConsoleBanner = useCallback(
     (message: string, options?: { intent?: NotificationIntent; duration?: number | null }) => {
       notifyBanner({
@@ -712,6 +720,18 @@ export function Workbench({
     setFileId(activeId);
   }, [files.activeTabId, setFileId]);
 
+  useEffect(() => {
+    if (!pendingOpenFileId || !tree) {
+      return;
+    }
+    if (!findFileNode(tree, pendingOpenFileId)) {
+      return;
+    }
+    files.openFile(pendingOpenFileId);
+    setFileId(pendingOpenFileId);
+    setPendingOpenFileId(null);
+  }, [pendingOpenFileId, tree, files, setFileId]);
+
   const startRunStream = useCallback(
     (options: RunStreamOptions, metadata: RunStreamMetadata, forceRebuild = false) => {
       const effectiveOptions = forceRebuild ? { ...options, force_rebuild: true } : options;
@@ -822,14 +842,14 @@ export function Workbench({
                 });
                 try {
                   const listing = await fetchRunOutputs(currentRunId);
-                  const files = (Array.isArray(listing.files) ? listing.files : []).map((file) => {
-                    const name = (file as any).name ?? (file as any).path ?? "output";
-                    const path = (file as any).path ?? (file as any).name;
+                  const outputFiles = Array.isArray(listing.files) ? listing.files : [];
+                  const files = outputFiles.map((file) => {
+                    const path = (file as { path?: string }).path;
                     return {
-                      name,
+                      name: file.name ?? path ?? "output",
                       path,
-                      byte_size: (file as any).byte_size ?? 0,
-                      download_url: (file as any).download_url ?? undefined,
+                      byte_size: file.byte_size ?? 0,
+                      download_url: file.download_url ?? undefined,
                     };
                   });
                   setLatestRun((prev) =>
@@ -1029,6 +1049,8 @@ export function Workbench({
   const isRunningExtraction = isStreamingExtraction;
   const canRunExtraction =
     !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !isStreamingAny;
+  const canCreateFiles = !usingSeed && !filesQuery.isLoading && !filesQuery.isError;
+  const canDeleteFiles = canCreateFiles && !deleteConfigFile.isPending;
 
   const handleSelectActivityView = useCallback((view: ActivityBarView) => {
     setActivityView(view);
@@ -1076,6 +1098,90 @@ export function Workbench({
   const handleToggleInspectorVisibility = useCallback(() => {
     setInspector((prev) => ({ ...prev, collapsed: !prev.collapsed }));
   }, []);
+
+  const handleCreateFile = useCallback(
+    async (folderPath: string, fileName: string) => {
+      const trimmed = fileName.trim();
+      if (!trimmed) {
+        throw new Error("Enter a file name.");
+      }
+      if (trimmed.includes("..")) {
+        throw new Error("File name cannot include '..'.");
+      }
+      if (!canCreateFiles) {
+        throw new Error("Files are still loading.");
+      }
+      const normalizedFolder = folderPath.replace(/\/+$/, "");
+      const sanitizedName = trimmed.replace(/^\/+/, "").replace(/\/+/g, "/");
+      const candidatePath = normalizedFolder ? `${normalizedFolder}/${sanitizedName}` : sanitizedName;
+      const normalizedPath = candidatePath.replace(/\/+/g, "/");
+      if (!normalizedPath || normalizedPath.endsWith("/")) {
+        throw new Error("Enter a valid file name.");
+      }
+      if (tree && findFileNode(tree, normalizedPath)) {
+        throw new Error("A file or folder with that name already exists.");
+      }
+      setIsCreatingFile(true);
+      try {
+        await saveConfigFile.mutateAsync({
+          path: normalizedPath,
+          content: "",
+          parents: true,
+          create: true,
+        });
+        setPendingOpenFileId(normalizedPath);
+        await filesQuery.refetch();
+        showConsoleBanner(`Created ${normalizedPath}`, { intent: "success", duration: 4000 });
+      } catch (error) {
+        pushConsoleError(error);
+        throw error instanceof Error ? error : new Error("Unable to create file.");
+      } finally {
+        setIsCreatingFile(false);
+      }
+    },
+    [canCreateFiles, tree, saveConfigFile, filesQuery, showConsoleBanner, pushConsoleError],
+  );
+
+  const handleDeleteFile = useCallback(
+    async (filePath: string) => {
+      if (!canDeleteFiles) {
+        throw new Error("Files are still loading.");
+      }
+      const target = tree ? findFileNode(tree, filePath) : null;
+      if (!tree || !target) {
+        throw new Error("File not found in workspace.");
+      }
+      const confirmDelete =
+        typeof window !== "undefined"
+          ? window.confirm(`Delete ${filePath}? This cannot be undone.`)
+          : true;
+      if (!confirmDelete) {
+        return;
+      }
+      setIsCreatingFile(false);
+      setDeletingFilePath(filePath);
+      try {
+        await deleteConfigFile.mutateAsync({ path: filePath, etag: target.metadata?.etag });
+        files.closeTab(filePath);
+        setPendingOpenFileId((prev) => (prev === filePath ? null : prev));
+        await filesQuery.refetch();
+        showConsoleBanner(`Deleted ${filePath}`, { intent: "info", duration: 4000 });
+      } catch (error) {
+        const message =
+          error instanceof ApiError && error.status === 428
+            ? "Delete blocked: missing latest file version. Reload the explorer and try again."
+            : error instanceof Error
+              ? error.message
+              : "Unable to delete file.";
+        pushConsoleError(message);
+        throw new Error(message);
+      }
+      finally {
+        setDeletingFilePath((prev) => (prev === filePath ? null : prev));
+      }
+    },
+    [canDeleteFiles, tree, deleteConfigFile, files, filesQuery, showConsoleBanner, pushConsoleError, setDeletingFilePath],
+  );
 
   const settingsMenuItems = useMemo<ContextMenuItem[]>(() => {
     const blankIcon = <span className="inline-block h-4 w-4 opacity-0" />;
@@ -1260,6 +1366,12 @@ export function Workbench({
                       setFileId(fileId);
                     }}
                     theme={menuAppearance}
+                    canCreateFile={canCreateFiles}
+                    isCreatingFile={isCreatingFile}
+                    onCreateFile={handleCreateFile}
+                    canDeleteFile={canDeleteFiles}
+                    deletingFilePath={deletingFilePath}
+                    onDeleteFile={handleDeleteFile}
                     onCloseFile={files.closeTab}
                     onCloseOtherFiles={files.closeOtherTabs}
                     onCloseTabsToRight={files.closeTabsToRight}

@@ -177,6 +177,7 @@ class BuildsService:
                 target_path=str(target_path),
                 python_bin=python_interpreter,
                 engine_spec=engine_spec,
+                engine_version_hint=engine_version_hint,
                 pip_cache_dir=str(self._settings.pip_cache_dir)
                 if self._settings.pip_cache_dir
                 else None,
@@ -247,7 +248,11 @@ class BuildsService:
                     "status": "active",
                     "summary": build.summary,
                     "exit_code": build.exit_code,
-                    "env": {"reason": "reuse_ok", "should_build": False, "force": bool(options.force)},
+                    "env": {
+                        "reason": "reuse_ok",
+                        "should_build": False,
+                        "force": bool(options.force),
+                    },
                 },
             )
             return
@@ -547,6 +552,7 @@ class BuildsService:
             target_path=str(target_path),
             python_bin=python_interpreter,
             engine_spec=engine_spec,
+            engine_version_hint=engine_version_hint,
             pip_cache_dir=str(self._settings.pip_cache_dir)
             if self._settings.pip_cache_dir
             else None,

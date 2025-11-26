@@ -5,6 +5,7 @@ import {
   readConfigurationFileJson,
   renameConfigurationFile,
   upsertConfigurationFile,
+  deleteConfigurationFile,
   type ListConfigurationFilesOptions,
   type RenameConfigurationFilePayload,
   type UpsertConfigurationFilePayload,
@@ -113,6 +114,19 @@ export function useRenameConfigurationFileMutation(workspaceId: string, configId
         queryClient.invalidateQueries({ queryKey: configurationKeys.files(workspaceId, configId) }),
         queryClient.invalidateQueries({ queryKey: configurationKeys.file(workspaceId, configId, variables.fromPath) }),
         queryClient.invalidateQueries({ queryKey: configurationKeys.file(workspaceId, configId, variables.toPath) }),
+      ]);
+    },
+  });
+}
+
+export function useDeleteConfigurationFileMutation(workspaceId: string, configId: string) {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { path: string; etag?: string | null }>({
+    mutationFn: (payload) => deleteConfigurationFile(workspaceId, configId, payload.path, { etag: payload.etag }),
+    async onSuccess(_, variables) {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: configurationKeys.files(workspaceId, configId) }),
+        queryClient.invalidateQueries({ queryKey: configurationKeys.file(workspaceId, configId, variables.path) }),
       ]);
     },
   });

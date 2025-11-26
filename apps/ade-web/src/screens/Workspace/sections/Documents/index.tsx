@@ -1977,10 +1977,10 @@ function RunExtractionDrawerContent({
                   ) : outputFiles.length > 0 ? (
                     <ul className="mt-1 space-y-1 text-xs text-slate-700">
                       {outputFiles.map((file) => {
-                        const name = (file as any).name ?? file.path ?? "output";
-                        const path = (file as any).path ?? name;
+                        const path = (file as { path?: string }).path ?? file.name;
+                        const size = typeof file.byte_size === "number" ? file.byte_size : 0;
                         const href =
-                          (file as any).download_url ??
+                          file.download_url ??
                           (downloadBase
                             ? `${downloadBase}/outputs/${path.split("/").map(encodeURIComponent).join("/")}`
                             : undefined);
@@ -1994,10 +1994,10 @@ function RunExtractionDrawerContent({
                               className="text-emerald-700 hover:underline"
                               aria-disabled={!href}
                             >
-                              {name}
+                              {file.name}
                             </a>
                             <span className="text-[11px] text-slate-500">
-                              {(file as any).byte_size?.toLocaleString() ?? "0"} bytes
+                              {size.toLocaleString()} bytes
                             </span>
                           </li>
                         );
