@@ -1313,38 +1313,36 @@ export function Workbench({
       {isMaximized ? <div className="fixed inset-0 z-40 bg-slate-900/60" /> : null}
       <div className={windowFrameClass}>
         <WorkbenchChrome
-        configName={configName}
-        workspaceLabel={workspaceLabel}
-        validationLabel={validationLabel}
-        latestRun={latestRun}
-        onShowRunSummary={handleShowRunSummary}
-        canSaveFiles={canSaveFiles}
-        isSavingFiles={isSavingTabs}
-        onSaveFile={handleSaveActiveTab}
-        saveShortcutLabel={saveShortcutLabel}
-        onOpenTestMenu={(position) => setTestMenu(position)}
-        canRunValidation={canRunValidation}
-        isRunningValidation={isRunningValidation}
-        onRunValidation={handleRunValidation}
-        canRunExtraction={canRunExtraction}
-        isRunningExtraction={isRunningExtraction}
-        onRunExtraction={(force) => {
-          if (!canRunExtraction) return;
-          setForceRun(force);
-          setRunDialogOpen(true);
-        }}
-        explorerVisible={showExplorerPane}
-        onToggleExplorer={handleToggleExplorer}
-        consoleOpen={!outputCollapsed}
-        onToggleConsole={handleToggleOutput}
-        inspectorCollapsed={inspector.collapsed}
-        onToggleInspector={handleToggleInspectorVisibility}
-        appearance={menuAppearance}
-        windowState={windowState}
-        onMinimizeWindow={handleMinimizeWindow}
-        onToggleMaximize={handleToggleMaximize}
-        onCloseWindow={handleCloseWorkbench}
-      />
+          configName={configName}
+          workspaceLabel={workspaceLabel}
+          validationLabel={validationLabel}
+          canSaveFiles={canSaveFiles}
+          isSavingFiles={isSavingTabs}
+          onSaveFile={handleSaveActiveTab}
+          saveShortcutLabel={saveShortcutLabel}
+          onOpenTestMenu={(position) => setTestMenu(position)}
+          canRunValidation={canRunValidation}
+          isRunningValidation={isRunningValidation}
+          onRunValidation={handleRunValidation}
+          canRunExtraction={canRunExtraction}
+          isRunningExtraction={isRunningExtraction}
+          onRunExtraction={(force) => {
+            if (!canRunExtraction) return;
+            setForceRun(force);
+            setRunDialogOpen(true);
+          }}
+          explorerVisible={showExplorerPane}
+          onToggleExplorer={handleToggleExplorer}
+          consoleOpen={!outputCollapsed}
+          onToggleConsole={handleToggleOutput}
+          inspectorCollapsed={inspector.collapsed}
+          onToggleInspector={handleToggleInspectorVisibility}
+          appearance={menuAppearance}
+          windowState={windowState}
+          onMinimizeWindow={handleMinimizeWindow}
+          onToggleMaximize={handleToggleMaximize}
+          onCloseWindow={handleCloseWorkbench}
+        />
         <div ref={setPaneAreaEl} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           <ActivityBar
             activeView={activityView}
@@ -1554,50 +1552,6 @@ export function Workbench({
   );
 }
 
-function RunStatusPill({
-  summary,
-  appearance,
-  onClick,
-}: {
-  readonly summary: WorkbenchRunSummary;
-  readonly appearance: "light" | "dark";
-  readonly onClick?: () => void;
-}) {
-  const durationLabel = formatRunDurationLabel(summary.durationMs);
-  const sheetLabel = describeSheetSelection(summary.sheetNames);
-  const docLabel = summary.documentName ?? "Document not recorded";
-  const statusText = describeRunStatus(summary.status);
-  const surfaceClass =
-    appearance === "dark"
-      ? "border-white/15 bg-white/5 text-white hover:border-white/25 hover:bg-white/10 focus-visible:ring-white/40"
-      : "border-slate-200 bg-slate-100 text-slate-800 hover:border-slate-300 hover:bg-white focus-visible:ring-slate-400/40";
-  const metaTextClass = appearance === "dark" ? "text-white/70" : "text-slate-500";
-  const actionClass = appearance === "dark" ? "text-brand-200" : "text-brand-700";
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={clsx(
-        "flex max-w-sm flex-col items-start gap-1 rounded-md border px-3 py-2 text-left text-[13px] shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
-        surfaceClass,
-      )}
-      title="View the latest run summary"
-    >
-      <span className="flex items-center gap-2 text-xs font-semibold">
-        <RunStatusDot status={summary.status} />
-        <span className="leading-none">Last run: {statusText}</span>
-        {durationLabel ? <span className={clsx("font-normal", metaTextClass)}>· {durationLabel}</span> : null}
-      </span>
-      <span className={clsx("line-clamp-1 text-[12px]", metaTextClass)}>
-        {docLabel}
-        {sheetLabel ? ` · ${sheetLabel}` : ""}
-      </span>
-      <span className={clsx("text-[11px] font-semibold", actionClass)}>View summary</span>
-    </button>
-  );
-}
-
 interface SidePanelPlaceholderProps {
   readonly width: number;
   readonly view: ActivityBarView;
@@ -1628,8 +1582,6 @@ function WorkbenchChrome({
   configName,
   workspaceLabel,
   validationLabel,
-  latestRun,
-  onShowRunSummary,
   canSaveFiles,
   isSavingFiles,
   onSaveFile,
@@ -1656,8 +1608,6 @@ function WorkbenchChrome({
   readonly configName: string;
   readonly workspaceLabel: string;
   readonly validationLabel?: string;
-  readonly latestRun?: WorkbenchRunSummary | null;
-  readonly onShowRunSummary?: () => void;
   readonly canSaveFiles: boolean;
   readonly isSavingFiles: boolean;
   readonly onSaveFile: () => void;
@@ -1711,9 +1661,6 @@ function WorkbenchChrome({
         </div>
       </div>
       <div className="flex items-center gap-3">
-        {latestRun ? (
-          <RunStatusPill summary={latestRun} appearance={appearance} onClick={onShowRunSummary} />
-        ) : null}
         {validationLabel ? <span className={clsx("text-xs", metaTextClass)}>{validationLabel}</span> : null}
         <button
           type="button"
@@ -2103,18 +2050,6 @@ function ChromeIconButton({
   );
 }
 
-function RunStatusDot({ status }: { readonly status: RunStatus }) {
-  const tone =
-    status === "succeeded"
-      ? "bg-emerald-500"
-      : status === "running" || status === "queued" || status === "active"
-        ? "bg-amber-400"
-        : status === "canceled"
-          ? "bg-slate-400"
-          : "bg-rose-500";
-  return <span className={clsx("inline-block h-2.5 w-2.5 rounded-full", tone)} aria-hidden />;
-}
-
 function describeSheetSelection(sheetNames?: readonly string[] | null): string | null {
   if (!sheetNames) {
     return null;
@@ -2123,24 +2058,6 @@ function describeSheetSelection(sheetNames?: readonly string[] | null): string |
     return "All worksheets";
   }
   return sheetNames.join(", ");
-}
-
-function describeRunStatus(status: RunStatus): string {
-  switch (status) {
-    case "succeeded":
-      return "Succeeded";
-    case "failed":
-      return "Failed";
-    case "canceled":
-      return "Canceled";
-    case "queued":
-      return "Queued";
-    case "running":
-    case "active":
-      return "Running";
-    default:
-      return status;
-  }
 }
 
 function formatRunDurationLabel(durationMs?: number | null): string | null {

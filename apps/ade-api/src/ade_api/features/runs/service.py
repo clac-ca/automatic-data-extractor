@@ -1074,12 +1074,27 @@ class RunsService:
         )
         summary_json = self._serialize_summary(summary_model)
 
-        await self._complete_run(
+        completion = await self._complete_run(
             run,
             status=status,
             exit_code=return_code,
             summary=summary_json,
             error_message=error_message,
+        )
+        payload: dict[str, Any] = {
+            "status": self._status_literal(completion.status),
+            "execution": {
+                "exit_code": completion.exit_code,
+                "duration_ms": self._duration_ms(completion),
+            },
+            "run_summary": summary_model.model_dump(mode="json") if summary_model else None,
+        }
+        if error_message:
+            payload["error"] = {"message": error_message}
+        yield self._ade_event(
+            run=completion,
+            type_="run.completed",
+            payload=payload,
         )
 
     async def _stream_validate_only_run(
