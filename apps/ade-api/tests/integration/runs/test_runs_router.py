@@ -221,11 +221,12 @@ async def _seed_real_configuration(
 
         pip_exe = _venv_executable(venv_path, "pip")
         _pip_install(pip_exe, _ENGINE_PACKAGE)
-        config_src = tmp_path / f"ade-config-{config.id}"
+        config_src = workspace_config_root(settings, workspace_id, config.id)
         shutil.copytree(_CONFIG_TEMPLATE, config_src, dirs_exist_ok=True)
         _pip_install(pip_exe, config_src)
 
         python_exe = _venv_executable(venv_path, "python")
+        digest = compute_config_digest(config_src)
         now = utc_now()
         config.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
         config.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
@@ -235,7 +236,8 @@ async def _seed_real_configuration(
         config.last_build_started_at = now  # type: ignore[attr-defined]
         config.last_build_finished_at = now  # type: ignore[attr-defined]
         config.built_configuration_version = config.configuration_version  # type: ignore[attr-defined]
-        config.built_content_digest = config.content_digest  # type: ignore[attr-defined]
+        config.content_digest = digest  # type: ignore[attr-defined]
+        config.built_content_digest = digest  # type: ignore[attr-defined]
         config.last_build_id = build_id  # type: ignore[attr-defined]
         await session.commit()
         return config.id

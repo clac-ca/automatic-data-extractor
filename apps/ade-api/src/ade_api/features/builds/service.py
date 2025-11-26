@@ -99,6 +99,7 @@ class BuildExecutionContext:
             target_path=str(payload["target_path"]),
             python_bin=payload.get("python_bin") or None,
             engine_spec=str(payload["engine_spec"]),
+            engine_version_hint=payload.get("engine_version_hint") or None,
             pip_cache_dir=payload.get("pip_cache_dir") or None,
             timeout_seconds=float(payload["timeout_seconds"]),
             should_run=bool(payload["should_run"]),

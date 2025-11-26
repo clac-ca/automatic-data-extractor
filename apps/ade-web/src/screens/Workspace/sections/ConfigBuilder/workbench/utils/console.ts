@@ -10,7 +10,15 @@ const TIME_OPTIONS: Intl.DateTimeFormatOptions = {
 };
 
 export function formatConsoleTimestamp(value: string | Date): string {
-  const iso = value instanceof Date ? value.toISOString() : value;
+  const iso =
+    value instanceof Date
+      ? Number.isNaN(value.getTime())
+        ? null
+        : value.toISOString()
+      : value;
+  if (!iso) {
+    return "";
+  }
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
     return "";
@@ -45,7 +53,7 @@ export function describeBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine 
       return { level: "info", message: "Build started.", timestamp: ts, origin: "build" };
     case "build.phase.started": {
       const phase = (event.phase as string | undefined) ?? "building";
-      const message = (event.message as string | undefined) ?? phase.replaceAll("_", " ");
+      const message = (event.message as string | undefined) ?? phase;
       return { level: "info", message, timestamp: ts, origin: "build" };
     }
     case "build.console":
@@ -84,8 +92,9 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
       };
     case "run.phase.started": {
       const phase = (event.phase as string | undefined) ?? "progress";
+      const level = normalizeLevel((event.level as string | undefined) ?? "info");
       return {
-        level: "info",
+        level,
         message: `Phase: ${phase}`,
         timestamp: ts,
         origin: "run",

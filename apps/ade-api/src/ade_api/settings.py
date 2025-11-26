@@ -474,30 +474,16 @@ class Settings(BaseSettings):
             self.alembic_migrations_dir, default=DEFAULT_ALEMBIC_MIGRATIONS
         )
 
-        workspaces_explicit = "workspaces_dir" in self._explicit_init_fields
-        documents_explicit = "documents_dir" in self._explicit_init_fields
-        configs_explicit = "configs_dir" in self._explicit_init_fields
-        venvs_explicit = "venvs_dir" in self._explicit_init_fields
-        runs_explicit = "runs_dir" in self._explicit_init_fields
-
         self.workspaces_dir = _resolve_path(
             self.workspaces_dir, default=DEFAULT_WORKSPACES_DIR
         )
-        if workspaces_explicit and not documents_explicit:
+        if "documents_dir" not in self.model_fields_set:
             self.documents_dir = self.workspaces_dir
-        elif "documents_dir" not in self.model_fields_set:
-            self.documents_dir = self.workspaces_dir
-        if workspaces_explicit and not configs_explicit:
+        if "configs_dir" not in self.model_fields_set:
             self.configs_dir = self.workspaces_dir
-        elif "configs_dir" not in self.model_fields_set:
-            self.configs_dir = self.workspaces_dir
-        if workspaces_explicit and not venvs_explicit:
+        if "venvs_dir" not in self.model_fields_set:
             self.venvs_dir = self.workspaces_dir
-        elif "venvs_dir" not in self.model_fields_set:
-            self.venvs_dir = self.workspaces_dir
-        if workspaces_explicit and not runs_explicit:
-            self.runs_dir = self.workspaces_dir
-        elif "runs_dir" not in self.model_fields_set:
+        if "runs_dir" not in self.model_fields_set:
             self.runs_dir = self.workspaces_dir
         self.documents_dir = _resolve_path(
             self.documents_dir, default=self.workspaces_dir
