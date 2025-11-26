@@ -422,13 +422,15 @@ Run detail view composes:
 
 Data sources:
 
-* `useRunQuery(workspaceId, runId)` → `GET /runs/{run_id}`.
-* `useRunOutputsQuery(workspaceId, runId)` → `/runs/{run_id}/outputs`.
+* `useRunQuery(runId)` → `GET /runs/{run_id}` (global; runId is unique).
+* `useRunOutputsQuery(runId)` → `/runs/{run_id}/outputs`.
 * `useRunLogsStream(runId)`:
 
   * Connects to `/runs/{run_id}/logs`.
   * Parses NDJSON events.
   * Updates console output incrementally.
+
+If a backend exposes workspace‑scoped detail endpoints, a `useWorkspaceRunQuery(workspaceId, runId)` variant can be added alongside the global hook; the global `useRunQuery(runId)` remains canonical.
 
 While a run is `queued` or `running`:
 
@@ -441,7 +443,7 @@ Runs are append‑only. A “Run again” affordance in the ledger always **crea
 
 - **Configuration version** – same version as the source run unless the user picks another.
 - **Document set** – the same input documents as the source run.
-- **RunOptions** – copied (dryRun, validateOnly, sheet selection) unless explicitly overridden.
+- **RunOptions** – copied (dryRun, validateOnly, sheet selection; `forceRebuild` only when it was explicitly set) unless explicitly overridden.
 
 This mirrors the per‑run preference pattern used in document‑scoped run dialogs: defaults are helpful hints, not authoritative configuration.
 
@@ -469,6 +471,12 @@ ADE Web exposes run options via the `RunOptions` shape (camelCase in the UI, con
   * Label: “Run validators only”.
   * Skip full extraction; sets `validateOnly: true` and usually `mode: "validation"`.
 
+* **Force rebuild**
+
+  * Label: “Force rebuild environment” (shown where relevant—typically validation/test flows).
+  * Sends `forceRebuild: true` (`force_rebuild` to the API) to rebuild the environment before running.
+  * Backend will also rebuild automatically when the environment is missing, stale, or built from outdated content; `forceRebuild` is the explicit override.
+
 * **Sheet selection**
 
   * Label and UI: “Worksheets”.
@@ -483,6 +491,7 @@ General rules:
 
 * Options live under an “Advanced settings” expander in run dialogs.
 * Defaults are product decisions and may be remembered per document (see next section).
+* This doc is the canonical source for `RunOptions`; other docs should point here rather than re‑defining the shape.
 
 ### 7.2 Workspace‑level run creation (Documents & Runs)
 
@@ -502,7 +511,7 @@ From the **Documents** screen:
 
      * `input_document_ids: [documentId]`
      * Optional `input_sheet_names`
-     * Optional run options mapped from `RunOptions` to snake_case (`dry_run`, `validate_only`)
+     * Optional run options mapped from `RunOptions` (see §7.1) to snake_case (`dry_run`, `validate_only`, `force_rebuild` when provided)
      * Selected configuration/version identifiers.
 
 4. On success:
@@ -546,6 +555,8 @@ export interface DocumentRunPreferences {
 ```
 
 Fields are optional; missing fields fall back to sensible defaults.
+
+`forceRebuild` is intentionally **not** persisted here—environment rebuild is a workbench/test concern surfaced per run, not a remembered default for generic document runs.
 
 ### 8.2 Storage and keying
 

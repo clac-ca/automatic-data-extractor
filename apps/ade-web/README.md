@@ -199,6 +199,7 @@ type RunMode = "normal" | "validation" | "test";
 interface RunOptions {
   dryRun?: boolean;           // API: dry_run
   validateOnly?: boolean;     // API: validate_only
+  forceRebuild?: boolean;     // API: force_rebuild (force env rebuild before run)
   inputSheetNames?: string[]; // API: input_sheet_names
   mode?: RunMode;             // optional view-model helper derived from flags
 }
@@ -206,8 +207,13 @@ interface RunOptions {
 
 - `dryRun` – exercise the pipeline without emitting final outputs.
 - `validateOnly` – run validators and checks only (a **validation run**, not a build).
+- `forceRebuild` – request an environment rebuild before executing the run (backend
+  also auto‑rebuilds when the environment is missing/dirty). Typically surfaced
+  on validation/test flows rather than generic document runs.
 - `inputSheetNames` – when provided, only these spreadsheet worksheets are processed.
 - `mode` – optional label for UI/tests; typically `"validation"` for validation runs and `"test"` for sample runs.
+
+See `docs/07-documents-and-runs.md` for the canonical `RunOptions` shape and API mapping.
 
 **Build** always refers to an environment build (`Build` type via `/builds`). All
 executions against documents—including validation runs and test runs—are `Run`

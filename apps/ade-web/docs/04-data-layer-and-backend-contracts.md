@@ -519,7 +519,7 @@ Streaming hook:
 
 * Configuration entities and versions.
 * Config file tree and file contents for the workbench.
-* Build and validate operations.
+* Build and validate operations (builds are typically triggered implicitly during runs; explicit build calls are rare).
 
 **Key routes: configurations**
 
@@ -548,6 +548,8 @@ Streaming hook:
 * `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds`
 * `GET  /api/v1/builds/{build_id}`
 * `GET  /api/v1/builds/{build_id}/logs` – stream build logs (NDJSON).
+
+Frontends generally **do not** call `/builds` directly. The backend rebuilds a configuration environment automatically when a run starts and the environment is missing, stale, built from outdated content, or when run options include `force_rebuild` (`RunOptions.forceRebuild` in the UI). Keep the `/builds` API available for admin/backfill flows or specialised tooling, but day‑to‑day workbench flows rely on run creation + `force_rebuild` to refresh environments.
 
 **Example functions**
 
@@ -733,6 +735,8 @@ Used by:
 * Run consoles:
 
   * `streamRunLogs(runId)` → `/api/v1/runs/{run_id}/logs` (run event stream).
+
+Because environments are rebuilt automatically when runs start (or when `force_rebuild` is set), the build stream is primarily for explicit `/builds` flows or debugging; typical workbench/test runs rely solely on the run stream.
 
 Event format is determined by the backend. We expect at minimum:
 

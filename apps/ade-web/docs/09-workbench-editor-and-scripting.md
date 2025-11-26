@@ -1,6 +1,6 @@
 # 09 – Workbench editor and scripting
 
-The **Configuration Builder workbench** is the dedicated editing window used to edit ADE configuration packages and run environment builds, validation runs, and test runs directly from the browser. Use “workbench” for the whole window and “editor” only for the Monaco instance.
+The **Configuration Builder workbench** is the dedicated editing window used to edit ADE configuration packages and launch validation/test runs directly from the browser. Environment readiness is handled when runs start (including rebuilds when required); there is no standalone “build environment” control. Use “workbench” for the whole window and “editor” only for the Monaco instance.
 
 This document covers the internal architecture of the workbench in `ade-web`:
 
@@ -14,10 +14,12 @@ This document covers the internal architecture of the workbench in `ade-web`:
 - The Monaco‑based **CodeEditor** and **theme** preference.
 - ADE‑specific **scripting helpers** for detectors, transforms, validators, and hooks.
 
-Workbench run actions use the canonical `RunOptions` shape
-(`dryRun`/`validateOnly`/`inputSheetNames` with optional `mode`) in camelCase
-and convert those to backend snake_case fields. Environment builds are separate
-`Build` entities; validation runs and test runs are always `Run` entities.
+Workbench run actions use the canonical `RunOptions` shape (see `07-documents-and-runs.md`)
+in camelCase (`dryRun`/`validateOnly`/`forceRebuild`/`inputSheetNames` with optional
+`mode`) and convert those to backend snake_case fields. Environment builds remain backend
+`Build` entities but are triggered automatically when runs start if the environment is
+missing, stale, built from outdated content, or when `force_rebuild` is set; validation
+runs and test runs are always `Run` entities.
 
 Configuration lifecycles and manifest details live in `08-configurations-and-config-builder.md`. Core naming (e.g. “run”) is defined in `01-domain-model-and-naming.md`.
 
@@ -190,7 +192,7 @@ Bottom strip toggles between:
 
 * **Console tab**
 
-  * Shows streaming logs from builds and runs in plain text.
+  * Shows streaming logs from runs (including any rebuild output emitted during startup) in plain text.
   * Highlights run status (succeeded/failed).
   * Shows a **Run summary** card when runs complete:
 
@@ -605,7 +607,7 @@ The **URL** determines shareable state; local storage retains a user’s persona
 
 ## 7. Run streams and environment readiness
 
-The workbench console and validation views consume streaming events from the backend. Environment readiness is handled at run start—there is no separate build stream/button. The run payload may include `force_rebuild: true` when the user picks **Force build and test**.
+The workbench console and validation views consume streaming events from the backend. Environment readiness is handled at run start—there is no separate build stream/button. The backend rebuilds automatically when environments are missing or stale; the run payload may include `force_rebuild: true` when the user picks **Force build and test** to force that rebuild before executing.
 
 ### 7.1 Run streams (validation and test modes)
 
