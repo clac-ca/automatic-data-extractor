@@ -30,12 +30,17 @@ export function isAdeEvent(event: unknown): event is AdeEvent {
   );
 }
 
-export function eventTimestamp(event: AdeEvent): number {
+export function eventTimestamp(event: AdeEvent): string {
   const value = event.created_at;
-  if (typeof value === "number") {
-    // Accept either seconds or milliseconds; normalize to milliseconds.
-    return value > 1_000_000_000_000 ? value : value * 1000;
+  if (value instanceof Date) {
+    return value.toISOString();
   }
-  const parsed = Date.parse(String(value));
-  return Number.isFinite(parsed) ? parsed : Date.now();
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number") {
+    const ms = value > 1_000_000_000_000 ? value : value * 1000;
+    return new Date(ms).toISOString();
+  }
+  return new Date().toISOString();
 }

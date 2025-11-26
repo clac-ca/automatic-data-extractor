@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 
 from ade_engine.schemas import AdeEvent, ManifestV1, RunSummaryV1
 from pydantic import ValidationError
@@ -255,7 +255,7 @@ def build_run_summary(
         "config_version": manifest.version if manifest else None,  # type: ignore[union-attr]
         "env_reason": env_reason,
         "env_reused": env_reused,
-        "started_at": start_timestamp or datetime.now(timezone.utc),
+        "started_at": start_timestamp or datetime.now(UTC),
         "completed_at": completed_timestamp,
         "duration_seconds": duration_seconds,
     }

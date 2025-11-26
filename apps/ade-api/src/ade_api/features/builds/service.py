@@ -8,9 +8,8 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from uuid import uuid4
-
 from typing import Any
+from uuid import uuid4
 
 from ade_engine.schemas import AdeEvent
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +27,6 @@ from .builder import (
     BuilderArtifactsEvent,
     BuilderLogEvent,
     BuilderStepEvent,
-    BuildStep,
     VirtualEnvironmentBuilder,
 )
 from .exceptions import (
@@ -40,20 +38,11 @@ from .exceptions import (
 from .models import Build, BuildLog, BuildStatus
 from .repository import BuildsRepository
 from .schemas import (
-    BuildCompletedEvent,
-    BuildCreatedEvent,
     BuildCreateOptions,
-    BuildEvent,
     BuildLogEntry,
     BuildLogsResponse,
     BuildResource,
     BuildStatusLiteral,
-)
-from .schemas import (
-    BuildLogEvent as BuildLogSchema,
-)
-from .schemas import (
-    BuildStepEvent as BuildStepSchema,
 )
 
 __all__ = [
