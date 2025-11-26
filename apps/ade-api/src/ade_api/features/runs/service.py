@@ -49,15 +49,14 @@ from .models import Run, RunLog, RunStatus
 from .repository import RunsRepository
 from .runner import ADEProcessRunner, StdoutFrame
 from .schemas import (
-    RunCompletedEvent,
-    RunCreatedEvent,
     RunCreateOptions,
-    RunEvent,
+    RunDiagnosticsV1,
+    RunInput,
+    RunLinks,
     RunLogEntry,
-    RunLogEvent,
     RunLogsResponse,
+    RunOutput,
     RunResource,
-    RunStartedEvent,
     RunStatusLiteral,
 )
 from .summary_builder import build_run_summary_from_paths
@@ -486,6 +485,78 @@ class RunsService:
 
         return await self._runs.get(run_id)
 
+    async def get_run_summary(self, run_id: str) -> RunSummaryV1 | None:
+        """Return a RunSummaryV1 for ``run_id`` if available or derivable."""
+
+        run = await self._require_run(run_id)
+        summary_payload = self._deserialize_run_summary(run.summary)
+        if isinstance(summary_payload, dict):
+            try:
+                return RunSummaryV1.model_validate(summary_payload)
+            except ValidationError:
+                pass
+
+        paths = self._finalize_paths(
+            summary=None,
+            run_dir=self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id),
+            default_paths=RunPathsSnapshot(output_paths=[], processed_files=[]),
+        )
+        return await self._build_run_summary_for_completion(run=run, paths=paths)
+
+    async def get_run_diagnostics(self, run_id: str) -> RunDiagnosticsV1:
+        """Return detailed diagnostics (former artifact) for ``run_id``."""
+
+        run = await self._require_run(run_id)
+        run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
+        candidates = [
+            run_dir / "logs" / "diagnostics.json",
+            run_dir / "logs" / "artifact.json",
+            run_dir / "output" / "diagnostics.json",
+            run_dir / "output" / "artifact.json",
+        ]
+        for path in candidates:
+            if not path.is_file():
+                continue
+            try:
+                return RunDiagnosticsV1.model_validate_json(path.read_text(encoding="utf-8"))
+            except ValidationError:
+                continue
+        raise RunOutputMissingError("Run diagnostics are unavailable")
+
+    async def get_run_events(
+        self,
+        *,
+        run_id: str,
+        cursor: int | None = None,
+        limit: int = DEFAULT_STREAM_LIMIT,
+    ) -> tuple[list[AdeEvent], int | None]:
+        """Return ADE telemetry events for ``run_id`` with optional paging."""
+
+        run = await self._require_run(run_id)
+        events_path = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id) / "logs" / "events.ndjson"
+        events: list[AdeEvent] = []
+        next_cursor: int | None = None
+        start = 0 if cursor is None else max(cursor, 0)
+        if not events_path.exists():
+            return events, None
+
+        with events_path.open("r", encoding="utf-8") as handle:
+            for idx, line in enumerate(handle):
+                if idx < start:
+                    continue
+                candidate = line.strip()
+                if not candidate:
+                    continue
+                try:
+                    events.append(AdeEvent.model_validate_json(candidate))
+                except ValidationError:
+                    continue
+                if len(events) >= limit:
+                    next_cursor = idx + 1
+                    break
+
+        return events, next_cursor
+
     async def list_runs(
         self,
         *,
@@ -518,39 +589,95 @@ class RunsService:
 
     def to_resource(self, run: Run) -> RunResource:
         """Convert ``run`` into its API representation."""
+        run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
+        summary_payload = self._deserialize_run_summary(run.summary)
+        summary_run = summary_payload.get("run") if isinstance(summary_payload, dict) else {}
+        summary_core = summary_payload.get("core") if isinstance(summary_payload, dict) else {}
+
         paths = self._finalize_paths(
-            summary=None,
-            run_dir=self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id),
+            summary=summary_payload if isinstance(summary_payload, dict) else None,
+            run_dir=run_dir,
             default_paths=RunPathsSnapshot(output_paths=[], processed_files=[]),
         )
-        summary_payload = self._deserialize_run_summary(run.summary)
+
+        document_ids = [
+            str(doc["document_id"])
+            for doc in (run.input_documents or [])
+            if isinstance(doc, dict) and doc.get("document_id")
+        ]
+        if run.input_document_id and run.input_document_id not in document_ids:
+            document_ids.append(run.input_document_id)
+
+        sheet_names = run.input_sheet_names or []
+        if run.input_sheet_name and run.input_sheet_name not in sheet_names:
+            sheet_names.append(run.input_sheet_name)
+
+        output_files = paths.output_paths or self._relative_output_paths(run_dir / "output")
+        processed_files = list(paths.processed_files or [])
+        if not processed_files and isinstance(summary_payload, dict):
+            processed_files = [
+                str(item) for item in summary_payload.get("processed_files", []) or []
+            ]
+
+        started_at = self._ensure_utc(run.started_at)
+        finished_at = self._ensure_utc(run.finished_at)
+        duration_seconds = (
+            (finished_at - started_at).total_seconds()
+            if started_at and finished_at
+            else summary_run.get("duration_seconds")
+            if isinstance(summary_run, dict)
+            else None
+        )
+
+        failure_message = None
+        if isinstance(summary_run, dict):
+            failure_message = summary_run.get("failure_message")
+        if run.error_message:
+            failure_message = run.error_message
 
         return RunResource(
             id=run.id,
+            workspace_id=run.workspace_id,
             configuration_id=run.configuration_id,
-            configuration_version_id=run.configuration_version_id,
-            submitted_by_user_id=run.submitted_by_user_id,
-            input_document_id=run.input_document_id,
-            input_documents=run.input_documents or [],
-            input_sheet_name=run.input_sheet_name,
-            input_sheet_names=run.input_sheet_names,
+            configuration_version=run.configuration_version_id,
             status=self._status_literal(run.status),
-            attempt=run.attempt,
-            retry_of_run_id=run.retry_of_run_id,
-            trace_id=run.trace_id,
-            created=self._epoch_seconds(run.created_at),
-            started=self._epoch_seconds(run.started_at),
-            finished=self._epoch_seconds(run.finished_at),
-            canceled=self._epoch_seconds(run.canceled_at),
+            failure_code=summary_run.get("failure_code") if isinstance(summary_run, dict) else None,
+            failure_stage=summary_run.get("failure_stage") if isinstance(summary_run, dict) else None,
+            failure_message=failure_message,
+            engine_version=summary_run.get("engine_version") if isinstance(summary_run, dict) else None,
+            config_version=summary_run.get("config_version") if isinstance(summary_run, dict) else None,
+            env_reason=summary_run.get("env_reason") if isinstance(summary_run, dict) else None,
+            env_reused=summary_run.get("env_reused") if isinstance(summary_run, dict) else None,
+            created_at=self._ensure_utc(run.created_at) or utc_now(),
+            started_at=started_at,
+            completed_at=finished_at,
+            duration_seconds=duration_seconds,
             exit_code=run.exit_code,
-            artifact_uri=run.artifact_uri,
-            output_uri=run.output_uri,
-            logs_uri=run.logs_uri,
-            summary=summary_payload,
-            error_message=run.error_message,
-            events_path=paths.events_path,
-            output_paths=paths.output_paths or [],
-            processed_files=paths.processed_files or [],
+            input=RunInput(
+                document_ids=document_ids,
+                input_sheet_names=sheet_names,
+                input_file_count=summary_core.get("input_file_count") if isinstance(summary_core, dict) else None,
+                input_sheet_count=summary_core.get("input_sheet_count") if isinstance(summary_core, dict) else None,
+            ),
+            output=RunOutput(
+                has_outputs=bool(output_files),
+                output_count=len(output_files),
+                processed_files=processed_files,
+            ),
+            links=self._links(run.id),
+        )
+
+    @staticmethod
+    def _links(run_id: str) -> RunLinks:
+        base = f"/api/v1/runs/{run_id}"
+        return RunLinks(
+            self=base,
+            summary=f"{base}/summary",
+            events=f"{base}/events",
+            logs=f"{base}/logs",
+            logfile=f"{base}/logfile",
+            outputs=f"{base}/outputs",
+            diagnostics=f"{base}/diagnostics",
         )
 
     def _ade_event(
@@ -724,6 +851,10 @@ class RunsService:
 
         if not snapshot.output_paths:
             snapshot.output_paths = self._relative_output_paths(run_dir / "output")
+
+        processed_candidates = summary.get("processed_files") if summary else None
+        if isinstance(processed_candidates, list):
+            snapshot.processed_files = [str(path) for path in processed_candidates]
 
         return snapshot
 
@@ -958,6 +1089,9 @@ class RunsService:
             "workspace_id": run.workspace_id,
             "context_configuration_id": context.configuration_id,
         }
+        if options.metadata:
+            for key, value in options.metadata.items():
+                metadata[key] = str(value)
         for key, value in metadata.items():
             command.extend(["--metadata", f"{key}={value}"])
 

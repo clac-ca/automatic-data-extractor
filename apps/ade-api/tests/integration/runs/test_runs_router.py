@@ -476,7 +476,8 @@ async def test_stream_run_respects_persisted_safe_mode_override(
     assert run_response.status_code == 200
     run_payload = run_response.json()
     assert run_payload["status"] == "succeeded"
-    assert run_payload.get("summary") == "Safe mode override respected"
+    assert run_payload["exit_code"] == 0
+    assert run_payload.get("failure_message") is None
 
 
 async def test_non_stream_run_executes_in_background(
@@ -556,17 +557,18 @@ async def test_stream_run_processes_real_documents(
     run_payload = run_response.json()
     assert run_payload["status"] == "succeeded"
     assert run_payload["exit_code"] == 0
-    assert run_payload["input_document_id"] == document.id
-    assert run_payload["input_sheet_name"] is None
-    assert run_payload["input_sheet_names"] is None
+    assert run_payload["input"]["document_ids"] == [document.id]
+    assert run_payload["input"]["input_sheet_names"] == []
 
     outputs_response = await async_client.get(f"/api/v1/runs/{run_id}/outputs")
     assert outputs_response.status_code == 200
     outputs_payload = outputs_response.json()
     assert outputs_payload["files"], "expected normalized outputs"
-    assert any(
-        entry["path"].endswith("normalized.xlsx") for entry in outputs_payload["files"]
+    normalized = next(
+        (entry for entry in outputs_payload["files"] if entry["name"].endswith("normalized.xlsx")),
+        None,
     )
+    assert normalized is not None
 
     logs_response = await async_client.get(f"/api/v1/runs/{run_id}/logs")
     assert logs_response.status_code == 200
@@ -632,22 +634,19 @@ async def test_stream_run_honors_input_sheet_override(
     run_payload = run_response.json()
     assert run_payload["status"] == "succeeded"
     assert run_payload["exit_code"] == 0
-    assert run_payload["input_document_id"] == document.id
-    assert run_payload["input_sheet_name"] == "Selected"
-    assert run_payload["input_sheet_names"] == ["Selected"]
+    assert run_payload["input"]["document_ids"] == [document.id]
+    assert run_payload["input"]["input_sheet_names"] == ["Selected"]
 
     outputs_response = await async_client.get(f"/api/v1/runs/{run_id}/outputs")
     assert outputs_response.status_code == 200
     outputs_payload = outputs_response.json()
     normalized = next(
-        (entry for entry in outputs_payload["files"] if entry["path"].endswith("normalized.xlsx")),
+        (entry for entry in outputs_payload["files"] if entry["name"].endswith("normalized.xlsx")),
         None,
     )
     assert normalized is not None, "expected normalized workbook output"
 
-    download_response = await async_client.get(
-        f"/api/v1/runs/{run_id}/outputs/{normalized['path']}"
-    )
+    download_response = await async_client.get(normalized["download_url"])
     assert download_response.status_code == 200
     workbook = openpyxl.load_workbook(BytesIO(download_response.content), read_only=True)
     sheet = workbook[workbook.sheetnames[0]]
@@ -773,14 +772,12 @@ async def test_stream_run_processes_all_worksheets_when_unspecified(
     assert outputs_response.status_code == 200
     outputs_payload = outputs_response.json()
     normalized = next(
-        (entry for entry in outputs_payload["files"] if entry["path"].endswith("normalized.xlsx")),
+        (entry for entry in outputs_payload["files"] if entry["name"].endswith("normalized.xlsx")),
         None,
     )
     assert normalized is not None, "expected normalized workbook output"
 
-    download_response = await async_client.get(
-        f"/api/v1/runs/{run_id}/outputs/{normalized['path']}"
-    )
+    download_response = await async_client.get(normalized["download_url"])
     assert download_response.status_code == 200
     workbook = openpyxl.load_workbook(BytesIO(download_response.content), read_only=True)
     rows = [list(sheet.iter_rows(values_only=True)) for sheet in workbook]
@@ -841,21 +838,18 @@ async def test_stream_run_limits_to_requested_sheet_list(
     run_response = await async_client.get(f"/api/v1/runs/{run_id}")
     assert run_response.status_code == 200
     run_payload = run_response.json()
-    assert run_payload["input_sheet_name"] == "Selected"
-    assert run_payload["input_sheet_names"] == ["Selected"]
+    assert run_payload["input"]["input_sheet_names"] == ["Selected"]
 
     outputs_response = await async_client.get(f"/api/v1/runs/{run_id}/outputs")
     assert outputs_response.status_code == 200
     outputs_payload = outputs_response.json()
     normalized = next(
-        (entry for entry in outputs_payload["files"] if entry["path"].endswith("normalized.xlsx")),
+        (entry for entry in outputs_payload["files"] if entry["name"].endswith("normalized.xlsx")),
         None,
     )
     assert normalized is not None, "expected normalized workbook output"
 
-    download_response = await async_client.get(
-        f"/api/v1/runs/{run_id}/outputs/{normalized['path']}"
-    )
+    download_response = await async_client.get(normalized["download_url"])
     assert download_response.status_code == 200
     workbook = openpyxl.load_workbook(BytesIO(download_response.content), read_only=True)
     sheet = workbook[workbook.sheetnames[0]]
