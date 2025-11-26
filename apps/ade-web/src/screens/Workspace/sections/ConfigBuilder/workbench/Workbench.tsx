@@ -2050,16 +2050,6 @@ function ChromeIconButton({
   );
 }
 
-function describeSheetSelection(sheetNames?: readonly string[] | null): string | null {
-  if (!sheetNames) {
-    return null;
-  }
-  if (sheetNames.length === 0) {
-    return "All worksheets";
-  }
-  return sheetNames.join(", ");
-}
-
 function formatRunDurationLabel(durationMs?: number | null): string | null {
   if (durationMs == null || !Number.isFinite(durationMs) || durationMs < 0) {
     return null;
