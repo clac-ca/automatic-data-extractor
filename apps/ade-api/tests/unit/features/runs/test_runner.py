@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from ade_engine.schemas import ADE_EVENT_SCHEMA, AdeEvent
 
-from ade_api.features.runs.runner import ADEProcessRunner, StdoutFrame
+from ade_api.features.runs.runner import EngineSubprocessRunner, StdoutFrame
 
 pytestmark = pytest.mark.asyncio()
 
@@ -35,7 +35,7 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
     )
 
     command = [sys.executable, str(script), str(events_path)]
-    runner = ADEProcessRunner(command=command, run_dir=tmp_path, env=os.environ.copy())
+    runner = EngineSubprocessRunner(command=command, run_dir=tmp_path, env=os.environ.copy())
 
     frames = []
     async for frame in runner.stream():

@@ -1,4 +1,4 @@
-"""In-memory supervisor for asynchronous ADE run execution."""
+"""In-memory coordinator for asynchronous ADE run execution streams."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from .service import RunStreamFrame
 
-__all__ = ["RunSupervisor"]
+__all__ = ["RunExecutionSupervisor"]
 
 
 class _RunGenerator(Protocol):
@@ -27,8 +27,8 @@ class _RunHandle:
 _COMPLETE = object()
 
 
-class RunSupervisor:
-    """Coordinate background execution for ADE runs.
+class RunExecutionSupervisor:
+    """Coordinate background execution streams for ADE runs.
 
     The supervisor ensures the engine subprocess executes outside the request
     scope while allowing callers to consume the run stream lazily. Each run

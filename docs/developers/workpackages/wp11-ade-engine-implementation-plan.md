@@ -168,7 +168,7 @@ Completed this iteration by introducing the `RunService` facade, isolating table
 
 ### Follow-Up Opportunities
 - [x] Define a shared manifest + telemetry schema package that the backend, engine, and SPA can import to eliminate drift in run context structures. (Originally implemented via the shared `ade-schemas` package; schemas are now bundled with `ade_engine`.)
-- [x] Prototype an asynchronous run runner abstraction for the API that supervises engine subprocesses, streams NDJSON over Server-Sent Events, and reconciles run status updates. (Added the `ADEProcessRunner` supervisor with telemetry-aware streaming.)
+- [x] Prototype an asynchronous run runner abstraction for the API that supervises engine subprocesses, streams NDJSON over Server-Sent Events, and reconciles run status updates. (Added the `EngineSubprocessRunner` supervisor with telemetry-aware streaming.)
 - [x] Extend the SPA's runs client to consume versioned telemetry envelopes, adding regression tests that guard the NDJSON parsing contract end-to-end. (Workspace console now renders telemetry frames with dedicated Vitest coverage.)
 
 ## Architecture Hindsight (Round 4)
