@@ -78,6 +78,7 @@ class BuildExecutionContext:
     target_path: str
     python_bin: str | None
     engine_spec: str
+    engine_version_hint: str | None
     pip_cache_dir: str | None
     timeout_seconds: float
     should_run: bool
@@ -92,6 +93,7 @@ class BuildExecutionContext:
             "target_path": self.target_path,
             "python_bin": self.python_bin,
             "engine_spec": self.engine_spec,
+            "engine_version_hint": self.engine_version_hint,
             "pip_cache_dir": self.pip_cache_dir,
             "timeout_seconds": self.timeout_seconds,
             "should_run": self.should_run,

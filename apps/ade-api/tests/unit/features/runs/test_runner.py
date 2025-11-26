@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from ade_engine.schemas import ADE_TELEMETRY_EVENT_SCHEMA
+from ade_engine.schemas import ADE_EVENT_SCHEMA, AdeEvent
 
 from ade_api.features.runs.runner import ADEProcessRunner, StdoutFrame
 
@@ -21,16 +21,13 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
         "events.parent.mkdir(parents=True, exist_ok=True)\n"
         "print('engine ready', flush=True)\n"
         "payload = {\n"
-        "    'schema': 'ade.telemetry/run-event.v1',\n"
+        "    'schema': 'ade.event/v1',\n"
         "    'version': '1.0.0',\n"
         "    'run_id': 'run-1',\n"
         "    'timestamp': '2024-01-01T00:00:00Z',\n"
-        "    'metadata': {'run_id': 'run-1'},\n"
-        "    'event': {\n"
-        "        'event': 'pipeline_transition',\n"
-        "        'level': 'info',\n"
-        "        'payload': {'phase': 'mapping'},\n"
-        "    },\n"
+        "    'object': 'ade.event',\n"
+        "    'run': {'phase': 'mapping'},\n"
+        "    'type': 'run.pipeline.progress',\n"
         "}\n"
         "time.sleep(0.05)\n"
         "events.write_text(json.dumps(payload) + '\\n', encoding='utf-8')\n",
@@ -47,6 +44,7 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
     stdout_frames = [frame for frame in frames if isinstance(frame, StdoutFrame)]
     assert stdout_frames, "expected stdout frames"
     telemetry = next(frame for frame in frames if not isinstance(frame, StdoutFrame))
-    assert telemetry.schema == ADE_TELEMETRY_EVENT_SCHEMA
-    assert telemetry.event.event == "pipeline_transition"
-    assert telemetry.event.level == "info"
+    assert isinstance(telemetry, AdeEvent)
+    assert telemetry.schema == ADE_EVENT_SCHEMA
+    assert telemetry.type == "run.pipeline.progress"
+    assert telemetry.run["phase"] == "mapping"
