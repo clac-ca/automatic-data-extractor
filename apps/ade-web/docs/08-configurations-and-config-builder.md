@@ -510,6 +510,8 @@ Behaviour:
    `07-documents-and-runs.md`), which may still be backed by `/runs` endpoints
    server‑side.
 
+Event schema reference for the streamed console: `apps/ade-web/docs/04-data-layer-and-backend-contracts.md` §6 and `apps/ade-engine/docs/11-ade-event-model.md`.
+
 ---
 
 ## 9. Safe mode and permissions

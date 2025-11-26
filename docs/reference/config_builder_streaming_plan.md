@@ -10,13 +10,13 @@ before making UI changes.
 
 - Surface `POST /api/v1/workspaces/{workspace_id}/configs/{config_id}/builds`
 and `POST /api/v1/configs/{config_id}/runs` streaming output inside the
-config builder console.
-- Keep validation messaging in the secondary panel while adding
-real-time console updates for build/run events.
-- Reuse a shared NDJSON client so builds and runs follow the same
-transport primitives.
-- Preserve existing persistence of console panel state, including height
-and collapsed preferences.
+workbench panel (Terminal tab).
+- Keep validation messaging in the `Problems` tab while adding real-time
+console updates for build/run events.
+- Use the shared NDJSON client so builds and runs follow the same transport
+primitives and attach origin/level metadata for filtering.
+- Preserve existing persistence of panel state, including height and collapsed
+preferences.
 
 ## Non-goals
 
@@ -34,10 +34,9 @@ screen work).
      iterate over strongly-typed objects.
 
 2. **Workbench console state**
-   - Promote console lines to React state instead of relying solely on
-     seed data.
-   - Provide helpers to append new lines with timestamps and cap the
-     history length (~400 rows) to avoid uncontrolled growth.
+   - Console lines are React state with capped history (~400 rows).
+   - Lines include `origin` (`run`/`build`/`raw`) and `level` so UI filters
+     can render Terminal like a real log viewer.
 
 3. **Event formatting**
    - Map build/run events to the existing `WorkbenchConsoleLine` shape.
@@ -47,21 +46,18 @@ screen work).
      require updating one module.
 
 4. **User actions**
-   - Add a "Build environment" action next to "Run validation" that
-     calls the streaming build endpoint with `{ stream: true }`.
-   - Update the validation handler to kick off a streaming run (using
-     `validate_only: true`) while still invoking the existing validation
-     mutation for structured issues.
-   - Ensure both actions open the console pane and switch to the
-     "Console" tab automatically.
+   - "Run validation" triggers a streaming run (`validate_only: true`) and
+     still invokes the validation mutation for structured issues in Problems.
+   - "Test run" triggers a streaming extraction; when complete, the chrome pill
+     and the `Run` tab surface outputs/summary/telemetry.
+   - Both actions open the panel and focus the `Terminal` tab by default.
 
 5. **Error handling & UX polish**
    - Catch `ApiError` and aborted fetches; append error messages to the
-     console and surface a transient toast/notice in the workbench
-     chrome.
-   - When operations finish, drop a succinct summary line (status,
-     exit code) and show a brief inline notice so users notice the
-     outcome even if the console is collapsed.
+     console and surface a transient toast/notice in the workbench chrome.
+   - When operations finish, append a succinct summary line (status/duration)
+     and update the chrome "Last run" pill so users notice outcomes even if the
+     panel is collapsed.
 
 6. **Documentation & tracking**
    - Link this plan from WP12 and the frontend integration notes.

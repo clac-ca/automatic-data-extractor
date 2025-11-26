@@ -197,7 +197,7 @@ export function Workbench({
         return;
       }
       const timestamp = formatConsoleTimestamp(new Date());
-      setConsoleLines([{ level: "info", message, timestamp }]);
+      setConsoleLines([{ level: "info", message, timestamp, origin: "run" }]);
     },
     [setConsoleLines],
   );
@@ -293,7 +293,7 @@ export function Workbench({
         return;
       }
       const message = describeError(error);
-      appendConsoleLine({ level: "error", message, timestamp: formatConsoleTimestamp(new Date()) });
+      appendConsoleLine({ level: "error", message, timestamp: formatConsoleTimestamp(new Date()), origin: "run" });
       showConsoleBanner(message, { intent: "danger", duration: null });
     },
     [appendConsoleLine, showConsoleBanner],
@@ -815,6 +815,7 @@ export function Workbench({
                       ? `Run ${runStatus} in ${formatRunDurationLabel(durationMs)}. Open Run summary for details.`
                       : `Run ${runStatus}. Open Run summary for details.`,
                   timestamp: formatConsoleTimestamp(completedAt),
+                  origin: "run",
                 });
                 try {
                   const listing = await fetchRunOutputs(currentRunId);
@@ -1039,6 +1040,10 @@ export function Workbench({
       closeConsole();
     }
   }, [outputCollapsed, openConsole, closeConsole]);
+
+  const handleClearConsole = useCallback(() => {
+    setConsoleLines([]);
+  }, []);
 
   const handleShowRunSummary = useCallback(() => {
     if (!latestRun) {
@@ -1363,6 +1368,8 @@ export function Workbench({
                 activePane={pane}
                 onPaneChange={setPane}
                 latestRun={latestRun}
+                onShowRunDetails={handleShowRunSummary}
+                onClearConsole={handleClearConsole}
               />
             </div>
           )}
@@ -1610,11 +1617,11 @@ function WorkbenchChrome({
           {isRunningValidation ? "Running…" : "Run validation"}
         </button>
         <SplitButton
-          label={isRunningExtraction ? "Running…" : "Test"}
+          label={isRunningExtraction ? "Running…" : "Test run"}
           icon={isRunningExtraction ? <SpinnerIcon /> : <RunIcon />}
           disabled={!canRunExtraction}
           isLoading={isRunningExtraction}
-          title="Run test"
+          title="Run test run"
           primaryClassName={clsx(
             runButtonClass,
             "rounded-r-none focus-visible:ring-offset-0",
@@ -1908,7 +1915,7 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
             }}
             disabled={runDisabled}
           >
-            Run test
+            Start test run
           </Button>
         </footer>
       </div>
