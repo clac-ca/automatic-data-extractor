@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ConfigBuilderPane } from "@app/nav/urlState";
 import type { RunSummaryV1 } from "@schema";
 import type { AdeEvent, RunStatus } from "@shared/runs/types";
@@ -35,6 +36,8 @@ interface BottomPanelProps {
   readonly activePane: ConfigBuilderPane;
   readonly onPaneChange: (pane: ConfigBuilderPane) => void;
   readonly latestRun?: WorkbenchRunSummary | null;
+  readonly onShowRunDetails?: () => void;
+  readonly onClearConsole?: () => void;
 }
 
 export function BottomPanel({
@@ -44,8 +47,24 @@ export function BottomPanel({
   activePane,
   onPaneChange,
   latestRun,
+  onShowRunDetails,
+  onClearConsole,
 }: BottomPanelProps) {
-  const hasConsoleLines = consoleLines.length > 0;
+  const [originFilter, setOriginFilter] = useState<"all" | "run" | "build" | "raw">("all");
+  const [levelFilter, setLevelFilter] = useState<"all" | "info" | "warning" | "error" | "success">("all");
+  const [followLogs, setFollowLogs] = useState(true);
+
+  const filteredConsoleLines = useMemo(() => {
+    const filterSeverity = resolveSeverity(levelFilter);
+    return consoleLines.filter((line) => {
+      const originMatches = originFilter === "all" || (line.origin ?? "run") === originFilter;
+      const severity = resolveSeverity(line.level);
+      const levelMatches = levelFilter === "all" || severity >= filterSeverity;
+      return originMatches && levelMatches;
+    });
+  }, [consoleLines, originFilter, levelFilter]);
+  const hasConsoleLines = filteredConsoleLines.length > 0;
+  const hasAnyConsoleLines = consoleLines.length > 0;
   const hasProblems = validation.messages.length > 0;
   const hasRun = Boolean(latestRun);
 
@@ -67,6 +86,17 @@ export function BottomPanel({
               Terminal
             </TabsTrigger>
             <TabsTrigger
+              value="runSummary"
+              className="rounded px-2 py-1 uppercase tracking-[0.16em]"
+            >
+              Run
+              {hasRun ? (
+                <span className="ml-1 text-[10px] lowercase text-slate-500">
+                  {latestRun?.status}
+                </span>
+              ) : null}
+            </TabsTrigger>
+            <TabsTrigger
               value="problems"
               className="flex items-center gap-1 rounded px-2 py-1 uppercase tracking-[0.16em]"
             >
@@ -77,22 +107,66 @@ export function BottomPanel({
                 </span>
               ) : null}
             </TabsTrigger>
-            <TabsTrigger
-              value="runSummary"
-              className="rounded px-2 py-1 uppercase tracking-[0.16em]"
-            >
-              Run summary
-              {hasRun ? (
-                <span className="ml-1 text-[10px] lowercase text-slate-500">
-                  {latestRun?.status}
-                </span>
-              ) : null}
-            </TabsTrigger>
           </TabsList>
+          <div className="flex items-center gap-2 text-[11px]">
+            <label className="flex items-center gap-1 text-slate-500">
+              Origin
+              <select
+                value={originFilter}
+                onChange={(event) => setOriginFilter(event.target.value as typeof originFilter)}
+                className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 shadow-sm"
+              >
+                <option value="all">All</option>
+                <option value="run">Run</option>
+                <option value="build">Build</option>
+                <option value="raw">Raw</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-1 text-slate-500">
+              Level
+              <select
+                value={levelFilter}
+                onChange={(event) => setLevelFilter(event.target.value as typeof levelFilter)}
+                className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 shadow-sm"
+              >
+                <option value="all">All</option>
+                <option value="info">Info</option>
+                <option value="warning">Warning</option>
+                <option value="error">Error</option>
+                <option value="success">Success</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => setFollowLogs((prev) => !prev)}
+              className={clsx(
+                "rounded px-2 py-1 font-semibold uppercase tracking-wide transition",
+                followLogs
+                  ? "border border-emerald-500 bg-emerald-50 text-emerald-700"
+                  : "border border-slate-300 bg-white text-slate-600 hover:border-slate-400",
+              )}
+            >
+              {followLogs ? "Follow" : "Scroll"}
+            </button>
+            <button
+              type="button"
+              onClick={() => onClearConsole?.()}
+              className="rounded border border-slate-300 bg-white px-2 py-1 font-semibold uppercase tracking-wide text-slate-600 transition hover:border-slate-400"
+            >
+              Clear
+            </button>
+          </div>
         </div>
 
         <TabsContent value="terminal" className="flex min-h-0 flex-1 flex-col">
-          <TerminalPanel consoleLines={consoleLines} hasConsoleLines={hasConsoleLines} />
+          <TerminalPanel
+            consoleLines={filteredConsoleLines}
+            hasConsoleLines={hasConsoleLines}
+            hasAnyConsoleLines={hasAnyConsoleLines}
+            latestRun={latestRun}
+            onShowRunDetails={onShowRunDetails}
+            followLogs={followLogs}
+          />
         </TabsContent>
 
         <TabsContent
@@ -116,15 +190,56 @@ export function BottomPanel({
 function TerminalPanel({
   consoleLines,
   hasConsoleLines,
+  hasAnyConsoleLines,
+  latestRun,
+  onShowRunDetails,
+  followLogs,
 }: {
   readonly consoleLines: readonly WorkbenchConsoleLine[];
   readonly hasConsoleLines: boolean;
+  readonly hasAnyConsoleLines: boolean;
+  readonly latestRun?: WorkbenchRunSummary | null;
+  readonly onShowRunDetails?: () => void;
+  readonly followLogs: boolean;
 }) {
+  const logEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!followLogs) return;
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [consoleLines, followLogs]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-slate-900/80 bg-slate-950 font-mono text-[13px] leading-relaxed text-slate-100 shadow-inner shadow-black/30">
-      <div className="flex flex-none items-center gap-3 border-b border-white/5 bg-slate-950/80 px-4 py-1.5 text-[11px] uppercase tracking-[0.35em] text-slate-500">
-        <span className="font-semibold tracking-[0.45em] text-slate-200">Terminal</span>
-        <span className="text-[10px] tracking-[0.45em] text-emerald-400">live</span>
+      <div className="flex flex-col border-b border-white/5 bg-slate-950/80">
+        <div className="flex items-center gap-3 px-4 py-1.5 text-[11px] uppercase tracking-[0.35em] text-slate-500">
+          <span className="font-semibold tracking-[0.45em] text-slate-200">Terminal</span>
+          <span className="text-[10px] tracking-[0.45em] text-emerald-400">live</span>
+        </div>
+        {latestRun ? (
+          <div className="flex items-center justify-between gap-3 border-t border-white/5 px-4 py-1.5 text-[11px] text-slate-400">
+            <div className="flex min-w-0 items-center gap-2">
+              <StatusDot status={latestRun.status} />
+              <span className="truncate" title={latestRun.runId}>
+                Run {latestRun.runId}
+              </span>
+              <span className="truncate text-slate-500">
+                {latestRun.documentName ?? "Document not recorded"}
+                {describeSheetSelection(latestRun.sheetNames) ? ` · ${describeSheetSelection(latestRun.sheetNames)}` : ""}
+              </span>
+              {latestRun.durationMs != null ? (
+                <span className="text-slate-600">· {formatRunDuration(latestRun.durationMs)}</span>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="text-[11px] font-semibold text-emerald-300 transition hover:text-emerald-200"
+              onClick={() => onShowRunDetails?.()}
+            >
+              View details →
+            </button>
+          </div>
+        ) : null}
       </div>
       <div className="flex-1 overflow-auto">
         {hasConsoleLines ? (
@@ -155,7 +270,13 @@ function TerminalPanel({
                 </span>
               </li>
             ))}
+            <div ref={logEndRef} />
           </ul>
+        ) : hasAnyConsoleLines ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center text-[13px] text-slate-500">
+            <p className="tracking-wide text-slate-300">No console output matches these filters.</p>
+            <p className="text-[12px] leading-relaxed text-slate-500">Adjust origin or level filters to see more.</p>
+          </div>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center text-[13px] text-slate-500">
             <p className="tracking-wide text-slate-300">Waiting for ADE output…</p>
@@ -203,7 +324,7 @@ function RunSummaryPanel({ latestRun }: { readonly latestRun?: WorkbenchRunSumma
   if (!latestRun) {
     return (
       <div className="flex flex-1 items-center justify-center text-xs text-slate-500">
-        No run yet. Run a test or validation to see a summary here.
+        No run yet. Run a test or validation to see details here.
       </div>
     );
   }
@@ -489,4 +610,22 @@ function statusLabel(status: RunStatus): string {
     default:
       return status;
   }
+}
+
+function describeSheetSelection(sheetNames?: readonly string[] | null): string | null {
+  if (!sheetNames) {
+    return null;
+  }
+  if (sheetNames.length === 0) {
+    return "All worksheets";
+  }
+  return sheetNames.join(", ");
+}
+
+function resolveSeverity(level: WorkbenchConsoleLine["level"] | "all"): number {
+  if (level === "error") return 3;
+  if (level === "warning") return 2;
+  if (level === "success") return 1;
+  if (level === "info") return 1;
+  return 0;
 }

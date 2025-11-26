@@ -39,6 +39,7 @@ export type WorkbenchConsoleLevel = "info" | "success" | "warning" | "error";
 export interface WorkbenchConsoleLine {
   readonly level: WorkbenchConsoleLevel;
   readonly message: string;
+  readonly origin?: "run" | "build" | "raw";
   readonly timestamp?: string;
 }
 

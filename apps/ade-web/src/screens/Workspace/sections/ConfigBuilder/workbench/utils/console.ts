@@ -19,10 +19,15 @@ export function formatConsoleTimestamp(value: number | Date | string): string {
 
 export function describeBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine {
   if (!isAdeEvent(event)) {
-    return { level: "info", message: JSON.stringify(event), timestamp: "" };
+    return { level: "info", message: JSON.stringify(event), timestamp: "", origin: "raw" };
   }
   if (!event.type.startsWith("build.")) {
-    return { level: "info", message: JSON.stringify(event), timestamp: formatConsoleTimestamp(eventTimestamp(event)) };
+    return {
+      level: "info",
+      message: JSON.stringify(event),
+      timestamp: formatConsoleTimestamp(eventTimestamp(event)),
+      origin: "build",
+    };
   }
   const ts = formatConsoleTimestamp(eventTimestamp(event));
   switch (event.type) {
@@ -32,32 +37,33 @@ export function describeBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine 
         level: "info",
         message: `Build ${event.build_id ?? ""} queued (${reason}).`,
         timestamp: ts,
+        origin: "build",
       };
     }
     case "build.started":
-      return { level: "info", message: "Build started.", timestamp: ts };
+      return { level: "info", message: "Build started.", timestamp: ts, origin: "build" };
     case "build.phase.started": {
       const phase = (event.phase as string | undefined) ?? "building";
       const message = (event.message as string | undefined) ?? phase.replaceAll("_", " ");
-      return { level: "info", message, timestamp: ts };
+      return { level: "info", message, timestamp: ts, origin: "build" };
     }
     case "build.console":
       return formatConsole(event, ts);
     case "build.completed":
       return formatBuildCompletion(event, ts);
     default:
-      return { level: "info", message: JSON.stringify(event), timestamp: ts };
+      return { level: "info", message: JSON.stringify(event), timestamp: ts, origin: "build" };
   }
 }
 
 export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
   if (!isAdeEvent(event)) {
-    return { level: "info", message: JSON.stringify(event), timestamp: "" };
+    return { level: "info", message: JSON.stringify(event), timestamp: "", origin: "raw" };
   }
   const ts = formatConsoleTimestamp(eventTimestamp(event));
   const { type } = event;
   if (!type.startsWith("run.")) {
-    return { level: "info", message: JSON.stringify(event), timestamp: ts };
+    return { level: "info", message: JSON.stringify(event), timestamp: ts, origin: "run" };
   }
 
   switch (type) {
@@ -66,12 +72,14 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
         level: "info",
         message: `Run ${event.run_id ?? ""} queued${event.mode ? ` (${event.mode})` : ""}.`,
         timestamp: ts,
+        origin: "run",
       };
     case "run.started":
       return {
         level: "info",
         message: `Run started${event.mode ? ` (${event.mode})` : ""}.`,
         timestamp: ts,
+        origin: "run",
       };
     case "run.phase.started": {
       const phase = (event.phase as string | undefined) ?? "progress";
@@ -79,6 +87,7 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
         level: "info",
         message: `Phase: ${phase}`,
         timestamp: ts,
+        origin: "run",
       };
     }
     case "run.table.summary": {
@@ -91,6 +100,7 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
         level: "info",
         message: `Table completed (${name})`,
         timestamp: ts,
+        origin: "run",
       };
     }
     case "run.validation.issue": {
@@ -99,6 +109,7 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
         level: sev === "error" ? "error" : sev === "warning" ? "warning" : "info",
         message: `Validation issue${event.code ? `: ${event.code as string}` : ""}`,
         timestamp: ts,
+        origin: "run",
       };
     }
     case "run.console":
@@ -106,7 +117,7 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
     case "run.completed":
       return formatRunCompletion(event, ts);
     default:
-      return { level: "info", message: JSON.stringify(event), timestamp: ts };
+      return { level: "info", message: JSON.stringify(event), timestamp: ts, origin: "run" };
   }
 }
 
@@ -117,6 +128,7 @@ function formatConsole(event: RunStreamEvent, timestamp: string): WorkbenchConso
     level: normalizeLevel(level),
     message: String((event.message as string | undefined) ?? ""),
     timestamp,
+    origin: event.type?.startsWith("build.") ? "build" : "run",
   };
 }
 
@@ -129,10 +141,11 @@ function formatBuildCompletion(event: RunStreamEvent, timestamp: string): Workbe
       level: "success",
       message: summary || "Build completed successfully.",
       timestamp,
+      origin: "build",
     };
   }
   if (status === "canceled") {
-    return { level: "warning", message: "Build was canceled before completion.", timestamp };
+    return { level: "warning", message: "Build was canceled before completion.", timestamp, origin: "build" };
   }
   if (status === "failed") {
     const error = (event.error as Record<string, unknown> | undefined)?.message as string | undefined;
@@ -141,12 +154,14 @@ function formatBuildCompletion(event: RunStreamEvent, timestamp: string): Workbe
       level: "error",
       message: (error || summary || "Build failed.") + exit,
       timestamp,
+      origin: "build",
     };
   }
   return {
     level: "info",
     message: summary || `Build ${status ?? "completed"}.`,
     timestamp,
+    origin: "build",
   };
 }
 
@@ -164,6 +179,7 @@ function formatRunCompletion(event: RunStreamEvent, timestamp: string): Workbenc
     level,
     message: `${base}${exitPart}.`,
     timestamp,
+    origin: "run",
   };
 }
 

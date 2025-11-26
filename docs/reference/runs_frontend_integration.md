@@ -22,16 +22,19 @@ relies on the legacy runs endpoints. Key touchpoints:
     states (queued, running, succeeded, failed, canceled) and error
     messaging in the drawer summary.
 
-## Config Builder validation console
+## Config Builder panel (Terminal | Run | Problems)
 
-- `apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/` –
-  validation actions dispatch `validateConfiguration` and display
-  "Console streaming endpoints are not available yet." Replace this guard
-  with a streaming client that consumes NDJSON events so the console shows
-  live detector output.
-- `Workbench.tsx` and `BottomPanel.tsx` track `validationState.status` and
-  `lastRunAt`. Ensure these fields read from the new runs endpoints rather
-  than the legacy validation responses.
+- `apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/` now
+  consumes run/build NDJSON streams: `Terminal` shows raw logs, `Problems`
+  shows validation issues, and `Run` hosts summary/output/telemetry cards.
+- `BottomPanel.tsx` already accepts console lines with `origin` and supports
+  origin/level filters, follow toggle, and clear. Keep feeding it build/run
+  events via `describeRunEvent`/`describeBuildEvent`.
+- `Workbench.tsx` keeps `validationState.status/lastRunAt` and the latest run
+  summary. Ensure these hydrate from the streaming runs endpoints and the
+  follow-up fetches (`fetchRunOutputs`, `fetchRunSummary`, `fetchRunTelemetry`).
+- The chrome "Last run" pill opens the `Run` tab; the primary action is labeled
+  **Test run**. Update any onboarding or inline help to reflect the new naming.
 
 ## Generated API types
 
