@@ -47,7 +47,7 @@ from ade_api.storage_layout import (
 
 from .models import Run, RunLog, RunStatus
 from .repository import RunsRepository
-from .runner import ADEProcessRunner, StdoutFrame
+from .runner import EngineSubprocessRunner, StdoutFrame
 from .schemas import (
     RunCreateOptions,
     RunDiagnosticsV1,
@@ -60,7 +60,7 @@ from .schemas import (
     RunStatusLiteral,
 )
 from .summary_builder import build_run_summary_from_paths
-from .supervisor import RunSupervisor
+from .supervisor import RunExecutionSupervisor
 
 __all__ = [
     "RunExecutionContext",
@@ -189,14 +189,14 @@ class RunsService:
         *,
         session: AsyncSession,
         settings: Settings,
-        supervisor: RunSupervisor | None = None,
+        supervisor: RunExecutionSupervisor | None = None,
         safe_mode_service: SafeModeService | None = None,
     ) -> None:
         self._session = session
         self._settings = settings
         self._configs = ConfigurationsRepository(session)
         self._runs = RunsRepository(session)
-        self._supervisor = supervisor or RunSupervisor()
+        self._supervisor = supervisor or RunExecutionSupervisor()
         self._documents = DocumentsRepository(session)
         self._safe_mode_service = safe_mode_service
         self._builder = VirtualEnvironmentBuilder()
@@ -1039,7 +1039,7 @@ class RunsService:
         if safe_mode_enabled:
             command.append("--safe-mode")
 
-        runner = ADEProcessRunner(command=command, run_dir=run_dir, env=env)
+        runner = EngineSubprocessRunner(command=command, run_dir=run_dir, env=env)
 
         summary: dict[str, Any] | None = None
         paths_snapshot = RunPathsSnapshot()

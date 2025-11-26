@@ -21,7 +21,7 @@ from ade_api.features.auth.service import AuthenticatedIdentity, AuthService
 from ade_api.features.roles.authorization import authorize
 from ade_api.features.roles.models import ScopeType
 from ade_api.features.roles.service import ensure_user_principal
-from ade_api.features.runs.supervisor import RunSupervisor
+from ade_api.features.runs.supervisor import RunExecutionSupervisor
 from ade_api.features.users.models import User
 from ade_api.features.workspaces.schemas import WorkspaceOut
 from ade_api.settings import Settings, get_settings
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
-_RUN_SUPERVISOR = RunSupervisor()
+_RUN_EXECUTION_SUPERVISOR = RunExecutionSupervisor()
 
 
 def get_users_service(session: SessionDep) -> UsersService:
@@ -149,7 +149,7 @@ def get_runs_service(
     return RunsService(
         session=session,
         settings=settings,
-        supervisor=_RUN_SUPERVISOR,
+        supervisor=_RUN_EXECUTION_SUPERVISOR,
         safe_mode_service=get_safe_mode_service(session=session, settings=settings),
     )
 

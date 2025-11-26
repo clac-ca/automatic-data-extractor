@@ -1,4 +1,4 @@
-"""Async ADE engine process supervisor."""
+"""Asynchronous supervisor for ADE engine subprocess streams."""
 
 from __future__ import annotations
 
@@ -27,8 +27,8 @@ class StdoutFrame:
 RunnerFrame = StdoutFrame | AdeEvent
 
 
-class ADEProcessRunner:
-    """Spawn the ADE engine subprocess and surface streaming frames."""
+class EngineSubprocessRunner:
+    """Manage a single ADE engine subprocess and stream its telemetry."""
 
     def __init__(
         self,
@@ -127,4 +127,4 @@ def _read_new_event_lines(path: Path, position: int) -> tuple[int, list[str]]:
     return position, [line.rstrip("\n") for line in data]
 
 
-__all__ = ["ADEProcessRunner", "RunnerFrame", "StdoutFrame"]
+__all__ = ["EngineSubprocessRunner", "RunnerFrame", "StdoutFrame"]
