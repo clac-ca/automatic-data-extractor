@@ -242,10 +242,11 @@ Key variables (defaults assume `WORKDIR=/app` inside the container):
 
 | Variable                  | Default                  | Purpose                                    |
 | ------------------------- | ------------------------ | ------------------------------------------ |
-| `ADE_DOCUMENTS_DIR`       | `./data/documents`       | Uploaded files + generated artifacts       |
-| `ADE_CONFIGS_DIR`         | `./data/config_packages` | Installable config packages                |
-| `ADE_VENVS_DIR`           | `./data/.venv`           | Per‑config virtualenvs                     |
-| `ADE_RUNS_DIR`            | `./data/runs`            | Per‑run working directories                |
+| `ADE_WORKSPACES_DIR`      | `./data/workspaces`      | Root for all workspace storage             |
+| `ADE_DOCUMENTS_DIR`       | `./data/workspaces`      | Base for documents (`<ws>/documents/...`)  |
+| `ADE_CONFIGS_DIR`         | `./data/workspaces`      | Base for configs (`<ws>/config_packages/`) |
+| *(venvs)*                 | _fixed_                  | Virtualenv lives at `<config_root>/.venv/` |
+| `ADE_RUNS_DIR`            | `./data/workspaces`      | Base for runs (`<ws>/runs/<run_id>/...`)   |
 | `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`       | pip download/build cache                   |
 | `ADE_SAFE_MODE`           | `false`                  | If `true`, skips engine execution          |
 | `ADE_MAX_CONCURRENCY`     | `2`                      | Backend worker concurrency                 |
@@ -254,9 +255,6 @@ Key variables (defaults assume `WORKDIR=/app` inside the container):
 | `ADE_WORKER_CPU_SECONDS`  | `60`                     | Best‑effort CPU limit per run              |
 | `ADE_WORKER_MEM_MB`       | `512`                    | Best‑effort memory limit per run (MB)      |
 | `ADE_WORKER_FSIZE_MB`     | `100`                    | Best‑effort max file size a run may create |
-
-When upgrading from earlier releases that stored runs under a legacy directory, relocate those run folders to `data/runs` (or configure `ADE_RUNS_DIR`)
-before starting the service to avoid mixing storage roots.
 
 In Docker, these resolve under `/app`, so `./data/...` becomes `/app/data/...`.
 

@@ -374,7 +374,7 @@ Common patterns:
   The config expects to operate on one sheet (e.g., “Detail”). Column mapping only runs for that sheet.
 
 * **Multi‑sheet runs**
-  Some configs may want to:
+  Some configurations may want to:
 
   * process multiple sheets with the same schema (e.g., monthly tabs), or
   * process different sheets with different schemas (e.g., `Header` vs `Detail` tables).

@@ -6,11 +6,11 @@ import pytest
 from fastapi import HTTPException, status
 from sqlalchemy import select
 
-from ade_api.shared.db.session import get_sessionmaker
 from ade_api.features.roles.models import Role
 from ade_api.features.workspaces.models import Workspace, WorkspaceMembership
 from ade_api.features.workspaces.schemas import WorkspaceMemberRolesUpdate
 from ade_api.features.workspaces.service import WorkspacesService
+from ade_api.shared.db.session import get_sessionmaker
 
 pytestmark = pytest.mark.asyncio
 

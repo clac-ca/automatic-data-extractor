@@ -23,13 +23,13 @@ class ConfigurationsRepository:
         self,
         *,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
     ) -> Configuration | None:
         stmt = (
             self.base_query()
             .where(
                 Configuration.workspace_id == workspace_id,
-                Configuration.config_id == config_id,
+                Configuration.id == configuration_id,
             )
             .limit(1)
         )
@@ -45,8 +45,8 @@ class ConfigurationsRepository:
         result = await self._session.execute(stmt)
         return result.scalars().all()
 
-    async def get_by_config_id(self, config_id: str) -> Configuration | None:
-        stmt = self.base_query().where(Configuration.config_id == config_id).limit(1)
+    async def get_by_id(self, configuration_id: str) -> Configuration | None:
+        stmt = self.base_query().where(Configuration.id == configuration_id).limit(1)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 

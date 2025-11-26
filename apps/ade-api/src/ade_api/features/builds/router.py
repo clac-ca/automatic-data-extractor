@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Annotated, Any
 
+from ade_engine.schemas import AdeEvent
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Security, status
 from fastapi import Path as PathParam
 from fastapi.responses import StreamingResponse
@@ -30,6 +31,8 @@ builds_service_dependency = Depends(get_builds_service)
 
 
 def _event_bytes(event: Any) -> bytes:
+    if isinstance(event, AdeEvent):
+        return event.model_dump_json().encode("utf-8") + b"\n"
     if hasattr(event, "json_bytes"):
         return event.json_bytes() + b"\n"
     return json.dumps(event).encode("utf-8") + b"\n"
@@ -71,21 +74,27 @@ async def _execute_build_background(
 
 
 @router.post(
-    "/workspaces/{workspace_id}/configs/{config_id}/builds",
+    "/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
     response_model=BuildResource,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
 )
 async def create_build_endpoint(
     *,
-    workspace_id: Annotated[str, PathParam(min_length=1, description="Workspace identifier")],
-    config_id: Annotated[str, PathParam(min_length=1, description="Configuration identifier")],
+    workspace_id: Annotated[
+        str,
+        PathParam(min_length=1, description="Workspace identifier"),
+    ],
+    configuration_id: Annotated[
+        str,
+        PathParam(min_length=1, description="Configuration identifier"),
+    ],
     payload: BuildCreateRequest,
     background_tasks: BackgroundTasks,
     _actor: Annotated[
         object,
         Security(
-            require_workspace("Workspace.Configs.ReadWrite"),
+            require_workspace("Workspace.Configurations.ReadWrite"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -94,7 +103,7 @@ async def create_build_endpoint(
     try:
         build, context = await service.prepare_build(
             workspace_id=workspace_id,
-            config_id=config_id,
+            configuration_id=configuration_id,
             options=payload.options,
         )
     except ConfigurationNotFoundError as exc:
@@ -124,14 +133,16 @@ async def create_build_endpoint(
         except BuildNotFoundError:
             return
         except BuildExecutionError as exc:
-            error_event = {
-                "object": "ade.build.event",
-                "type": "build.log",
-                "build_id": build.id,
-                "created": int(utc_now().timestamp()),
-                "stream": "stderr",
-                "message": str(exc),
-            }
+            error_event = AdeEvent(
+                type="build.console",
+                created_at=utc_now(),
+                build_id=build.id,
+                workspace_id=build.workspace_id,
+                configuration_id=build.configuration_id,
+                stream="stderr",
+                level="error",
+                message=str(exc),
+            )
             yield _event_bytes(error_event)
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")

@@ -5,11 +5,11 @@ import { useNavigate } from "@app/nav/history";
 
 import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
-import { useWorkspacesQuery, type WorkspaceProfile } from "@screens/Workspace/api/workspaces-api";
+import { useWorkspacesQuery, type WorkspaceProfile } from "@features/Workspace/api/workspaces-api";
 import { Button } from "@ui/Button";
 import { PageState } from "@ui/PageState";
-import { defaultWorkspaceSection } from "@screens/Workspace/components/workspace-navigation";
-import { WorkspaceDirectoryLayout } from "@screens/Workspaces/components/WorkspaceDirectoryLayout";
+import { defaultWorkspaceSection } from "@features/Workspace/components/workspace-navigation";
+import { WorkspaceDirectoryLayout } from "@features/Workspaces/components/WorkspaceDirectoryLayout";
 import { useShortcutHint } from "@shared/hooks/useShortcutHint";
 import type { GlobalSearchSuggestion } from "@app/shell/GlobalTopBar";
 import { GlobalSearchField } from "@app/shell/GlobalSearchField";

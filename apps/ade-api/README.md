@@ -18,7 +18,7 @@ The API ships with two installable `ade_config` templates under `src/ade_api/tem
 You can materialize either template through the `ConfigurationsService` endpoint when creating a configuration:
 
 ```http
-POST /api/v1/workspaces/{workspace_id}/configs
+POST /api/v1/workspaces/{workspace_id}/configurations
 {
   "display_name": "Sandbox Config",
   "source": {

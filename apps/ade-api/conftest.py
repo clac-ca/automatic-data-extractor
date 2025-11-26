@@ -5,22 +5,18 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
 from alembic import command
 from alembic.config import Config
-from fastapi import FastAPI
 from asgi_lifespan import LifespanManager
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
-from ade_api.settings import Settings, get_settings, reload_settings
-from ade_api.shared.db.engine import ensure_database_ready, render_sync_url, reset_database_state
-from ade_api.shared.db.session import get_sessionmaker
 from ade_api.features.auth.security import hash_password
 from ade_api.features.roles.models import Role, ScopeType
 from ade_api.features.roles.service import (
@@ -31,9 +27,12 @@ from ade_api.features.roles.service import (
 )
 from ade_api.features.users.models import User, UserCredential
 from ade_api.features.workspaces.models import Workspace, WorkspaceMembership
-from ade_api.shared.core.lifecycles import ensure_runtime_dirs
-from ade_api.shared.dependency import configure_auth_dependencies
 from ade_api.main import create_app
+from ade_api.settings import Settings, get_settings, reload_settings
+from ade_api.shared.core.lifecycles import ensure_runtime_dirs
+from ade_api.shared.db.engine import ensure_database_ready, render_sync_url, reset_database_state
+from ade_api.shared.db.session import get_sessionmaker
+from ade_api.shared.dependency import configure_auth_dependencies
 
 
 @pytest.fixture(scope="session")
@@ -52,17 +51,15 @@ def _configure_database(
     """Apply Alembic migrations against the ephemeral test database."""
 
     data_dir = tmp_path_factory.mktemp("api-app-data")
-    documents_dir = data_dir / "documents"
-    configs_dir = data_dir / "config_packages"
-    venvs_dir = data_dir / ".venv"
-    runs_dir = data_dir / "runs"
+    workspaces_dir = data_dir / "workspaces"
     pip_cache_dir = data_dir / "cache" / "pip"
 
     os.environ["ADE_DATABASE_DSN"] = _database_url
-    os.environ["ADE_DOCUMENTS_DIR"] = str(documents_dir)
-    os.environ["ADE_CONFIGS_DIR"] = str(configs_dir)
-    os.environ["ADE_VENVS_DIR"] = str(venvs_dir)
-    os.environ["ADE_RUNS_DIR"] = str(runs_dir)
+    os.environ["ADE_WORKSPACES_DIR"] = str(workspaces_dir)
+    os.environ["ADE_DOCUMENTS_DIR"] = str(workspaces_dir)
+    os.environ["ADE_CONFIGS_DIR"] = str(workspaces_dir)
+    os.environ["ADE_VENVS_DIR"] = str(workspaces_dir)
+    os.environ["ADE_RUNS_DIR"] = str(workspaces_dir)
     os.environ["ADE_PIP_CACHE_DIR"] = str(pip_cache_dir)
     # Ensure tests run with OIDC disabled regardless of local .env values.
     os.environ["ADE_OIDC_ENABLED"] = "false"
@@ -89,9 +86,11 @@ def _configure_database(
     reload_settings()
     for env_var in (
         "ADE_DATABASE_DSN",
+        "ADE_WORKSPACES_DIR",
         "ADE_DOCUMENTS_DIR",
         "ADE_CONFIGS_DIR",
         "ADE_VENVS_DIR",
+        "ADE_RUNS_DIR",
         "ADE_PIP_CACHE_DIR",
         "ADE_OIDC_ENABLED",
         "ADE_SAFE_MODE",

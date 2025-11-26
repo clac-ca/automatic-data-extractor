@@ -3,7 +3,7 @@
 ADE turns messy spreadsheets into consistent, auditable workbooks through a simple, repeatable flow:
 
 1. **Config** — define detection, mapping, and transformation rules ([`01-config-packages.md`](./01-config-packages.md))
-2. **Build** — set up a dedicated virtual environment (`.venv/<config_id>/`) with `ade_engine` and your `ade_config` installed
+2. **Build** — set up a dedicated virtual environment (`.venv/<config_id>/<build_id>/`) with `ade_engine` and your `ade_config` installed
 3. **Run** — use that frozen environment to process one or more input files deterministically
 
 At run runtime, the **ADE Engine** and your versioned **ADE Config** are installed in an isolated virtual environment (venv) and produce a normalized Excel workbook.
@@ -59,7 +59,7 @@ automatic-data-extractor/
 
 Bundled ADE config templates now live under `apps/ade-api/src/ade_api/templates/config_packages/` and ship with the backend package.
 
-Everything ADE produces (config_packages, venvs, runs, logs, cache, etc.) is persisted under `./data`. Individual subdirectories can be overridden via environment variables (`ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_RUNS_DIR`, etc.), but by default they are organized as subfolders under the data root. In production, this folder is typically mounted to an external file share so it persists across restarts.
+Everything ADE produces (config_packages, venvs, runs, logs, cache, etc.) is persisted under `./data/workspaces/<workspace_id>/...` by default. Set `ADE_WORKSPACES_DIR` to move the workspace root, or override `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_RUNS_DIR`, or `ADE_DOCUMENTS_DIR` to relocate a specific storage type—ADE always nests the workspace ID beneath the override. In production, mount this folder to external storage so it persists across restarts.
 
 ```text
 ./data/
@@ -74,19 +74,16 @@ Everything ADE produces (config_packages, venvs, runs, logs, cache, etc.) is per
 │     │        ├─ hooks/            # on_run_start/after_mapping/before_save/on_run_end
 │     │        ├─ manifest.json     # read via importlib.resources
 │     ├─ .venv/                     # Python virtual environments organized by workspace
-│     │  └─ <workspace_id>/
-│     │     └─ <config_id>/
-│     │        └─ <build_id>/       # unique per build
-│     │           ├─ bin/python
-│     │           └─ <site-packages>/
-│     │              ├─ ade_engine/
-│     │              └─ ade_config/
+│     │  └─ <config_id>/<build_id>/ # unique per build
+│     │     ├─ bin/python
+│     │     └─ <site-packages>/
+│     │        ├─ ade_engine/
+│     │        └─ ade_config/
 │     ├─ runs/
 │     │  └─ <run_id>/
 │     │     ├─ input/               # Uploaded files
 │     │     ├─ output/              # Generated output files
 │     │     └─ logs/
-│     │        ├─ artifact.json     # human/audit-readable narrative
 │     │        └─ events.ndjson     # append-only timeline
 │     └─ documents/
 │        └─ <document_id>.<ext>     # optional shared document store
@@ -116,7 +113,7 @@ flowchart TD
         A1 --> A2 --> A3 --> A4 --> A5
     end
     J1 --> A1
-    A5 --> R1["Results: output.xlsx + logs/artifact.json"]
+    A5 --> R1["Results: output.xlsx + logs/events.ndjson"]
 
     %% Run B
     S2 -->|reuse frozen venv| J2["Step 3: Run run B"]
@@ -126,7 +123,7 @@ flowchart TD
         B3 --> B4["4) Validate (optional)"] --> B5["5) Generate outputs"]
     end
     J2 --> B1
-    B5 --> R2["Results: output.xlsx + logs/artifact.json"]
+    B5 --> R2["Results: output.xlsx + logs/events.ndjson"]
 
     %% Run C
     S2 -->|reuse frozen venv| J3["Step 3: Run run C"]
@@ -136,7 +133,7 @@ flowchart TD
         C3 --> C4["4) Validate (optional)"] --> C5["5) Generate outputs"]
     end
     J3 --> C1
-    C5 --> R3["Results: output.xlsx + logs/artifact.json"]
+    C5 --> R3["Results: output.xlsx + logs/events.ndjson"]
 ```
 
 ## Step 1: Config — Define the Rules
@@ -165,12 +162,13 @@ Hooks give you precise control over the pipeline without changing the core engin
 
 | Hook                   | Runs                           | Typical use                                                                      |
 | ---------------------- | ------------------------------ | -------------------------------------------------------------------------------- |
-| **`on_run_start.py`**  | Before any files are processed | Initialize shared state, load reference data, or record metadata in the artifact |
+| **`on_run_start.py`**  | Before any files are processed | Initialize shared state, load reference data, or emit metadata via logger        |
 | **`after_mapping.py`** | After columns are mapped       | Adjust mappings, reorder fields, or correct mislabeled headers                   |
 | **`before_save.py`**   | Just before output is written  | Add summary tabs, rename sheets, or tweak formatting                             |
 | **`on_run_end.py`**    | After the run completes        | Clean up temporary resources or emit final notes                                 |
 
-Each hook receives structured context objects (e.g., `run`, `table`, `book`) and can safely write observations to the audit artifact using `note()`.
+Each hook receives structured context objects (e.g., `run`, `table`, `book`)
+and can emit telemetry/notes using `context.logger.note(...)`.
 
 ### Example Config Package Layout
 
@@ -186,7 +184,7 @@ Each hook receives structured context objects (e.g., `run`, `table`, `book`) and
 │     │  ├─ header.py                                     # Heuristics that vote for “this row looks like a header row”
 │     │  └─ data.py                                       # Heuristics that vote for “this row looks like a data row”
 │     ├─ hooks/                                           # Optional lifecycle hooks that run around run stages
-│     │  ├─ on_run_start.py                               # def run(*, run, **_): initialize tiny policy/state; note() to artifact
+│     │  ├─ on_run_start.py                               # def run(*, run, **_): initialize tiny policy/state; note() via logger
 │     │  ├─ after_mapping.py                              # def after_mapping(*, run, table, **_): correct mapping/order/labels
 │     │  ├─ before_save.py                                # def before_save(*, run, book, **_): rename tab, add sheets, widths
 │     │  └─ on_run_end.py                                 # def run(*, run, **_)
@@ -219,7 +217,7 @@ Once the configuration environment is built, ADE can process real spreadsheets s
 **Manifest check (current CLI)**
 
 ```bash
-${ADE_VENVS_DIR}/<config_id>/bin/python -I -B -m ade_engine
+${ADE_VENVS_DIR}/<workspace_id>/.venv/<config_id>/<build_id>/bin/python -I -B -m ade_engine
 ```
 
 This placeholder command prints the engine version together with the installed
@@ -236,7 +234,6 @@ runs/<run_id>/
   output/
     output.xlsx       # final structured workbook
   logs/
-    artifact.json     # full audit trail and rule explanations
     events.ndjson     # timeline of the run
 ```
 
@@ -246,10 +243,11 @@ ADE is configured via environment variables so it remains simple and portable. D
 
 | Variable                  | Default                         | What it controls                                            |
 | ------------------------- | ------------------------------- | ----------------------------------------------------------- |
-| `ADE_DOCUMENTS_DIR`       | `./data/documents`              | Uploaded files + generated artifacts                        |
-| `ADE_CONFIGS_DIR`         | `./data/config_packages`        | Where GUI‑managed, installable config projects live         |
-| `ADE_VENVS_DIR`           | `./data/.venv`                  | Builds environments (one per `config_id`)                   |
-| `ADE_RUNS_DIR`            | `./data/runs`                   | Per‑run working directories                                 |
+| `ADE_WORKSPACES_DIR`      | `./data/workspaces`             | Workspace root for ADE storage                              |
+| `ADE_DOCUMENTS_DIR`       | `./data/workspaces`             | Base for documents (`<ws>/documents/...`)                   |
+| `ADE_CONFIGS_DIR`         | `./data/workspaces`             | Base for configs (`<ws>/config_packages/...`)               |
+| `ADE_VENVS_DIR`           | `./data/workspaces`             | Base for venvs (`<ws>/.venv/<cfg>/<build>/...`)             |
+| `ADE_RUNS_DIR`            | `./data/workspaces`             | Per‑run working directories (`<ws>/runs/<run_id>/...`)      |
 | `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`              | pip cache for wheels/sdists (speeds up building)            |
 | `ADE_MAX_CONCURRENCY`     | `2`                             | Backend dispatcher parallelism                              |
 | `ADE_QUEUE_SIZE`          | `10`                            | Max enqueued runs before the API returns 429                |
@@ -258,8 +256,7 @@ ADE is configured via environment variables so it remains simple and portable. D
 | `ADE_WORKER_MEM_MB`       | `512`                           | Best‑effort address‑space ceiling per run (POSIX `rlimit`)  |
 | `ADE_WORKER_FSIZE_MB`     | `100`                           | Best‑effort max file size a run can create (POSIX `rlimit`) |
 
-If upgrading from a deployment that used `data/runs`, move existing run data to `data/runs` (or set `ADE_RUNS_DIR`) before starti
-ng the service to avoid mixed storage roots.
+Workspace IDs are always nested beneath the configured roots, even when you override one storage type.
 
 ### Bypass authentication for local debugging
 
@@ -302,11 +299,11 @@ If a build fails, re‑run the build action and check `packages.txt` to see the 
 data/.venv/<config_id>/bin/python -I -B -c "import ade_engine, ade_config; print('ok')"
 ```
 
-If mapping results look unexpected, open `artifact.json`; it records the winning scores and the rules that contributed to each decision. Performance issues usually trace back to heavy work in detectors; prefer sampling in detectors, move heavier cleanup into transforms, and keep validators light. Because every configuration has its own environment, installs are isolated; if you suspect a dependency clash, run `pip check` in the venv to diagnose.
+If mapping results look unexpected, inspect `events.ndjson` (look for `run.table.summary` events); they record mapping scores, unmapped columns, and validation breakdowns. Performance issues usually trace back to heavy work in detectors; prefer sampling in detectors, move heavier cleanup into transforms, and keep validators light. Because every configuration has its own environment, installs are isolated; if you suspect a dependency clash, run `pip check` in the venv to diagnose.
 
 ## Where to go next
 
 1. **[Config Packages](./01-config-packages.md)** — what a config is, Script API v1, detectors, transforms, validators, hooks.
 2. **[Run Orchestration](./02-run-orchestration.md)** — queue, workers, resource limits, atomic writes.
-3. **[Artifact Reference](./14-run_artifact_json.md)** — the per‑run audit trail (schema and examples).
+3. **Run telemetry** — the per‑run event log (`events.ndjson`) and derived run summaries (`ade.run_summary/v1`).
 4. **[Glossary](./12-glossary.md)** — common terms and system vocabulary.

@@ -6,7 +6,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@app": fileURLToPath(new URL("./src/app", import.meta.url)),
-      "@screens": fileURLToPath(new URL("./src/screens", import.meta.url)),
+      "@features": fileURLToPath(new URL("./src/screens", import.meta.url)),
       "@shared": fileURLToPath(new URL("./src/shared", import.meta.url)),
       "@ui": fileURLToPath(new URL("./src/ui", import.meta.url)),
       "@schema": fileURLToPath(new URL("./src/schema", import.meta.url)),

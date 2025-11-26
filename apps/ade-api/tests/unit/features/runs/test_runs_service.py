@@ -1,27 +1,29 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from ade_engine.schemas import AdeEvent
 
-from ade_engine.schemas import TelemetryEnvelope, TelemetryEvent
-
-from ade_api.features.builds.models import ConfigurationBuild, ConfigurationBuildStatus
+from ade_api.features.builds.models import BuildStatus
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
+from ade_api.features.configs.storage import compute_config_digest
 from ade_api.features.documents.models import Document, DocumentSource, DocumentStatus
 from ade_api.features.documents.storage import DocumentStorage
 from ade_api.features.runs.models import RunStatus
-from ade_api.features.runs.schemas import RunCompletedEvent, RunCreateOptions, RunLogEvent
+from ade_api.features.runs.schemas import RunCreateOptions
 from ade_api.features.runs.service import RunExecutionContext, RunsService
-from ade_api.features.workspaces.models import Workspace
 from ade_api.features.system_settings.service import SafeModeService
+from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import Settings
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.db.mixins import generate_ulid
+from ade_api.storage_layout import config_venv_path, workspace_config_root, workspace_documents_root
 
 
 async def _prepare_service(
@@ -34,38 +36,47 @@ async def _prepare_service(
     session.add(workspace)
     await session.flush()
 
+    configuration_id = generate_ulid()
     configuration = Configuration(
+        id=configuration_id,
         workspace_id=workspace.id,
-        config_id=generate_ulid(),
         display_name="Config",
         status=ConfigurationStatus.ACTIVE,
-        config_version=1,
+        configuration_version=1,
         content_digest="digest",
     )
     session.add(configuration)
     await session.flush()
 
-    venv_root = tmp_path / "venvs"
-    documents_dir = tmp_path / "documents"
-    runs_dir = tmp_path / "runs"
-    venv_dir = venv_root / configuration.config_id
-    bin_dir = venv_dir / ("Scripts" if os.name == "nt" else "bin")
-    bin_dir.mkdir(parents=True, exist_ok=True)
-    python_name = "python.exe" if os.name == "nt" else "python"
-    (bin_dir / python_name).write_text("", encoding="utf-8")
+    workspaces_dir = tmp_path / "workspaces"
+    documents_dir = workspaces_dir
+    runs_dir = workspaces_dir
 
     base_settings = Settings()
     settings = base_settings.model_copy(
         update={
-            "venvs_dir": str(venv_root),
+            "workspaces_dir": workspaces_dir,
             "safe_mode": safe_mode,
             "documents_dir": documents_dir,
             "runs_dir": runs_dir,
         }
     )
 
+    venv_dir = config_venv_path(settings, workspace.id, configuration.id)
+    bin_dir = venv_dir / ("Scripts" if os.name == "nt" else "bin")
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    python_name = "python.exe" if os.name == "nt" else "python"
+    (bin_dir / python_name).write_text("", encoding="utf-8")
+    config_root = workspace_config_root(settings, workspace.id, configuration.id)
+    config_root.mkdir(parents=True, exist_ok=True)
+    (config_root / "pyproject.toml").write_text(
+        "[project]\nname='demo'\nversion='0.0.1'\n",
+        encoding="utf-8",
+    )
+    digest = compute_config_digest(config_root)
+
     document_id = generate_ulid()
-    storage = DocumentStorage(settings.documents_dir)
+    storage = DocumentStorage(workspace_documents_root(settings, workspace.id))
     stored_uri = storage.make_stored_uri(document_id)
     source_path = storage.path_for(stored_uri)
     source_path.parent.mkdir(parents=True, exist_ok=True)
@@ -85,21 +96,14 @@ async def _prepare_service(
     )
     session.add(document)
 
-    build = ConfigurationBuild(
-        workspace_id=workspace.id,
-        config_id=configuration.config_id,
-        configuration_id=configuration.id,
-        build_id=generate_ulid(),
-        status=ConfigurationBuildStatus.ACTIVE,
-        venv_path=str(venv_dir),
-        config_version=configuration.config_version,
-        content_digest=configuration.content_digest,
-        engine_spec=settings.engine_spec,
-        engine_version="0.2.0",
-        python_interpreter=settings.python_bin,
-        built_at=utc_now(),
-    )
-    session.add(build)
+    configuration.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
+    configuration.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
+    configuration.engine_version = "0.2.0"  # type: ignore[attr-defined]
+    configuration.python_interpreter = settings.python_bin  # type: ignore[attr-defined]
+    configuration.python_version = "3.12.1"  # type: ignore[attr-defined]
+    configuration.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
+    configuration.built_content_digest = digest  # type: ignore[attr-defined]
+    configuration.content_digest = digest
     await session.commit()
 
     safe_mode_service = SafeModeService(session=session, settings=settings)
@@ -109,7 +113,7 @@ async def _prepare_service(
         safe_mode_service=safe_mode_service,
     )
     run, context = await service.prepare_run(
-        config_id=configuration.config_id,
+        configuration_id=configuration.id,
         options=RunCreateOptions(input_document_id=document.id),
     )
     return service, context, document
@@ -130,19 +134,22 @@ async def test_stream_run_happy_path_yields_engine_events(
         run,
         context: RunExecutionContext,
         options: RunCreateOptions,
-        ) -> AsyncIterator[RunLogEvent | RunCompletedEvent | TelemetryEnvelope]:
+        ) -> AsyncIterator[AdeEvent]:
             log = await self._append_log(run.id, "engine output", stream="stdout")
-            yield RunLogEvent(
-                run_id=run.id,
-                created=self._epoch_seconds(log.created_at),
-                stream="stdout",
-                message="engine output",
+            yield self._ade_event(
+                run=run,
+                type_="run.console",
+                payload={
+                    "stream": "stdout",
+                    "level": "info",
+                    "message": "engine output",
+                    "created": self._epoch_seconds(log.created_at),
+                },
             )
-            telemetry = TelemetryEnvelope(
-                run_id=context.run_id,
-                timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                metadata={"run_id": context.run_id},
-                event=TelemetryEvent(event="pipeline_transition", level="info"),
+            telemetry = self._ade_event(
+                run=run,
+                type_="run.phase.started",
+                payload={"phase": "extracting"},
             )
             await self._append_log(run.id, telemetry.model_dump_json(), stream="stdout")
             yield telemetry
@@ -151,12 +158,13 @@ async def test_stream_run_happy_path_yields_engine_events(
                 status=RunStatus.SUCCEEDED,
                 exit_code=0,
             )
-            yield RunCompletedEvent(
-                run_id=completion.id,
-                created=self._epoch_seconds(completion.finished_at),
-                status=self._status_literal(completion.status),
-                exit_code=completion.exit_code,
-                error_message=completion.error_message,
+            yield self._ade_event(
+                run=completion,
+                type_="run.completed",
+                payload={
+                    "status": "succeeded",
+                    "execution": {"exit_code": completion.exit_code},
+                },
             )
 
     monkeypatch.setattr(RunsService, "_execute_engine", fake_execute_engine)
@@ -165,11 +173,10 @@ async def test_stream_run_happy_path_yields_engine_events(
     async for event in service.stream_run(context=context, options=run_options):
         events.append(event)
 
-    assert events[0].type == "run.created"
-    assert events[1].type == "run.started"
-    assert isinstance(events[2], RunLogEvent)
-    assert isinstance(events[3], TelemetryEnvelope)
-    assert events[4].type == "run.completed"
+    assert events[0].type == "run.queued"
+    assert events[1].type == "run.console"
+    assert events[2].type == "run.phase.started"
+    assert events[3].type == "run.completed"
 
     run = await service.get_run(context.run_id)
     assert run is not None
@@ -177,8 +184,8 @@ async def test_stream_run_happy_path_yields_engine_events(
     logs = await service.get_logs(run_id=context.run_id)
     messages = [entry.message for entry in logs.entries]
     assert messages[0] == "engine output"
-    telemetry = TelemetryEnvelope.model_validate_json(messages[1])
-    assert telemetry.event.event == "pipeline_transition"
+    telemetry = AdeEvent.model_validate_json(messages[1])
+    assert telemetry.type == "run.phase.started"
     assert logs.next_after_id is None
 
 
@@ -203,7 +210,7 @@ async def test_stream_run_handles_engine_failure(
         events.append(event)
 
     assert events[-1].type == "run.completed"
-    assert events[-1].status == "failed"
+    assert events[-1].model_extra.get("status") == "failed"
     failure_logs = await service.get_logs(run_id=context.run_id)
     assert failure_logs.entries[-1].message.startswith("ADE run failed: boom")
 
@@ -235,12 +242,37 @@ async def test_stream_run_handles_cancelled_execution(
             events.append(event)
 
     assert events[-1].type == "run.completed"
-    assert events[-1].status == "canceled"
+    assert events[-1].model_extra.get("status") == "canceled"
 
     run = await service.get_run(context.run_id)
     assert run is not None
     assert run.status is RunStatus.CANCELED
-    assert run.error_message == "Run execution cancelled"
+
+
+@pytest.mark.asyncio()
+async def test_force_rebuild_triggers_rebuild(
+    session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, context, document = await _prepare_service(session, tmp_path)
+
+    rebuild_called = False
+
+    async def fake_rebuild(self, *, configuration, config_root, venv_path, digest):  # type: ignore[no-untyped-def]
+        nonlocal rebuild_called
+        rebuild_called = True
+        configuration.build_status = BuildStatus.ACTIVE  # type: ignore[assignment]
+        configuration.built_content_digest = digest  # type: ignore[attr-defined]
+        configuration.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
+
+    monkeypatch.setattr(RunsService, "_rebuild_configuration_env", fake_rebuild)
+
+    options = RunCreateOptions(input_document_id=document.id, force_rebuild=True)
+    run, _ = await service.prepare_run(configuration_id=context.configuration_id, options=options)
+
+    assert rebuild_called is True
+    assert run.build_id is not None
 
 
 @pytest.mark.asyncio()
@@ -259,17 +291,20 @@ async def test_stream_run_validate_only_short_circuits(
         events.append(event)
 
     assert [event.type for event in events] == [
-        "run.created",
+        "run.queued",
         "run.started",
-        "run.log",
+        "run.console",
         "run.completed",
     ]
-    assert events[-1].status == "succeeded"
+    assert events[-1].model_extra.get("status") == "succeeded"
+    assert events[-1].model_extra.get("run_summary", {}).get("run", {}).get("failure_message") == "Validation-only execution"
 
     run = await service.get_run(context.run_id)
     assert run is not None
     assert run.status is RunStatus.SUCCEEDED
-    assert run.summary == "Validation-only execution"
+    summary = json.loads(run.summary or "{}")
+    assert summary.get("run", {}).get("status") == "succeeded"
+    assert summary.get("run", {}).get("failure_message") == "Validation-only execution"
     logs = await service.get_logs(run_id=context.run_id)
     assert logs.entries[0].message == "Run options: validate-only mode"
 
@@ -284,16 +319,19 @@ async def test_stream_run_respects_safe_mode(session, tmp_path: Path) -> None:
         events.append(event)
 
     assert [event.type for event in events] == [
-        "run.created",
+        "run.queued",
         "run.started",
-        "run.log",
+        "run.console",
         "run.completed",
     ]
-    assert events[-1].status == "succeeded"
-    assert events[-1].exit_code == 0
+    assert events[-1].model_extra.get("status") == "succeeded"
+    assert (events[-1].model_extra.get("execution") or {}).get("exit_code") == 0
+    assert events[-1].model_extra.get("run_summary", {}).get("run", {}).get("failure_message") == "Safe mode skip"
 
     run = await service.get_run(context.run_id)
     assert run is not None
-    assert run.summary == "Safe mode skip"
+    summary = json.loads(run.summary or "{}")
+    assert summary.get("run", {}).get("status") == "succeeded"
+    assert summary.get("run", {}).get("failure_message") == "Safe mode skip"
     logs = await service.get_logs(run_id=context.run_id)
     assert "safe mode" in logs.entries[-1].message.lower()

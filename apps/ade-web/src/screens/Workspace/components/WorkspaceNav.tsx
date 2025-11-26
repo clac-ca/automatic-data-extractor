@@ -1,8 +1,8 @@
 import { NavLink } from "@app/nav/Link";
 import clsx from "clsx";
 
-import { getWorkspacePrimaryNavigation, type WorkspaceNavigationItem } from "@screens/Workspace/components/workspace-navigation";
-import type { WorkspaceProfile } from "@screens/Workspace/api/workspaces-api";
+import { getWorkspacePrimaryNavigation, type WorkspaceNavigationItem } from "@features/Workspace/components/workspace-navigation";
+import type { WorkspaceProfile } from "@features/Workspace/api/workspaces-api";
 
 const COLLAPSED_NAV_WIDTH = "4.25rem";
 const EXPANDED_NAV_WIDTH = "18.75rem";

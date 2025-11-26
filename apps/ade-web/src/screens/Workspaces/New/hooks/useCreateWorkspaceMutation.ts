@@ -6,7 +6,7 @@ import {
   type WorkspaceCreatePayload,
   type WorkspaceListPage,
   type WorkspaceProfile,
-} from "@screens/Workspace/api/workspaces-api";
+} from "@features/Workspace/api/workspaces-api";
 
 export function useCreateWorkspaceMutation() {
   const queryClient = useQueryClient();

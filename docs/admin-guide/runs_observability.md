@@ -13,7 +13,7 @@ emits lifecycle notifications (`run.created`, `run.started`, `run.log`,
 `run.completed`).
 
 ```bash
-http --stream POST :8000/api/v1/configs/$CONFIG_ID/runs stream:=true \
+http --stream POST :8000/api/v1/configurations/$CONFIG_ID/runs stream:=true \
   "options:={\"dry_run\": false}"
 ```
 
@@ -48,7 +48,7 @@ directly. The table layout matches the SQLAlchemy models in
 ```sql
 SELECT id, status, exit_code, started_at, finished_at
 FROM runs
-WHERE config_id = :config_id
+WHERE configuration_id = :configuration_id
 ORDER BY created_at DESC
 LIMIT 20;
 ```
@@ -78,7 +78,7 @@ and polling endpoints. Use the same troubleshooting workflow when verifying
 environment preparation:
 
 1. Trigger a build with `stream: true` using
-   `POST /api/v1/workspaces/{workspace_id}/configs/{config_id}/builds`.
+   `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds`.
    Watch for `build.created`, `build.step`, `build.log`, and
    `build.completed` events.
 2. When automation needs to poll instead of stream, hit

@@ -2,9 +2,9 @@ import { useEffect } from "react";
 
 import { PageState } from "@ui/PageState";
 
-import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
-import { useWorkbenchWindow } from "@screens/Workspace/context/WorkbenchWindowContext";
-import { useConfigQuery } from "@shared/configs/hooks/useConfigsQuery";
+import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
+import { useWorkbenchWindow } from "@features/Workspace/context/WorkbenchWindowContext";
+import { useConfigurationQuery } from "@shared/configurations/hooks/useConfigurationsQuery";
 
 import { Workbench } from "./Workbench";
 
@@ -25,7 +25,7 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
     shouldBypassUnsavedGuard,
   } = useWorkbenchWindow();
   const configId = params?.configId;
-  const configQuery = useConfigQuery({ workspaceId: workspace.id, configId });
+  const configQuery = useConfigurationQuery({ workspaceId: workspace.id, configId });
 
   useEffect(() => {
     if (configId) {

@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
+import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
 import {
   useCreateWorkspaceRoleMutation,
   useDeleteWorkspaceRoleMutation,
@@ -11,7 +11,7 @@ import {
   useUpdateWorkspaceRoleMutation,
   useWorkspaceRolesQuery,
 } from "../hooks/useWorkspaceRoles";
-import type { RoleDefinition, PermissionDefinition } from "@screens/Workspace/api/workspaces-api";
+import type { RoleDefinition, PermissionDefinition } from "@features/Workspace/api/workspaces-api";
 import { Alert } from "@ui/Alert";
 import { Button } from "@ui/Button";
 import { Input } from "@ui/Input";

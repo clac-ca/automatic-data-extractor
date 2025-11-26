@@ -60,8 +60,6 @@ def _run_context(tmp_path: Path, manifest: object, request: RunRequest) -> RunCo
         input_dir=request.input_dir or tmp_path,
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
-        artifact_path=tmp_path / "artifact.json",
-        events_path=tmp_path / "events.ndjson",
     )
     return RunContext(
         run_id="run-1",
@@ -177,4 +175,3 @@ def detect_low(*, header, **_):
     assert field_mapping.field == "only_field"
     assert field_mapping.is_satisfied is False
     assert mapped.column_map.unmapped_columns[0].output_header == "raw_1"
-

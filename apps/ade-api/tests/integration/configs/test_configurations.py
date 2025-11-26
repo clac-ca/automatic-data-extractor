@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
+import io
+import zipfile
 from pathlib import Path
 from typing import Any
-import io
-from pathlib import Path
-import zipfile
 
 import pytest
 from httpx import AsyncClient
-
 from sqlalchemy import select
 
 from ade_api.features.configs.models import Configuration
@@ -56,12 +54,12 @@ async def _create_from_template(
     return response.json()
 
 
-def _config_path(workspace_id: str, config_id: str) -> Path:
+def _config_path(workspace_id: str, configuration_id: str) -> Path:
     return (
         Path(get_settings().configs_dir)
         / workspace_id
         / "config_packages"
-        / config_id
+        / configuration_id
     )
 
 
@@ -81,13 +79,13 @@ async def test_create_configuration_and_validate(
         headers=headers,
     )
 
-    config_path = _config_path(workspace_id, record["config_id"])
+    config_path = _config_path(workspace_id, record["id"])
     assert config_path.exists()
     manifest = config_path / "src" / "ade_config" / "manifest.json"
     assert manifest.exists()
 
     response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['config_id']}/validate",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/validate",
         headers=headers,
     )
     assert response.status_code == 200, response.text
@@ -117,13 +115,13 @@ async def test_clone_configuration_creates_copy(
         headers=headers,
         json={
             "display_name": "Cloned Config",
-            "source": {"type": "clone", "config_id": source["config_id"]},
+            "source": {"type": "clone", "configuration_id": source["id"]},
         },
     )
     assert clone_response.status_code == 201, clone_response.text
     clone = clone_response.json()
     assert clone["display_name"] == "Cloned Config"
-    clone_path = _config_path(workspace_id, clone["config_id"])
+    clone_path = _config_path(workspace_id, clone["id"])
     assert clone_path.exists()
     assert (clone_path / "src" / "ade_config" / "manifest.json").exists()
 
@@ -143,7 +141,7 @@ async def test_validate_reports_issues_when_manifest_missing(
         headers=headers,
     )
     manifest_path = (
-        _config_path(workspace_id, record["config_id"])
+        _config_path(workspace_id, record["id"])
         / "src"
         / "ade_config"
         / "manifest.json"
@@ -151,7 +149,7 @@ async def test_validate_reports_issues_when_manifest_missing(
     manifest_path.unlink()
 
     response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['config_id']}/validate",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/validate",
         headers=headers,
     )
     assert response.status_code == 200, response.text
@@ -198,7 +196,7 @@ async def test_validate_missing_config_returns_not_found(
         headers=headers,
     )
     assert response.status_code == 404
-    assert response.json()["detail"] == "config_not_found"
+    assert response.json()["detail"] == "configuration_not_found"
 
 
 async def test_list_versions_reflects_status_transitions(
@@ -217,23 +215,23 @@ async def test_list_versions_reflects_status_transitions(
     )
 
     draft_versions = await async_client.get(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{draft['config_id']}/versions",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{draft['id']}/versions",
         headers=headers,
     )
     assert draft_versions.status_code == 200, draft_versions.text
     versions = draft_versions.json()
-    assert versions[0]["config_version_id"] == draft["config_id"]
+    assert versions[0]["configuration_version_id"] == draft["id"]
     assert versions[0]["status"] == "draft"
     assert versions[0]["semver"] is None
 
     publish = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{draft['config_id']}/publish",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{draft['id']}/publish",
         headers=headers,
     )
     assert publish.status_code == 200, publish.text
 
     published_versions = await async_client.get(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{draft['config_id']}/versions",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{draft['id']}/versions",
         headers=headers,
     )
     assert published_versions.status_code == 200, published_versions.text
@@ -256,7 +254,7 @@ async def test_file_editor_endpoints(
         workspace_id=workspace_id,
         headers=headers,
     )
-    base_url = f"/api/v1/workspaces/{workspace_id}/configurations/{record['config_id']}"
+    base_url = f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}"
 
     resp = await async_client.get(f"{base_url}/files", headers=headers)
     assert resp.status_code == 200
@@ -353,7 +351,7 @@ async def test_editing_non_draft_rejected(
         workspace_id=workspace_id,
         headers=headers,
     )
-    base_url = f"/api/v1/workspaces/{workspace_id}/configurations/{record['config_id']}"
+    base_url = f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}"
     await async_client.post(
         f"{base_url}/activate",
         headers=headers,
@@ -386,21 +384,21 @@ async def test_activate_configuration_sets_active_and_digest(
     )
 
     publish = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['config_id']}/publish",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/publish",
         headers=headers,
         json=None,
     )
     assert publish.status_code == 200, publish.text
 
     response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['config_id']}/activate",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/activate",
         headers=headers,
         json={},
     )
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["status"] == "active"
-    assert payload["config_version"] == 1
+    assert payload["configuration_version"] == 1
     assert payload["content_digest"].startswith("sha256:")
 
     settings = get_settings()
@@ -408,7 +406,7 @@ async def test_activate_configuration_sets_active_and_digest(
     async with session_factory() as session:
         stmt = select(Configuration).where(
             Configuration.workspace_id == workspace_id,
-            Configuration.config_id == record["config_id"],
+            Configuration.id == record["id"],
         )
         result = await session.execute(stmt)
         config = result.scalar_one()
@@ -429,7 +427,7 @@ async def test_activate_demotes_previous_active(
         async_client, workspace_id=workspace_id, headers=headers, display_name="First"
     )
     await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{first['config_id']}/publish",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{first['id']}/publish",
         headers=headers,
         json=None,
     )
@@ -437,18 +435,18 @@ async def test_activate_demotes_previous_active(
         async_client, workspace_id=workspace_id, headers=headers, display_name="Second"
     )
     await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{second['config_id']}/publish",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{second['id']}/publish",
         headers=headers,
         json=None,
     )
 
     await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{first['config_id']}/activate",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{first['id']}/activate",
         headers=headers,
         json={},
     )
     await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{second['config_id']}/activate",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{second['id']}/activate",
         headers=headers,
         json={},
     )
@@ -458,9 +456,9 @@ async def test_activate_demotes_previous_active(
     async with session_factory() as session:
         stmt = select(Configuration).where(Configuration.workspace_id == workspace_id)
         result = await session.execute(stmt)
-        configs = {row.config_id: row for row in result.scalars()}
-        assert configs[first["config_id"]].status == "inactive"
-        assert configs[second["config_id"]].status == "active"
+        configs = {row.id: row for row in result.scalars()}
+        assert configs[first["id"]].status == "inactive"
+        assert configs[second["id"]].status == "active"
 
 
 async def test_activate_returns_422_when_validation_fails(
@@ -478,7 +476,7 @@ async def test_activate_returns_422_when_validation_fails(
         headers=headers,
     )
     manifest_path = (
-        _config_path(workspace_id, record["config_id"])
+        _config_path(workspace_id, record["id"])
         / "src"
         / "ade_config"
         / "manifest.json"
@@ -486,7 +484,7 @@ async def test_activate_returns_422_when_validation_fails(
     manifest_path.unlink()
 
     response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['config_id']}/publish",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/publish",
         headers=headers,
         json=None,
     )
@@ -513,7 +511,7 @@ async def test_deactivate_configuration_sets_inactive(
     )
 
     response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['config_id']}/deactivate",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/deactivate",
         headers=headers,
     )
     assert response.status_code == 200, response.text
@@ -542,13 +540,13 @@ async def test_list_and_read_configurations(
     assert list_response.status_code == 200, list_response.text
     payload = list_response.json()
     items = payload["items"]
-    assert any(item["config_id"] == record["config_id"] for item in items)
+    assert any(item["id"] == record["id"] for item in items)
 
     detail_response = await async_client.get(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['config_id']}",
+        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}",
         headers=headers,
     )
     assert detail_response.status_code == 200, detail_response.text
     payload = detail_response.json()
-    assert payload["config_id"] == record["config_id"]
+    assert payload["id"] == record["id"]
     assert payload["display_name"] == record["display_name"]

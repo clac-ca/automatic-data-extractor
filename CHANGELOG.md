@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+_No notable changes yet._
+
+## [v0.2.0] - 2025-10-10
+
+### Added
+- Expanded run metadata to include attempts, retries, submitter, config version, input documents, trace IDs, and storage URIs for artifacts/logs/outputs.
+- Frontend runs history experience replaces the legacy jobs UI, with export, filtering, and workspace navigation updates.
+
+### Changed
+- Adopted runs as the sole execution concept across backend, engine, and frontend; removed all jobs terminology, APIs, and UI.
+- Renamed storage/env to `ADE_RUNS_DIR` and standardized paths to `data/runs/<run_id>/{input,output,logs}`.
+- Squashed Alembic history into a single initial migration that now creates runs, run_logs, builds, and build_logs tables; drop existing databases or restamp before migrating.
+- Regenerated OpenAPI/types and documentation to align with the runs-only API surface.
+
+### Removed
+- Deleted jobs tables, services, routers, tests, and documentation; removed `ADE_JOBS_DIR` handling.
+- Removed incremental migration files in favor of the consolidated `0001_initial_schema.py`.
+
+## [v0.1.0] - 2025-10-09
+
 ### Added
 - Introduce ADE runs API endpoints with streaming NDJSON events, run/log models, and background execution wiring.
 - Refactor configuration build orchestration to stream NDJSON events, persist build/log tables, and expose `/api/v1/.../builds` endpoints with background execution.
@@ -57,8 +77,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Fix the upload picker so selected files are processed before the input resets, keeping button and drag-and-drop uploads consistent.
 - Automatically refresh browser sessions before access tokens expire so idle users are not met with unexpected 401 errors.
 - Fix SPA navigation not re-rendering: dedupe React/React Router in Vite and redesign navigation so workspace chrome lives inside the workspace route; sidebar highlights, breadcrumbs, and main panel now update immediately on click.
-
-## [v0.1.0] - 2025-10-09
-
-### Added
-- Initial release of ADE with the FastAPI backend, CLI utilities, and frontend build pipeline.

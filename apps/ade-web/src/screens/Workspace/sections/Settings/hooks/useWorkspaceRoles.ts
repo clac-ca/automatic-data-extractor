@@ -12,7 +12,7 @@ import {
   type RoleListPage,
   type RoleCreatePayload,
   type RoleUpdatePayload,
-} from "@screens/Workspace/api/workspaces-api";
+} from "@features/Workspace/api/workspaces-api";
 
 const ROLES_PAGE_SIZE = 200;
 const PERMISSIONS_PAGE_SIZE = 200;

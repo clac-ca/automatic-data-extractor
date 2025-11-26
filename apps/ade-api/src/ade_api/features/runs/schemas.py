@@ -2,40 +2,36 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from datetime import datetime
+from typing import Literal
 
-from pydantic import Field
+from ade_engine.schemas import AdeEvent
+from ade_engine.schemas import ArtifactV1 as RunDiagnosticsV1
+from pydantic import Field, model_validator
 
 from ade_api.shared.core.ids import ULIDStr
 from ade_api.shared.core.schema import BaseSchema
-from ade_api.shared.pagination import Page, PageParams
+from ade_api.shared.pagination import Page
 
 RunObjectType = Literal["ade.run"]
-RunEventObjectType = Literal["ade.run.event"]
 RunLogsObjectType = Literal["ade.run.logs"]
 RunStatusLiteral = Literal["queued", "running", "succeeded", "failed", "canceled"]
-RunEventType = Literal[
-    "run.created",
-    "run.started",
-    "run.log",
-    "run.completed",
-]
 
 __all__ = [
     "RunCreateOptions",
     "RunCreateRequest",
-    "RunCreatedEvent",
-    "RunCompletedEvent",
     "RunFilters",
+    "RunInput",
+    "RunLinks",
+    "RunOutput",
     "RunPage",
-    "RunEvent",
-    "RunEventBase",
     "RunLogEntry",
-    "RunLogEvent",
     "RunLogsResponse",
     "RunOutputFile",
     "RunOutputListing",
     "RunResource",
+    "RunDiagnosticsV1",
+    "RunEventsPage",
     "RunStatusLiteral",
 ]
 
@@ -45,7 +41,18 @@ class RunCreateOptions(BaseSchema):
 
     dry_run: bool = False
     validate_only: bool = False
-    input_document_id: ULIDStr | None = None
+    force_rebuild: bool = Field(
+        default=False,
+        description="If true, rebuild the configuration environment before running.",
+    )
+    document_ids: list[ULIDStr] | None = Field(
+        default=None,
+        description="Preferred document identifiers to stage as inputs (first is used today).",
+    )
+    input_document_id: ULIDStr | None = Field(
+        default=None,
+        description="Deprecated: single document identifier to ingest.",
+    )
     input_sheet_name: str | None = Field(
         default=None,
         description="Preferred worksheet to ingest when processing XLSX files.",
@@ -55,6 +62,18 @@ class RunCreateOptions(BaseSchema):
         default=None,
         description="Explicit worksheets to ingest; defaults to all when omitted.",
     )
+    metadata: dict[str, str] | None = Field(
+        default=None,
+        description="Opaque metadata to propagate with run telemetry.",
+    )
+
+    @model_validator(mode="after")
+    def _normalize_document_ids(self) -> RunCreateOptions:
+        if self.document_ids and not self.input_document_id:
+            self.input_document_id = self.document_ids[0]
+        elif self.input_document_id and not self.document_ids:
+            self.document_ids = [self.input_document_id]
+        return self
 
 
 class RunCreateRequest(BaseSchema):
@@ -64,51 +83,63 @@ class RunCreateRequest(BaseSchema):
     options: RunCreateOptions = Field(default_factory=RunCreateOptions)
 
 
+class RunLinks(BaseSchema):
+    """Hypermedia links for run-related resources."""
+
+    self: str
+    summary: str
+    events: str
+    logs: str
+    logfile: str
+    outputs: str
+    diagnostics: str
+
+
+class RunInput(BaseSchema):
+    """Input metadata captured for a run."""
+
+    document_ids: list[str] = Field(default_factory=list)
+    input_sheet_names: list[str] = Field(default_factory=list)
+    input_file_count: int | None = None
+    input_sheet_count: int | None = None
+
+
+class RunOutput(BaseSchema):
+    """Output metadata captured for a run."""
+
+    has_outputs: bool = False
+    output_count: int = 0
+    processed_files: list[str] = Field(default_factory=list)
+
+
 class RunResource(BaseSchema):
     """API representation of a persisted ADE run."""
 
     id: str
     object: RunObjectType = Field(default="ade.run", alias="object")
-    config_id: str
-    config_version_id: str | None = None
-    submitted_by_user_id: str | None = None
-    input_document_id: str | None = Field(
-        default=None,
-        description="Document ULID staged for this run when provided.",
-    )
-    input_documents: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Descriptors for all input documents staged for the run.",
-    )
-    input_sheet_name: str | None = Field(
-        default=None,
-        description="Worksheet name used when ingesting XLSX inputs.",
-        max_length=64,
-    )
-    input_sheet_names: list[str] | None = Field(
-        default=None,
-        description="Worksheets requested for ingestion when provided.",
-    )
+    workspace_id: str
+    configuration_id: str
+    configuration_version: str | None = None
+
     status: RunStatusLiteral
-    attempt: int = 1
-    retry_of_run_id: str | None = None
-    trace_id: str | None = None
+    failure_code: str | None = None
+    failure_stage: str | None = None
+    failure_message: str | None = None
 
-    created: int
-    started: int | None = None
-    finished: int | None = None
-    canceled: int | None = None
+    engine_version: str | None = None
+    config_version: str | None = None
+    env_reason: str | None = None
+    env_reused: bool | None = None
 
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    duration_seconds: float | None = None
     exit_code: int | None = None
-    output_paths: list[str] = Field(default_factory=list)
-    processed_files: list[str] = Field(default_factory=list)
-    artifact_uri: str | None = None
-    output_uri: str | None = None
-    logs_uri: str | None = None
-    artifact_path: str | None = None
-    events_path: str | None = None
-    summary: str | None = None
-    error_message: str | None = None
+
+    input: RunInput = Field(default_factory=RunInput)
+    output: RunOutput = Field(default_factory=RunOutput)
+    links: RunLinks
 
 
 class RunFilters(BaseSchema):
@@ -128,53 +159,6 @@ class RunPage(Page[RunResource]):
     """Paginated collection of ``RunResource`` items."""
 
     items: list[RunResource]
-
-
-class RunEventBase(BaseSchema):
-    """Common envelope fields for run stream events."""
-
-    object: RunEventObjectType = Field(default="ade.run.event", alias="object")
-    run_id: str
-    created: int
-    type: RunEventType
-
-
-class RunCreatedEvent(RunEventBase):
-    """Event emitted when a run record is created."""
-
-    type: Literal["run.created"] = "run.created"
-    status: RunStatusLiteral
-    config_id: str
-
-
-class RunStartedEvent(RunEventBase):
-    """Event emitted once execution begins."""
-
-    type: Literal["run.started"] = "run.started"
-
-
-class RunLogEvent(RunEventBase):
-    """Event encapsulating a streamed log line."""
-
-    type: Literal["run.log"] = "run.log"
-    stream: Literal["stdout", "stderr"] = "stdout"
-    message: str
-
-
-class RunCompletedEvent(RunEventBase):
-    """Event emitted when execution finishes (success, failure, or cancel)."""
-
-    type: Literal["run.completed"] = "run.completed"
-    status: RunStatusLiteral
-    exit_code: int | None = None
-    error_message: str | None = None
-    artifact_path: str | None = None
-    events_path: str | None = None
-    output_paths: list[str] = Field(default_factory=list)
-    processed_files: list[str] = Field(default_factory=list)
-
-
-RunEvent = RunCreatedEvent | RunStartedEvent | RunLogEvent | RunCompletedEvent
 
 
 class RunLogEntry(BaseSchema):
@@ -198,11 +182,21 @@ class RunLogsResponse(BaseSchema):
 class RunOutputFile(BaseSchema):
     """Single file emitted by a streaming run output directory."""
 
-    path: str
+    name: str
+    kind: str | None = None
+    content_type: str | None = None
     byte_size: int
+    download_url: str | None = None
 
 
 class RunOutputListing(BaseSchema):
     """Collection of files produced by a streaming run."""
 
     files: list[RunOutputFile] = Field(default_factory=list)
+
+
+class RunEventsPage(BaseSchema):
+    """Paginated ADE events for a run."""
+
+    items: list[AdeEvent]
+    next_cursor: str | None = None

@@ -29,7 +29,13 @@ We follow a few rules:
 1. The **location bar is authoritative**. A reload should land you back on the same screen with the same view state.
 2. All navigation goes through **`NavProvider`** (`useNavigate` / `Link` / `NavLink`), not raw `history.pushState`.
 3. **Query parameters** are the standard way to represent view‑level state that should survive refresh and be shareable.
-4. Navigation blockers are **opt‑in and local** to the features that need them (e.g. the Config Builder workbench).
+4. Navigation blockers are **opt‑in and local** to the features that need them (e.g. the Configuration Builder workbench).
+
+### Canonical sources and names
+
+- Build workspace routes via `@shared/nav/routes` instead of hand‑rolled strings so the route map below and the code stay in sync.
+- Query parameter names for workspace sections are defined in the Documents/Runs filter helpers (`parseDocumentFilters` / `buildDocumentSearchParams`, `parseRunFilters` / `buildRunSearchParams`) described in `docs/06` and `docs/07`; add new keys there to keep deep links consistent.
+- Permission checks referenced in navigation (e.g. showing nav items) should use the keys in `@schema/permissions` and helper logic in `@shared/permissions`, not ad‑hoc strings.
 
 ---
 
@@ -68,7 +74,7 @@ export function App() {
 * **`ScreenSwitch`**
   Looks at `location.pathname` and chooses the top‑level screen. It is the **only place** that maps raw paths to top‑level React components.
 
-Everything below `ScreenSwitch` (workspaces, documents, runs, Config Builder) uses URL‑encoded view state and query parameters.
+Everything below `ScreenSwitch` (workspaces, documents, runs, Configuration Builder) uses URL‑encoded view state and query parameters.
 
 ---
 
@@ -125,14 +131,32 @@ Inside `/workspaces/:workspaceId`, the next path segment selects the section:
 | Segment          | Example path                     | Section                       |
 | ---------------- | -------------------------------- | ----------------------------- |
 | `documents`      | `/workspaces/123/documents`      | Documents list & run triggers |
-| `runs`           | `/workspaces/123/runs`           | Run history (runs ledger)     |
-| `config-builder` | `/workspaces/123/config-builder` | Config list + workbench       |
+| `runs`           | `/workspaces/123/runs`           | Runs ledger (workspace run history) |
+| `config-builder` | `/workspaces/123/config-builder` | Configuration Builder (configurations list + workbench) |
 | `settings`       | `/workspaces/123/settings`       | Workspace settings            |
 | `overview`*      | `/workspaces/123/overview`       | Overview/summary (optional)   |
 
 * The `overview` section is optional; if not present, the shell can redirect to a default (e.g. Documents).
 
+Naming stays 1:1: the nav item reads **“Configuration Builder”**, the route segment is `config-builder`, and the feature folder is `features/workspace-shell/sections/config-builder`. The Configuration Builder section always includes both the configurations list and the workbench editing mode.
+
 If the workspace ID is valid but the section segment is unknown, the shell should render a **workspace‑local “Section not found”** state, not the global 404. This lets the user switch to another section without leaving the workspace.
+
+### 3.3 Route helpers (`shared/nav/routes.ts`)
+
+Workspace routes are centralised in `shared/nav/routes.ts`:
+
+```ts
+export const routes = {
+  workspaces: "/workspaces",
+  workspaceDocuments: (id: string) => `/workspaces/${id}/documents`,
+  workspaceRuns: (id: string) => `/workspaces/${id}/runs`,
+  workspaceConfigBuilder: (id: string) => `/workspaces/${id}/config-builder`,
+  workspaceSettings: (id: string) => `/workspaces/${id}/settings`,
+};
+```
+
+Use these helpers everywhere (links, navigation logic, tests) instead of hand‑rolled strings. Keeping one source of truth helps the tables above stay in sync with the code.
 
 ---
 
@@ -202,6 +226,8 @@ type NavigationBlocker = (intent: NavigationIntent) => boolean;
 
 The result: back/forward, `Link` clicks, and `navigate()` all share one code path and one blocker mechanism.
 
+Because `new URL(to, window.location.origin)` assumes a root‑served app, if ADE Web ever needs to live under a sub‑path we will centralise the base path in `NavProvider` or `shared/nav/routes.ts` instead of sprinkling `/`‑prefixed strings through components.
+
 ### 4.3 Reading the current location (`useLocation`)
 
 ```ts
@@ -252,7 +278,7 @@ Conceptual API:
 useNavigationBlocker(blocker: NavigationBlocker, when: boolean);
 ```
 
-Example pattern for the Config Builder editor:
+Example pattern for the Configuration Builder editor:
 
 ```ts
 const { pathname } = useLocation();
@@ -363,7 +389,7 @@ Examples:
 
 * Documents filters and sort order.
 * Which settings tab is selected.
-* Config Builder layout (editor vs split vs zen, which pane is open).
+* Configuration Builder layout (editor vs split vs zen, which pane is open).
 
 Plain local component state is fine for **purely ephemeral** UI (e.g. whether a dropdown is open). If a user might:
 
@@ -472,6 +498,10 @@ Rules:
 * Document each usage with a comment explaining why the override is needed.
 * Prefer migrating to real URL state over time.
 
+### 6.5 Typed query helpers for filters
+
+For non‑trivial query state (documents filters, run filters), use typed helper pairs instead of scattered strings: `parseDocumentFilters(params: URLSearchParams)` / `buildDocumentSearchParams(filters)` or `parseRunFilters` / `buildRunSearchParams`. Centralising canonical names (`q`, `status`, `view`, etc.) keeps components consistent and deep links predictable. See `07-documents-and-runs.md` for the canonical filter shapes.
+
 ---
 
 ## 7. Canonical query parameters
@@ -538,7 +568,7 @@ On `/workspaces/:workspaceId/runs`:
 
   * Comma‑separated run statuses.
 
-* `config` (string, optional):
+* `configurationId` (string, optional):
 
   * Filter by configuration ID.
 
@@ -550,9 +580,9 @@ On `/workspaces/:workspaceId/runs`:
 
   * ISO‑8601 date boundaries for run start time.
 
-These names should be stable so that links from other parts of the UI (e.g. “View runs for this config”) can construct correct URLs.
+These names should be stable so that links from other parts of the UI (e.g. “View runs for this configuration”) can construct correct URLs.
 
-### 7.5 Config Builder (summary)
+### 7.5 Configuration Builder (summary)
 
 On `/workspaces/:workspaceId/config-builder` with an active workbench:
 
@@ -572,7 +602,7 @@ On `/workspaces/:workspaceId/config-builder` with an active workbench:
 
   * ID/path of the active file in the workbench.
 
-The Config Builder URL state is documented in detail in `09-workbench-editor-and-scripting.md`. The important rule here: we only write **non‑default** values back into the URL to keep it tidy.
+The Configuration Builder URL state is documented in detail in `09-workbench-editor-and-scripting.md`. The important rule here: we only write **non‑default** values back into the URL to keep it tidy.
 
 ---
 
@@ -592,19 +622,8 @@ When adding new routes or URL‑encoded state, follow this checklist:
 
 3. **Define route helpers**
 
-   * Centralise URL construction in a `routes.ts` module:
-
-     ```ts
-     export const routes = {
-       workspaceDocuments: (id: string) =>
-         `/workspaces/${id}/documents`,
-       workspaceRuns: (id: string) =>
-         `/workspaces/${id}/runs`,
-       // ...
-     };
-     ```
-
-   * Use these helpers in `Link` / `NavLink` and navigation logic instead of ad‑hoc strings.
+   * Centralise URL construction in `shared/nav/routes.ts` (see §3.3), and add any new helpers there.
+   * Use these helpers in `Link` / `NavLink`, navigation logic, and tests instead of ad‑hoc strings. If we ever host under a sub‑path, this is where a base path would be defined.
 
 4. **Register query parameters here**
 

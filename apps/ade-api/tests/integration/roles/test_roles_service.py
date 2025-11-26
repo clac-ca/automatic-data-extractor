@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy import delete, select
 
-from ade_api.shared.db.session import get_sessionmaker
 from ade_api.features.roles import registry
 from ade_api.features.roles.models import (
     Permission,
@@ -15,15 +14,16 @@ from ade_api.features.roles.models import (
 )
 from ade_api.features.roles.service import (
     AuthorizationError,
+    RoleScopeMismatchError,
     assign_global_role,
     authorize_global,
     authorize_workspace,
     collect_permission_keys,
     get_global_permissions_for_user,
-    RoleScopeMismatchError,
     sync_permission_registry,
 )
 from ade_api.features.users.models import User
+from ade_api.shared.db.session import get_sessionmaker
 
 
 def test_collect_permission_keys_rejects_unknown() -> None:

@@ -96,7 +96,7 @@ def get_safe_mode_service(
     return SafeModeService(session=session, settings=settings)
 
 
-def get_configs_service(
+def get_configurations_service(
     session: SessionDep,
     settings: SettingsDep,
 ) -> ConfigurationsService:
@@ -112,7 +112,7 @@ def get_configs_service(
     templates_root = module_root / "templates" / "config_packages"
     storage = ConfigStorage(
         templates_root=templates_root,
-        configs_root=settings.configs_dir,
+        settings=settings,
     )
     return ConfigurationsService(session=session, storage=storage)
 
@@ -133,7 +133,7 @@ def get_builds_service(
     templates_root = module_root / "templates" / "config_packages"
     storage = ConfigStorage(
         templates_root=templates_root,
-        configs_root=settings.configs_dir,
+        settings=settings,
     )
     return BuildsService(session=session, settings=settings, storage=storage)
 
@@ -433,7 +433,7 @@ __all__ = [
     "configure_auth_dependencies",
     "get_current_identity",
     "get_current_user",
-    "get_configs_service",
+    "get_configurations_service",
     "get_documents_service",
     "get_health_service",
     "get_runs_service",

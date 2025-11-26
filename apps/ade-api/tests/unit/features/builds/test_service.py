@@ -1,23 +1,22 @@
-import asyncio
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import AsyncIterator, Callable
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ade_api.features.builds.builder import (
     BuildArtifacts,
-    BuildStep,
     BuilderArtifactsEvent,
     BuilderEvent,
     BuilderLogEvent,
     BuilderStepEvent,
+    BuildStep,
 )
-from ade_api.features.builds.models import BuildStatus, ConfigurationBuild, ConfigurationBuildStatus
+from ade_api.features.builds.models import BuildStatus
 from ade_api.features.builds.schemas import BuildCreateOptions
-from ade_api.features.builds.service import BuildExecutionContext, BuildsService
+from ade_api.features.builds.service import BuildsService
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.features.configs.storage import ConfigStorage
 from ade_api.features.workspaces.models import Workspace
@@ -36,7 +35,7 @@ class FakeBuilder:
         *,
         build_id: str,
         workspace_id: str,
-        config_id: str,
+        configuration_id: str,
         target_path: Path,
         config_path: Path,
         engine_spec: str,
@@ -72,13 +71,19 @@ async def session() -> AsyncSession:
 
 
 @pytest.fixture()
-def service_factory(tmp_path: Path) -> Callable[[AsyncSession, FakeBuilder | None, Callable[[], datetime]], BuildsService]:
+def service_factory(
+    tmp_path: Path,
+) -> Callable[
+    [AsyncSession, FakeBuilder | None, Callable[[], datetime]],
+    BuildsService,
+]:
     def _factory(
         session: AsyncSession,
         builder: FakeBuilder | None = None,
         now: Callable[[], datetime] = utc_now,
     ) -> BuildsService:
         base_settings = Settings()
+        workspaces_dir = tmp_path / "workspaces"
         engine_dir = tmp_path / "engine"
         engine_dir.mkdir(parents=True, exist_ok=True)
         (engine_dir / "pyproject.toml").write_text(
@@ -89,14 +94,11 @@ version = "0.2.0"
 """.strip(),
             encoding="utf-8",
         )
-        configs_dir = tmp_path / "configs"
-        configs_dir.mkdir(parents=True, exist_ok=True)
-        venvs_dir = tmp_path / "venvs"
         pip_cache_dir = tmp_path / "pip-cache"
         settings = base_settings.model_copy(
             update={
-                "configs_dir": configs_dir,
-                "venvs_dir": venvs_dir,
+                "workspaces_dir": workspaces_dir,
+                "configs_dir": workspaces_dir,
                 "pip_cache_dir": pip_cache_dir,
                 "engine_spec": str(engine_dir),
             }
@@ -105,7 +107,7 @@ version = "0.2.0"
         templates_root.mkdir(parents=True, exist_ok=True)
         storage = ConfigStorage(
             templates_root=templates_root,
-            configs_root=settings.configs_dir,
+            settings=settings,
         )
         builder = builder or FakeBuilder(events=[])
         return BuildsService(
@@ -125,12 +127,13 @@ async def _create_configuration(
     workspace = Workspace(name="Acme", slug=f"acme-{generate_ulid().lower()}")
     session.add(workspace)
     await session.flush()
+    configuration_id = generate_ulid()
     configuration = Configuration(
+        id=configuration_id,
         workspace_id=workspace.id,
-        config_id=generate_ulid(),
         display_name="Config",
         status=ConfigurationStatus.ACTIVE,
-        config_version=1,
+        configuration_version=1,
         content_digest="digest",
     )
     session.add(configuration)
@@ -138,45 +141,45 @@ async def _create_configuration(
     return workspace, configuration
 
 
-async def test_prepare_build_reuses_active(session: AsyncSession, tmp_path: Path, service_factory) -> None:
+async def test_prepare_build_reuses_active(
+    session: AsyncSession,
+    tmp_path: Path,
+    service_factory,
+) -> None:
     workspace, configuration = await _create_configuration(session)
     builder = FakeBuilder(events=[])
     service = service_factory(session, builder=builder)
 
-    config_path = service.storage.config_path(workspace.id, configuration.config_id)
+    config_path = service.storage.config_path(workspace.id, configuration.id)
     config_path.mkdir(parents=True, exist_ok=True)
 
-    pointer = ConfigurationBuild(
-        workspace_id=workspace.id,
-        config_id=configuration.config_id,
-        configuration_id=configuration.id,
-        build_id=generate_ulid(),
-        status=ConfigurationBuildStatus.ACTIVE,
-        venv_path=str(tmp_path / "venvs" / workspace.id / configuration.config_id / "existing"),
-        config_version=configuration.config_version,
-        content_digest=configuration.content_digest,
-        engine_spec=service.settings.engine_spec,
-        engine_version="0.2.0",
-        python_interpreter=service.settings.python_bin,
-        built_at=utc_now(),
-    )
-    session.add(pointer)
+    configuration.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
+    configuration.built_configuration_version = configuration.configuration_version  # type: ignore[attr-defined]
+    configuration.built_content_digest = configuration.content_digest  # type: ignore[attr-defined]
+    configuration.engine_spec = service.settings.engine_spec  # type: ignore[attr-defined]
+    configuration.engine_version = "0.2.0"  # type: ignore[attr-defined]
+    configuration.python_interpreter = service.settings.python_bin  # type: ignore[attr-defined]
+    configuration.python_version = "3.12.1"  # type: ignore[attr-defined]
+    configuration.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
     await session.commit()
 
     build, context = await service.prepare_build(
         workspace_id=workspace.id,
-        config_id=configuration.config_id,
+        configuration_id=configuration.id,
         options=BuildCreateOptions(force=False, wait=False),
     )
 
     assert context.should_run is False
     assert build.status is BuildStatus.ACTIVE
     assert build.summary == "Reused existing build"
-    assert build.build_ref == pointer.build_id
 
 
 @pytest.mark.asyncio()
-async def test_stream_build_success(session: AsyncSession, tmp_path: Path, service_factory) -> None:
+async def test_stream_build_success(
+    session: AsyncSession,
+    tmp_path: Path,
+    service_factory,
+) -> None:
     workspace, configuration = await _create_configuration(session)
     builder = FakeBuilder(
         events=[
@@ -191,16 +194,19 @@ async def test_stream_build_success(session: AsyncSession, tmp_path: Path, servi
     )
     service = service_factory(session, builder=builder)
 
-    config_path = service.storage.config_path(workspace.id, configuration.config_id)
+    config_path = service.storage.config_path(workspace.id, configuration.id)
     config_path.mkdir(parents=True, exist_ok=True)
 
     build, context = await service.prepare_build(
         workspace_id=workspace.id,
-        config_id=configuration.config_id,
+        configuration_id=configuration.id,
         options=BuildCreateOptions(force=True, wait=False),
     )
     events = []
-    async for event in service.stream_build(context=context, options=BuildCreateOptions(force=True, wait=False)):
+    async for event in service.stream_build(
+        context=context,
+        options=BuildCreateOptions(force=True, wait=False),
+    ):
         events.append(event)
 
     refreshed = await service.get_build(build.id)

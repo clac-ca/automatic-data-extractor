@@ -1,75 +1,82 @@
 # 09 – Workbench editor and scripting
 
-The **Config Builder workbench** is an IDE‑style surface used to edit ADE configuration packages and run builds/validations directly from the browser.
+The **Configuration Builder workbench** is the dedicated editing surface for ADE configuration packages and for kicking off validation/test runs in the browser.
 
-This document covers the internal architecture of the workbench in `ade-web`:
+* “**Workbench**” = the whole editing window (panels, tabs, console, etc.).
+* “**Editor**” = specifically the Monaco editor instance.
 
-- How a workbench **session** is scoped.
-- **Window states** and navigation safety.
-- The **layout**: activity bar, explorer, editor, console, validation, inspector.
-- The **file tree** model and how it’s built from backend listings.
-- The **tab** model, loading/saving, and persistence.
-- How **URL state** and local storage interact.
-- The **console** and **validation** panels and their data flow.
-- The Monaco‑based **CodeEditor** and **theme** preference.
-- ADE‑specific **scripting helpers** for detectors, transforms, validators, and hooks.
+This doc is for people working on `ade-web` internals. It explains how the workbench is wired so that humans **and agents** can safely reason about it and extend it.
 
-Config lifecycles and manifest details live in `08-configurations-and-config-builder.md`. Core naming (e.g. “run”) is defined in `01-domain-model-and-naming.md`.
+> Configuration lifecycle, manifests, and terminology (e.g. “run”) are defined in:
+>
+> * `01-domain-model-and-naming.md`
+> * `07-documents-and-runs.md` (canonical `RunOptions`)
+> * `08-configurations-and-config-builder.md`
+> * `apps/ade-web/docs/04-data-layer-and-backend-contracts.md` and
+>   `apps/ade-engine/docs/11-ade-event-model.md` (event schemas)
+
+Workbench run actions always use the canonical **`RunOptions`** shape (camelCase:
+`dryRun`, `validateOnly`, `forceRebuild`, `inputSheetNames`, optional `mode`) and then convert to backend snake_case fields.
+Environment builds stay as backend `Build` entities but are triggered automatically when runs start if:
+
+* the environment is missing or stale,
+* the environment was built from outdated content, or
+* the user explicitly requested `force_rebuild`.
+
+Validation runs and test runs are always `Run` entities.
 
 ---
 
-## 1. Workbench session and identity
+## 1. What the workbench is scoped to
 
-A workbench session is always scoped to a **single configuration in a single workspace**.
+A workbench session is always scoped to **exactly one configuration in one workspace**.
 
-- **Session key**: `(workspaceId, configId)`
-- At any given time, in a browser tab, there is at most **one active workbench** for that `(workspaceId, configId)`.
-- Session‑scoped state includes:
-  - Window state (restored / maximized / docked).
-  - Open tabs and MRU order.
-  - Console open/closed state and height.
-  - Editor theme preference.
+* **Session identity**
+
+  ```ts
+  type WorkbenchSessionKey = {
+    workspaceId: string;
+    configurationId: string;
+  };
+  ```
+
+* In any given browser tab there is at most **one active workbench** for a given `(workspaceId, configurationId)`.
+
+* Session‑scoped state includes (non‑persisted unless stated otherwise):
+
+  * Window state (restored / maximized / docked).
+  * Open tabs, pinning, and MRU order (persisted).
+  * Console open/closed + height (persisted).
+  * Editor theme preference (persisted).
+  * URL state (shareable).
 
 ### 1.1 Entering and exiting the workbench
 
-Typical entry:
+Typical entry flow:
 
-- User clicks “Open editor” or similar from the Config Builder screen.
-- Current URL is captured as the **return path** and stored under:
+1. User clicks **“Open in workbench”** (may be labelled “Open editor”) from the Configuration Builder screen.
+2. The *current* URL is captured as the **return path** and stored under:
 
-  ```text
-  ade.ui.workspace.<workspaceId>.workbench.returnPath
-````
+   ```text
+   ade.ui.workspace.<workspaceId>.workbench.returnPath
+   ```
 
 On exit:
 
-* The workbench close action:
+* The **close** action:
 
-  * Checks for unsaved changes (see §2.3).
-  * If allowed, navigates back to the stored return path (if any), otherwise falls back to the Config Builder screen.
-  * Clears the stored return path.
+  * Checks for unsaved changes (see §1.3).
+  * If the user is allowed to leave:
+
+    * Navigates back to the stored return path, if it still exists.
+    * Otherwise falls back to the Configuration Builder screen.
+  * Clears the stored return path key.
+
+This keeps the workbench feeling like a “modal workspace” on top of the existing navigation, not a separate app.
 
 ### 1.2 Window states
 
-The workbench supports three window states:
-
-* **Restored**
-
-  * Embedded inside the Config Builder section.
-  * Workspace shell (top bar, left nav) is visible and interactive.
-
-* **Maximized**
-
-  * Workbench overlays the full viewport.
-  * Workspace shell is visually dimmed and effectively disabled.
-  * Body scroll is locked while maximized.
-
-* **Docked (minimized)**
-
-  * Workbench UI is hidden.
-  * A “docked workbench” affordance in the Config Builder screen re‑opens it.
-
-Conceptually:
+The workbench can appear in three **window states**:
 
 ```ts
 type WorkbenchWindowState = "restored" | "maximized" | "docked";
@@ -81,122 +88,173 @@ interface WorkbenchWindowContextValue {
 }
 ```
 
-Window state is **session‑local** only (not persisted). On reload we always start in `restored` to avoid surprising full‑screen states.
+* **Restored**
 
-### 1.3 Unsaved changes and navigation blockers
+  * Workbench is embedded in the Configuration Builder section.
+  * Workspace shell (top bar, left nav) is fully visible and usable.
 
-The workbench uses `useNavigationBlocker` to guard unsaved changes:
+* **Maximized**
 
-* A tab is **dirty** if `content !== initialContent`.
-* A session is **dirty** if any tab is dirty.
-* While dirty:
+  * Workbench covers the full viewport.
+  * Workspace shell is visually dimmed and effectively disabled.
+  * Body scroll is locked to prevent scroll bleed.
 
-  * Any navigation that changes the **pathname** (different page) is intercepted.
-  * The user sees a confirmation dialog (“You have unsaved changes …”).
+* **Docked**
+
+  * Workbench UI is hidden.
+  * A small “docked workbench” affordance appears on the Configuration Builder screen and brings it back to `restored`.
+
+Window state is **session‑local only** and not persisted. On reload we always start in `restored` to avoid surprise full‑screen takeovers.
+
+### 1.3 Unsaved changes and navigation blocking
+
+The workbench uses a navigation blocker (e.g. `useNavigationBlocker`) to avoid accidental loss of edits.
+
+* A **tab** is dirty if:
+
+  ```ts
+  const isDirty = tab.content !== tab.initialContent;
+  ```
+
+* A **session** is dirty if *any* tab is dirty.
+
+While dirty:
+
+* Any navigation that changes the **pathname** is intercepted:
+
+  * Switching workspace sections.
+  * Leaving the workspace.
+  * Closing the workbench.
+  * Browser back/forward to another page.
+
+* The user is shown a confirmation dialog:
+
   * If they confirm:
 
     * The blocker is temporarily disabled.
-    * The navigation is retried.
+    * The attempted navigation is retried.
   * If they cancel:
 
-    * The navigation is cancelled.
-    * The URL is restored to the previous location.
+    * Navigation is cancelled.
+    * URL is restored to the previous location.
 
-Navigation that only changes **search** or **hash** (e.g. switching console pane) is allowed so URL state updates remain smooth.
-
-The same blocker protects:
-
-* Closing the workbench window.
-* Switching workspace sections via the left nav.
-* Browser back/forward.
+Navigation that only changes **search** (query params) or **hash** is allowed. This keeps URL‑encoded state responsive (e.g. switching console pane) without triggering spurious warnings.
 
 ---
 
-## 2. Layout and panels
+## 2. Layout overview
 
-The workbench uses a familiar editor layout so it’s easy to orient yourself:
+The workbench mimics familiar IDE/editor layouts so new users can orient fast:
 
 ```text
 +-------------------------------------------------------------+
-| Activity |            Editor & Tabs                         |
+| Activity |           Editor & Tabs                          |
 |   Bar    |                                                 |
 |         Explorer     Editor       Inspector                |
 |         Panel        Area         Panel                    |
 |                       |             |                      |
 |                       |             |                      |
 +-----------------------+-------------+----------------------+
-|                        Console / Validation                |
+|                       Console / Validation                 |
 +-------------------------------------------------------------+
 ```
 
+High‑level pieces:
+
+1. **Activity bar** — left vertical mode switcher.
+2. **Explorer** — configuration file tree.
+3. **Editor & tabs** — Monaco editor + tab strip.
+4. **Inspector** — metadata about the active file.
+5. **Console / Validation** — bottom panel for run output and validation issues.
+
 ### 2.1 Activity bar
 
-Leftmost vertical bar that selects the **mode**:
+Leftmost vertical strip; picks the workbench “mode”:
 
-* **Explorer** – file tree. (Implemented.)
-* **Search** – reserved for future in‑config search.
-* **SCM** – reserved for future source control features.
-* **Extensions** – reserved for future extensibility.
-* **Settings** (gear) – workbench‑level preferences.
+* **Explorer** – configuration file tree (implemented).
+* **Search** – reserved for in‑configuration search.
+* **SCM** – reserved for source control.
+* **Extensions** – reserved for extensibility.
+* **Settings** (gear) – workbench preferences (e.g. theme).
 
-Currently, only **Explorer** is active; the others are placeholders.
+Currently only **Explorer** is hooked up; others are placeholders but should be treated as reserved affordances.
 
 ### 2.2 Explorer panel
 
-Left sidebar that shows the **config file tree**:
+The Explorer shows the **configuration package file tree**:
 
 * Renders `WorkbenchFileNode` trees (see §3).
-* Highlights the currently active file.
-* Marks open files (e.g. with a dot or italic label).
-* Provides a right‑click `ContextMenu` for:
+* Highlights the active file.
+* Marks open files (e.g. via dot, italics, or similar).
+* Provides a right‑click `ContextMenu` that can include:
 
-  * Opening files in new tabs.
-  * Copying paths.
-  * Creating/renaming/deleting files or folders (where backend supports it).
-  * Closing related tabs.
+  * Open in new tab.
+  * Copy path.
+  * Create / rename / delete file/folder (if supported by backend).
+  * Close related tabs.
 
 Selecting a file:
 
-* Opens a tab if not already open.
-* Activates that tab.
-* Updates the URL `file` query parameter (see §5).
+1. Opens a tab if it isn’t open yet.
+2. Activates that tab if it is.
+3. Updates the URL `file` query parameter (see §5).
 
-### 2.3 Editor area
+### 2.3 Editor and tab strip
 
-Center panel that hosts the tab strip and Monaco editor.
+The center pane hosts the Monaco editor and tab strip.
 
-* **Tab strip:**
+* **Tab strip**
 
-  * Pinned tabs appear on the left.
-  * Dirty tabs show a visual marker (e.g. dot, italic).
-  * Right‑click menu supports close / close others / close to right / pin / unpin.
-  * Keyboard navigation integrates with MRU (Ctrl+Tab / ⌘Tab).
+  * Pinned tabs are grouped on the left.
+  * Dirty tabs have a visual marker (e.g. dot, italic, or pilcrow).
+  * Right‑click menu supports:
 
-* **Editor:**
+    * Close
+    * Close others
+    * Close to the right
+    * Pin / unpin
+  * Keyboard navigation uses **MRU** order for Ctrl+Tab / ⌘Tab (not visual left‑to‑right).
 
-  * Uses the shared `CodeEditor` (see §7).
-  * Binds ⌘S / Ctrl+S to save the active file.
-  * Uses the resolved editor theme for `(workspaceId, configId)`.
-  * Displays language‑appropriate syntax highlighting (`language` from tab/file metadata).
+* **Editor**
 
-### 2.4 Console and validation panel (bottom)
+  * Uses the shared `CodeEditor` component (see §8).
+  * Binds ⌘S / Ctrl+S to the **save** action for the active tab.
+  * Uses the resolved editor theme for the `(workspaceId, configurationId)` pair.
+  * Applies language‑appropriate syntax highlighting (`language` from the tab/file).
 
-Bottom strip toggles between:
+### 2.4 Inspector (right sidebar)
 
-* **Console tab**
+The **Inspector** is an optional right sidebar that shows metadata for the current file:
 
-  * Shows streaming logs from builds and runs in plain text.
-  * Highlights run status (succeeded/failed).
-  * Shows a **Run summary** card when runs complete:
+* Path and display name.
+* Size and last modified timestamp.
+* Content type and ETag.
+* Load state (loading / ready / error).
+* Dirty vs saved.
+* Last saved timestamp.
+
+The inspector is **read‑only**: it never modifies file content.
+
+### 2.5 Console / Validation panel (bottom)
+
+The bottom panel can be toggled and resized. It has two logical tabs:
+
+* **Console**
+
+  * Shows streamed text logs for runs, including any environment build output.
+  * Shows status of the last run (running, succeeded, failed).
+  * Renders a **run summary** after completion, including where available:
 
     * Run ID.
-    * Selected document + sheet names.
-    * High‑level metrics (rows processed, warnings, errors) when available.
-    * Links to outputs (artifact, telemetry, logs).
+    * Document and sheet names used.
+    * Basic metrics (rows processed, warnings, errors).
+    * Links to telemetry and logs.
 
-* **Validation tab**
+* **Validation**
 
-  * Shows structured validation issues from a validation run or `validate_only` operation:
+  * Shows structured validation issues when a run is executed in “validation mode” (`RunOptions.validateOnly: true`).
+
+  * Issues are represented as:
 
     ```ts
     interface ValidationIssue {
@@ -208,38 +266,27 @@ Bottom strip toggles between:
       path?: string; // manifest/config path
     }
     ```
-  * Issues can be grouped by file / table / severity.
+
+  * Issues can be grouped (e.g. by file, table, or severity).
+
   * Clicking an issue:
 
-    * Focuses the relevant file.
-    * Opens it in a tab.
-    * Optionally scrolls the editor to the reported line.
+    * Opens the relevant file tab (if needed).
+    * Activates it.
+    * Optionally scrolls the editor to the line/column.
 
-The bottom panel supports:
+The panel itself supports:
 
-* Open/closed state (collapsed vs visible).
-* Draggable height, persisted as a fraction of the vertical space (see §6).
+* **Open/closed** state (collapsed vs visible).
+* **Draggable height**, stored as a fraction of available vertical space (see §6).
 
-On very short viewports, the panel may auto‑collapse and show a one‑time banner explaining why.
-
-### 2.5 Inspector panel
-
-Optional right sidebar that shows metadata for the **active file**:
-
-* Path and display name.
-* Size and last modified timestamp.
-* Content type and ETag.
-* Load state (loading / ready / error).
-* Dirty vs saved status.
-* Last saved timestamp.
-
-The inspector never edits content; it’s purely informational.
+On very short viewports, the panel may auto‑collapse. We show a one‑time hint explaining that behavior.
 
 ---
 
 ## 3. File tree model
 
-The workbench file tree is a typed, in‑memory representation of the configuration package.
+The workbench maintains an in‑memory, typed representation of the configuration package.
 
 ### 3.1 Data model
 
@@ -265,14 +312,14 @@ export interface WorkbenchFileNode {
 
 **Invariants:**
 
-* `id` is a canonical, slash‑separated path relative to the config root.
+* `id` is a canonical, slash‑separated path relative to the configuration root.
 * `name === basename(id)`.
-* Folders (`kind: "folder"`) may have `children`; files do not.
-* `language` is present for editable files; folders can leave it undefined.
+* `kind: "folder"` nodes may have `children`; `kind: "file"` nodes do not.
+* Editable files should populate `language`; folders can leave it undefined.
 
 ### 3.2 Constructing the tree from backend listing
 
-The backend returns a flat listing, conceptually:
+The backend exposes a **flat listing**, conceptually:
 
 ```ts
 interface FileListingEntry {
@@ -288,50 +335,75 @@ interface FileListingEntry {
 }
 ```
 
-`createWorkbenchTreeFromListing(listing: FileListingEntry[]): WorkbenchFileNode`:
+`createWorkbenchTreeFromListing(listing: FileListingEntry[]): WorkbenchFileNode` should:
 
-1. **Normalise paths**
+1. **Normalize paths**
 
-   * Remove trailing slashes.
-   * Collapse any `.` segments.
+   * Strip trailing slashes.
+   * Collapse `.` segments and redundant separators.
+
 2. **Ensure folder structure**
 
-   * Build folders for any `parent` path that appears.
+   * Ensure folder nodes exist for all `parent` paths.
+
 3. **Create nodes**
 
-   * For each entry:
+   * For `kind === "dir"`: ensure a folder node exists.
+   * For `kind === "file"`: create a file node with metadata.
+   * Infer `language` from the filename extension, e.g.:
 
-     * If `kind === "dir"`, ensure a folder node exists.
-     * If `kind === "file"`, create a file node with metadata.
-   * Infer `language` from extension (e.g. `.py` → `python`, `.json` → `json`, `.md` → `markdown`).
+     * `.py` → `python`
+     * `.json` → `json`
+     * `.md` → `markdown`
+
 4. **Sort children**
 
    * Folders before files.
    * Alphabetically by `name` (case‑insensitive) within each group.
 
-Helper utilities:
+Useful helpers:
 
-* `extractName(path: string): string` – basename.
-* `deriveParent(path: string): string` – parent path or `""` for root.
-* `findFileNode(root, id)` – depth‑first search by `id`.
-* `findFirstFile(root)` – first file in folder‑first traversal (used as an initial selection fallback).
+```ts
+extractName(path: string): string;  // basename
+deriveParent(path: string): string; // parent or "" for root
+findFileNode(root: WorkbenchFileNode, id: string): WorkbenchFileNode | undefined;
+findFirstFile(root: WorkbenchFileNode): WorkbenchFileNode | undefined;
+```
 
 ### 3.3 Tree operations
 
-The tree itself is **pure** (no side effects). Operations go through APIs and then rebuild or patch the tree:
+The tree structure itself is **pure**; it doesn’t call the backend. All side‑effects go through API modules.
 
-* **Select file** → find node, open tab, update URL.
-* **Refresh listing** → fetch listing, rebuild tree, try to preserve:
+Common operations:
 
-  * Selected file.
-  * Open tabs (see §4.3).
-* **Create / rename / delete** → call appropriate config file endpoints, then refresh or incrementally update the tree.
+* **File selection**
+
+  * Find node by `id`.
+  * Open/activate the corresponding tab.
+  * Update URL `file` query parameter.
+
+* **Refresh listing**
+
+  * Fetch listing from backend.
+  * Rebuild the tree.
+  * Try to preserve:
+
+    * Selected file.
+    * Open tabs (see §4.3).
+
+* **Create / rename / delete**
+
+  * Call configuration file endpoints.
+  * Then either:
+
+    * Refresh listing, or
+    * Apply an incremental patch to the tree.
 
 ---
 
 ## 4. Tabs, file content, and persistence
 
-Tabs are the primary unit of editing. Each open file has one tab instance.
+Tabs are the main editing unit: **one open file = one tab**.
 
 ### 4.1 Tab model
 
@@ -340,87 +412,90 @@ export type WorkbenchFileTabStatus = "loading" | "ready" | "error";
 
 export interface WorkbenchFileTab {
   id: string;                   // file id / path
-  name: string;                 // display name
+  name: string;                 // display label
   language?: string;
   initialContent: string;       // last saved content
   content: string;              // current editor content
   status: WorkbenchFileTabStatus;
   error?: string | null;        // load error
-  etag?: string | null;         // concurrency token from backend
+  etag?: string | null;         // concurrency token
   metadata?: WorkbenchFileMetadata | null;
   pinned?: boolean;
   saving?: boolean;
-  saveError?: string | null;    // last save error
+  saveError?: string | null;    // last save error, if any
   lastSavedAt?: string | null;  // ISO timestamp of last successful save
 }
 ```
 
-Dirty state:
+Dirty state is derived:
 
 ```ts
 const isDirty = tab.content !== tab.initialContent;
 ```
 
-### 4.2 `useWorkbenchFiles` responsibilities
+### 4.2 `useWorkbenchFiles`: responsibilities
 
-A dedicated hook manages tab state and IO for file content:
+A dedicated hook (e.g. `useWorkbenchFiles`) manages tab state and IO:
 
 * **Open file**
 
-  * If tab exists, activate it.
-  * If not:
+  * If tab already exists, just activate it.
+  * Otherwise:
 
-    * Add tab with `status: "loading"`.
-    * Fetch content & metadata from backend (`GET /files/{file_path}`).
+    * Add a new tab with `status: "loading"`.
+    * Fetch content & metadata via `GET /files/{file_path}`.
     * On success:
 
-      * Set `initialContent`, `content`, `etag`, `metadata`, `status: "ready"`.
+      * Set `initialContent`, `content`, `etag`, `metadata`.
+      * Set `status: "ready"`.
     * On failure:
 
-      * Set `status: "error"` and `error` message.
+      * Set `status: "error"` and an `error` message.
 
 * **Edit content**
 
-  * Bound to editor’s `onChange`.
-  * Updates `content`.
-  * Dirty state is recomputed from `content` vs `initialContent`.
+  * Hook `onChange` from the editor to update `content`.
+  * Dirty state is recomputed from `content` and `initialContent`.
 
 * **Save**
 
-  * No‑op if not dirty.
+  * No‑op if the tab is not dirty.
   * Otherwise:
 
-    * Send `content` to backend (`PUT /files/{file_path}`) with `etag` as precondition if supported.
+    * Send `content` to backend via `PUT /files/{file_path}`, using `etag` as a precondition when supported.
     * On success:
 
-      * Update `initialContent` to current `content`.
-      * Update `etag`, `metadata.modifiedAt`, `lastSavedAt`.
+      * Set `initialContent = content`.
+      * Update `etag`.
+      * Update `metadata.modifiedAt` and `lastSavedAt`.
       * Clear `saveError`.
     * On concurrency conflict:
 
-      * Keep content.
-      * Set `saveError` with a clear conflict message.
-      * Do **not** blindly overwrite.
+      * Do **not** overwrite server content.
+      * Keep current `content`.
+      * Set `saveError` with a clear conflict explanation.
 
 * **Close tabs**
 
-  * Single tab, others, to right, all.
-  * Prompt if any to‑be‑closed tab is dirty.
+  * Close single tab, all others, to the right, etc.
+  * If any tab to be closed is dirty, prompt first (reusing the unsaved‑changes logic).
 
 * **Pin / unpin**
 
   * Toggle `pinned`.
-  * Tab strip keeps pinned tabs grouped on the left.
+  * Tab strip groups pinned tabs to the left.
 
 * **MRU tracking**
 
-  * Maintain MRU order (e.g. array of tab IDs).
-  * When a tab becomes active, move its ID to front.
-  * Keyboard shortcuts (Ctrl+Tab / ⌘Tab) follow MRU order, not visual order.
+  * Maintain an MRU list of tab IDs.
+  * When a tab becomes active, move its ID to the front.
+  * Keyboard shortcuts (Ctrl+Tab / ⌘Tab) iterate through MRU order, not physical order.
 
 ### 4.3 Tab persistence
 
-We persist tab **identity**, not content, to allow seamless reloads without storing code outside the config.
+We persist **which tabs** are open and their pinning/MRU metadata, but **not** file contents (authoritative source of truth is the configuration package).
+
+Persisted shape:
 
 ```ts
 interface PersistedWorkbenchTabs {
@@ -433,31 +508,29 @@ interface PersistedWorkbenchTabs {
 Storage key:
 
 ```text
-ade.ui.workspace.<workspaceId>.config.<configId>.tabs
+ade.ui.workspace.<workspaceId>.configuration.<configurationId>.tabs
 ```
 
-Hydration algorithm:
+Hydration on load:
 
-1. Read persisted snapshot (if any).
-2. Filter out files not present in the current file tree.
+1. Read the snapshot (if any).
+2. Filter out files that no longer exist in the current file tree.
 3. For each remaining file:
 
-   * Open a tab (lazy load content).
-   * Reapply `pinned` flags.
-4. Restore `activeTabId` if that file still exists.
-5. Restore MRU order for shortcuts.
+   * Create a tab object (content will be loaded lazily).
+   * Apply `pinned` flags as stored.
+4. Restore `activeTabId` if still valid.
+5. Restore MRU order for keyboard shortcuts.
 
-On any tab add/remove/pin/unpin:
-
-* Write a fresh snapshot to local storage.
+Any tab change (open/close, pin/unpin, active tab change) writes a fresh snapshot to local storage.
 
 ---
 
 ## 5. Workbench URL state
 
-The URL encodes **shareable view state** for the workbench: which file is open, which bottom pane is visible, etc.
+URL query parameters encode **shareable view state**—the bits we want to survive refresh, deep linking, and copy‑pasting.
 
-### 5.1 State model
+### 5.1 Search state model
 
 ```ts
 export type ConfigBuilderTab = "editor";
@@ -487,7 +560,7 @@ export const DEFAULT_CONFIG_BUILDER_SEARCH: ConfigBuilderSearchState = {
 
 ### 5.2 Reading from the URL
 
-`readConfigBuilderSearch(source)` returns:
+`readConfigBuilderSearch(source)` returns a **normalized** snapshot:
 
 ```ts
 export interface ConfigBuilderSearchSnapshot
@@ -502,30 +575,34 @@ export interface ConfigBuilderSearchSnapshot
 }
 ```
 
-It:
+Responsibilities:
 
-* Parses the search string or `URLSearchParams`.
-* Normalises invalid values back to defaults.
-* Maps legacy `path` to `file` if needed.
-* Records which keys were explicitly present (`present.*`).
+* Parse the search string / `URLSearchParams`.
+* Map invalid or unknown values back to defaults.
+* Support legacy `path` → `file` mapping for backwards compatibility.
+* Record which keys were explicitly present under `present.*`.
 
 ### 5.3 Writing to the URL
 
 `mergeConfigBuilderSearch(currentParams, patch)`:
 
-1. Reads current state via `readConfigBuilderSearch`.
-2. Merges defaults, current state, and the `patch`.
+1. Reads the current state via `readConfigBuilderSearch`.
+2. Merges:
+
+   * Hard defaults,
+   * Current state,
+   * Given `patch`.
 3. Produces new `URLSearchParams` by:
 
-   * Clearing all builder‑related keys (`tab`, `pane`, `console`, `view`, `file`, `path`).
-   * Writing only keys whose values differ from defaults.
-   * Omitting `file` if empty.
+   * Removing all builder‑related keys (`tab`, `pane`, `console`, `view`, `file`, `path`).
+   * Writing new keys **only when they differ from defaults**.
+   * Omitting `file` when empty.
 
-This keeps URLs compact and stable while still letting users bookmark meaningful differences.
+This keeps URLs stable and short, while still encoding meaningful view state.
 
 ### 5.4 `useWorkbenchUrlState`
 
-A small abstraction wraps `useSearchParams` and the helpers:
+A small hook wraps `useSearchParams` and the helpers:
 
 ```ts
 interface WorkbenchUrlState {
@@ -539,34 +616,33 @@ interface WorkbenchUrlState {
 }
 ```
 
-Behaviour:
+Behavior:
 
-* `fileId` comes from `file` in the query string.
+* `fileId` is derived from the `file` query parameter.
 
-* `setFileId` / `setPane` / `setConsole`:
+* `setFileId`, `setPane`, `setConsole`:
 
-  * No‑op if the value wouldn’t change.
-  * Use `mergeConfigBuilderSearch` to produce new params.
-  * Call `setSearchParams(next, { replace: true })` to avoid history spam.
+  * No‑op when the value is unchanged.
+  * Use `mergeConfigBuilderSearch` to compute new params.
+  * Call `setSearchParams(next, { replace: true })` to avoid polluting history.
 
-* `consoleExplicit`:
+* `consoleExplicit` is `true` when the URL explicitly contains a `console` key (`present.console`):
 
-  * True if the URL explicitly includes a `console` key (`present.console`).
-  * When true, URL `console` state overrides persisted console preferences (see §6).
-  * When false, local preferences decide initial open/closed state.
+  * When **true**, the URL’s `console` state overrides any persisted preferences for the initial state.
+  * When **false**, stored console preferences determine initial open/closed state (see §6).
 
 ---
 
-## 6. Console state and persistence
+## 6. Console panel preferences
 
-The console panel has its own persisted preferences, independent of URL state.
+The console panel has its own local preferences, separate from URL state.
 
-### 6.1 ConsolePanelPreferences
+### 6.1 Preference model
 
 ```ts
 interface ConsolePanelPreferences {
   readonly version: 2;
-  readonly fraction: number;              // 0–1 of available vertical space
+  readonly fraction: number;              // 0–1 of vertical space
   readonly state: ConfigBuilderConsole;   // "open" | "closed"
 }
 ```
@@ -574,92 +650,114 @@ interface ConsolePanelPreferences {
 Storage key:
 
 ```text
-ade.ui.workspace.<workspaceId>.config.<configId>.console
+ade.ui.workspace.<workspaceId>.configuration.<configurationId>.console
 ```
 
 Hydration:
 
 1. Read stored preferences (if any).
-2. If `version` mismatches, ignore and use defaults.
-3. If `consoleExplicit` from URL is true:
+2. If `version` mismatch → ignore; use defaults.
+3. If `consoleExplicit` from URL is `true`:
 
-   * Override `state` with URL value.
-4. Otherwise, use stored `state`.
+   * Override `state` with the URL value.
+4. Else, keep stored `state`.
 
-Resize:
+User actions:
 
-* When user drags the panel splitter, update `fraction` and write preferences.
+* **Resize**
 
-Open/close:
+  * On drag, update `fraction` and persist.
 
-* When toggling console, update `state` and write preferences.
+* **Open/close**
 
-The **URL** determines shareable state; local storage retains a user’s personal layout.
+  * On toggle, update `state` and persist.
 
----
+Rule of thumb:
 
-## 7. Build and run streams
-
-The workbench console and validation views consume streaming events from the backend.
-
-### 7.1 Build streams
-
-The **Build environment** button starts a build and streams events into the console.
-
-Conceptually:
-
-```ts
-streamBuild(workspaceId, configId, options, signal);
-```
-
-* Uses NDJSON to deliver events (status updates, log lines).
-* Normal behaviour:
-
-  * “Build / reuse environment” reuses container when possible.
-  * “Force rebuild now” triggers a full rebuild.
-  * “Force rebuild after current build” queues a rebuild.
-
-The console:
-
-* Renders events in arrival order.
-* On completion, shows a **build summary** with status and any backend‑provided message.
-
-Keyboard shortcuts (wired in workbench chrome):
-
-* ⌘B / Ctrl+B → default build behaviour.
-* ⇧⌘B / Ctrl+Shift+B → force rebuild.
-
-### 7.2 Run and validation streams
-
-The **Run extraction** button in the workbench:
-
-* Opens a dialog that lets the user choose a document and optionally sheet names.
-* On confirm, starts a run (using the current config) and streams events into the console.
-
-Validation:
-
-* The **Run validation** button triggers a `validate_only` run.
-* While running:
-
-  * Console shows streamed events.
-* On completion:
-
-  * Structured issues are extracted and displayed in the Validation tab.
-
-Error handling:
-
-* Stream setup failures → inline message in console.
-* Validation errors → top‑level error in Validation tab plus any partial issues.
+* **URL**: what we want to share or deep link.
+* **Preferences**: what the user wants to see “by default” when there’s no explicit URL.
 
 ---
 
-## 8. Editor and theme
+## 7. Runs, streams, and environment readiness
 
-The workbench uses a shared Monaco wrapper component and per‑config theme preferences.
+The workbench wires run actions to stream events into the console/validation panel. There is no separate “build” button; environment readiness is handled as part of run startup.
 
-### 8.1 CodeEditor
+### 7.1 RunOptions and environment behavior
 
-`CodeEditor` lives in `src/ui` and wraps Monaco:
+All workbench run actions use the canonical `RunOptions` shape (see `07-documents-and-runs.md`) in camelCase and convert to backend snake_case. Fields include:
+
+* `dryRun`
+* `validateOnly`
+* `forceRebuild`
+* `inputSheetNames`
+* Optional `mode` (e.g. `"validation"`)
+
+Environment builds remain `Build` entities on the backend, but are triggered automatically at run start if:
+
+* the environment is missing,
+* stale,
+* built from outdated content, or
+* `force_rebuild: true` is set (e.g. user chooses **Force build and test**).
+
+### 7.2 Test runs
+
+The **Test** split button in the workbench:
+
+1. Opens a dialog where the user selects:
+
+   * A document.
+   * Optional sheet names.
+2. On confirm:
+
+   * Builds a `RunOptions` object.
+   * Sends a run request to the backend (camelCase → snake_case).
+   * Starts streaming events to the **Console**.
+   * Includes `force_rebuild: true` if the user selected that option.
+
+The console shows:
+
+* Streaming log lines.
+* Current run status.
+* Summary information once the run completes.
+
+### 7.3 Validation runs
+
+The **Validation run** action executes a run with:
+
+* `RunOptions.validateOnly: true`
+* Typically also `mode: "validation"`
+
+While the run is active:
+
+* Console shows streamed events.
+
+On completion:
+
+* Structured validation issues are extracted and shown in the **Validation** tab as `ValidationIssue` objects (see §2.5).
+* The tab and console both reflect success/failure.
+
+### 7.4 Stream errors
+
+Error handling is intentionally explicit:
+
+* Stream setup failures (connection errors, protocol mismatches, etc.) → inline message in the **Console**.
+* Validation extraction failures → show a top‑level error in the **Validation** tab, plus any partial issues if available.
+
+Low‑level event schemas are documented in:
+
+* `apps/ade-web/docs/04-data-layer-and-backend-contracts.md` (see the run streaming section)
+* `apps/ade-engine/docs/11-ade-event-model.md` (canonical event model)
+
+---
+
+## 8. Editor and theme handling
+
+The workbench uses a shared Monaco wrapper component plus per‑configuration theme preferences.
+
+### 8.1 `CodeEditor` component
+
+`CodeEditor` lives under `src/ui` and wraps the Monaco editor. Its props:
 
 ```ts
 interface CodeEditorProps {
@@ -684,14 +782,14 @@ interface CodeEditorHandle {
 
 Workbench integration:
 
-* Binds `value`/`onChange` to the active `WorkbenchFileTab`.
-* Uses `path = tab.id` so Monaco can keep per‑file state.
-* Binds `onSaveShortcut` to the workbench’s save routine.
-* Uses the resolved `EditorThemeId` from preferences (see below).
+* `value`/`onChange` are wired to the active `WorkbenchFileTab`.
+* `path` is set to `tab.id` so Monaco keeps per‑file state (undo stack, markers).
+* `onSaveShortcut` calls the workbench’s save handler.
+* `theme` is the resolved `EditorThemeId` from preferences (see below).
 
 ### 8.2 Theme preference
 
-Editor theme is controlled separately from any global app theme.
+The editor theme is separate from any global app theme.
 
 Types:
 
@@ -702,60 +800,73 @@ export type EditorThemeId = "ade-dark" | "vs-light";
 
 Hook:
 
-* `useEditorThemePreference(workspaceId, configId)`:
+```ts
+useEditorThemePreference(workspaceId, configurationId);
+```
 
-  * Storage key:
+* Storage key:
 
-    ```text
-    ade.ui.workspace.<workspaceId>.config.<configId>.editor-theme
-    ```
+  ```text
+  ade.ui.workspace.<workspaceId>.configuration.<configurationId>.editor-theme
+  ```
 
-  * Returns:
+* Returns:
 
-    * `preference: EditorThemePreference`
-    * `setPreference(next: EditorThemePreference)`
-    * `resolvedTheme: EditorThemeId`
+  * `preference: EditorThemePreference`
+  * `setPreference(next: EditorThemePreference)`
+  * `resolvedTheme: EditorThemeId`
 
-* Resolution rules:
+Resolution rules:
 
-  * `"light"` → `vs-light`.
-  * `"dark"` → `ade-dark`.
-  * `"system"` → `ade-dark` or `vs-light` based on `prefers-color-scheme`.
+* `"light"` → `vs-light`
+* `"dark"` → `ade-dark`
+* `"system"` → choose based on `prefers-color-scheme`:
 
-Monaco setup:
+  * dark → `ade-dark`
+  * light → `vs-light`
 
-* `ade-dark` is a custom dark theme registered once.
-* `vs-light` is reused as the light theme.
+Monaco configuration:
+
+* `ade-dark` is a custom registered theme.
+* `vs-light` is the default light theme.
 
 ---
 
 ## 9. ADE scripting helpers
 
-To make config editing safer and more discoverable, the workbench augments Monaco with ADE‑aware helpers.
+The workbench extends Monaco with **ADE‑aware scripting helpers** for Python code in configuration packages. These helpers are **guidance** (hover, completion, snippets), not hard validation.
 
 ### 9.1 Goals
 
-* Make the correct **entrypoint signatures** easy to use.
-* Provide **inline documentation** (hover, signature help) where scripts are written.
-* Avoid hard coupling to backend implementation; helpers are guidance, not validation.
+Helpers are designed to:
 
-### 9.2 Scope detection
+* Make the right **entrypoint signatures** easy to discover and reuse.
+* Provide **inline documentation** (hover, parameter hints) where authors actually write scripts.
+* Keep helpers **decoupled** from backend implementation details — the contract is “what configuration authors should write,” not how the engine executes it.
 
-Helpers are activated based on the virtual path of the file being edited:
+### 9.2 Scope detection (which helpers apply where)
+
+Helpers are activated based on the file’s path in the configuration package.
+
+Examples:
 
 * `ade_config/row_detectors/*.py` → row detector helpers.
-* `ade_config/column_detectors/*.py` → column‑level helpers (detectors, transforms, validators).
+* `ade_config/column_detectors/*.py` → column‑level helpers:
+
+  * column detectors
+  * transforms
+  * validators
 * `ade_config/hooks/*.py` → run hooks.
 
 `registerAdeScriptHelpers(monaco)`:
 
-* Registers providers for the `python` language.
-* Uses `model.uri.path` (or similar) to determine category.
-* Injects hover, completion, and signature help based on that category.
+* Registers providers for language `"python"`.
+* Uses `model.uri.path` (or equivalent) to infer category (row detector, column, hook, etc.).
+* Attaches hover, completion, and signature help providers based on that category.
 
 ### 9.3 Function specification model
 
-Helper metadata is described with a simple specification structure, conceptually:
+Helper metadata is captured via simple spec structures, conceptually:
 
 ```ts
 interface AdeParamSpec {
@@ -770,20 +881,20 @@ interface AdeFunctionSpec {
   kind: "row-detector" | "column-detector" | "transform" | "validator" | "hook";
   description?: string;
   params: AdeParamSpec[];
-  returns?: string;         // description of returned value
-  examples?: string[];      // sample snippets
+  returns?: string;         // description of return value
+  examples?: string[];      // sample code snippets
 }
 ```
 
-This drives:
+These specs drive:
 
-* **Hover** – show signature and description on function definitions and usages.
-* **Completion** – snippet completions for common entrypoints.
-* **Signature help** – parameter hints while typing calls.
+* **Hover**: show signature + description on definitions and usages.
+* **Completion items**: snippet templates for common entrypoints.
+* **Signature help**: parameter info while author types calls.
 
 ### 9.4 Row detectors
 
-In `row_detectors/*.py`, helpers expect row detector functions of the form:
+For files under `ade_config/row_detectors/*.py`, helpers expect detector entrypoints like:
 
 ```python
 def detect_*(
@@ -798,25 +909,26 @@ def detect_*(
     ...
 ```
 
-Key ideas:
+Key parameters (documented via helpers):
 
-* Keyword‑only parameters for clarity.
-* `run`: run context (ids, environment, manifest).
-* `state`: mutable state shared across the run.
-* `row_index` / `row_values`: current row.
-* `logger`: run‑scoped logger.
+* `run` — run context (ids, environment, manifest).
+* `state` — mutable state shared across the run.
+* `row_index` — current row index (0‑based or documented accordingly).
+* `row_values` — raw values for the current row.
+* `logger` — run‑scoped logger.
+* `**_` — catch‑all for unused keyword arguments.
 
-Helpers provide:
+Helpers:
 
-* Hover with human explanations of each parameter.
-* Completions like `detect_header_row` with template bodies.
-* Signature help when calling helper utilities from within detectors.
+* Provide completions for patterns like `detect_header_row`.
+* Show parameter descriptions on hover.
+* Offer signature help when using supporting utilities.
 
 ### 9.5 Column detectors, transforms, validators
 
-In `column_detectors/*.py`, helpers support three primary entrypoints.
+In `ade_config/column_detectors/*.py`, helpers support three main entrypoints.
 
-**Detector:**
+**Column detector:**
 
 ```python
 def detect_*(
@@ -871,17 +983,25 @@ def validate(
     ...
 ```
 
-Helpers:
+Helpers clarify:
 
-* Explain what `field_meta`, `column_values_sample`, `row`, etc. contain.
-* Describe expected return values (e.g. score dicts, normalized values, validation issue objects).
-* Provide snippets with correctly ordered parameters.
+* What `field_meta` contains.
+* How `column_values_sample` differs from `column_values`.
+* What shape `row` and `table` have.
+* Expected return shapes:
+
+  * detectors → e.g. classification/score dicts.
+  * transforms → possibly modified dict or `None`.
+  * validators → list of issue dicts.
+
+They also provide:
+
+* Snippet completions with parameters in the correct order.
+* Hover documentation explaining when and how each entrypoint is invoked.
 
 ### 9.6 Run hooks
 
-In `hooks/*.py`, helpers focus on **run‑level** hooks.
-
-Typical signatures:
+For files under `ade_config/hooks/*.py`, helpers cover **run lifecycle hooks**, including (but not limited to):
 
 ```python
 def on_run_start(
@@ -889,7 +1009,6 @@ def on_run_start(
     run_id: str,
     manifest: dict,
     env: dict | None = None,
-    artifact: dict | None = None,
     logger=None,
     **_,
 ) -> None:
@@ -908,7 +1027,6 @@ def after_mapping(
 def before_save(
     *,
     workbook,
-    artifact: dict | None = None,
     logger=None,
     **_,
 ):
@@ -916,56 +1034,93 @@ def before_save(
 
 def on_run_end(
     *,
-    artifact: dict | None = None,
+    tables=None,
     logger=None,
     **_,
 ) -> None:
     ...
 ```
 
-Helpers:
+Helpers explain:
 
-* Describe **when** each hook is called in the run lifecycle.
-* Clarify shapes of `manifest`, `env`, `artifact`.
-* Provide skeleton hook implementations with appropriate TODOs.
+* **When** each hook fires in the run lifecycle.
+* **What** `manifest`, `env`, `table`, and `workbook` look like at that moment.
+* How return values are interpreted (e.g. whether a hook is allowed to mutate or replace a structure).
 
-### 9.7 Extending helpers
+Typical UX:
 
-To add support for new script categories or entrypoints:
+* Skeleton implementations with TODOs are offered as snippet completions.
+* Hover shows lifecycle timing (e.g. “Called once at the start of a run”).
 
-1. Add new `AdeFunctionSpec` definitions describing names, parameters, returns, and examples.
-2. Extend the path‑based scope detection to cover new folders (e.g. `table_detectors/`).
-3. Register additional Monaco providers if new language features are needed.
+### 9.7 Extending helper coverage
 
-The intent is to keep helper metadata central and declarative; the Monaco integration should not need to know ADE internals.
+To add support for new script types or entrypoints:
+
+1. Add one or more `AdeFunctionSpec` definitions describing:
+
+   * Function name.
+   * `kind`.
+   * Parameters (names, types, descriptions).
+   * Return description.
+   * Example snippets.
+2. Extend path‑based detection to recognize new folders or naming schemes (e.g. `ade_config/table_detectors/*.py`).
+3. Hook the new specs into the existing Monaco providers (hover, completion, signature help).
+
+The goal is to keep the **metadata declarative and centralized**; the Monaco integration should remain thin glue.
 
 ---
 
 ## 10. Evolution guidelines
 
-When evolving the workbench, keep these principles in mind:
+When extending or refactoring the workbench, keep these principles in mind:
 
 * **Stable state shapes**
-  Types like `WorkbenchFileNode`, `WorkbenchFileTab`, `ConfigBuilderSearchState`, and `ConsolePanelPreferences` are part of the architecture. Changes should be deliberate, versioned, and reflected in this doc.
+
+  Types like:
+
+  * `WorkbenchFileNode`
+  * `WorkbenchFileTab`
+  * `ConfigBuilderSearchState`
+  * `ConsolePanelPreferences`
+
+  are effectively **architectural contracts**. If they change, update:
+
+  1. The type definitions.
+  2. This document.
+  3. Any persistence/versioning logic.
 
 * **Separation of concerns**
 
-  * Layout components (Explorer, Editor, Console, Inspector) should not call the backend directly.
-  * All IO should flow through API modules and state hooks (`useWorkbenchFiles`, streaming helpers).
+  * Layout components (Explorer, Editor, Console, Inspector) should not talk directly to the backend.
+  * All IO goes through:
+
+    * API modules (REST clients, streaming helpers).
+    * State hooks (`useWorkbenchFiles`, run streaming hooks, etc.).
 
 * **URL vs preferences**
 
-  * Use query parameters for state that affects navigation and deep linking (`file`, `pane`, `console`).
-  * Use local storage for user preferences (which tabs are open, MRU order, panel sizes, editor theme).
+  * Use **URL query parameters** for state that impacts navigation and deep linking:
+
+    * `file`, `pane`, `console`, `view`.
+  * Use **local storage** for per‑user, per‑configuration preferences:
+
+    * Open tabs, pinning, MRU.
+    * Panel sizes.
+    * Editor theme.
+    * Console open/closed default.
 
 * **Navigation safety**
 
-  * Any feature that can produce unsaved edits should participate in navigation blocking.
-  * Only block true page changes; let query/hash changes proceed.
+  * Any feature that can create unsaved edits must participate in navigation blocking.
+  * Only block when the **page** changes (pathname); let query/hash changes pass to keep things snappy.
 
 * **Scripting surface as contract**
 
-  * Treat the documented ADE entrypoints and parameters as a public contract for config authors.
-  * Update helper specs and this doc together when those contracts change.
+  * Treat documented ADE entrypoints and parameters as a public contract for configuration authors.
+  * When contracts change:
 
-This document is the source of truth for the workbench editor and scripting architecture. If implementation diverges, update the implementation *and* this file together so future developers and agents can reason about `ade-web` without guesswork.
+    * Update scripting helper specs.
+    * Update backend acceptance.
+    * Update this doc in the same change.
+
+This document is the **source of truth** for the workbench editor and scripting architecture. If implementation diverges, fix both the code and this file so that future maintainers (and agents) never have to guess how the workbench is supposed to behave.

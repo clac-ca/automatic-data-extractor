@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from ade_api.shared.db.session import get_sessionmaker
 from ade_api.features.roles.authorization import authorize
 from ade_api.features.roles.models import ScopeType
 from ade_api.features.roles.service import AuthorizationError, ensure_user_principal
 from ade_api.features.users.models import User
+from ade_api.shared.db.session import get_sessionmaker
 
 pytestmark = pytest.mark.asyncio
 

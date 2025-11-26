@@ -16,7 +16,10 @@ def _items(payload: Any) -> list[dict[str, Any]]:
 
 
 @pytest.mark.asyncio
-async def test_permission_catalog_workspace(async_client: AsyncClient, seed_identity: dict[str, Any]) -> None:
+async def test_permission_catalog_workspace(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
     owner = seed_identity["workspace_owner"]
     token, _ = await login(async_client, email=owner["email"], password=owner["password"])
 
@@ -55,7 +58,10 @@ async def test_permission_catalog_workspace_requires_access(
 
 
 @pytest.mark.asyncio
-async def test_permission_catalog_global(async_client: AsyncClient, seed_identity: dict[str, Any]) -> None:
+async def test_permission_catalog_global(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
     admin = seed_identity["admin"]
     token, _ = await login(async_client, email=admin["email"], password=admin["password"])
 
@@ -342,7 +348,10 @@ async def test_workspace_role_assignment_flow(
 
 
 @pytest.mark.asyncio
-async def test_read_effective_permissions(async_client: AsyncClient, seed_identity: dict[str, Any]) -> None:
+async def test_read_effective_permissions(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
     owner = seed_identity["workspace_owner"]
     token, _ = await login(async_client, email=owner["email"], password=owner["password"])
 
@@ -376,7 +385,10 @@ async def test_check_permissions_requires_workspace_id(
 
 
 @pytest.mark.asyncio
-async def test_check_permissions_returns_map(async_client: AsyncClient, seed_identity: dict[str, Any]) -> None:
+async def test_check_permissions_returns_map(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
     admin = seed_identity["admin"]
     token, _ = await login(async_client, email=admin["email"], password=admin["password"])
 

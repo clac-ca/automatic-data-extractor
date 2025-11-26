@@ -17,7 +17,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@app": resolveSrc("app"),
-      "@screens": resolveSrc("screens"),
+      "@features": resolveSrc("screens"),
       "@ui": resolveSrc("ui"),
       "@shared": resolveSrc("shared"),
       "@schema": resolveSrc("schema"),

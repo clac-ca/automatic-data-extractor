@@ -37,12 +37,7 @@ class BuildResource(BaseSchema):
     object: BuildObjectType = "ade.build"
 
     workspace_id: str
-    config_id: str
     configuration_id: str
-    configuration_build_id: str | None = None
-    build_ref: str | None = Field(
-        None, description="Underlying configuration_builds.build_id value when present"
-    )
 
     status: BuildStatusLiteral
     created: int = Field(..., description="Unix timestamp when the build request was created")
@@ -89,7 +84,7 @@ class BuildEventBase(BaseSchema):
 class BuildCreatedEvent(BuildEventBase):
     type: Literal["build.created"] = "build.created"
     status: BuildStatusLiteral
-    config_id: str
+    configuration_id: str
 
 
 class BuildStepEvent(BuildEventBase):

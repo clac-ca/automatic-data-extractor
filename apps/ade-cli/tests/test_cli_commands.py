@@ -29,13 +29,13 @@ def test_ci_continues_when_types_exits_zero(monkeypatch) -> None:
         raise typer.Exit(code=0)
 
     monkeypatch.setattr(ci, "run_types", fake_types)
-    monkeypatch.setattr(ci, "run_lint", lambda scope="all": calls.append(("lint", scope)))
+    monkeypatch.setattr(ci, "run_lint", lambda scope="all", fix=False: calls.append(("lint", scope, fix)))
     monkeypatch.setattr(ci, "run_tests", lambda **kwargs: calls.append("tests"))
     monkeypatch.setattr(ci, "run_build", lambda: calls.append("build"))
 
     ci.run_ci()
 
-    assert calls == ["refresh", "types", ("lint", "all"), "tests", "build"]
+    assert calls == ["refresh", "types", ("lint", "all", False), "tests", "build"]
 
 
 def test_build_handles_missing_dist(monkeypatch, tmp_path) -> None:

@@ -34,37 +34,33 @@ def execute_pipeline(
 
     logger = logger or logging.getLogger(__name__)
 
-    pipeline_logger.transition("extracting")
+    pipeline_logger.pipeline_phase("extracting")
     raw_tables = extract_raw_tables(request=request, run=run, runtime=runtime, logger=logger)
     run_hooks(
         HookStage.ON_AFTER_EXTRACT,
         runtime.hooks,
         run=run,
         manifest=runtime.manifest,
-        artifact=pipeline_logger.artifact_sink,
-        events=pipeline_logger.event_sink,
         tables=raw_tables,
         workbook=None,
         result=None,
         logger=pipeline_logger,
     )
 
-    pipeline_logger.transition("mapping")
+    pipeline_logger.pipeline_phase("mapping")
     mapped_tables = map_raw_tables(tables=raw_tables, runtime=runtime, run=run, logger=logger)
     run_hooks(
         HookStage.ON_AFTER_MAPPING,
         runtime.hooks,
         run=run,
         manifest=runtime.manifest,
-        artifact=pipeline_logger.artifact_sink,
-        events=pipeline_logger.event_sink,
         tables=mapped_tables,
         workbook=None,
         result=None,
         logger=pipeline_logger,
     )
 
-    pipeline_logger.transition("normalizing")
+    pipeline_logger.pipeline_phase("normalizing")
     normalized_tables = [
         normalize_table(ctx=run, cfg=runtime, mapped=mapped, logger=logger)
         for mapped in mapped_tables
@@ -72,7 +68,11 @@ def execute_pipeline(
     for table in normalized_tables:
         pipeline_logger.record_table(table)
 
-    pipeline_logger.transition("writing_output")
+    # Run-level validation summary (useful for validation-only mode and analytics).
+    all_issues = [issue for table in normalized_tables for issue in table.validation_issues]
+    pipeline_logger.validation_summary(all_issues)
+
+    pipeline_logger.pipeline_phase("writing_output")
     output_path = write_workbook(
         ctx=run,
         cfg=runtime,
