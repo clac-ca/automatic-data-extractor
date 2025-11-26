@@ -1,13 +1,15 @@
 # Artifact JSON (`artifact.json`)
 
-`artifact.json` is the **per‑run audit record** produced by the engine.
+`artifact.json` is the **per-run audit record** produced by the engine.
 
-It is the primary, structured answer to:
+It answers:
 
-> “Exactly what did the engine do to this set of spreadsheets, and why?”  
+> “Exactly what did the engine do to this set of spreadsheets, and why?”
 
-Everything else (UI, reports, analytics, AI summarization) should treat
-`artifact.json` as the source of truth.
+Everything else (UI, summaries, reports, AI, etc.) should treat
+`artifact.json` as the **source of truth for run-level details**. The ADE API
+derives **run summaries** and **event streams** from this file plus
+`events.ndjson`.
 
 This document defines:
 
@@ -15,24 +17,24 @@ This document defines:
 - The **schema for artifact v1**.
 - How tables, mappings, and validation are represented.
 - The invariants consumers can rely on.
-- How ADE API is expected to consume it.
+- How ADE API is expected to consume it and relate it to run summaries.
 
 ## Terminology
 
-| Concept        | Term in code      | Notes                                                     |
-| -------------- | ----------------- | --------------------------------------------------------- |
-| Run            | `run`             | One call to `Engine.run()` or one CLI invocation          |
-| Config package | `config_package`  | Installed `ade_config` package for this run               |
-| Config version | `manifest.version`| Version declared by the config package manifest           |
-| Build          | build             | Virtual environment built for a specific config version   |
-| User data file | `source_file`     | Original spreadsheet on disk                              |
-| User sheet     | `source_sheet`    | Worksheet/tab in the spreadsheet                          |
-| Canonical col  | `field`           | Defined in manifest; never call this a “column”           |
-| Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
-| Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
+| Concept        | Term in code        | Notes                                                     |
+| -------------- | ------------------- | --------------------------------------------------------- |
+| Run            | `run`               | One call to `Engine.run()` or one CLI invocation         |
+| Config package | `config_package`    | Installed `ade_config` package for this run              |
+| Config version | `manifest.version`  | Version declared by the config package manifest          |
+| Build          | build               | Virtual environment built for a specific config version  |
+| User data file | `source_file`       | Original spreadsheet on disk                             |
+| User sheet     | `source_sheet`      | Worksheet/tab in the spreadsheet                         |
+| Canonical col  | `field`             | Defined in manifest; never call this a “column”          |
+| Physical col   | column              | B / C / index 0,1,2… in a sheet                          |
+| Output workbook| normalized workbook | Written to `output_dir`; includes mapped + normalized data |
 
-Artifact docs stick to these names; telemetry uses the same values for
-consistency.
+Artifact docs stick to these terms; telemetry and run summaries reuse the same
+vocabulary.
 
 ---
 
@@ -47,41 +49,55 @@ For each **engine run** there is exactly **one** artifact file:
 
 Where `<logs_dir>` is:
 
-- Passed in via `RunRequest.logs_dir`, or
-- Inferred by the engine from the input location (see runtime docs).
+- passed in via `RunRequest.logs_dir`, or
+- inferred by the engine from the input location (see runtime docs).
 
 ### 1.2 When it’s created and updated
 
-The `FileArtifactSink` in `artifact.py` manages the lifecycle:
+`FileArtifactSink` in `infra/artifact.py` manages the lifecycle:
 
-1. **Start of run**  
-   - Creates an in‑memory artifact structure with:
-     - Run info (`run.status="running"`, `run.id`, `run.started_at`, …).
-     - Config metadata (`config.schema`, `config.version`, …).
-     - Empty `tables` and `notes` arrays.
+1. **Start of run**
+
+   - Creates an in-memory artifact structure:
+
+     - `run.status = "running"`,
+     - `run.id`, `run.started_at`,
+     - `config` metadata (`schema`, `version`, `name`),
+     - empty `tables` and `notes`.
 
 2. **During the run**
-   - Each pipeline stage calls into the artifact sink:
-     - `record_table(...)` to append table summaries.
-     - `note(...)` to append human‑oriented notes.
-   - This can happen multiple times (e.g., once per table).
+
+   - Each pipeline stage calls into the sink:
+
+     - `record_table(...)` to append table summaries (mapping + validation).
+     - `note(...)` to append high-level notes.
+
+   - This may happen multiple times (e.g., one `record_table` per table).
 
 3. **On completion (success or failure)**
+
    - `mark_success(outputs=...)` or `mark_failure(error=...)`:
-     - Sets `run.status`.
-     - Sets `run.completed_at`.
-     - Writes outputs or error info.
+
+     - sets `run.status`,
+     - sets `run.completed_at`,
+     - writes either `outputs` or `error`.
+
    - `flush()` writes JSON to disk **atomically**:
-     - Serialize to `artifact.json.tmp`.
-     - `fsync` and rename to `artifact.json`.
+
+     - serialize to `artifact.json.tmp`,
+     - `fsync`,
+     - rename to `artifact.json`.
 
 ### 1.3 Guarantees
 
 For **every** engine run (even failed ones):
 
 - `artifact.json` exists at `RunPaths.artifact_path`.
-- It is well‑formed JSON.
+- It is well-formed JSON.
 - `run.status` is either `"succeeded"` or `"failed"`.
+
+Run summaries and reporting code can rely on this: if a run exists, it has an
+artifact.
 
 ---
 
@@ -89,32 +105,41 @@ For **every** engine run (even failed ones):
 
 The artifact schema is intentionally:
 
-- **Human‑inspectable**  
-  Easy to read in an editor or pretty‑printed for debugging.
+- **Human-inspectable**  
+  Easy to read in an editor or pretty-printed for debugging.
 
 - **Stable & versioned**  
-  Changes are additive where possible; breaking changes bump `version`.
+  Changes are additive where possible; breaking changes bump the version.
 
 - **Downstream friendly**  
   ADE API, reporting, and AI agents can:
-  - Reconstruct mapping decisions.
-  - Count validation issues by field/code/severity.
-  - See how many tables were processed and from which sheets.
 
-- **Backend‑run‑agnostic**
-  No first‑class orchestration concept. Backend correlation data (run IDs, config IDs, workspace IDs) lives in telemetry, not in `artifact.json`.
+  - reconstruct mapping decisions,
+  - count validation issues by field / code / severity,
+  - see how many tables were processed and from which files/sheets.
+
+- **Backend-run-agnostic**  
+  No first-class notion of “run request” or “workspace”; those live in the API.
+  Engine treats any IDs passed in via `RunRequest.metadata` as opaque tags, not
+  first-class fields.
 
 - **Deliberately minimal**  
-  Artifact is the stable, human‑readable audit log: run‑level info, compact
-  mapping summaries (with per-column contributions), compact validation summaries,
-  and high‑level notes. Per-row or debug chatter belongs in telemetry
-  (`events.ndjson`), not in `artifact.json`, to keep artifacts small even on large runs.
+  Artifact is the durable, human-oriented audit log:
+
+  - run-level info,
+  - compact mapping summaries (with per-column contributions),
+  - compact validation summaries,
+  - high-level notes.
+
+  **Per-row detail** and “live timeline” are expressed via telemetry in
+  `events.ndjson`, and **aggregate metrics** for reporting are expressed via
+  run summaries (see `12-run-summary-and-reporting.md`).
 
 ---
 
-## 3. Top‑level schema (v1)
+## 3. Top-level schema (v1)
 
-Artifact JSON v1 has this high‑level shape:
+Artifact JSON v1 has this high-level shape:
 
 ```jsonc
 {
@@ -126,17 +151,18 @@ Artifact JSON v1 has this high‑level shape:
   "tables": [ ... ],
   "notes": [ ... ]
 }
-````
+```
 
-### 3.1 Types and conventions
+### 3.1 Conventions
 
 Across the schema:
 
-* All timestamps are **ISO 8601** strings in UTC (e.g. `"2024-01-01T12:00:00Z"`).
-* File paths in `outputs` are strings relative to whatever the worker passes
-  into the engine; they are **not** normalized to any global root.
-* Optional fields are omitted or set to `null` (never the empty string) when
-  not applicable.
+* Timestamps are **ISO 8601** strings in UTC (`"2024-01-01T12:00:00Z"`).
+* File paths in `outputs` are strings as seen by the engine; they are **not**
+  resolved to any global root by the engine.
+* Optional fields are **omitted** or set to `null` (never `""`) when not
+  applicable.
+* Arrays are used instead of `null` for “zero entries” (e.g., `tables: []`).
 
 Everything in this document refers to **artifact schema v1**:
 `"schema": "ade.artifact/v1", "version": "1.0.0"`.
@@ -145,7 +171,7 @@ Everything in this document refers to **artifact schema v1**:
 
 ## 4. `run` section
 
-Run‑level info and outcome:
+Run-level info and outcome:
 
 ```jsonc
 "run": {
@@ -163,29 +189,28 @@ Run‑level info and outcome:
 
 ### 4.1 Fields
 
-* `id: str`
+* `id: str`  
   Unique per engine run (generated by the engine).
 
-* `status: "succeeded" | "failed"`
+* `status: "succeeded" | "failed"`  
   Final outcome of the run.
 
-* `started_at: str`
-  Time run started (pipeline initialization) in UTC.
+* `started_at: str`  
+  When the engine began processing, in UTC.
 
-* `completed_at: str | null`
-  Time run completed (success or failure).
-  May be `null` if an unrecoverable error occurs before the engine can set it
-  (but the artifact file will still be valid JSON).
+* `completed_at: str | null`  
+  Time the run finished (success or failure). On some catastrophic errors this
+  may be `null`, but the artifact must still be valid JSON.
 
-* `outputs: string[]`
-  Paths (usually file names) of output workbooks written by the engine.
-  Typically length 1, but future writer modes may emit more.
-* `engine_version: str`
-  Version of `ade_engine` that produced the artifact.
+* `outputs: string[]`  
+  Paths (usually filenames) of normalized workbooks written by the engine.
+  Typically a single entry, but more are allowed in future writer modes.
 
-* `error: object | null`
-  If `status == "failed"`, contains error summary with structured code + stage + message.
-  Recommended shape:
+* `engine_version: str`  
+  Version of `ade_engine` that produced this artifact.
+
+* `error: object | null`  
+  When `status == "failed"`, contains error summary:
 
   ```jsonc
   {
@@ -195,10 +220,12 @@ Run‑level info and outcome:
     "details": {
       "exception_type": "ValueError",
       "exception_message": "...",
-      "stage_detail": "... optional free-form stage info ..."
+      "stage_detail": "optional free-form stage info"
     }
   }
   ```
+
+  For successful runs, `error` is `null`.
 
 ---
 
@@ -214,25 +241,23 @@ Metadata about the config and manifest used for the run:
 }
 ```
 
-### 5.1 Fields
-
-* `schema: str`
+* `schema: str`  
   Manifest schema tag, e.g. `"ade.manifest/v1"`.
 
-* `version: str`
-  Value of `version` from `manifest.json` (semver recommended).
+* `version: str`  
+  The `version` field from `manifest.json` (semver recommended).
 
-* `name: str | null`
-  Human‑readable name from `manifest.name`, or `null` if not provided.
+* `name: str | null`  
+  Human-readable config name from `manifest.name`, or `null` if absent.
 
-This section lets you answer “which config produced this artifact?” quickly,
-without opening the manifest.
+This lets you quickly answer “which version of which config produced this
+artifact?” without opening the manifest.
 
 ---
 
 ## 6. `tables` section
 
-Each element in `tables` describes one logical table detected in the input:
+Each element in `tables` describes one **logical table** detected in the input:
 
 ```jsonc
 "tables": [
@@ -253,7 +278,7 @@ Each element in `tables` describes one logical table detected in the input:
         "contributions": [
           {
             "detector": "ade_config.column_detectors.member_id.detect_header_synonyms",
-            "delta": 0.60
+            "delta": 0.6
           },
           {
             "detector": "ade_config.column_detectors.member_id.detect_value_shape",
@@ -286,109 +311,101 @@ Each element in `tables` describes one logical table detected in the input:
 ]
 ```
 
-### 6.1 Per‑table metadata
+### 6.1 Per-table metadata
 
-* `source_file: str`
-  Basename of the source file where the table was found
-  (e.g., `"input.xlsx"` or `"members.csv"`).
+* `source_file: str`  
+  Basename of the file that contained the table (e.g. `"input.xlsx"`).
 
-* `source_sheet: str | null`
+* `source_sheet: str | null`  
   Excel sheet name, or `null` for CSV.
 
-* `table_index: int`
-  0-based order of the table within the sheet (supports multiple tables per sheet).
+* `table_index: int`  
+  0-based ordinal of the table within that sheet (supports multiple tables per
+  sheet).
 
 * `header: object`
 
-  * `row_index: int` — 1‑based row index within the sheet.
-  * `cells: string[]` — header row cells as strings.
+  * `row_index: int` – 1-based row index of the header within the sheet.
+  * `cells: string[]` – header cells as strings.
 
-The **table identity** is `(source_file, source_sheet, table_index)`; `header.row_index`
-is still recorded for traceability.
+The **identity** of a table is `(source_file, source_sheet, table_index)`.
 
-### 6.2 `mapped_columns` entries
+### 6.2 `mapped_columns`
 
-Each item describes how one canonical field was mapped:
+Each entry describes how a canonical field was mapped:
 
-* `field: str`
-  Canonical field name (from manifest `columns.fields`).
+* `field: str`  
+  Canonical field ID from `manifest.columns.fields`.
 
-* `header: str`
-  Original header text from the source file that was mapped to this field
-  (post simple normalization).
+* `header: str`  
+  Header text from the original sheet for this column (normalized).
 
-* `source_column_index: int`
-  Zero‑based index of the column in the raw table.
+* `source_column_index: int`  
+  Zero-based column index within the raw table.
 
-* `score: number`
-  Final matching score for this `(field, column)` after aggregating detector
-  contributions.
+* `score: number`  
+  Final mapping score for `(field, column)` after aggregating detector scores.
 
-* `contributions: {detector, delta}[]`
-  Fine‑grained breakdown of how `score` was built:
+* `contributions: {detector, delta}[]`  
+  How `score` was built:
 
-  * `detector: str` — fully qualified function name or a stable ID.
-  * `delta: number` — contribution added by that detector.
+  * `detector: str` – fully qualified function name (or a stable ID).
+  * `delta: number` – contribution to the score.
 
-This structure makes it possible to reconstruct **why** a column mapped to a
-field, not just that it did.
+This makes column mapping explainable: you can see **why** a column was chosen
+for a field.
 
-### 6.3 `unmapped_columns` entries
+### 6.3 `unmapped_columns`
 
-Each `unmapped_columns` entry represents a source column that was not mapped to any
-canonical field but is preserved in the normalized output:
+Each entry represents a physical input column that did **not** map to any
+canonical field:
 
-* `header: str`
+* `header: str`  
   Original header text.
 
-* `source_column_index: int`
-  Zero‑based index in the raw table.
+* `source_column_index: int`  
+  Zero-based index in the raw table.
 
-* `output_header: str`
-  Generated header used for this column in the normalized workbook
-  (e.g. `raw_notes`), based on writer settings.
+* `output_header: str`  
+  Generated header for this column in the normalized workbook (e.g.
+  `"raw_notes"`), derived from writer settings.
 
-If `writer.append_unmapped_columns` is `false` in the manifest, the
-engine may omit `unmapped_columns` entries (or leave the array empty) because those
-columns are dropped entirely.
+If `writer.append_unmapped_columns` is `false` in the manifest, the engine may
+omit or empty `unmapped_columns` because those columns are dropped entirely.
 
-### 6.4 `validation_issues` entries
+### 6.4 `validation_issues`
 
 Each validation issue is recorded **per field, per row**:
 
-* `row_index: int`
-  1‑based original row index in the sheet (consistent with extraction).
+* `row_index: int`  
+  1-based original sheet row index.
 
-* `field: str`
+* `field: str`  
   Canonical field name.
 
-* `code: str`
-  Short, machine‑friendly identifier, e.g. `"invalid_format"`,
-  `"missing_required"`, `"out_of_range"`.
+* `code: str`  
+  Short identifier such as `"missing_required"`, `"invalid_format"`,
+  `"out_of_range"`, `"future_date"`.
 
-* `severity: str`
-  At least:
+* `severity: str`  
+  At least `"error"` and `"warning"`; engines and configs may define more
+  (e.g. `"info"`).
 
-  * `"error"`
-  * `"warning"`
-    Additional severities may be defined later (e.g. `"info"`).
+* `message: str`  
+  Human-readable explanation.
 
-* `message: str`
-  Human‑readable explanation suitable for UI display.
+* `details: object | null`  
+  Optional extra structured context (e.g.,
+  `{ "expected_pattern": "...", "actual_value": "..." }`).
 
-* `details: object | null`
-  Optional structured data to support richer UIs:
-
-  * e.g. `{ "expected_pattern": "...", "actual_value": "..." }`.
-
-The engine normalizes any issues returned by validators into this shape before
-writing the artifact.
+The engine normalizes whatever validators return into this shape before writing
+the artifact.
 
 ---
 
 ## 7. `notes` section
 
-`notes` is a human‑oriented timeline of important events or comments:
+`notes` is a human-oriented log of important events or comments:
 
 ```jsonc
 "notes": [
@@ -404,140 +421,105 @@ writing the artifact.
 ]
 ```
 
-### 7.1 Fields
+Each note has:
 
-Each note entry contains:
-
-* `timestamp: str`
+* `timestamp: str`  
   When the note was recorded.
 
-* `level: "debug" | "info" | "warning" | "error"`
-  Severity or importance of the note.
+* `level: "debug" | "info" | "warning" | "error"`  
+  Severity or importance.
 
-* `message: str`
-  Human‑readable text.
+* `message: str`  
+  Human-readable text.
 
-* `details: object | null`
-  Optional structured data (free‑form).
+* `details: object | null`  
+  Optional structured details.
 
-### 7.2 Sources of notes
+Sources of notes:
 
-Notes may be produced by:
+* Engine internals: phase transitions, high-level milestones.
+* Hooks: “empty table detected”, configuration-specific messages.
+* Config scripts: sparingly, for durable annotations (use telemetry for
+  noisy/verbose events).
 
-* The engine itself:
-
-  * Phase transitions, key milestones.
-* Hooks:
-
-  * `on_run_start`, `on_after_extract`, `on_after_mapping`, etc.
-* Config scripts:
-
-  * Via the provided `artifact` or `logger` APIs (used sparingly for enduring
-    notes; otherwise prefer telemetry).
-
-**Guideline:**
-
-Use `notes` for high‑level narrative. Use telemetry (`events.ndjson`) for
-more granular event streams.
-
-**Boundary:**
-
-Keep `artifact.json` compact: run info, compact mapping summaries (with
-per-column contributions), validation summaries, and durable notes. Put
-per-row debug or verbose detector outputs into telemetry events instead of
-artifact.
+Guideline: **Use notes for narrative**, not for per-row detail. Use telemetry
+for high-volume events.
 
 ---
 
-## 8. Behavior & invariants
+## 8. Invariants
 
-The following **invariants** hold for artifact v1:
+For artifact v1:
 
 * `run.status ∈ {"succeeded", "failed"}`.
-* When `status == "succeeded"`:
 
-  * `run.outputs` has at least one entry.
-* When `status == "failed"`:
+* When `run.status == "succeeded"`:
 
-  * `run.error` is non‑null and contains a `message`.
+  * `run.outputs` is non-empty.
+
+* When `run.status == "failed"`:
+
+  * `run.error` is non-null and contains `message` and `code`.
+
 * For every table:
 
-  * `source_file` is non‑empty string.
+  * `source_file` is non-empty.
   * `header.row_index ≥ 1`.
-  * `header.cells` length equals `mapped_columns.length + unmapped_columns.length` if the
-    writer is configured to preserve all columns.
-* `tables`, `mapped_columns`, `unmapped_columns`, `validation_issues`, `notes` are arrays;
-  missing values are represented as empty arrays, not `null`.
+  * `header.cells` length is at least the number of `mapped_columns` and
+    `unmapped_columns` that refer to this table.
 
-Backends can safely rely on these when building UI and reporting logic.
+* `tables`, `mapped_columns`, `unmapped_columns`, `validation_issues`, `notes`
+  are arrays; “none” is represented as an empty array, not `null`.
+
+Consumers and summarizers can rely on these invariants when building derived
+views.
 
 ---
 
-## 9. Versioning & evolution
+## 9. Relationship to telemetry and run summaries
+
+The engine also writes **telemetry events** to `events.ndjson` using the
+unified `ade.event/v1` envelope (see `07-telemetry-events.md` and
+`11-ade-event-model.md`):
+
+* Telemetry = **timeline** (run.started, pipeline phases, table_completed, etc.)
+* Artifact = **snapshot** (final state of tables, mapping, validation).
+
+The ADE API builds a **run summary** object (see
+`12-run-summary-and-reporting.md`) by reading `artifact.json` and (optionally)
+`events.ndjson`:
+
+* computes totals like `total_rows`, `error_count`, `rows_with_issues`,
+* aggregates counts by field and by file,
+* attaches summary into `run.completed` events and persists it into the `runs`
+  table for BI.
+
+The engine itself does **not** compute run summaries; it only guarantees:
+
+* `artifact.json` is complete and self-consistent, and
+* `events.ndjson` is a valid `ade.event/v1` NDJSON stream.
+
+---
+
+## 10. Versioning & evolution
 
 Artifact is explicitly versioned via:
 
-* `schema` — identifies the “family” (e.g., `"ade.artifact/v1"`).
-* `version` — semantic version for this family.
+* `schema` – identifies the family (e.g., `"ade.artifact/v1"`),
+* `version` – semantic version for this schema family.
 
-### 9.1 Minor changes
+Minor / patch changes (additive):
 
-Allowed without bumping `schema` and with minor/patch bumps of
-`version`:
+* New optional fields.
+* New `code` / `severity` values.
+* Extra `details` keys.
 
-* Adding optional fields.
-* Adding `details` sub‑fields.
-* Adding new `code` / `severity` values.
+Breaking changes (require new `schema` and/or major bump):
 
-Consumers should ignore unknown fields.
+* Removing or renaming existing top-level keys.
+* Changing the meaning or type of fields.
+* Changing how tables are identified (`source_file` / `source_sheet` /
+  `table_index` triplet).
 
-### 9.2 Breaking changes
-
-Require either:
-
-* A new `schema` (e.g. `"ade.artifact/v2"`), or
-* A major bump in `version` and clear migration plan.
-
-Breaking changes include:
-
-* Removing or renaming top‑level keys.
-* Changing the meaning or type of existing fields.
-* Changing how tables are keyed or identified.
-
----
-
-## 10. How ADE API should use `artifact.json`
-
-Typical usage patterns:
-
-* **Run summary page (in backend UI)**
-
-  * Use `run.status`, `run.error`, and `run.outputs`.
-  * Show config `name` and `version`.
-
-* **Field mapping explanation**
-
-  * For each table:
-
-    * Show `mapped_columns` rows: canonical field → source header + score.
-    * Show `unmapped_columns` and their generated `output_header`.
-
-* **Data quality reporting**
-
-  * Aggregate `validation_issues` entries across tables:
-
-    * counts by `field`, `code`, `severity`.
-    * top rows with many issues.
-  * Provide drill‑down views: “show me all rows where `member_id` is missing”.
-
-* **AI‑assisted explanations**
-
-  * Use `tables[*].mapped_columns`, `validation_issues`, `notes`, and run outputs as the
-    primary context to explain:
-
-    * how the engine interpreted the file,
-    * what problems were found,
-    * how severe they are.
-
-`events.ndjson` (telemetry) complements `artifact.json` with a fine‑grained
-event stream, but `artifact.json` is the canonical, stable run summary.
+When evolving the artifact schema, keep run summary and event schemas aligned
+so downstream tools can continue to integrate them cleanly.

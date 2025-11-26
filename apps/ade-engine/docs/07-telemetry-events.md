@@ -1,71 +1,84 @@
-# Telemetry Events (engine-side logging & streaming)
+# Telemetry Events (`events.ndjson`)
 
-This document describes the **engine-side telemetry event system**: how
-`ade_engine` emits events into `events.ndjson`, how those events are modeled in
-code, and how they fit into the unified ADE event model.
+This document describes the **telemetry event system** used by the ADE engine:
 
-It focuses on:
+- how events are modeled and written to `events.ndjson`,
+- how they relate to `artifact.json` and run summaries,
+- and which `run.*` event types the engine emits.
 
-- What the engine writes to `events.ndjson`.
-- How pipeline code and configs log through `PipelineLogger`.
-- How this relates to `artifact.json` and to the unified `ade.event/v1`
-  envelope described in `11-ade-event-model.md`.
+This focuses on **engine-side** telemetry. For the unified ADE event envelope
+and how builds / runs are streamed by the API, see
+`11-ade-event-model.md`. For run summaries (what goes into the `runs` table and
+front-end reporting), see `12-run-summary-and-reporting.md`.
 
-If you want the system-wide story (builds, API run streaming, DB
-persistence), read `11-ade-event-model.md` after this.
+## Terminology
 
----
+| Concept        | Term in code        | Notes                                                     |
+| -------------- | ------------------- | --------------------------------------------------------- |
+| Run            | `run`               | One call to `Engine.run()` or one CLI invocation         |
+| Config package | `config_package`    | Installed `ade_config` package for this run              |
+| Config version | `manifest.version`  | Version declared by the config package manifest          |
+| Build          | build               | Virtual environment built for a specific config version  |
+| User data file | `source_file`       | Original spreadsheet on disk                             |
+| User sheet     | `source_sheet`      | Worksheet/tab in the spreadsheet                         |
+| Canonical col  | `field`             | Defined in manifest; never call this a “column”          |
+| Physical col   | column              | B / C / index 0,1,2… in a sheet                          |
+| Output workbook| normalized workbook | Written to `output_dir`; includes mapped + normalized data |
 
-## 1. Where telemetry fits
-
-Each engine run produces two complementary outputs:
-
-- **Artifact** – `artifact.json` (see `06-artifact-json.md`)
-
-  - Run-level snapshot.
-  - Mapping summary, validation summary, tables, and durable notes.
-  - Designed for post-run inspection and reporting.
-
-- **Telemetry** – `events.ndjson` (this doc)
-
-  - Line-based event stream.
-  - Lifecycle, pipeline phases, per-table summaries, notes, and optional
-    fine-grained events.
-  - Designed for streaming (e.g. ADE API tailing the file) and for
-    log aggregation.
-
-Conceptually:
-
-> `artifact.json` answers **“What is the final outcome?”**  
-> `events.ndjson` answers **“What happened, in order, while we got there?”**
-
-All telemetry events use the unified ADE event envelope, `ade.event/v1`,
-described in `11-ade-event-model.md`. The engine is responsible for emitting
-run-scoped `ade.event` instances to `events.ndjson`.
+Telemetry payloads reuse these names for consistency with runtime and
+artifact docs.
 
 ---
 
-## 2. Unified ADE event envelope (engine view)
+## 1. Telemetry vs artifact vs run summary
 
-The unified ADE event model defines a single envelope:
+The engine produces two low-level outputs:
+
+1. **`artifact.json`** – hierarchical snapshot:
+
+   - mapping decisions (per table),
+   - validation issues,
+   - notes,
+   - run-level status.
+
+2. **`events.ndjson`** – line-oriented event stream:
+
+   - `run.started`, `run.pipeline.progress`, `run.table.summary`,
+     `run.completed`, etc.
+
+The ADE API then derives a **run summary** object from these artifacts:
+
+- ingests `artifact.json` + `events.ndjson`,
+- aggregates metrics (rows, issues, mapping quality),
+- attaches the summary to the `run.completed` event payload,
+- persists summary into the `runs` table for BI.
+
+The engine itself knows nothing about SQL or run summaries; it just writes:
+
+- `artifact.json` (see `06-artifact-json.md`), and
+- `events.ndjson` (this document).
+
+---
+
+## 2. Envelope: `ade.event/v1`
+
+All engine telemetry events are written using the **unified ADE event
+envelope**:
 
 ```jsonc
 {
-  "type": "run.pipeline.progress",   // primary discriminator
+  "type": "run.pipeline.progress",
   "object": "ade.event",
   "schema": "ade.event/v1",
   "version": "1.0.0",
+  "created_at": "2025-11-26T12:00:03Z",
 
-  "created_at": "2025-11-26T12:00:00Z",
-
-  // Correlation (nullable where not applicable)
-  "workspace_id": "ws_123",
-  "configuration_id": "cfg_123",
+  "workspace_id": null,
+  "configuration_id": null,
   "run_id": "run_123",
   "build_id": null,
 
-  // Namespaced payloads (only some are present per event)
-  "run": { },
+  "run": { ... },
   "build": null,
   "env": null,
   "validation": null,
@@ -76,286 +89,223 @@ The unified ADE event model defines a single envelope:
 }
 ```
 
-Engine telemetry uses a subset of the global type space:
-
-* `run.started` / `run.completed` (engine-level lifecycle)
-* `run.pipeline.progress`
-* `run.table.summary`
-* `run.validation.issue.delta` (optional, fine-grained)
-* `run.note`
-* `run.log.delta` (optional; stdout/stderr bridged via API or direct)
-
-The ADE API later:
-
-* Tails `events.ndjson`.
-* Forwards these envelopes to clients as-is.
-* Adds its own events (`run.created`, `run.env.plan`, API-level
-  `run.completed`, etc.) using the same envelope.
-
-See `11-ade-event-model.md` for the full type catalog. This document stays
-engine-centric.
-
----
-
-## 3. Engine data model (Python types)
-
-Within the engine, the unified envelope is represented by Pydantic models
-(similar to earlier `TelemetryEvent` / `TelemetryEnvelope`, just aligned to
-`ade.event/v1`).
-
-At a high level:
-
-```python
-# ade_engine/schemas/telemetry.py (conceptual)
-
-class AdeEvent(BaseModel):
-    type: str                     # e.g. "run.started", "run.table.summary"
-    object: Literal["ade.event"]
-    schema: Literal["ade.event/v1"]
-    version: str
-
-    created_at: datetime
-
-    workspace_id: str | None = None
-    configuration_id: str | None = None
-    run_id: str | None = None
-    build_id: str | None = None
-
-    run: RunPayload | None = None
-    build: BuildPayload | None = None
-    env: EnvPayload | None = None
-    validation: ValidationPayload | None = None
-    execution: ExecutionPayload | None = None
-    output_delta: OutputDeltaPayload | None = None
-    log: LogPayload | None = None
-    error: ErrorPayload | None = None
-```
-
 Notes:
 
-* Engine code only emits run-scoped events, so `build_id` and `build`
-  are always `null` here.
-* `workspace_id` / `configuration_id` are copied from
-  `RunContext.metadata` when present, but are treated as opaque tags by
-  the engine.
-* The `RunPayload`, `ValidationPayload`, etc. are small Pydantic models with
-  event-specific fields (e.g. `phase` for pipeline progress, `row_count` for
-  table summaries).
+* `type` is the **primary discriminator** (e.g. `"run.started"`,
+  `"run.pipeline.progress"`, `"run.table.summary"`, `"run.completed"`).
 
-These models can generate JSON Schema for external consumers if needed, but
-the JSON on disk is the `AdeEvent` envelope itself.
+* `object`, `schema`, and `version` are constant:
+
+  * `object = "ade.event"`
+  * `schema = "ade.event/v1"`
+  * `version` evolves semantically (e.g. `"1.0.0"`).
+
+* `created_at` is an ISO 8601 UTC timestamp (when the event was emitted).
+
+* Correlation context:
+
+  * `run_id` is always set for engine events.
+  * `workspace_id` / `configuration_id` / `build_id` may be `null` on the
+    engine side; the API often fills them when streaming.
+
+The envelope shape is shared with API-level events (build events, wrapper
+run events). See `11-ade-event-model.md` for a full catalog.
 
 ---
 
-## 4. Event sinks
+## 3. Event sinks
 
-### 4.1 EventSink protocol
+### 3.1 EventSink protocol
 
-Internally, sinks implement a minimal protocol:
+Inside the engine, sinks implement a minimal interface:
 
 ```python
 class EventSink(Protocol):
-    def emit(self, event: AdeEvent) -> None:
+    def log(
+        self,
+        *,
+        type: str,
+        run: RunContext,
+        level: str = "info",
+        **payload: Any,
+    ) -> None:
         ...
 ```
 
-Higher-level helpers (`PipelineLogger`) build `AdeEvent` instances and pass
-them to the sink.
+Responsibilities:
 
-### 4.2 FileEventSink
+* build a `ade.event/v1` envelope:
 
-The default sink is file-backed:
+  * set `type`, `object`, `schema`, `version`,
+  * set `run_id` and other context from `RunContext`,
+  * attach the payload under the correct namespace (`run`, `validation`,
+    `output_delta`, `log`, etc.),
 
-* One NDJSON file per run:
-  `RunPaths.events_path` (typically `<logs_dir>/events.ndjson`).
-* Each call to `emit(...)`:
+* serialize to JSON,
 
-  * JSON-serializes the `AdeEvent`,
-  * writes a line ending in `\n`.
+* write or forward the event.
+
+### 3.2 FileEventSink
+
+Default sink used by the engine:
+
+* writes one **JSON object per line** to:
+
+  ```text
+  <logs_dir>/events.ndjson
+  ```
+
+* opens the file in append mode,
+
+* writes events in the order they are emitted.
 
 Guarantees:
 
-* File exists for every run (even if empty on early failures).
-* Lines are well-formed JSON objects.
-* Events appear in the order they were emitted.
+* `events.ndjson` exists for every run (possibly empty if no events).
+* Each line is a complete JSON envelope.
 
-### 4.3 DispatchEventSink (fan-out)
+### 3.3 DispatchEventSink
 
-A composite sink can fan out events to multiple sinks:
+Optional composite sink that fans out events to multiple sinks:
 
-* `FileEventSink` + console logging.
-* `FileEventSink` + streaming to a message bus.
-
-Each run gets its own sink instance. This is configured via `TelemetryConfig`
-(see below).
+* holds a list of `EventSink` instances,
+* forwards every event to each child sink,
+* enables setups like “file + console” or “file + message bus”.
 
 ---
 
-## 5. TelemetryConfig and per-run bindings
+## 4. PipelineLogger
 
-### 5.1 TelemetryConfig
-
-`TelemetryConfig` is passed to the `Engine` at construction and controls how
-telemetry is wired:
-
-Conceptually:
-
-```python
-@dataclass
-class TelemetryConfig:
-    min_level: str = "info"       # "debug" | "info" | "warning" | "error"
-    make_event_sink: Callable[[RunContext], EventSink] | None = None
-```
-
-* `min_level` lets you filter out very noisy events.
-* `make_event_sink` builds the sink for a particular run; if `None`, a default
-  `FileEventSink` is created pointing at `RunPaths.events_path`.
-
-### 5.2 Per-run bindings
-
-For each run, the engine constructs a small binding object that holds:
-
-* `events: EventSink`
-* `artifact: ArtifactSink`
-* `logger: PipelineLogger` (wrapping both)
-
-These bindings:
-
-* Are per run, not global.
-* Decorate every event with:
-
-  * `schema`, `version`, `created_at`,
-  * `run_id`, and
-  * any correlation metadata from `RunContext.metadata` that you decide to
-    surface (`workspace_id`, `configuration_id`, etc.).
-
----
-
-## 6. PipelineLogger
-
-`PipelineLogger` is the only thing pipeline code and config scripts should
-touch. It hides envelope construction and sink details.
+`PipelineLogger` is the **only thing** pipeline code and config scripts should
+use to emit telemetry and artifact notes.
 
 Conceptual API:
 
 ```python
 class PipelineLogger:
-    def note(self, message: str, *, level: str = "info", **details: Any) -> None: ...
-    def event(self, type_suffix: str, *, level: str = "info", **payload: Any) -> None: ...
-    def pipeline_phase(self, phase: str, **payload: Any) -> None: ...
-    def table_summary(self, **table_payload: Any) -> None: ...
+    def note(self, message: str, level: str = "info", **details: Any) -> None: ...
+    def event(self, name: str, level: str = "info", **payload: Any) -> None: ...
+    def transition(self, phase: str, **payload: Any) -> None: ...
+    def record_table(self, table_summary: dict[str, Any]) -> None: ...
 ```
 
-### 6.1 `note(...)` – narrative notes
+* `note`
 
-* Adds a human-readable note to the artifact’s `notes` section.
-* Also emits an ADE event with `type: "run.note"`:
+  * Appends a human-friendly note to the artifact’s `notes` array.
+  * Optionally emits a `run.note` telemetry event (depending on config).
 
-  ```jsonc
-  {
-    "type": "run.note",
-    "object": "ade.event",
-    "run": {
-      "message": "Run started",
-      "level": "info",
-      "details": {
-        "files": 1
-      }
-    }
-  }
-  ```
+* `event(name, ...)`
 
-Use this for durable breadcrumbs you want in both the artifact and telemetry.
+  * Emits a structured event with `type = "run." + name` and the given payload.
+  * Does **not** directly touch the artifact.
 
-### 6.2 `event(...)` – arbitrary ADE events
+* `transition(phase, ...)`
 
-* Builds an ADE event named `f"run.{type_suffix}"`.
-* Only writes to telemetry (does not touch the artifact unless you do so
-  yourself).
+  * Convenience wrapper to emit `run.pipeline.progress` events.
 
-Example:
+* `record_table(table_summary)`
 
-```python
-logger.event(
-    "validation.issue.delta",
-    level="warning",
-    field="email",
-    row_index=10,
-    code="invalid_format",
-)
+  * Writes table summary data into `artifact.json`.
+  * May also emit a `run.table.summary` event with a compact payload.
+
+Engine internals use `PipelineLogger`. Config scripts and hooks receive the
+same logger and should use it instead of `print`.
+
+---
+
+## 5. NDJSON output
+
+### 5.1 File location
+
+Telemetry is written to:
+
+```text
+<logs_dir>/events.ndjson
 ```
 
-Produces:
+Where `logs_dir` comes from `RunRequest`/`RunPaths`.
+
+### 5.2 Format
+
+* Each line is one JSON envelope (`ade.event/v1`).
+* Lines are separated by `\n`.
+* There’s no trailing comma or array wrapper.
+
+Example (abridged):
+
+```text
+{"type":"run.started","object":"ade.event","schema":"ade.event/v1","version":"1.0.0","run_id":"run_1",...,"run":{"engine_version":"0.2.0"}}
+{"type":"run.pipeline.progress","object":"ade.event","schema":"ade.event/v1","version":"1.0.0","run_id":"run_1",...,"run":{"phase":"extracting","file_count":1}}
+{"type":"run.table.summary","object":"ade.event","schema":"ade.event/v1","version":"1.0.0","run_id":"run_1",...,"output_delta":{"kind":"table_summary","table":{"source_file":"input.xlsx","source_sheet":"Sheet1","table_index":0,"row_count":100,"validation_issue_counts":{"error":2,"warning":5}}}}
+{"type":"run.completed","object":"ade.event","schema":"ade.event/v1","version":"1.0.0","run_id":"run_1",...,"run":{"engine_status":"succeeded","exit_code":0}}
+```
+
+The ADE API typically **tails** this file while the run is live and forwards
+events to clients.
+
+---
+
+## 6. Standard engine `run.*` events
+
+The engine emits a compact set of `run.*` events; configs may emit additional
+events via `logger.event()`.
+
+### 6.1 `run.started`
+
+Emitted once, near the start of `Engine.run`.
 
 ```jsonc
 {
-  "type": "run.validation.issue.delta",
-  "object": "ade.event",
-  "validation": {
-    "field": "email",
-    "row_index": 10,
-    "code": "invalid_format",
-    "severity": "warning"
+  "type": "run.started",
+  "run": {
+    "engine_version": "0.2.0",
+    "config_version": "3.1.0",
+    "config_schema": "ade.manifest/v1",
+    "input_file_count": 1
   }
 }
 ```
 
-### 6.3 `pipeline_phase(...)` – standardized phase transitions
+Use cases:
 
-Short-hand for emitting `run.pipeline.progress` ADE events:
+* “Run has begun” indicator.
+* Showing engine and config versions in a stream UI.
 
-```python
-logger.pipeline_phase(
-    "extracting",
-    file_count=3,
-)
-```
+### 6.2 `run.pipeline.progress`
 
-→
+Emitted at phase transitions:
+
+* `"initialization"`
+* `"load_config"`
+* `"extracting"`
+* `"mapping"`
+* `"normalizing"`
+* `"writing_output"`
+* `"hooks"`
+* `"completed"`
+* `"failed"`
+
+Example:
 
 ```jsonc
 {
   "type": "run.pipeline.progress",
-  "object": "ade.event",
   "run": {
     "phase": "extracting",
-    "file_count": 3
+    "file_count": 1
   }
 }
 ```
 
-Phases align with `RunPhase` values:
+Payload may include small counters (files, tables, rows examined so far).
 
-* `initialization`
-* `load_config`
-* `extracting`
-* `mapping`
-* `normalizing`
-* `writing_output`
-* `hooks`
-* `completed`
-* `failed`
+### 6.3 `run.table.summary`
 
-### 6.4 `table_summary(...)` – per-table aggregate
-
-Used by the engine when a table has been fully processed:
-
-```python
-logger.table_summary(
-    source_file="input.xlsx",
-    source_sheet="Sheet1",
-    table_index=0,
-    row_count=123,
-    validation_issue_counts={"error": 2, "warning": 5},
-)
-```
-
-→
+Emitted once per completed normalized table:
 
 ```jsonc
 {
   "type": "run.table.summary",
-  "object": "ade.event",
   "output_delta": {
     "kind": "table_summary",
     "table": {
@@ -364,7 +314,7 @@ logger.table_summary(
       "table_index": 0,
       "row_count": 123,
       "validation_issue_counts": {
-        "error": 2,
+        "error": 3,
         "warning": 5
       }
     }
@@ -372,165 +322,144 @@ logger.table_summary(
 }
 ```
 
----
+This provides incremental visibility into per-table quality as the run
+progresses.
 
-## 7. Standard engine-emitted events
+### 6.4 `run.note`
 
-The engine emits a small, consistent set of ADE event types.
+Optional, emitted when the engine or configs record a notable event that should
+be visible in both `artifact.json` and the event stream:
 
-### 7.1 Lifecycle
-
-Emitted by the engine itself (API also emits additional lifecycle events):
-
-* `run.started`
-
-  * Emitted once after initialization and config load succeed.
-  * `run` payload typically includes `engine_version` and basic input summary.
-
-* `run.completed`
-
-  * Emitted once at the end of pipeline execution (success or failure).
-  * Engine-view only: `run.engine_status: "succeeded" | "failed"`, plus any
-    engine-level error details.
-  * API will later emit its own `run.completed` summarizing the whole run
-    (env + engine + persistence).
-
-* `run.pipeline.progress`
-
-  * Emitted on each phase transition; `run.phase` = one of `RunPhase.value`.
-
-### 7.2 Tables
-
-* `run.table.summary`
-
-  * Emitted once per `NormalizedTable`, after mapping/normalization.
-  * Includes per-table row count and validation issue counts.
-
-### 7.3 Validation
-
-* `run.validation.issue.delta` (optional)
-
-  * Emitted when you want streaming visibility into validation issues.
-
-  * Payload mirrors `ValidationIssue`:
-
-    * `row_index`
-    * `field`
-    * `code`
-    * `severity`
-    * optional `message` / `details`
-
-  * Not required for correctness; artifact remains the authoritative list of
-    issues.
-
-### 7.4 Notes
-
-* `run.note`
-
-  * Emitted whenever `logger.note(...)` is used.
-  * Mirrors artifact `notes` entries.
-
-### 7.5 Logs
-
-Depending on configuration, you may also see:
-
-* `run.log.delta`
-
-  * Used when the API bridges stdout/stderr into ADE events.
-
-  * Payload:
-
-    ```jsonc
-    {
-      "log": {
-        "stream": "stdout" | "stderr",
-        "message": "raw line..."
-      }
+```jsonc
+{
+  "type": "run.note",
+  "run": {
+    "level": "warning",
+    "message": "Empty table detected",
+    "details": {
+      "source_file": "input.xlsx",
+      "source_sheet": "Sheet2"
     }
-    ```
-
-  * Engine itself does not have to emit this; it can be injected at the
-    process boundary.
-
----
-
-## 8. NDJSON file format
-
-Telemetry is written to:
-
-```text
-<logs_dir>/events.ndjson
+  }
+}
 ```
 
-Properties:
+`details` should remain small and structured.
 
-* One event per line, no commas, plain `\n` separator.
-* Each line parses to a complete `ade.event/v1` object.
-* Empty lines are not used.
+### 6.5 `run.completed` / `run.failed` (engine view)
 
-Example (abridged):
+The engine emits a terminal event when the pipeline finishes:
 
-```text
-{"type":"run.started","object":"ade.event","schema":"ade.event/v1","version":"1.0.0","run_id":"run_1","created_at":"2025-11-26T12:00:00Z","run":{"engine_version":"0.2.0"}}
-{"type":"run.pipeline.progress","object":"ade.event","schema":"ade.event/v1","version":"1.0.0","run_id":"run_1","created_at":"2025-11-26T12:00:01Z","run":{"phase":"extracting","file_count":1}}
-{"type":"run.table.summary","object":"ade.event","schema":"ade.event/v1","version":"1.0.0","run_id":"run_1","created_at":"2025-11-26T12:00:05Z","output_delta":{"kind":"table_summary","table":{"source_file":"input.xlsx","source_sheet":"Sheet1","table_index":0,"row_count":123,"validation_issue_counts":{"error":2}}}}
-{"type":"run.completed","object":"ade.event","schema":"ade.event/v1","version":"1.0.0","run_id":"run_1","created_at":"2025-11-26T12:00:07Z","run":{"engine_status":"succeeded"}}
+```jsonc
+{
+  "type": "run.completed",
+  "run": {
+    "engine_status": "succeeded",
+    "exit_code": 0,
+    "duration_ms": 9000
+  }
+}
 ```
 
-Consumers (ADE API, log processors) can treat `events.ndjson` as a standard
-NDJSON stream.
+On failure:
+
+```jsonc
+{
+  "type": "run.failed",
+  "run": {
+    "engine_status": "failed",
+    "exit_code": 1
+  },
+  "error": {
+    "code": "config_error",
+    "stage": "load_config",
+    "message": "Unable to import ade_config",
+    "details": {
+      "exception_type": "ImportError",
+      "exception_message": "No module named 'ade_config'"
+    }
+  }
+}
+```
+
+The API typically wraps these with its own `run.completed` events containing
+high-level status, artifact/events paths, and the aggregated **run summary**
+object.
 
 ---
 
-## 9. Consumption by ADE API
+## 7. Custom events from configs
 
-From the engine’s perspective, the ADE API is just a consumer of
-`events.ndjson`. Typical usage:
+Config code and hooks may emit domain-specific events:
 
-* Streaming UI
+```python
+logger.event(
+    "quality_score_computed",
+    level="info",
+    score=0.97,
+    rows=1230,
+)
+```
 
-  * Tail `events.ndjson` while the run process is alive.
-  * Forward ADE events to clients (websocket, SSE, etc.).
-  * Combine engine events with API-emitted events like `run.created`,
-    `run.env.plan`, and API-level `run.completed`.
+This becomes:
 
-* Post-run analysis
+```jsonc
+{
+  "type": "run.quality_score_computed",
+  "run": {
+    "level": "info",
+    "score": 0.97,
+    "rows": 1230
+  }
+}
+```
 
-  * Read `events.ndjson` after completion.
-  * Compute metrics (duration, #tables, #issues).
-  * Feed logs into a log index or monitoring system.
+Guidelines:
 
-The engine never depends on how events are consumed; it only guarantees the
-envelope shape and ordering.
+* Keep payloads **small and JSON-friendly**.
+* Use stable event names; prefer `run.<noun_or_verb>` patterns.
+* Avoid dumping whole rows or giant strings in the payload; reflect structured
+  metrics instead.
 
 ---
 
-## 10. Best practices
+## 8. Consumption by ADE API
 
-### 10.1 For engine maintainers
+The ADE API typically:
 
-* Keep the set of engine-emitted event types small and stable.
-* Prefer additive changes:
+1. Tails `events.ndjson` while the engine is running.
+2. Forwards envelopes directly to clients (WebSocket / SSE).
+3. On run completion, reads `artifact.json` and `events.ndjson` and:
 
-  * New fields in existing payloads.
-  * New event types with clear names.
-* For breaking changes, bump `schema`/`version` (see `11-ade-event-model.md`).
+   * computes a `run.summary` object (see `12-run-summary-and-reporting.md`),
+   * attaches it to a **final** `run.completed` API event,
+   * persists run metadata + summary into the `runs` table.
 
-### 10.2 For config authors
+Engine code remains unaware of this; its job is only to write a clean,
+versioned NDJSON stream and artifact.
 
-* Use `logger.note(...)` for durable notes that should appear in
-  `artifact.json` and telemetry.
-* Use `logger.event(...)` for domain-specific streaming signals (e.g.,
-  `validation.issue.delta`, `quality_score.computed`).
-* Keep payloads small, JSON-serializable, and stable.
+---
 
-### 10.3 For backend integrators
+## 9. Extensibility and versioning
 
-* Treat `events.ndjson` as a log source, not a primary data store.
-* Use `artifact.json` for detailed reporting and queries.
-* If you attach extra sinks (HTTP, queues, etc.), ensure failures in those
-  sinks do not crash the run; they should degrade gracefully.
+The telemetry format is versioned via:
 
-With this model, engine telemetry is predictable, streamable, and aligned to
-the ADE-wide event envelope, while `artifact.json` remains the canonical audit
-record.
+* `schema = "ade.event/v1"`,
+* `version = "1.0.0"`.
+
+Additive changes:
+
+* new event types (e.g. `run.validation.issue.delta`),
+* new optional payload fields.
+
+Breaking changes:
+
+* changing payload shape for an existing `type`,
+* changing semantics of existing fields.
+
+Breaking changes require either bumping `schema` (e.g. `"ade.event/v2"`) or at
+least a major bump and a coordinated migration. Engine and API should evolve
+telemetry together with explicit tests.
+
+Use `11-ade-event-model.md` as the canonical reference for the global ADE
+event space; this document stays focused on **engine-side emission**.

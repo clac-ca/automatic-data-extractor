@@ -10,6 +10,9 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+from typing import Any
+
+from ade_engine.schemas import AdeEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
@@ -223,13 +226,25 @@ class BuildsService:
         *,
         context: BuildExecutionContext,
         options: BuildCreateOptions,
-    ) -> AsyncIterator[BuildEvent]:
+    ) -> AsyncIterator[AdeEvent]:
         build = await self._require_build(context.build_id)
-        yield BuildCreatedEvent(
-            build_id=build.id,
-            created=self._epoch_seconds(build.created_at),
-            status=self._status_literal(build.status),
-            configuration_id=context.configuration_id,
+        reason = "force_rebuild" if options.force else "dirty_or_missing"
+        yield self._ade_event(
+            build=build,
+            type_="build.created",
+            build_payload={"status": self._status_literal(build.status)},
+        )
+        yield self._ade_event(
+            build=build,
+            type_="build.plan",
+            env_payload={
+                "should_build": context.should_run,
+                "force": bool(options.force),
+                "reason": reason,
+                "engine_spec": context.engine_spec,
+                "engine_version_hint": context.engine_version_hint,
+                "python_bin": context.python_bin,
+            },
         )
 
         if not context.should_run:
@@ -239,22 +254,30 @@ class BuildsService:
                 summary=context.reuse_summary,
                 exit_code=0,
             )
-            yield BuildCompletedEvent(
-                build_id=build.id,
-                created=self._epoch_seconds(build.finished_at),
-                status=self._status_literal(build.status),
-                exit_code=build.exit_code,
-                summary=build.summary,
-                error_message=build.error_message,
+            yield self._ade_event(
+                build=build,
+                type_="build.completed",
+                build_payload={
+                    "status": self._status_literal(build.status),
+                    "exit_code": build.exit_code,
+                    "summary": build.summary,
+                },
+                env_payload={
+                    "should_build": False,
+                    "force": bool(options.force),
+                    "reason": "reuse_ok",
+                },
             )
             return
 
         build = await self._transition_status(build, BuildStatus.BUILDING)
-        yield BuildStepSchema(
-            build_id=build.id,
-            created=self._epoch_seconds(build.started_at),
-            step=BuildStep.CREATE_VENV.value,
-            message="Starting build",
+        yield self._ade_event(
+            build=build,
+            type_="build.progress",
+            build_payload={
+                "phase": BuildStep.CREATE_VENV.value,
+                "message": "Starting build",
+            },
         )
 
         artifacts: BuildArtifacts | None = None
@@ -273,11 +296,13 @@ class BuildsService:
                 timeout=context.timeout_seconds,
             ):
                 if isinstance(event, BuilderStepEvent):
-                    yield BuildStepSchema(
-                        build_id=build.id,
-                        created=self._epoch_seconds(self._now()),
-                        step=event.step.value,
-                        message=event.message,
+                    yield self._ade_event(
+                        build=build,
+                        type_="build.progress",
+                        build_payload={
+                            "phase": event.step.value,
+                            "message": event.message,
+                        },
                     )
                 elif isinstance(event, BuilderLogEvent):
                     log = await self._append_log(
@@ -285,11 +310,14 @@ class BuildsService:
                         message=event.message,
                         stream=event.stream,
                     )
-                    yield BuildLogSchema(
-                        build_id=build.id,
-                        created=self._epoch_seconds(log.created_at),
-                        stream=event.stream,
-                        message=event.message,
+                    yield self._ade_event(
+                        build=build,
+                        type_="build.log.delta",
+                        log_payload={
+                            "stream": event.stream,
+                            "message": event.message,
+                            "created": self._epoch_seconds(log.created_at),
+                        },
                     )
                 elif isinstance(event, BuilderArtifactsEvent):
                     artifacts = event.artifacts
@@ -300,13 +328,15 @@ class BuildsService:
                 error=str(exc),
             )
             build = await self._require_build(build.id)
-            yield BuildCompletedEvent(
-                build_id=build.id,
-                created=self._epoch_seconds(build.finished_at),
-                status=self._status_literal(build.status),
-                exit_code=build.exit_code,
-                summary=build.summary,
-                error_message=build.error_message,
+            yield self._ade_event(
+                build=build,
+                type_="build.completed",
+                build_payload={
+                    "status": self._status_literal(build.status),
+                    "exit_code": build.exit_code,
+                    "summary": build.summary,
+                    "error_message": build.error_message,
+                },
             )
             return
 
@@ -317,13 +347,15 @@ class BuildsService:
                 error="Build terminated without metadata",
             )
             build = await self._require_build(build.id)
-            yield BuildCompletedEvent(
-                build_id=build.id,
-                created=self._epoch_seconds(build.finished_at),
-                status=self._status_literal(build.status),
-                exit_code=build.exit_code,
-                summary=build.summary,
-                error_message=build.error_message,
+            yield self._ade_event(
+                build=build,
+                type_="build.completed",
+                build_payload={
+                    "status": self._status_literal(build.status),
+                    "exit_code": build.exit_code,
+                    "summary": build.summary,
+                    "error_message": build.error_message,
+                },
             )
             return
 
@@ -332,13 +364,16 @@ class BuildsService:
             context=context,
             artifacts=artifacts,
         )
-        yield BuildCompletedEvent(
-            build_id=build.id,
-            created=self._epoch_seconds(build.finished_at),
-            status=self._status_literal(build.status),
-            exit_code=build.exit_code,
-            summary=build.summary,
-            error_message=build.error_message,
+        yield self._ade_event(
+            build=build,
+            type_="build.completed",
+            build_payload={
+                "status": self._status_literal(build.status),
+                "exit_code": build.exit_code,
+                "summary": build.summary,
+                "error_message": build.error_message,
+            },
+            env_payload={"reason": reason},
         )
 
     async def run_to_completion(
@@ -401,6 +436,33 @@ class BuildsService:
             exit_code=build.exit_code,
             summary=build.summary,
             error_message=build.error_message,
+        )
+
+    def _ade_event(
+        self,
+        *,
+        build: Build,
+        type_: str,
+        build_payload: dict[str, Any] | None = None,
+        env_payload: dict[str, Any] | None = None,
+        log_payload: dict[str, Any] | None = None,
+        error_payload: dict[str, Any] | None = None,
+    ) -> AdeEvent:
+        return AdeEvent(
+            type=type_,
+            created_at=utc_now(),
+            workspace_id=build.workspace_id,
+            configuration_id=build.configuration_id,
+            run_id=None,
+            build_id=build.id,
+            run=None,
+            build=build_payload,
+            env=env_payload,
+            validation=None,
+            execution=None,
+            output_delta=None,
+            log=log_payload,
+            error=error_payload,
         )
 
     # ------------------------------------------------------------------

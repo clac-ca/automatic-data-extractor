@@ -227,12 +227,13 @@ For a given document:
   - Preferred subset of sheet names.
 - These preferences are stored in local, workspace‑scoped storage and reapplied the next time you run that document.
 
-The backend exposes **streaming NDJSON APIs** for run events:
+The backend exposes **streaming NDJSON APIs** for run events using the unified
+`ade.event/v1` envelope:
 
 - ADE Web uses these for:
-  - Live status updates,
-  - Logs,
-  - Telemetry summaries (rows processed, warnings, etc.).
+  - Live status updates (`run.created`, `run.started`, `run.completed`),
+  - Logs (`run.log.delta`),
+  - Telemetry/progress (`run.pipeline.progress`, `run.table.summary`, optional validation deltas).
 - The same streams can be replayed to show historical run details.
 - The Configuration Builder workbench reuses this to show build/run events inside its **Console**.
 
@@ -1261,15 +1262,17 @@ At a high level, the backend must provide:
 * **Runs / runs**
 
   * Create run (document + configuration version + options).
-  * NDJSON streaming endpoint for run events:
+  * NDJSON streaming endpoint for run events (`ade.event/v1`):
 
-    * Status changes, logs, telemetry envelopes.
+    * Status changes (`run.created`, `run.started`, `run.completed`).
+    * Logs (`run.log.delta`).
+    * Telemetry/progress (`run.pipeline.progress`, `run.table.summary`, optional validation deltas).
   * List runs (filterable by status, document, configuration, date).
   * Run outputs:
 
     * Listing of output files (path, byte size).
     * Artifact download (combined outputs, typically zip).
-    * Telemetry download.
+    * Telemetry download (`events.ndjson`).
 
 * **Configurations & Configuration Builder**
 
