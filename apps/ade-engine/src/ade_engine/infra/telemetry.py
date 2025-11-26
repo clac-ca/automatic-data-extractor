@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Protocol
+from collections import defaultdict
 
-from ade_engine.infra.artifact import ArtifactSink
 from ade_engine.core.types import NormalizedTable, RunContext
 from ade_engine.schemas.telemetry import AdeEvent
 
@@ -109,31 +109,18 @@ class TelemetryConfig:
 
     def build_sink(self, run: RunContext) -> EventSink:
         sinks = [factory(run) for factory in self.event_sink_factories]
-        sinks.append(FileEventSink(path=run.paths.events_path, min_level=self.min_event_level))
+        sinks.append(FileEventSink(path=run.paths.logs_dir / "events.ndjson", min_level=self.min_event_level))
         return DispatchEventSink(sinks)
 
 
 @dataclass
 class PipelineLogger:
-    """Unified facade for artifact notes and ADE events."""
+    """Unified facade for ADE events."""
 
     run: RunContext
-    artifact_sink: ArtifactSink
     event_sink: EventSink | None = None
 
-    def _emit(
-        self,
-        type_suffix: str,
-        *,
-        run_payload: dict[str, Any] | None = None,
-        build_payload: dict[str, Any] | None = None,
-        env_payload: dict[str, Any] | None = None,
-        validation_payload: dict[str, Any] | None = None,
-        execution_payload: dict[str, Any] | None = None,
-        output_delta: dict[str, Any] | None = None,
-        log_payload: dict[str, Any] | None = None,
-        error_payload: dict[str, Any] | None = None,
-    ) -> None:
+    def _emit(self, type_suffix: str, *, run_payload: dict[str, Any] | None = None, build_payload: dict[str, Any] | None = None, env_payload: dict[str, Any] | None = None, validation_payload: dict[str, Any] | None = None, execution_payload: dict[str, Any] | None = None, output_delta: dict[str, Any] | None = None, log_payload: dict[str, Any] | None = None, error_payload: dict[str, Any] | None = None) -> None:
         if not self.event_sink:
             return
 
@@ -152,7 +139,6 @@ class PipelineLogger:
         self.event_sink.emit(event)
 
     def note(self, message: str, *, level: str = "info", **details: Any) -> None:
-        self.artifact_sink.note(message, level=level, details=details or None)
         run_payload = {"message": message, "level": level}
         if details:
             run_payload["details"] = details
@@ -168,8 +154,27 @@ class PipelineLogger:
         self._emit("pipeline.progress", run_payload={"phase": phase, **payload})
 
     def record_table(self, table: NormalizedTable) -> None:
-        self.artifact_sink.record_table(table)
         raw = table.mapped.raw
+        validation = _aggregate_validation(table.validation_issues)
+        mapped_fields = [
+            {
+                "field": column.field,
+                "score": column.score,
+                "is_required": column.is_required,
+                "is_satisfied": column.is_satisfied,
+                "header": column.header,
+                "source_column_index": column.source_column_index,
+            }
+            for column in table.mapped.column_map.mapped_columns
+        ]
+        unmapped_columns = [
+            {
+                "header": column.header,
+                "source_column_index": column.source_column_index,
+                "output_header": column.output_header,
+            }
+            for column in table.mapped.column_map.unmapped_columns
+        ]
         self._emit(
             "table.summary",
             output_delta={
@@ -179,13 +184,59 @@ class PipelineLogger:
                     "source_sheet": raw.source_sheet,
                     "table_index": raw.table_index,
                     "row_count": len(table.rows),
-                    "validation_issue_counts": {
-                        "error": len([i for i in table.validation_issues if i.severity == "error"]),
-                        "warning": len([i for i in table.validation_issues if i.severity == "warning"]),
-                    },
+                    "mapped_fields": mapped_fields,
+                    "unmapped_column_count": len(table.mapped.column_map.unmapped_columns),
+                    "unmapped_columns": unmapped_columns,
+                    "validation": validation,
                 },
             },
         )
 
     def validation_issue(self, **payload: Any) -> None:
         self._emit("validation.issue.delta", validation_payload=payload)
+
+
+def _aggregate_validation(issues: list[Any]) -> dict[str, Any]:
+    total = 0
+    by_severity: defaultdict[str, int] = defaultdict(int)
+    by_code: defaultdict[str, int] = defaultdict(int)
+    by_field: dict[str, dict[str, Any]] = {}
+
+    for issue in issues:
+        severity = str(getattr(issue, "severity", None) or "")
+        code = str(getattr(issue, "code", None) or "")
+        field = str(getattr(issue, "field", None) or "")
+
+        total += 1
+        if severity:
+            by_severity[severity] += 1
+        if code:
+            by_code[code] += 1
+
+        bucket = by_field.setdefault(
+            field,
+            {
+                "total": 0,
+                "by_severity": defaultdict(int),
+                "by_code": defaultdict(int),
+            },
+        )
+        bucket["total"] += 1
+        if severity:
+            bucket["by_severity"][severity] += 1
+        if code:
+            bucket["by_code"][code] += 1
+
+    return {
+        "total": total,
+        "by_severity": dict(by_severity),
+        "by_code": dict(by_code),
+        "by_field": {
+            field: {
+                "total": data["total"],
+                "by_severity": dict(data["by_severity"]),
+                "by_code": dict(data["by_code"]),
+            }
+            for field, data in by_field.items()
+        },
+    }

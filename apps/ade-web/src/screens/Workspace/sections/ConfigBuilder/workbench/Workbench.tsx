@@ -38,13 +38,7 @@ import { useValidateConfigurationMutation } from "@shared/configurations/hooks/u
 import { createScopedStorage } from "@shared/storage";
 import type { ConfigBuilderConsole } from "@app/nav/urlState";
 import { ApiError } from "@shared/api";
-import {
-  fetchRunArtifact,
-  fetchRunOutputs,
-  fetchRunTelemetry,
-  streamRun,
-  type RunStreamOptions,
-} from "@shared/runs/api";
+import { fetchRunOutputs, fetchRunSummary, fetchRunTelemetry, streamRun, type RunStreamOptions } from "@shared/runs/api";
 import type { RunStatus, AdeEvent as RunStreamEvent } from "@shared/runs/types";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
@@ -801,9 +795,9 @@ export function Workbench({
                   sheetNames: metadata.sheetNames ?? [],
                   outputs: [],
                   outputsLoaded: false,
-                  artifact: null,
-                  artifactLoaded: false,
-                  artifactError: null,
+                  summary: null,
+                  summaryLoaded: false,
+                  summaryError: null,
                   telemetry: null,
                   telemetryLoaded: false,
                   telemetryError: null,
@@ -828,18 +822,17 @@ export function Workbench({
                 }
 
                 try {
-                  const artifact = await fetchRunArtifact(currentRunId);
+                  const summary = await fetchRunSummary(currentRunId);
                   setLatestRun((prev) =>
                     prev && prev.runId === currentRunId
-                      ? { ...prev, artifact, artifactLoaded: true }
+                      ? { ...prev, summary, summaryLoaded: true }
                       : prev,
                   );
                 } catch (error) {
-                  const message =
-                    error instanceof Error ? error.message : "Unable to load run artifact.";
+                  const message = error instanceof Error ? error.message : "Unable to load run summary.";
                   setLatestRun((prev) =>
                     prev && prev.runId === currentRunId
-                      ? { ...prev, artifactLoaded: true, artifactError: message }
+                      ? { ...prev, summaryLoaded: true, summaryError: message }
                       : prev,
                   );
                 }

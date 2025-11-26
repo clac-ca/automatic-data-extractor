@@ -2,7 +2,7 @@ import { post } from "@shared/api";
 import { client } from "@shared/api/client";
 import { parseNdjsonStream } from "@shared/api/ndjson";
 
-import type { ArtifactV1, components } from "@schema";
+import type { RunSummaryV1, components } from "@schema";
 import type { AdeEvent as RunStreamEvent } from "./types";
 
 export type RunResource = components["schemas"]["RunResource"];
@@ -54,22 +54,6 @@ export async function fetchRunOutputs(
   return data as RunOutputListing;
 }
 
-export async function fetchRunArtifact(
-  runId: string,
-  signal?: AbortSignal,
-): Promise<ArtifactV1> {
-  const response = await fetch(`/api/v1/runs/${encodeURIComponent(runId)}/artifact`, {
-    headers: { Accept: "application/json" },
-    signal,
-  });
-
-  if (!response.ok) {
-    throw new Error("Run artifact unavailable");
-  }
-
-  return (await response.json()) as ArtifactV1;
-}
-
 export async function fetchRunTelemetry(
   runId: string,
   signal?: AbortSignal,
@@ -111,9 +95,24 @@ export async function fetchRun(
   return data as RunResource;
 }
 
+export async function fetchRunSummary(runId: string, signal?: AbortSignal): Promise<RunSummaryV1 | null> {
+  const run = await fetchRun(runId, signal);
+  const summary = run.summary;
+  if (!summary) return null;
+  if (typeof summary === "string") {
+    try {
+      return JSON.parse(summary) as RunSummaryV1;
+    } catch (error) {
+      console.warn("Unable to parse run summary", { error });
+      return null;
+    }
+  }
+  return summary as RunSummaryV1;
+}
+
 export const runQueryKeys = {
   detail: (runId: string) => ["run", runId] as const,
   outputs: (runId: string) => ["run-outputs", runId] as const,
-  artifact: (runId: string) => ["run-artifact", runId] as const,
   telemetry: (runId: string) => ["run-telemetry", runId] as const,
+  summary: (runId: string) => ["run-summary", runId] as const,
 };

@@ -64,7 +64,6 @@ from .summary_builder import build_run_summary_from_paths
 from .supervisor import RunSupervisor
 
 __all__ = [
-    "RunArtifactMissingError",
     "RunExecutionContext",
     "RunInputMissingError",
     "RunDocumentMissingError",
@@ -88,7 +87,6 @@ RunStreamFrame = AdeEvent
 class RunPathsSnapshot:
     """Container for run-relative output and log paths."""
 
-    artifact_path: str | None = None
     events_path: str | None = None
     output_paths: list[str] = None  # type: ignore[assignment]
     processed_files: list[str] = None  # type: ignore[assignment]
@@ -140,10 +138,6 @@ class RunNotFoundError(RuntimeError):
 
 class RunDocumentMissingError(RuntimeError):
     """Raised when a requested input document cannot be located."""
-
-
-class RunArtifactMissingError(RuntimeError):
-    """Raised when a requested run artifact is unavailable."""
 
 
 class RunLogsFileMissingError(RuntimeError):
@@ -531,7 +525,6 @@ class RunsService:
             logs_uri=run.logs_uri,
             summary=summary_payload,
             error_message=run.error_message,
-            artifact_path=paths.artifact_path,
             events_path=paths.events_path,
             output_paths=paths.output_paths or [],
             processed_files=paths.processed_files or [],
@@ -589,16 +582,6 @@ class RunsService:
             entries=entries,
             next_after_id=next_after,
         )
-
-    async def get_artifact_path(self, *, run_id: str) -> Path:
-        """Return the artifact path for ``run_id`` when available."""
-
-        run = await self._require_run(run_id)
-        logs_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id) / "logs"
-        artifact_path = logs_dir / "artifact.json"
-        if not artifact_path.is_file():
-            raise RunArtifactMissingError("Run artifact is unavailable")
-        return artifact_path
 
     async def get_logs_file_path(self, *, run_id: str) -> Path:
         """Return the raw log stream path for ``run_id`` when available."""
@@ -707,22 +690,12 @@ class RunsService:
         default_paths: RunPathsSnapshot,
     ) -> RunPathsSnapshot:
         snapshot = RunPathsSnapshot(
-            artifact_path=default_paths.artifact_path,
             events_path=default_paths.events_path,
             output_paths=list(default_paths.output_paths or []),
             processed_files=list(default_paths.processed_files or []),
         )
 
         logs_dir = run_dir / "logs"
-        artifact_candidates = [
-            summary.get("artifact_path") if summary else None,
-            logs_dir / "artifact.json",
-        ]
-        for candidate in artifact_candidates:
-            snapshot.artifact_path = self._relative_if_exists(candidate)
-            if snapshot.artifact_path:
-                break
-
         event_candidates = [
             summary.get("events_path") if summary else None,
             logs_dir / "events.ndjson",
@@ -823,20 +796,16 @@ class RunsService:
         run: Run,
         paths: RunPathsSnapshot,
     ) -> RunSummaryV1 | None:
-        if not paths.artifact_path:
-            return None
-
-        artifact_path = (self._runs_dir / paths.artifact_path).resolve()
-        if not artifact_path.exists():
-            return None
-
         events_path = (self._runs_dir / paths.events_path).resolve() if paths.events_path else None
+        if events_path is None:
+            events_path = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id) / "logs" / "events.ndjson"
+        if not events_path.exists():
+            return None
         manifest_path = self._manifest_path(run.workspace_id, run.configuration_id)
 
         try:
             return await asyncio.to_thread(
                 build_run_summary_from_paths,
-                artifact_path=artifact_path,
                 events_path=events_path if events_path and events_path.exists() else None,
                 manifest_path=manifest_path if manifest_path.exists() else None,
                 workspace_id=run.workspace_id,
@@ -847,7 +816,7 @@ class RunsService:
         except Exception:
             logger.warning(
                 "Failed to build run summary",
-                extra={"run_id": run.id, "artifact_path": str(artifact_path)},
+                extra={"run_id": run.id, "events_path": str(events_path)},
                 exc_info=True,
             )
             return None
@@ -1035,14 +1004,13 @@ class RunsService:
         yield self._ade_event(
             run=completion,
             type_="run.completed",
-            run_payload={
-                "status": self._status_literal(completion.status),
-                "execution_summary": {"exit_code": completion.exit_code},
-                "artifact_path": paths_snapshot.artifact_path,
-                "events_path": paths_snapshot.events_path,
-                "output_paths": paths_snapshot.output_paths,
-                "processed_files": paths_snapshot.processed_files,
-                "error_message": completion.error_message,
+                run_payload={
+                    "status": self._status_literal(completion.status),
+                    "execution_summary": {"exit_code": completion.exit_code},
+                    "events_path": paths_snapshot.events_path,
+                    "output_paths": paths_snapshot.output_paths,
+                    "processed_files": paths_snapshot.processed_files,
+                    "error_message": completion.error_message,
                 "summary": summary_model.model_dump(mode="json") if summary_model else None,
             },
         )

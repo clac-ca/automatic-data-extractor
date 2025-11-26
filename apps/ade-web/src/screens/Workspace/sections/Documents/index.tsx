@@ -30,11 +30,11 @@ import { createScopedStorage } from "@shared/storage";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
-import { ArtifactSummary, TelemetrySummary } from "@shared/runs/RunInsights";
+import { RunSummaryView, TelemetrySummary } from "@shared/runs/RunInsights";
 import {
   fetchRun,
   fetchRunOutputs,
-  fetchRunArtifact,
+  fetchRunSummary,
   fetchRunTelemetry,
   runQueryKeys,
   type RunOutputListing,
@@ -1577,12 +1577,10 @@ function RunExtractionDrawerContent({
     staleTime: 5_000,
   });
 
-  const artifactQuery = useQuery({
-    queryKey: activeRunId ? runQueryKeys.artifact(activeRunId) : ["run-artifact", "none"],
+  const summaryQuery = useQuery({
+    queryKey: activeRunId ? runQueryKeys.summary(activeRunId) : ["run-summary", "none"],
     queryFn: ({ signal }) =>
-      activeRunId
-        ? fetchRunArtifact(activeRunId, signal)
-        : Promise.reject(new Error("No run selected")),
+      activeRunId ? fetchRunSummary(activeRunId, signal) : Promise.reject(new Error("No run selected")),
     enabled:
       Boolean(activeRunId) &&
       (runQuery.data?.status === "succeeded" || runQuery.data?.status === "failed"),
@@ -1656,7 +1654,7 @@ function RunExtractionDrawerContent({
     ? `/api/v1/runs/${encodeURIComponent(activeRunId)}`
     : null;
   const outputFiles: RunOutputListing["files"] = outputsQuery.data?.files ?? [];
-  const artifact = artifactQuery.data ?? null;
+  const summary = summaryQuery.data ?? null;
   const telemetryEvents = telemetryQuery.data ?? [];
 
   useEffect(() => {
@@ -1961,18 +1959,6 @@ function RunExtractionDrawerContent({
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   <a
-                    href={downloadBase ? `${downloadBase}/artifact` : undefined}
-                    className={clsx(
-                      "inline-flex items-center rounded border px-3 py-1 text-xs font-semibold transition",
-                      downloadBase && !runRunning
-                        ? "border-slate-300 text-slate-700 hover:bg-slate-100"
-                        : "cursor-not-allowed border-slate-200 text-slate-400",
-                    )}
-                    aria-disabled={runRunning || !downloadBase}
-                  >
-                    Download artifact
-                  </a>
-                  <a
                     href={downloadBase ? `${downloadBase}/logs` : undefined}
                     className={clsx(
                       "inline-flex items-center rounded border px-3 py-1 text-xs font-semibold transition",
@@ -2008,15 +1994,15 @@ function RunExtractionDrawerContent({
                   )}
                 </div>
                 <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
-                  <p className="text-xs font-semibold text-slate-700">Artifact summary</p>
-                  {artifactQuery.isLoading ? (
-                    <p className="text-xs text-slate-500">Loading artifact…</p>
-                  ) : artifactQuery.isError ? (
-                    <p className="text-xs text-rose-600">Unable to load artifact.</p>
-                  ) : artifact ? (
-                    <ArtifactSummary artifact={artifact} />
+                  <p className="text-xs font-semibold text-slate-700">Run summary</p>
+                  {summaryQuery.isLoading ? (
+                    <p className="text-xs text-slate-500">Loading summary…</p>
+                  ) : summaryQuery.isError ? (
+                    <p className="text-xs text-rose-600">Unable to load run summary.</p>
+                  ) : summary ? (
+                    <RunSummaryView summary={summary} />
                   ) : (
-                    <p className="text-xs text-slate-500">Artifact not available.</p>
+                    <p className="text-xs text-slate-500">Summary not available.</p>
                   )}
                 </div>
                 <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">

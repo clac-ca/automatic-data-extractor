@@ -24,7 +24,7 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
         "    'schema': 'ade.event/v1',\n"
         "    'version': '1.0.0',\n"
         "    'run_id': 'run-1',\n"
-        "    'timestamp': '2024-01-01T00:00:00Z',\n"
+        "    'created_at': '2024-01-01T00:00:00Z',\n"
         "    'object': 'ade.event',\n"
         "    'run': {'phase': 'mapping'},\n"
         "    'type': 'run.pipeline.progress',\n"

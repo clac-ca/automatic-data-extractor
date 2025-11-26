@@ -42,7 +42,6 @@ from .schemas import (
 )
 from .service import (
     DEFAULT_STREAM_LIMIT,
-    RunArtifactMissingError,
     RunDocumentMissingError,
     RunEnvironmentNotReadyError,
     RunExecutionContext,
@@ -179,22 +178,6 @@ async def get_run_logs_endpoint(
     if run is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
     return await service.get_logs(run_id=run_id, after_id=after_id, limit=limit)
-
-
-@router.get(
-    "/runs/{run_id}/artifact",
-    response_class=FileResponse,
-    responses={status.HTTP_404_NOT_FOUND: {"description": "Artifact unavailable"}},
-)
-async def download_run_artifact_endpoint(
-    run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
-    service: RunsService = runs_service_dependency,
-):
-    try:
-        path = await service.get_artifact_path(run_id=run_id)
-    except (RunNotFoundError, RunArtifactMissingError) as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return FileResponse(path=path, media_type="application/json", filename=path.name)
 
 
 @router.get(

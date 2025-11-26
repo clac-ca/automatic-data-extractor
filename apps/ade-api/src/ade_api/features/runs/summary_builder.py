@@ -1,4 +1,4 @@
-"""Build ade.run_summary/v1 objects from artifacts and telemetry."""
+"""Build ade.run_summary/v1 objects from telemetry events."""
 from __future__ import annotations
 
 from collections import defaultdict
@@ -6,31 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-from ade_engine.schemas import AdeEvent, ArtifactV1, ManifestV1, RunSummaryV1
+from ade_engine.schemas import AdeEvent, ManifestV1, RunSummaryV1
 from pydantic import ValidationError
 
 TableKey = tuple[str, str | None, int]
-
-
-def _parse_datetime(value: str | datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-    normalized = value.strip()
-    if normalized.endswith("Z"):
-        normalized = f"{normalized[:-1]}+00:00"
-    try:
-        parsed = datetime.fromisoformat(normalized)
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        return parsed
-    except ValueError:
-        return None
-
-
-def _status_value(value: object) -> str:
-    return getattr(value, "value", None) or str(value)
 
 
 def _table_key(source_file: str, source_sheet: str | None, table_index: int) -> TableKey:
@@ -48,32 +27,9 @@ def _sum_if_complete(keys: list[TableKey], counts: dict[TableKey, int]) -> int |
     return total
 
 
-def _extract_table_row_counts(events: Iterable[AdeEvent]) -> dict[TableKey, int]:
-    counts: dict[TableKey, int] = {}
-    for event in events:
-        if event.type != "run.table.summary":
-            continue
-        table = (event.output_delta or {}).get("table") if event.output_delta else None
-        if not isinstance(table, dict):
-            continue
-        try:
-            key = _table_key(
-                str(table["source_file"]),
-                table.get("source_sheet"),
-                int(table["table_index"]),
-            )
-        except (KeyError, TypeError, ValueError):
-            continue
-        row_count = table.get("row_count")
-        if isinstance(row_count, int):
-            counts[key] = row_count
-    return counts
-
-
 def build_run_summary(
     *,
-    artifact: ArtifactV1,
-    events: Iterable[AdeEvent] | None,
+    events: Iterable[AdeEvent],
     manifest: ManifestV1 | None,
     workspace_id: str | None,
     configuration_id: str | None,
@@ -82,12 +38,11 @@ def build_run_summary(
     env_reason: str | None = None,
     env_reused: bool | None = None,
 ) -> RunSummaryV1:
-    """Aggregate a RunSummaryV1 from artifact + events + manifest metadata."""
+    """Aggregate a RunSummaryV1 from telemetry events and manifest metadata."""
 
-    events_list = list(events or [])
-    table_row_counts = _extract_table_row_counts(events_list)
-
+    events_list = list(events)
     table_keys: list[TableKey] = []
+    table_row_counts: dict[TableKey, int] = {}
     input_files: set[str] = set()
     input_sheets: set[tuple[str, str | None]] = set()
     mapped_fields: set[str] = set()
@@ -95,6 +50,7 @@ def build_run_summary(
     validation_issue_count_total = 0
     issue_counts_by_severity: defaultdict[str, int] = defaultdict(int)
     issue_counts_by_code: defaultdict[str, int] = defaultdict(int)
+    unmapped_column_total = 0
     file_issue_counts: dict[str, defaultdict[str, int]] = defaultdict(lambda: defaultdict(int))
     file_issue_codes: dict[str, defaultdict[str, int]] = defaultdict(lambda: defaultdict(int))
     file_issue_totals: defaultdict[str, int] = defaultdict(int)
@@ -103,27 +59,93 @@ def build_run_summary(
     field_issue_totals: defaultdict[str, int] = defaultdict(int)
     file_tables: defaultdict[str, list[TableKey]] = defaultdict(list)
 
-    for table in artifact.tables:
-        key = _table_key(table.source_file, table.source_sheet, table.table_index)
+    started_event: AdeEvent | None = None
+    completed_event: AdeEvent | None = None
+
+    for event in events_list:
+        if event.type == "run.started":
+            started_event = started_event or event
+        elif event.type == "run.completed":
+            completed_event = event
+
+        if event.type != "run.table.summary":
+            continue
+
+        table = (event.output_delta or {}).get("table") if event.output_delta else None
+        if not isinstance(table, dict):
+            continue
+
+        try:
+            key = _table_key(
+                str(table["source_file"]),
+                table.get("source_sheet"),
+                int(table["table_index"]),
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+
         table_keys.append(key)
-        input_files.add(table.source_file)
-        input_sheets.add((table.source_file, table.source_sheet))
-        file_tables[table.source_file].append(key)
+        source_file = str(table["source_file"])
+        source_sheet = table.get("source_sheet")
+        input_files.add(source_file)
+        input_sheets.add((source_file, source_sheet))
+        file_tables[source_file].append(key)
 
-        for mapped in table.mapped_columns:
-            mapped_fields.add(mapped.field)
-            mapped_scores[mapped.field] = max(mapped_scores.get(mapped.field, float("-inf")), mapped.score)
+        row_count = table.get("row_count")
+        if isinstance(row_count, int):
+            table_row_counts[key] = row_count
 
-        for issue in table.validation_issues:
-            validation_issue_count_total += 1
-            issue_counts_by_severity[str(issue.severity)] += 1
-            issue_counts_by_code[str(issue.code)] += 1
-            file_issue_counts[table.source_file][str(issue.severity)] += 1
-            file_issue_codes[table.source_file][str(issue.code)] += 1
-            file_issue_totals[table.source_file] += 1
-            field_issue_counts[str(issue.field)][str(issue.severity)] += 1
-            field_issue_codes[str(issue.field)][str(issue.code)] += 1
-            field_issue_totals[str(issue.field)] += 1
+        unmapped_count = table.get("unmapped_column_count")
+        if isinstance(unmapped_count, int):
+            unmapped_column_total += unmapped_count
+
+        mapped_fields_payload = table.get("mapped_fields") or []
+        for mapped in mapped_fields_payload:
+            field_name = mapped.get("field")
+            if not isinstance(field_name, str):
+                continue
+            mapped_fields.add(field_name)
+            score = mapped.get("score")
+            if isinstance(score, (int, float)):
+                mapped_scores[field_name] = max(mapped_scores.get(field_name, float("-inf")), float(score))
+
+        validation = table.get("validation") or {}
+        total = validation.get("total")
+        if isinstance(total, int):
+            validation_issue_count_total += total
+            file_issue_totals[source_file] += total
+
+        by_severity = validation.get("by_severity") or {}
+        for severity, count in by_severity.items():
+            if not isinstance(count, int):
+                continue
+            issue_counts_by_severity[str(severity)] += count
+            file_issue_counts[source_file][str(severity)] += count
+
+        by_code = validation.get("by_code") or {}
+        for code, count in by_code.items():
+            if not isinstance(count, int):
+                continue
+            issue_counts_by_code[str(code)] += count
+            file_issue_codes[source_file][str(code)] += count
+
+        by_field = validation.get("by_field") or {}
+        for field_name, details in by_field.items():
+            if not isinstance(details, dict):
+                continue
+            total_for_field = details.get("total")
+            if isinstance(total_for_field, int):
+                field_issue_totals[str(field_name)] += total_for_field
+            field_severity = details.get("by_severity") or {}
+            for severity, count in field_severity.items():
+                if not isinstance(count, int):
+                    continue
+                field_issue_counts[str(field_name)][str(severity)] += count
+            field_codes = details.get("by_code") or {}
+            for code, count in field_codes.items():
+                if not isinstance(count, int):
+                    continue
+                field_issue_codes[str(field_name)][str(code)] += count
 
     canonical_fields: dict[str, tuple[str | None, bool]] = {}
     if manifest:
@@ -141,13 +163,23 @@ def build_run_summary(
         else len(mapped_fields)
     )
 
-    summary_run_status = _status_value(getattr(artifact.run, "status", "succeeded"))
-    error = getattr(artifact.run, "error", None)
-    started_at = _parse_datetime(getattr(artifact.run, "started_at", None)) or datetime.now(timezone.utc)
-    completed_at = _parse_datetime(getattr(artifact.run, "completed_at", None))
-    duration_seconds = None
-    if completed_at is not None and started_at:
-        duration_seconds = (completed_at - started_at).total_seconds()
+    start_timestamp = started_event.created_at if started_event else None
+    completed_timestamp = completed_event.created_at if completed_event else None
+    duration_seconds = (
+        (completed_timestamp - start_timestamp).total_seconds()
+        if completed_timestamp and start_timestamp
+        else None
+    )
+
+    completion_payload = completed_event.run if completed_event else {}
+    completion_error = completion_payload.get("error") if isinstance(completion_payload, dict) else None
+    status_literal = None
+    if isinstance(completion_payload, dict):
+        status_literal = (
+            completion_payload.get("status")
+            or completion_payload.get("engine_status")
+        )
+    summary_run_status = status_literal or ("succeeded" if completed_event else "failed")
 
     by_file = []
     for source_file in sorted(file_tables.keys() or input_files):
@@ -165,7 +197,6 @@ def build_run_summary(
         )
 
     if not by_file and input_files:
-        # Handle cases where tables are missing but source files are known.
         for source_file in sorted(input_files):
             by_file.append(
                 {
@@ -207,27 +238,29 @@ def build_run_summary(
         "configuration_id": configuration_id,
         "configuration_version": configuration_version,
         "status": summary_run_status,
-        "failure_code": getattr(error, "code", None),
-        "failure_stage": getattr(error, "stage", None),
-        "failure_message": getattr(error, "message", None),
-        "engine_version": getattr(artifact.run, "engine_version", None),
-        "config_version": getattr(artifact.config, "version", None),
+        "failure_code": completion_error.get("code") if isinstance(completion_error, dict) else None,
+        "failure_stage": completion_error.get("stage") if isinstance(completion_error, dict) else None,
+        "failure_message": completion_error.get("message") if isinstance(completion_error, dict) else None,
+        "engine_version": started_event.run.get("engine_version")  # type: ignore[union-attr]
+        if started_event and isinstance(started_event.run, dict)
+        else None,
+        "config_version": manifest.version if manifest else None,  # type: ignore[union-attr]
         "env_reason": env_reason,
         "env_reused": env_reused,
-        "started_at": started_at,
-        "completed_at": completed_at,
+        "started_at": start_timestamp or datetime.now(timezone.utc),
+        "completed_at": completed_timestamp,
         "duration_seconds": duration_seconds,
     }
 
     summary_core = {
         "input_file_count": len(input_files),
         "input_sheet_count": len(input_sheets),
-        "table_count": len(artifact.tables),
+        "table_count": len(table_keys),
         "row_count": _sum_if_complete(table_keys, table_row_counts),
         "canonical_field_count": declared_fields,
         "required_field_count": required_fields,
         "mapped_field_count": mapped_field_count,
-        "unmapped_column_count": sum(len(table.unmapped_columns) for table in artifact.tables),
+        "unmapped_column_count": unmapped_column_total,
         "validation_issue_count_total": validation_issue_count_total,
         "issue_counts_by_severity": dict(issue_counts_by_severity),
         "issue_counts_by_code": dict(issue_counts_by_code),
@@ -242,7 +275,6 @@ def build_run_summary(
 
 def build_run_summary_from_paths(
     *,
-    artifact_path: Path,
     events_path: Path | None,
     manifest_path: Path | None,
     workspace_id: str | None,
@@ -252,9 +284,7 @@ def build_run_summary_from_paths(
     env_reason: str | None = None,
     env_reused: bool | None = None,
 ) -> RunSummaryV1:
-    """Load artifacts/events from disk and build a RunSummaryV1."""
-
-    artifact = ArtifactV1.model_validate_json(artifact_path.read_text(encoding="utf-8"))
+    """Load events from disk and build a RunSummaryV1."""
 
     events: list[AdeEvent] = []
     if events_path and events_path.exists():
@@ -276,7 +306,6 @@ def build_run_summary_from_paths(
             manifest = None
 
     return build_run_summary(
-        artifact=artifact,
         events=events,
         manifest=manifest,
         workspace_id=workspace_id,

@@ -9,7 +9,6 @@ from openpyxl import load_workbook
 from ade_engine.config.loader import load_config_runtime
 from ade_engine.core.pipeline import map_raw_tables, normalize_table, write_workbook
 from ade_engine.core.types import RawTable, RunContext, RunPaths, RunRequest
-from ade_engine.infra.artifact import FileArtifactSink
 from ade_engine.infra.telemetry import PipelineLogger
 
 
@@ -72,8 +71,6 @@ def _run_context(tmp_path: Path, manifest: object, request: RunRequest) -> RunCo
         input_dir=request.input_dir or tmp_path,
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
-        artifact_path=tmp_path / "artifact.json",
-        events_path=tmp_path / "events.ndjson",
     )
     return RunContext(
         run_id="run-1",
@@ -85,9 +82,7 @@ def _run_context(tmp_path: Path, manifest: object, request: RunRequest) -> RunCo
 
 
 def _logger(run: RunContext, manifest) -> PipelineLogger:
-    artifact = FileArtifactSink(run.paths.artifact_path)
-    artifact.start(run, manifest)
-    return PipelineLogger(run=run, artifact_sink=artifact)
+    return PipelineLogger(run=run)
 
 
 def test_writes_combined_sheet_with_unmapped_columns(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
